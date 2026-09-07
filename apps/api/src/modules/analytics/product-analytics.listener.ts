@@ -6,8 +6,12 @@ import {
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
+import type { QuizScoreBucket } from '@knowtis/shared-types';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
+import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
+import { FlashcardReviewedEvent } from '../artifacts/domain/events/flashcard-reviewed.event';
+import { QuizCompletedEvent } from '../artifacts/domain/events/quiz-completed.event';
 import { McpKeyCreatedEvent } from '../mcp/mcp-key-created.event';
 import { NoteCreatedEvent } from '../notes/domain/events/note-created.event';
 import { NoteSharedEvent } from '../notes/domain/events/note-shared.event';
@@ -20,6 +24,23 @@ import type {
 import { ProductAnalytics } from './product-analytics.service';
 
 type UserRecord = NonNullable<Awaited<ReturnType<UsersService['findById']>>>;
+
+const QUIZ_SCORE_MID_FLOOR = 0.5;
+const QUIZ_SCORE_HIGH_FLOOR = 0.8;
+const QUIZ_SCORE_PERFECT = 1;
+
+function scoreBucketFor(score: number): QuizScoreBucket {
+  if (score >= QUIZ_SCORE_PERFECT) {
+    return '100';
+  }
+  if (score >= QUIZ_SCORE_HIGH_FLOOR) {
+    return '80-99';
+  }
+  if (score >= QUIZ_SCORE_MID_FLOOR) {
+    return '50-79';
+  }
+  return '<50';
+}
 
 interface UserEventCapture<E extends ServerProductEventName> {
   event: E;
@@ -97,6 +118,46 @@ export class ProductAnalyticsListener {
       () => ({
         event: 'mcp key created',
         properties: { source: 'api', scope_level: event.scopeLevel },
+      })
+    );
+  }
+
+  @OnEvent(ArtifactGeneratedEvent.EVENT_NAME, { async: true })
+  async handleArtifactGenerated(event: ArtifactGeneratedEvent): Promise<void> {
+    await this.captureForUser(
+      ArtifactGeneratedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'study artifact generated',
+        properties: { source: 'api', artifact_type: event.artifactType },
+      })
+    );
+  }
+
+  @OnEvent(FlashcardReviewedEvent.EVENT_NAME, { async: true })
+  async handleFlashcardReviewed(event: FlashcardReviewedEvent): Promise<void> {
+    await this.captureForUser(
+      FlashcardReviewedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'flashcard reviewed',
+        properties: { source: 'api', quality: event.quality, kind: event.kind },
+      })
+    );
+  }
+
+  @OnEvent(QuizCompletedEvent.EVENT_NAME, { async: true })
+  async handleQuizCompleted(event: QuizCompletedEvent): Promise<void> {
+    await this.captureForUser(
+      QuizCompletedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'quiz completed',
+        properties: {
+          source: 'api',
+          scope: event.scope,
+          score_bucket: scoreBucketFor(event.score),
+        },
       })
     );
   }

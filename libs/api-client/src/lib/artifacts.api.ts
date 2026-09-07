@@ -1,8 +1,14 @@
 import type {
   Artifact,
   ArtifactType,
+  ArtifactWithStudyState,
   FlashcardProgress,
+  LatestQuizAttemptResponse,
   QuizAttempt,
+  QuizAttemptScope,
+  SM2Quality,
+  StudySession,
+  StudyStats,
 } from '@knowtis/shared-types';
 
 import { httpClient } from './http-client';
@@ -12,29 +18,24 @@ export interface GenerateArtifactInput {
   type: ArtifactType;
 }
 
-export interface LearnTopicInput {
-  topic: string;
-}
-
 export interface ReviewCardInput {
   cardIndex: number;
-  quality: number;
+  quality: SM2Quality;
 }
 
 export interface SubmitQuizInput {
   answers: { questionIndex: number; selectedIndex: number }[];
+  scope?: QuizAttemptScope;
 }
 
-export interface DueCard {
-  artifactId: string;
-  cardIndex: number;
-  artifactTitle: string;
+function studyQuery(timeZone: string): string {
+  return timeZone ? `?tz=${encodeURIComponent(timeZone)}` : '';
 }
 
 export const artifactsApi = {
-  async getAll(noteId?: string): Promise<Artifact[]> {
-    const params = noteId ? `?noteId=${noteId}` : '';
-    return httpClient.get<Artifact[]>(`/artifacts${params}`);
+  async getAll(noteId?: string): Promise<ArtifactWithStudyState[]> {
+    const params = noteId ? `?noteId=${encodeURIComponent(noteId)}` : '';
+    return httpClient.get<ArtifactWithStudyState[]>(`/artifacts${params}`);
   },
 
   async getById(id: string): Promise<Artifact> {
@@ -43,15 +44,6 @@ export const artifactsApi = {
 
   async generate(input: GenerateArtifactInput): Promise<Artifact> {
     return httpClient.post<Artifact>('/artifacts/generate', input);
-  },
-
-  async learnTopic(
-    input: LearnTopicInput
-  ): Promise<{ title: string; content: string }> {
-    return httpClient.post<{ title: string; content: string }>(
-      '/artifacts/learn',
-      input
-    );
   },
 
   async delete(id: string): Promise<void> {
@@ -90,8 +82,24 @@ export const artifactsApi = {
     );
   },
 
-  async getDueCards(): Promise<DueCard[]> {
-    return httpClient.get<DueCard[]>('/artifacts/study/due');
+  async getLatestQuizAttempt(
+    artifactId: string
+  ): Promise<LatestQuizAttemptResponse> {
+    return httpClient.get<LatestQuizAttemptResponse>(
+      `/artifacts/${artifactId}/quiz-attempts/latest`
+    );
+  },
+
+  async getStudySession(timeZone: string): Promise<StudySession> {
+    return httpClient.get<StudySession>(
+      `/artifacts/study/session${studyQuery(timeZone)}`
+    );
+  },
+
+  async getStudyStats(timeZone: string): Promise<StudyStats> {
+    return httpClient.get<StudyStats>(
+      `/artifacts/study/stats${studyQuery(timeZone)}`
+    );
   },
 
   async getByShareToken(token: string): Promise<Artifact[]> {

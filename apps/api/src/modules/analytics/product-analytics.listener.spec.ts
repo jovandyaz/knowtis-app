@@ -6,6 +6,11 @@ import {
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { QuizScoreBucket } from '@knowtis/shared-types';
+
+import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
+import { FlashcardReviewedEvent } from '../artifacts/domain/events/flashcard-reviewed.event';
+import { QuizCompletedEvent } from '../artifacts/domain/events/quiz-completed.event';
 import { McpKeyCreatedEvent } from '../mcp/mcp-key-created.event';
 import { NoteCreatedEvent } from '../notes/domain/events/note-created.event';
 import { NoteSharedEvent } from '../notes/domain/events/note-shared.event';
@@ -230,5 +235,73 @@ describe('ProductAnalyticsListener', () => {
     );
 
     errorSpy.mockRestore();
+  });
+
+  it('captures study artifact generated with only the artifact type', async () => {
+    await listener.handleArtifactGenerated(
+      new ArtifactGeneratedEvent('artifact-1', USER.id, 'flashcard_deck')
+    );
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        distinctId: USER.id,
+        event: 'study artifact generated',
+        properties: { source: 'api', artifact_type: 'flashcard_deck' },
+      })
+    );
+  });
+
+  it('captures a flashcard review with quality and kind', async () => {
+    await listener.handleFlashcardReviewed(
+      new FlashcardReviewedEvent('artifact-1', USER.id, 3, 'due')
+    );
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'flashcard reviewed',
+        properties: { source: 'api', quality: 3, kind: 'due' },
+      })
+    );
+  });
+
+  it('buckets the quiz score and never sends the raw value', async () => {
+    await listener.handleQuizCompleted(
+      new QuizCompletedEvent('quiz-1', USER.id, 'full', 0.8)
+    );
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'quiz completed',
+        properties: { source: 'api', scope: 'full', score_bucket: '80-99' },
+      })
+    );
+    await listener.handleQuizCompleted(
+      new QuizCompletedEvent('quiz-1', USER.id, 'missed', 1)
+    );
+    expect(capture).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        event: 'quiz completed',
+        properties: { source: 'api', scope: 'missed', score_bucket: '100' },
+      })
+    );
+  });
+
+  it('maps every score bucket boundary', async () => {
+    const cases: Array<[number, QuizScoreBucket]> = [
+      [0.2, '<50'],
+      [0.5, '50-79'],
+      [0.79, '50-79'],
+      [0.8, '80-99'],
+      [0.99, '80-99'],
+      [1, '100'],
+    ];
+    for (const [score, bucket] of cases) {
+      await listener.handleQuizCompleted(
+        new QuizCompletedEvent('quiz-1', USER.id, 'full', score)
+      );
+      expect(capture).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          event: 'quiz completed',
+          properties: { source: 'api', scope: 'full', score_bucket: bucket },
+        })
+      );
+    }
   });
 });

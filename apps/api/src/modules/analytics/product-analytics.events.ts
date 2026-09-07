@@ -1,12 +1,16 @@
 import type { EmailVerificationSource } from '@jovandyaz/auth/server';
 
 import type {
+  ArtifactType,
+  FlashcardReviewKind,
   McpScopeLevel,
   NoteShareType,
   PermissionLevel,
   ProductActorContext,
   ProductEventName,
   ProductPersonProperties,
+  QuizAttemptScope,
+  QuizScoreBucket,
 } from '@knowtis/shared-types';
 
 export interface ServerActorContext extends ProductActorContext {
@@ -28,6 +32,17 @@ export interface ServerProductEventMap {
     permission: PermissionLevel;
   };
   'mcp key created': { source: 'api'; scope_level: McpScopeLevel };
+  'study artifact generated': { source: 'api'; artifact_type: ArtifactType };
+  'flashcard reviewed': {
+    source: 'api';
+    quality: number;
+    kind: FlashcardReviewKind;
+  };
+  'quiz completed': {
+    source: 'api';
+    scope: QuizAttemptScope;
+    score_bucket: QuizScoreBucket;
+  };
 }
 
 export type ServerProductEventName = keyof ServerProductEventMap &

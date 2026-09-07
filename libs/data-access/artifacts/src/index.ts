@@ -7,8 +7,9 @@ export {
   useReviewCard,
   useSubmitQuiz,
   useQuizAttempts,
-  useDueCards,
+  useLatestQuizAttempt,
+  useStudySession,
+  useStudyStats,
   useSharedNoteArtifacts,
-  useLearnTopic,
   artifactsQueryKeys,
 } from './artifacts.hooks';

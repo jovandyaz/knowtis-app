@@ -15,6 +15,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@knowtis/api-client': resolve(
+        __dirname,
+        '../../api-client/src/index.ts'
+      ),
+      '@knowtis/shared-types': resolve(
+        __dirname,
+        '../../../packages/shared/types/src/index.ts'
+      ),
       '@knowtis/shared-util': resolve(
         __dirname,
         '../../shared/util/src/index.ts'

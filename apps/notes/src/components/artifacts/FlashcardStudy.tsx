@@ -25,21 +25,24 @@ interface FlashcardStudyProps {
 
 export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
-  const reviewCard = useReviewCard(artifact.id);
+  const { mutateAsync: reviewCard, isPending: isReviewPending } =
+    useReviewCard();
   const session = useStudySession(artifact.content);
 
   const submitReview = useCallback(
-    (quality: number) => {
+    (quality: SM2Quality) => {
       if (readOnly) {
         return;
       }
-      void reviewCard
-        .mutateAsync({ cardIndex: session.currentIndex, quality })
-        .catch(() => {
-          toast.error(t('ai.artifacts.flashcards.reviewError'));
-        });
+      void reviewCard({
+        artifactId: artifact.id,
+        cardIndex: session.currentIndex,
+        quality,
+      }).catch(() => {
+        toast.error(t('ai.artifacts.flashcards.reviewError'));
+      });
     },
-    [session.currentIndex, reviewCard, t, readOnly]
+    [artifact.id, session.currentIndex, reviewCard, t, readOnly]
   );
 
   const handleWrong = useCallback(() => {
@@ -122,7 +125,7 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
         onRateAdvanced={handleRateAdvanced}
         wrongCount={session.counts.wrong}
         correctCount={session.counts.correct}
-        disabled={reviewCard.isPending}
+        disabled={isReviewPending}
         canGoPrev={session.currentIndex > 0}
       />
     </div>

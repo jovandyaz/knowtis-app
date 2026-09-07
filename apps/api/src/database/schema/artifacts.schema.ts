@@ -1,17 +1,25 @@
+import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
   numeric,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { ARTIFACT_TYPES, type ArtifactType } from '@knowtis/shared-types';
+import {
+  ARTIFACT_TYPES,
+  QUIZ_ATTEMPT_SCOPES,
+  type ArtifactType,
+  type QuizAttemptScope,
+} from '@knowtis/shared-types';
 
 import { notes } from './notes.schema';
 import { users } from './users.schema';
@@ -97,6 +105,7 @@ export const quizAttempts = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     score: numeric('score', { precision: 5, scale: 2 }).notNull(),
     answers: jsonb('answers').notNull(),
+    scope: text('scope').$type<QuizAttemptScope>().notNull().default('full'),
     completedAt: timestamp('completed_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -104,8 +113,48 @@ export const quizAttempts = pgTable(
   (table) => [
     index('quiz_attempts_artifact_idx').on(table.artifactId),
     index('quiz_attempts_user_idx').on(table.userId),
+    check(
+      'quiz_attempts_scope_check',
+      sql`${table.scope} in (${sql.raw(
+        QUIZ_ATTEMPT_SCOPES.map((scope) => `'${scope}'`).join(', ')
+      )})`
+    ),
   ]
 );
 
 export type QuizAttemptRow = typeof quizAttempts.$inferSelect;
 export type NewQuizAttemptRow = typeof quizAttempts.$inferInsert;
+
+export const flashcardReviews = pgTable(
+  'flashcard_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    cardIndex: integer('card_index').notNull(),
+    quality: smallint('quality').notNull(),
+    intervalBeforeDays: integer('interval_before_days').notNull(),
+    intervalAfterDays: integer('interval_after_days').notNull(),
+    easeAfter: numeric('ease_after', { precision: 4, scale: 2 }).notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('flashcard_reviews_user_reviewed_idx').on(
+      table.userId,
+      table.reviewedAt
+    ),
+    check(
+      'flashcard_reviews_quality_check',
+      sql`${table.quality} between 0 and 5`
+    ),
+  ]
+);
+
+export type FlashcardReviewRow = typeof flashcardReviews.$inferSelect;
+export type NewFlashcardReviewRow = typeof flashcardReviews.$inferInsert;

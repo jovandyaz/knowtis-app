@@ -1,3 +1,5 @@
+import type { ParaBucket } from './organization.types';
+
 export const ARTIFACT_TYPE = {
   FLASHCARD_DECK: 'flashcard_deck',
   QUIZ: 'quiz',
@@ -88,20 +90,107 @@ export interface FlashcardProgress {
   nextReview: string;
 }
 
+export const QUIZ_ATTEMPT_SCOPES = ['full', 'missed'] as const;
+export type QuizAttemptScope = (typeof QUIZ_ATTEMPT_SCOPES)[number];
+
+export const QUIZ_ATTEMPT_SCOPE = {
+  FULL: 'full',
+  MISSED: 'missed',
+} as const satisfies Record<string, QuizAttemptScope>;
+
 export interface QuizAttempt {
   id: string;
   artifactId: string;
   score: number;
+  scope: QuizAttemptScope;
   answers: { questionIndex: number; selectedIndex: number; correct: boolean }[];
   completedAt: string;
 }
 
+export interface QuizQuestionReview {
+  questionIndex: number;
+  question: string;
+  options: string[];
+  selectedIndex: number;
+  correctIndex: number;
+  explanation: string;
+}
+
+export interface QuizAttemptReview {
+  score: number;
+  completedAt: string;
+  review: QuizQuestionReview[];
+  missedQuestionIndexes: number[];
+}
+
+export interface LatestQuizAttemptResponse {
+  latest: QuizAttemptReview | null;
+}
+
+export const STUDY_CARD_KINDS = ['due', 'new'] as const;
+export type StudyCardKind = (typeof STUDY_CARD_KINDS)[number];
+
+export const STUDY_CARD_KIND = {
+  DUE: 'due',
+  NEW: 'new',
+} as const satisfies Record<string, StudyCardKind>;
+
+/** Days until the next review for each rating, as the scheduler would compute them right now. */
+export interface PredictedIntervals {
+  again: number;
+  hard: number;
+  good: number;
+  easy: number;
+}
+
+export interface StudyCard {
+  artifactId: string;
+  cardIndex: number;
+  noteId: string;
+  deckTitle: string;
+  bucket: ParaBucket | null;
+  front: string;
+  back: string;
+  difficulty: FlashcardDifficulty;
+  kind: StudyCardKind;
+  predictedIntervals: PredictedIntervals;
+}
+
 export interface StudyStats {
-  cardsDueToday: number;
-  cardsReviewedToday: number;
+  dueCount: number;
+  newCount: number;
+  reviewedToday: number;
   currentStreak: number;
   totalCardsStudied: number;
+  nextDueAt: string | null;
 }
+
+export interface StudySession {
+  cards: StudyCard[];
+  stats: StudyStats;
+}
+
+export interface FlashcardDeckStudyState {
+  masteredCount: number;
+  totalCount: number;
+  dueCount: number;
+}
+
+export interface QuizStudyState {
+  lastScore: number;
+  lastAttemptAt: string;
+}
+
+export type ArtifactStudyState =
+  | FlashcardDeckStudyState
+  | QuizStudyState
+  | null;
+
+export type ArtifactWithStudyState =
+  | (FlashcardArtifact & { studyState: FlashcardDeckStudyState })
+  | (QuizArtifact & { studyState: QuizStudyState | null })
+  | (SummaryArtifact & { studyState: null })
+  | (MindMapArtifact & { studyState: null });
 
 export const CARD_SESSION_STATUSES = [
   'pending',

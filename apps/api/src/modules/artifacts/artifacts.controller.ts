@@ -22,15 +22,12 @@ import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { GetNoteHandler } from '../notes/application';
 import { NoteErrorCodes } from '../notes/domain/errors/note.errors';
-import {
-  DeleteArtifactHandler,
-  GenerateArtifactHandler,
-  GetArtifactHandler,
-  GetArtifactsHandler,
-  LearnTopicHandler,
-} from './application';
+import { DeleteArtifactHandler } from './application/commands/delete-artifact.handler';
+import { GenerateArtifactHandler } from './application/commands/generate-artifact.handler';
+import { GetArtifactHandler } from './application/queries/get-artifact.handler';
+import { GetArtifactsHandler } from './application/queries/get-artifacts.handler';
 import { ARTIFACT_ERROR_STATUS_MAP } from './artifact-error-status.map';
-import { ArtifactsQueryDto, GenerateArtifactDto, LearnTopicDto } from './dto';
+import { ArtifactsQueryDto, GenerateArtifactDto } from './dto/artifacts.dto';
 
 @ApiTags('Artifacts')
 @ApiBearerAuth()
@@ -40,7 +37,6 @@ import { ArtifactsQueryDto, GenerateArtifactDto, LearnTopicDto } from './dto';
 export class ArtifactsController {
   constructor(
     private readonly generateArtifactHandler: GenerateArtifactHandler,
-    private readonly learnTopicHandler: LearnTopicHandler,
     private readonly getArtifactHandler: GetArtifactHandler,
     private readonly getArtifactsHandler: GetArtifactsHandler,
     private readonly deleteArtifactHandler: DeleteArtifactHandler,
@@ -78,19 +74,6 @@ export class ArtifactsController {
       type: dto.type,
     });
 
-    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
-  }
-
-  @ApiOperation({ summary: 'Generate educational content about a topic' })
-  @Post('learn')
-  async learnTopic(
-    @CurrentUser() user: RequestUser,
-    @Body() dto: LearnTopicDto
-  ) {
-    const result = await this.learnTopicHandler.execute({
-      userId: user.id,
-      topic: dto.topic,
-    });
     return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 

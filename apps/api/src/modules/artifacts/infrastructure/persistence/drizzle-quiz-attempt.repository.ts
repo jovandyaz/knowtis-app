@@ -1,16 +1,20 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
-import type { QuizAttempt } from '@knowtis/shared-types';
+import {
+  QUIZ_ATTEMPT_SCOPE,
+  type QuizAttempt,
+  type QuizAttemptScope,
+} from '@knowtis/shared-types';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { quizAttempts } from '../../../../database/schema';
 import {
   ArtifactErrors,
   type ArtifactDomainError,
-  type QuizAttemptRepository,
-} from '../../domain';
+} from '../../domain/errors/artifact.errors';
+import type { QuizAttemptRepository } from '../../domain/ports/artifact.repository';
 
 @Injectable()
 export class DrizzleQuizAttemptRepository implements QuizAttemptRepository {
@@ -25,6 +29,7 @@ export class DrizzleQuizAttemptRepository implements QuizAttemptRepository {
     artifactId: string;
     userId: string;
     score: number;
+    scope: QuizAttemptScope;
     answers: QuizAttempt['answers'];
   }): Promise<Result<QuizAttempt, ArtifactDomainError>> {
     try {
@@ -34,6 +39,7 @@ export class DrizzleQuizAttemptRepository implements QuizAttemptRepository {
           artifactId: data.artifactId,
           userId: data.userId,
           score: data.score.toFixed(2),
+          scope: data.scope,
           answers: data.answers,
         })
         .returning();
@@ -50,13 +56,7 @@ export class DrizzleQuizAttemptRepository implements QuizAttemptRepository {
         );
       }
 
-      return ok({
-        id: result[0].id,
-        artifactId: result[0].artifactId,
-        score: Number(result[0].score),
-        answers: result[0].answers as QuizAttempt['answers'],
-        completedAt: result[0].completedAt.toISOString(),
-      });
+      return ok(this.toAttempt(result[0]));
     } catch (error) {
       this.logger.error({
         event: 'quiz_attempt.create_error',
@@ -89,12 +89,60 @@ export class DrizzleQuizAttemptRepository implements QuizAttemptRepository {
       )
       .orderBy(desc(quizAttempts.completedAt));
 
-    return rows.map((row) => ({
+    return rows.map((row) => this.toAttempt(row));
+  }
+
+  async findLatestFull(
+    artifactId: string,
+    userId: string
+  ): Promise<QuizAttempt | null> {
+    const rows = await this.db
+      .select()
+      .from(quizAttempts)
+      .where(
+        and(
+          eq(quizAttempts.artifactId, artifactId),
+          eq(quizAttempts.userId, userId),
+          eq(quizAttempts.scope, QUIZ_ATTEMPT_SCOPE.FULL)
+        )
+      )
+      .orderBy(desc(quizAttempts.completedAt))
+      .limit(1);
+
+    return rows[0] ? this.toAttempt(rows[0]) : null;
+  }
+
+  async findLatestFullByArtifacts(
+    artifactIds: string[],
+    userId: string
+  ): Promise<QuizAttempt[]> {
+    if (artifactIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db
+      .selectDistinctOn([quizAttempts.artifactId])
+      .from(quizAttempts)
+      .where(
+        and(
+          inArray(quizAttempts.artifactId, artifactIds),
+          eq(quizAttempts.userId, userId),
+          eq(quizAttempts.scope, QUIZ_ATTEMPT_SCOPE.FULL)
+        )
+      )
+      .orderBy(quizAttempts.artifactId, desc(quizAttempts.completedAt));
+
+    return rows.map((row) => this.toAttempt(row));
+  }
+
+  private toAttempt(row: typeof quizAttempts.$inferSelect): QuizAttempt {
+    return {
       id: row.id,
       artifactId: row.artifactId,
       score: Number(row.score),
+      scope: row.scope,
       answers: row.answers as QuizAttempt['answers'],
       completedAt: row.completedAt.toISOString(),
-    }));
+    };
   }
 }

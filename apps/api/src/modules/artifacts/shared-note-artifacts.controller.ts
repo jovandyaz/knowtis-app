@@ -3,7 +3,7 @@ import { Controller, Get, Param } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { GetSharedNoteArtifactsHandler } from './application';
+import { GetSharedNoteArtifactsHandler } from './application/queries/get-shared-note-artifacts.handler';
 import { ARTIFACT_ERROR_STATUS_MAP } from './artifact-error-status.map';
 
 @ApiTags('Shared Notes')

@@ -18,6 +18,9 @@ const EVENT_PROPERTY_KEYS = {
   'note created': ['source', 'actor_type'],
   'note shared': ['source', 'share_type', 'permission'],
   'mcp key created': ['source', 'scope_level'],
+  'study artifact generated': ['source', 'artifact_type'],
+  'flashcard reviewed': ['source', 'quality', 'kind'],
+  'quiz completed': ['source', 'scope', 'score_bucket'],
 } as const satisfies {
   [E in ServerProductEventName]: readonly (keyof ServerProductEventMap[E])[];
 };

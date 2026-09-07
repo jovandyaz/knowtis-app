@@ -1,22 +1,39 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
-import { ARTIFACT_TYPE } from '@knowtis/shared-types';
-import type { QuizAttempt, QuizContent } from '@knowtis/shared-types';
+import {
+  ARTIFACT_TYPE,
+  QUIZ_ATTEMPT_SCOPE,
+  type QuizAttempt,
+  type QuizAttemptScope,
+  type QuizContent,
+} from '@knowtis/shared-types';
 
-import { ArtifactErrors, type ArtifactDomainError } from '../../domain/errors';
+import type { ArtifactDomainError } from '../../domain/errors/artifact.errors';
+import { QuizCompletedEvent } from '../../domain/events/quiz-completed.event';
 import {
   ARTIFACT_READ_REPOSITORY,
   QUIZ_ATTEMPT_REPOSITORY,
   type ArtifactReadRepository,
   type QuizAttemptRepository,
-} from '../../domain/ports';
+} from '../../domain/ports/artifact.repository';
+import {
+  gradeQuizAttempt,
+  resolveMissedScope,
+  validateQuizAnswers,
+  type QuizAnswer,
+} from '../../domain/services/quiz-attempt.policy';
+import { loadOwnedArtifact } from '../services/load-owned-artifact';
 
 interface SubmitQuizAttemptInput {
   artifactId: string;
   userId: string;
-  answers: { questionIndex: number; selectedIndex: number }[];
+  scope?: QuizAttemptScope;
+  answers: QuizAnswer[];
 }
+
+const DEFAULT_SCOPE: QuizAttemptScope = QUIZ_ATTEMPT_SCOPE.FULL;
 
 @Injectable()
 export class SubmitQuizAttemptHandler {
@@ -24,48 +41,65 @@ export class SubmitQuizAttemptHandler {
     @Inject(ARTIFACT_READ_REPOSITORY)
     private readonly readRepo: ArtifactReadRepository,
     @Inject(QUIZ_ATTEMPT_REPOSITORY)
-    private readonly quizAttemptRepo: QuizAttemptRepository
+    private readonly quizAttemptRepo: QuizAttemptRepository,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async execute(
     input: SubmitQuizAttemptInput
   ): Promise<Result<QuizAttempt, ArtifactDomainError>> {
-    const artifact = await this.readRepo.findById(input.artifactId);
+    const owned = await loadOwnedArtifact(
+      this.readRepo,
+      input.artifactId,
+      input.userId,
+      ARTIFACT_TYPE.QUIZ
+    );
 
-    if (!artifact || artifact.userId !== input.userId) {
-      return err(ArtifactErrors.notFound(input.artifactId));
+    if (owned.isErr()) {
+      return err(owned.error);
     }
 
-    if (artifact.type !== ARTIFACT_TYPE.QUIZ) {
-      return err(ArtifactErrors.invalidType(artifact.type));
+    const scope = input.scope ?? DEFAULT_SCOPE;
+    const { questions } = owned.value.content as QuizContent;
+
+    const validated = validateQuizAnswers(questions, input.answers, scope);
+    if (validated.isErr()) {
+      return err(validated.error);
     }
 
-    const quizContent = artifact.content as QuizContent;
-    const gradedAnswers = input.answers.map((answer) => {
-      const question = quizContent.questions[answer.questionIndex];
-      return {
-        questionIndex: answer.questionIndex,
-        selectedIndex: answer.selectedIndex,
-        correct: question
-          ? answer.selectedIndex === question.correctIndex
-          : false,
-      };
-    });
+    if (scope === QUIZ_ATTEMPT_SCOPE.MISSED) {
+      const latestFull = await this.quizAttemptRepo.findLatestFull(
+        input.artifactId,
+        input.userId
+      );
+      const missedScope = resolveMissedScope(latestFull, input.answers);
+      if (missedScope.isErr()) {
+        return err(missedScope.error);
+      }
+    }
 
-    const correctCount = gradedAnswers.filter((a) => a.correct).length;
-    const totalQuestions = quizContent.questions.length;
-    const score = totalQuestions > 0 ? correctCount / totalQuestions : 0;
+    const { gradedAnswers, score } = gradeQuizAttempt(
+      questions,
+      input.answers,
+      scope
+    );
 
     const createResult = await this.quizAttemptRepo.create({
       artifactId: input.artifactId,
       userId: input.userId,
       score,
+      scope,
       answers: gradedAnswers,
     });
 
     if (createResult.isErr()) {
       return err(createResult.error);
     }
+
+    this.eventEmitter.emit(
+      QuizCompletedEvent.EVENT_NAME,
+      new QuizCompletedEvent(input.artifactId, input.userId, scope, score)
+    );
 
     return ok(createResult.value);
   }
