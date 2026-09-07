@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
@@ -26,6 +27,7 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
   const { t } = useTranslation('auth');
   const email = useAuthUser()?.email ?? '';
   const source = useVerifyEmailStore((s) => s.source);
+  const codeInputRef = useRef<HTMLInputElement>(null);
   // No code was just sent — the user may be days past registration — so the
   // first send must be one click away rather than held by a phantom cooldown.
   const form = useVerifyEmailCodeForm({
@@ -34,6 +36,8 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
       onVerified();
     },
     startHeld: false,
+    onCodeCleared: () => codeInputRef.current?.focus(),
+    onCodeInvalid: () => codeInputRef.current?.focus(),
   });
 
   return (
@@ -54,7 +58,7 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
       </DialogHeader>
 
       <form onSubmit={form.onSubmit} noValidate className="space-y-4">
-        <OtpCodeField id={CODE_FIELD_ID} form={form} />
+        <OtpCodeField ref={codeInputRef} id={CODE_FIELD_ID} form={form} />
         <ResendNoticeAlert notice={form.resendNotice} />
 
         <DialogFooter>

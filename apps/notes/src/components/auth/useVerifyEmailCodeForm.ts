@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useEffectEvent, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isRateLimited } from '@/hooks/useRateLimitState';
@@ -27,6 +27,10 @@ export interface VerifyEmailCodeFormOptions {
   onVerified: () => void;
   /** False where no code was just sent, so the first send is one click away. */
   startHeld?: boolean;
+  /** Moves the workflow to its intended target after resend resets stale input. */
+  onCodeCleared?: () => void;
+  /** Runs after an invalid-code result commits and pending controls reenable. */
+  onCodeInvalid?: () => void;
 }
 
 export interface VerifyEmailCodeForm extends ResendControls {
@@ -65,11 +69,23 @@ function verifyErrorKey(error: Error | null): VerifyErrorKey | undefined {
 export function useVerifyEmailCodeForm({
   onVerified,
   startHeld = true,
+  onCodeCleared,
+  onCodeInvalid,
 }: VerifyEmailCodeFormOptions): VerifyEmailCodeForm {
   const { t } = useTranslation('auth');
   const verifyCode = useVerifyEmailCode();
   const [code, setCode] = useState('');
   const [attemptsSpent, setAttemptsSpent] = useState(false);
+
+  const notifyCodeInvalid = useEffectEvent(() => onCodeInvalid?.());
+  useEffect(() => {
+    if (
+      !verifyCode.isPending &&
+      verifyErrorKey(verifyCode.error) === CODE_INVALID_KEY
+    ) {
+      notifyCodeInvalid();
+    }
+  }, [verifyCode.error, verifyCode.isPending]);
 
   const resend = useResendCooldown({
     startHeld,
@@ -77,6 +93,7 @@ export function useVerifyEmailCodeForm({
       setCode('');
       setAttemptsSpent(false);
       verifyCode.reset();
+      onCodeCleared?.();
     },
   });
 

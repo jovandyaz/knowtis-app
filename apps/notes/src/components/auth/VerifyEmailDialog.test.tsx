@@ -124,6 +124,34 @@ describe('VerifyEmailDialog', () => {
     expect(document.activeElement).toBe(screen.getByLabelText(CODE_LABEL));
   });
 
+  it('recaptures outside focus after opening without first refocusing the code', async () => {
+    render(
+      <>
+        <textarea aria-label="Background editor" />
+        <VerifyEmailDialog />
+      </>,
+      {
+        wrapper: createAuthWrapper(createAuthApiMock(), {
+          user: HARNESS_PROFILE,
+        }),
+      }
+    );
+    const editor = screen.getByLabelText('Background editor');
+    editor.focus();
+    openDialog();
+
+    const code = screen.getByLabelText(CODE_LABEL);
+    expect(code).toHaveFocus();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    });
+    expect(code).toHaveFocus();
+
+    act(() => editor.focus());
+
+    expect(code).toHaveFocus();
+  });
+
   it('offers a code immediately, because none was just sent', () => {
     renderDialog();
     openDialog();
@@ -148,6 +176,22 @@ describe('VerifyEmailDialog', () => {
       vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
     });
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
+  });
+
+  it('returns focus to the cleared dialog code after a successful resend', async () => {
+    const { api } = renderDialog();
+    openDialog();
+
+    const code = screen.getByLabelText(CODE_LABEL);
+    fireEvent.change(code, { target: { value: '123' } });
+    const resend = screen.getByRole('button', { name: RESEND_BUTTON });
+    resend.focus();
+    fireEvent.click(resend);
+    await flushPromises();
+
+    expect(api.resendVerification).toHaveBeenCalledTimes(1);
+    expect(code).toHaveValue('');
+    expect(code).toHaveFocus();
   });
 
   it('arms the cooldown hold when the server says the last code is too recent', async () => {
