@@ -309,6 +309,20 @@
       "when": 1788631360884,
       "tag": "0043_sticky_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788741445377,
+      "tag": "0044_steady_mongu",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788741453019,
+      "tag": "0045_seed_study_review_queue_flag",
+      "breakpoints": true
     }
   ]
 }
