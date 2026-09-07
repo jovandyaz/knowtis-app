@@ -67,7 +67,7 @@ export class SubmitQuizDto {
   @ApiPropertyOptional({
     enum: QUIZ_ATTEMPT_SCOPES,
     description:
-      'full grades the whole quiz; missed grades exactly the questions failed in the latest full attempt',
+      'full grades the whole quiz and must answer every question; missed grades exactly the questions failed in the latest full attempt',
   })
   @IsOptional()
   @IsIn(QUIZ_ATTEMPT_SCOPES)
