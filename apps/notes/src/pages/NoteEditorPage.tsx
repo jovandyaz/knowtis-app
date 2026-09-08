@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
+import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
@@ -186,6 +187,7 @@ function NoteEditor({
   });
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
+  const { data: noteArtifacts } = useArtifacts(noteId);
   const workspaceTab = useWorkspaceStore((s) => s.activeTab);
   const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
 
@@ -325,7 +327,7 @@ function NoteEditor({
         onShareDialogOpenChange={setIsShareDialogOpen}
       />
 
-      {aiEnabled && <WorkspaceTabBar noteId={noteId} />}
+      {aiEnabled && <WorkspaceTabBar studyCount={noteArtifacts?.length ?? 0} />}
 
       <div
         {...(aiEnabled

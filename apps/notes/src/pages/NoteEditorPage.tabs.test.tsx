@@ -12,7 +12,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
-const { aiState } = vi.hoisted(() => ({ aiState: { aiEnabled: false } }));
+const { aiState, artifactsState } = vi.hoisted(() => ({
+  aiState: { aiEnabled: false },
+  artifactsState: { data: [] as { id: string }[] },
+}));
 
 const renderWithClient = (ui: ReactElement) =>
   render(
@@ -62,7 +65,7 @@ vi.mock('@/components/artifacts/StudyToolsTab', () => ({
 }));
 
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useArtifacts: () => ({ data: [] }),
+  useArtifacts: () => ({ data: artifactsState.data }),
 }));
 
 vi.mock('@knowtis/data-access-notes', () => ({
@@ -101,6 +104,7 @@ describe('NoteEditorPage workspace tabs', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ activeTab: 'note' });
     aiState.aiEnabled = false;
+    artifactsState.data = [];
   });
 
   describe('when AI is disabled', () => {
@@ -143,6 +147,16 @@ describe('NoteEditorPage workspace tabs', () => {
       );
       expect(notePanel).toHaveAttribute('tabindex', '0');
       expect(estudioPanel).toHaveAttribute('tabindex', '0');
+    });
+
+    it('shows the note artifact count on the study tab', () => {
+      artifactsState.data = [{ id: 'a1' }, { id: 'a2' }];
+
+      renderWithClient(<NoteEditorPage />);
+
+      expect(
+        screen.getByRole('tab', { name: /workspace.tabs.study/ })
+      ).toHaveTextContent('2');
     });
 
     it('keeps the editor mounted and only hides the note panel when switching to Estudio', () => {

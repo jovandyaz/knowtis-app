@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceStore, type WorkspaceTab } from '@/stores/workspace.store';
 import { BookOpen, FileText, type LucideIcon } from 'lucide-react';
 
-import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { cn } from '@knowtis/design-system';
 
 import { workspacePanelId, workspaceTabId } from './workspace-tab-ids';
@@ -16,11 +15,10 @@ interface WorkspaceTabItem {
   count?: number;
 }
 
-export function WorkspaceTabBar({ noteId }: { noteId: string }) {
+export function WorkspaceTabBar({ studyCount }: { studyCount?: number }) {
   const { t } = useTranslation('notes');
   const activeTab = useWorkspaceStore((s) => s.activeTab);
   const setTab = useWorkspaceStore((s) => s.setTab);
-  const { data: artifacts } = useArtifacts(noteId);
 
   const tabs: WorkspaceTabItem[] = [
     { value: 'note', label: t('workspace.tabs.note'), icon: FileText },
@@ -28,7 +26,7 @@ export function WorkspaceTabBar({ noteId }: { noteId: string }) {
       value: 'estudio',
       label: t('workspace.tabs.study'),
       icon: BookOpen,
-      count: artifacts?.length ?? 0,
+      count: studyCount ?? 0,
     },
   ];
 
