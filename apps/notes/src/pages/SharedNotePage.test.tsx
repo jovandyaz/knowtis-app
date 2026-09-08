@@ -350,6 +350,8 @@ describe('SharedNotePage editing as a visitor', () => {
 describe('SharedNotePage study tab', () => {
   const studyTab = () =>
     screen.getByRole('tab', { name: /workspace.tabs.study/ });
+  const noteTab = () =>
+    screen.getByRole('tab', { name: /workspace.tabs.note/ });
   const notePanel = () => document.getElementById(workspacePanelId('note'));
   const studyPanel = () => document.getElementById(workspacePanelId('estudio'));
 
@@ -403,6 +405,44 @@ describe('SharedNotePage study tab', () => {
       screen.getByRole('tab', { name: /workspace.tabs.note/ })
     ).toHaveAttribute('aria-selected', 'true');
     expect(useWorkspaceStore.getState().activeTab).toBe('note');
+  });
+
+  it('returns the viewer to the note tab when editing starts', async () => {
+    ensureGuestSession.mockResolvedValue(true);
+    sharedArtifacts.data = artifactFixtures;
+    renderPage();
+
+    await userEvent.click(studyTab());
+    expect(studyPanel()).not.toHaveClass('hidden');
+
+    await clickEdit();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument()
+    );
+    expect(noteTab()).toHaveAttribute('aria-selected', 'true');
+    expect(notePanel()).not.toHaveClass('hidden');
+  });
+
+  it('returns the viewer to the note tab when editing stops', async () => {
+    ensureGuestSession.mockResolvedValue(true);
+    sharedArtifacts.data = artifactFixtures;
+    renderPage();
+
+    await clickEdit();
+    await waitFor(() =>
+      expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument()
+    );
+    await userEvent.click(studyTab());
+    expect(studyPanel()).not.toHaveClass('hidden');
+
+    await userEvent.click(
+      screen.getAllByRole('button', { name: 'shared.viewButton' })[0]
+    );
+
+    expect(noteTab()).toHaveAttribute('aria-selected', 'true');
+    expect(notePanel()).not.toHaveClass('hidden');
+    expect(screen.getByTestId('read-only-editor')).toBeInTheDocument();
   });
 
   it('no longer offers the study sidebar toggles', () => {

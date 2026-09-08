@@ -13,6 +13,7 @@ import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useWorkspaceTabReset } from '@/stores/useWorkspaceTabReset';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { format } from 'date-fns';
 import { Check, Eye, Pencil, Share2 } from 'lucide-react';
@@ -65,6 +66,8 @@ export function SharedNotePage() {
   // A registered visitor gets nothing from the login page but a bounce back here.
   const offerSignIn = !isAuthLoading && isAnonymousVisitor;
 
+  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
+
   useWorkspaceTabReset(token);
 
   useEffect(() => {
@@ -88,21 +91,23 @@ export function SharedNotePage() {
     void ensureGuestSession()
       .then((ready) => {
         if (ready) {
+          setWorkspaceTab('note');
           setIsEditing(true);
           return;
         }
         toast.error(t('shared.editUnavailable'));
       })
       .finally(() => setIsPreparingEdit(false));
-  }, [t]);
+  }, [t, setWorkspaceTab]);
 
   const handleUpdate = useCallback((content: string) => {
     setLatestContent(content);
   }, []);
 
   const handleStopEditing = useCallback(() => {
+    setWorkspaceTab('note');
     setIsEditing(false);
-  }, []);
+  }, [setWorkspaceTab]);
 
   if (isLoading) {
     return (
