@@ -1,11 +1,12 @@
 import type { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
   GENERAL_ACCESS,
   PERMISSION,
+  type NotePerson,
   type PermissionLevel as PermissionLevelType,
 } from '@knowtis/shared-types';
 
@@ -13,10 +14,10 @@ import {
   DATABASE_CONNECTION,
   notePermissions,
   notes,
-  users,
   type Database,
   type NewNotePermission,
 } from '../../../../database';
+import { users } from '../../../../database/schema/users.schema';
 import {
   NoteErrors,
   PermissionLevel,
@@ -66,58 +67,59 @@ export class DrizzlePermissionRepository implements PermissionRepository {
     };
   }
 
-  async findPermissionsByNote(noteId: string): Promise<
-    {
-      permission: NotePermissionEntity;
-      user: {
-        id: string;
-        name: string;
-        email: string;
-        avatarUrl: string | null;
-      };
-    }[]
-  > {
-    const results = await this.db
+  async findPeopleByNote(noteId: string): Promise<NotePerson[]> {
+    const personFields = {
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      avatarUrl: users.avatarUrl,
+    };
+    const owner = this.db
       .select({
-        permission: notePermissions,
-        user: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          avatarUrl: users.avatarUrl,
-        },
+        ...personFields,
+        permission: sql<NotePerson['permission']>`'owner'::text`.as(
+          'permission'
+        ),
+        rank: sql<number>`0`.as('rank'),
       })
-      .from(notePermissions)
-      .innerJoin(users, eq(notePermissions.userId, users.id))
-      .where(eq(notePermissions.noteId, noteId));
-
-    const mapped: {
-      permission: NotePermissionEntity;
-      user: {
-        id: string;
-        name: string;
-        email: string;
-        avatarUrl: string | null;
-      };
-    }[] = [];
-
-    for (const row of results) {
-      const permissionResult = PermissionLevel.create(
-        row.permission.permission
+      .from(notes)
+      .innerJoin(users, eq(users.id, notes.ownerId))
+      .where(and(eq(notes.id, noteId), isNull(notes.deletedAt)));
+    const direct = this.db
+      .select({
+        ...personFields,
+        permission: sql<
+          NotePerson['permission']
+        >`${notePermissions.permission}::text`.as('permission'),
+        rank: sql<number>`1`.as('rank'),
+      })
+      .from(notes)
+      .innerJoin(notePermissions, eq(notePermissions.noteId, notes.id))
+      .innerJoin(users, eq(users.id, notePermissions.userId))
+      .where(
+        and(
+          eq(notes.id, noteId),
+          isNull(notes.deletedAt),
+          ne(notePermissions.userId, notes.ownerId)
+        )
       );
-      if (permissionResult.isOk()) {
-        mapped.push({
-          permission: {
-            noteId: row.permission.noteId,
-            userId: row.permission.userId,
-            permission: permissionResult.value,
-          },
-          user: row.user,
-        });
-      }
-    }
-
-    return mapped;
+    const people = owner.unionAll(direct).as('people');
+    const rows = await this.db
+      .select({
+        id: people.id,
+        name: people.name,
+        email: people.email,
+        avatarUrl: people.avatarUrl,
+        permission: people.permission,
+      })
+      .from(people)
+      .orderBy(
+        people.rank,
+        sql`${people.name} COLLATE "C"`,
+        sql`${people.email} COLLATE "C"`,
+        people.id
+      );
+    return rows.map(({ permission, ...user }) => ({ user, permission }));
   }
 
   async upsertPermission(
@@ -135,18 +137,36 @@ export class DrizzlePermissionRepository implements PermissionRepository {
         permission: data.permission as PermissionLevelType,
       };
 
-      const result = await this.db
-        .insert(notePermissions)
-        .values(newPerm)
-        .onConflictDoUpdate({
-          target: [notePermissions.noteId, notePermissions.userId],
-          set: { permission: newPerm.permission },
-        })
-        .returning();
+      // A concurrent revoke must not turn an unverified narrowing into a new grant.
+      const result =
+        data.allowAmplification === false
+          ? await this.db
+              .update(notePermissions)
+              .set({ permission: newPerm.permission })
+              .where(
+                and(
+                  eq(notePermissions.noteId, data.noteId),
+                  eq(notePermissions.userId, data.userId.value),
+                  newPerm.permission === PERMISSION.EDITOR
+                    ? eq(notePermissions.permission, PERMISSION.EDITOR)
+                    : undefined
+                )
+              )
+              .returning()
+          : await this.db
+              .insert(notePermissions)
+              .values(newPerm)
+              .onConflictDoUpdate({
+                target: [notePermissions.noteId, notePermissions.userId],
+                set: { permission: newPerm.permission },
+              })
+              .returning();
 
       if (!result[0]) {
         return err(
-          NoteErrors.persistenceError('upsertPermission', data.noteId)
+          data.allowAmplification === false
+            ? NoteErrors.verificationRequired()
+            : NoteErrors.persistenceError('upsertPermission', data.noteId)
         );
       }
 
