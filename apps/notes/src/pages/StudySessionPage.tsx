@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, Navigate } from '@tanstack/react-router';
@@ -9,7 +9,7 @@ import { FlashcardSummary } from '@/components/artifacts/flashcard/FlashcardSumm
 import { useFlashcardSession } from '@/components/artifacts/flashcard/use-flashcard-session';
 import { ROUTES } from '@/config';
 import { useStudyFocusMode } from '@/hooks/useStudyFocusMode';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -31,6 +31,7 @@ import {
   RATING_ORDER,
   RATING_QUALITY,
   Skeleton,
+  Switch,
   TOUCH_TARGET_CLASS,
   type RatingKey,
 } from '@knowtis/design-system';
@@ -49,6 +50,8 @@ const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
 const CTA_CLASS = 'rounded-lg px-4 text-sm font-medium';
 const RATING_BAR_MOBILE_PADDING = 'pb-28 md:pb-6';
+const ADVANCED_TOGGLE_TAP_AREA =
+  "before:absolute before:-inset-x-2 before:-inset-y-3.5 before:content-['']";
 const RATING_BAR_CLASS =
   'fixed inset-x-0 bottom-0 z-30 border-t border-(--border) bg-(--background)/95 px-4 py-3 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:pb-0 md:backdrop-blur-none';
 
@@ -181,6 +184,7 @@ function StudyQueueSession({
   const { t } = useTranslation('notes');
   const session = useFlashcardSession(initialCards);
   const containerRef = useRef<HTMLDivElement>(null);
+  const advancedLabelId = useId();
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
 
@@ -371,12 +375,33 @@ function StudyQueueSession({
         onFlip={session.flip}
       />
 
+      <div className="flex items-center justify-center gap-2">
+        <Settings2
+          aria-hidden="true"
+          className="h-3.5 w-3.5 text-(--muted-foreground)"
+        />
+        <span
+          id={advancedLabelId}
+          className="text-xs text-(--muted-foreground)"
+        >
+          {t('ai.artifacts.flashcards.advancedMode')}
+        </span>
+        <Switch
+          checked={session.isAdvancedMode}
+          onCheckedChange={session.toggleAdvanced}
+          size="sm"
+          aria-labelledby={advancedLabelId}
+          className={ADVANCED_TOGGLE_TAP_AREA}
+        />
+      </div>
+
       {session.flipped ? (
         <div className={RATING_BAR_CLASS}>
           <FlashcardRating
             isAdvancedMode={session.isAdvancedMode}
             disabled={isReviewPending}
             intervals={card.predictedIntervals}
+            showKeys
             onWrong={handleWrong}
             onCorrect={handleCorrect}
             onRateAdvanced={handleRateAdvanced}

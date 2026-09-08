@@ -18,6 +18,7 @@ interface FlashcardRatingProps {
   readOnly?: boolean | undefined;
   disabled: boolean;
   intervals?: PredictedIntervals | undefined;
+  showKeys?: boolean | undefined;
   onWrong: () => void;
   onCorrect: () => void;
   onRateAdvanced: (quality: SM2Quality) => void;
@@ -38,6 +39,7 @@ export function FlashcardRating({
   readOnly,
   disabled,
   intervals,
+  showKeys = false,
   onWrong,
   onCorrect,
   onRateAdvanced,
@@ -66,6 +68,7 @@ export function FlashcardRating({
           }
           onRate={onRateAdvanced}
           disabled={disabled}
+          showKeys={showKeys}
         />
       </motion.div>
     );

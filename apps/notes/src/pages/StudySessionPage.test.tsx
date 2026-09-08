@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as MotionReact from 'motion/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -144,6 +144,10 @@ const CARD_TWO = makeCard({
 });
 
 const front = (text: RegExp) => screen.getByRole('button', { name: text });
+const advancedToggle = () =>
+  screen.getByRole('switch', { name: 'ai.artifacts.flashcards.advancedMode' });
+const ratingBar = () =>
+  screen.queryByRole('group', { name: 'ai.artifacts.flashcards.rateCard' });
 const practiseAgain = () =>
   screen.getByRole('button', {
     name: 'ai.artifacts.flashcards.summary.practiceAgain',
@@ -411,6 +415,55 @@ describe('StudySessionPage', () => {
     expect(
       screen.getByRole('button', { name: 'Dorso uno' })
     ).toBeInTheDocument();
+  });
+
+  it('swaps the two rating buttons for the four-way bar in advanced mode', async () => {
+    render(<StudySessionPage />);
+    await userEvent.click(front(/Frente uno/));
+
+    expect(correctButton()).toBeInTheDocument();
+    expect(ratingBar()).toBeNull();
+
+    await userEvent.click(advancedToggle());
+
+    expect(
+      screen.queryByRole('button', { name: 'ai.artifacts.flashcards.correct' })
+    ).toBeNull();
+    expect(ratingBar()).toBeInTheDocument();
+  });
+
+  it('captions the advanced ratings with the current card own intervals', async () => {
+    render(<StudySessionPage />);
+
+    await userEvent.click(advancedToggle());
+    await userEvent.click(front(/Frente uno/));
+
+    expect(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.quality.good, ai.artifacts.flashcards.intervalDays {"count":4}',
+      })
+    ).toBeInTheDocument();
+  });
+
+  it('rates good with the 3 key and announces the shortcut', async () => {
+    queueOf([makeCard({ artifactId: 'deck-3', cardIndex: 7 }), CARD_TWO]);
+    const { container } = render(<StudySessionPage />);
+
+    await userEvent.click(advancedToggle());
+    await userEvent.click(front(/Frente uno/));
+
+    expect(
+      screen.getByRole('button', { name: /quality\.good/ })
+    ).toHaveAttribute('aria-keyshortcuts', '3');
+
+    fireEvent.keyDown(container.firstElementChild as HTMLElement, { key: '3' });
+
+    expect(reviewCard).toHaveBeenCalledWith({
+      artifactId: 'deck-3',
+      cardIndex: 7,
+      quality: SM2_QUALITY.GOOD,
+    });
+    expect(front(/Frente dos/)).toBeInTheDocument();
   });
 
   it('keeps playing when the refetched queue comes back empty', async () => {
