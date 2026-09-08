@@ -10,11 +10,8 @@ import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
 import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
-import {
-  workspacePanelId,
-  workspaceTabId,
-} from '@/components/workspace/workspace-tab-ids';
 import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
+import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
@@ -35,7 +32,7 @@ import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
+import { ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import {
   ACCESS,
@@ -188,7 +185,6 @@ function NoteEditor({
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
   const { data: noteArtifacts } = useArtifacts(noteId);
-  const workspaceTab = useWorkspaceStore((s) => s.activeTab);
   const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
 
   useEffect(() => {
@@ -329,17 +325,7 @@ function NoteEditor({
 
       {aiEnabled && <WorkspaceTabBar studyCount={noteArtifacts?.length ?? 0} />}
 
-      <div
-        {...(aiEnabled
-          ? {
-              id: workspacePanelId('note'),
-              role: 'tabpanel' as const,
-              'aria-labelledby': workspaceTabId('note'),
-              tabIndex: 0,
-            }
-          : {})}
-        className={cn(aiEnabled && workspaceTab !== 'note' && 'hidden')}
-      >
+      <WorkspaceTabPanel tab="note" tabbed={aiEnabled}>
         <div className="mb-4">
           <Input
             ref={titleInputRef}
@@ -395,18 +381,12 @@ function NoteEditor({
             preAcquiredStream={preAcquiredStream}
           />
         )}
-      </div>
+      </WorkspaceTabPanel>
 
       {aiEnabled && (
-        <div
-          id={workspacePanelId('estudio')}
-          role="tabpanel"
-          aria-labelledby={workspaceTabId('estudio')}
-          tabIndex={0}
-          className={cn(workspaceTab !== 'estudio' && 'hidden')}
-        >
+        <WorkspaceTabPanel tab="estudio" tabbed>
           <StudyToolsTab noteId={noteId} />
-        </div>
+        </WorkspaceTabPanel>
       )}
     </div>
   );

@@ -7,11 +7,8 @@ import { ensureGuestSession } from '@/auth/setup';
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
-import {
-  workspacePanelId,
-  workspaceTabId,
-} from '@/components/workspace/workspace-tab-ids';
 import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
+import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';
@@ -27,7 +24,6 @@ import { useNoteByToken } from '@knowtis/data-access-notes';
 import {
   Badge,
   Button,
-  cn,
   ErrorState,
   LoadingState,
   Tooltip,
@@ -55,7 +51,6 @@ export function SharedNotePage() {
   const { copied, copy: copyLink } = useCopyLink();
   const sharedArtifacts = artifacts ?? [];
   const hasArtifacts = sharedArtifacts.length > 0;
-  const workspaceTab = useWorkspaceStore((s) => s.activeTab);
   const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
   const sharedPath = sharedNotePath(token);
   const capturedTokenRef = useRef<string | null>(null);
@@ -337,19 +332,7 @@ export function SharedNotePage() {
                 <WorkspaceTabBar studyCount={sharedArtifacts.length} />
               )}
 
-              <div
-                {...(hasArtifacts
-                  ? {
-                      id: workspacePanelId('note'),
-                      role: 'tabpanel' as const,
-                      'aria-labelledby': workspaceTabId('note'),
-                      tabIndex: 0,
-                    }
-                  : {})}
-                className={cn(
-                  hasArtifacts && workspaceTab !== 'note' && 'hidden'
-                )}
-              >
+              <WorkspaceTabPanel tab="note" tabbed={hasArtifacts}>
                 {isEditing ? (
                   <CollaborativeEditor
                     noteId={data.id}
@@ -362,22 +345,16 @@ export function SharedNotePage() {
                 ) : (
                   <ReadOnlyEditor content={displayContent} />
                 )}
-              </div>
+              </WorkspaceTabPanel>
 
               {hasArtifacts && (
-                <div
-                  id={workspacePanelId('estudio')}
-                  role="tabpanel"
-                  aria-labelledby={workspaceTabId('estudio')}
-                  tabIndex={0}
-                  className={cn(workspaceTab !== 'estudio' && 'hidden')}
-                >
+                <WorkspaceTabPanel tab="estudio" tabbed>
                   <StudyToolsTab
                     noteId={data.id}
                     artifacts={sharedArtifacts}
                     readOnly
                   />
-                </div>
+                </WorkspaceTabPanel>
               )}
             </div>
           </main>
