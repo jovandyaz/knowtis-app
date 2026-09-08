@@ -110,10 +110,17 @@ function serveOnRefetch(cards: StudyCard[]) {
 const front = (text: RegExp) => screen.getByRole('button', { name: text });
 const correctButton = () =>
   screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' });
+const wrongButton = () =>
+  screen.getByRole('button', { name: 'ai.artifacts.flashcards.wrong' });
 
 async function rateCurrentCorrect(text: RegExp) {
   await userEvent.click(front(text));
   await userEvent.click(correctButton());
+}
+
+async function rateCurrentWrong(text: RegExp) {
+  await userEvent.click(front(text));
+  await userEvent.click(wrongButton());
 }
 
 const CONTEXT = {
@@ -182,6 +189,27 @@ describe('StudySessionPage analytics', () => {
       source: 'queue',
       reviewed_count: 1,
       correct_count: 1,
+      duration_bucket: '<2m',
+    });
+  });
+
+  it('still reports a correct count of zero when nothing was answered right', async () => {
+    queueOf([makeCard({ kind: 'due' })]);
+
+    render(<StudySessionPage />);
+    vi.clearAllMocks();
+
+    await rateCurrentWrong(/Frente uno/);
+
+    const completedCalls = posthog.capture.mock.calls.filter(
+      ([event]) => event === 'study session completed'
+    );
+    expect(completedCalls).toHaveLength(1);
+    expect(completedCalls[0][1]).toEqual({
+      ...CONTEXT,
+      source: 'queue',
+      reviewed_count: 1,
+      correct_count: 0,
       duration_bucket: '<2m',
     });
   });

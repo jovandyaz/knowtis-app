@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StudyStats } from '@knowtis/shared-types';
@@ -48,6 +48,8 @@ function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
   };
 }
 
+const tile = (name: string) => screen.getByRole('group', { name });
+
 beforeEach(() => {
   flagsQuery = { isPending: false, isError: false };
   isQueueEnabled = true;
@@ -55,19 +57,28 @@ beforeEach(() => {
 });
 
 describe('StudyTodayCard', () => {
-  it("renders today's counts from the stats", () => {
+  it("renders today's counts under the tile each one belongs to", () => {
     render(<StudyTodayCard />);
 
-    expect(screen.getByText('study.todayCard.dueLabel')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();
     expect(
-      screen.getByText('study.todayCard.newLabel {"count":4}')
+      within(tile('study.todayCard.dueLabel')).getByText('12')
     ).toBeInTheDocument();
-    expect(screen.getByText('4')).toBeInTheDocument();
     expect(
-      screen.getByText('study.todayCard.streakLabel {"count":3}')
+      within(tile('study.todayCard.newLabel {"count":4}')).getByText('4')
     ).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(
+      within(tile('study.todayCard.streakLabel {"count":3}')).getByText('3')
+    ).toBeInTheDocument();
+  });
+
+  it('shows a loading state while the stats are still loading', () => {
+    statsQuery = { data: undefined, isPending: true, isError: false };
+
+    render(<StudyTodayCard />);
+
+    expect(
+      screen.getByRole('status', { name: 'study.loading' })
+    ).toBeInTheDocument();
   });
 
   it('shows the caught up state once nothing is left for today', () => {
