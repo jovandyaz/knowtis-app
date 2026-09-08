@@ -84,7 +84,7 @@ describe('QuizSession', () => {
     expect(bar).toHaveAttribute('aria-valuemax', '1');
   });
 
-  it('parks the roving tabindex on the first option until one is picked', () => {
+  it('parks the roving tabindex on the first option before any movement', () => {
     render(<QuizSession artifact={artifact} />);
 
     const [first, second, third] = screen.getAllByRole('radio');
@@ -93,34 +93,79 @@ describe('QuizSession', () => {
     expect(third).toHaveAttribute('tabindex', '-1');
   });
 
-  it('moves focus and selection to the next option on ArrowDown', async () => {
+  it('moves focus to the next option on ArrowDown without picking it', async () => {
     render(<QuizSession artifact={artifact} />);
 
     screen.getByRole('radio', { name: /^A\.\s*Madrid$/ }).focus();
     await userEvent.keyboard('{ArrowDown}');
 
     const second = screen.getByRole('radio', { name: /^B\.\s*París$/ });
-    expect(second).toHaveAttribute('aria-checked', 'true');
     expect(second).toHaveFocus();
+    expect(second).toHaveAttribute('tabindex', '0');
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio).toHaveAttribute('aria-checked', 'false');
+    }
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
-  it('wraps to the last option on ArrowUp from the first', async () => {
+  it('wraps focus to the last option on ArrowUp from the first', async () => {
     render(<QuizSession artifact={artifact} />);
 
     screen.getByRole('radio', { name: /^A\.\s*Madrid$/ }).focus();
     await userEvent.keyboard('{ArrowUp}');
 
-    expect(screen.getByRole('radio', { name: /^C\.\s*Roma$/ })).toHaveAttribute(
-      'aria-checked',
-      'true'
+    const third = screen.getByRole('radio', { name: /^C\.\s*Roma$/ });
+    expect(third).toHaveFocus();
+    expect(third).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('answers the focused option on Enter', async () => {
+    render(<QuizSession artifact={artifact} />);
+
+    screen.getByRole('radio', { name: /^A\.\s*Madrid$/ }).focus();
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    expect(
+      screen.getByRole('radio', { name: /^B\.\s*París$/ })
+    ).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('moves focus to the advance button once an answer is picked', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    ).toHaveFocus();
+  });
+
+  it('moves focus back to the first option after advancing', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
     );
+
+    const [first] = screen.getAllByRole('radio');
+    expect(first).toHaveFocus();
+    expect(first).toHaveAttribute('tabindex', '0');
+  });
+
+  it('keeps the advance button mounted and disabled until an answer is picked', () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    ).toBeDisabled();
   });
 
   it('announces the outcome and the correct answer once answered', async () => {
     render(<QuizSession artifact={artifact} />);
 
     const status = screen.getByRole('status');
-    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).not.toHaveAttribute('aria-live');
     expect(status).toBeEmptyDOMElement();
 
     await userEvent.click(
@@ -130,6 +175,21 @@ describe('QuizSession', () => {
     expect(status.textContent).toContain('ai.artifacts.quiz.outcomeIncorrect');
     expect(status.textContent).toContain('"letter":"B"');
     expect(status.textContent).toContain('"answer":"París"');
+  });
+
+  it('reveals the right answer without checking a second radio', async () => {
+    render(<QuizSession artifact={artifact} />);
+
+    await userEvent.click(
+      screen.getByRole('radio', { name: /^A\.\s*Madrid$/ })
+    );
+
+    const revealed = screen.getByRole('radio', { name: /^B\.\s*París$/ });
+    expect(revealed).toHaveAttribute('data-state', 'correct');
+    expect(revealed).toHaveAttribute('aria-checked', 'false');
+    expect(
+      screen.getByRole('radio', { name: /^A\.\s*Madrid$/ })
+    ).toHaveAttribute('aria-checked', 'true');
   });
 
   it('announces a correct pick with its letter', async () => {
@@ -179,14 +239,34 @@ describe('QuizSession', () => {
     const bar = await screen.findByRole('progressbar');
     expect(bar).toHaveAttribute('aria-valuenow', '50');
     expect(bar).toHaveAttribute('aria-valuemax', '100');
-    expect(bar.firstElementChild?.className).toContain('bg-(--primary)');
+    expect(bar.firstElementChild).toHaveClass('bg-(--primary)');
   });
 
-  it('does not submit a read-only quiz', () => {
+  it('lets a read-only viewer practise the whole quiz without submitting it', async () => {
     render(<QuizSession artifact={twoQuestionArtifact} readOnly />);
 
     const [first] = screen.getAllByRole('radio');
-    expect(first).toBeDisabled();
+    expect(first).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+    expect(screen.getByRole('status').textContent).toContain(
+      'ai.artifacts.quiz.outcomeCorrect'
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    );
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Tres$/ }));
+    const finish = screen.getByRole('button', {
+      name: 'ai.artifacts.quiz.finish',
+    });
+    expect(finish).toBeEnabled();
+
+    await userEvent.click(finish);
+
+    expect(
+      await screen.findByText('ai.artifacts.quiz.completed')
+    ).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 });

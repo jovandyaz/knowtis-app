@@ -1,4 +1,10 @@
-import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { RotateCcw, Trophy } from 'lucide-react';
@@ -6,34 +12,25 @@ import { toast } from 'sonner';
 
 import { useSubmitQuiz } from '@knowtis/data-access-artifacts';
 import {
+  answerLetter,
   AnswerOption,
   Button,
   Progress,
   type AnswerOutcome,
-  type ProgressProps,
 } from '@knowtis/design-system';
 import type { QuizArtifact } from '@knowtis/shared-types';
 
-const QUIZ_SCORE_THRESHOLD = {
-  GOOD: 70,
-  FAIR: 40,
-} as const;
+import { scoreTone } from './quiz-score';
 
 const PERCENT = 100;
-const LETTER_A_CHAR_CODE = 65;
+const FIRST_OPTION = 0;
 
 const ANSWER_OUTCOME = {
   CORRECT: 'correct',
   INCORRECT: 'incorrect',
 } as const satisfies Record<string, AnswerOutcome>;
 
-const SCORE_TONE = {
-  GOOD: ANSWER_OUTCOME.CORRECT,
-  FAIR: 'primary',
-  POOR: ANSWER_OUTCOME.INCORRECT,
-} as const satisfies Record<string, ProgressProps['tone']>;
-
-const ARROW_KEY_STEP: Record<string, number> = {
+const ARROW_KEY_STEP: Partial<Record<string, number>> = {
   ArrowDown: 1,
   ArrowRight: 1,
   ArrowUp: -1,
@@ -50,16 +47,6 @@ const OUTCOME_FEEDBACK = {
     className: 'text-learn-incorrect-text',
   },
 } as const satisfies Record<AnswerOutcome, { key: string; className: string }>;
-
-function scoreTone(percentage: number): ProgressProps['tone'] {
-  if (percentage >= QUIZ_SCORE_THRESHOLD.GOOD) {
-    return SCORE_TONE.GOOD;
-  }
-  if (percentage >= QUIZ_SCORE_THRESHOLD.FAIR) {
-    return SCORE_TONE.FAIR;
-  }
-  return SCORE_TONE.POOR;
-}
 
 interface QuizSessionProps {
   artifact: QuizArtifact;
@@ -79,10 +66,13 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(FIRST_OPTION);
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [completed, setCompleted] = useState(false);
   const [score, setScore] = useState(0);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const advanceRef = useRef<HTMLButtonElement>(null);
+  const isFirstQuestion = useRef(true);
 
   const totalQuestions = content.questions.length;
   const currentQuestion = content.questions[currentIndex];
@@ -110,7 +100,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>) => {
-      if (answered || readOnly || !currentQuestion) {
+      if (answered || !currentQuestion) {
         return;
       }
       const step = ARROW_KEY_STEP[event.key];
@@ -120,19 +110,33 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
       event.preventDefault();
 
       const optionCount = currentQuestion.options.length;
-      const nextIndex =
-        ((selectedOption ?? 0) + step + optionCount) % optionCount;
+      const nextIndex = (focusedIndex + step + optionCount) % optionCount;
+      setFocusedIndex(nextIndex);
       optionRefs.current[nextIndex]?.focus();
-      handleSelect(nextIndex);
     },
-    [answered, readOnly, currentQuestion, selectedOption, handleSelect]
+    [answered, currentQuestion, focusedIndex]
   );
+
+  useEffect(() => {
+    if (answered) {
+      advanceRef.current?.focus();
+    }
+  }, [answered]);
+
+  useEffect(() => {
+    if (isFirstQuestion.current) {
+      isFirstQuestion.current = false;
+      return;
+    }
+    optionRefs.current[FIRST_OPTION]?.focus();
+  }, [currentIndex]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex((prev) => prev + 1);
       setSelectedOption(null);
       setAnswered(false);
+      setFocusedIndex(FIRST_OPTION);
     } else {
       setCompleted(true);
       if (!readOnly) {
@@ -147,6 +151,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     setCurrentIndex(0);
     setSelectedOption(null);
     setAnswered(false);
+    setFocusedIndex(FIRST_OPTION);
     setAnswers([]);
     setCompleted(false);
     setScore(0);
@@ -192,8 +197,6 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     current: currentIndex + 1,
     total: totalQuestions,
   });
-  const rovingIndex = selectedOption ?? 0;
-
   const outcomeFor = (index: number): AnswerOutcome | undefined => {
     if (!answered) {
       return undefined;
@@ -237,9 +240,10 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
               }}
               index={index}
               selected={selectedOption === index}
-              {...(optionOutcome ? { outcome: optionOutcome } : {})}
-              disabled={answered || readOnly}
-              tabIndex={index === rovingIndex ? 0 : -1}
+              outcome={optionOutcome}
+              disabled={answered}
+              tabIndex={index === focusedIndex ? 0 : -1}
+              onFocus={() => setFocusedIndex(index)}
               onKeyDown={handleKeyDown}
               onSelect={() => handleSelect(index)}
             >
@@ -249,11 +253,11 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         })}
       </div>
 
-      <div role="status" aria-live="polite">
+      <div role="status">
         {feedback && (
           <p className={`text-sm font-medium ${feedback.className}`}>
             {t(feedback.key, {
-              letter: String.fromCharCode(LETTER_A_CHAR_CODE + correctIndex),
+              letter: answerLetter(correctIndex),
               answer: currentQuestion.options[correctIndex],
             })}
           </p>
@@ -271,15 +275,13 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         </div>
       )}
 
-      {answered && (
-        <div className="flex justify-end">
-          <Button onClick={handleNext}>
-            {currentIndex < totalQuestions - 1
-              ? t('ai.artifacts.quiz.next')
-              : t('ai.artifacts.quiz.finish')}
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <Button ref={advanceRef} onClick={handleNext} disabled={!answered}>
+          {currentIndex < totalQuestions - 1
+            ? t('ai.artifacts.quiz.next')
+            : t('ai.artifacts.quiz.finish')}
+        </Button>
+      </div>
     </div>
   );
 }
