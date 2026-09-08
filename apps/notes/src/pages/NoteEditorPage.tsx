@@ -21,8 +21,8 @@ import { captureProductEvent } from '@/lib/analytics/product-events';
 import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useWorkspaceTabReset } from '@/stores/useWorkspaceTabReset';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
-import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
@@ -185,13 +185,13 @@ function NoteEditor({
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
   const { data: noteArtifacts } = useArtifacts(noteId);
-  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
+
+  useWorkspaceTabReset(noteId);
 
   useEffect(() => {
     setActiveNoteId(noteId);
-    setWorkspaceTab('note');
     return () => setActiveNoteId(null);
-  }, [noteId, setActiveNoteId, setWorkspaceTab]);
+  }, [noteId, setActiveNoteId]);
 
   const voiceNoteOpen = useVoiceNoteEditorStore((s) => s.isOpen);
   const voiceNoteClose = useVoiceNoteEditorStore((s) => s.close);

@@ -12,7 +12,7 @@ import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';
-import { useWorkspaceStore } from '@/stores/workspace.store';
+import { useWorkspaceTabReset } from '@/stores/useWorkspaceTabReset';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { format } from 'date-fns';
 import { Check, Eye, Pencil, Share2 } from 'lucide-react';
@@ -51,7 +51,6 @@ export function SharedNotePage() {
   const { copied, copy: copyLink } = useCopyLink();
   const sharedArtifacts = artifacts ?? [];
   const hasArtifacts = sharedArtifacts.length > 0;
-  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
   const sharedPath = sharedNotePath(token);
   const capturedTokenRef = useRef<string | null>(null);
   const permission =
@@ -66,9 +65,7 @@ export function SharedNotePage() {
   // A registered visitor gets nothing from the login page but a bounce back here.
   const offerSignIn = !isAuthLoading && isAnonymousVisitor;
 
-  useEffect(() => {
-    setWorkspaceTab('note');
-  }, [token, setWorkspaceTab]);
+  useWorkspaceTabReset(token);
 
   useEffect(() => {
     if (!isResolved || !permission || capturedTokenRef.current === token) {
