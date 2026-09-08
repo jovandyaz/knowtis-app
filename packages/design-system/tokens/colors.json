@@ -210,7 +210,7 @@
           "type": "color"
         },
         "bucket-archive": {
-          "value": "{color.primitive.neutral.500}",
+          "value": "{color.primitive.neutral.400}",
           "type": "color"
         },
         "tag-purple": {
