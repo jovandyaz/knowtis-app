@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AnimatePresence, motion } from 'motion/react';
@@ -8,8 +8,11 @@ import { useReviewCard } from '@knowtis/data-access-artifacts';
 import { useMotionPreset } from '@knowtis/design-system';
 import {
   SM2_QUALITY,
+  STUDY_CARD_KIND,
   type FlashcardArtifact,
+  type PredictedIntervals,
   type SM2Quality,
+  type StudyCard,
 } from '@knowtis/shared-types';
 
 import { FlashcardCard } from './flashcard/FlashcardCard';
@@ -17,9 +20,17 @@ import { FlashcardHeader } from './flashcard/FlashcardHeader';
 import { FlashcardNav } from './flashcard/FlashcardNav';
 import { FlashcardRating } from './flashcard/FlashcardRating';
 import { FlashcardSummary } from './flashcard/FlashcardSummary';
-import { useStudySession } from './flashcard/use-study-session';
+import { useFlashcardSession } from './flashcard/use-flashcard-session';
 
 const CARD_ENTER_X = 60;
+
+/** Neutral placeholder until a deck session carries the server's per-card predictions. */
+const NEUTRAL_PREDICTED_INTERVALS: PredictedIntervals = {
+  again: 1,
+  hard: 1,
+  good: 1,
+  easy: 1,
+};
 
 interface FlashcardStudyProps {
   artifact: FlashcardArtifact;
@@ -30,7 +41,23 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
-  const session = useStudySession(artifact.content);
+  const cards = useMemo<StudyCard[]>(
+    () =>
+      artifact.content.cards.map((card, index) => ({
+        artifactId: artifact.id,
+        cardIndex: index,
+        noteId: artifact.sourceNoteId,
+        deckTitle: artifact.title,
+        bucket: null,
+        front: card.front,
+        back: card.back,
+        difficulty: card.difficulty,
+        kind: STUDY_CARD_KIND.NEW,
+        predictedIntervals: NEUTRAL_PREDICTED_INTERVALS,
+      })),
+    [artifact]
+  );
+  const session = useFlashcardSession(cards);
   const preset = useMotionPreset();
 
   const submitReview = useCallback(

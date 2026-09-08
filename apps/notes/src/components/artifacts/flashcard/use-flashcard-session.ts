@@ -3,14 +3,12 @@ import { useCallback, useMemo, useReducer } from 'react';
 import type {
   CardResult,
   CardSessionStatus,
-  FlashcardContent,
   RestartFilter,
   SM2Quality,
+  StudyCard,
   StudySessionResult,
 } from '@knowtis/shared-types';
 import { CARD_STATUS, SM2_QUALITY } from '@knowtis/shared-types';
-
-type FlashcardCard = FlashcardContent['cards'][number];
 
 interface SessionState {
   currentIndex: number;
@@ -20,8 +18,8 @@ interface SessionState {
   isComplete: boolean;
   startTime: number;
   endTime: number | null;
-  originalCards: FlashcardCard[];
-  activeCards: FlashcardCard[];
+  originalCards: StudyCard[];
+  activeCards: StudyCard[];
 }
 
 type SessionAction =
@@ -31,7 +29,18 @@ type SessionAction =
   | { type: 'NAVIGATE'; index: number }
   | { type: 'TOGGLE_ADVANCED' }
   | { type: 'RESTART'; filter: RestartFilter }
-  | { type: 'FINISH' };
+  | { type: 'FINISH' }
+  | { type: 'SHUFFLE'; cards: StudyCard[] };
+
+/** In-place Fisher-Yates shuffle over a copy of `items`, uniform over all permutations. */
+function fisherYatesShuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 function findNextPendingIndex(
   statuses: CardSessionStatus[],
@@ -114,6 +123,18 @@ function sessionReducer(
     case 'TOGGLE_ADVANCED':
       return { ...state, isAdvancedMode: !state.isAdvancedMode };
 
+    case 'SHUFFLE':
+      return {
+        ...state,
+        currentIndex: 0,
+        flipped: false,
+        cardStatuses: Array(action.cards.length).fill(CARD_STATUS.PENDING),
+        isComplete: false,
+        endTime: null,
+        originalCards: action.cards,
+        activeCards: action.cards,
+      };
+
     case 'RESTART': {
       if (action.filter === 'missed' || action.filter === 'skipped') {
         const targetStatus =
@@ -153,7 +174,7 @@ function sessionReducer(
   }
 }
 
-function createInitialState(cards: FlashcardCard[]): SessionState {
+function createInitialState(cards: StudyCard[]): SessionState {
   return {
     currentIndex: 0,
     flipped: false,
@@ -167,10 +188,13 @@ function createInitialState(cards: FlashcardCard[]): SessionState {
   };
 }
 
-export function useStudySession(content: FlashcardContent) {
+export function useFlashcardSession(
+  cards: StudyCard[],
+  shuffleFn: <T>(items: T[]) => T[] = fisherYatesShuffle
+) {
   const [state, dispatch] = useReducer(
     sessionReducer,
-    content.cards,
+    cards,
     createInitialState
   );
 
@@ -222,6 +246,10 @@ export function useStudySession(content: FlashcardContent) {
     dispatch({ type: 'RESTART', filter });
   }, []);
 
+  const shuffle = useCallback(() => {
+    dispatch({ type: 'SHUFFLE', cards: shuffleFn(state.originalCards) });
+  }, [shuffleFn, state.originalCards]);
+
   const sessionResult = useMemo((): StudySessionResult => {
     const durationMs = (state.endTime ?? state.startTime) - state.startTime;
     const cardResults: CardResult[] = state.activeCards.map((card, i) => ({
@@ -265,5 +293,6 @@ export function useStudySession(content: FlashcardContent) {
     navigate,
     toggleAdvanced,
     restart,
+    shuffle,
   };
 }
