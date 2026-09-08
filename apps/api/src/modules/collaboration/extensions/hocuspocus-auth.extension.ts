@@ -1,6 +1,6 @@
 import type { Extension } from '@hocuspocus/server';
 import { USER_ROLE } from '@jovandyaz/auth';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
 import {
@@ -10,24 +10,26 @@ import {
   type AuthUser,
   type SharedNote,
 } from '@knowtis/authorization';
-import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
+import {
+  COLLABORATION_CLOSE_REASON,
+  HANDSHAKE_FAILURE,
+} from '@knowtis/shared-types';
 
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../../mcp/mcp-token';
-import {
-  resolveEffectiveAccess,
-  type AccessSnapshot,
-  type SessionIdentity,
+import type {
+  AccessSnapshot,
+  SessionIdentity,
 } from '../../notes/domain/access-policy';
-import {
-  ACCESS_SNAPSHOT_REPOSITORY,
-  type AccessSnapshotRepository,
-} from '../../notes/domain/ports/access-snapshot.repository';
 import { shareTokenFingerprint } from '../../notes/domain/share-token-fingerprint';
 import { UsersService } from '../../users/users.service';
 import {
   MAX_TIMER_DELAY_MS,
   TOKEN_EXPIRY_GRACE_MS,
 } from '../../websocket/socket-expiry';
+import {
+  AccessRevalidationService,
+  type AccessLease,
+} from '../access-revalidation.service';
 import { HandshakeError } from '../handshake-error';
 
 type AuthenticatedUser = Awaited<ReturnType<UsersService['findById']>>;
@@ -43,6 +45,7 @@ export interface HocuspocusAuthContext {
   user: AuthUser;
   noteId: string;
   identity: SessionIdentity;
+  accessLease: AccessLease;
   tokenExpiresAtMs?: number;
 }
 
@@ -53,8 +56,7 @@ export class HocuspocusAuthExtension {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
-    @Inject(ACCESS_SNAPSHOT_REPOSITORY)
-    private readonly accessRepository: AccessSnapshotRepository
+    private readonly access: AccessRevalidationService
   ) {}
 
   toExtension(): Extension<HocuspocusAuthContext> {
@@ -62,6 +64,7 @@ export class HocuspocusAuthExtension {
     // the instance methods + injected dependencies.
     const authenticate = this.authenticate.bind(this);
     const armExpiryDisconnect = this.armExpiryDisconnect.bind(this);
+    const access = this.access;
 
     return {
       priority: 100,
@@ -82,8 +85,21 @@ export class HocuspocusAuthExtension {
       },
 
       async connected({ context, connection }) {
+        access.register(context.accessLease, connection);
         armExpiryDisconnect(context, connection);
       },
+    };
+  }
+
+  guardHooks(): Pick<
+    Extension<HocuspocusAuthContext>,
+    'beforeHandleMessage' | 'beforeSync'
+  > {
+    return {
+      beforeHandleMessage: async ({ context }) =>
+        this.access.assertValid(context.accessLease),
+      beforeSync: async ({ context }) =>
+        this.access.assertValid(context.accessLease),
     };
   }
 
@@ -106,7 +122,10 @@ export class HocuspocusAuthExtension {
         this.logger.log(
           `Closing collaboration connection for note ${context.noteId}: token expired`
         );
-        connection.close({ code: 4401, reason: 'Token expired' });
+        connection.close({
+          code: 4401,
+          reason: COLLABORATION_CLOSE_REASON.TOKEN_EXPIRED,
+        });
       },
       Math.max(delay, 0)
     );
@@ -127,34 +146,18 @@ export class HocuspocusAuthExtension {
       documentName
     );
 
-    let snapshot: AccessSnapshot | null;
-    try {
-      snapshot = await this.accessRepository.findAccessSnapshot(documentName);
-      if (!snapshot) {
-        throw new HandshakeError(HANDSHAKE_FAILURE.NOTE_NOT_FOUND);
-      }
-    } catch (error) {
-      // A missing note is an intentional verdict and is re-thrown verbatim;
-      // unexpected DB/repo failures are normalised so the raw error message
-      // (which may include connection strings, SQL, table names) is never
-      // delivered as the WebSocket close reason.
-      if (error instanceof HandshakeError) {
-        throw error;
-      }
-      this.logger.error(
-        `Internal error during auth for note ${documentName}`,
-        error instanceof Error ? error.stack : error
-      );
-      throw new HandshakeError(HANDSHAKE_FAILURE.INTERNAL_ERROR);
-    }
-
     const identity: SessionIdentity = {
       userId: user.id,
       suppliedTokenFingerprint: shareTokenFingerprint(
         requestParameters?.get('shareToken') ?? null
       ),
     };
-    const effective = resolveEffectiveAccess(snapshot, identity);
+    const accessLease = await this.access.acquire(
+      documentName,
+      identity,
+      user.role === USER_ROLE.ADMIN
+    );
+    const effective = accessLease.effectiveAccess;
     if (effective === 'none' && user.role !== USER_ROLE.ADMIN) {
       throw new HandshakeError(HANDSHAKE_FAILURE.FORBIDDEN);
     }
@@ -168,8 +171,8 @@ export class HocuspocusAuthExtension {
       ability,
       {
         id: documentName,
-        ownerId: snapshot.ownerId,
-        generalAccess: snapshot.generalAccess,
+        ownerId: accessLease.ownerId,
+        generalAccess: accessLease.generalAccess,
       },
       connectionConfig
     );
@@ -177,6 +180,7 @@ export class HocuspocusAuthExtension {
     return {
       user: authUser,
       identity,
+      accessLease,
       noteId: documentName,
       ...(tokenExpiresAtMs !== undefined && { tokenExpiresAtMs }),
     };

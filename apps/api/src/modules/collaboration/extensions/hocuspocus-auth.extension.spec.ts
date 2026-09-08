@@ -4,6 +4,7 @@ import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
 import type { AccessSnapshot } from '../../notes/domain/access-policy';
 import { shareTokenFingerprint } from '../../notes/domain/share-token-fingerprint';
+import { AccessRevalidationService } from '../access-revalidation.service';
 import { HocuspocusAuthExtension } from './hocuspocus-auth.extension';
 
 const snapshot: AccessSnapshot = {
@@ -33,7 +34,7 @@ function setup(userId = 'guest', role = 'user', isAnonymous = false) {
   const extension = new HocuspocusAuthExtension(
     { verify } as never,
     users as never,
-    repository
+    new AccessRevalidationService(repository)
   ).toExtension();
   return {
     verify,
@@ -173,7 +174,7 @@ describe('HocuspocusAuthExtension access snapshots', () => {
       return new HocuspocusAuthExtension(
         { verify: vi.fn() } as never,
         { findById: vi.fn() } as never,
-        { findAccessSnapshot: vi.fn() }
+        { register: vi.fn() } as never
       );
     }
 

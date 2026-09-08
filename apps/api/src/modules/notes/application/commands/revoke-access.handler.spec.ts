@@ -1,4 +1,5 @@
-import { ok } from 'neverthrow';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NoteRepository } from '../../domain/ports';
@@ -11,7 +12,11 @@ describe('RevokeAccessHandler', () => {
     findPermission: vi.fn(),
     deletePermission: vi.fn(),
   };
-  const handler = new RevokeAccessHandler(repo as unknown as NoteRepository);
+  const events = new EventEmitter2();
+  const handler = new RevokeAccessHandler(
+    repo as unknown as NoteRepository,
+    events
+  );
   const revoke = (userId: string, targetUserId = 'viewer') =>
     handler.execute({ noteId: 'note', userId, targetUserId });
   beforeEach(() => {
@@ -24,6 +29,21 @@ describe('RevokeAccessHandler', () => {
       permission: PermissionLevel.create('editor')._unsafeUnwrap(),
     });
     repo.deletePermission.mockResolvedValue(ok(true));
+  });
+  it('publishes only a committed revocation and cannot fail the saved change when delivery throws', async () => {
+    const delivered: unknown[] = [];
+    events.on('note.access-changed', (event) => {
+      delivered.push(event);
+      throw new Error('delivery failed');
+    });
+    expect((await revoke('owner')).isOk()).toBe(true);
+    expect(delivered).toEqual([expect.objectContaining({ noteId: 'note' })]);
+    repo.deletePermission.mockResolvedValue(
+      err({ code: 'FAILED', message: 'failed' })
+    );
+    await revoke('owner');
+    expect(delivered).toHaveLength(1);
+    events.removeAllListeners();
   });
   it.each(['owner', 'direct-editor'])(
     'lets %s revoke a non-owner',

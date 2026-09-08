@@ -55,6 +55,14 @@ describe('ShareNoteHandler People contract', () => {
     permission: 'viewer' | 'editor' = 'viewer',
     email = 'recipient@example.test'
   ) => handler.execute({ noteId: 'note', userId, email, permission });
+  it('notifies active sessions after a committed permission change', async () => {
+    const result = await share();
+    expect(result.isOk()).toBe(true);
+    expect(events.emit).toHaveBeenCalledWith(
+      'note.access-changed',
+      expect.objectContaining({ noteId: 'note' })
+    );
+  });
   it('normalizes exact email and returns the public person projection', async () => {
     expect(
       (
@@ -143,14 +151,20 @@ describe('ShareNoteHandler People contract', () => {
   );
   it('does not emit private recipient data', async () => {
     await share();
-    expect(events.emit).toHaveBeenCalledExactlyOnceWith(
-      NoteSharedEvent.EVENT_NAME,
-      {
-        actorId: 'owner',
-        shareType: 'collaborator',
-        permission: 'viewer',
-      }
-    );
+    expect(
+      events.emit.mock.calls.filter(
+        ([name]) => name === NoteSharedEvent.EVENT_NAME
+      )
+    ).toEqual([
+      [
+        NoteSharedEvent.EVENT_NAME,
+        {
+          actorId: 'owner',
+          shareType: 'collaborator',
+          permission: 'viewer',
+        },
+      ],
+    ]);
   });
   it('does not emit success on persistence failure', async () => {
     repo.upsertPermission.mockResolvedValue(
