@@ -539,8 +539,8 @@
         "correct": "Correcto",
         "advancedMode": "Modo avanzado",
         "rateCard": "Califica esta tarjeta",
-        "summaryDescription": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas, en {{duration}}.",
         "summary": {
+          "description": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas, en {{duration}}.",
           "excellentMastery": "¡Excelente dominio!",
           "greatJob": "¡Muy bien, sigue así!",
           "goodProgress": "¡Buen progreso!",

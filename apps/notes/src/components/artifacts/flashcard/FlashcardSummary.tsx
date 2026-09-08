@@ -21,6 +21,7 @@ interface FlashcardSummaryProps {
 
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
+const PERCENT = 100;
 
 const MOTIVATIONAL_THRESHOLDS = [
   { min: 90, key: 'ai.artifacts.flashcards.summary.excellentMastery' },
@@ -43,7 +44,9 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
   const preset = useMotionPreset();
 
   const percentage =
-    result.total > 0 ? Math.round((result.correct / result.total) * 100) : 0;
+    result.total > 0
+      ? Math.round((result.correct / result.total) * PERCENT)
+      : 0;
   const timeSpent = t(
     'ai.artifacts.flashcards.summary.timeSpent',
     formatDuration(result.durationMs)
@@ -92,7 +95,7 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
       <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-8">
         <DonutChart
           segments={segments}
-          description={t('ai.artifacts.flashcards.summaryDescription', {
+          description={t('ai.artifacts.flashcards.summary.description', {
             percentage,
             correct: result.correct,
             wrong: result.wrong,

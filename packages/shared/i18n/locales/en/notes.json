@@ -539,8 +539,8 @@
         "correct": "Correct",
         "advancedMode": "Advanced mode",
         "rateCard": "Rate this card",
-        "summaryDescription": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped, in {{duration}}.",
         "summary": {
+          "description": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped, in {{duration}}.",
           "excellentMastery": "Excellent mastery!",
           "greatJob": "Great job, keep it up!",
           "goodProgress": "Good progress!",

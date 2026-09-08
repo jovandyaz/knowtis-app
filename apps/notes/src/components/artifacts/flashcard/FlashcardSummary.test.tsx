@@ -33,7 +33,7 @@ describe('FlashcardSummary', () => {
     render(<FlashcardSummary result={result} onRestart={vi.fn()} />);
 
     const donut = screen.getByRole('img', {
-      name: /ai\.artifacts\.flashcards\.summaryDescription/,
+      name: /ai\.artifacts\.flashcards\.summary\.description/,
     });
     expect(donut).toHaveAccessibleName(/"percentage":60/);
     expect(donut).toHaveAccessibleName(/"correct":6/);
