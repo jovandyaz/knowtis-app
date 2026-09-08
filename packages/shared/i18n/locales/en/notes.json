@@ -667,5 +667,20 @@
       "study": "Study"
     },
     "tabsLabel": "Note workspace"
+  },
+  "study": {
+    "loading": "Loading your review",
+    "newBadge": "New",
+    "caughtUp": {
+      "title": "All caught up",
+      "nextReview": "Your next card arrives {{when}}",
+      "nothingScheduled": "You have no cards scheduled yet",
+      "cta": "Generate flashcards from a note"
+    },
+    "summary": {
+      "streak_one": "{{count}} day streak",
+      "streak_other": "{{count}} day streak",
+      "backHome": "Back to home"
+    }
   }
 }

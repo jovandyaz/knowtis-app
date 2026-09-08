@@ -7,6 +7,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   NOTES: '/notes',
   NOTE: '/notes/$noteId',
+  STUDY: '/study',
   SHARED_NOTE: '/s/$token',
   LOGIN: '/login',
   REGISTER: '/register',

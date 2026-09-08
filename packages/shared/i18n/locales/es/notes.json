@@ -667,5 +667,20 @@
       "study": "Estudio"
     },
     "tabsLabel": "Espacio de la nota"
+  },
+  "study": {
+    "loading": "Cargando tu repaso",
+    "newBadge": "Nueva",
+    "caughtUp": {
+      "title": "Todo repasado",
+      "nextReview": "Tu próxima tarjeta llega {{when}}",
+      "nothingScheduled": "Aún no tienes tarjetas programadas",
+      "cta": "Generar flashcards desde una nota"
+    },
+    "summary": {
+      "streak_one": "Racha de {{count}} día",
+      "streak_other": "Racha de {{count}} días",
+      "backHome": "Volver al inicio"
+    }
   }
 }
