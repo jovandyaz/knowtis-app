@@ -9,6 +9,8 @@ interface FlashcardCardProps {
   difficulty: FlashcardDifficulty;
   flipped: boolean;
   onFlip: () => void;
+  /** `aria-keyshortcuts` value for the flip control; only pass keys the caller answers. */
+  keyShortcuts?: string | undefined;
 }
 
 const DIFFICULTY_CLASS: Record<FlashcardDifficulty, string> = {
@@ -30,6 +32,7 @@ export function FlashcardCard({
   difficulty,
   flipped,
   onFlip,
+  keyShortcuts,
 }: FlashcardCardProps) {
   const { t } = useTranslation('notes');
 
@@ -43,6 +46,7 @@ export function FlashcardCard({
         className="min-h-72 w-full"
         flipped={flipped}
         onFlip={onFlip}
+        aria-keyshortcuts={keyShortcuts}
         frontHint={t('ai.artifacts.flashcards.showBack')}
         backHint={t('ai.artifacts.flashcards.showFront')}
         front={

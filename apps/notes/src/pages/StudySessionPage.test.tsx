@@ -444,6 +444,15 @@ describe('StudySessionPage', () => {
     expect(screen.queryByText('study.caughtUp.title')).toBeNull();
   });
 
+  it('announces the flip and navigation shortcuts on the card', () => {
+    render(<StudySessionPage />);
+
+    expect(front(/Frente uno/)).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Space Enter ArrowLeft ArrowRight'
+    );
+  });
+
   it('never puts the back of a card on its front', async () => {
     render(<StudySessionPage />);
 

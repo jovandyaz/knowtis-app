@@ -70,6 +70,8 @@ export type StudyKeyAction =
   | { type: typeof STUDY_KEY_ACTION_TYPES.NAVIGATE; direction: -1 | 1 }
   | { type: typeof STUDY_KEY_ACTION_TYPES.RATE; quality: SM2Quality };
 
+const STUDY_CARD_SHORTCUTS = 'Space Enter ArrowLeft ArrowRight';
+
 const SIMPLE_MODE_RATING_KEYS: Record<string, RatingKey> = {
   '1': RATING_ORDER[0],
   '2': RATING_ORDER[2],
@@ -409,6 +411,7 @@ function StudyQueueSession({
         difficulty={card.difficulty}
         flipped={session.flipped}
         onFlip={session.flip}
+        keyShortcuts={STUDY_CARD_SHORTCUTS}
       />
 
       <div className="flex items-center justify-center gap-2">

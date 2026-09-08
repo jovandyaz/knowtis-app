@@ -66,6 +66,8 @@ function makeCard(overrides: Partial<StudyCard> = {}): StudyCard {
   };
 }
 
+const ARIA_SPACE_TOKEN = 'Space';
+
 const CARD_ONE = makeCard();
 const CARD_TWO = makeCard({
   cardIndex: 1,
@@ -234,6 +236,21 @@ describe('StudySessionPage keyboard map', () => {
 
     expect(reviewCard).not.toHaveBeenCalled();
     expect(correctButton()).toBeNull();
+  });
+
+  it('announces no shortcut the page does not answer', () => {
+    render(<StudySessionPage />);
+
+    const announced =
+      front(/Frente uno/)
+        .getAttribute('aria-keyshortcuts')
+        ?.split(' ') ?? [];
+
+    expect(announced.length).toBeGreaterThan(0);
+    for (const token of announced) {
+      const key = token === ARIA_SPACE_TOKEN ? ' ' : token;
+      expect(resolveStudyKeyAction(key, false)).toBeDefined();
+    }
   });
 
   it('never rates while a text input has focus', () => {
