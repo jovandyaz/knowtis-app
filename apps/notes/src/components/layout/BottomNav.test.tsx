@@ -7,9 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BottomNav } from './BottomNav';
 
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
+const currentPathname = vi.fn<() => string>();
 
 vi.mock('@tanstack/react-router', () => ({
-  useLocation: () => ({ pathname: '/notes' }),
+  useLocation: () => ({ pathname: currentPathname() }),
   useNavigate: () => vi.fn(),
   useRouter: () => ({ navigate: vi.fn() }),
 }));
@@ -55,6 +56,15 @@ vi.mock('motion/react', () => ({
 describe('BottomNav', () => {
   beforeEach(() => {
     authUser.mockReturnValue({ isAnonymous: false });
+    currentPathname.mockReturnValue('/notes');
+  });
+
+  it('renders nothing on the study session route', () => {
+    currentPathname.mockReturnValue('/study');
+
+    const { container } = render(<BottomNav />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('offers explore next to the primary destinations', () => {

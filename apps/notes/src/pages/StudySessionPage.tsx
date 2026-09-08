@@ -8,6 +8,7 @@ import { FlashcardRating } from '@/components/artifacts/flashcard/FlashcardRatin
 import { FlashcardSummary } from '@/components/artifacts/flashcard/FlashcardSummary';
 import { useFlashcardSession } from '@/components/artifacts/flashcard/use-flashcard-session';
 import { ROUTES } from '@/config';
+import { useStudyFocusMode } from '@/hooks/useStudyFocusMode';
 import { CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,6 +45,9 @@ const BROWSER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
 const CTA_CLASS = 'rounded-lg px-4 text-sm font-medium';
+const RATING_BAR_MOBILE_PADDING = 'pb-28 md:pb-6';
+const RATING_BAR_CLASS =
+  'fixed inset-x-0 bottom-0 z-30 border-t border-(--border) bg-(--background)/95 px-4 py-3 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:pb-0 md:backdrop-blur-none';
 
 export function StudySessionPage() {
   const { isPending: areFlagsPending } = useFeatureFlags();
@@ -62,6 +66,7 @@ export function StudySessionPage() {
 
 function StudyQueue() {
   const { t: tCommon } = useTranslation('common');
+  useStudyFocusMode();
   const queue = useStudySession(BROWSER_TIME_ZONE);
   const stats = useStudyStats(BROWSER_TIME_ZONE);
   const [attempt, setAttempt] = useState(0);
@@ -201,7 +206,9 @@ function StudyQueueSession({
     session.counts.correct + session.counts.wrong + session.counts.skipped;
 
   return (
-    <div className={PAGE_LAYOUT}>
+    <div
+      className={cn(PAGE_LAYOUT, session.flipped && RATING_BAR_MOBILE_PADDING)}
+    >
       <div className="flex flex-col gap-3">
         <Progress
           value={reviewedCount}
@@ -236,13 +243,15 @@ function StudyQueueSession({
       />
 
       {session.flipped ? (
-        <FlashcardRating
-          isAdvancedMode={session.isAdvancedMode}
-          disabled={isReviewPending}
-          onWrong={handleWrong}
-          onCorrect={handleCorrect}
-          onRateAdvanced={handleRateAdvanced}
-        />
+        <div className={RATING_BAR_CLASS}>
+          <FlashcardRating
+            isAdvancedMode={session.isAdvancedMode}
+            disabled={isReviewPending}
+            onWrong={handleWrong}
+            onCorrect={handleCorrect}
+            onRateAdvanced={handleRateAdvanced}
+          />
+        </div>
       ) : null}
     </div>
   );

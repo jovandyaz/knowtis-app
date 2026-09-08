@@ -23,6 +23,7 @@ import { cn } from '@knowtis/design-system';
 import { MobileSheet } from './MobileSheet';
 
 const NOTE_EDITOR_PATTERN = /^\/notes\/[^/]+$/;
+const STUDY_SESSION_PATTERN = /^\/study$/;
 
 interface BottomNavTab {
   icon: typeof Home;
@@ -48,7 +49,10 @@ export function BottomNav() {
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
   const [isExploreSheetOpen, setIsExploreSheetOpen] = useState(false);
 
-  if (NOTE_EDITOR_PATTERN.test(currentPath)) {
+  if (
+    NOTE_EDITOR_PATTERN.test(currentPath) ||
+    STUDY_SESSION_PATTERN.test(currentPath)
+  ) {
     return null;
   }
 
