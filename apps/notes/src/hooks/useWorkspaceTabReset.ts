@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { useWorkspaceStore } from './workspace.store';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 
 export function useWorkspaceTabReset(noteKey: string): void {
   const setTab = useWorkspaceStore((s) => s.setTab);

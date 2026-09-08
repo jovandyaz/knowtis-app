@@ -1,8 +1,8 @@
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useWorkspaceTabReset } from './useWorkspaceTabReset';
-import { useWorkspaceStore } from './workspace.store';
 
 beforeEach(() => {
   useWorkspaceStore.setState({ activeTab: 'note' });

@@ -12,8 +12,8 @@ import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { useSharedNoteEditing } from '@/hooks/useSharedNoteEditing';
+import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
 import { captureProductEvent } from '@/lib/analytics/product-events';
-import { useWorkspaceTabReset } from '@/stores/useWorkspaceTabReset';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 
 import { ApiClientError } from '@knowtis/api-client';
