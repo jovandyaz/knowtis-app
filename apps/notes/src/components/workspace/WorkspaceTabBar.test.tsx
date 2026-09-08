@@ -34,12 +34,6 @@ describe('WorkspaceTabBar', () => {
     expect(studyTab()).not.toHaveTextContent(/\d/);
   });
 
-  it('does not render the count badge when no study count is given', () => {
-    render(<WorkspaceTabBar />);
-    expect(studyTab()).toHaveTextContent('workspace.tabs.study');
-    expect(studyTab()).not.toHaveTextContent(/\d/);
-  });
-
   it('marks a tab selected and switches the workspace tab when clicked', async () => {
     render(<WorkspaceTabBar studyCount={2} />);
     await userEvent.click(studyTab());

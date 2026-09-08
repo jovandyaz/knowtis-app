@@ -15,7 +15,7 @@ interface WorkspaceTabItem {
   count?: number;
 }
 
-export function WorkspaceTabBar({ studyCount }: { studyCount?: number }) {
+export function WorkspaceTabBar({ studyCount }: { studyCount: number }) {
   const { t } = useTranslation('notes');
   const activeTab = useWorkspaceStore((s) => s.activeTab);
   const setTab = useWorkspaceStore((s) => s.setTab);
@@ -26,7 +26,7 @@ export function WorkspaceTabBar({ studyCount }: { studyCount?: number }) {
       value: 'estudio',
       label: t('workspace.tabs.study'),
       icon: BookOpen,
-      count: studyCount ?? 0,
+      count: studyCount,
     },
   ];
 

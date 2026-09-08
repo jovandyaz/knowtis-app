@@ -6,12 +6,12 @@ import { Link, useParams } from '@tanstack/react-router';
 import { ensureGuestSession } from '@/auth/setup';
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import {
   workspacePanelId,
   workspaceTabId,
-} from '@/components/editor/workspace-tab-ids';
-import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
-import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
+} from '@/components/workspace/workspace-tab-ids';
+import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
 import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';

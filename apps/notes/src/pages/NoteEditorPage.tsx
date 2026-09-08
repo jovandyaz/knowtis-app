@@ -7,14 +7,14 @@ import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
-import {
-  workspacePanelId,
-  workspaceTabId,
-} from '@/components/editor/workspace-tab-ids';
-import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
 import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import {
+  workspacePanelId,
+  workspaceTabId,
+} from '@/components/workspace/workspace-tab-ids';
+import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';

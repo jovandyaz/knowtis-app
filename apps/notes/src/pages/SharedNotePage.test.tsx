@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import {
   workspacePanelId,
   workspaceTabId,
-} from '@/components/editor/workspace-tab-ids';
+} from '@/components/workspace/workspace-tab-ids';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
