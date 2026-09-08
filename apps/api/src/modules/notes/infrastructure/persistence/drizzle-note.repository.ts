@@ -4,6 +4,7 @@ import type { Result } from 'neverthrow';
 
 import type {
   NoteBucketCounts,
+  NotePerson,
   NoteSupertagCounts,
   PermissionLevel as PermissionLevelType,
 } from '@knowtis/shared-types';
@@ -173,18 +174,8 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.permissionRepo.findPermission(noteId, userId);
   }
 
-  findPermissionsByNote(noteId: string): Promise<
-    {
-      permission: NotePermissionEntity;
-      user: {
-        id: string;
-        name: string;
-        email: string;
-        avatarUrl: string | null;
-      };
-    }[]
-  > {
-    return this.permissionRepo.findPermissionsByNote(noteId);
+  findPeopleByNote(noteId: string): Promise<NotePerson[]> {
+    return this.permissionRepo.findPeopleByNote(noteId);
   }
 
   upsertPermission(

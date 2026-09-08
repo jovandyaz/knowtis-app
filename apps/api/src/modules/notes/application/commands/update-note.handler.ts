@@ -44,6 +44,7 @@ import {
 } from '../../infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../infrastructure/trivial-html';
 import { decodeYjsStateUpdate } from '../../infrastructure/yjs-state-update';
+import { emitAccessChanged } from '../emit-access-changed';
 
 export interface UpdateNoteInput {
   readonly noteId: string;
@@ -170,6 +171,13 @@ export class UpdateNoteHandler {
 
     if (persisted.isErr()) {
       return err(persisted.error);
+    }
+
+    if (
+      input.generalAccess !== undefined ||
+      input.generalAccessPermission !== undefined
+    ) {
+      emitAccessChanged(this.eventEmitter, input.noteId);
     }
 
     if (isOwner && linkExposureWidened) {

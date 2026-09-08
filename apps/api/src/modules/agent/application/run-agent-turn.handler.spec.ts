@@ -4657,7 +4657,7 @@ describe('RunAgentTurnHandler', () => {
       expect(appended.messages).toHaveLength(4);
     });
 
-    it('persists the tool rows with no stop reason when the turn ends on a tool result', async () => {
+    it('preserves tool rows and persists the terminal stop reason after a tool result', async () => {
       const { conversations, execute } = run([
         { type: 'step', messages: [...stepWithTool] },
         doneEvent,
@@ -4670,6 +4670,12 @@ describe('RunAgentTurnHandler', () => {
         { role: 'user', content: 'what is in N1?' },
         stepWithTool[0],
         stepWithTool[1],
+        {
+          role: 'assistant',
+          content: '',
+          sources: doneEvent.sources,
+          stopReason: 'completed',
+        },
       ]);
     });
 

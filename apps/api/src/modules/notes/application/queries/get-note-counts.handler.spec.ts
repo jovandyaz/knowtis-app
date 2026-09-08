@@ -42,7 +42,7 @@ describe('GetNoteCountsHandler', () => {
       delete: vi.fn(),
       restore: vi.fn(),
       findPermission: vi.fn(),
-      findPermissionsByNote: vi.fn(),
+      findPeopleByNote: vi.fn(),
       upsertPermission: vi.fn(),
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),

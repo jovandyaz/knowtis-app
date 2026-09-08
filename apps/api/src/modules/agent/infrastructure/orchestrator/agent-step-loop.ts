@@ -229,6 +229,9 @@ export async function* runAgentStepLoop(
         instructions: params.instructions,
         cache: params.cache,
         tools: params.tools,
+        ...(completedSteps + 1 === input.maxSteps
+          ? { toolChoice: 'none' as const }
+          : {}),
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
         providerOptions,

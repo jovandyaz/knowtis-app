@@ -3,6 +3,7 @@ import type { AgentChatMessage } from '@/stores/agent.store';
 import { Message, MessageContent, Response } from '../ai-elements/message';
 import { AgentResolvedChip } from './AgentResolvedChip';
 import { AgentSourceChips } from './AgentSourceChips';
+import { AgentStopNotice } from './AgentStopNotice';
 import { AgentWebSourceChips } from './AgentWebSourceChips';
 
 export function AgentMessage({
@@ -32,6 +33,9 @@ export function AgentMessage({
             >
               {message.content}
             </Response>
+            <AgentStopNotice
+              {...(message.stopReason ? { reason: message.stopReason } : {})}
+            />
             {isStreaming && message.content.length > 0 && (
               <span
                 aria-hidden="true"

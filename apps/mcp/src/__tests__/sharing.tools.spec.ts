@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
-import type { Collaborator, SharingApi } from '../api-client/sharing.api.js';
+import type { NotePerson } from '@knowtis/shared-types';
+
+import type { SharingApi } from '../api-client/sharing.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { registerSharingTools } from '../tools/sharing.tools.js';
@@ -15,8 +18,8 @@ const CREDENTIAL: McpCredential = { kind: 'api-key', apiKey: TEST_API_KEY };
 
 function createMockSharingApi(overrides: Partial<SharingApi> = {}): SharingApi {
   return {
-    getCollaborators: vi.fn().mockResolvedValue([]),
-    share: vi.fn(),
+    getPeople: vi.fn().mockResolvedValue([]),
+    upsertPerson: vi.fn(),
     ...overrides,
   } as unknown as SharingApi;
 }
@@ -92,21 +95,24 @@ describe('registerSharingTools', () => {
       'List who has access to a note and their permission level (owner, editor, viewer).'
     );
     expect(getTool(tools, 'share-note').config.description).toBe(
-      'Share a note with another user by their user ID.'
+      'Add a person to a note by their exact email address.'
     );
   });
 
   it('should return collaborators from the get-collaborators handler', async () => {
-    const collaborators: Collaborator[] = [
+    const collaborators: NotePerson[] = [
       {
-        userId: 'user-1',
-        email: 'user1@example.com',
-        name: 'User One',
+        user: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User One',
+          avatarUrl: null,
+        },
         permission: 'editor',
       },
     ];
     sharingApi = createMockSharingApi({
-      getCollaborators: vi.fn().mockResolvedValue(collaborators),
+      getPeople: vi.fn().mockResolvedValue(collaborators),
     });
     const { server, tools } = createFakeServer();
     registerSharingTools(server, sharingApi, authService, CREDENTIAL);
@@ -115,7 +121,7 @@ describe('registerSharingTools', () => {
       noteId: 'note-1',
     });
 
-    expect(sharingApi.getCollaborators).toHaveBeenCalledWith(
+    expect(sharingApi.getPeople).toHaveBeenCalledWith(
       'jwt-token-123',
       'note-1'
     );
@@ -129,23 +135,41 @@ describe('registerSharingTools', () => {
 
     const result = await getTool(tools, 'share-note').cb({
       noteId: 'note-1',
-      userId: 'user-2',
+      email: 'user2@example.com',
       permission: 'viewer',
     });
 
-    expect(sharingApi.share).toHaveBeenCalledWith(
+    expect(sharingApi.upsertPerson).toHaveBeenCalledWith(
       'jwt-token-123',
       'note-1',
-      'user-2',
-      'viewer'
+      { email: 'user2@example.com', permission: 'viewer' }
     );
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({ success: true });
   });
 
+  it('validates the email tool schema and rejects a legacy UUID-only input', () => {
+    const { server, tools } = createFakeServer();
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
+    const shape = getTool(tools, 'share-note').config
+      .inputSchema as z.ZodRawShape;
+    const schema = z.object(shape);
+    const noteId = '22222222-2222-4222-8222-222222222222';
+    expect(
+      schema.safeParse({ noteId, userId: noteId, permission: 'viewer' }).success
+    ).toBe(false);
+    expect(
+      schema.parse({
+        noteId,
+        email: '  PERSON@EXAMPLE.COM  ',
+        permission: 'viewer',
+      })
+    ).toEqual({ noteId, email: 'person@example.com', permission: 'viewer' });
+  });
+
   it('should surface API failures as isError results', async () => {
     sharingApi = createMockSharingApi({
-      getCollaborators: vi.fn().mockRejectedValue(new Error('upstream down')),
+      getPeople: vi.fn().mockRejectedValue(new Error('upstream down')),
     });
     const { server, tools } = createFakeServer();
     registerSharingTools(server, sharingApi, authService, CREDENTIAL);

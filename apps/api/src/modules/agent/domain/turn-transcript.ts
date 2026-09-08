@@ -45,6 +45,8 @@ export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
   const last = rows.at(-1);
   if (last && last.role === ASSISTANT_ROLE) {
     rows[rows.length - 1] = { ...last, sources, stopReason };
+  } else if (last?.role === 'tool') {
+    rows.push({ role: ASSISTANT_ROLE, content: '', sources, stopReason });
   }
   return rows;
 }

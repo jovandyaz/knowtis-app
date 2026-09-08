@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
 import {
@@ -7,6 +8,7 @@ import {
   type NoteDomainError,
   type NoteRepository,
 } from '../../domain';
+import { emitAccessChanged } from '../emit-access-changed';
 
 export interface DeleteNoteInput {
   readonly noteId: string;
@@ -16,7 +18,8 @@ export interface DeleteNoteInput {
 @Injectable()
 export class DeleteNoteHandler {
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository
+    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async execute(
@@ -33,6 +36,10 @@ export class DeleteNoteHandler {
       );
     }
 
-    return this.noteRepository.delete(input.noteId);
+    const result = await this.noteRepository.delete(input.noteId);
+    if (result.isOk()) {
+      emitAccessChanged(this.eventEmitter, input.noteId);
+    }
+    return result;
   }
 }

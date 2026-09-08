@@ -430,6 +430,81 @@ describe('VerifyEmailDialog', () => {
     expect(toastSuccess).toHaveBeenCalledWith('Email verified successfully!');
   });
 
+  it('submits only once for two clicks before pending controls render', async () => {
+    const user = userEvent.setup();
+    const pending = Promise.withResolvers<undefined>();
+    const api = createAuthApiMock({
+      verifyEmailCode: vi.fn().mockReturnValue(pending.promise),
+    });
+    renderDialog(api);
+    openDialog();
+
+    try {
+      await user.type(screen.getByLabelText(CODE_LABEL), CODE);
+      const verifyButton = screen.getByRole('button', {
+        name: VERIFY_BUTTON,
+      });
+      act(() => {
+        fireEvent.click(verifyButton);
+        fireEvent.click(verifyButton);
+      });
+
+      await waitFor(() => expect(verifyButton).toBeDisabled());
+      expect(api.verifyEmailCode).toHaveBeenCalledExactlyOnceWith(CODE);
+      expect(verifyButton).toBeDisabled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    } finally {
+      await act(async () => {
+        pending.resolve(undefined);
+        await pending.promise;
+      });
+    }
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+    expect(toastSuccess).toHaveBeenCalledWith('Email verified successfully!');
+  });
+
+  it('allows a new attempt after a failed verification settles', async () => {
+    const pending = Promise.withResolvers<undefined>();
+    const api = createAuthApiMock({
+      verifyEmailCode: vi
+        .fn()
+        .mockReturnValueOnce(pending.promise)
+        .mockResolvedValue(undefined),
+    });
+    renderDialog(api);
+    openDialog();
+    await userEvent.type(screen.getByLabelText(CODE_LABEL), CODE);
+    const verifyButton = screen.getByRole('button', { name: VERIFY_BUTTON });
+
+    act(() => {
+      fireEvent.click(verifyButton);
+      fireEvent.click(verifyButton);
+    });
+    await waitFor(() => expect(verifyButton).toBeDisabled());
+    expect(api.verifyEmailCode).toHaveBeenCalledExactlyOnceWith(CODE);
+    await act(async () => {
+      pending.reject(
+        new ApiClientError('Invalid code', 400, 'INVALID_VERIFICATION_CODE')
+      );
+    });
+    await waitFor(() => expect(verifyButton).toBeEnabled());
+
+    act(() => {
+      fireEvent.click(verifyButton);
+      fireEvent.click(verifyButton);
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+    expect(api.verifyEmailCode).toHaveBeenCalledTimes(2);
+    expect(toastSuccess).toHaveBeenCalledExactlyOnceWith(
+      'Email verified successfully!'
+    );
+  });
+
   it('keeps the dialog open and says why when the code is wrong', async () => {
     const api = createAuthApiMock({
       verifyEmailCode: vi
