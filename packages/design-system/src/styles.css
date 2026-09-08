@@ -69,6 +69,9 @@
   --color-learn-difficulty-easy: var(--learn-difficulty-easy);
   --color-learn-difficulty-medium: var(--learn-difficulty-medium);
   --color-learn-difficulty-hard: var(--learn-difficulty-hard);
+  --color-learn-difficulty-easy-text: var(--learn-difficulty-easy-text);
+  --color-learn-difficulty-medium-text: var(--learn-difficulty-medium-text);
+  --color-learn-difficulty-hard-text: var(--learn-difficulty-hard-text);
 
   --color-bucket-projects: var(--bucket-projects);
   --color-bucket-areas: var(--bucket-areas);
@@ -103,6 +106,15 @@
     --color-semantic-light-learn-difficulty-medium
   );
   --learn-difficulty-hard: var(--color-semantic-light-learn-difficulty-hard);
+  --learn-difficulty-easy-text: var(
+    --color-semantic-light-learn-difficulty-easy-text
+  );
+  --learn-difficulty-medium-text: var(
+    --color-semantic-light-learn-difficulty-medium-text
+  );
+  --learn-difficulty-hard-text: var(
+    --color-semantic-light-learn-difficulty-hard-text
+  );
   --border: var(--color-semantic-light-border);
   --input: var(--color-semantic-light-input);
   --ring: var(--color-semantic-light-ring);
@@ -149,6 +161,15 @@
   --learn-difficulty-easy: var(--color-semantic-dark-learn-difficulty-easy);
   --learn-difficulty-medium: var(--color-semantic-dark-learn-difficulty-medium);
   --learn-difficulty-hard: var(--color-semantic-dark-learn-difficulty-hard);
+  --learn-difficulty-easy-text: var(
+    --color-semantic-dark-learn-difficulty-easy-text
+  );
+  --learn-difficulty-medium-text: var(
+    --color-semantic-dark-learn-difficulty-medium-text
+  );
+  --learn-difficulty-hard-text: var(
+    --color-semantic-dark-learn-difficulty-hard-text
+  );
   --border: var(--color-semantic-dark-border);
   --input: var(--color-semantic-dark-input);
   --ring: var(--color-semantic-dark-ring);
