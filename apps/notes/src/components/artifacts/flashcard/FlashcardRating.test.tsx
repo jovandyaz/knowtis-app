@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SM2_QUALITY } from '@knowtis/shared-types';
 
-import { FlashcardControls } from './FlashcardControls';
+import { FlashcardRating } from './FlashcardRating';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -13,31 +13,25 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-function renderControls(
-  overrides: Partial<Parameters<typeof FlashcardControls>[0]> = {}
+function renderRating(
+  overrides: Partial<Parameters<typeof FlashcardRating>[0]> = {}
 ) {
   const props = {
     isAdvancedMode: false,
-    isFlipped: true,
     readOnly: false,
     onWrong: vi.fn(),
     onCorrect: vi.fn(),
-    onNavigatePrev: vi.fn(),
-    onNavigateNext: vi.fn(),
     onRateAdvanced: vi.fn(),
-    wrongCount: 0,
-    correctCount: 0,
     disabled: false,
-    canGoPrev: false,
     ...overrides,
   };
-  render(<FlashcardControls {...props} />);
+  render(<FlashcardRating {...props} />);
   return props;
 }
 
-describe('FlashcardControls', () => {
+describe('FlashcardRating', () => {
   it('rates correct and wrong in simple mode', async () => {
-    const props = renderControls();
+    const props = renderRating();
 
     await userEvent.click(
       screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' })
@@ -51,8 +45,19 @@ describe('FlashcardControls', () => {
     expect(props.onRateAdvanced).not.toHaveBeenCalled();
   });
 
+  it('keeps each tone button coloured under the ghost hover rule', () => {
+    renderRating();
+
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.wrong' })
+    ).toHaveClass('hover:text-learn-incorrect-text');
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' })
+    ).toHaveClass('hover:text-learn-correct-text');
+  });
+
   it('rates with the SM-2 quality in advanced mode', async () => {
-    const props = renderControls({ isAdvancedMode: true });
+    const props = renderRating({ isAdvancedMode: true });
 
     expect(
       screen.getByRole('group', { name: 'ai.artifacts.flashcards.rateCard' })
@@ -69,7 +74,7 @@ describe('FlashcardControls', () => {
   });
 
   it('keeps the simple buttons when advanced mode is read-only', () => {
-    renderControls({ isAdvancedMode: true, readOnly: true });
+    renderRating({ isAdvancedMode: true, readOnly: true });
 
     expect(
       screen.queryByRole('group', { name: 'ai.artifacts.flashcards.rateCard' })
@@ -80,12 +85,10 @@ describe('FlashcardControls', () => {
   });
 
   it('hides the interval captions while every rating predicts one day', () => {
-    renderControls({ isAdvancedMode: true });
+    renderRating({ isAdvancedMode: true });
 
     expect(
-      screen.getByRole('button', {
-        name: 'ai.artifacts.flashcards.quality.good',
-      })
+      screen.getByRole('button', { name: /quality\.good/ })
     ).not.toHaveTextContent('1d');
   });
 });

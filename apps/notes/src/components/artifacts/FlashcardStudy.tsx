@@ -13,8 +13,9 @@ import {
 } from '@knowtis/shared-types';
 
 import { FlashcardCard } from './flashcard/FlashcardCard';
-import { FlashcardControls } from './flashcard/FlashcardControls';
 import { FlashcardHeader } from './flashcard/FlashcardHeader';
+import { FlashcardNav } from './flashcard/FlashcardNav';
+import { FlashcardRating } from './flashcard/FlashcardRating';
 import { FlashcardSummary } from './flashcard/FlashcardSummary';
 import { useStudySession } from './flashcard/use-study-session';
 
@@ -126,20 +127,24 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
         </motion.div>
       </AnimatePresence>
 
-      <FlashcardControls
-        isAdvancedMode={session.isAdvancedMode}
-        isFlipped={session.flipped}
-        readOnly={readOnly}
-        onWrong={handleWrong}
-        onCorrect={handleCorrect}
-        onNavigatePrev={handleNavigatePrev}
-        onNavigateNext={handleNavigateNext}
-        onRateAdvanced={handleRateAdvanced}
-        wrongCount={session.counts.wrong}
-        correctCount={session.counts.correct}
-        disabled={isReviewPending}
-        canGoPrev={session.currentIndex > 0}
-      />
+      {session.flipped ? (
+        <FlashcardRating
+          isAdvancedMode={session.isAdvancedMode}
+          readOnly={readOnly}
+          disabled={isReviewPending}
+          onWrong={handleWrong}
+          onCorrect={handleCorrect}
+          onRateAdvanced={handleRateAdvanced}
+        />
+      ) : (
+        <FlashcardNav
+          wrongCount={session.counts.wrong}
+          correctCount={session.counts.correct}
+          canGoPrev={session.currentIndex > 0}
+          onNavigatePrev={handleNavigatePrev}
+          onNavigateNext={handleNavigateNext}
+        />
+      )}
     </div>
   );
 }
