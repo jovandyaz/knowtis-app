@@ -683,7 +683,8 @@
       "streak_zero": "Your streak starts today",
       "streak_one": "Streak of {{count}} day",
       "streak_other": "Streak of {{count}} days",
-      "backHome": "Back to home"
+      "backHome": "Back to home",
+      "restartFailed": "We couldn't load new cards. Try again."
     },
     "todayCard": {
       "title": "Today's review",

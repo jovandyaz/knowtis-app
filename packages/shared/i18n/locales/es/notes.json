@@ -683,7 +683,8 @@
       "streak_zero": "Tu racha empieza hoy",
       "streak_one": "Racha de {{count}} día",
       "streak_other": "Racha de {{count}} días",
-      "backHome": "Volver al inicio"
+      "backHome": "Volver al inicio",
+      "restartFailed": "No pudimos cargar tarjetas nuevas. Inténtalo de nuevo."
     },
     "todayCard": {
       "title": "Repaso de hoy",

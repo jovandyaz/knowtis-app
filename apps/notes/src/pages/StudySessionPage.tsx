@@ -52,6 +52,7 @@ import { studyDurationBucket } from './study-duration-bucket';
 const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
 const CTA_CLASS = 'rounded-lg px-4 text-sm font-medium';
+const RESTART_ERROR_CLASS = 'text-center text-sm text-(--destructive)';
 const RATING_BAR_MOBILE_PADDING = 'pb-28 md:pb-6';
 const ADVANCED_TOGGLE_TAP_AREA =
   "before:absolute before:-inset-x-2 before:-inset-y-3.5 before:content-['']";
@@ -115,33 +116,22 @@ export function StudySessionPage() {
   return <StudyQueue />;
 }
 
-interface QueueRestart {
-  attempt: number;
-  failed: boolean;
-}
-
 function StudyQueue() {
   useStudyFocusMode();
   const queue = useStudySession(BROWSER_TIME_ZONE);
   const stats = useStudyStats(BROWSER_TIME_ZONE);
-  const [restart, setRestart] = useState<QueueRestart>({
-    attempt: 0,
-    failed: false,
-  });
+  const [attempt, setAttempt] = useState(0);
   const [hasSession, setHasSession] = useState(false);
   const { refetch } = queue;
 
   const restartQueue = useCallback(async () => {
     const result = await refetch();
     if (result.isError) {
-      setRestart((previous) => ({ ...previous, failed: true }));
-      return;
+      return false;
     }
     setHasSession(false);
-    setRestart((previous) => ({
-      attempt: previous.attempt + 1,
-      failed: false,
-    }));
+    setAttempt((previous) => previous + 1);
+    return true;
   }, [refetch]);
 
   const servedCards = queue.data?.cards;
@@ -151,7 +141,7 @@ function StudyQueue() {
     setHasSession(true);
   }
 
-  if (restart.failed || (servedCards === undefined && queue.isError)) {
+  if (servedCards === undefined && queue.isError) {
     return <StudyLoadError onRetry={() => void restartQueue()} />;
   }
 
@@ -165,10 +155,10 @@ function StudyQueue() {
 
   return (
     <StudyQueueSession
-      key={restart.attempt}
+      key={attempt}
       initialCards={servedCards}
       streak={currentStats?.currentStreak ?? 0}
-      onNewQueue={() => void restartQueue()}
+      onNewQueue={restartQueue}
     />
   );
 }
@@ -176,7 +166,7 @@ function StudyQueue() {
 interface StudyQueueSessionProps {
   initialCards: StudyCard[];
   streak: number;
-  onNewQueue: () => void;
+  onNewQueue: () => Promise<boolean>;
 }
 
 function StudyQueueSession({
@@ -188,6 +178,7 @@ function StudyQueueSession({
   const session = useFlashcardSession(initialCards);
   const containerRef = useRef<HTMLDivElement>(null);
   const advancedLabelId = useId();
+  const [restartFailed, setRestartFailed] = useState(false);
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
 
@@ -254,9 +245,12 @@ function StudyQueueSession({
   );
 
   const handleRestart = useCallback(
-    (filter: RestartFilter) => {
+    async (filter: RestartFilter) => {
+      setRestartFailed(false);
       if (filter === 'all') {
-        onNewQueue();
+        if (!(await onNewQueue())) {
+          setRestartFailed(true);
+        }
         return;
       }
       session.restart(filter);
@@ -342,8 +336,13 @@ function StudyQueueSession({
       <div className={PAGE_LAYOUT}>
         <FlashcardSummary
           result={session.sessionResult}
-          onRestart={handleRestart}
+          onRestart={(filter) => void handleRestart(filter)}
         />
+        {restartFailed ? (
+          <p role="alert" className={RESTART_ERROR_CLASS}>
+            {t('study.summary.restartFailed')}
+          </p>
+        ) : null}
         <div className="flex flex-col items-center gap-4">
           <p className="text-sm text-(--muted-foreground)">
             {t('study.summary.streak', { count: streak })}

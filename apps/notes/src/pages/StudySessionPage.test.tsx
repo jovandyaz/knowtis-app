@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as MotionReact from 'motion/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -154,6 +154,7 @@ const practiseAgain = () =>
   });
 const correctButton = () =>
   screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' });
+const summaryTile = (name: string) => screen.getByRole('group', { name });
 
 async function rateCurrentCorrect(text: RegExp) {
   await userEvent.click(front(text));
@@ -360,21 +361,47 @@ describe('StudySessionPage', () => {
     expect(screen.queryByRole('button', { name: /Frente uno/ })).toBeNull();
   });
 
-  it('says so when practising again cannot reach the server', async () => {
-    queueOf([CARD_ONE]);
+  it('keeps the summary and says so when practising again cannot reach the server', async () => {
+    queueOf([CARD_ONE], makeStats({ currentStreak: 7 }));
     render(<StudySessionPage />);
     await rateCurrentCorrect(/Frente uno/);
 
     failOnRefetch();
     await userEvent.click(practiseAgain());
 
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'study.summary.restartFailed'
+    );
     expect(
-      await screen.findByText('errors.errorLoadingData')
+      within(summaryTile('ai.artifacts.flashcards.summary.gotIt')).getByText(
+        '1'
+      )
     ).toBeInTheDocument();
+    expect(screen.getByText(/study\.summary\.streak/)).toHaveTextContent(
+      '"count":7'
+    );
+    expect(practiseAgain()).toBeInTheDocument();
+    expect(screen.queryByText('errors.errorLoadingData')).toBeNull();
+  });
+
+  it('plays the fresh queue when practising again works on the second try', async () => {
+    queueOf([CARD_ONE]);
+    render(<StudySessionPage />);
+    await rateCurrentCorrect(/Frente uno/);
+
+    failOnRefetch();
+    await userEvent.click(practiseAgain());
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    serveOnRefetch([
+      makeCard({ cardIndex: 5, front: 'Frente cinco', back: 'Dorso cinco' }),
+    ]);
+    await userEvent.click(practiseAgain());
+
     expect(
-      screen.queryByText('ai.artifacts.flashcards.summary.gotIt')
-    ).toBeNull();
-    expect(screen.queryByRole('button', { name: /Frente uno/ })).toBeNull();
+      await screen.findByRole('button', { name: /Frente cinco/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('says so instead of redirecting when the flags cannot be read', async () => {
