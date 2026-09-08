@@ -444,16 +444,4 @@ describe('SharedNotePage study tab', () => {
     expect(notePanel()).not.toHaveClass('hidden');
     expect(screen.getByTestId('read-only-editor')).toBeInTheDocument();
   });
-
-  it('no longer offers the study sidebar toggles', () => {
-    sharedArtifacts.data = artifactFixtures;
-    renderPage();
-
-    expect(
-      screen.queryByRole('button', { name: 'ai.artifacts.sidebar.studyTools' })
-    ).toBeNull();
-    expect(
-      screen.queryByRole('button', { name: 'ai.artifacts.sidebar.openPanel' })
-    ).toBeNull();
-  });
 });

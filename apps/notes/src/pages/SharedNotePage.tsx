@@ -21,9 +21,10 @@ import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
 import { useNoteByToken } from '@knowtis/data-access-notes';
 import { Button, LoadingState } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
-import { PERMISSION } from '@knowtis/shared-types';
+import { PERMISSION, type Artifact } from '@knowtis/shared-types';
 
 const HTTP_NOT_FOUND = 404;
+const NO_ARTIFACTS: Artifact[] = [];
 const TERMINAL_ACCESS_STATUSES = new Set([401, 403, HTTP_NOT_FOUND]);
 
 export function SharedNotePage() {
@@ -45,7 +46,7 @@ export function SharedNotePage() {
     handleUpdate,
   } = useSharedNoteEditing();
   const { copied, copy: copyLink } = useCopyLink();
-  const sharedArtifacts = artifacts ?? [];
+  const sharedArtifacts = artifacts ?? NO_ARTIFACTS;
   const hasArtifacts = sharedArtifacts.length > 0;
   const sharedPath = sharedNotePath(token);
   const capturedTokenRef = useRef<string | null>(null);

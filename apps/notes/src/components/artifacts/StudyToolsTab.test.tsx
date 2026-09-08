@@ -107,6 +107,20 @@ describe('StudyToolsTab', () => {
       expect(viewerProps.last?.artifact).toEqual(artifacts[0]);
       expect(viewerProps.last?.readOnly).toBe(true);
     });
+
+    it('labels the way back out of a selected artifact', async () => {
+      render(
+        <StudyToolsTab noteId="note-1" artifacts={artifacts} readOnly={true} />
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Open artifact' })
+      );
+
+      expect(
+        screen.getByRole('button', { name: 'ai.artifacts.back' })
+      ).toBeInTheDocument();
+    });
   });
 
   describe('for the note owner', () => {

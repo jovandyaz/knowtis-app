@@ -9,17 +9,13 @@ import { ArtifactGeneratorButton } from './ArtifactGenerator';
 import { ArtifactList } from './ArtifactList';
 import { ArtifactViewer } from './ArtifactViewer';
 
-interface StudyToolsTabProps {
-  noteId: string | null;
-  artifacts?: Artifact[];
-  readOnly?: boolean;
-}
+type StudyToolsTabProps =
+  | { noteId: string | null }
+  | { noteId: string; artifacts: Artifact[]; readOnly: true };
 
-export function StudyToolsTab({
-  noteId,
-  artifacts,
-  readOnly = false,
-}: StudyToolsTabProps) {
+export function StudyToolsTab(props: StudyToolsTabProps) {
+  const { noteId } = props;
+  const readOnly = 'artifacts' in props;
   const { t } = useTranslation('notes');
   const [selected, setSelected] = useState<Artifact | null>(null);
   const [prevNoteId, setPrevNoteId] = useState(noteId);
@@ -45,7 +41,7 @@ export function StudyToolsTab({
             type="button"
             onClick={() => setSelected(null)}
             className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={t('ai.artifacts.sidebar.back')}
+            aria-label={t('ai.artifacts.back')}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -66,11 +62,15 @@ export function StudyToolsTab({
         </h2>
         {!readOnly && <ArtifactGeneratorButton />}
       </div>
-      <ArtifactList
-        {...(artifacts ? { artifacts } : { noteId })}
-        readOnly={readOnly}
-        onSelect={setSelected}
-      />
+      {'artifacts' in props ? (
+        <ArtifactList
+          artifacts={props.artifacts}
+          readOnly={true}
+          onSelect={setSelected}
+        />
+      ) : (
+        <ArtifactList noteId={noteId} readOnly={false} onSelect={setSelected} />
+      )}
     </div>
   );
 }
