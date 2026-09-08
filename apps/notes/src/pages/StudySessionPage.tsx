@@ -9,6 +9,7 @@ import { FlashcardSummary } from '@/components/artifacts/flashcard/FlashcardSumm
 import { useFlashcardSession } from '@/components/artifacts/flashcard/use-flashcard-session';
 import { ROUTES } from '@/config';
 import { useStudyFocusMode } from '@/hooks/useStudyFocusMode';
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { CheckCircle2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,7 +46,6 @@ import {
 } from '@knowtis/shared-types';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
-const BROWSER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
 const CTA_CLASS = 'rounded-lg px-4 text-sm font-medium';

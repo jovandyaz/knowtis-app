@@ -683,6 +683,17 @@
       "streak_one": "Racha de {{count}} día",
       "streak_other": "Racha de {{count}} días",
       "backHome": "Volver al inicio"
+    },
+    "todayCard": {
+      "title": "Repaso de hoy",
+      "dueLabel_one": "para hoy",
+      "dueLabel_other": "para hoy",
+      "newLabel_one": "nueva",
+      "newLabel_other": "nuevas",
+      "streakLabel_one": "día de racha",
+      "streakLabel_other": "días de racha",
+      "cta": "Empezar",
+      "caughtUpTitle": "Al día"
     }
   }
 }

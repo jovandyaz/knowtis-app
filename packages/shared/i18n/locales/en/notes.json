@@ -683,6 +683,17 @@
       "streak_one": "Streak of {{count}} day",
       "streak_other": "Streak of {{count}} days",
       "backHome": "Back to home"
+    },
+    "todayCard": {
+      "title": "Today's review",
+      "dueLabel_one": "due today",
+      "dueLabel_other": "due today",
+      "newLabel_one": "new",
+      "newLabel_other": "new",
+      "streakLabel_one": "day streak",
+      "streakLabel_other": "day streak",
+      "cta": "Start",
+      "caughtUpTitle": "All caught up"
     }
   }
 }
