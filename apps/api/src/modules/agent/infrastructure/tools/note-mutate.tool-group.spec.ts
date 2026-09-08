@@ -1,7 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
-import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import { AgentErrors } from '../../domain/agent-errors';
 import type {
   CreateProposedMutation,
@@ -40,17 +39,8 @@ function run(
 
 const PREVIEW = '<h1>secret preview</h1>'.repeat(2000);
 
-function verified(value: boolean): VerifiedIdentityPolicy {
-  return {
-    isVerified: vi.fn().mockResolvedValue(value),
-  } as unknown as VerifiedIdentityPolicy;
-}
-
-function group(
-  builder: MutationProposalBuilder,
-  identity: VerifiedIdentityPolicy = verified(true)
-): NoteMutateToolGroup {
-  return new NoteMutateToolGroup(builder, identity);
+function group(builder: MutationProposalBuilder): NoteMutateToolGroup {
+  return new NoteMutateToolGroup(builder);
 }
 
 const proposal: CreateProposedMutation = {
@@ -157,7 +147,7 @@ describe('NoteMutateToolGroup', () => {
     expect(c.proposals.captured).toBeNull();
   });
 
-  describe('proposeShareNote verified-identity gate', () => {
+  it('captures a share proposal for confirmation without executing it', async () => {
     const shareProposal: ShareProposedMutation = {
       id: 'p3',
       kind: 'share',
@@ -165,70 +155,23 @@ describe('NoteMutateToolGroup', () => {
       summary: 'Share "Plan" with a@b.com as viewer',
       payload: { targetEmail: 'a@b.com', permission: 'viewer' },
     };
-    const input = {
-      noteId: 'n1',
-      targetEmail: 'a@b.com',
-      permission: 'viewer',
-    };
-
-    it('refuses to propose for an unverified caller, tells the model to relay the verification step and captures nothing', async () => {
-      const builder = {
-        buildShare: vi.fn().mockResolvedValue(ok(shareProposal)),
-      } as unknown as MutationProposalBuilder;
-      const identity = verified(false);
-      const c = ctx();
-      const out = (await run(
-        group(builder, identity),
-        c,
-        'proposeShareNote',
-        input
-      )) as { error: string };
-      expect(out).toEqual({
-        error: AgentErrors.emailNotVerified().message,
-      });
-      expect(identity.isVerified).toHaveBeenCalledWith('u1');
-      expect(builder.buildShare).not.toHaveBeenCalled();
-      expect(c.proposals.captured).toBeNull();
-    });
-
-    it('proposes as before for a verified caller', async () => {
-      const builder = {
-        buildShare: vi.fn().mockResolvedValue(ok(shareProposal)),
-      } as unknown as MutationProposalBuilder;
-      const c = ctx();
-      const out = await run(
-        group(builder, verified(true)),
-        c,
-        'proposeShareNote',
-        input
-      );
-      expect(out).toEqual({
-        ok: true,
-        proposalId: 'p3',
-        summary: 'Share "Plan" with a@b.com as viewer',
-      });
-      expect(builder.buildShare).toHaveBeenCalledWith(
-        'u1',
-        'n1',
-        'a@b.com',
-        'viewer'
-      );
-      expect(c.proposals.captured).toBe(shareProposal);
-    });
-
-    it('does not consult the verified-identity policy for create or update proposals', async () => {
-      const builder = {
-        buildCreate: vi.fn().mockResolvedValue(ok(proposal)),
-      } as unknown as MutationProposalBuilder;
-      const identity = verified(false);
-      const out = await run(
-        group(builder, identity),
-        ctx(),
-        'proposeCreateNote',
-        { title: 'Plan', contentMarkdown: '# Plan' }
-      );
-      expect(out).toMatchObject({ ok: true, proposalId: 'p1' });
-      expect(identity.isVerified).not.toHaveBeenCalled();
-    });
+    const builder = {
+      buildShare: vi.fn().mockResolvedValue(ok(shareProposal)),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+    expect(
+      await run(group(builder), c, 'proposeShareNote', {
+        noteId: 'n1',
+        targetEmail: 'a@b.com',
+        permission: 'viewer',
+      })
+    ).toEqual({ ok: true, proposalId: 'p3', summary: shareProposal.summary });
+    expect(builder.buildShare).toHaveBeenCalledWith(
+      'u1',
+      'n1',
+      'a@b.com',
+      'viewer'
+    );
+    expect(c.proposals.captured).toBe(shareProposal);
   });
 });

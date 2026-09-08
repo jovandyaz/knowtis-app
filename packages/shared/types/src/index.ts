@@ -22,11 +22,14 @@ export {
   type NoteAccessLevel,
   type GeneralAccessLevel,
   type NotePermission,
+  type NotePerson,
   type ShareNoteInput,
 } from './lib/note.types';
 
 export {
   HANDSHAKE_FAILURE,
+  COLLABORATION_CLOSE_REASON,
+  type CollaborationCloseReason,
   type HandshakeFailureReason,
   type CollaborationUser,
   type JoinRoomPayload,

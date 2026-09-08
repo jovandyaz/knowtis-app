@@ -1057,10 +1057,12 @@ pnpm nx run api:eval
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
   (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).
-- **Trials:** `AI_EVAL_TRIALS` (default 1) repeats every promptfoo case N times; a case fails
-  when it passes fewer than `ceil(2/3 * G)` of its **graded** trials G. Agent behavior is
+- **Trials:** `AI_EVAL_TRIALS` (default 1) repeats every promptfoo case N times. Copilot security cases
+  (HITL and prompt-injection resistance) require every graded trial to pass; behavior cases fail
+  when they pass fewer than `ceil(2/3 * G)` of their **graded** trials G. Agent behavior is
   stochastic, so a single trial cannot distinguish a regression from variance — nightly CI runs
-  3 trials, while the local default stays at 1 for cheap pre-merge runs.
+  3 trials, while the local default stays at 1 for cheap pre-merge runs. These are per-case pass
+  rates, not a statistical pass@k estimate.
 - **Ungraded trials:** a trial whose every failing assertion is a grader transport error
   (`metadata.graderError` — e.g. HTTP 529 from the rubric model) carries no verdict, so it
   leaves the denominator instead of counting as a regression. Two guardrails keep that from
@@ -1088,9 +1090,11 @@ pnpm nx run api:eval
   serves fixed notes and records tool calls) and `PENDING_MUTATION_STORE` (a no-op).
 - **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
   sources) plus `llm-rubric` graders (Anthropic) for grounding, no-hallucination, HITL, and
-  injection resistance. With `AI_EVAL_TRIALS` > 1 each case is judged on its per-case pass
-  rate over the graded trials (threshold 2/3), so one flaky trial does not fail the suite but a
-  consistent regression does.
+  injection resistance. Each Copilot case is judged on its category-specific
+  pass rate over the graded trials: security requires 100%, while behavior requires 2/3. Other
+  suites, including `injection-guard`, retain the default 2/3 threshold. The
+  benign Spanish guard-bait case remains behavioral so the strict security gate does not hide
+  false-positive regressions.
 - **Code:** `apps/api/src/modules/agent/eval/` — six suites today. `runtime/eval-runtime.ts` is
   the runtime they share: the Promptfoo runner (`runEvalSuite`, trial summarisation, result
   output) drives `copilot.eval.ts` and `injection-guard.eval.ts`, while `evalGateOpen` /
@@ -1107,8 +1111,10 @@ cases (injection resistance, copilot behaviors) run unless the `VOYAGE_API_KEY` 
 secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is missing, so a
 silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
 (a zero-credit key surfaces as an eval error, not a skip). The workflow sets `AI_EVAL_TRIALS=3`,
-so every promptfoo case runs three times and fails below a 2/3 pass rate over its graded
-trials. A grader outage therefore reads as `N of 3 ungraded` per case rather than as a wave of
+so every promptfoo case runs three times. Copilot security cases require every evaluable trial
+to pass; behavior cases require at least 2/3 of evaluable trials. Grader errors leave the
+denominator, and a case with no evaluable trials fails. A grader outage therefore reads as
+`N of 3 ungraded` per case rather than as a wave of
 behavioral regressions — the failure mode that made the 2026-09-01 nightly report
 `Failed: 13  Errors: 0` while the same code passed 24/24 ninety minutes earlier.
 Each run persists results to the `eval-results` artifact (90-day retention) and a

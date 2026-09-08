@@ -59,6 +59,7 @@ export class HocuspocusService
       maxDebounce: 10000,
       // Respect the debounce on disconnect so we don't clobber pending writes.
       unloadImmediately: false,
+      ...this.auth.guardHooks(),
       extensions: [
         ...redisExtensions,
         this.auth.toExtension(),

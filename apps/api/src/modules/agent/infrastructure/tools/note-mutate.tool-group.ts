@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
-import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
-import { AgentErrors } from '../../domain/agent-errors';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import type { ProposalCollector } from '../orchestrator/proposal-collector';
@@ -25,10 +23,7 @@ function captureProposal(
 export class NoteMutateToolGroup implements AgentToolGroup {
   readonly name = 'note-mutate';
 
-  constructor(
-    private readonly proposalBuilder: MutationProposalBuilder,
-    private readonly verifiedIdentity: VerifiedIdentityPolicy
-  ) {}
+  constructor(private readonly proposalBuilder: MutationProposalBuilder) {}
 
   availableIn(phase: AgentToolPhase): boolean {
     return phase === 'full';
@@ -93,7 +88,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
       }),
       proposeShareNote: tool({
         description:
-          'Propose sharing a note with another user by email. Does NOT share it — the user must confirm. noteId must come from searchNotes/getNote. Requires a verified email; if the tool returns an error asking the user to verify, relay that instruction instead of retrying.',
+          'Propose sharing a note with another user by email. Does NOT share it — the user must confirm. noteId must come from searchNotes/getNote. Adding a person or upgrading viewer to editor requires a verified email when confirmed; reducing or retaining access does not. If confirmation requires verification, relay that instruction instead of retrying.',
         inputSchema: z.object({
           noteId: z.string().uuid(),
           targetEmail: z
@@ -103,9 +98,6 @@ export class NoteMutateToolGroup implements AgentToolGroup {
           permission: z.enum(['viewer', 'editor']).default('viewer'),
         }),
         execute: async ({ noteId, targetEmail, permission }) => {
-          if (!(await this.verifiedIdentity.isVerified(userId))) {
-            return { error: AgentErrors.emailNotVerified().message };
-          }
           const r = await this.proposalBuilder.buildShare(
             userId,
             noteId,

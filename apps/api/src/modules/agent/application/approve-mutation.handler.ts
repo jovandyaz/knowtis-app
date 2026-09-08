@@ -9,11 +9,6 @@ import { ShareNoteHandler } from '../../notes/application/commands/share-note.ha
 import { UpdateNoteHandler } from '../../notes/application/commands/update-note.handler';
 import { NoteErrorCodes } from '../../notes/domain';
 import { NOTE_REPOSITORY, type NoteRepository } from '../../notes/domain/ports';
-import {
-  USER_READ_REPOSITORY,
-  type UserReadRepository,
-} from '../../users/domain/ports/user-read.repository';
-import { VerifiedIdentityPolicy } from '../../users/verified-identity.policy';
 import { AgentErrors, type AgentDomainError } from '../domain/agent-errors';
 import type { AgentCommitResult } from '../domain/agent-event';
 import {
@@ -50,9 +45,7 @@ export class ApproveMutationHandler {
     private readonly updateHandler: UpdateNoteHandler,
     private readonly shareHandler: ShareNoteHandler,
     private readonly abilityFactory: AppAbilityFactory,
-    @Inject(NOTE_REPOSITORY) private readonly noteRepo: NoteRepository,
-    @Inject(USER_READ_REPOSITORY) private readonly userRepo: UserReadRepository,
-    private readonly verifiedIdentity: VerifiedIdentityPolicy
+    @Inject(NOTE_REPOSITORY) private readonly noteRepo: NoteRepository
   ) {}
 
   async execute(
@@ -169,31 +162,23 @@ export class ApproveMutationHandler {
     m: ShareProposedMutation,
     toolName: string
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
-    // Ahead of the lookups, not only inside ShareNoteHandler: resolving the
-    // target email first would answer whether that account exists.
-    if (!(await this.verifiedIdentity.isVerified(userId))) {
-      return err(AgentErrors.emailNotVerified());
-    }
-    const note = await this.noteRepo.findById(m.targetNoteId);
-    if (!note) {
-      return err(AgentErrors.noteNotFound(m.targetNoteId));
-    }
-    const target = await this.userRepo.findByEmail(m.payload.targetEmail);
-    if (!target) {
-      return err(AgentErrors.targetUserNotFound(m.payload.targetEmail));
-    }
     const res = await this.shareHandler.execute({
       noteId: m.targetNoteId,
       userId,
-      targetUserId: target.id,
+      email: m.payload.targetEmail,
       permission: m.payload.permission,
     });
     if (res.isErr()) {
       return err(this.mapCommitError(m, res.error));
     }
+    const note = await this.noteRepo.findById(m.targetNoteId);
     return ok({
-      result: { noteId: m.targetNoteId, title: note.title, kind: 'share' },
-      outcome: `shared "${note.title}" with ${m.payload.targetEmail} as ${m.payload.permission}`,
+      result: {
+        noteId: m.targetNoteId,
+        title: note?.title ?? 'Note',
+        kind: 'share',
+      },
+      outcome: `shared "${note?.title ?? 'Note'}" with ${m.payload.targetEmail} as ${m.payload.permission}`,
       toolName,
     });
   }

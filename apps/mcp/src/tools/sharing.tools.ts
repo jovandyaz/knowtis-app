@@ -7,10 +7,13 @@ import type { McpCredential } from '../auth/credentials.js';
 import { NON_DESTRUCTIVE_IDEMPOTENT, READ_ONLY } from './annotations.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
-const collaboratorShape = {
-  userId: z.string(),
-  email: z.string(),
-  name: z.string(),
+const personShape = {
+  user: z.object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string(),
+    avatarUrl: z.string().nullable(),
+  }),
   permission: z.enum(['owner', 'viewer', 'editor']),
 };
 
@@ -29,14 +32,14 @@ export function registerSharingTools(
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note'),
       },
-      outputSchema: { collaborators: z.array(z.object(collaboratorShape)) },
+      outputSchema: { collaborators: z.array(z.object(personShape)) },
       annotations: READ_ONLY,
     },
     wrapToolHandler(
       'get-collaborators',
       authService,
       async (token, { noteId }) => ({
-        collaborators: await sharingApi.getCollaborators(token, noteId),
+        collaborators: await sharingApi.getPeople(token, noteId),
       }),
       credential
     )
@@ -46,13 +49,15 @@ export function registerSharingTools(
     'share-note',
     {
       title: 'Share Note',
-      description: 'Share a note with another user by their user ID.',
+      description: 'Add a person to a note by their exact email address.',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to share'),
-        userId: z
+        email: z
           .string()
-          .uuid()
-          .describe('The UUID of the user to share with'),
+          .trim()
+          .toLowerCase()
+          .email()
+          .describe('The exact email address of the person'),
         permission: z.enum(['viewer', 'editor']).describe('Permission level'),
       },
       outputSchema: { success: z.boolean() },
@@ -61,8 +66,8 @@ export function registerSharingTools(
     wrapToolHandler(
       'share-note',
       authService,
-      async (token, { noteId, userId, permission }) => {
-        await sharingApi.share(token, noteId, userId, permission);
+      async (token, { noteId, email, permission }) => {
+        await sharingApi.upsertPerson(token, noteId, { email, permission });
         return { success: true };
       },
       credential

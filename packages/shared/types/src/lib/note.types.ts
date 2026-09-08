@@ -86,7 +86,16 @@ export interface NotePermission {
   createdAt: Date;
 }
 
+export interface NotePerson {
+  readonly user: {
+    readonly id: string;
+    readonly name: string;
+    readonly email: string;
+    readonly avatarUrl: string | null;
+  };
+  readonly permission: NoteAccessLevel;
+}
 export interface ShareNoteInput {
-  userId: string;
-  permission: PermissionLevel;
+  readonly email: string;
+  readonly permission: PermissionLevel;
 }
