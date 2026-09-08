@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link, useParams } from '@tanstack/react-router';
+import { useParams } from '@tanstack/react-router';
 
 import { ensureGuestSession } from '@/auth/setup';
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import { SharedNoteAccessError } from '@/components/notes/shared-note/SharedNoteAccessError';
 import { SharedNoteHeader } from '@/components/notes/shared-note/SharedNoteHeader';
 import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
 import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
-import { ROUTES, sharedNotePath } from '@/config';
+import { sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useWorkspaceTabReset } from '@/stores/useWorkspaceTabReset';
@@ -20,7 +21,7 @@ import { toast } from 'sonner';
 import { ApiClientError } from '@knowtis/api-client';
 import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
 import { useNoteByToken } from '@knowtis/data-access-notes';
-import { Button, ErrorState, LoadingState } from '@knowtis/design-system';
+import { Button, LoadingState } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION } from '@knowtis/shared-types';
 
@@ -112,43 +113,15 @@ export function SharedNotePage() {
     TERMINAL_ACCESS_STATUSES.has(error.status);
 
   if (isError && (!data || isTerminalAccessError)) {
-    const isNotFound =
-      ApiClientError.isApiClientError(error) && error.status === HTTP_NOT_FOUND;
-
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-        <ErrorState
-          fullHeight={false}
-          title={
-            isNotFound
-              ? t('shared.linkNotFound')
-              : tCommon('errors.somethingWentWrong')
-          }
-          message={
-            isNotFound
-              ? t('shared.linkNotFoundDesc')
-              : t('shared.failedToLoadShared')
-          }
-          {...(isNotFound
-            ? {}
-            : {
-                onRetry: () => refetch(),
-                retryLabel: tCommon('buttons.tryAgain'),
-              })}
-        />
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {offerSignIn ? (
-            <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
-              <Button size="sm">{t('shared.signIn')}</Button>
-            </Link>
-          ) : null}
-          <Link to={ROUTES.DASHBOARD}>
-            <Button variant="outline" size="sm">
-              {t('shared.goToKnowtis')}
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <SharedNoteAccessError
+        isNotFound={
+          ApiClientError.isApiClientError(error) &&
+          error.status === HTTP_NOT_FOUND
+        }
+        offerSignIn={offerSignIn}
+        onRetry={() => void refetch()}
+      />
     );
   }
 
