@@ -132,10 +132,35 @@ export { DataTable, type DataTableProps } from './components/DataTable';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
 export { Kbd, type KbdProps } from './components/Kbd';
 export { Progress, type ProgressProps } from './components/Progress';
+export { FlipCard, type FlipCardProps } from './components/FlipCard';
+export {
+  ProgressRing,
+  type ProgressRingProps,
+  RING_SIZE_DEFAULT,
+  RING_STROKE_DEFAULT,
+} from './components/ProgressRing';
+export {
+  DonutChart,
+  type DonutChartProps,
+  type DonutSegment,
+  DONUT_SIZE_DEFAULT,
+  DONUT_STROKE,
+} from './components/DonutChart';
+export {
+  StatTile,
+  type StatTileProps,
+  type StatDelta,
+} from './components/StatTile';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
 
+export {
+  LEARN_TONES,
+  type LearnTone,
+  type ProgressRingTone,
+  type DonutTone,
+} from './constants/learn-tone';
 export { THEMES, type Theme } from './constants/theme';
 
 export { cn } from './utils';

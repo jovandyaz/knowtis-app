@@ -4,9 +4,9 @@ import * as ProgressPrimitive from '@radix-ui/react-progress';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../utils';
+import { clampProgress } from '../utils/progress';
 
 const PERCENT = 100;
-const MAX_FLOOR = 1;
 
 const indicatorVariants = cva(
   'h-full w-full rounded-full transition-transform duration-(--motion-duration-base) ease-enter motion-reduce:transition-none',
@@ -37,9 +37,8 @@ export interface ProgressProps
 
 const Progress = forwardRef<HTMLDivElement, ProgressProps>(
   ({ className, value, max, label, tone, ...props }, ref) => {
-    const safeMax = Math.max(max, MAX_FLOOR);
-    const clamped = Math.min(Math.max(value, 0), safeMax);
-    const percent = (clamped / safeMax) * PERCENT;
+    const { safeMax, clamped, ratio } = clampProgress(value, max);
+    const percent = ratio * PERCENT;
     return (
       <ProgressPrimitive.Root
         ref={ref}
