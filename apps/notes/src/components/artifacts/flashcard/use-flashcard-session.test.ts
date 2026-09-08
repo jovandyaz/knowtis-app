@@ -1,9 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SM2_QUALITY, type StudyCard } from '@knowtis/shared-types';
 
 import { useFlashcardSession } from './use-flashcard-session';
+
+function assertDefined<T>(value: T | undefined): asserts value is T {
+  expect(value).toBeDefined();
+}
 
 function makeCard(i: number): StudyCard {
   return {
@@ -25,6 +29,10 @@ function reverse<T>(items: T[]): T[] {
 }
 
 describe('useFlashcardSession', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('starts on the first card, unflipped, incomplete', () => {
     const cards = [makeCard(0), makeCard(1)];
     const { result } = renderHook(() => useFlashcardSession(cards));
@@ -54,18 +62,20 @@ describe('useFlashcardSession', () => {
 
     act(() => result.current.shuffle());
 
-    expect(result.current.currentCard).toEqual(cards[2]);
+    expect(result.current.currentCard?.artifactId).toBe(cards[2].artifactId);
+    expect(result.current.currentCard?.cardIndex).toBe(cards[2].cardIndex);
   });
 
   it('marks the remaining cards skipped when the session is finished early', () => {
     const cards = [makeCard(0), makeCard(1), makeCard(2)];
     const { result } = renderHook(() => useFlashcardSession(cards));
 
+    act(() => result.current.rate('correct'));
     act(() => result.current.finish());
 
     expect(result.current.isComplete).toBe(true);
     expect(result.current.cardStatuses).toEqual([
-      'skipped',
+      'correct',
       'skipped',
       'skipped',
     ]);
@@ -124,19 +134,32 @@ describe('useFlashcardSession', () => {
     expect(result.current.currentCard?.cardIndex).toBe(cards[1].cardIndex);
   });
 
-  it('reports a duration that starts at the first render and freezes on completion', () => {
+  it('reports a duration that starts at the first render, freezes on completion, and restarts fresh', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
     const cards = [makeCard(0), makeCard(1)];
-    const { result } = renderHook(() => useFlashcardSession(cards));
+    const { result, rerender } = renderHook(() => useFlashcardSession(cards));
 
-    expect(result.current.sessionResult.durationMs).toBe(0);
-
+    vi.setSystemTime(5_000);
     act(() => result.current.rate('correct'));
     act(() => result.current.rate('correct'));
 
     expect(result.current.isComplete).toBe(true);
-    const frozenDuration = result.current.sessionResult.durationMs;
-    expect(frozenDuration).toBeGreaterThanOrEqual(0);
-    expect(result.current.sessionResult.durationMs).toBe(frozenDuration);
+    expect(result.current.sessionResult.durationMs).toBe(5_000);
+
+    vi.setSystemTime(9_000);
+    rerender();
+    expect(result.current.sessionResult.durationMs).toBe(5_000);
+
+    vi.setSystemTime(9_500);
+    act(() => result.current.restart());
+    expect(result.current.sessionResult.durationMs).toBe(0);
+
+    vi.setSystemTime(11_500);
+    act(() => result.current.rate('correct'));
+    act(() => result.current.rate('correct'));
+    expect(result.current.sessionResult.durationMs).toBe(2_000);
   });
 
   it('shuffles without losing or duplicating a card', () => {
@@ -161,7 +184,8 @@ describe('useFlashcardSession', () => {
       (_, i) => i
     ).map((i) => {
       act(() => result.current.navigate(i));
-      const card = result.current.currentCard as StudyCard;
+      const card = result.current.currentCard;
+      assertDefined(card);
       return `${card.artifactId}:${card.cardIndex}`;
     });
 
