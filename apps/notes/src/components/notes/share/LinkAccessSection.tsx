@@ -73,6 +73,11 @@ export function LinkAccessSection({
               variant="outline"
               size="icon"
               onClick={handleCopyLink}
+              aria-label={
+                copiedLink
+                  ? tCommon('buttons.copied')
+                  : tCommon('buttons.copyLink')
+              }
               className="flex-shrink-0 h-8 w-8"
             >
               {copiedLink ? (

@@ -34,7 +34,13 @@ import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
+import {
+  Button,
+  cn,
+  ErrorState,
+  Input,
+  LoadingState,
+} from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import {
   ACCESS,
@@ -415,13 +421,23 @@ export function NoteEditorPage() {
   const navigate = useNavigate();
   const { t } = useTranslation('notes');
 
-  const { data: note, isLoading, isError, error } = useNote(noteId);
+  const {
+    data: note,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useNote(noteId);
+  const terminalError =
+    ApiClientError.isApiClientError(error) &&
+    [401, 403, 404].includes(error.status);
 
   if (isLoading) {
     return <LoadingState message={t('editor.loadingNote')} />;
   }
 
-  if (isError) {
+  if (isError && (!note || terminalError)) {
     return (
       <ErrorState
         title={t('editor.failedToLoad')}
@@ -437,20 +453,42 @@ export function NoteEditorPage() {
   }
 
   return (
-    <NoteEditor
-      key={note.id}
-      noteId={note.id}
-      initialTitle={note.title}
-      initialContent={note.content}
-      accessLevel={note.accessLevel}
-      bucket={note.bucket}
-      tags={note.tags}
-      supertag={note.supertag}
-      supertagFields={note.supertagFields}
-      generalAccess={note.generalAccess}
-      generalAccessPermission={note.generalAccessPermission}
-      shareToken={note.shareToken}
-      editorsCanShare={note.editorsCanShare}
-    />
+    <>
+      {isError ? (
+        <div
+          role="alert"
+          className="mx-auto mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 rounded-lg border border-(--border) p-4"
+        >
+          <p className="text-sm text-(--muted-foreground)">
+            {t('editor.refreshError')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isFetching}
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            {t('editor.retryRefresh')}
+          </Button>
+        </div>
+      ) : null}
+      <NoteEditor
+        key={note.id}
+        noteId={note.id}
+        initialTitle={note.title}
+        initialContent={note.content}
+        accessLevel={note.accessLevel}
+        bucket={note.bucket}
+        tags={note.tags}
+        supertag={note.supertag}
+        supertagFields={note.supertagFields}
+        generalAccess={note.generalAccess}
+        generalAccessPermission={note.generalAccessPermission}
+        shareToken={note.shareToken}
+        editorsCanShare={note.editorsCanShare}
+      />
+    </>
   );
 }

@@ -1,97 +1,85 @@
-import type { ReactNode } from 'react';
-
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as ApiClient from '@knowtis/api-client';
 import { notesApi } from '@knowtis/api-client';
-import { TooltipProvider } from '@knowtis/design-system';
+import type * as ApiClient from '@knowtis/api-client';
 
 import {
-  createAuthApiMock,
-  createAuthOnlyWrapper,
-  HARNESS_PROFILE,
-} from '../../test/auth-harness';
-import { ShareDialog } from './ShareDialog';
+  deferred,
+  SHARE_NOTE,
+  SHARE_OWNER,
+  SHARE_VIEWER,
+  shareHarness,
+  waitForPeople,
+} from '../../test/share-harness';
 
-const toastSuccess = vi.fn();
-
-vi.mock('@knowtis/api-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof ApiClient>();
+vi.mock('@knowtis/api-client', async (load) => {
+  const actual = await load<typeof ApiClient>();
   return {
     ...actual,
-    notesApi: { ...actual.notesApi, update: vi.fn() },
+    notesApi: {
+      ...actual.notesApi,
+      getById: vi.fn(),
+      getPeople: vi.fn(),
+      update: vi.fn(),
+      upsertPerson: vi.fn(),
+    },
   };
 });
-vi.mock('sonner', () => ({
-  toast: {
-    success: (...a: unknown[]) => toastSuccess(...a),
-    error: vi.fn(),
-  },
-}));
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-let queryClient: QueryClient;
-
-const AuthOnly = createAuthOnlyWrapper(createAuthApiMock(), {
-  user: HARNESS_PROFILE,
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(notesApi.getById).mockResolvedValue({
+    ...SHARE_NOTE,
+    shareToken: 'tok',
+  });
+  vi.mocked(notesApi.getPeople).mockResolvedValue([SHARE_OWNER]);
 });
+afterEach(cleanup);
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={queryClient}>
-    <AuthOnly>
-      <TooltipProvider>{children}</TooltipProvider>
-    </AuthOnly>
-  </QueryClientProvider>
-);
-
-describe('ShareDialog — confirmation outlives the dialog', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    queryClient = new QueryClient({
-      defaultOptions: { mutations: { retry: false } },
-    });
+describe('ShareDialog mutation lifetime', () => {
+  it('announces a link change that resolves after unmounting', async () => {
+    const save = deferred<typeof SHARE_NOTE>();
+    vi.mocked(notesApi.update).mockReturnValue(save.promise);
+    const view = shareHarness().render();
+    await waitForPeople();
+    await userEvent.click(
+      screen.getByRole('radio', { name: /Anyone with the link/ })
+    );
+    await waitFor(() => expect(notesApi.update).toHaveBeenCalledTimes(1));
+    view.unmount();
+    await act(async () => save.resolve(SHARE_NOTE));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        "Link active again. It's the same one as before"
+      )
+    );
   });
 
-  it('announces a share that resolves after the dialog is gone', async () => {
-    let settle: (() => void) | undefined;
-    vi.mocked(notesApi.update).mockReturnValue(
-      new Promise((resolve) => {
-        settle = () =>
-          resolve({ id: 'n1' } as Awaited<ReturnType<typeof notesApi.update>>);
-      })
+  it('keeps the shared action lock while closing and reopening a pending add', async () => {
+    const save = deferred<typeof SHARE_VIEWER>();
+    vi.mocked(notesApi.upsertPerson).mockReturnValue(save.promise);
+    const harness = shareHarness();
+    const view = harness.render();
+    await waitForPeople();
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Email' }),
+      'viewer@example.com'
     );
-
-    const { unmount } = render(
-      <ShareDialog
-        open
-        onOpenChange={vi.fn()}
-        noteId="n1"
-        noteTitle="Note"
-        generalAccess="restricted"
-        generalAccessPermission="viewer"
-        shareToken="tok"
-        editorsCanShare={false}
-        accessLevel="owner"
-      />,
-      { wrapper }
-    );
-
-    await userEvent.click(
-      screen.getByRole('radio', { name: /share.anyoneWithLink/ })
-    );
-    await waitFor(() => expect(notesApi.update).toHaveBeenCalled());
-
-    unmount();
-    settle?.();
-
-    await waitFor(() =>
-      expect(toastSuccess).toHaveBeenCalledWith('share.linkResumedToast')
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+    await waitFor(() => expect(notesApi.upsertPerson).toHaveBeenCalledTimes(1));
+    view.rerender(harness.dialog({ open: false }));
+    view.rerender(harness.dialog());
+    await waitFor(() => expect(notesApi.getPeople).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+    expect(
+      screen.getByRole('radio', { name: /Anyone with the link/ })
+    ).toBeDisabled();
+    await act(async () => save.resolve(SHARE_VIEWER));
+    await waitForPeople();
+    expect(toast.success).toHaveBeenCalledWith('Permissions saved.');
+    expect(notesApi.upsertPerson).toHaveBeenCalledTimes(1);
   });
 });
