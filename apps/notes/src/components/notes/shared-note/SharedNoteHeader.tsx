@@ -41,7 +41,7 @@ export function SharedNoteHeader({
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
             <span>{ownerName}</span>
             <span>&middot;</span>
-            <span>{format(new Date(updatedAt), 'MMM d, yyyy')}</span>
+            <span>{format(updatedAt, 'MMM d, yyyy')}</span>
           </span>
         </div>
         <SharedNoteActions variant="desktop" canEdit={canEdit} {...actions} />
