@@ -4,15 +4,21 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { ensureGuestSession } from '@/auth/setup';
-import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
+import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import {
+  workspacePanelId,
+  workspaceTabId,
+} from '@/components/editor/workspace-tab-ids';
+import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { format } from 'date-fns';
-import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
+import { Check, Eye, Pencil, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -21,6 +27,7 @@ import { useNoteByToken } from '@knowtis/data-access-notes';
 import {
   Badge,
   Button,
+  cn,
   ErrorState,
   LoadingState,
   Tooltip,
@@ -45,9 +52,11 @@ export function SharedNotePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [latestContent, setLatestContent] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const { copied, copy: copyLink } = useCopyLink();
-  const hasArtifacts = !!artifacts && artifacts.length > 0;
+  const sharedArtifacts = artifacts ?? [];
+  const hasArtifacts = sharedArtifacts.length > 0;
+  const workspaceTab = useWorkspaceStore((s) => s.activeTab);
+  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
   const sharedPath = sharedNotePath(token);
   const capturedTokenRef = useRef<string | null>(null);
   const permission =
@@ -61,6 +70,10 @@ export function SharedNotePage() {
     !isLoading && !isError && data !== undefined && !isAuthLoading;
   // A registered visitor gets nothing from the login page but a bounce back here.
   const offerSignIn = !isAuthLoading && isAnonymousVisitor;
+
+  useEffect(() => {
+    setWorkspaceTab('note');
+  }, [token, setWorkspaceTab]);
 
   useEffect(() => {
     if (!isResolved || !permission || capturedTokenRef.current === token) {
@@ -222,7 +235,6 @@ export function SharedNotePage() {
         </div>
       </header>
 
-      {/* Desktop: content column + sidebar side-by-side */}
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
@@ -299,16 +311,6 @@ export function SharedNotePage() {
                   </Button>
                 </Link>
               ) : null}
-              {hasArtifacts && (
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen((prev) => !prev)}
-                  className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
-                  aria-label={t('ai.artifacts.sidebar.openPanel')}
-                >
-                  <PanelLeft className="h-4 w-4 -scale-x-100" />
-                </button>
-              )}
             </div>
           </div>
 
@@ -331,41 +333,56 @@ export function SharedNotePage() {
 
           <main className="flex-1 min-h-0 overflow-y-auto p-4 md:px-8 md:pt-3 md:pb-8">
             <div className="mx-auto max-w-4xl">
-              {isEditing ? (
-                <CollaborativeEditor
-                  noteId={data.id}
-                  initialContent={data.content}
-                  onUpdate={handleUpdate}
-                  editable={true}
-                  shareToken={token}
-                  onEditDenied={handleEditDenied}
-                />
-              ) : (
-                <ReadOnlyEditor content={displayContent} />
+              {hasArtifacts && (
+                <WorkspaceTabBar studyCount={sharedArtifacts.length} />
+              )}
+
+              <div
+                {...(hasArtifacts
+                  ? {
+                      id: workspacePanelId('note'),
+                      role: 'tabpanel' as const,
+                      'aria-labelledby': workspaceTabId('note'),
+                      tabIndex: 0,
+                    }
+                  : {})}
+                className={cn(
+                  hasArtifacts && workspaceTab !== 'note' && 'hidden'
+                )}
+              >
+                {isEditing ? (
+                  <CollaborativeEditor
+                    noteId={data.id}
+                    initialContent={data.content}
+                    onUpdate={handleUpdate}
+                    editable={true}
+                    shareToken={token}
+                    onEditDenied={handleEditDenied}
+                  />
+                ) : (
+                  <ReadOnlyEditor content={displayContent} />
+                )}
+              </div>
+
+              {hasArtifacts && (
+                <div
+                  id={workspacePanelId('estudio')}
+                  role="tabpanel"
+                  aria-labelledby={workspaceTabId('estudio')}
+                  tabIndex={0}
+                  className={cn(workspaceTab !== 'estudio' && 'hidden')}
+                >
+                  <StudyToolsTab
+                    noteId={data.id}
+                    artifacts={sharedArtifacts}
+                    readOnly
+                  />
+                </div>
               )}
             </div>
           </main>
         </div>
-
-        {hasArtifacts && (
-          <SharedArtifactSidebar
-            artifacts={artifacts}
-            open={sidebarOpen}
-            onToggle={() => setSidebarOpen((prev) => !prev)}
-          />
-        )}
       </div>
-
-      {hasArtifacts && (
-        <button
-          type="button"
-          onClick={() => setSidebarOpen((prev) => !prev)}
-          className="fixed bottom-4 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
-          aria-label={t('ai.artifacts.sidebar.studyTools')}
-        >
-          <Sparkles className="h-5 w-5" />
-        </button>
-      )}
     </div>
   );
 }

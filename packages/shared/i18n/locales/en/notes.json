@@ -485,9 +485,6 @@
       },
       "sidebar": {
         "back": "Back",
-        "openPanel": "Open study panel",
-        "closePanel": "Close study panel",
-        "studyTools": "Study Tools",
         "resizePanel": "Resize panel"
       },
       "list": {

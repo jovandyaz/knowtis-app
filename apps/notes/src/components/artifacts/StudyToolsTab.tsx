@@ -9,7 +9,17 @@ import { ArtifactGeneratorButton } from './ArtifactGenerator';
 import { ArtifactList } from './ArtifactList';
 import { ArtifactViewer } from './ArtifactViewer';
 
-export function StudyToolsTab({ noteId }: { noteId: string | null }) {
+interface StudyToolsTabProps {
+  noteId: string | null;
+  artifacts?: Artifact[];
+  readOnly?: boolean;
+}
+
+export function StudyToolsTab({
+  noteId,
+  artifacts,
+  readOnly = false,
+}: StudyToolsTabProps) {
   const { t } = useTranslation('notes');
   const [selected, setSelected] = useState<Artifact | null>(null);
   const [prevNoteId, setPrevNoteId] = useState(noteId);
@@ -43,7 +53,7 @@ export function StudyToolsTab({ noteId }: { noteId: string | null }) {
             {selected.title}
           </h2>
         </div>
-        <ArtifactViewer artifact={selected} />
+        <ArtifactViewer artifact={selected} readOnly={readOnly} />
       </div>
     );
   }
@@ -54,9 +64,13 @@ export function StudyToolsTab({ noteId }: { noteId: string | null }) {
         <h2 className="text-sm font-semibold text-foreground">
           {t('ai.artifacts.studyTools')}
         </h2>
-        <ArtifactGeneratorButton />
+        {!readOnly && <ArtifactGeneratorButton />}
       </div>
-      <ArtifactList noteId={noteId} onSelect={setSelected} />
+      <ArtifactList
+        {...(artifacts ? { artifacts } : { noteId })}
+        readOnly={readOnly}
+        onSelect={setSelected}
+      />
     </div>
   );
 }

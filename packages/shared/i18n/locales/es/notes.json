@@ -485,9 +485,6 @@
       },
       "sidebar": {
         "back": "Volver",
-        "openPanel": "Abrir panel de estudio",
-        "closePanel": "Cerrar panel de estudio",
-        "studyTools": "Herramientas de Estudio",
         "resizePanel": "Redimensionar panel"
       },
       "list": {

@@ -1,18 +1,63 @@
 import type { ReactNode } from 'react';
 
+import {
+  workspacePanelId,
+  workspaceTabId,
+} from '@/components/editor/workspace-tab-ids';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@knowtis/design-system';
+import type { Artifact } from '@knowtis/shared-types';
 
 import { SharedNotePage } from './SharedNotePage';
 
+interface StudyToolsTabProps {
+  noteId: string | null;
+  artifacts?: Artifact[];
+  readOnly?: boolean;
+}
+
 const ensureGuestSession = vi.fn<() => Promise<boolean>>();
 const toastError = vi.fn();
-const { captureProductEvent } = vi.hoisted(() => ({
-  captureProductEvent: vi.fn(),
-}));
+const {
+  captureProductEvent,
+  artifactFixtures,
+  sharedArtifacts,
+  studyToolsProps,
+} = vi.hoisted(() => {
+  const artifactFixtures = [
+    {
+      id: 'a1',
+      userId: 'u1',
+      sourceNoteId: 'note-1',
+      title: 'Key ideas',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      type: 'summary',
+      content: { summary: 'body', keyPoints: [] },
+    },
+    {
+      id: 'a2',
+      userId: 'u1',
+      sourceNoteId: 'note-1',
+      title: 'Practice quiz',
+      createdAt: '2026-09-02T00:00:00.000Z',
+      updatedAt: '2026-09-02T00:00:00.000Z',
+      type: 'quiz',
+      content: { questions: [] },
+    },
+  ] as Artifact[];
+
+  return {
+    captureProductEvent: vi.fn(),
+    artifactFixtures,
+    sharedArtifacts: { data: [] as Artifact[] },
+    studyToolsProps: { last: undefined as StudyToolsTabProps | undefined },
+  };
+});
 const authUser = vi.fn<() => { isAnonymous?: boolean } | null>();
 const authLoading = vi.fn<() => boolean>();
 let denyEdit: (() => void) | undefined;
@@ -66,7 +111,13 @@ vi.mock('@knowtis/editor', () => ({
   ),
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useSharedNoteArtifacts: () => ({ data: [] }),
+  useSharedNoteArtifacts: () => ({ data: sharedArtifacts.data }),
+}));
+vi.mock('@/components/artifacts/StudyToolsTab', () => ({
+  StudyToolsTab: (props: StudyToolsTabProps) => {
+    studyToolsProps.last = props;
+    return <div data-testid="study-tools-tab" />;
+  },
 }));
 vi.mock('@knowtis/data-access-notes', () => ({
   useNoteByToken: () => noteQuery,
@@ -90,6 +141,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   denyEdit = undefined;
   token = 'tok';
+  sharedArtifacts.data = [];
+  studyToolsProps.last = undefined;
+  useWorkspaceStore.setState({ activeTab: 'note' });
   authUser.mockReturnValue({ isAnonymous: true });
   authLoading.mockReturnValue(false);
   noteQuery = {
@@ -290,5 +344,76 @@ describe('SharedNotePage editing as a visitor', () => {
 
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
     expect(toastError).toHaveBeenCalledWith('shared.editDenied');
+  });
+});
+
+describe('SharedNotePage study tab', () => {
+  const studyTab = () =>
+    screen.getByRole('tab', { name: /workspace.tabs.study/ });
+  const notePanel = () => document.getElementById(workspacePanelId('note'));
+  const studyPanel = () => document.getElementById(workspacePanelId('estudio'));
+
+  it('leaves the page untabbed when the shared note has no artifacts', () => {
+    renderPage();
+
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('tabpanel')).toBeNull();
+    expect(screen.getByTestId('read-only-editor')).toBeInTheDocument();
+  });
+
+  it('offers a note and a study tab when the shared note has artifacts', () => {
+    sharedArtifacts.data = artifactFixtures;
+    renderPage();
+
+    expect(screen.getByRole('tablist')).toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    expect(studyTab()).toHaveTextContent('2');
+    expect(notePanel()).toHaveAttribute('role', 'tabpanel');
+    expect(notePanel()).toHaveAttribute(
+      'aria-labelledby',
+      workspaceTabId('note')
+    );
+    expect(notePanel()).not.toHaveClass('hidden');
+    expect(studyPanel()).toHaveClass('hidden');
+  });
+
+  it('shows the study tools read-only without unmounting the note', async () => {
+    sharedArtifacts.data = artifactFixtures;
+    renderPage();
+
+    await userEvent.click(studyTab());
+
+    expect(studyPanel()).not.toHaveClass('hidden');
+    expect(studyToolsProps.last).toEqual({
+      noteId: 'note-1',
+      artifacts: artifactFixtures,
+      readOnly: true,
+    });
+    expect(notePanel()).toHaveClass('hidden');
+    expect(screen.getByTestId('read-only-editor')).toBeInTheDocument();
+  });
+
+  it('opens on the note tab even when the workspace was left on study', () => {
+    sharedArtifacts.data = artifactFixtures;
+    useWorkspaceStore.setState({ activeTab: 'estudio' });
+
+    renderPage();
+
+    expect(
+      screen.getByRole('tab', { name: /workspace.tabs.note/ })
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(useWorkspaceStore.getState().activeTab).toBe('note');
+  });
+
+  it('no longer offers the study sidebar toggles', () => {
+    sharedArtifacts.data = artifactFixtures;
+    renderPage();
+
+    expect(
+      screen.queryByRole('button', { name: 'ai.artifacts.sidebar.studyTools' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'ai.artifacts.sidebar.openPanel' })
+    ).toBeNull();
   });
 });
