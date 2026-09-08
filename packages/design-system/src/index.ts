@@ -152,6 +152,7 @@ export {
   type StatDelta,
 } from './components/StatTile';
 export { RatingBar, type RatingBarProps } from './components/RatingBar';
+export { learnToneButton } from './components/learn-tone-button';
 export {
   AnswerOption,
   type AnswerOptionProps,
@@ -166,12 +167,14 @@ export {
   type LearnTone,
   type ProgressRingTone,
   type DonutTone,
+  type LearnToneButtonTone,
 } from './constants/learn-tone';
 export {
   ANSWER_OPTION_STATES,
   type AnswerOptionState,
   ANSWER_OUTCOMES,
   type AnswerOutcome,
+  answerLetter,
 } from './constants/answer-option';
 export {
   RATING_ORDER,
@@ -180,5 +183,6 @@ export {
 } from './constants/rating';
 export { DECK_CHIP_TONES, type DeckChipTone } from './constants/deck-chip';
 export { THEMES, type Theme } from './constants/theme';
+export { TOUCH_TARGET_CLASS } from './constants/touch-target';
 
 export { cn } from './utils';

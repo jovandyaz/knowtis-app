@@ -20,7 +20,6 @@ const TONE_CLASS: Record<DonutTone, string> = {
 export interface DonutSegment {
   value: number;
   tone: DonutTone;
-  label: string;
 }
 
 export interface DonutChartProps extends Omit<

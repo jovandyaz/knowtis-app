@@ -96,12 +96,12 @@ describe('RatingBar', () => {
 
   it('paints the tone buttons with the AA-contrast text tokens', () => {
     renderBar();
-    expect(
-      screen.getByRole('button', { name: 'Again, 1d' }).className
-    ).toContain('text-learn-incorrect-text');
-    expect(
-      screen.getByRole('button', { name: 'Good, 6d' }).className
-    ).toContain('text-learn-correct-text');
+    expect(screen.getByRole('button', { name: 'Again, 1d' })).toHaveClass(
+      'text-learn-incorrect-text'
+    );
+    expect(screen.getByRole('button', { name: 'Good, 6d' })).toHaveClass(
+      'text-learn-correct-text'
+    );
   });
 
   it('keeps the transition disabled under reduced motion', () => {

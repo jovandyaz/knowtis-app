@@ -91,7 +91,7 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
             className={TONE_CLASS[tone]}
           />
         </svg>
-        {children ? (
+        {children != null ? (
           <div
             aria-hidden="true"
             className="absolute inset-0 flex items-center justify-center text-xs font-medium tabular-nums"

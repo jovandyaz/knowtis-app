@@ -1,0 +1,143 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type * as MotionReact from 'motion/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TooltipProvider } from '@knowtis/design-system';
+import type { FlashcardArtifact } from '@knowtis/shared-types';
+
+import { FlashcardStudy } from './FlashcardStudy';
+
+const reviewCard = vi.fn().mockResolvedValue({ ok: true });
+
+/** The jsdom matchMedia stub answers every non-width query, so the suite runs reduced by default. */
+const reducedMotion = { value: true };
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (k: string, opts?: Record<string, unknown>) =>
+      opts ? `${k} ${JSON.stringify(opts)}` : k,
+  }),
+}));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@knowtis/data-access-artifacts', () => ({
+  useReviewCard: () => ({ mutateAsync: reviewCard, isPending: false }),
+}));
+vi.mock('motion/react', async () => {
+  const actual = await vi.importActual<typeof MotionReact>('motion/react');
+  return { ...actual, useReducedMotion: () => reducedMotion.value };
+});
+
+const artifact = {
+  id: 'deck-1',
+  content: {
+    cards: [
+      { front: 'Front one', back: 'Back one', difficulty: 'easy' },
+      { front: 'Front two', back: 'Back two', difficulty: 'hard' },
+    ],
+  },
+} as unknown as FlashcardArtifact;
+
+function renderStudy(readOnly = false) {
+  render(
+    <TooltipProvider>
+      <FlashcardStudy artifact={artifact} readOnly={readOnly} />
+    </TooltipProvider>
+  );
+}
+
+const CORRECT_BUTTON = { name: 'ai.artifacts.flashcards.correct' };
+const NEXT_BUTTON = { name: 'ai.artifacts.flashcards.next' };
+
+async function rateCorrect(front: RegExp) {
+  await userEvent.click(await screen.findByRole('button', { name: front }));
+  await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
+}
+
+describe('FlashcardStudy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    reducedMotion.value = true;
+  });
+
+  it('advances a read-only session without recording the review', async () => {
+    renderStudy(true);
+
+    await rateCorrect(/Front one/);
+
+    expect(reviewCard).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: /Front two/ })
+    ).toBeInTheDocument();
+  });
+
+  it('records the review when the viewer owns the deck', async () => {
+    renderStudy();
+
+    await rateCorrect(/Front one/);
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a card skipped when the next arrow leaves it unflipped', async () => {
+    renderStudy();
+
+    await userEvent.click(screen.getByRole('button', NEXT_BUTTON));
+    await rateCorrect(/Front two/);
+
+    const skipped = await screen.findByRole('group', {
+      name: 'ai.artifacts.flashcards.summary.skipped',
+    });
+    expect(within(skipped).getByText('1')).toBeInTheDocument();
+  });
+
+  it('restarts the deck at the first card with the counters cleared', async () => {
+    renderStudy();
+
+    await rateCorrect(/Front one/);
+    await rateCorrect(/Front two/);
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceAgain',
+      })
+    );
+
+    expect(
+      await screen.findByRole('button', { name: /Front one/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    expect(
+      screen.getByText('ai.artifacts.flashcards.correct').parentElement
+    ).toHaveTextContent('ai.artifacts.flashcards.correct0');
+  });
+
+  it('crossfades the two faces instead of flipping under reduced motion', () => {
+    const { container } = render(
+      <TooltipProvider>
+        <FlashcardStudy artifact={artifact} />
+      </TooltipProvider>
+    );
+
+    expect(container.querySelectorAll('[data-face="stack"]')).toHaveLength(2);
+    expect(container.querySelector('[data-face="flip"]')).toBeNull();
+  });
+
+  it('flips the card in three dimensions when motion is allowed', () => {
+    reducedMotion.value = false;
+    const { container } = render(
+      <TooltipProvider>
+        <FlashcardStudy artifact={artifact} />
+      </TooltipProvider>
+    );
+
+    expect(container.querySelector('[data-face="flip"]')).not.toBeNull();
+    expect(container.querySelector('[data-face="stack"]')).toBeNull();
+  });
+});

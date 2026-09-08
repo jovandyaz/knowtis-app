@@ -3,13 +3,12 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cva } from 'class-variance-authority';
 import { Check, X } from 'lucide-react';
 
-import type {
-  AnswerOptionState,
-  AnswerOutcome,
+import {
+  answerLetter,
+  type AnswerOptionState,
+  type AnswerOutcome,
 } from '../constants/answer-option';
 import { cn } from '../utils';
-
-const LETTER_A_CODE = 65;
 
 const optionVariants = cva(
   'flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none',
@@ -33,9 +32,9 @@ export interface AnswerOptionProps extends Omit<
   index: number;
   children: ReactNode;
   /** The answer the user picked. Drives `aria-checked` on its own. */
-  selected?: boolean;
+  selected?: boolean | undefined;
   /** Revealed grading. Drives the icon and the tone, never the checked state. */
-  outcome?: AnswerOutcome;
+  outcome?: AnswerOutcome | undefined;
   onSelect?: () => void;
 }
 
@@ -78,7 +77,7 @@ const AnswerOption = forwardRef<HTMLButtonElement, AnswerOptionProps>(
   ) => {
     const state: AnswerOptionState =
       outcome ?? (selected ? 'selected' : 'idle');
-    const letter = String.fromCharCode(LETTER_A_CODE + index);
+    const letter = answerLetter(index);
     return (
       <button
         ref={ref}

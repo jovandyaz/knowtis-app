@@ -516,15 +516,13 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf": "{{reviewed}} de {{total}} tarjetas repasadas",
         "showAnswer": "Mostrar respuesta",
         "showFront": "Mostrar frente de la tarjeta",
         "showBack": "Mostrar dorso de la tarjeta",
-        "clickToFlip": "Haz clic para voltear",
         "prev": "Anterior",
         "next": "Siguiente",
         "reviewError": "Error al enviar la revisión",
-        "complete": "Sesión completada!",
-        "reviewedAll": "Revisaste las {{total}} tarjetas",
         "restart": "Empezar de nuevo",
         "difficulty": {
           "easy": "Fácil",
@@ -539,9 +537,10 @@
         },
         "wrong": "Incorrecto",
         "correct": "Correcto",
-        "skip": "Saltar",
         "advancedMode": "Modo avanzado",
+        "rateCard": "Califica esta tarjeta",
         "summary": {
+          "description": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas, en {{duration}}.",
           "excellentMastery": "¡Excelente dominio!",
           "greatJob": "¡Muy bien, sigue así!",
           "goodProgress": "¡Buen progreso!",
@@ -560,6 +559,9 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} de {{total}} respondidas",
+        "outcomeCorrect": "Correcto — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrecto — la respuesta es {{letter}}. {{answer}}",
         "explanation": "Explicación",
         "next": "Siguiente",
         "finish": "Finalizar",

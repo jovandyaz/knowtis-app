@@ -1,12 +1,16 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Check, SkipForward, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
+import {
+  DonutChart,
+  StatTile,
+  useMotionPreset,
+  type DonutSegment,
+} from '@knowtis/design-system';
 import type { RestartFilter, StudySessionResult } from '@knowtis/shared-types';
 
-import { DonutChart } from './DonutChart';
 import { MissedCardsList } from './MissedCardsList';
 import { PracticeAgainButton } from './PracticeAgainButton';
 
@@ -15,9 +19,9 @@ interface FlashcardSummaryProps {
   onRestart: (filter: RestartFilter) => void;
 }
 
-const CORRECT_COLOR = 'oklch(0.75 0.18 155)';
-const WRONG_COLOR = 'oklch(0.65 0.2 25)';
-const SKIPPED_COLOR = 'oklch(0.55 0.01 90)';
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const PERCENT = 100;
 
 const MOTIVATIONAL_THRESHOLDS = [
   { min: 90, key: 'ai.artifacts.flashcards.summary.excellentMastery' },
@@ -28,59 +32,57 @@ const MOTIVATIONAL_THRESHOLDS = [
 ] as const;
 
 function formatDuration(ms: number): { minutes: number; seconds: number } {
-  const totalSeconds = Math.floor(ms / 1000);
+  const totalSeconds = Math.floor(ms / MS_PER_SECOND);
   return {
-    minutes: Math.floor(totalSeconds / 60),
-    seconds: totalSeconds % 60,
+    minutes: Math.floor(totalSeconds / SECONDS_PER_MINUTE),
+    seconds: totalSeconds % SECONDS_PER_MINUTE,
   };
 }
 
 export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
   const { t } = useTranslation('notes');
+  const preset = useMotionPreset();
 
-  const answered = result.correct + result.wrong;
   const percentage =
-    answered > 0 ? Math.round((result.correct / answered) * 100) : 0;
-  const hasMissedCards = result.wrong > 0;
-  const duration = formatDuration(result.durationMs);
-
-  const segments = useMemo(
-    () => [
-      { value: result.correct, color: CORRECT_COLOR },
-      { value: result.wrong, color: WRONG_COLOR },
-      { value: result.skipped, color: SKIPPED_COLOR },
-    ],
-    [result.correct, result.wrong, result.skipped]
+    result.total > 0
+      ? Math.round((result.correct / result.total) * PERCENT)
+      : 0;
+  const timeSpent = t(
+    'ai.artifacts.flashcards.summary.timeSpent',
+    formatDuration(result.durationMs)
   );
+
+  const segments: DonutSegment[] = [
+    { value: result.correct, tone: 'correct' },
+    { value: result.wrong, tone: 'incorrect' },
+    { value: result.skipped, tone: 'muted' },
+  ];
 
   const stats = [
     {
-      icon: Check,
       label: t('ai.artifacts.flashcards.summary.gotIt'),
-      count: result.correct,
-      color: 'text-green-500',
+      value: result.correct,
+      icon: <Check className="h-4 w-4 text-learn-correct-text" />,
     },
     {
-      icon: X,
       label: t('ai.artifacts.flashcards.summary.missedIt'),
-      count: result.wrong,
-      color: 'text-destructive',
+      value: result.wrong,
+      icon: <X className="h-4 w-4 text-learn-incorrect-text" />,
     },
     {
-      icon: SkipForward,
       label: t('ai.artifacts.flashcards.summary.skipped'),
-      count: result.skipped,
-      color: 'text-muted-foreground',
+      value: result.skipped,
+      icon: <SkipForward className="h-4 w-4" />,
     },
   ];
 
   return (
-    <div className="flex flex-col items-center gap-6 py-4 min-w-0">
+    <div className="flex min-w-0 flex-col items-center gap-6 py-4">
       <motion.h2
-        className="text-xl font-semibold text-foreground text-center"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
+        className="text-center text-xl font-semibold"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={preset.fade}
       >
         {t(
           (
@@ -90,31 +92,35 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
         )}
       </motion.h2>
 
-      <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+      <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-8">
         <DonutChart
           segments={segments}
+          description={t('ai.artifacts.flashcards.summary.description', {
+            percentage,
+            correct: result.correct,
+            wrong: result.wrong,
+            skipped: result.skipped,
+            duration: timeSpent,
+          })}
           centerLabel={`${result.correct}/${result.total}`}
           centerSublabel={`${percentage}%`}
-          centerDetail={t(
-            'ai.artifacts.flashcards.summary.timeSpent',
-            duration
-          )}
-        />
+        >
+          {timeSpent}
+        </DonutChart>
 
-        <div className="flex flex-col gap-3">
-          {stats.map(({ icon: Icon, label, count, color }, i) => (
+        <div className="grid w-full max-w-sm grid-cols-1 gap-3 sm:grid-cols-3">
+          {stats.map((stat, index) => (
             <motion.div
-              key={label}
-              className="flex items-center gap-3"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 + i * 0.1, duration: 0.3 }}
+              key={stat.label}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ ...preset.fade, delay: index * preset.stagger }}
             >
-              <Icon className={`h-4 w-4 ${color}`} />
-              <span className="text-sm text-muted-foreground min-w-[70px]">
-                {label}
-              </span>
-              <span className={`text-sm font-semibold ${color}`}>{count}</span>
+              <StatTile
+                label={stat.label}
+                value={stat.value}
+                icon={stat.icon}
+              />
             </motion.div>
           ))}
         </div>
@@ -125,7 +131,7 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
       </div>
 
       <PracticeAgainButton
-        hasMissedCards={hasMissedCards}
+        hasMissedCards={result.wrong > 0}
         hasSkippedCards={result.skipped > 0}
         onRestart={onRestart}
       />

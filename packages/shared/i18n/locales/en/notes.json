@@ -516,15 +516,13 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf": "{{reviewed}} of {{total}} cards reviewed",
         "showAnswer": "Show Answer",
         "showFront": "Show front of card",
         "showBack": "Show back of card",
-        "clickToFlip": "Click to flip",
         "prev": "Previous",
         "next": "Next",
         "reviewError": "Failed to submit review",
-        "complete": "Session complete!",
-        "reviewedAll": "You reviewed all {{total}} cards",
         "restart": "Start over",
         "difficulty": {
           "easy": "Easy",
@@ -539,9 +537,10 @@
         },
         "wrong": "Incorrect",
         "correct": "Correct",
-        "skip": "Skip",
         "advancedMode": "Advanced mode",
+        "rateCard": "Rate this card",
         "summary": {
+          "description": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped, in {{duration}}.",
           "excellentMastery": "Excellent mastery!",
           "greatJob": "Great job, keep it up!",
           "goodProgress": "Good progress!",
@@ -560,6 +559,9 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} of {{total}} answered",
+        "outcomeCorrect": "Correct — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrect — the answer is {{letter}}. {{answer}}",
         "explanation": "Explanation",
         "next": "Next",
         "finish": "Finish",
