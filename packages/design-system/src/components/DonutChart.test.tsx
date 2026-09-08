@@ -14,9 +14,9 @@ afterEach(() => {
 });
 
 const SEGMENTS: DonutSegment[] = [
-  { value: 6, tone: 'correct', label: 'Got it' },
-  { value: 3, tone: 'incorrect', label: 'Missed' },
-  { value: 1, tone: 'muted', label: 'Skipped' },
+  { value: 6, tone: 'correct' },
+  { value: 3, tone: 'incorrect' },
+  { value: 1, tone: 'muted' },
 ];
 
 const DESCRIPTION = '60% correct: got it 6, missed 3, skipped 1.';
@@ -73,7 +73,7 @@ describe('DonutChart', () => {
   it('renders an empty ring when every value is zero', () => {
     const { container } = render(
       <DonutChart
-        segments={[{ value: 0, tone: 'correct', label: 'Got it' }]}
+        segments={[{ value: 0, tone: 'correct' }]}
         centerLabel="0"
         description="Nothing answered yet."
       />
@@ -85,8 +85,8 @@ describe('DonutChart', () => {
     const { container } = render(
       <DonutChart
         segments={[
-          { value: 10, tone: 'correct', label: 'Got it' },
-          { value: -5, tone: 'incorrect', label: 'Missed' },
+          { value: 10, tone: 'correct' },
+          { value: -5, tone: 'incorrect' },
         ]}
         centerLabel="100%"
         description="100% correct: got it 10."

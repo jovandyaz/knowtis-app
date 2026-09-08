@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useId, type HTMLAttributes, type ReactNode } from 'react';
 
 import type { LearnTone } from '../constants/learn-tone';
 import { cn } from '../utils';
@@ -11,7 +11,7 @@ export interface StatDelta {
 
 export interface StatTileProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
-  'children'
+  'children' | 'role' | 'aria-labelledby'
 > {
   value: ReactNode;
   label: string;
@@ -47,35 +47,40 @@ function formatDelta(value: number): string {
 }
 
 const StatTile = forwardRef<HTMLDivElement, StatTileProps>(
-  ({ value, label, delta, icon, className, ...rest }, ref) => (
-    <div
-      ref={ref}
-      {...rest}
-      className={cn(CARD_SURFACE, 'flex flex-col gap-1 p-4', className)}
-    >
-      <div className="flex items-center justify-between text-xs text-(--muted-foreground)">
-        <span>{label}</span>
-        {icon ? <span aria-hidden="true">{icon}</span> : null}
+  ({ value, label, delta, icon, className, ...rest }, ref) => {
+    const labelId = useId();
+    return (
+      <div
+        ref={ref}
+        {...rest}
+        role="group"
+        aria-labelledby={labelId}
+        className={cn(CARD_SURFACE, 'flex flex-col gap-1 p-4', className)}
+      >
+        <div className="flex items-center justify-between text-xs text-(--muted-foreground)">
+          <span id={labelId}>{label}</span>
+          {icon ? <span aria-hidden="true">{icon}</span> : null}
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold tabular-nums">{value}</span>
+          {delta ? (
+            <>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'text-xs font-medium tabular-nums',
+                  deltaClass(delta.value)
+                )}
+              >
+                {formatDelta(delta.value)}
+              </span>
+              <span className="sr-only">{delta.label}</span>
+            </>
+          ) : null}
+        </div>
       </div>
-      <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-semibold tabular-nums">{value}</span>
-        {delta ? (
-          <>
-            <span
-              aria-hidden="true"
-              className={cn(
-                'text-xs font-medium tabular-nums',
-                deltaClass(delta.value)
-              )}
-            >
-              {formatDelta(delta.value)}
-            </span>
-            <span className="sr-only">{delta.label}</span>
-          </>
-        ) : null}
-      </div>
-    </div>
-  )
+    );
+  }
 );
 StatTile.displayName = 'StatTile';
 

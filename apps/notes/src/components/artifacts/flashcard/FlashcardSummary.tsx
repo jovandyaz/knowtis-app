@@ -50,21 +50,9 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
   );
 
   const segments: DonutSegment[] = [
-    {
-      value: result.correct,
-      tone: 'correct',
-      label: t('ai.artifacts.flashcards.summary.gotIt'),
-    },
-    {
-      value: result.wrong,
-      tone: 'incorrect',
-      label: t('ai.artifacts.flashcards.summary.missedIt'),
-    },
-    {
-      value: result.skipped,
-      tone: 'muted',
-      label: t('ai.artifacts.flashcards.summary.skipped'),
-    },
+    { value: result.correct, tone: 'correct' },
+    { value: result.wrong, tone: 'incorrect' },
+    { value: result.skipped, tone: 'muted' },
   ];
 
   const stats = [

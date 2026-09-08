@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { StatTile } from './StatTile';
@@ -8,6 +8,12 @@ describe('StatTile', () => {
     render(<StatTile value={7} label="Day streak" />);
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText('Day streak')).toBeInTheDocument();
+  });
+
+  it('groups the value under its label, so a reader can scope to one tile', () => {
+    render(<StatTile value={7} label="Day streak" />);
+    const tile = screen.getByRole('group', { name: 'Day streak' });
+    expect(within(tile).getByText('7')).toBeInTheDocument();
   });
 
   it('signs and colours a positive delta', () => {

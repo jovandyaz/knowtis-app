@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CARD_STATUS, type StudySessionResult } from '@knowtis/shared-types';
@@ -27,14 +27,6 @@ const result: StudySessionResult = {
     },
   ],
 };
-
-function statTile(label: string): HTMLElement {
-  const tile = screen.getByText(label).closest('div')?.parentElement;
-  if (!tile) {
-    throw new Error(`No stat tile around "${label}"`);
-  }
-  return tile;
-}
 
 describe('FlashcardSummary', () => {
   it('names the donut with the score, every segment count and the time', () => {
@@ -73,7 +65,8 @@ describe('FlashcardSummary', () => {
       ['ai.artifacts.flashcards.summary.missedIt', '2'],
       ['ai.artifacts.flashcards.summary.skipped', '2'],
     ]) {
-      expect(statTile(label).textContent).toBe(`${label}${count}`);
+      const tile = screen.getByRole('group', { name: label });
+      expect(within(tile).getByText(count)).toBeInTheDocument();
     }
   });
 });
