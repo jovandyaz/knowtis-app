@@ -213,7 +213,8 @@ export function caseKeyOf(vars: Record<string, unknown> | undefined): string {
 
 export function summarizeTrials(
   results: readonly EvalTrialResult[],
-  minPassRate: number = EVAL_MIN_PASS_RATE
+  minPassRate: number = EVAL_MIN_PASS_RATE,
+  minPassRateByCase: ReadonlyMap<string, number> = new Map()
 ): EvalTrialSummary {
   const byCase = new Map<string, Omit<EvalCaseOutcome, 'key'>>();
   for (const result of results) {
@@ -249,8 +250,9 @@ export function summarizeTrials(
   }));
   const casesBelowThreshold = cases.filter((c) => {
     const gradedTrials = c.trials - c.graderErrors;
+    const requiredRate = minPassRateByCase.get(c.key) ?? minPassRate;
     return (
-      gradedTrials === 0 || c.passes < Math.ceil(minPassRate * gradedTrials)
+      gradedTrials === 0 || c.passes < Math.ceil(requiredRate * gradedTrials)
     );
   });
   return { cases, casesBelowThreshold };
@@ -282,6 +284,7 @@ export interface EvalRunStats {
 export interface EvalRunOptions {
   readonly trials?: number;
   readonly minPassRate?: number;
+  readonly minPassRateByCase?: ReadonlyMap<string, number>;
 }
 
 export async function runEvalSuite(
@@ -298,7 +301,8 @@ export async function runEvalSuite(
 
   const { cases, casesBelowThreshold } = summarizeTrials(
     summary.results.map(toTrialResult),
-    options.minPassRate
+    options.minPassRate,
+    options.minPassRateByCase
   );
   const graderErrors = cases.reduce((n, c) => n + c.graderErrors, 0);
 

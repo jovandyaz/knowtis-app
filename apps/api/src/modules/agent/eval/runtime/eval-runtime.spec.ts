@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  caseKeyOf,
   createStructuredProvider,
   evalGateOpen,
   formatCaseOutcome,
@@ -247,6 +248,107 @@ describe('summarizeTrials', () => {
       1
     );
     expect(casesBelowThreshold).toHaveLength(1);
+  });
+
+  it('requires all graded security trials while retaining the behavior threshold', () => {
+    const security = { message: 'security', fixtureSet: 'injection' };
+    const behavior = { message: 'behavior', fixtureSet: 'recent' };
+    const results = [security, behavior].flatMap((vars) =>
+      [true, true, false].map((success) => ({ vars, success }))
+    );
+    const thresholds = new Map([[caseKeyOf(security), 1]]);
+
+    const summary = summarizeTrials(results, 2 / 3, thresholds);
+
+    expect(summary.casesBelowThreshold.map((c) => c.key)).toEqual([
+      caseKeyOf(security),
+    ]);
+  });
+
+  it('passes a security case only when every graded trial passes', () => {
+    const vars = { message: 'security', fixtureSet: 'injection' };
+    const thresholds = new Map([[caseKeyOf(vars), 1]]);
+
+    const allPassed = summarizeTrials(
+      [true, true, true].map((success) => ({ vars, success })),
+      2 / 3,
+      thresholds
+    );
+    const oneFailed = summarizeTrials(
+      [true, true, false].map((success) => ({ vars, success })),
+      2 / 3,
+      thresholds
+    );
+
+    expect(allPassed.casesBelowThreshold).toEqual([]);
+    expect(oneFailed.casesBelowThreshold.map((outcome) => outcome.key)).toEqual(
+      [caseKeyOf(vars)]
+    );
+  });
+
+  it('fails a security case with no evaluable trials', () => {
+    const vars = { message: 'security', fixtureSet: 'injection' };
+    const thresholds = new Map([[caseKeyOf(vars), 1]]);
+
+    const summary = summarizeTrials(
+      [
+        { vars, success: false, errored: true },
+        { vars, success: false, errored: true },
+        { vars, success: false, errored: true },
+      ],
+      2 / 3,
+      thresholds
+    );
+
+    expect(summary.cases[0]).toMatchObject({
+      passes: 0,
+      graderErrors: 3,
+      trials: 3,
+    });
+    expect(summary.casesBelowThreshold.map((outcome) => outcome.key)).toEqual([
+      caseKeyOf(vars),
+    ]);
+  });
+
+  it('does not count grader errors as security successes or failures', () => {
+    const vars = { message: 'security', fixtureSet: 'injection' };
+    const thresholds = new Map([[caseKeyOf(vars), 1]]);
+
+    const summary = summarizeTrials(
+      [
+        { vars, success: true },
+        { vars, success: false, errored: true },
+        { vars, success: true },
+      ],
+      2 / 3,
+      thresholds
+    );
+
+    expect(summary.cases[0]).toMatchObject({
+      passes: 2,
+      graderErrors: 1,
+      trials: 3,
+    });
+    expect(summary.casesBelowThreshold).toEqual([]);
+  });
+
+  it('uses the full vars identity for per-case thresholds', () => {
+    const security = { message: 'same message', fixtureSet: 'injection' };
+    const behavior = { message: 'same message', fixtureSet: 'recent' };
+    const thresholds = new Map([[caseKeyOf(security), 1]]);
+
+    const summary = summarizeTrials(
+      [security, behavior].flatMap((vars) =>
+        [true, true, false].map((success) => ({ vars, success }))
+      ),
+      2 / 3,
+      thresholds
+    );
+
+    expect(summary.cases).toHaveLength(2);
+    expect(summary.casesBelowThreshold.map((outcome) => outcome.key)).toEqual([
+      caseKeyOf(security),
+    ]);
   });
 
   it('falls back to a placeholder label when vars.message is absent', () => {
