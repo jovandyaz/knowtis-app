@@ -32,21 +32,26 @@ const schema = z.object({ answer: z.number() });
 const OPENROUTER_MODEL = 'openrouter:minimax/minimax-m3';
 
 function createRoutingSource(
-  providerOrder: readonly string[] = []
+  providerOrder: readonly string[] = [],
+  ignoredProviders: readonly string[] = []
 ): OpenRouterRoutingSource {
-  return { getOpenRouterProviderOrder: async () => providerOrder };
+  return {
+    getOpenRouterProviderOrder: async () => providerOrder,
+    getOpenRouterIgnoredProviders: async () => ignoredProviders,
+  };
 }
 
 function createProvider(
   config = createMockConfig(),
   fallbackChain?: string,
-  providerOrder?: readonly string[]
+  providerOrder?: readonly string[],
+  ignoredProviders?: readonly string[]
 ) {
   const { registry, chain } = createTestChain(config, fallbackChain);
   return new AIStructuredOutputSDKProvider(
     registry,
     chain,
-    createRoutingSource(providerOrder)
+    createRoutingSource(providerOrder, ignoredProviders)
   );
 }
 
@@ -59,6 +64,33 @@ describe('AIStructuredOutputSDKProvider', () => {
       usage: { inputTokens: 10, outputTokens: 5 },
     } as unknown as Awaited<ReturnType<typeof generateText>>);
     languageModel.mockClear();
+  });
+
+  it('preserves exclusions and parameter support across structured-output fallbacks', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    generateText.mockRejectedValueOnce(new Error('primary unavailable'));
+    const provider = createProvider(
+      createMockConfig({ OPENROUTER_API_KEY: 'test-key' }),
+      'openrouter:minimax/minimax-m2.5',
+      ['parasail'],
+      ['parasail']
+    );
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'openrouter:deepseek/deepseek-v3.2',
+    });
+    expect(generateText.mock.calls).toHaveLength(2);
+    for (const [options] of generateText.mock.calls) {
+      expect(options).toMatchObject({
+        providerOptions: {
+          openrouter: {
+            provider: { ignore: ['parasail'], require_parameters: true },
+          },
+        },
+      });
+      expect(options.providerOptions?.openrouter?.provider).not.toHaveProperty(
+        'order'
+      );
+    }
   });
 
   it('should hand the fallback scope to the chain resolver', async () => {

@@ -1,3 +1,4 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,10 +11,14 @@ describe('DeleteNoteHandler', () => {
       delete: vi.fn().mockResolvedValue(ok(true)),
     };
 
-    const handler = new DeleteNoteHandler(noteRepo as never);
+    const events = new EventEmitter2();
+    const delivered: unknown[] = [];
+    events.on('note.access-changed', (event) => delivered.push(event));
+    const handler = new DeleteNoteHandler(noteRepo as never, events);
     const result = await handler.execute({ noteId: 'n1', userId: 'owner' });
 
     expect(result.isOk()).toBe(true);
+    expect(delivered).toEqual([expect.objectContaining({ noteId: 'n1' })]);
     expect(noteRepo.delete).toHaveBeenCalledWith('n1');
   });
 
@@ -23,7 +28,10 @@ describe('DeleteNoteHandler', () => {
       delete: vi.fn(),
     };
 
-    const handler = new DeleteNoteHandler(noteRepo as never);
+    const events = new EventEmitter2();
+    const delivered: unknown[] = [];
+    events.on('note.access-changed', (event) => delivered.push(event));
+    const handler = new DeleteNoteHandler(noteRepo as never, events);
     const result = await handler.execute({
       noteId: 'missing',
       userId: 'owner',
@@ -31,6 +39,7 @@ describe('DeleteNoteHandler', () => {
 
     expect(result.isErr()).toBe(true);
     expect(noteRepo.delete).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 
   it('returns permission denied for a non-owner', async () => {
@@ -39,10 +48,14 @@ describe('DeleteNoteHandler', () => {
       delete: vi.fn(),
     };
 
-    const handler = new DeleteNoteHandler(noteRepo as never);
+    const events = new EventEmitter2();
+    const delivered: unknown[] = [];
+    events.on('note.access-changed', (event) => delivered.push(event));
+    const handler = new DeleteNoteHandler(noteRepo as never, events);
     const result = await handler.execute({ noteId: 'n1', userId: 'intruder' });
 
     expect(result.isErr()).toBe(true);
     expect(noteRepo.delete).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 });

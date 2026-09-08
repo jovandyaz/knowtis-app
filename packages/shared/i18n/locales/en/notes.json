@@ -376,6 +376,12 @@
       "sources": "Sources",
       "webSources": "Web sources",
       "stop": "Stop",
+      "stopReason": {
+        "max_steps": "The step limit was reached.",
+        "token_budget": "The turn budget was reached.",
+        "length": "The response was cut short.",
+        "content_filter": "The provider filtered this response."
+      },
       "empty": {
         "title": "Ask your notes",
         "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",

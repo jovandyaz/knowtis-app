@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import {
   useResetAiConfig,
   useSetAiConfig,
@@ -16,7 +18,28 @@ import { useForkedDraft } from './useForkedDraft';
 
 const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
-const UPSTREAMS_INPUT_ID = 'ai-openrouter-upstreams';
+const UPSTREAM_COPY = {
+  preference: {
+    id: 'ai-openrouter-upstreams',
+    title: 'OpenRouter upstreams',
+    description:
+      'Preferred upstream providers, tried in order. OpenRouter may fall back to other providers that are not excluded.',
+    label: 'Preferred providers',
+    helper:
+      'Leave it empty for OpenRouter’s default routing. Measured-good defaults: fireworks, baseten.',
+    placeholder: 'fireworks,baseten',
+  },
+  ignore: {
+    id: 'ai-openrouter-ignored-upstreams',
+    title: 'OpenRouter exclusions',
+    description:
+      'Excluded upstream providers are skipped on every OpenRouter attempt, including fallbacks. Direct providers are unaffected.',
+    label: 'Ignored providers',
+    helper:
+      'Leave it empty to exclude no providers. Exclusions override preferences; requests can fail if no eligible upstream remains.',
+    placeholder: 'parasail',
+  },
+} as const;
 
 function normalizeCsv(value: string): string {
   const trimmed = value.trim();
@@ -49,67 +72,75 @@ function validate(value: string): string | null {
 
 interface UpstreamSectionProps {
   entry: AiConfigEntry;
+  mode: keyof typeof UPSTREAM_COPY;
 }
 
-export function UpstreamSection({ entry }: UpstreamSectionProps) {
+export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
+  const copy = UPSTREAM_COPY[mode];
   const setConfig = useSetAiConfig();
   const resetConfig = useResetAiConfig();
+  const mutationInFlight = useRef(false);
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
   const { value, isDirty, edit, discard } = useForkedDraft(entry.value);
   const error = validate(value);
 
+  const releaseMutation = () => {
+    mutationInFlight.current = false;
+  };
+
+  const save = () => {
+    if (mutationInFlight.current || mutating || error !== null) {
+      return;
+    }
+    mutationInFlight.current = true;
+    setConfig.mutate(
+      { key: entry.key, value: normalizeCsv(value) },
+      { onSuccess: discard, onSettled: releaseMutation }
+    );
+  };
+
+  const reset = () => {
+    if (mutationInFlight.current || mutating) {
+      return;
+    }
+    mutationInFlight.current = true;
+    resetConfig.mutate({ key: entry.key }, { onSettled: releaseMutation });
+  };
+
   return (
-    <ConfigSection
-      title="OpenRouter upstreams"
-      description="The upstream providers OpenRouter may route a turn to, tried in order. Applies only to models served through OpenRouter."
-    >
+    <ConfigSection title={copy.title} description={copy.description}>
       <MutationErrorAlert
         error={setConfig.error}
         isError={setConfig.isError}
-        fallbackMessage="Could not update the upstream allowlist."
+        fallbackMessage={`Could not update ${copy.label.toLowerCase()}.`}
       />
       <ConfigSourceCell
         entry={entry}
-        label="provider allowlist"
+        label={copy.label.toLowerCase()}
         disabled={mutating}
-        onReset={() => resetConfig.mutate({ key: entry.key })}
+        onReset={reset}
       />
-      <FormField
-        id={UPSTREAMS_INPUT_ID}
-        label="Provider allowlist"
-        error={error ?? undefined}
-      >
+      <FormField id={copy.id} label={copy.label} error={error ?? undefined}>
         <Input
-          id={UPSTREAMS_INPUT_ID}
+          id={copy.id}
           value={value}
           disabled={mutating}
           spellCheck={false}
           autoComplete="off"
           aria-invalid={error !== null}
-          aria-describedby={
-            error !== null ? `${UPSTREAMS_INPUT_ID}-error` : undefined
-          }
-          placeholder="fireworks,baseten"
+          aria-describedby={error !== null ? `${copy.id}-error` : undefined}
+          placeholder={copy.placeholder}
           onChange={(event) => edit(event.target.value)}
         />
       </FormField>
       <p className="text-xs text-(--muted-foreground)">
-        Comma-separated lowercase slugs, up to {MAX_OPENROUTER_PROVIDERS}. Leave
-        it empty for OpenRouter’s default routing. Measured-good defaults:
-        fireworks, baseten.
+        Comma-separated lowercase slugs, up to {MAX_OPENROUTER_PROVIDERS}.{' '}
+        {copy.helper}
       </p>
       {isDirty ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            disabled={mutating || error !== null}
-            onClick={() =>
-              setConfig.mutate(
-                { key: entry.key, value: normalizeCsv(value) },
-                { onSuccess: discard }
-              )
-            }
-          >
+          <Button disabled={mutating || error !== null} onClick={save}>
             Save
           </Button>
           <Button variant="ghost" disabled={mutating} onClick={discard}>
