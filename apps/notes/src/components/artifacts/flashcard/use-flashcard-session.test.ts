@@ -207,6 +207,23 @@ describe('useFlashcardSession', () => {
     ]);
   });
 
+  it('comes back to a card the cursor was moved past instead of stranding it', () => {
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    act(() => result.current.navigate(1));
+    act(() => result.current.rate('correct'));
+
+    expect(result.current.currentIndex).toBe(0);
+    expect(result.current.currentCard).toEqual(cards[0]);
+    expect(result.current.isComplete).toBe(false);
+
+    act(() => result.current.rate('correct'));
+
+    expect(result.current.isComplete).toBe(true);
+    expect(result.current.counts.correct).toBe(2);
+  });
+
   it('rateAdvanced maps SM2 quality to correct/wrong', () => {
     const cards = [makeCard(0), makeCard(1)];
     const { result } = renderHook(() => useFlashcardSession(cards));

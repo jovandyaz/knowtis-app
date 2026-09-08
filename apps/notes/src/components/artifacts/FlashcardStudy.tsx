@@ -10,6 +10,7 @@ import {
 } from '@knowtis/data-access-artifacts';
 import { LoadingState, useMotionPreset } from '@knowtis/design-system';
 import {
+  CARD_STATUS,
   SM2_QUALITY,
   type FlashcardArtifact,
   type FlashcardProgress,
@@ -73,7 +74,9 @@ function FlashcardDeckSession({
 
   const submitReview = useCallback(
     (quality: SM2Quality) => {
-      if (readOnly || !session.currentCard) {
+      const isPendingCard =
+        session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
+      if (readOnly || !session.currentCard || !isPendingCard) {
         return;
       }
       const { artifactId, cardIndex } = session.currentCard;
@@ -81,7 +84,14 @@ function FlashcardDeckSession({
         toast.error(t('ai.artifacts.flashcards.reviewError'));
       });
     },
-    [session.currentCard, reviewCard, t, readOnly]
+    [
+      session.currentCard,
+      session.cardStatuses,
+      session.currentIndex,
+      reviewCard,
+      t,
+      readOnly,
+    ]
   );
 
   const handleWrong = useCallback(() => {

@@ -49,9 +49,10 @@ function findNextPendingIndex(
   statuses: CardSessionStatus[],
   fromIndex: number
 ): number {
-  for (let i = fromIndex + 1; i < statuses.length; i++) {
-    if (statuses[i] === CARD_STATUS.PENDING) {
-      return i;
+  for (let offset = 1; offset <= statuses.length; offset++) {
+    const index = (fromIndex + offset) % statuses.length;
+    if (statuses[index] === CARD_STATUS.PENDING) {
+      return index;
     }
   }
   return -1;

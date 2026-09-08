@@ -158,6 +158,18 @@ describe('FlashcardStudy', () => {
     expect(reviewCard).toHaveBeenCalledTimes(1);
   });
 
+  it('records no second review when the viewer goes back and rates a card again', async () => {
+    renderStudy();
+
+    await rateCorrect(/Front one/);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.prev' })
+    );
+    await rateCorrect(/Front one/);
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+  });
+
   it('counts a card skipped when the next arrow leaves it unflipped', async () => {
     renderStudy();
 

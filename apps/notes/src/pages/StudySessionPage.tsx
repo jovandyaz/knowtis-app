@@ -38,6 +38,7 @@ import {
   type RatingKey,
 } from '@knowtis/design-system';
 import {
+  CARD_STATUS,
   FEATURE_FLAG_KEYS,
   SM2_QUALITY,
   STUDY_CARD_KIND,
@@ -220,7 +221,9 @@ function StudyQueueSession({
 
   const submitReview = useCallback(
     (quality: SM2Quality) => {
-      if (!session.currentCard) {
+      const isPendingCard =
+        session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
+      if (!session.currentCard || !isPendingCard) {
         return;
       }
       const { artifactId, cardIndex } = session.currentCard;
@@ -228,7 +231,13 @@ function StudyQueueSession({
         toast.error(t('ai.artifacts.flashcards.reviewError'));
       });
     },
-    [session.currentCard, reviewCard, t]
+    [
+      session.currentCard,
+      session.cardStatuses,
+      session.currentIndex,
+      reviewCard,
+      t,
+    ]
   );
 
   const handleWrong = useCallback(() => {

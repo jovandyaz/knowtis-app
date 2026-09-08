@@ -206,6 +206,53 @@ describe('StudySessionPage keyboard map', () => {
     expect(front(/Frente uno/)).toBeInTheDocument();
   });
 
+  it('comes back to the card the cursor skipped instead of re-rating the answered one', () => {
+    const { container } = render(<StudySessionPage />);
+
+    fireEvent.keyDown(pageRoot(container), { key: 'ArrowRight' });
+    fireEvent.keyDown(pageRoot(container), { key: ' ' });
+    fireEvent.keyDown(pageRoot(container), { key: '2' });
+
+    expect(front(/Frente uno/)).toBeInTheDocument();
+
+    fireEvent.keyDown(pageRoot(container), { key: ' ' });
+    fireEvent.keyDown(pageRoot(container), { key: '2' });
+
+    expect(reviewCard).toHaveBeenNthCalledWith(1, {
+      artifactId: 'deck-1',
+      cardIndex: 1,
+      quality: SM2_QUALITY.GOOD,
+    });
+    expect(reviewCard).toHaveBeenNthCalledWith(2, {
+      artifactId: 'deck-1',
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
+    expect(reviewCard).toHaveBeenCalledTimes(2);
+    expect(
+      screen.getByRole('link', { name: 'study.summary.backHome' })
+    ).toBeInTheDocument();
+  });
+
+  it('posts no second review for a card that was already answered', () => {
+    const { container } = render(<StudySessionPage />);
+
+    fireEvent.keyDown(pageRoot(container), { key: ' ' });
+    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    expect(front(/Frente dos/)).toBeInTheDocument();
+
+    fireEvent.keyDown(pageRoot(container), { key: 'ArrowLeft' });
+    fireEvent.keyDown(pageRoot(container), { key: ' ' });
+    fireEvent.keyDown(pageRoot(container), { key: '2' });
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+    expect(reviewCard).toHaveBeenCalledWith({
+      artifactId: 'deck-1',
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
+  });
+
   it('rates wrong with 1 and correct with 2 in simple mode', () => {
     const { container } = render(<StudySessionPage />);
 
