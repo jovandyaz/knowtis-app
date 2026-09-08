@@ -156,6 +156,7 @@ export {
   AnswerOption,
   type AnswerOptionProps,
 } from './components/AnswerOption';
+export { DeckChip, type DeckChipProps } from './components/DeckChip';
 export {
   ANSWER_OPTION_STATES,
   type AnswerOptionState,
@@ -173,6 +174,7 @@ export {
   type DonutTone,
 } from './constants/learn-tone';
 export { RATING_ORDER, type RatingKey } from './constants/rating';
+export { DECK_CHIP_TONES, type DeckChipTone } from './constants/deck-chip';
 export { THEMES, type Theme } from './constants/theme';
 
 export { cn } from './utils';
