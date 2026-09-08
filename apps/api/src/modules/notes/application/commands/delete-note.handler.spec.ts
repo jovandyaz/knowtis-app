@@ -28,10 +28,10 @@ describe('DeleteNoteHandler', () => {
       delete: vi.fn(),
     };
 
-    const handler = new DeleteNoteHandler(
-      noteRepo as never,
-      new EventEmitter2()
-    );
+    const events = new EventEmitter2();
+    const delivered: unknown[] = [];
+    events.on('note.access-changed', (event) => delivered.push(event));
+    const handler = new DeleteNoteHandler(noteRepo as never, events);
     const result = await handler.execute({
       noteId: 'missing',
       userId: 'owner',
@@ -39,6 +39,7 @@ describe('DeleteNoteHandler', () => {
 
     expect(result.isErr()).toBe(true);
     expect(noteRepo.delete).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 
   it('returns permission denied for a non-owner', async () => {
@@ -47,13 +48,14 @@ describe('DeleteNoteHandler', () => {
       delete: vi.fn(),
     };
 
-    const handler = new DeleteNoteHandler(
-      noteRepo as never,
-      new EventEmitter2()
-    );
+    const events = new EventEmitter2();
+    const delivered: unknown[] = [];
+    events.on('note.access-changed', (event) => delivered.push(event));
+    const handler = new DeleteNoteHandler(noteRepo as never, events);
     const result = await handler.execute({ noteId: 'n1', userId: 'intruder' });
 
     expect(result.isErr()).toBe(true);
     expect(noteRepo.delete).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 });

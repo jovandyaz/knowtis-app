@@ -56,7 +56,8 @@ describe('ShareNoteHandler People contract', () => {
     email = 'recipient@example.test'
   ) => handler.execute({ noteId: 'note', userId, email, permission });
   it('notifies active sessions after a committed permission change', async () => {
-    await share();
+    const result = await share();
+    expect(result.isOk()).toBe(true);
     expect(events.emit).toHaveBeenCalledWith(
       'note.access-changed',
       expect.objectContaining({ noteId: 'note' })

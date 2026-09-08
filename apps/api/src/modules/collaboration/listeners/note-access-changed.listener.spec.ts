@@ -1,9 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccessRevalidationService } from '../access-revalidation.service';
 import { NoteAccessChangedListener } from './note-access-changed.listener';
 
 describe('committed access changes', () => {
+  let service: AccessRevalidationService;
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setInterval',
+        'clearInterval',
+        'setTimeout',
+        'clearTimeout',
+        'performance',
+      ],
+    });
+  });
+  afterEach(() => {
+    service?.onModuleDestroy();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
   it('revalidates locally when Redis publication fails without failing the committed operation', async () => {
     let snapshot = {
       ownerId: 'owner',
@@ -12,9 +30,10 @@ describe('committed access changes', () => {
       shareTokenFingerprint: null,
       directPermissions: [{ userId: 'guest', permission: 'editor' as const }],
     };
-    const service = new AccessRevalidationService({
+    service = new AccessRevalidationService({
       findAccessSnapshot: async () => snapshot,
     });
+    service.onModuleInit();
     const lease = await service.acquire('note', {
       userId: 'guest',
       suppliedTokenFingerprint: null,
@@ -25,11 +44,16 @@ describe('committed access changes', () => {
         throw new Error('offline');
       },
     } as never);
+    const warnings = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     await expect(
       listener.handle({ noteId: 'note' } as never)
     ).resolves.toBeUndefined();
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await vi.advanceTimersByTimeAsync(1);
     expect(lease.closed).toBe(true);
-    service.onModuleDestroy();
+    expect(warnings).toHaveBeenCalledExactlyOnceWith(
+      'Access invalidation delivery unavailable; primary renewal remains active'
+    );
   });
 });
