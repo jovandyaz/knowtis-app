@@ -6,6 +6,7 @@ export interface NoteDomainError {
 }
 
 export const NoteErrorCodes = {
+  PERSON_NOT_ADDABLE: 'PERSON_NOT_ADDABLE',
   INVALID_TITLE: 'INVALID_TITLE',
   INVALID_CONTENT: 'INVALID_CONTENT',
   INVALID_PERMISSION: 'INVALID_PERMISSION',
@@ -32,6 +33,11 @@ export function createNoteError(
 }
 
 export const NoteErrors = {
+  personNotAddable: () =>
+    createNoteError(
+      NoteErrorCodes.PERSON_NOT_ADDABLE,
+      'This person cannot be added or changed'
+    ),
   invalidTitle: (reason: string) =>
     createNoteError(NoteErrorCodes.INVALID_TITLE, `Invalid title: ${reason}`),
 

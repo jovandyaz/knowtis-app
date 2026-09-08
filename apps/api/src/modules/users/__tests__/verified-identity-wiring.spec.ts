@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { validateEnv } from '../../../config/env.config';
 import { AgentModule } from '../../agent/agent.module';
 import { ApproveMutationHandler } from '../../agent/application/approve-mutation.handler';
-import { NoteMutateToolGroup } from '../../agent/infrastructure/tools/note-mutate.tool-group';
 import { AIModule } from '../../ai/ai.module';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
@@ -26,11 +25,6 @@ const GATED_SITES = [
   {
     name: 'ApproveMutationHandler',
     target: ApproveMutationHandler,
-    owner: AgentModule,
-  },
-  {
-    name: 'NoteMutateToolGroup',
-    target: NoteMutateToolGroup,
     owner: AgentModule,
   },
 ] as const;
@@ -67,7 +61,7 @@ const mockAllButThePolicy = (token: unknown) =>
 
 describe('verified identity wiring', () => {
   it.each(GATED_SITES)(
-    "$name is built by Nest with the container's own policy instance",
+    "$name reaches the container's own verified-identity policy",
     async ({ target, owner }) => {
       const moduleRef = await Test.createTestingModule({
         imports: [
@@ -90,7 +84,14 @@ describe('verified identity wiring', () => {
 
         expect(site).toBeInstanceOf(target);
         expect(policy).toBeInstanceOf(VerifiedIdentityPolicy);
-        expect(Object.values(site)).toContain(policy);
+        const policyOwner =
+          target === ApproveMutationHandler
+            ? moduleRef.get(ShareNoteHandler)
+            : site;
+        if (target === ApproveMutationHandler) {
+          expect(Object.values(site)).toContain(policyOwner);
+        }
+        expect(Object.values(policyOwner)).toContain(policy);
       } finally {
         await moduleRef.close();
       }

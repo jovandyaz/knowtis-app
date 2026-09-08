@@ -78,7 +78,7 @@ describe('UpdateNoteHandler', () => {
       delete: vi.fn(),
       restore: vi.fn(),
       findPermission: vi.fn(),
-      findPermissionsByNote: vi.fn(),
+      findPeopleByNote: vi.fn(),
       upsertPermission: vi.fn(),
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),
@@ -105,6 +105,28 @@ describe('UpdateNoteHandler', () => {
       mockTagRepository,
       mockEventEmitter,
       policyFor(IDENTITY_STATE.VERIFIED)
+    );
+  });
+
+  it('notifies a persisted link change before a later tag write fails', async () => {
+    vi.mocked(mockRepository.findById).mockResolvedValue(mockNote);
+    vi.mocked(mockRepository.update).mockResolvedValue(
+      ok({ ...mockNote, generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK })
+    );
+    vi.mocked(mockTagRepository.replaceNoteTags).mockRejectedValue(
+      new Error('tags failed')
+    );
+    await expect(
+      handler.execute({
+        noteId,
+        userId: OWNER_ID,
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        tags: ['tag'],
+      })
+    ).rejects.toThrow('tags failed');
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'note.access-changed',
+      expect.objectContaining({ noteId })
     );
   });
 

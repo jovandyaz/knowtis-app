@@ -20,10 +20,12 @@ import {
   useCollaborativeEditor,
   usePresenceBroadcast,
 } from '@/hooks';
+import { queryClient } from '@/lib/query-client';
 import { useAIMenuStore } from '@/stores/ai-menu.store';
 import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
+import { notesQueryKeys } from '@knowtis/data-access-notes';
 import { cn, ErrorState } from '@knowtis/design-system';
 import {
   CollaborationIndicator,
@@ -301,17 +303,23 @@ export function CollaborativeEditor({
   }, [navigate, shareToken, onEditDenied]);
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
-  const { status, isConnected, isSynced } = useHocuspocusCollaboration({
-    noteId,
-    yDoc: editorState.yDoc,
-    awareness: editorState.awareness,
-    serverUrl: getCollaborationServerUrl(),
-    enabled: wsEnabled,
-    shareToken,
-    onEditDenied,
-    onAuthRefresh: refreshAccessToken,
-    onSessionExpired: handleSessionExpired,
-  });
+  const reconcileAccess = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: notesQueryKeys.all });
+  }, []);
+
+  const { status, isConnected, isSynced, readOnly } =
+    useHocuspocusCollaboration({
+      noteId,
+      yDoc: editorState.yDoc,
+      awareness: editorState.awareness,
+      serverUrl: getCollaborationServerUrl(),
+      enabled: wsEnabled,
+      shareToken,
+      onEditDenied,
+      onAccessChanged: reconcileAccess,
+      onAuthRefresh: refreshAccessToken,
+      onSessionExpired: handleSessionExpired,
+    });
   const accessDenied = status === 'accessDenied';
 
   useEffect(() => {
@@ -366,7 +374,9 @@ export function CollaborativeEditor({
           initialContent={wsEnabled ? '' : initialContent}
           onUpdate={onUpdate}
           placeholder={resolvedPlaceholder}
-          editable={editable}
+          editable={
+            editable && (!wsEnabled || (!readOnly && isConnected && isSynced))
+          }
           isSynced={!wsEnabled || isSynced}
           canTag={canTag}
           autoFocus={autoFocus}

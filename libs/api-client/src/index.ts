@@ -13,7 +13,6 @@ export {
   notesApi,
   type NoteWithAccess,
   type NoteDetail,
-  type NoteCollaborator,
   type NoteCounts,
   type SupertagCatalog,
 } from './lib/notes.api';

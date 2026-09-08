@@ -1,5 +1,6 @@
 import type { Extension } from '@hocuspocus/server';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { USER_ROLE } from '@jovandyaz/auth';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
 import {
@@ -10,20 +11,25 @@ import {
   type SharedNote,
 } from '@knowtis/authorization';
 import {
-  GENERAL_ACCESS,
+  COLLABORATION_CLOSE_REASON,
   HANDSHAKE_FAILURE,
-  type PermissionLevel,
 } from '@knowtis/shared-types';
 
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../../mcp/mcp-token';
-import { NOTE_REPOSITORY } from '../../notes/domain';
-import type { NoteRepository } from '../../notes/domain';
-import type { NoteEntity } from '../../notes/domain/entities/note.entity';
+import type {
+  AccessSnapshot,
+  SessionIdentity,
+} from '../../notes/domain/access-policy';
+import { shareTokenFingerprint } from '../../notes/domain/share-token-fingerprint';
 import { UsersService } from '../../users/users.service';
 import {
   MAX_TIMER_DELAY_MS,
   TOKEN_EXPIRY_GRACE_MS,
 } from '../../websocket/socket-expiry';
+import {
+  AccessRevalidationService,
+  type AccessLease,
+} from '../access-revalidation.service';
 import { HandshakeError } from '../handshake-error';
 
 type AuthenticatedUser = Awaited<ReturnType<UsersService['findById']>>;
@@ -38,6 +44,8 @@ interface JwtPayload extends McpTokenClaims {
 export interface HocuspocusAuthContext {
   user: AuthUser;
   noteId: string;
+  identity: SessionIdentity;
+  accessLease: AccessLease;
   tokenExpiresAtMs?: number;
 }
 
@@ -48,8 +56,7 @@ export class HocuspocusAuthExtension {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
-    @Inject(NOTE_REPOSITORY)
-    private readonly noteRepository: NoteRepository
+    private readonly access: AccessRevalidationService
   ) {}
 
   toExtension(): Extension<HocuspocusAuthContext> {
@@ -57,6 +64,7 @@ export class HocuspocusAuthExtension {
     // the instance methods + injected dependencies.
     const authenticate = this.authenticate.bind(this);
     const armExpiryDisconnect = this.armExpiryDisconnect.bind(this);
+    const access = this.access;
 
     return {
       priority: 100,
@@ -77,8 +85,21 @@ export class HocuspocusAuthExtension {
       },
 
       async connected({ context, connection }) {
+        access.register(context.accessLease, connection);
         armExpiryDisconnect(context, connection);
       },
+    };
+  }
+
+  guardHooks(): Pick<
+    Extension<HocuspocusAuthContext>,
+    'beforeHandleMessage' | 'beforeSync'
+  > {
+    return {
+      beforeHandleMessage: async ({ context }) =>
+        this.access.assertValid(context.accessLease),
+      beforeSync: async ({ context }) =>
+        this.access.assertValid(context.accessLease),
     };
   }
 
@@ -101,7 +122,10 @@ export class HocuspocusAuthExtension {
         this.logger.log(
           `Closing collaboration connection for note ${context.noteId}: token expired`
         );
-        connection.close({ code: 4401, reason: 'Token expired' });
+        connection.close({
+          code: 4401,
+          reason: COLLABORATION_CLOSE_REASON.TOKEN_EXPIRED,
+        });
       },
       Math.max(delay, 0)
     );
@@ -122,43 +146,41 @@ export class HocuspocusAuthExtension {
       documentName
     );
 
-    let note: NoteEntity;
-    let rawPermissions: Awaited<
-      ReturnType<NoteRepository['findPermissionsByNote']>
-    >;
-    try {
-      [note, rawPermissions] = await Promise.all([
-        this.loadNote(documentName),
-        this.noteRepository.findPermissionsByNote(documentName),
-      ]);
-    } catch (error) {
-      // A missing note is an intentional verdict and is re-thrown verbatim;
-      // unexpected DB/repo failures are normalised so the raw error message
-      // (which may include connection strings, SQL, table names) is never
-      // delivered as the WebSocket close reason.
-      if (error instanceof HandshakeError) {
-        throw error;
-      }
-      this.logger.error(
-        `Internal error during auth for note ${documentName}`,
-        error instanceof Error ? error.stack : error
-      );
-      throw new HandshakeError(HANDSHAKE_FAILURE.INTERNAL_ERROR);
-    }
-
-    const sharedNotes = this.buildSharedNotes(
-      rawPermissions,
-      user.id,
-      note,
-      requestParameters?.get('shareToken') ?? null
+    const identity: SessionIdentity = {
+      userId: user.id,
+      suppliedTokenFingerprint: shareTokenFingerprint(
+        requestParameters?.get('shareToken') ?? null
+      ),
+    };
+    const accessLease = await this.access.acquire(
+      documentName,
+      identity,
+      user.role === USER_ROLE.ADMIN
     );
-
+    const effective = accessLease.effectiveAccess;
+    if (effective === 'none' && user.role !== USER_ROLE.ADMIN) {
+      throw new HandshakeError(HANDSHAKE_FAILURE.FORBIDDEN);
+    }
+    const sharedNotes: SharedNote[] =
+      effective === 'viewer' || effective === 'editor'
+        ? [{ noteId: documentName, permission: effective }]
+        : [];
     const authUser = this.toAuthUser(user);
     const ability = defineAbilityFor(authUser, { sharedNotes });
-    this.enforcePermissions(ability, note, connectionConfig);
+    this.enforcePermissions(
+      ability,
+      {
+        id: documentName,
+        ownerId: accessLease.ownerId,
+        generalAccess: accessLease.generalAccess,
+      },
+      connectionConfig
+    );
 
     return {
       user: authUser,
+      identity,
+      accessLease,
       noteId: documentName,
       ...(tokenExpiresAtMs !== undefined && { tokenExpiresAtMs }),
     };
@@ -212,47 +234,6 @@ export class HocuspocusAuthExtension {
     };
   }
 
-  private async loadNote(documentName: string): Promise<NoteEntity> {
-    const note = await this.noteRepository.findById(documentName);
-    if (!note) {
-      throw new HandshakeError(HANDSHAKE_FAILURE.NOTE_NOT_FOUND);
-    }
-    return note;
-  }
-
-  /**
-   * Builds the SharedNote list used by CASL to evaluate per-note permissions.
-   * Combines (a) explicit collaborator entries from the DB filtered to the
-   * current user, and (b) a synthetic entry derived from a valid `shareToken`
-   * URL parameter — keeping a single permission-evaluation code path.
-   */
-  private buildSharedNotes(
-    permissions: Awaited<ReturnType<NoteRepository['findPermissionsByNote']>>,
-    userId: string,
-    note: NoteEntity,
-    shareTokenParam: string | null
-  ): SharedNote[] {
-    const sharedNotes: SharedNote[] = permissions
-      .filter((entry) => entry.permission.userId === userId)
-      .map((entry) => ({
-        noteId: entry.permission.noteId,
-        permission: entry.permission.permission.value as PermissionLevel,
-      }));
-
-    if (
-      shareTokenParam &&
-      note.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
-      note.shareToken === shareTokenParam
-    ) {
-      sharedNotes.push({
-        noteId: note.id,
-        permission: note.generalAccessPermission as PermissionLevel,
-      });
-    }
-
-    return sharedNotes;
-  }
-
   private toAuthUser(user: AuthenticatedUser): AuthUser {
     return {
       id: user.id,
@@ -263,7 +244,11 @@ export class HocuspocusAuthExtension {
 
   private enforcePermissions(
     ability: AppAbility,
-    note: NoteEntity,
+    note: {
+      id: string;
+      ownerId: string;
+      generalAccess: AccessSnapshot['generalAccess'];
+    },
     connectionConfig: { readOnly: boolean }
   ): void {
     const noteSubject = {
