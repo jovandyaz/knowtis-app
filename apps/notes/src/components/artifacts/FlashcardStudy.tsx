@@ -8,10 +8,11 @@ import {
   useFlashcardProgress,
   useReviewCard,
 } from '@knowtis/data-access-artifacts';
-import { useMotionPreset } from '@knowtis/design-system';
+import { LoadingState, useMotionPreset } from '@knowtis/design-system';
 import {
   SM2_QUALITY,
   type FlashcardArtifact,
+  type FlashcardProgress,
   type SM2Quality,
 } from '@knowtis/shared-types';
 
@@ -32,11 +33,37 @@ interface FlashcardStudyProps {
 
 export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
-  const { mutateAsync: reviewCard, isPending: isReviewPending } =
-    useReviewCard();
-  const { data: progress } = useFlashcardProgress(
+  const { data: progress, isLoading } = useFlashcardProgress(
     readOnly ? undefined : artifact.id
   );
+
+  if (isLoading) {
+    return <LoadingState message={t('ai.artifacts.loadingStudy')} />;
+  }
+
+  return (
+    <FlashcardDeckSession
+      artifact={artifact}
+      progress={progress}
+      readOnly={readOnly}
+    />
+  );
+}
+
+interface FlashcardDeckSessionProps {
+  artifact: FlashcardArtifact;
+  progress: FlashcardProgress[] | undefined;
+  readOnly?: boolean | undefined;
+}
+
+function FlashcardDeckSession({
+  artifact,
+  progress,
+  readOnly,
+}: FlashcardDeckSessionProps) {
+  const { t } = useTranslation('notes');
+  const { mutateAsync: reviewCard, isPending: isReviewPending } =
+    useReviewCard();
   const cards = useMemo(
     () => deckStudyCards(artifact, progress),
     [artifact, progress]

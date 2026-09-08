@@ -4,14 +4,28 @@ import type * as MotionReact from 'motion/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@knowtis/design-system';
-import type { FlashcardArtifact } from '@knowtis/shared-types';
+import type {
+  FlashcardArtifact,
+  FlashcardProgress,
+} from '@knowtis/shared-types';
 
+import { useFlashcardSession } from './flashcard/use-flashcard-session';
+import type * as UseFlashcardSessionModule from './flashcard/use-flashcard-session';
 import { FlashcardStudy } from './FlashcardStudy';
 
 const reviewCard = vi.fn().mockResolvedValue({ ok: true });
 const { useFlashcardProgressMock } = vi.hoisted(() => ({
-  useFlashcardProgressMock: vi.fn(() => ({ data: undefined })),
+  useFlashcardProgressMock: vi.fn(() => ({
+    data: undefined as FlashcardProgress[] | undefined,
+    isLoading: false,
+    isError: false,
+  })),
 }));
+const DEFAULT_PROGRESS_RESULT: ReturnType<typeof useFlashcardProgressMock> = {
+  data: undefined,
+  isLoading: false,
+  isError: false,
+};
 
 /** The jsdom matchMedia stub answers every non-width query, so the suite runs reduced by default. */
 const reducedMotion = { value: true };
@@ -30,6 +44,10 @@ vi.mock('@knowtis/data-access-artifacts', () => ({
 vi.mock('motion/react', async () => {
   const actual = await vi.importActual<typeof MotionReact>('motion/react');
   return { ...actual, useReducedMotion: () => reducedMotion.value };
+});
+vi.mock('./flashcard/use-flashcard-session', async (importOriginal) => {
+  const actual = await importOriginal<typeof UseFlashcardSessionModule>();
+  return { ...actual, useFlashcardSession: vi.fn(actual.useFlashcardSession) };
 });
 
 const artifact = {
@@ -61,6 +79,7 @@ async function rateCorrect(front: RegExp) {
 describe('FlashcardStudy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useFlashcardProgressMock.mockReturnValue(DEFAULT_PROGRESS_RESULT);
   });
 
   afterEach(() => {
@@ -77,6 +96,43 @@ describe('FlashcardStudy', () => {
     renderStudy();
 
     expect(useFlashcardProgressMock).toHaveBeenCalledWith('deck-1');
+  });
+
+  it('shows a loading state and does not mount the session while progress is loading', () => {
+    useFlashcardProgressMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+
+    renderStudy();
+
+    expect(screen.getByText('ai.artifacts.loadingStudy')).toBeInTheDocument();
+    expect(useFlashcardSession).not.toHaveBeenCalled();
+  });
+
+  it("mounts the session with a card's kind once its progress has loaded", async () => {
+    const progress: FlashcardProgress[] = [
+      {
+        artifactId: 'deck-1',
+        cardIndex: 0,
+        easeFactor: 2.5,
+        intervalDays: 3,
+        repetitions: 1,
+        nextReview: '2026-09-09T00:00:00.000Z',
+      },
+    ];
+    useFlashcardProgressMock.mockReturnValue({
+      data: progress,
+      isLoading: false,
+      isError: false,
+    });
+
+    renderStudy();
+
+    await screen.findByRole('button', { name: /Front one/ });
+    const cards = vi.mocked(useFlashcardSession).mock.calls.at(-1)?.[0];
+    expect(cards?.[0].kind).toBe('due');
   });
 
   it('advances a read-only session without recording the review', async () => {
