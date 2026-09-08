@@ -381,7 +381,7 @@ function StudyQueueSession({
           max={session.totalCards}
           label={t('ai.artifacts.flashcards.reviewedOf', {
             reviewed: reviewedCount,
-            total: session.totalCards,
+            count: session.totalCards,
           })}
         />
         <div className="flex min-w-0 items-center justify-between gap-2">

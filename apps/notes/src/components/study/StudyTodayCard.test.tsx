@@ -101,6 +101,21 @@ describe('StudyTodayCard', () => {
     ).toBeInTheDocument();
   });
 
+  it('offers no review to start once nothing is left for today', () => {
+    statsQuery = {
+      data: makeStats({ dueCount: 0, newCount: 0 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<StudyTodayCard />);
+
+    expect(screen.getByText('study.caughtUp.title')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'study.todayCard.cta' })
+    ).toBeNull();
+  });
+
   it('renders nothing when the flag is off', () => {
     isQueueEnabled = false;
 

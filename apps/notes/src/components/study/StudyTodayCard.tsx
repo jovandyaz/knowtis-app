@@ -66,28 +66,30 @@ export function StudyTodayCard() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-3">
-          <StatTile value={dueCount} label={t('study.todayCard.dueLabel')} />
-          <StatTile
-            value={newCount}
-            label={t('study.todayCard.newLabel', { count: newCount })}
-          />
-          <StatTile
-            value={currentStreak}
-            label={t('study.todayCard.streakLabel', { count: currentStreak })}
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <StatTile value={dueCount} label={t('study.todayCard.dueLabel')} />
+            <StatTile
+              value={newCount}
+              label={t('study.todayCard.newLabel', { count: newCount })}
+            />
+            <StatTile
+              value={currentStreak}
+              label={t('study.todayCard.streakLabel', { count: currentStreak })}
+            />
+          </div>
+          <Link
+            to={ROUTES.STUDY}
+            className={cn(
+              buttonVariants({ variant: 'default' }),
+              TOUCH_TARGET_CLASS,
+              CTA_CLASS
+            )}
+          >
+            {t('study.todayCard.cta')}
+          </Link>
+        </>
       )}
-      <Link
-        to={ROUTES.STUDY}
-        className={cn(
-          buttonVariants({ variant: 'default' }),
-          TOUCH_TARGET_CLASS,
-          CTA_CLASS
-        )}
-      >
-        {t('study.todayCard.cta')}
-      </Link>
     </div>
   );
 }

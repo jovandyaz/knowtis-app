@@ -237,6 +237,18 @@ describe('StudySessionPage', () => {
     expect(bar).toHaveAttribute('aria-valuemax', '2');
   });
 
+  it('counts a one-card queue in the singular', () => {
+    queueOf([CARD_ONE]);
+
+    render(<StudySessionPage />);
+
+    expect(
+      screen.getByRole('progressbar', {
+        name: 'ai.artifacts.flashcards.reviewedOf {"reviewed":0,"count":1}',
+      })
+    ).toBeInTheDocument();
+  });
+
   it('marks a new card as new', () => {
     queueOf([makeCard({ kind: 'new' })]);
     const { unmount } = render(<StudySessionPage />);

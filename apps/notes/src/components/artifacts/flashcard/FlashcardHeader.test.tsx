@@ -37,7 +37,7 @@ describe('FlashcardHeader', () => {
 
     const ring = screen.getByRole('progressbar');
     expect(ring).toHaveAccessibleName(
-      'ai.artifacts.flashcards.reviewedOf {"reviewed":3,"total":10}'
+      'ai.artifacts.flashcards.reviewedOf {"reviewed":3,"count":10}'
     );
     expect(ring).toHaveAttribute('aria-valuenow', '3');
     expect(ring).toHaveAttribute('aria-valuemax', '10');

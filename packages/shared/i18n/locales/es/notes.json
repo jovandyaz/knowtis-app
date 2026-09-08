@@ -513,7 +513,8 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
-        "reviewedOf": "{{reviewed}} de {{total}} tarjetas repasadas",
+        "reviewedOf_one": "{{reviewed}} de {{count}} tarjeta repasada",
+        "reviewedOf_other": "{{reviewed}} de {{count}} tarjetas repasadas",
         "showAnswer": "Mostrar respuesta",
         "showFront": "Mostrar frente de la tarjeta",
         "showBack": "Mostrar dorso de la tarjeta",

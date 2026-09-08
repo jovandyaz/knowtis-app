@@ -41,7 +41,7 @@ export function FlashcardHeader({
   });
   const reviewed = t('ai.artifacts.flashcards.reviewedOf', {
     reviewed: reviewedCount,
-    total,
+    count: total,
   });
 
   return (
