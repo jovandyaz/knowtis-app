@@ -541,6 +541,8 @@
         "correct": "Correct",
         "skip": "Skip",
         "advancedMode": "Advanced mode",
+        "rateCard": "Rate this card",
+        "summaryDescription": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped.",
         "summary": {
           "excellentMastery": "Excellent mastery!",
           "greatJob": "Great job, keep it up!",
@@ -554,8 +556,7 @@
           "practiceAgain": "Practice again",
           "allCards": "All cards",
           "onlyMissed": "Only cards you missed",
-          "onlySkipped": "Only cards you skipped",
-          "timeSpent": "{{minutes}}m {{seconds}}s"
+          "onlySkipped": "Only cards you skipped"
         }
       },
       "quiz": {

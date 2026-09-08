@@ -541,6 +541,8 @@
         "correct": "Correcto",
         "skip": "Saltar",
         "advancedMode": "Modo avanzado",
+        "rateCard": "Califica esta tarjeta",
+        "summaryDescription": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas.",
         "summary": {
           "excellentMastery": "¡Excelente dominio!",
           "greatJob": "¡Muy bien, sigue así!",
@@ -554,8 +556,7 @@
           "practiceAgain": "Practicar de nuevo",
           "allCards": "Todas las tarjetas",
           "onlyMissed": "Solo las que fallaste",
-          "onlySkipped": "Solo las que saltaste",
-          "timeSpent": "{{minutes}}m {{seconds}}s"
+          "onlySkipped": "Solo las que saltaste"
         }
       },
       "quiz": {

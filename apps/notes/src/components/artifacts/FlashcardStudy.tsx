@@ -1,22 +1,24 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 
 import { useReviewCard } from '@knowtis/data-access-artifacts';
+import { useMotionPreset } from '@knowtis/design-system';
 import {
   SM2_QUALITY,
   type FlashcardArtifact,
   type SM2Quality,
 } from '@knowtis/shared-types';
 
-import {
-  FlashcardCard,
-  FlashcardControls,
-  FlashcardHeader,
-  FlashcardSummary,
-  useStudySession,
-} from './flashcard';
+import { FlashcardCard } from './flashcard/FlashcardCard';
+import { FlashcardControls } from './flashcard/FlashcardControls';
+import { FlashcardHeader } from './flashcard/FlashcardHeader';
+import { FlashcardSummary } from './flashcard/FlashcardSummary';
+import { useStudySession } from './flashcard/use-study-session';
+
+const CARD_ENTER_X = 60;
 
 interface FlashcardStudyProps {
   artifact: FlashcardArtifact;
@@ -28,6 +30,7 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
   const session = useStudySession(artifact.content);
+  const preset = useMotionPreset();
 
   const submitReview = useCallback(
     (quality: SM2Quality) => {
@@ -105,14 +108,23 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
         readOnly={readOnly}
       />
 
-      <FlashcardCard
-        front={session.currentCard.front}
-        back={session.currentCard.back}
-        difficulty={session.currentCard.difficulty}
-        flipped={session.flipped}
-        cardIndex={session.currentIndex}
-        onFlip={session.flip}
-      />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={session.currentIndex}
+          initial={{ opacity: 0, x: preset.reduced ? 0 : CARD_ENTER_X }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: preset.reduced ? 0 : -CARD_ENTER_X }}
+          transition={preset.slide}
+        >
+          <FlashcardCard
+            front={session.currentCard.front}
+            back={session.currentCard.back}
+            difficulty={session.currentCard.difficulty}
+            flipped={session.flipped}
+            onFlip={session.flip}
+          />
+        </motion.div>
+      </AnimatePresence>
 
       <FlashcardControls
         isAdvancedMode={session.isAdvancedMode}
