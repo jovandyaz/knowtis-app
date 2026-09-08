@@ -12,7 +12,7 @@ import { cn } from '../utils';
 const LETTER_A_CODE = 65;
 
 const optionVariants = cva(
-  'flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:cursor-default',
+  'flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none',
   {
     variants: {
       state: {
@@ -27,9 +27,9 @@ const optionVariants = cva(
 
 export interface AnswerOptionProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
-  'onClick' | 'type' | 'role' | 'aria-checked' | 'children'
+  'onClick' | 'type' | 'role' | 'aria-checked' | 'children' | 'onSelect'
 > {
-  /** Zero-based position in the group; renders as the letter A-Z. */
+  /** Zero-based position in the group, 0-25; renders as the letter A-Z. */
   index: number;
   children: ReactNode;
   /** The answer the user picked. Drives `aria-checked` on its own. */
@@ -57,10 +57,11 @@ function StateIcon({ state }: { state: AnswerOptionState }) {
 }
 
 /**
- * One answer row of a quiz, meant to live inside a `radiogroup`. Only
- * `selected` drives `aria-checked`, so revealing the right answer with
- * `outcome` on an unpicked row never adds a second checked radio; the quiz
- * announces the grading itself.
+ * One answer row of a quiz, meant to live inside a `radiogroup` the consumer
+ * owns: that group holds the roving `tabIndex` and arrow-key movement of the
+ * APG radio group pattern, and announces the graded result. Only `selected`
+ * drives `aria-checked`, so revealing the right answer with `outcome` on an
+ * unpicked row never adds a second checked radio.
  */
 const AnswerOption = forwardRef<HTMLButtonElement, AnswerOptionProps>(
   (
@@ -95,7 +96,7 @@ const AnswerOption = forwardRef<HTMLButtonElement, AnswerOptionProps>(
         >
           {letter}
         </span>
-        <span className="sr-only">{letter}. </span>
+        <span className="sr-only">{letter}.</span>
         <span className="flex-1">{children}</span>
         <StateIcon state={state} />
       </button>

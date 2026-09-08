@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +14,7 @@ describe('AnswerOption', () => {
       </AnswerOption>
     );
     const option = screen.getByRole('radio', { name: /^A\.\s*Paris$/ });
+    expect(option).toHaveAttribute('type', 'button');
     expect(option).toHaveAttribute('aria-checked', 'false');
     expect(option).toHaveAttribute('data-state', 'idle');
     fireEvent.click(option);
@@ -42,6 +45,18 @@ describe('AnswerOption', () => {
     expect(option).toHaveAttribute('data-state', 'correct');
   });
 
+  it('marks a picked wrong answer with its own icon and tone', () => {
+    render(
+      <AnswerOption index={2} selected outcome="incorrect">
+        Rome
+      </AnswerOption>
+    );
+    const option = screen.getByRole('radio', { name: /^C\.\s*Rome$/ });
+    expect(option).toHaveAttribute('data-state', 'incorrect');
+    expect(option.className).toContain('border-learn-incorrect');
+    expect(option.querySelector('svg')).not.toBeNull();
+  });
+
   it('checks a pick that has no outcome yet', () => {
     render(
       <AnswerOption index={3} selected>
@@ -54,24 +69,28 @@ describe('AnswerOption', () => {
     expect(option.querySelector('svg')).toBeNull();
   });
 
-  it('cannot be selected while disabled', () => {
+  it('cannot be selected or hovered while disabled', () => {
     const onSelect = vi.fn();
     render(
-      <AnswerOption
-        index={2}
-        selected
-        outcome="incorrect"
-        onSelect={onSelect}
-        disabled
-      >
+      <AnswerOption index={2} outcome="incorrect" onSelect={onSelect} disabled>
         Rome
       </AnswerOption>
     );
     const option = screen.getByRole('radio', { name: /^C\.\s*Rome$/ });
     expect(option).toBeDisabled();
-    expect(option.className).toContain('border-learn-incorrect');
+    expect(option.className).toContain('disabled:pointer-events-none');
     fireEvent.click(option);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('forwards a ref to the button', () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(
+      <AnswerOption index={0} ref={ref}>
+        Paris
+      </AnswerOption>
+    );
+    expect(ref.current).toBe(screen.getByRole('radio'));
   });
 
   it('forwards rest props like id to the button', () => {
