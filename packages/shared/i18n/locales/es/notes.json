@@ -674,26 +674,25 @@
     "loading": "Cargando tu repaso",
     "newBadge": "Nueva",
     "caughtUp": {
-      "title": "Todo repasado",
+      "title": "Todo al día",
       "nextReview": "Tu próxima tarjeta llega {{when}}",
       "nothingScheduled": "Aún no tienes tarjetas programadas",
       "cta": "Ir a mis notas"
     },
     "summary": {
+      "streak_zero": "Tu racha empieza hoy",
       "streak_one": "Racha de {{count}} día",
       "streak_other": "Racha de {{count}} días",
       "backHome": "Volver al inicio"
     },
     "todayCard": {
       "title": "Repaso de hoy",
-      "dueLabel_one": "para hoy",
-      "dueLabel_other": "para hoy",
+      "dueLabel": "para hoy",
       "newLabel_one": "nueva",
       "newLabel_other": "nuevas",
       "streakLabel_one": "día de racha",
       "streakLabel_other": "días de racha",
-      "cta": "Empezar",
-      "caughtUpTitle": "Al día"
+      "cta": "Empezar"
     }
   }
 }

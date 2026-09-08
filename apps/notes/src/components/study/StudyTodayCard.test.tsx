@@ -58,9 +58,7 @@ describe('StudyTodayCard', () => {
   it("renders today's counts from the stats", () => {
     render(<StudyTodayCard />);
 
-    expect(
-      screen.getByText('study.todayCard.dueLabel {"count":12}')
-    ).toBeInTheDocument();
+    expect(screen.getByText('study.todayCard.dueLabel')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(
       screen.getByText('study.todayCard.newLabel {"count":4}')
@@ -82,9 +80,7 @@ describe('StudyTodayCard', () => {
 
     render(<StudyTodayCard />);
 
-    expect(
-      screen.getByText('study.todayCard.caughtUpTitle')
-    ).toBeInTheDocument();
+    expect(screen.getByText('study.caughtUp.title')).toBeInTheDocument();
     expect(screen.getByText(/study\.caughtUp\.nextReview/)).toHaveTextContent(
       formatRelativeTime(new Date(nextDueAt), 'es')
     );
@@ -136,7 +132,7 @@ describe('StudyTodayCard', () => {
 
     const { container } = render(<StudyTodayCard />);
 
-    expect(screen.queryByText('study.todayCard.caughtUpTitle')).toBeNull();
+    expect(screen.queryByText('study.caughtUp.title')).toBeNull();
     expect(container).toBeEmptyDOMElement();
   });
 

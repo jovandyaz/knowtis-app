@@ -55,7 +55,7 @@ export function StudyTodayCard() {
       {dueCount + newCount === 0 ? (
         <div className="flex flex-col gap-1">
           <p className="text-sm font-medium text-(--foreground)">
-            {t('study.todayCard.caughtUpTitle')}
+            {t('study.caughtUp.title')}
           </p>
           <p className="text-sm text-(--muted-foreground)">
             {nextDueAt
@@ -67,10 +67,7 @@ export function StudyTodayCard() {
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
-          <StatTile
-            value={dueCount}
-            label={t('study.todayCard.dueLabel', { count: dueCount })}
-          />
+          <StatTile value={dueCount} label={t('study.todayCard.dueLabel')} />
           <StatTile
             value={newCount}
             label={t('study.todayCard.newLabel', { count: newCount })}
