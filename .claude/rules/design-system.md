@@ -26,6 +26,7 @@ paths:
 - Color system uses OKLCH colorspace defined in `tokens/colors.json`.
 - Semantic tokens map to CSS custom properties: `bg-(--background)`, `text-(--foreground)`, `border-(--border)`.
 - Never hardcode color values (hex, rgb, oklch) in components — always reference tokens via CSS custom properties.
+- Learn tones split fill from text: fills and rings use `learn-*` (`bg-learn-correct/15`, `ring-learn-incorrect/25`), text on a neutral or tinted surface uses `learn-*-text` (`text-learn-correct-text`) — the fill shades fail WCAG AA as text.
 - Never hardcode spacing values — use Tailwind spacing scale (`p-4`, `gap-2`, `mt-6`).
 
 ## Motion

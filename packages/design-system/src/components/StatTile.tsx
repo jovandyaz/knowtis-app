@@ -28,9 +28,9 @@ const SIGN_TONE: Record<number, DeltaTone> = {
 };
 
 const TONE_CLASS: Record<DeltaTone, string> = {
-  correct: 'text-learn-correct',
+  correct: 'text-learn-correct-text',
   muted: 'text-(--muted-foreground)',
-  incorrect: 'text-learn-incorrect',
+  incorrect: 'text-learn-incorrect-text',
 };
 
 function safeDelta(value: number): number {

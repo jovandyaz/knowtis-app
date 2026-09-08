@@ -25,9 +25,9 @@ const ratingButton = cva(
     variants: {
       rating: {
         again:
-          'bg-learn-incorrect/15 text-learn-incorrect ring-learn-incorrect/25 hover:bg-learn-incorrect/25',
+          'bg-learn-incorrect/15 text-learn-incorrect-text ring-learn-incorrect/25 hover:bg-learn-incorrect/25',
         hard: 'bg-(--muted) text-(--foreground) ring-(--border) hover:bg-(--accent)',
-        good: 'bg-learn-correct/15 text-learn-correct ring-learn-correct/25 hover:bg-learn-correct/25',
+        good: 'bg-learn-correct/15 text-learn-correct-text ring-learn-correct/25 hover:bg-learn-correct/25',
         easy: 'bg-(--primary)/15 text-(--primary) ring-(--primary)/25 hover:bg-(--primary)/25',
       },
     },

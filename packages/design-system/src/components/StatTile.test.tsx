@@ -19,7 +19,7 @@ describe('StatTile', () => {
       />
     );
     const sign = screen.getByText('+3');
-    expect(sign.className).toContain('text-learn-correct');
+    expect(sign.className).toContain('text-learn-correct-text');
     expect(sign).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByText('3 more than yesterday')).toHaveClass('sr-only');
   });
@@ -29,7 +29,7 @@ describe('StatTile', () => {
       <StatTile value={1} label="Due" delta={{ value: -2, label: '2 fewer' }} />
     );
     const sign = screen.getByText('-2');
-    expect(sign.className).toContain('text-learn-incorrect');
+    expect(sign.className).toContain('text-learn-incorrect-text');
     expect(screen.getByText('2 fewer')).toHaveClass('sr-only');
   });
 
