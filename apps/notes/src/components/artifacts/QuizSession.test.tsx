@@ -255,6 +255,17 @@ describe('QuizSession', () => {
     expect(bar).toHaveAttribute('aria-valuenow', '50');
     expect(bar).toHaveAttribute('aria-valuemax', '100');
     expect(bar.firstElementChild).toHaveClass('bg-(--primary)');
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    ).toHaveClass('min-h-11');
+  });
+
+  it('gives the advance button a 44px touch target', () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    ).toHaveClass('min-h-11');
   });
 
   it('lets a read-only viewer practise the whole quiz without submitting it', async () => {

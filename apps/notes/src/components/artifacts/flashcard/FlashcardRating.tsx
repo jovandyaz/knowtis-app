@@ -8,6 +8,7 @@ import {
   cn,
   learnToneButton,
   RatingBar,
+  TOUCH_TARGET_CLASS,
   useMotionPreset,
 } from '@knowtis/design-system';
 import type { PredictedIntervals, SM2Quality } from '@knowtis/shared-types';
@@ -29,7 +30,7 @@ const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
   easy: 1,
 };
 
-const RATE_BUTTON_LAYOUT = 'min-h-11 rounded-full px-6 py-2.5';
+const RATE_BUTTON_LAYOUT = `${TOUCH_TARGET_CLASS} rounded-full px-6 py-2.5`;
 
 export function FlashcardRating({
   isAdvancedMode,

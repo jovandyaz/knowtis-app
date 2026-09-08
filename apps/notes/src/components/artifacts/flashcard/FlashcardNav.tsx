@@ -53,7 +53,7 @@ export function FlashcardNav({
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-full"
+            className="h-11 w-11 rounded-full"
             onClick={onNavigatePrev}
             disabled={!canGoPrev}
             aria-label={t('ai.artifacts.flashcards.prev')}
@@ -81,7 +81,7 @@ export function FlashcardNav({
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-full"
+            className="h-11 w-11 rounded-full"
             onClick={onNavigateNext}
             aria-label={t('ai.artifacts.flashcards.next')}
           >

@@ -73,4 +73,15 @@ describe('FlashcardNav', () => {
     expect(props.onNavigatePrev).toHaveBeenCalledTimes(1);
     expect(props.onNavigateNext).toHaveBeenCalledTimes(1);
   });
+
+  it('gives both arrows a 44px touch target', () => {
+    renderNav({ canGoPrev: true });
+
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.prev' })
+    ).toHaveClass('h-11', 'w-11');
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.next' })
+    ).toHaveClass('h-11', 'w-11');
+  });
 });
