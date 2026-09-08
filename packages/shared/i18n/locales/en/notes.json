@@ -522,6 +522,8 @@
         "reviewError": "Failed to submit review",
         "restart": "Start over",
         "shuffle": "Shuffle",
+        "intervalDays_one": "{{count}} day",
+        "intervalDays_other": "{{count}} days",
         "difficulty": {
           "easy": "Easy",
           "medium": "Medium",

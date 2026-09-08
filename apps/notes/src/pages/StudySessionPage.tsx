@@ -1,4 +1,10 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, Navigate } from '@tanstack/react-router';
@@ -28,8 +34,11 @@ import {
   EmptyState,
   ErrorState,
   Progress,
+  RATING_ORDER,
+  RATING_QUALITY,
   Skeleton,
   TOUCH_TARGET_CLASS,
+  type RatingKey,
 } from '@knowtis/design-system';
 import {
   FEATURE_FLAG_KEYS,
@@ -48,6 +57,44 @@ const CTA_CLASS = 'rounded-lg px-4 text-sm font-medium';
 const RATING_BAR_MOBILE_PADDING = 'pb-28 md:pb-6';
 const RATING_BAR_CLASS =
   'fixed inset-x-0 bottom-0 z-30 border-t border-(--border) bg-(--background)/95 px-4 py-3 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:pb-0 md:backdrop-blur-none';
+
+const STUDY_KEY_ACTION_TYPES = {
+  FLIP: 'flip',
+  NAVIGATE: 'navigate',
+  RATE: 'rate',
+} as const;
+
+export type StudyKeyAction =
+  | { type: typeof STUDY_KEY_ACTION_TYPES.FLIP }
+  | { type: typeof STUDY_KEY_ACTION_TYPES.NAVIGATE; direction: -1 | 1 }
+  | { type: typeof STUDY_KEY_ACTION_TYPES.RATE; quality: SM2Quality };
+
+const SIMPLE_MODE_RATING_KEYS: Record<string, RatingKey> = {
+  '1': RATING_ORDER[0],
+  '2': RATING_ORDER[2],
+};
+
+/** Space/Enter flip, arrows navigate; 1/2 rate wrong/correct in simple mode, 1-4 rate Again/Hard/Good/Easy in advanced mode. */
+export function resolveStudyKeyAction(
+  key: string,
+  isAdvancedMode: boolean
+): StudyKeyAction | undefined {
+  if (key === ' ' || key === 'Enter') {
+    return { type: STUDY_KEY_ACTION_TYPES.FLIP };
+  }
+  if (key === 'ArrowLeft') {
+    return { type: STUDY_KEY_ACTION_TYPES.NAVIGATE, direction: -1 };
+  }
+  if (key === 'ArrowRight') {
+    return { type: STUDY_KEY_ACTION_TYPES.NAVIGATE, direction: 1 };
+  }
+  const ratingKey = isAdvancedMode
+    ? RATING_ORDER[Number(key) - 1]
+    : SIMPLE_MODE_RATING_KEYS[key];
+  return ratingKey
+    ? { type: STUDY_KEY_ACTION_TYPES.RATE, quality: RATING_QUALITY[ratingKey] }
+    : undefined;
+}
 
 export function StudySessionPage() {
   const { isPending: areFlagsPending } = useFeatureFlags();
@@ -122,6 +169,7 @@ function StudyQueueSession({
 }: StudyQueueSessionProps) {
   const { t } = useTranslation('notes');
   const session = useFlashcardSession(cards);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
 
@@ -167,6 +215,79 @@ function StudyQueueSession({
     [onNewQueue, session]
   );
 
+  const handleNavigate = useCallback(
+    (direction: -1 | 1) => {
+      const nextIndex = session.currentIndex + direction;
+      if (nextIndex >= 0 && nextIndex < session.totalCards) {
+        session.navigate(nextIndex);
+      }
+    },
+    [session]
+  );
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      ) {
+        return;
+      }
+      if (
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+      const action = resolveStudyKeyAction(event.key, session.isAdvancedMode);
+      if (!action) {
+        return;
+      }
+      // A focused button already flips on Space/Enter natively; acting again would double-toggle.
+      if (
+        action.type === STUDY_KEY_ACTION_TYPES.FLIP &&
+        target instanceof HTMLButtonElement
+      ) {
+        return;
+      }
+      if (action.type === STUDY_KEY_ACTION_TYPES.RATE && !session.flipped) {
+        return;
+      }
+      event.preventDefault();
+      switch (action.type) {
+        case STUDY_KEY_ACTION_TYPES.FLIP:
+          session.flip();
+          break;
+        case STUDY_KEY_ACTION_TYPES.NAVIGATE:
+          handleNavigate(action.direction);
+          break;
+        case STUDY_KEY_ACTION_TYPES.RATE:
+          if (session.isAdvancedMode) {
+            handleRateAdvanced(action.quality);
+          } else if (action.quality === SM2_QUALITY.AGAIN) {
+            handleWrong();
+          } else {
+            handleCorrect();
+          }
+          break;
+      }
+    },
+    [session, handleNavigate, handleRateAdvanced, handleWrong, handleCorrect]
+  );
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    container.addEventListener('keydown', handleKeyDown);
+    return () => container.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
   if (session.totalCards === 0) {
     return emptyState;
   }
@@ -207,6 +328,7 @@ function StudyQueueSession({
 
   return (
     <div
+      ref={containerRef}
       className={cn(PAGE_LAYOUT, session.flipped && RATING_BAR_MOBILE_PADDING)}
     >
       <div className="flex flex-col gap-3">
@@ -247,6 +369,7 @@ function StudyQueueSession({
           <FlashcardRating
             isAdvancedMode={session.isAdvancedMode}
             disabled={isReviewPending}
+            intervals={card.predictedIntervals}
             onWrong={handleWrong}
             onCorrect={handleCorrect}
             onRateAdvanced={handleRateAdvanced}

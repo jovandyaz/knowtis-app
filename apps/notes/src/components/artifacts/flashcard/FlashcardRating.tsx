@@ -17,12 +17,13 @@ interface FlashcardRatingProps {
   isAdvancedMode: boolean;
   readOnly?: boolean | undefined;
   disabled: boolean;
+  intervals?: PredictedIntervals | undefined;
   onWrong: () => void;
   onCorrect: () => void;
   onRateAdvanced: (quality: SM2Quality) => void;
 }
 
-/** Every rating schedules the card for tomorrow until the server predicts per-card intervals. */
+/** Every rating schedules the card for tomorrow until a caller passes per-card `intervals`. */
 const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
   again: 1,
   hard: 1,
@@ -36,6 +37,7 @@ export function FlashcardRating({
   isAdvancedMode,
   readOnly,
   disabled,
+  intervals,
   onWrong,
   onCorrect,
   onRateAdvanced,
@@ -52,14 +54,16 @@ export function FlashcardRating({
       >
         <RatingBar
           label={t('ai.artifacts.flashcards.rateCard')}
-          intervals={FIRST_REVIEW_INTERVALS}
+          intervals={intervals ?? FIRST_REVIEW_INTERVALS}
           labels={{
             again: t('ai.artifacts.flashcards.quality.again'),
             hard: t('ai.artifacts.flashcards.quality.hard'),
             good: t('ai.artifacts.flashcards.quality.good'),
             easy: t('ai.artifacts.flashcards.quality.easy'),
           }}
-          formatInterval={(days) => `${days}d`}
+          formatInterval={(days) =>
+            t('ai.artifacts.flashcards.intervalDays', { count: days })
+          }
           onRate={onRateAdvanced}
           disabled={disabled}
         />

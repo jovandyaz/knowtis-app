@@ -102,4 +102,15 @@ describe('FlashcardRating', () => {
       screen.getByRole('button', { name: /quality\.good/ })
     ).not.toHaveTextContent('1d');
   });
+
+  it('renders the passed intervals rather than the default', () => {
+    renderRating({
+      isAdvancedMode: true,
+      intervals: { again: 1, hard: 2, good: 4, easy: 8 },
+    });
+
+    expect(
+      screen.getByRole('button', { name: /quality\.good/ })
+    ).toHaveTextContent('ai.artifacts.flashcards.intervalDays {"count":4}');
+  });
 });

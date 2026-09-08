@@ -522,6 +522,8 @@
         "reviewError": "Error al enviar la revisión",
         "restart": "Empezar de nuevo",
         "shuffle": "Barajar",
+        "intervalDays_one": "{{count}} día",
+        "intervalDays_other": "{{count}} días",
         "difficulty": {
           "easy": "Fácil",
           "medium": "Medio",
