@@ -137,6 +137,9 @@ function StudyQueue() {
   const servedCards = queue.data?.cards;
   const currentStats = stats.data ?? queue.data?.stats;
 
+  // Latched rather than read live: the session hook's lazy initialiser only
+  // stops a mounted session from reseeding, so a refetch that empties the queue
+  // would otherwise drop a mid-session player onto the caught-up screen.
   if (!hasSession && servedCards !== undefined && servedCards.length > 0) {
     setHasSession(true);
   }
