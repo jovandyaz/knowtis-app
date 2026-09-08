@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
 
-import { ensureGuestSession } from '@/auth/setup';
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { SharedNoteAccessError } from '@/components/notes/shared-note/SharedNoteAccessError';
@@ -12,11 +11,10 @@ import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
 import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
+import { useSharedNoteEditing } from '@/hooks/useSharedNoteEditing';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useWorkspaceTabReset } from '@/stores/useWorkspaceTabReset';
-import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
-import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
@@ -37,9 +35,15 @@ export function SharedNotePage() {
   const user = useAuthUser();
   const isAuthLoading = useAuthLoading();
   const { data: artifacts } = useSharedNoteArtifacts(token);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPreparingEdit, setIsPreparingEdit] = useState(false);
-  const [latestContent, setLatestContent] = useState<string | null>(null);
+  const {
+    isEditing,
+    isPreparingEdit,
+    latestContent,
+    handleStartEditing,
+    handleStopEditing,
+    handleEditDenied,
+    handleUpdate,
+  } = useSharedNoteEditing();
   const { copied, copy: copyLink } = useCopyLink();
   const sharedArtifacts = artifacts ?? [];
   const hasArtifacts = sharedArtifacts.length > 0;
@@ -57,8 +61,6 @@ export function SharedNotePage() {
   // A registered visitor gets nothing from the login page but a bounce back here.
   const offerSignIn = !isAuthLoading && isAnonymousVisitor;
 
-  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
-
   useWorkspaceTabReset(token);
 
   useEffect(() => {
@@ -72,33 +74,6 @@ export function SharedNotePage() {
       actor_type: actorType,
     });
   }, [actorType, isResolved, permission, token]);
-
-  const handleEditDenied = useCallback(() => {
-    toast.error(t('shared.editDenied'));
-  }, [t]);
-
-  const handleStartEditing = useCallback(() => {
-    setIsPreparingEdit(true);
-    void ensureGuestSession()
-      .then((ready) => {
-        if (ready) {
-          setWorkspaceTab('note');
-          setIsEditing(true);
-          return;
-        }
-        toast.error(t('shared.editUnavailable'));
-      })
-      .finally(() => setIsPreparingEdit(false));
-  }, [t, setWorkspaceTab]);
-
-  const handleUpdate = useCallback((content: string) => {
-    setLatestContent(content);
-  }, []);
-
-  const handleStopEditing = useCallback(() => {
-    setWorkspaceTab('note');
-    setIsEditing(false);
-  }, [setWorkspaceTab]);
 
   if (isLoading) {
     return (
