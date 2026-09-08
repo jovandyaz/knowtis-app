@@ -87,6 +87,43 @@ describe('useFlashcardSession', () => {
     expect(result.current.currentCard).toEqual(cards[0]);
   });
 
+  it('keeps a shuffle inside a filtered restart within the filtered cards', () => {
+    const cards = [makeCard(0), makeCard(1), makeCard(2)];
+    const { result } = renderHook(() => useFlashcardSession(cards, reverse));
+
+    act(() => result.current.rate('wrong'));
+    act(() => result.current.rate('correct'));
+    act(() => result.current.rate('correct'));
+
+    act(() => result.current.restart('missed'));
+    expect(result.current.totalCards).toBe(1);
+
+    act(() => result.current.shuffle());
+
+    expect(result.current.totalCards).toBe(1);
+    expect(result.current.currentCard?.artifactId).toBe(cards[0].artifactId);
+    expect(result.current.currentCard?.cardIndex).toBe(cards[0].cardIndex);
+  });
+
+  it("pairs a second filtered restart with each card's own status", () => {
+    const cards = [makeCard(0), makeCard(1), makeCard(2)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    act(() => result.current.rate('correct'));
+    act(() => result.current.rate('wrong'));
+    act(() => result.current.rate('correct'));
+
+    act(() => result.current.restart('missed'));
+    expect(result.current.currentCard?.artifactId).toBe(cards[1].artifactId);
+
+    act(() => result.current.rate('wrong'));
+    act(() => result.current.restart('missed'));
+
+    expect(result.current.totalCards).toBe(1);
+    expect(result.current.currentCard?.artifactId).toBe(cards[1].artifactId);
+    expect(result.current.currentCard?.cardIndex).toBe(cards[1].cardIndex);
+  });
+
   it('reports a duration that starts at the first render and freezes on completion', () => {
     const cards = [makeCard(0), makeCard(1)];
     const { result } = renderHook(() => useFlashcardSession(cards));
@@ -113,7 +150,7 @@ describe('useFlashcardSession', () => {
     expect(result.current.cardStatuses).toEqual([
       'pending',
       'pending',
-      'pending',
+      'correct',
     ]);
 
     const identities = new Set(
@@ -130,6 +167,20 @@ describe('useFlashcardSession', () => {
 
     expect(new Set(activeIdentities)).toEqual(identities);
     expect(activeIdentities).toHaveLength(cards.length);
+  });
+
+  it('gives each card result its own artifactId and deck cardIndex, not its session position', () => {
+    const cards = [makeCard(5), makeCard(2)];
+    const { result } = renderHook(() => useFlashcardSession(cards, reverse));
+
+    act(() => result.current.shuffle());
+    act(() => result.current.rate('correct'));
+    act(() => result.current.rate('correct'));
+
+    expect(result.current.sessionResult.cardResults).toEqual([
+      expect.objectContaining({ artifactId: 'artifact-2', cardIndex: 2 }),
+      expect.objectContaining({ artifactId: 'artifact-5', cardIndex: 5 }),
+    ]);
   });
 
   it('rateAdvanced maps SM2 quality to correct/wrong', () => {

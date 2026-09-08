@@ -20,6 +20,7 @@ const result: StudySessionResult = {
   durationMs: 90_000,
   cardResults: [
     {
+      artifactId: 'artifact-1',
       cardIndex: 0,
       status: CARD_STATUS.WRONG,
       front: 'What is a CRDT?',

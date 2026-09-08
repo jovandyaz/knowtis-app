@@ -211,6 +211,7 @@ export const RESTART_FILTERS = ['all', 'missed', 'skipped'] as const;
 export type RestartFilter = (typeof RESTART_FILTERS)[number];
 
 export interface CardResult {
+  artifactId: string;
   cardIndex: number;
   status: CardSessionStatus;
   front: string;

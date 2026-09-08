@@ -32,7 +32,6 @@ type SessionAction =
   | { type: 'FINISH' }
   | { type: 'SHUFFLE'; cards: StudyCard[] };
 
-/** In-place Fisher-Yates shuffle over a copy of `items`, uniform over all permutations. */
 function fisherYatesShuffle<T>(items: T[]): T[] {
   const shuffled = [...items];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -40,6 +39,10 @@ function fisherYatesShuffle<T>(items: T[]): T[] {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+function cardIdentityKey(card: StudyCard): string {
+  return `${card.artifactId}:${card.cardIndex}`;
 }
 
 function findNextPendingIndex(
@@ -123,23 +126,33 @@ function sessionReducer(
     case 'TOGGLE_ADVANCED':
       return { ...state, isAdvancedMode: !state.isAdvancedMode };
 
-    case 'SHUFFLE':
+    case 'SHUFFLE': {
+      const statusByIdentity = new Map(
+        state.activeCards.map((card, i) => [
+          cardIdentityKey(card),
+          state.cardStatuses[i],
+        ])
+      );
+      const shuffledStatuses = action.cards.map(
+        (card) =>
+          statusByIdentity.get(cardIdentityKey(card)) ?? CARD_STATUS.PENDING
+      );
       return {
         ...state,
         currentIndex: 0,
         flipped: false,
-        cardStatuses: Array(action.cards.length).fill(CARD_STATUS.PENDING),
+        cardStatuses: shuffledStatuses,
         isComplete: false,
         endTime: null,
-        originalCards: action.cards,
         activeCards: action.cards,
       };
+    }
 
     case 'RESTART': {
       if (action.filter === 'missed' || action.filter === 'skipped') {
         const targetStatus =
           action.filter === 'missed' ? CARD_STATUS.WRONG : CARD_STATUS.SKIPPED;
-        const filteredCards = state.originalCards.filter(
+        const filteredCards = state.activeCards.filter(
           (_, i) => state.cardStatuses[i] === targetStatus
         );
         if (filteredCards.length > 0) {
@@ -247,13 +260,14 @@ export function useFlashcardSession(
   }, []);
 
   const shuffle = useCallback(() => {
-    dispatch({ type: 'SHUFFLE', cards: shuffleFn(state.originalCards) });
-  }, [shuffleFn, state.originalCards]);
+    dispatch({ type: 'SHUFFLE', cards: shuffleFn(state.activeCards) });
+  }, [shuffleFn, state.activeCards]);
 
   const sessionResult = useMemo((): StudySessionResult => {
     const durationMs = (state.endTime ?? state.startTime) - state.startTime;
     const cardResults: CardResult[] = state.activeCards.map((card, i) => ({
-      cardIndex: i,
+      artifactId: card.artifactId,
+      cardIndex: card.cardIndex,
       status: state.cardStatuses[i] ?? CARD_STATUS.PENDING,
       front: card.front,
       back: card.back,

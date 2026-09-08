@@ -35,7 +35,7 @@ export function MissedCardsList({ cards }: MissedCardsListProps) {
       <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
         {missedCards.map((card, i) => (
           <motion.div
-            key={card.cardIndex}
+            key={`${card.artifactId}:${card.cardIndex}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ ...preset.fade, delay: i * preset.stagger }}
