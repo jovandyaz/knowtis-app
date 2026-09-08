@@ -45,6 +45,17 @@ describe('FlashcardRating', () => {
     expect(props.onRateAdvanced).not.toHaveBeenCalled();
   });
 
+  it('gives each simple rating button a 44px touch target', () => {
+    renderRating();
+
+    for (const name of [
+      'ai.artifacts.flashcards.wrong',
+      'ai.artifacts.flashcards.correct',
+    ]) {
+      expect(screen.getByRole('button', { name })).toHaveClass('min-h-11');
+    }
+  });
+
   it('keeps each tone button coloured under the ghost hover rule', () => {
     renderRating();
 

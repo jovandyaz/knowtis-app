@@ -29,7 +29,7 @@ const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
   easy: 1,
 };
 
-const RATE_BUTTON_LAYOUT = 'rounded-full px-6 py-2.5';
+const RATE_BUTTON_LAYOUT = 'min-h-11 rounded-full px-6 py-2.5';
 
 export function FlashcardRating({
   isAdvancedMode,
