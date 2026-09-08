@@ -153,6 +153,16 @@ export {
 } from './components/StatTile';
 export { RatingBar, type RatingBarProps } from './components/RatingBar';
 export { RATING_ORDER, type RatingKey } from './constants/rating';
+export {
+  AnswerOption,
+  type AnswerOptionProps,
+} from './components/AnswerOption';
+export {
+  ANSWER_OPTION_STATES,
+  type AnswerOptionState,
+  ANSWER_OUTCOMES,
+  type AnswerOutcome,
+} from './constants/answer-option';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
