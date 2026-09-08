@@ -76,12 +76,27 @@ describe('QuizSession', () => {
     );
   });
 
-  it('tracks the question position on a progress bar', () => {
-    render(<QuizSession artifact={artifact} />);
+  it('tracks the answers given on a progress bar, not the question reached', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
 
     const bar = screen.getByRole('progressbar');
+    expect(bar).toHaveAccessibleName(
+      'ai.artifacts.quiz.answeredOf {"answered":0,"total":2}'
+    );
+    expect(bar).toHaveAttribute('aria-valuenow', '0');
+    expect(bar).toHaveAttribute('aria-valuemax', '2');
+
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+
     expect(bar).toHaveAttribute('aria-valuenow', '1');
-    expect(bar).toHaveAttribute('aria-valuemax', '1');
+  });
+
+  it('keeps the question position as the visible caption', () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    expect(
+      screen.getByText('ai.artifacts.quiz.questionOf {"current":1,"total":2}')
+    ).toBeInTheDocument();
   });
 
   it('parks the roving tabindex on the first option before any movement', () => {

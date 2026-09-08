@@ -516,6 +516,7 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf": "{{reviewed}} de {{total}} tarjetas repasadas",
         "showAnswer": "Mostrar respuesta",
         "showFront": "Mostrar frente de la tarjeta",
         "showBack": "Mostrar dorso de la tarjeta",
@@ -558,6 +559,7 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} de {{total}} respondidas",
         "outcomeCorrect": "Correcto — {{letter}}. {{answer}}",
         "outcomeIncorrect": "Incorrecto — la respuesta es {{letter}}. {{answer}}",
         "explanation": "Explicación",

@@ -35,11 +35,15 @@ export function FlashcardHeader({
     current: current + 1,
     total,
   });
+  const reviewed = t('ai.artifacts.flashcards.reviewedOf', {
+    reviewed: reviewedCount,
+    total,
+  });
 
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-3">
-        <ProgressRing value={reviewedCount} max={total} label={position}>
+        <ProgressRing value={reviewedCount} max={total} label={reviewed}>
           {reviewedCount}
         </ProgressRing>
 

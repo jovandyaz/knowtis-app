@@ -197,6 +197,11 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     current: currentIndex + 1,
     total: totalQuestions,
   });
+  const answeredCount = currentIndex + (answered ? 1 : 0);
+  const answeredLabel = t('ai.artifacts.quiz.answeredOf', {
+    answered: answeredCount,
+    total: totalQuestions,
+  });
   const outcomeFor = (index: number): AnswerOutcome | undefined => {
     if (!answered) {
       return undefined;
@@ -216,9 +221,9 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
       <p className="text-sm text-(--muted-foreground)">{positionLabel}</p>
 
       <Progress
-        value={currentIndex + 1}
+        value={answeredCount}
         max={totalQuestions}
-        label={positionLabel}
+        label={answeredLabel}
       />
 
       <div className="rounded-lg border border-(--border) bg-(--card) p-6">
