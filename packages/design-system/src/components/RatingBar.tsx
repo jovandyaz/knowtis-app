@@ -8,6 +8,7 @@ import {
   RATING_QUALITY,
   type RatingKey,
 } from '../constants/rating';
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { cn } from '../utils';
 import { Kbd } from './Kbd';
 import { learnToneButton } from './learn-tone-button';
@@ -19,8 +20,10 @@ const RATING_TONE: Record<RatingKey, LearnToneButtonTone> = {
   easy: 'primary',
 };
 
-const RATING_BUTTON_LAYOUT =
-  'flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium';
+const RATING_BUTTON_LAYOUT = cn(
+  TOUCH_TARGET_CLASS,
+  'flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium'
+);
 
 export interface RatingBarProps extends Omit<
   HTMLAttributes<HTMLDivElement>,

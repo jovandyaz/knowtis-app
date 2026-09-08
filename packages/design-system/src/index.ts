@@ -183,5 +183,6 @@ export {
 } from './constants/rating';
 export { DECK_CHIP_TONES, type DeckChipTone } from './constants/deck-chip';
 export { THEMES, type Theme } from './constants/theme';
+export { TOUCH_TARGET_CLASS } from './constants/touch-target';
 
 export { cn } from './utils';
