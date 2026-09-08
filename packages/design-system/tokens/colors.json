@@ -24,13 +24,17 @@
       },
       "red": {
         "50": { "value": "oklch(0.97 0.02 25)", "type": "color" },
+        "300": { "value": "oklch(0.80 0.11 25)", "type": "color" },
         "400": { "value": "oklch(0.65 0.18 25)", "type": "color" },
-        "500": { "value": "oklch(0.55 0.20 25)", "type": "color" }
+        "500": { "value": "oklch(0.55 0.20 25)", "type": "color" },
+        "700": { "value": "oklch(0.44 0.17 25)", "type": "color" }
       },
       "green": {
         "50": { "value": "oklch(0.97 0.02 160)", "type": "color" },
+        "300": { "value": "oklch(0.84 0.13 160)", "type": "color" },
         "400": { "value": "oklch(0.72 0.14 160)", "type": "color" },
-        "500": { "value": "oklch(0.62 0.15 160)", "type": "color" }
+        "500": { "value": "oklch(0.62 0.15 160)", "type": "color" },
+        "700": { "value": "oklch(0.46 0.10 160)", "type": "color" }
       },
       "yellow": {
         "50": { "value": "oklch(0.97 0.02 85)", "type": "color" },
@@ -206,7 +210,7 @@
           "type": "color"
         },
         "bucket-archive": {
-          "value": "{color.primitive.neutral.500}",
+          "value": "{color.primitive.neutral.400}",
           "type": "color"
         },
         "tag-purple": {

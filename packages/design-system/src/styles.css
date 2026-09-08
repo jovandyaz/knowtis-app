@@ -43,13 +43,6 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
-  --color-learn-correct: var(--learn-correct);
-  --color-learn-incorrect: var(--learn-incorrect);
-  --color-learn-new: var(--learn-new);
-  --color-learn-difficulty-easy: var(--learn-difficulty-easy);
-  --color-learn-difficulty-medium: var(--learn-difficulty-medium);
-  --color-learn-difficulty-hard: var(--learn-difficulty-hard);
-
   --ease-standard: var(--motion-easing-standard);
   --ease-enter: var(--motion-easing-enter);
   --ease-exit: var(--motion-easing-exit);
@@ -58,17 +51,29 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --color-bucket-projects: var(--bucket-projects);
-  --color-bucket-areas: var(--bucket-areas);
-  --color-bucket-resources: var(--bucket-resources);
-  --color-bucket-archive: var(--bucket-archive);
-
   --color-tag-purple: var(--tag-purple);
   --color-tag-blue: var(--tag-blue);
   --color-tag-green: var(--tag-green);
   --color-tag-yellow: var(--tag-yellow);
   --color-tag-red: var(--tag-red);
   --color-tag-pink: var(--tag-pink);
+}
+
+/* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */
+@theme inline {
+  --color-learn-correct: var(--learn-correct);
+  --color-learn-incorrect: var(--learn-incorrect);
+  --color-learn-correct-text: var(--learn-correct-text);
+  --color-learn-incorrect-text: var(--learn-incorrect-text);
+  --color-learn-new: var(--learn-new);
+  --color-learn-difficulty-easy: var(--learn-difficulty-easy);
+  --color-learn-difficulty-medium: var(--learn-difficulty-medium);
+  --color-learn-difficulty-hard: var(--learn-difficulty-hard);
+
+  --color-bucket-projects: var(--bucket-projects);
+  --color-bucket-areas: var(--bucket-areas);
+  --color-bucket-resources: var(--bucket-resources);
+  --color-bucket-archive: var(--bucket-archive);
 }
 
 :root {
@@ -90,6 +95,8 @@
   --destructive-foreground: var(--color-semantic-light-destructive-foreground);
   --learn-correct: var(--color-semantic-light-learn-correct);
   --learn-incorrect: var(--color-semantic-light-learn-incorrect);
+  --learn-correct-text: var(--color-semantic-light-learn-correct-text);
+  --learn-incorrect-text: var(--color-semantic-light-learn-incorrect-text);
   --learn-new: var(--color-semantic-light-learn-new);
   --learn-difficulty-easy: var(--color-semantic-light-learn-difficulty-easy);
   --learn-difficulty-medium: var(
@@ -136,6 +143,8 @@
   --destructive-foreground: var(--color-semantic-dark-destructive-foreground);
   --learn-correct: var(--color-semantic-dark-learn-correct);
   --learn-incorrect: var(--color-semantic-dark-learn-incorrect);
+  --learn-correct-text: var(--color-semantic-dark-learn-correct-text);
+  --learn-incorrect-text: var(--color-semantic-dark-learn-incorrect-text);
   --learn-new: var(--color-semantic-dark-learn-new);
   --learn-difficulty-easy: var(--color-semantic-dark-learn-difficulty-easy);
   --learn-difficulty-medium: var(--color-semantic-dark-learn-difficulty-medium);
