@@ -141,7 +141,7 @@ describe('StudyToolsTab', () => {
     expect(listProps.last).toBeUndefined();
   });
 
-  it('rejects illegal prop combinations at compile time', () => {
+  it('rejects illegal prop combinations (asserted by typecheck, not at runtime)', () => {
     const artifactsWithoutReadOnly = (
       // @ts-expect-error - injected artifacts without readOnly must not compile
       <StudyToolsTab noteId="note-1" artifacts={artifacts} />
