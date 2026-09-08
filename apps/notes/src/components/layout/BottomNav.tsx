@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 
 import { BucketNav } from '@/components/organization/BucketNav';
+import { NAV_COUNT } from '@/components/organization/nav-row.styles';
 import { SupertagNav } from '@/components/organization/SupertagNav';
 import { TagTree } from '@/components/organization/TagTree';
 import { ROUTES } from '@/config';
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import {
@@ -14,11 +16,18 @@ import {
   FolderOpen,
   Home,
   LogIn,
+  Repeat,
   Settings,
   UserPlus,
 } from 'lucide-react';
 
-import { cn } from '@knowtis/design-system';
+import { useStudyStats } from '@knowtis/data-access-artifacts';
+import {
+  useFeatureFlag,
+  useFeatureFlags,
+} from '@knowtis/data-access-feature-flags';
+import { cn, Skeleton } from '@knowtis/design-system';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { MobileSheet } from './MobileSheet';
 
@@ -31,9 +40,11 @@ interface BottomNavTab {
     | 'labels.home'
     | 'labels.notes'
     | 'labels.explore'
+    | 'labels.study'
     | 'settings.title';
   to?: string;
   action?: () => void;
+  isLoadingPlaceholder?: boolean;
 }
 
 export function BottomNav() {
@@ -48,6 +59,10 @@ export function BottomNav() {
   const isAnonymous = user?.isAnonymous ?? false;
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
   const [isExploreSheetOpen, setIsExploreSheetOpen] = useState(false);
+  const flags = useFeatureFlags();
+  const isStudyEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
+  const stats = useStudyStats(BROWSER_TIME_ZONE);
+  const dueCount = stats.data?.dueCount ?? 0;
 
   if (
     NOTE_EDITOR_PATTERN.test(currentPath) ||
@@ -62,8 +77,13 @@ export function BottomNav() {
     action: () => setIsExploreSheetOpen(true),
   };
 
+  const studyTab: BottomNavTab = flags.isPending
+    ? { icon: Repeat, labelKey: 'labels.study', isLoadingPlaceholder: true }
+    : { icon: Repeat, labelKey: 'labels.study', to: ROUTES.STUDY };
+
   const tabs: BottomNavTab[] = [
     { icon: Home, labelKey: 'labels.home', to: ROUTES.DASHBOARD },
+    ...(flags.isPending || isStudyEnabled ? [studyTab] : []),
     { icon: FileText, labelKey: 'labels.notes', to: ROUTES.NOTES },
     ...(isAnonymous ? [] : [exploreTab]),
     {
@@ -90,6 +110,19 @@ export function BottomNav() {
       <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-(--border) bg-(--background)/90 backdrop-blur-xl md:hidden pb-[env(safe-area-inset-bottom)]">
         <div className="flex h-16 items-center justify-around">
           {tabs.map((tab) => {
+            if (tab.isLoadingPlaceholder) {
+              return (
+                <div
+                  key={tab.labelKey}
+                  aria-hidden="true"
+                  className="flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] px-2 py-1 rounded-xl"
+                >
+                  <Skeleton className="h-7 w-12 rounded-full" />
+                  <Skeleton className="h-2.5 w-8 rounded" />
+                </div>
+              );
+            }
+
             const active = isActive(tab);
             const Icon = tab.icon;
 
@@ -119,8 +152,11 @@ export function BottomNav() {
                 >
                   <Icon className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-medium leading-none">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium leading-none">
                   {t(tab.labelKey)}
+                  {tab.labelKey === 'labels.study' && dueCount > 0 && (
+                    <span className={NAV_COUNT}>{dueCount}</span>
+                  )}
                 </span>
               </button>
             );

@@ -2,7 +2,18 @@ import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { NAV_COUNT, NAV_LABEL } from '@/components/organization/nav-row.styles';
 import type { NavigationLink } from '@/config/navigation.config';
+import { ROUTES } from '@/config/routes.config';
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
+
+import { useStudyStats } from '@knowtis/data-access-artifacts';
+import {
+  useFeatureFlag,
+  useFeatureFlags,
+} from '@knowtis/data-access-feature-flags';
+import { Skeleton } from '@knowtis/design-system';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 /**
  * Navigation links props interface
@@ -16,10 +27,33 @@ interface NavigationLinksProps {
 
 export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
   const { t } = useTranslation('common');
+  const flags = useFeatureFlags();
+  const isStudyEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
+  const stats = useStudyStats(BROWSER_TIME_ZONE);
+  const dueCount = stats.data?.dueCount ?? 0;
 
   return (
     <nav className="py-2 px-4 flex flex-col gap-1">
       {links.map((link) => {
+        const isStudyLink = link.to === ROUTES.STUDY;
+
+        if (isStudyLink && flags.isPending) {
+          return (
+            <div
+              key={link.labelKey}
+              aria-hidden="true"
+              className="flex items-center gap-3 rounded-lg px-3 py-2"
+            >
+              <Skeleton className="h-4 w-4 shrink-0 rounded" />
+              <Skeleton className="h-4 w-16 rounded" />
+            </div>
+          );
+        }
+
+        if (isStudyLink && !isStudyEnabled) {
+          return null;
+        }
+
         if (link.disabled) {
           return (
             <span
@@ -49,7 +83,10 @@ export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
             {...link.linkProps}
           >
             <link.icon className="h-4 w-4" />
-            {t(link.labelKey)}
+            <span className={NAV_LABEL}>{t(link.labelKey)}</span>
+            {isStudyLink && dueCount > 0 && (
+              <span className={NAV_COUNT}>{dueCount}</span>
+            )}
           </Link>
         );
       })}

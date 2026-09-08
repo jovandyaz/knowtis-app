@@ -4,10 +4,31 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { StudyStats } from '@knowtis/shared-types';
+
 import { BottomNav } from './BottomNav';
 
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
 const currentPathname = vi.fn<() => string>();
+let flagsQuery: { isPending: boolean; isError: boolean };
+let isStudyEnabled: boolean;
+let statsQuery: {
+  data: StudyStats | undefined;
+  isPending: boolean;
+  isError: boolean;
+};
+
+function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
+  return {
+    dueCount: 0,
+    newCount: 0,
+    reviewedToday: 0,
+    currentStreak: 0,
+    totalCardsStudied: 0,
+    nextDueAt: null,
+    ...overrides,
+  };
+}
 
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: currentPathname() }),
@@ -20,6 +41,13 @@ vi.mock('@jovandyaz/auth-react', () => ({
 vi.mock('@/stores/settings.store', () => ({
   useSettingsStore: (selector: (state: { open: () => void }) => unknown) =>
     selector({ open: vi.fn() }),
+}));
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlags: () => flagsQuery,
+  useFeatureFlag: () => isStudyEnabled,
+}));
+vi.mock('@knowtis/data-access-artifacts', () => ({
+  useStudyStats: () => statsQuery,
 }));
 vi.mock('@/components/organization/BucketNav', () => ({
   BucketNav: ({ onNavigate }: { onNavigate?: () => void }) => (
@@ -57,6 +85,9 @@ describe('BottomNav', () => {
   beforeEach(() => {
     authUser.mockReturnValue({ isAnonymous: false });
     currentPathname.mockReturnValue('/notes');
+    flagsQuery = { isPending: false, isError: false };
+    isStudyEnabled = false;
+    statsQuery = { data: makeStats(), isPending: false, isError: false };
   });
 
   it('renders nothing on the study session route', () => {
@@ -148,5 +179,66 @@ describe('BottomNav', () => {
     expect(
       screen.getByRole('button', { name: 'nav.signIn' })
     ).toBeInTheDocument();
+  });
+
+  it('offers the review tab when the flag is on', () => {
+    isStudyEnabled = true;
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.study/ })
+    ).toBeInTheDocument();
+  });
+
+  it('hides the review tab when the flag is off', () => {
+    isStudyEnabled = false;
+
+    render(<BottomNav />);
+
+    expect(
+      screen.queryByRole('button', { name: /labels\.study/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the review tab hidden (not flickering) while the flag is still loading', () => {
+    flagsQuery = { isPending: true, isError: false };
+    isStudyEnabled = false;
+
+    render(<BottomNav />);
+
+    expect(
+      screen.queryByRole('button', { name: /labels\.study/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the due count on the review tab', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 5 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.study/ })
+    ).toHaveTextContent('5');
+  });
+
+  it('renders no badge on the review tab when nothing is due', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 0 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.study/ }).textContent
+    ).toBe('labels.study');
   });
 });
