@@ -558,6 +558,8 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "outcomeCorrect": "Correcto — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrecto — la respuesta es {{letter}}. {{answer}}",
         "explanation": "Explicación",
         "next": "Siguiente",
         "finish": "Finalizar",
