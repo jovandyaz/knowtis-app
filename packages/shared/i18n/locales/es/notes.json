@@ -677,7 +677,7 @@
       "title": "Todo repasado",
       "nextReview": "Tu próxima tarjeta llega {{when}}",
       "nothingScheduled": "Aún no tienes tarjetas programadas",
-      "cta": "Generar flashcards desde una nota"
+      "cta": "Ir a mis notas"
     },
     "summary": {
       "streak_one": "Racha de {{count}} día",

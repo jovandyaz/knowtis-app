@@ -15,16 +15,27 @@ import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { StudySessionPage } from './StudySessionPage';
 
-const { reviewCard, navigateTo, studySessionSpy, studyStatsSpy, refetchQueue } =
-  vi.hoisted(() => ({
-    reviewCard: vi.fn(),
-    navigateTo: vi.fn(),
-    studySessionSpy: vi.fn(),
-    studyStatsSpy: vi.fn(),
-    refetchQueue: vi.fn(),
-  }));
+const {
+  reviewCard,
+  navigateTo,
+  studySessionSpy,
+  studyStatsSpy,
+  refetchQueue,
+  refetchFlags,
+} = vi.hoisted(() => ({
+  reviewCard: vi.fn(),
+  navigateTo: vi.fn(),
+  studySessionSpy: vi.fn(),
+  studyStatsSpy: vi.fn(),
+  refetchQueue: vi.fn(),
+  refetchFlags: vi.fn(),
+}));
 
-let flagsQuery: { isPending: boolean };
+let flagsQuery: {
+  isPending: boolean;
+  isError: boolean;
+  refetch: typeof refetchFlags;
+};
 let isQueueEnabled: boolean;
 let sessionQuery: {
   data: StudySession | undefined;
@@ -149,7 +160,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   reviewCard.mockResolvedValue({ ok: true });
   refetchQueue.mockResolvedValue({ isError: false, data: undefined });
-  flagsQuery = { isPending: false };
+  flagsQuery = { isPending: false, isError: false, refetch: refetchFlags };
   isQueueEnabled = true;
   queueOf([CARD_ONE, CARD_TWO]);
 });
@@ -284,7 +295,7 @@ describe('StudySessionPage', () => {
   });
 
   it('waits for the flags before sending anyone away', () => {
-    flagsQuery = { isPending: true };
+    flagsQuery = { ...flagsQuery, isPending: true };
     isQueueEnabled = false;
 
     render(<StudySessionPage />);
@@ -360,6 +371,46 @@ describe('StudySessionPage', () => {
       screen.queryByText('ai.artifacts.flashcards.summary.gotIt')
     ).toBeNull();
     expect(screen.queryByRole('button', { name: /Frente uno/ })).toBeNull();
+  });
+
+  it('says so instead of redirecting when the flags cannot be read', async () => {
+    flagsQuery = { isPending: false, isError: true, refetch: refetchFlags };
+    isQueueEnabled = false;
+
+    render(<StudySessionPage />);
+
+    expect(navigateTo).not.toHaveBeenCalled();
+    expect(screen.getByText('errors.errorLoadingData')).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /buttons\.tryAgain/ })
+    );
+    expect(refetchFlags).toHaveBeenCalledTimes(1);
+  });
+
+  it('picks up a queue that only arrives on a later fetch', () => {
+    queueOf([], makeStats({ dueCount: 0 }));
+    const { rerender } = render(<StudySessionPage />);
+
+    expect(screen.getByText('study.caughtUp.title')).toBeInTheDocument();
+
+    queueOf([CARD_ONE, CARD_TWO]);
+    rerender(<StudySessionPage />);
+
+    expect(front(/Frente uno/)).toBeInTheDocument();
+    expect(screen.queryByText('study.caughtUp.title')).toBeNull();
+  });
+
+  it('never puts the back of a card on its front', async () => {
+    render(<StudySessionPage />);
+
+    expect(front(/Frente uno/)).toHaveAccessibleName('Frente uno');
+
+    await userEvent.click(front(/Frente uno/));
+
+    expect(
+      screen.getByRole('button', { name: 'Dorso uno' })
+    ).toBeInTheDocument();
   });
 
   it('keeps playing when the refetched queue comes back empty', async () => {

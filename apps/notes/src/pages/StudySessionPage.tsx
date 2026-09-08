@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, Navigate } from '@tanstack/react-router';
@@ -97,11 +91,15 @@ export function resolveStudyKeyAction(
 }
 
 export function StudySessionPage() {
-  const { isPending: areFlagsPending } = useFeatureFlags();
+  const flags = useFeatureFlags();
   const isQueueEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
 
-  if (areFlagsPending) {
+  if (flags.isPending) {
     return <StudyCardSkeleton />;
+  }
+
+  if (flags.isError) {
+    return <StudyLoadError onRetry={() => void flags.refetch()} />;
   }
 
   if (!isQueueEnabled) {
@@ -117,7 +115,6 @@ interface QueueRestart {
 }
 
 function StudyQueue() {
-  const { t: tCommon } = useTranslation('common');
   useStudyFocusMode();
   const queue = useStudySession(BROWSER_TIME_ZONE);
   const stats = useStudyStats(BROWSER_TIME_ZONE);
@@ -125,66 +122,64 @@ function StudyQueue() {
     attempt: 0,
     failed: false,
   });
+  const [hasSession, setHasSession] = useState(false);
   const { refetch } = queue;
 
   const restartQueue = useCallback(async () => {
     const result = await refetch();
-    setRestart((previous) =>
-      result.isError
-        ? { ...previous, failed: true }
-        : { attempt: previous.attempt + 1, failed: false }
-    );
+    if (result.isError) {
+      setRestart((previous) => ({ ...previous, failed: true }));
+      return;
+    }
+    setHasSession(false);
+    setRestart((previous) => ({
+      attempt: previous.attempt + 1,
+      failed: false,
+    }));
   }, [refetch]);
 
   const servedCards = queue.data?.cards;
   const currentStats = stats.data ?? queue.data?.stats;
 
+  if (!hasSession && servedCards !== undefined && servedCards.length > 0) {
+    setHasSession(true);
+  }
+
   if (restart.failed || (servedCards === undefined && queue.isError)) {
-    return (
-      <div className={PAGE_LAYOUT}>
-        <ErrorState
-          title={tCommon('errors.errorLoadingData')}
-          message={tCommon('errors.tryAgainLater')}
-          retryLabel={tCommon('buttons.tryAgain')}
-          onRetry={() => void restartQueue()}
-        />
-      </div>
-    );
+    return <StudyLoadError onRetry={() => void restartQueue()} />;
   }
 
   if (servedCards === undefined) {
     return <StudyCardSkeleton />;
   }
 
+  if (!hasSession) {
+    return <StudyCaughtUp nextDueAt={currentStats?.nextDueAt ?? null} />;
+  }
+
   return (
     <StudyQueueSession
       key={restart.attempt}
-      cards={servedCards}
+      initialCards={servedCards}
       streak={currentStats?.currentStreak ?? 0}
       onNewQueue={() => void restartQueue()}
-      emptyState={<StudyCaughtUp nextDueAt={currentStats?.nextDueAt ?? null} />}
     />
   );
 }
 
 interface StudyQueueSessionProps {
-  cards: StudyCard[];
+  initialCards: StudyCard[];
   streak: number;
   onNewQueue: () => void;
-  emptyState: ReactNode;
 }
 
-// The card list is read once, at mount: every review invalidates the artifact
-// queries and the server reorders what is left, so only a remount (a new `key`)
-// may pick up a fresh queue.
 function StudyQueueSession({
-  cards,
+  initialCards,
   streak,
   onNewQueue,
-  emptyState,
 }: StudyQueueSessionProps) {
   const { t } = useTranslation('notes');
-  const session = useFlashcardSession(cards);
+  const session = useFlashcardSession(initialCards);
   const containerRef = useRef<HTMLDivElement>(null);
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
@@ -303,10 +298,6 @@ function StudyQueueSession({
     container.addEventListener('keydown', handleKeyDown);
     return () => container.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
-
-  if (session.totalCards === 0) {
-    return emptyState;
-  }
 
   if (session.isComplete) {
     return (
@@ -427,6 +418,25 @@ function StudyCaughtUp({ nextDueAt }: StudyCaughtUpProps) {
           {t('study.caughtUp.cta')}
         </Link>
       </EmptyState>
+    </div>
+  );
+}
+
+interface StudyLoadErrorProps {
+  onRetry: () => void;
+}
+
+function StudyLoadError({ onRetry }: StudyLoadErrorProps) {
+  const { t: tCommon } = useTranslation('common');
+
+  return (
+    <div className={PAGE_LAYOUT}>
+      <ErrorState
+        title={tCommon('errors.errorLoadingData')}
+        message={tCommon('errors.tryAgainLater')}
+        retryLabel={tCommon('buttons.tryAgain')}
+        onRetry={onRetry}
+      />
     </div>
   );
 }

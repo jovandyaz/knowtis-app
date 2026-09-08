@@ -677,11 +677,11 @@
       "title": "All caught up",
       "nextReview": "Your next card arrives {{when}}",
       "nothingScheduled": "You have no cards scheduled yet",
-      "cta": "Generate flashcards from a note"
+      "cta": "Go to my notes"
     },
     "summary": {
-      "streak_one": "{{count}} day streak",
-      "streak_other": "{{count}} day streak",
+      "streak_one": "Streak of {{count}} day",
+      "streak_other": "Streak of {{count}} days",
       "backHome": "Back to home"
     }
   }
