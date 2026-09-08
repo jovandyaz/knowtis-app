@@ -34,7 +34,9 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
-  const { data: progress } = useFlashcardProgress(artifact.id);
+  const { data: progress } = useFlashcardProgress(
+    readOnly ? undefined : artifact.id
+  );
   const cards = useMemo(
     () => deckStudyCards(artifact, progress),
     [artifact, progress]

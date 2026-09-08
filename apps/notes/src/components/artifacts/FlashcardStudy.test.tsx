@@ -9,6 +9,9 @@ import type { FlashcardArtifact } from '@knowtis/shared-types';
 import { FlashcardStudy } from './FlashcardStudy';
 
 const reviewCard = vi.fn().mockResolvedValue({ ok: true });
+const { useFlashcardProgressMock } = vi.hoisted(() => ({
+  useFlashcardProgressMock: vi.fn(() => ({ data: undefined })),
+}));
 
 /** The jsdom matchMedia stub answers every non-width query, so the suite runs reduced by default. */
 const reducedMotion = { value: true };
@@ -22,7 +25,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
   useReviewCard: () => ({ mutateAsync: reviewCard, isPending: false }),
-  useFlashcardProgress: () => ({ data: undefined }),
+  useFlashcardProgress: useFlashcardProgressMock,
 }));
 vi.mock('motion/react', async () => {
   const actual = await vi.importActual<typeof MotionReact>('motion/react');
@@ -62,6 +65,18 @@ describe('FlashcardStudy', () => {
 
   afterEach(() => {
     reducedMotion.value = true;
+  });
+
+  it('does not request flashcard progress for a read-only viewer', () => {
+    renderStudy(true);
+
+    expect(useFlashcardProgressMock).toHaveBeenCalledWith(undefined);
+  });
+
+  it('requests flashcard progress by artifact id when the viewer owns the deck', () => {
+    renderStudy();
+
+    expect(useFlashcardProgressMock).toHaveBeenCalledWith('deck-1');
   });
 
   it('advances a read-only session without recording the review', async () => {
