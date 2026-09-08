@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 
 import { NAVIGATION_LINKS } from '@/config/navigation.config';
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StudyStats } from '@knowtis/shared-types';
 
 import { NavigationLinks } from './NavigationLinks';
+
+const { studyStatsSpy } = vi.hoisted(() => ({ studyStatsSpy: vi.fn() }));
 
 let flagsQuery: { isPending: boolean; isError: boolean };
 let isStudyEnabled: boolean;
@@ -39,7 +42,10 @@ vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: () => isStudyEnabled,
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useStudyStats: () => statsQuery,
+  useStudyStats: (timeZone: string, options?: { enabled?: boolean }) => {
+    studyStatsSpy(timeZone, options);
+    return statsQuery;
+  },
 }));
 
 function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
@@ -55,6 +61,7 @@ function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
 }
 
 beforeEach(() => {
+  studyStatsSpy.mockClear();
   flagsQuery = { isPending: false, isError: false };
   isStudyEnabled = false;
   statsQuery = { data: makeStats(), isPending: false, isError: false };
@@ -92,6 +99,37 @@ describe('NavigationLinks', () => {
       screen.queryByRole('link', { name: /labels\.study/ })
     ).not.toBeInTheDocument();
     expect(screen.getByRole('navigation')).not.toBeEmptyDOMElement();
+  });
+
+  it('asks for no study stats while the flag is off', () => {
+    isStudyEnabled = false;
+
+    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for no study stats until the flags have settled', () => {
+    flagsQuery = { isPending: true, isError: false };
+    isStudyEnabled = true;
+
+    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for the study stats once the flag is on', () => {
+    isStudyEnabled = true;
+
+    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: true,
+    });
   });
 
   it('shows the due count on the review item', () => {

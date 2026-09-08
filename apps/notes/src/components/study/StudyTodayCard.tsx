@@ -3,13 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Link } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
+import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 
 import { useStudyStats } from '@knowtis/data-access-artifacts';
-import {
-  useFeatureFlag,
-  useFeatureFlags,
-} from '@knowtis/data-access-feature-flags';
 import {
   buttonVariants,
   cn,
@@ -17,7 +14,6 @@ import {
   StatTile,
   TOUCH_TARGET_CLASS,
 } from '@knowtis/design-system';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 const CARD_LAYOUT = 'mt-8 flex flex-col gap-4';
@@ -27,15 +23,16 @@ const CTA_CLASS = 'w-full rounded-lg px-4 text-sm font-medium';
 
 export function StudyTodayCard() {
   const { t, i18n } = useTranslation('notes');
-  const flags = useFeatureFlags();
-  const isQueueEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
-  const stats = useStudyStats(BROWSER_TIME_ZONE);
+  const access = useStudyQueueAccess();
+  const stats = useStudyStats(BROWSER_TIME_ZONE, {
+    enabled: access.isEnabled,
+  });
 
-  if (flags.isPending) {
+  if (access.isPending) {
     return <StudyTodayCardSkeleton />;
   }
 
-  if (flags.isError || !isQueueEnabled) {
+  if (access.isError || !access.isEnabled) {
     return null;
   }
 

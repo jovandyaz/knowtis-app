@@ -9,20 +9,13 @@ import { FlashcardSummary } from '@/components/artifacts/flashcard/FlashcardSumm
 import { useFlashcardSession } from '@/components/artifacts/flashcard/use-flashcard-session';
 import { ROUTES } from '@/config';
 import { useStudyFocusMode } from '@/hooks/useStudyFocusMode';
+import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { CheckCircle2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import {
-  useReviewCard,
-  useStudySession,
-  useStudyStats,
-} from '@knowtis/data-access-artifacts';
-import {
-  useFeatureFlag,
-  useFeatureFlags,
-} from '@knowtis/data-access-feature-flags';
+import { useReviewCard, useStudySession } from '@knowtis/data-access-artifacts';
 import {
   buttonVariants,
   cn,
@@ -39,7 +32,6 @@ import {
 } from '@knowtis/design-system';
 import {
   CARD_STATUS,
-  FEATURE_FLAG_KEYS,
   SM2_QUALITY,
   STUDY_CARD_KIND,
   type RestartFilter,
@@ -101,18 +93,17 @@ export function resolveStudyKeyAction(
 }
 
 export function StudySessionPage() {
-  const flags = useFeatureFlags();
-  const isQueueEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
+  const access = useStudyQueueAccess();
 
-  if (flags.isPending) {
+  if (access.isPending) {
     return <StudyCardSkeleton />;
   }
 
-  if (flags.isError) {
-    return <StudyLoadError onRetry={() => void flags.refetch()} />;
+  if (access.isError) {
+    return <StudyLoadError onRetry={() => void access.refetch()} />;
   }
 
-  if (!isQueueEnabled) {
+  if (!access.isEnabled) {
     return <Navigate to={ROUTES.DASHBOARD} replace />;
   }
 
@@ -122,7 +113,6 @@ export function StudySessionPage() {
 function StudyQueue() {
   useStudyFocusMode();
   const queue = useStudySession(BROWSER_TIME_ZONE);
-  const stats = useStudyStats(BROWSER_TIME_ZONE);
   const [attempt, setAttempt] = useState(0);
   const [hasSession, setHasSession] = useState(false);
   const { refetch } = queue;
@@ -138,7 +128,7 @@ function StudyQueue() {
   }, [refetch]);
 
   const servedCards = queue.data?.cards;
-  const currentStats = stats.data ?? queue.data?.stats;
+  const currentStats = queue.data?.stats;
 
   // Latched rather than read live: the session hook's lazy initialiser only
   // stops a mounted session from reseeding, so a refetch that empties the queue

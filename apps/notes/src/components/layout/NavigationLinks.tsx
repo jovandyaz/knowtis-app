@@ -5,15 +5,11 @@ import { Link } from '@tanstack/react-router';
 import { NAV_COUNT, NAV_LABEL } from '@/components/organization/nav-row.styles';
 import type { NavigationLink } from '@/config/navigation.config';
 import { ROUTES } from '@/config/routes.config';
+import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 
 import { useStudyStats } from '@knowtis/data-access-artifacts';
-import {
-  useFeatureFlag,
-  useFeatureFlags,
-} from '@knowtis/data-access-feature-flags';
 import { Skeleton } from '@knowtis/design-system';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 /**
  * Navigation links props interface
@@ -27,9 +23,8 @@ interface NavigationLinksProps {
 
 export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
   const { t } = useTranslation('common');
-  const flags = useFeatureFlags();
-  const isStudyEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
-  const stats = useStudyStats(BROWSER_TIME_ZONE);
+  const { isEnabled: isStudyEnabled, isPending } = useStudyQueueAccess();
+  const stats = useStudyStats(BROWSER_TIME_ZONE, { enabled: isStudyEnabled });
   const dueCount = stats.data?.dueCount ?? 0;
 
   return (
@@ -37,7 +32,7 @@ export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
       {links.map((link) => {
         const isStudyLink = link.to === ROUTES.STUDY;
 
-        if (isStudyLink && flags.isPending) {
+        if (isStudyLink && isPending) {
           return (
             <div
               key={link.labelKey}

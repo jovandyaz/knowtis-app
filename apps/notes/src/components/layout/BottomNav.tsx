@@ -8,6 +8,7 @@ import { NAV_COUNT } from '@/components/organization/nav-row.styles';
 import { SupertagNav } from '@/components/organization/SupertagNav';
 import { TagTree } from '@/components/organization/TagTree';
 import { ROUTES } from '@/config';
+import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
@@ -22,12 +23,7 @@ import {
 } from 'lucide-react';
 
 import { useStudyStats } from '@knowtis/data-access-artifacts';
-import {
-  useFeatureFlag,
-  useFeatureFlags,
-} from '@knowtis/data-access-feature-flags';
 import { cn, Skeleton } from '@knowtis/design-system';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { MobileSheet } from './MobileSheet';
 
@@ -59,9 +55,9 @@ export function BottomNav() {
   const isAnonymous = user?.isAnonymous ?? false;
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
   const [isExploreSheetOpen, setIsExploreSheetOpen] = useState(false);
-  const flags = useFeatureFlags();
-  const isStudyEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.STUDY_REVIEW_QUEUE);
-  const stats = useStudyStats(BROWSER_TIME_ZONE);
+  const { isEnabled: isStudyEnabled, isPending: areFlagsPending } =
+    useStudyQueueAccess();
+  const stats = useStudyStats(BROWSER_TIME_ZONE, { enabled: isStudyEnabled });
   const dueCount = stats.data?.dueCount ?? 0;
 
   if (
@@ -77,13 +73,13 @@ export function BottomNav() {
     action: () => setIsExploreSheetOpen(true),
   };
 
-  const studyTab: BottomNavTab = flags.isPending
+  const studyTab: BottomNavTab = areFlagsPending
     ? { icon: Repeat, labelKey: 'labels.study', isLoadingPlaceholder: true }
     : { icon: Repeat, labelKey: 'labels.study', to: ROUTES.STUDY };
 
   const tabs: BottomNavTab[] = [
     { icon: Home, labelKey: 'labels.home', to: ROUTES.DASHBOARD },
-    ...(flags.isPending || isStudyEnabled ? [studyTab] : []),
+    ...(areFlagsPending || isStudyEnabled ? [studyTab] : []),
     { icon: FileText, labelKey: 'labels.notes', to: ROUTES.NOTES },
     ...(isAnonymous ? [] : [exploreTab]),
     {

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,8 @@ import type { StudyStats } from '@knowtis/shared-types';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { StudyTodayCard } from './StudyTodayCard';
+
+const { studyStatsSpy } = vi.hoisted(() => ({ studyStatsSpy: vi.fn() }));
 
 let flagsQuery: { isPending: boolean; isError: boolean };
 let isQueueEnabled: boolean;
@@ -33,7 +36,10 @@ vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: () => isQueueEnabled,
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useStudyStats: () => statsQuery,
+  useStudyStats: (timeZone: string, options?: { enabled?: boolean }) => {
+    studyStatsSpy(timeZone, options);
+    return statsQuery;
+  },
 }));
 
 function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
@@ -51,6 +57,7 @@ function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
 const tile = (name: string) => screen.getByRole('group', { name });
 
 beforeEach(() => {
+  studyStatsSpy.mockClear();
   flagsQuery = { isPending: false, isError: false };
   isQueueEnabled = true;
   statsQuery = { data: makeStats(), isPending: false, isError: false };
@@ -133,6 +140,37 @@ describe('StudyTodayCard', () => {
     const { container } = render(<StudyTodayCard />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('asks for no study stats while the flag is off', () => {
+    isQueueEnabled = false;
+
+    render(<StudyTodayCard />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for no study stats until the flags have settled', () => {
+    flagsQuery = { isPending: true, isError: false };
+    isQueueEnabled = true;
+
+    render(<StudyTodayCard />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for the study stats once the flag is on', () => {
+    isQueueEnabled = true;
+
+    render(<StudyTodayCard />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: true,
+    });
   });
 
   it('links the CTA to the study route', () => {

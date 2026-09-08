@@ -144,11 +144,19 @@ export function useStudySession(timeZone: string) {
   });
 }
 
-export function useStudyStats(timeZone: string) {
+export interface UseStudyStatsOptions {
+  enabled?: boolean;
+}
+
+export function useStudyStats(
+  timeZone: string,
+  { enabled = true }: UseStudyStatsOptions = {}
+) {
   return useQuery({
     queryKey: artifactsQueryKeys.studyStats(timeZone),
     queryFn: () => artifactsApi.getStudyStats(timeZone),
     staleTime: STALE_TIME.DEFAULT,
+    enabled,
   });
 }
 

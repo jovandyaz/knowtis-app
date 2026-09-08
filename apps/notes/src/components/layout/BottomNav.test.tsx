@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react';
 
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StudyStats } from '@knowtis/shared-types';
 
 import { BottomNav } from './BottomNav';
+
+const { studyStatsSpy } = vi.hoisted(() => ({ studyStatsSpy: vi.fn() }));
 
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
 const currentPathname = vi.fn<() => string>();
@@ -47,7 +50,10 @@ vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: () => isStudyEnabled,
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useStudyStats: () => statsQuery,
+  useStudyStats: (timeZone: string, options?: { enabled?: boolean }) => {
+    studyStatsSpy(timeZone, options);
+    return statsQuery;
+  },
 }));
 vi.mock('@/components/organization/BucketNav', () => ({
   BucketNav: ({ onNavigate }: { onNavigate?: () => void }) => (
@@ -83,6 +89,7 @@ vi.mock('motion/react', () => ({
 
 describe('BottomNav', () => {
   beforeEach(() => {
+    studyStatsSpy.mockClear();
     authUser.mockReturnValue({ isAnonymous: false });
     currentPathname.mockReturnValue('/notes');
     flagsQuery = { isPending: false, isError: false };
@@ -210,6 +217,37 @@ describe('BottomNav', () => {
     expect(
       screen.queryByRole('button', { name: /labels\.study/ })
     ).not.toBeInTheDocument();
+  });
+
+  it('asks for no study stats while the flag is off', () => {
+    isStudyEnabled = false;
+
+    render(<BottomNav />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for no study stats until the flags have settled', () => {
+    flagsQuery = { isPending: true, isError: false };
+    isStudyEnabled = true;
+
+    render(<BottomNav />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for the study stats once the flag is on', () => {
+    isStudyEnabled = true;
+
+    render(<BottomNav />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: true,
+    });
   });
 
   it('shows the due count on the review tab', () => {

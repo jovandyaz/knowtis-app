@@ -119,7 +119,6 @@ function queueOf(cards: StudyCard[], stats = makeStats()) {
     isError: false,
     refetch: refetchQueue,
   };
-  statsQuery = { data: stats };
 }
 
 function serveOnRefetch(cards: StudyCard[], stats = makeStats()) {
@@ -142,6 +141,8 @@ const CARD_TWO = makeCard({
   back: 'Dorso dos',
   deckTitle: 'Historia',
 });
+
+const STALE_STREAK = 99;
 
 const front = (text: RegExp) => screen.getByRole('button', { name: text });
 const advancedToggle = () =>
@@ -167,6 +168,7 @@ beforeEach(() => {
   refetchQueue.mockResolvedValue({ isError: false, data: undefined });
   flagsQuery = { isPending: false, isError: false, refetch: refetchFlags };
   isQueueEnabled = true;
+  statsQuery = { data: makeStats({ currentStreak: STALE_STREAK }) };
   queueOf([CARD_ONE, CARD_TWO]);
 });
 
@@ -178,7 +180,6 @@ describe('StudySessionPage', () => {
       isError: false,
       refetch: refetchQueue,
     };
-    statsQuery = { data: undefined };
 
     render(<StudySessionPage />);
 
@@ -212,7 +213,6 @@ describe('StudySessionPage', () => {
       isError: true,
       refetch: refetchQueue,
     };
-    statsQuery = { data: undefined };
 
     render(<StudySessionPage />);
 
@@ -297,6 +297,18 @@ describe('StudySessionPage', () => {
     expect(
       screen.getByRole('link', { name: 'study.summary.backHome' })
     ).toHaveAttribute('href', '/dashboard');
+  });
+
+  it('takes the streak from the queue payload instead of asking for it again', async () => {
+    queueOf([CARD_ONE], makeStats({ currentStreak: 7 }));
+    render(<StudySessionPage />);
+
+    await rateCurrentCorrect(/Frente uno/);
+
+    expect(screen.getByText(/study\.summary\.streak/)).toHaveTextContent(
+      '"count":7'
+    );
+    expect(studyStatsSpy).not.toHaveBeenCalled();
   });
 
   it('keeps the session away from a visitor whose flag is off', () => {
