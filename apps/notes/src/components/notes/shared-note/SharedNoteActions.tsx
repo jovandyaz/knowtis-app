@@ -59,7 +59,7 @@ function SharedNoteAction({
   );
 }
 
-interface SharedNoteActionsProps {
+export interface SharedNoteActionsProps {
   variant: SharedNoteActionsVariant;
   canEdit: boolean;
   isEditing: boolean;

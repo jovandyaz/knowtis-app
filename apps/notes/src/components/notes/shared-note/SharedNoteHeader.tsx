@@ -1,21 +1,19 @@
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { format } from 'date-fns';
 
-import { SharedNoteActions } from './SharedNoteActions';
+import {
+  SharedNoteActions,
+  type SharedNoteActionsProps,
+} from './SharedNoteActions';
 import { SharedNoteBadge } from './SharedNoteBadge';
 
-interface SharedNoteHeaderProps {
+interface SharedNoteHeaderProps extends Omit<
+  SharedNoteActionsProps,
+  'variant' | 'canEdit'
+> {
   canEdit: boolean;
-  isEditing: boolean;
-  isPreparingEdit: boolean;
-  copied: boolean;
-  offerSignIn: boolean;
-  sharedPath: string;
   ownerName: string;
   updatedAt: Date;
-  onCopyLink: () => void;
-  onStartEditing: () => void;
-  onStopEditing: () => void;
 }
 
 export function SharedNoteHeader({
