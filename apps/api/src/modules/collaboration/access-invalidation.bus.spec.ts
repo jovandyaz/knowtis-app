@@ -130,6 +130,13 @@ describe('access invalidation operational failures', () => {
       JSON.stringify({ version: 1, noteId })
     );
     expect(invalidate).toHaveBeenCalledWith(noteId);
+    invalidate.mockClear();
+    subscriber.emit(
+      'message',
+      'unrelated-channel',
+      JSON.stringify({ version: 1, noteId })
+    );
+    expect(invalidate).not.toHaveBeenCalled();
     expect(JSON.stringify(warnings.mock.calls)).not.toContain(canary);
     bus.onModuleDestroy();
     subscriber.emit('error', new Error(canary));

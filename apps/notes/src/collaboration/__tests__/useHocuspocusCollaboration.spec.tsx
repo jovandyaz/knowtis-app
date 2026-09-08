@@ -21,6 +21,7 @@ const mockProviderInstances: Array<{
     status: string;
     connect: ReturnType<typeof vi.fn>;
     disconnect: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
   };
 }> = [];
 
@@ -30,23 +31,30 @@ vi.mock('@hocuspocus/provider', () => ({
     Connected: 'connected',
     Disconnected: 'disconnected',
   },
+  HocuspocusProviderWebsocket: vi.fn(function () {
+    return {
+      status: 'connected',
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      destroy: vi.fn(),
+    };
+  }),
   HocuspocusProvider: vi.fn(function (
     this: unknown,
     options: Record<string, unknown>
   ) {
+    const websocketProvider = options[
+      'websocketProvider'
+    ] as (typeof mockProviderInstances)[number]['websocketProvider'];
     const instance = {
       options,
-      configuration: { websocketProvider: undefined as unknown },
+      configuration: { websocketProvider },
+      attach: vi.fn(),
       destroy: vi.fn(),
       sendToken: vi.fn().mockResolvedValue(undefined),
       startSync: vi.fn(),
-      websocketProvider: {
-        status: 'connected',
-        connect: vi.fn().mockResolvedValue(undefined),
-        disconnect: vi.fn(),
-      },
+      websocketProvider,
     };
-    instance.configuration.websocketProvider = instance.websocketProvider;
     mockProviderInstances.push(instance);
     return instance;
   }),

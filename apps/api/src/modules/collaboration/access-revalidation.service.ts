@@ -9,6 +9,7 @@ import {
 import {
   COLLABORATION_CLOSE_REASON,
   HANDSHAKE_FAILURE,
+  type CollaborationCloseReason,
 } from '@knowtis/shared-types';
 
 import {
@@ -43,7 +44,7 @@ export interface AccessLease {
   generalAccess: AccessSnapshot['generalAccess'];
   expiresAt: number;
   closed: boolean;
-  closeReason: string;
+  closeReason: CollaborationCloseReason;
   connection?: SessionConnection;
 }
 interface PendingLease {
@@ -160,9 +161,10 @@ export class AccessRevalidationService
   register(lease: AccessLease, connection: SessionConnection): void {
     lease.connection = connection;
     connection.onClose(() => this.close(lease, lease.closeReason));
-    if (lease.closed || performance.now() >= lease.expiresAt) {
-      this.close(lease, lease.closeReason);
+    if (lease.closed) {
       connection.close({ code: 4403, reason: lease.closeReason });
+    } else if (performance.now() >= lease.expiresAt) {
+      this.close(lease, lease.closeReason);
     }
   }
 
@@ -370,7 +372,7 @@ export class AccessRevalidationService
     }
   }
 
-  private close(lease: AccessLease, reason: string): void {
+  private close(lease: AccessLease, reason: CollaborationCloseReason): void {
     if (lease.closed) {
       return;
     }
@@ -388,7 +390,7 @@ export class AccessRevalidationService
     }
   }
 
-  private closeNote(state: NoteState, reason: string): void {
+  private closeNote(state: NoteState, reason: CollaborationCloseReason): void {
     for (const lease of state.sessions) {
       this.close(lease, reason);
     }
