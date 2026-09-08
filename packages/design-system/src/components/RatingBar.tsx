@@ -2,22 +2,15 @@ import { forwardRef, type HTMLAttributes } from 'react';
 
 import { cva } from 'class-variance-authority';
 
-import {
-  SM2_QUALITY,
-  type PredictedIntervals,
-  type SM2Quality,
-} from '@knowtis/shared-types';
+import type { PredictedIntervals, SM2Quality } from '@knowtis/shared-types';
 
-import { RATING_ORDER, type RatingKey } from '../constants/rating';
+import {
+  RATING_ORDER,
+  RATING_QUALITY,
+  type RatingKey,
+} from '../constants/rating';
 import { cn } from '../utils';
 import { Kbd } from './Kbd';
-
-const RATING_QUALITY: Record<RatingKey, SM2Quality> = {
-  again: SM2_QUALITY.AGAIN,
-  hard: SM2_QUALITY.HARD,
-  good: SM2_QUALITY.GOOD,
-  easy: SM2_QUALITY.EASY,
-};
 
 const ratingButton = cva(
   'flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium ring-1 transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',

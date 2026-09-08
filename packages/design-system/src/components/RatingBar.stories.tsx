@@ -1,7 +1,10 @@
+import { useEffect } from 'react';
+
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 
-import { RatingBar } from './RatingBar';
+import { RATING_ORDER, RATING_QUALITY } from '../constants/rating';
+import { RatingBar, type RatingBarProps } from './RatingBar';
 
 const meta: Meta<typeof RatingBar> = {
   title: 'Components/RatingBar',
@@ -25,8 +28,35 @@ export const FirstReview: Story = {
   args: { intervals: { again: 1, hard: 1, good: 1, easy: 1 } },
 };
 
+function WithKeysDemo({ onRate, ...rest }: RatingBarProps) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+      const ratingKey = RATING_ORDER[Number(event.key) - 1];
+      if (!ratingKey) {
+        return;
+      }
+      onRate(RATING_QUALITY[ratingKey]);
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onRate]);
+
+  return <RatingBar {...rest} onRate={onRate} />;
+}
+
 export const WithKeys: Story = {
   args: { showKeys: true },
+  render: (args) => <WithKeysDemo {...args} />,
 };
 
 export const WithoutIntervals: Story = {

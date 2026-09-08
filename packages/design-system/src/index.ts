@@ -173,7 +173,11 @@ export {
   ANSWER_OUTCOMES,
   type AnswerOutcome,
 } from './constants/answer-option';
-export { RATING_ORDER, type RatingKey } from './constants/rating';
+export {
+  RATING_ORDER,
+  RATING_QUALITY,
+  type RatingKey,
+} from './constants/rating';
 export { DECK_CHIP_TONES, type DeckChipTone } from './constants/deck-chip';
 export { THEMES, type Theme } from './constants/theme';
 
