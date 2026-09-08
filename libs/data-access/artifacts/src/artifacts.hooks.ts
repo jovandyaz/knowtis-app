@@ -7,6 +7,8 @@ import type {
   SubmitQuizInput,
 } from '@knowtis/api-client';
 
+const STUDY_SESSION_SEGMENT = 'session';
+
 const STALE_TIME = {
   SHORT: 1000 * 30,
   DEFAULT: 1000 * 60,
@@ -26,12 +28,17 @@ export const artifactsQueryKeys = {
     [...artifactsQueryKeys.all, 'quiz-attempts', id, 'latest'] as const,
   study: () => [...artifactsQueryKeys.all, 'study'] as const,
   studySession: (timeZone: string) =>
-    [...artifactsQueryKeys.study(), 'session', timeZone] as const,
+    [...artifactsQueryKeys.study(), STUDY_SESSION_SEGMENT, timeZone] as const,
   studyStats: (timeZone: string) =>
     [...artifactsQueryKeys.study(), 'stats', timeZone] as const,
   shared: (token: string) =>
     [...artifactsQueryKeys.all, 'shared', token] as const,
 } as const;
+
+function isStudySessionKey(queryKey: readonly unknown[]): boolean {
+  const sessionPrefix = [...artifactsQueryKeys.study(), STUDY_SESSION_SEGMENT];
+  return sessionPrefix.every((segment, index) => queryKey[index] === segment);
+}
 
 function requireArtifactId(artifactId: string | undefined): string {
   if (!artifactId) {
@@ -101,7 +108,15 @@ export function useReviewCard() {
     mutationFn: ({ artifactId, ...input }: ReviewCardVariables) =>
       artifactsApi.reviewCard(artifactId, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: artifactsQueryKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: artifactsQueryKeys.all,
+        predicate: (query) => !isStudySessionKey(query.queryKey),
+      });
+      queryClient.invalidateQueries({
+        queryKey: artifactsQueryKeys.all,
+        predicate: (query) => isStudySessionKey(query.queryKey),
+        refetchType: 'none',
+      });
     },
   });
 }
