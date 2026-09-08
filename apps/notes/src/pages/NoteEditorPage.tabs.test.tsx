@@ -12,10 +12,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
-const { aiState, artifactsState } = vi.hoisted(() => ({
-  aiState: { aiEnabled: false },
-  artifactsState: { data: [] as { id: string }[] },
-}));
+const { aiState, artifactsState, useArtifacts } = vi.hoisted(() => {
+  const artifactsState = { data: [] as { id: string }[] };
+  return {
+    aiState: { aiEnabled: false },
+    artifactsState,
+    useArtifacts: vi.fn<(noteId?: string) => { data: { id: string }[] }>(
+      () => ({
+        data: artifactsState.data,
+      })
+    ),
+  };
+});
 
 const renderWithClient = (ui: ReactElement) =>
   render(
@@ -64,9 +72,7 @@ vi.mock('@/components/artifacts/StudyToolsTab', () => ({
   StudyToolsTab: () => <div data-testid="study-tools" />,
 }));
 
-vi.mock('@knowtis/data-access-artifacts', () => ({
-  useArtifacts: () => ({ data: artifactsState.data }),
-}));
+vi.mock('@knowtis/data-access-artifacts', () => ({ useArtifacts }));
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => ({
@@ -105,6 +111,7 @@ describe('NoteEditorPage workspace tabs', () => {
     useWorkspaceStore.setState({ activeTab: 'note' });
     aiState.aiEnabled = false;
     artifactsState.data = [];
+    useArtifacts.mockClear();
   });
 
   describe('when AI is disabled', () => {
@@ -120,6 +127,13 @@ describe('NoteEditorPage workspace tabs', () => {
       expect(noteWrapper).not.toHaveAttribute('role');
       expect(noteWrapper).not.toHaveAttribute('aria-labelledby');
       expect(noteWrapper).not.toHaveAttribute('tabindex');
+    });
+
+    it('leaves the note artifacts unfetched', () => {
+      renderWithClient(<NoteEditorPage />);
+
+      expect(useArtifacts).toHaveBeenCalledWith(undefined);
+      expect(useArtifacts).not.toHaveBeenCalledWith('note-1');
     });
   });
 

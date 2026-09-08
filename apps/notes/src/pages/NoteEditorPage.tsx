@@ -184,7 +184,7 @@ function NoteEditor({
   });
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
-  const { data: noteArtifacts } = useArtifacts(noteId);
+  const { data: noteArtifacts } = useArtifacts(aiEnabled ? noteId : undefined);
 
   useWorkspaceTabReset(noteId);
 
