@@ -33,3 +33,4 @@ export {
   useSharingAuthority,
 } from './people.hooks';
 export { PersonInputSchema, type PersonInput } from './people.schemas';
+export { useRotateShareLink } from './rotation.hooks';

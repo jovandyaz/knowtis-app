@@ -1,5 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import {
+  and,
+  DrizzleQueryError,
+  eq,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -17,13 +25,37 @@ import {
   type UpdateNoteContentData,
   type UpdateNoteData,
 } from '../../domain';
+import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
 import { mapToNoteEntity } from './note-entity.mapper';
+
+function rotationFailureCategory(error: unknown) {
+  const cause = error instanceof DrizzleQueryError ? error.cause : error;
+  const code =
+    typeof cause === 'object' && cause !== null && 'code' in cause
+      ? cause.code
+      : undefined;
+  switch (code) {
+    case '23505':
+      return 'unique_violation';
+    case '08006':
+    case 'ECONNREFUSED':
+      return 'connection_failure';
+    case '55P03':
+      return 'transaction_conflict';
+    default:
+      return 'unclassified';
+  }
+}
+
+type NoteUpdatePayload = Omit<Partial<NewNote>, 'shareToken'> & {
+  shareToken?: string | null | SQL | undefined;
+};
 
 function buildUpdatePayload(
   data: UpdateNoteData,
   extras: Partial<NewNote> = {}
-): Partial<NewNote> {
-  const payload: Partial<NewNote> = { updatedAt: new Date(), ...extras };
+): NoteUpdatePayload {
+  const payload: NoteUpdatePayload = { updatedAt: new Date(), ...extras };
 
   if (data.title !== undefined) {
     payload.title = data.title;
@@ -38,7 +70,7 @@ function buildUpdatePayload(
     payload.generalAccessPermission = data.generalAccessPermission;
   }
   if (data.shareToken !== undefined) {
-    payload.shareToken = data.shareToken;
+    payload.shareToken = sql`coalesce(${notes.shareToken}, ${data.shareToken})`;
   }
   if (data.editorsCanShare !== undefined) {
     payload.editorsCanShare = data.editorsCanShare;
@@ -97,6 +129,35 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
         error instanceof Error ? error.stack : error
       );
       return err(NoteErrors.persistenceError('create', data.id ?? 'unknown'));
+    }
+  }
+
+  async rotateShareToken(
+    data: RotateShareTokenData
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    try {
+      const [record] = await this.db
+        .update(notes)
+        .set({ shareToken: data.newToken, updatedAt: new Date() })
+        .where(
+          and(
+            eq(notes.id, data.noteId),
+            eq(notes.ownerId, data.ownerId),
+            eq(notes.shareToken, data.expectedToken),
+            isNull(notes.deletedAt)
+          )
+        )
+        .returning();
+      return record
+        ? ok(mapToNoteEntity(record))
+        : err(NoteErrors.shareLinkConflict());
+    } catch (error) {
+      this.logger.error({
+        operation: 'rotateShareToken',
+        noteId: data.noteId,
+        failureCategory: rotationFailureCategory(error),
+      });
+      return err(NoteErrors.persistenceError('rotateShareToken', data.noteId));
     }
   }
 

@@ -70,6 +70,7 @@ describe('UpdateNoteHandler', () => {
       countAccessibleByUser: vi.fn(),
       countAccessibleByBucket: vi.fn(),
       countAccessibleBySupertag: vi.fn(),
+      rotateShareToken: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),

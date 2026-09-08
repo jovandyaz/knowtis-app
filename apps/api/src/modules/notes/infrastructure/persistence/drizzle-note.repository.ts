@@ -28,6 +28,7 @@ import type {
   UpdateNoteData,
   UpsertPermissionData,
 } from '../../domain';
+import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 import { DrizzleNoteWriteRepository } from './drizzle-note-write.repository';
 import { DrizzlePermissionRepository } from './drizzle-permission.repository';
@@ -132,6 +133,12 @@ export class DrizzleNoteRepository implements NoteRepository {
     yjsState: Buffer
   ): Promise<Result<NoteEntity, NoteDomainError>> {
     return this.writeRepo.createWithYjsState(data, yjsState);
+  }
+
+  rotateShareToken(
+    data: RotateShareTokenData
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.writeRepo.rotateShareToken(data);
   }
 
   update(

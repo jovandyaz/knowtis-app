@@ -101,6 +101,10 @@ export const notesApi = {
     return httpClient.post<Note>(`/notes/${id}/restore`, {});
   },
 
+  async rotateShareLink(noteId: string): Promise<Note> {
+    return httpClient.post<Note>(`/notes/${noteId}/share-link/rotate`);
+  },
+
   async upsertPerson(
     noteId: string,
     input: ShareNoteInput

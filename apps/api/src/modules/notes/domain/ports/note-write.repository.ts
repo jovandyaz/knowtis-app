@@ -35,7 +35,17 @@ export type UpdateNoteContentData = UpdateNoteData & {
   readonly content: string;
 };
 
+export interface RotateShareTokenData {
+  readonly noteId: string;
+  readonly ownerId: string;
+  readonly expectedToken: string;
+  readonly newToken: string;
+}
+
 export interface NoteWriteRepository {
+  rotateShareToken(
+    data: RotateShareTokenData
+  ): Promise<Result<NoteEntity, NoteDomainError>>;
   create(data: CreateNoteData): Promise<Result<NoteEntity, NoteDomainError>>;
   createWithYjsState(
     data: CreateNoteData,

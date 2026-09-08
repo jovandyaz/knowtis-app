@@ -693,5 +693,19 @@
       "study": "Estudio"
     },
     "tabsLabel": "Espacio de la nota"
+  },
+  "sharing": {
+    "rotation": {
+      "action": "Cambiar enlace para compartir",
+      "title": "¿Cambiar este enlace?",
+      "description": "El enlace actual dejará de funcionar. Las personas agregadas directamente conservan sus permisos. Las sesiones abiertas se actualizarán en unos segundos; el contenido ya descargado no se puede recuperar.",
+      "cancel": "Cancelar",
+      "confirm": "Cambiar enlace",
+      "close": "Cerrar",
+      "saved": "Enlace cambiado. Las sesiones abiertas se actualizarán en unos segundos.",
+      "uncertain": "No pudimos confirmar si cambió el enlace. Comprueba el enlace actual antes de volver a intentarlo.",
+      "conflict": "El enlace cambió en otra sesión o todavía no se ha creado. Comprueba el enlace actual antes de volver a intentarlo.",
+      "failed": "No se pudo cambiar el enlace. Comprueba tu acceso antes de volver a intentarlo."
+    }
   }
 }
