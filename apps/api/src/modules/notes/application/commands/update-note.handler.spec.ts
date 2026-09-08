@@ -108,6 +108,28 @@ describe('UpdateNoteHandler', () => {
     );
   });
 
+  it('notifies a persisted link change before a later tag write fails', async () => {
+    vi.mocked(mockRepository.findById).mockResolvedValue(mockNote);
+    vi.mocked(mockRepository.update).mockResolvedValue(
+      ok({ ...mockNote, generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK })
+    );
+    vi.mocked(mockTagRepository.replaceNoteTags).mockRejectedValue(
+      new Error('tags failed')
+    );
+    await expect(
+      handler.execute({
+        noteId,
+        userId: OWNER_ID,
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        tags: ['tag'],
+      })
+    ).rejects.toThrow('tags failed');
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'note.access-changed',
+      expect.objectContaining({ noteId })
+    );
+  });
+
   it('should allow owner to update all fields and emit event', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'update').mockResolvedValue(

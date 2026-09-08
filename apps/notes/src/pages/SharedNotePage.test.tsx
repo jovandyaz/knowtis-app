@@ -280,7 +280,7 @@ describe('SharedNotePage editing as a visitor', () => {
     expect(screen.queryByTestId('collaborative-editor')).toBeNull();
   });
 
-  it('drops back to reading — not to the login page — when the server denies the edit', async () => {
+  it('keeps collaboration mounted and notifies when the server denies editing', async () => {
     ensureGuestSession.mockResolvedValue(true);
     render(<SharedNotePage />, { wrapper });
 
@@ -288,9 +288,7 @@ describe('SharedNotePage editing as a visitor', () => {
     await waitFor(() => expect(denyEdit).toBeDefined());
     act(() => denyEdit?.());
 
-    await waitFor(() =>
-      expect(screen.getByTestId('read-only-editor')).toBeInTheDocument()
-    );
+    expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
     expect(toastError).toHaveBeenCalledWith('shared.editDenied');
   });
 });

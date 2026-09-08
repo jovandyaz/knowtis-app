@@ -79,3 +79,10 @@ export const HANDSHAKE_FAILURE = {
 
 export type HandshakeFailureReason =
   (typeof HANDSHAKE_FAILURE)[keyof typeof HANDSHAKE_FAILURE];
+
+/** Document CLOSE carries a reason (the provider synthesizes code 1000). */
+export const COLLABORATION_CLOSE_REASON = {
+  ACCESS_CHANGED: 'Note access changed',
+  ACCESS_UNAVAILABLE: 'Note access unavailable',
+  TOKEN_EXPIRED: 'Token expired',
+} as const;

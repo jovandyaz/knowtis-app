@@ -28,6 +28,7 @@ export {
 
 export {
   HANDSHAKE_FAILURE,
+  COLLABORATION_CLOSE_REASON,
   type HandshakeFailureReason,
   type CollaborationUser,
   type JoinRoomPayload,

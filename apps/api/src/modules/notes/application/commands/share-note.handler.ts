@@ -24,6 +24,7 @@ import {
 import { NoteSharedEvent } from '../../domain/events/note-shared.event';
 import { NOTE_REPOSITORY, type NoteRepository } from '../../domain/ports';
 import { authorizePeople } from '../authorize-people';
+import { emitAccessChanged } from '../emit-access-changed';
 
 export interface ShareNoteInput extends PersonInput {
   readonly noteId: string;
@@ -79,6 +80,7 @@ export class ShareNoteHandler {
     if (result.isErr()) {
       return err(result.error);
     }
+    emitAccessChanged(this.eventEmitter, input.noteId);
     this.eventEmitter.emit(
       NoteSharedEvent.EVENT_NAME,
       new NoteSharedEvent(input.userId, 'collaborator', input.permission)

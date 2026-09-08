@@ -31,12 +31,14 @@ import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION } from '@knowtis/shared-types';
 
 const HTTP_NOT_FOUND = 404;
+const TERMINAL_ACCESS_STATUSES = new Set([401, 403, HTTP_NOT_FOUND]);
 
 export function SharedNotePage() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const { token } = useParams({ from: '/s/$token' });
-  const { data, isLoading, isError, error, refetch } = useNoteByToken(token);
+  const { data, isLoading, isError, isFetching, error, refetch } =
+    useNoteByToken(token);
   const user = useAuthUser();
   const isAuthLoading = useAuthLoading();
   const { data: artifacts } = useSharedNoteArtifacts(token);
@@ -73,7 +75,6 @@ export function SharedNotePage() {
   }, [actorType, isResolved, permission, token]);
 
   const handleEditDenied = useCallback(() => {
-    setIsEditing(false);
     toast.error(t('shared.editDenied'));
   }, [t]);
 
@@ -106,7 +107,11 @@ export function SharedNotePage() {
     );
   }
 
-  if (isError) {
+  const isTerminalAccessError =
+    ApiClientError.isApiClientError(error) &&
+    TERMINAL_ACCESS_STATUSES.has(error.status);
+
+  if (isError && (!data || isTerminalAccessError)) {
     const isNotFound =
       ApiClientError.isApiClientError(error) && error.status === HTTP_NOT_FOUND;
 
@@ -256,7 +261,7 @@ export function SharedNotePage() {
                 </TooltipTrigger>
                 <TooltipContent>{tCommon('buttons.copyLink')}</TooltipContent>
               </Tooltip>
-              {canEdit && (
+              {(canEdit || isEditing) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -306,6 +311,23 @@ export function SharedNotePage() {
               )}
             </div>
           </div>
+
+          {isError && (
+            <div
+              role="alert"
+              className="mx-4 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm md:mx-8"
+            >
+              <span>{t('shared.failedToLoadShared')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isFetching}
+                onClick={() => void refetch()}
+              >
+                {tCommon('buttons.tryAgain')}
+              </Button>
+            </div>
+          )}
 
           <main className="flex-1 min-h-0 overflow-y-auto p-4 md:px-8 md:pt-3 md:pb-8">
             <div className="mx-auto max-w-4xl">

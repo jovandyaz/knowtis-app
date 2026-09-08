@@ -1,10 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 
-import {
-  DATABASE_CONNECTION,
-  type Database,
-} from '../../../../database/database.module';
+import type { Database } from '../../../../database/database.module';
 import {
   notePermissions,
   notes,
@@ -12,10 +9,13 @@ import {
 import type { AccessSnapshot } from '../../domain/access-policy';
 import type { AccessSnapshotRepository } from '../../domain/ports/access-snapshot.repository';
 import { shareTokenFingerprint } from '../../domain/share-token-fingerprint';
+import { ACCESS_DATABASE_CONNECTION } from './access-database';
 
 @Injectable()
 export class DrizzleAccessSnapshotRepository implements AccessSnapshotRepository {
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
+  constructor(
+    @Inject(ACCESS_DATABASE_CONNECTION) private readonly db: Database
+  ) {}
   async findAccessSnapshot(noteId: string): Promise<AccessSnapshot | null> {
     const rows = await this.db
       .select({
