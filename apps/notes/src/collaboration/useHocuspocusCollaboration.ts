@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import {
   HocuspocusProvider,
+  HocuspocusProviderWebsocket,
   WebSocketStatus,
   type onAuthenticatedParameters,
   type onStatusParameters,
@@ -14,7 +15,10 @@ import {
   deriveWsBaseUrl,
   type RefreshOutcome,
 } from '@knowtis/api-client';
-import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
+import {
+  COLLABORATION_CLOSE_REASON,
+  HANDSHAKE_FAILURE,
+} from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import { getCollaborationToken } from './token-provider';
@@ -43,6 +47,7 @@ interface UseHocuspocusCollaborationOptions {
   enabled?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
+  onAccessChanged?: (() => void) | undefined;
   /** Must resolve `refreshed` only after the new token is synchronously
    *  observable via `getCollaborationToken()`'s storage. Only `rejected` ends
    *  the session; `unavailable` leaves the retry to the next reconnect. */
@@ -93,6 +98,7 @@ export function useHocuspocusCollaboration({
   enabled = true,
   shareToken,
   onEditDenied,
+  onAccessChanged,
   onAuthRefresh,
   onSessionExpired,
 }: UseHocuspocusCollaborationOptions): UseHocuspocusCollaborationReturn {
@@ -100,6 +106,10 @@ export function useHocuspocusCollaboration({
   const [isSynced, setIsSynced] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const onEditDeniedRef = useRef(onEditDenied);
+  const onAccessChangedRef = useRef(onAccessChanged);
+  useEffect(() => {
+    onAccessChangedRef.current = onAccessChanged;
+  }, [onAccessChanged]);
   const onAuthRefreshRef = useRef(onAuthRefresh);
   const onSessionExpiredRef = useRef(onSessionExpired);
 
@@ -122,86 +132,188 @@ export function useHocuspocusCollaboration({
 
     const url = buildUrl(serverUrl, shareToken);
 
-    // Short-circuits provider callbacks that fire after `provider.destroy()`.
     let disposed = false;
-    // Per-provider so a fresh connection resets the retry budget.
+    let halted = false;
+    let pendingRecovery = false;
+    let recoveryAttempts = 0;
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
     const authPolicy = createTokenRefreshPolicy();
 
-    const provider = new HocuspocusProvider({
+    const pauseEditing = () => {
+      setReadOnly(true);
+      setIsSynced(false);
+    };
+    const clearRecovery = () => {
+      clearTimeout(recoveryTimer);
+      recoveryTimer = undefined;
+      pendingRecovery = false;
+    };
+    const scheduleRecovery = (delayMs = 0) => {
+      if (disposed || halted || pendingRecovery || recoveryTimer) {
+        return;
+      }
+      if (recoveryAttempts >= 3) {
+        halted = true;
+        setStatus('disconnected');
+        provider.configuration.websocketProvider.disconnect();
+        return;
+      }
+      recoveryTimer = setTimeout(() => {
+        recoveryTimer = undefined;
+        if (disposed || halted) {
+          return;
+        }
+        pendingRecovery = true;
+        recoveryAttempts++;
+        setStatus('connecting');
+        recoveryTimer = setTimeout(() => {
+          clearRecovery();
+          scheduleRecovery(500 * 2 ** recoveryAttempts);
+        }, 2000);
+        const transport = provider.configuration.websocketProvider;
+        const recovery =
+          transport.status === WebSocketStatus.Connected
+            ? provider.sendToken()
+            : transport.connect();
+        void recovery.catch(() => {
+          clearRecovery();
+          scheduleRecovery(500 * 2 ** recoveryAttempts);
+        });
+      }, delayMs);
+    };
+    const recoverCredentials = () => {
+      void authPolicy.recover({
+        refresh: () =>
+          onAuthRefreshRef.current?.() ?? Promise.resolve('rejected'),
+        onRefreshed: () => scheduleRecovery(),
+        onUnavailable: () => scheduleRecovery(1000),
+        onExhausted: () => {
+          if (disposed || halted) {
+            return;
+          }
+          halted = true;
+          clearRecovery();
+          provider.destroy();
+          transport.destroy();
+          onSessionExpiredRef.current?.();
+        },
+        onError: () =>
+          logger.warn('Collaboration credential refresh unavailable', {
+            context: 'useHocuspocusCollaboration',
+          }),
+      });
+    };
+
+    // One retry owner: stop raw-socket reconnects before Hocuspocus schedules
+    // its own close timer. Document CLOSE messages still reuse a healthy socket.
+    const transport = new HocuspocusProviderWebsocket({
       url,
+      autoConnect: false,
+      maxAttempts: 1,
+      onClose: () => transport.disconnect(),
+    });
+    const provider = new HocuspocusProvider({
+      websocketProvider: transport,
       name: noteId,
       document: yDoc,
       awareness,
       token: getCollaborationToken,
       onStatus: ({ status: wsStatus }: onStatusParameters) => {
-        if (disposed) {
+        if (disposed || halted) {
           return;
         }
-        setStatus(mapStatus(wsStatus));
+        if (wsStatus !== WebSocketStatus.Connected) {
+          pauseEditing();
+        }
+        setStatus(
+          wsStatus === WebSocketStatus.Connected
+            ? 'connecting'
+            : mapStatus(wsStatus)
+        );
+      },
+      onClose: ({ event }) => {
+        if (disposed || halted) {
+          return;
+        }
+        pauseEditing();
+        if (
+          event.reason === COLLABORATION_CLOSE_REASON.TOKEN_EXPIRED ||
+          event.code === 4401
+        ) {
+          setStatus('authenticationFailed');
+          recoverCredentials();
+        } else if (
+          event.reason === COLLABORATION_CLOSE_REASON.ACCESS_CHANGED ||
+          event.reason === COLLABORATION_CLOSE_REASON.ACCESS_UNAVAILABLE ||
+          event.code === 4403
+        ) {
+          setStatus('connecting');
+          onAccessChangedRef.current?.();
+          scheduleRecovery(
+            event.reason === COLLABORATION_CLOSE_REASON.ACCESS_UNAVAILABLE
+              ? 500
+              : 0
+          );
+        } else if (transport.status !== WebSocketStatus.Connected) {
+          scheduleRecovery(500);
+        }
       },
       onAuthenticated: ({ scope }: onAuthenticatedParameters) => {
-        if (disposed) {
+        if (disposed || halted) {
           return;
         }
+        const recovering = pendingRecovery;
         const isReadOnly = scope === 'readonly';
         setReadOnly(isReadOnly);
         if (isReadOnly) {
           onEditDeniedRef.current?.();
         }
+        if (recovering) {
+          onAccessChangedRef.current?.();
+          provider.startSync();
+        }
       },
       onAuthenticationFailed: ({ reason }) => {
-        if (disposed) {
+        if (disposed || halted) {
           return;
         }
-        logger.warn(`Hocuspocus authentication failed: ${reason}`, {
-          context: 'useHocuspocusCollaboration',
-        });
+        clearRecovery();
+        pauseEditing();
         if (TERMINAL_HANDSHAKE_DENIALS.has(reason)) {
+          halted = true;
           setStatus('accessDenied');
-          provider.destroy();
+          onAccessChangedRef.current?.();
+          provider.configuration.websocketProvider.disconnect();
           return;
         }
         setStatus('authenticationFailed');
-        // The server itself failed; a new token cannot change that answer, so
-        // the reconnect keeps the retry without spending the refresh attempt.
         if (reason === HANDSHAKE_FAILURE.INTERNAL_ERROR) {
+          scheduleRecovery(500 * 2 ** recoveryAttempts);
           return;
         }
-
-        // Credential reasons — and anything unrecognised, which an older server
-        // collapses into 'permission-denied' — get the single refresh attempt.
-        void authPolicy.recover({
-          refresh: () =>
-            onAuthRefreshRef.current?.() ?? Promise.resolve('rejected'),
-          // v4 auto-reconnect re-invokes getToken() on next onOpen, both to pick
-          // up a fresh token and to retry one the server never judged; destroy
-          // would block either.
-          onRefreshed: () => {},
-          onUnavailable: () => {},
-          onExhausted: () => {
-            if (disposed) {
-              return;
-            }
-            provider.destroy();
-            onSessionExpiredRef.current?.();
-          },
-          onError: (error) =>
-            logger.warn(`onAuthRefresh threw: ${String(error)}`, {
-              context: 'useHocuspocusCollaboration',
-            }),
-        });
+        recoverCredentials();
       },
       onSynced: ({ state }) => {
-        if (disposed) {
+        if (disposed || halted) {
           return;
         }
         setIsSynced(state);
+        if (state) {
+          clearRecovery();
+          recoveryAttempts = 0;
+          authPolicy.reset();
+          setStatus('connected');
+        }
       },
     });
+    provider.attach();
+    void transport.connect().catch(() => scheduleRecovery(500));
 
     return () => {
       disposed = true;
+      clearRecovery();
       provider.destroy();
+      transport.destroy();
       setStatus('connecting');
       setIsSynced(false);
       setReadOnly(false);
