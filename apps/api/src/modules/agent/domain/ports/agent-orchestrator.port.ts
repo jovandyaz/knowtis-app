@@ -23,6 +23,7 @@ export interface AgentRunInput {
   /** Effort for the model about to be served; awaited again on every failover so a rescue model is never handed another model's level. */
   readonly effortFor?: (model: string) => Promise<ReasoningEffort | undefined>;
   readonly openrouterProviderOrder?: readonly string[];
+  readonly openrouterIgnoredProviders?: readonly string[];
 }
 
 export interface AgentOrchestrator {

@@ -245,6 +245,7 @@ describe('AiSdkAgentOrchestrator', () => {
         model: 'openrouter:z-ai/glm-5.2',
         effortFor: async () => 'low',
         openrouterProviderOrder: ['fireworks', 'together'],
+        openrouterIgnoredProviders: ['parasail'],
       })
     );
 
@@ -255,6 +256,7 @@ describe('AiSdkAgentOrchestrator', () => {
             reasoning: { effort: 'low' },
             provider: {
               order: ['fireworks', 'together'],
+              ignore: ['parasail'],
               allow_fallbacks: true,
             },
           },
