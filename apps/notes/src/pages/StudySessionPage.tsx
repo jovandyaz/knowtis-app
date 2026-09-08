@@ -111,41 +111,57 @@ export function StudySessionPage() {
   return <StudyQueue />;
 }
 
+interface QueueRestart {
+  attempt: number;
+  failed: boolean;
+}
+
 function StudyQueue() {
   const { t: tCommon } = useTranslation('common');
   useStudyFocusMode();
   const queue = useStudySession(BROWSER_TIME_ZONE);
   const stats = useStudyStats(BROWSER_TIME_ZONE);
-  const [attempt, setAttempt] = useState(0);
+  const [restart, setRestart] = useState<QueueRestart>({
+    attempt: 0,
+    failed: false,
+  });
+  const { refetch } = queue;
 
-  const startNewQueue = useCallback(() => {
-    setAttempt((previous) => previous + 1);
-  }, []);
+  const restartQueue = useCallback(async () => {
+    const result = await refetch();
+    setRestart((previous) =>
+      result.isError
+        ? { ...previous, failed: true }
+        : { attempt: previous.attempt + 1, failed: false }
+    );
+  }, [refetch]);
 
   const servedCards = queue.data?.cards;
   const currentStats = stats.data ?? queue.data?.stats;
 
-  if (servedCards === undefined) {
-    return queue.isError ? (
+  if (restart.failed || (servedCards === undefined && queue.isError)) {
+    return (
       <div className={PAGE_LAYOUT}>
         <ErrorState
           title={tCommon('errors.errorLoadingData')}
           message={tCommon('errors.tryAgainLater')}
           retryLabel={tCommon('buttons.tryAgain')}
-          onRetry={() => void queue.refetch()}
+          onRetry={() => void restartQueue()}
         />
       </div>
-    ) : (
-      <StudyCardSkeleton />
     );
+  }
+
+  if (servedCards === undefined) {
+    return <StudyCardSkeleton />;
   }
 
   return (
     <StudyQueueSession
-      key={attempt}
+      key={restart.attempt}
       cards={servedCards}
       streak={currentStats?.currentStreak ?? 0}
-      onNewQueue={startNewQueue}
+      onNewQueue={() => void restartQueue()}
       emptyState={<StudyCaughtUp nextDueAt={currentStats?.nextDueAt ?? null} />}
     />
   );

@@ -111,6 +111,19 @@ function queueOf(cards: StudyCard[], stats = makeStats()) {
   statsQuery = { data: stats };
 }
 
+function serveOnRefetch(cards: StudyCard[], stats = makeStats()) {
+  refetchQueue.mockImplementation(() => {
+    queueOf(cards, stats);
+    return Promise.resolve({ isError: false, data: sessionQuery.data });
+  });
+}
+
+function failOnRefetch() {
+  refetchQueue.mockImplementation(() =>
+    Promise.resolve({ isError: true, data: undefined })
+  );
+}
+
 const CARD_ONE = makeCard();
 const CARD_TWO = makeCard({
   cardIndex: 1,
@@ -120,6 +133,10 @@ const CARD_TWO = makeCard({
 });
 
 const front = (text: RegExp) => screen.getByRole('button', { name: text });
+const practiseAgain = () =>
+  screen.getByRole('button', {
+    name: 'ai.artifacts.flashcards.summary.practiceAgain',
+  });
 const correctButton = () =>
   screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' });
 
@@ -131,6 +148,7 @@ async function rateCurrentCorrect(text: RegExp) {
 beforeEach(() => {
   vi.clearAllMocks();
   reviewCard.mockResolvedValue({ ok: true });
+  refetchQueue.mockResolvedValue({ isError: false, data: undefined });
   flagsQuery = { isPending: false };
   isQueueEnabled = true;
   queueOf([CARD_ONE, CARD_TWO]);
@@ -296,6 +314,52 @@ describe('StudySessionPage', () => {
       'aria-valuenow',
       '1'
     );
+  });
+
+  it('goes back to the server before practising the queue again', async () => {
+    queueOf([CARD_ONE]);
+    render(<StudySessionPage />);
+    await rateCurrentCorrect(/Frente uno/);
+
+    serveOnRefetch([
+      makeCard({ cardIndex: 5, front: 'Frente cinco', back: 'Dorso cinco' }),
+    ]);
+    await userEvent.click(practiseAgain());
+
+    expect(refetchQueue).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByRole('button', { name: /Frente cinco/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Frente uno/ })).toBeNull();
+  });
+
+  it('lands on all caught up when practising again returns nothing', async () => {
+    queueOf([CARD_ONE]);
+    render(<StudySessionPage />);
+    await rateCurrentCorrect(/Frente uno/);
+
+    serveOnRefetch([], makeStats({ dueCount: 0, nextDueAt: NEXT_DUE_AT }));
+    await userEvent.click(practiseAgain());
+
+    expect(await screen.findByText('study.caughtUp.title')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Frente uno/ })).toBeNull();
+  });
+
+  it('says so when practising again cannot reach the server', async () => {
+    queueOf([CARD_ONE]);
+    render(<StudySessionPage />);
+    await rateCurrentCorrect(/Frente uno/);
+
+    failOnRefetch();
+    await userEvent.click(practiseAgain());
+
+    expect(
+      await screen.findByText('errors.errorLoadingData')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.artifacts.flashcards.summary.gotIt')
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: /Frente uno/ })).toBeNull();
   });
 
   it('keeps playing when the refetched queue comes back empty', async () => {
