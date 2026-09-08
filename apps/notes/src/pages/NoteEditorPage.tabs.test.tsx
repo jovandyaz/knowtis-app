@@ -5,14 +5,25 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   workspacePanelId,
   workspaceTabId,
-} from '@/components/editor/workspace-tab-ids';
+} from '@/components/workspace/workspace-tab-ids';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
-const { aiState } = vi.hoisted(() => ({ aiState: { aiEnabled: false } }));
+const { aiState, artifactsState, useArtifacts } = vi.hoisted(() => {
+  const artifactsState = { data: [] as { id: string }[] };
+  return {
+    aiState: { aiEnabled: false },
+    artifactsState,
+    useArtifacts: vi.fn<(noteId?: string) => { data: { id: string }[] }>(
+      () => ({
+        data: artifactsState.data,
+      })
+    ),
+  };
+});
 
 const renderWithClient = (ui: ReactElement) =>
   render(
@@ -61,9 +72,7 @@ vi.mock('@/components/artifacts/StudyToolsTab', () => ({
   StudyToolsTab: () => <div data-testid="study-tools" />,
 }));
 
-vi.mock('@knowtis/data-access-artifacts', () => ({
-  useArtifacts: () => ({ data: [] }),
-}));
+vi.mock('@knowtis/data-access-artifacts', () => ({ useArtifacts }));
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => ({
@@ -101,6 +110,8 @@ describe('NoteEditorPage workspace tabs', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ activeTab: 'note' });
     aiState.aiEnabled = false;
+    artifactsState.data = [];
+    useArtifacts.mockClear();
   });
 
   describe('when AI is disabled', () => {
@@ -116,6 +127,13 @@ describe('NoteEditorPage workspace tabs', () => {
       expect(noteWrapper).not.toHaveAttribute('role');
       expect(noteWrapper).not.toHaveAttribute('aria-labelledby');
       expect(noteWrapper).not.toHaveAttribute('tabindex');
+    });
+
+    it('leaves the note artifacts unfetched', () => {
+      renderWithClient(<NoteEditorPage />);
+
+      expect(useArtifacts).toHaveBeenCalledWith(undefined);
+      expect(useArtifacts).not.toHaveBeenCalledWith('note-1');
     });
   });
 
@@ -143,6 +161,16 @@ describe('NoteEditorPage workspace tabs', () => {
       );
       expect(notePanel).toHaveAttribute('tabindex', '0');
       expect(estudioPanel).toHaveAttribute('tabindex', '0');
+    });
+
+    it('shows the note artifact count on the study tab', () => {
+      artifactsState.data = [{ id: 'a1' }, { id: 'a2' }];
+
+      renderWithClient(<NoteEditorPage />);
+
+      expect(
+        screen.getByRole('tab', { name: /workspace.tabs.study/ })
+      ).toHaveTextContent('2');
     });
 
     it('keeps the editor mounted and only hides the note panel when switching to Estudio', () => {

@@ -1,36 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link, useParams } from '@tanstack/react-router';
+import { useParams } from '@tanstack/react-router';
 
-import { ensureGuestSession } from '@/auth/setup';
-import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
+import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
-import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
-import { ROUTES, sharedNotePath } from '@/config';
+import { SharedNoteAccessError } from '@/components/notes/shared-note/SharedNoteAccessError';
+import { SharedNoteHeader } from '@/components/notes/shared-note/SharedNoteHeader';
+import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
+import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
+import { sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
+import { useSharedNoteEditing } from '@/hooks/useSharedNoteEditing';
+import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
-import { format } from 'date-fns';
-import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
 import { useNoteByToken } from '@knowtis/data-access-notes';
-import {
-  Badge,
-  Button,
-  ErrorState,
-  LoadingState,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@knowtis/design-system';
+import { Button, LoadingState } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
-import { PERMISSION } from '@knowtis/shared-types';
+import { PERMISSION, type Artifact } from '@knowtis/shared-types';
 
 const HTTP_NOT_FOUND = 404;
+const NO_ARTIFACTS: Artifact[] = [];
 const TERMINAL_ACCESS_STATUSES = new Set([401, 403, HTTP_NOT_FOUND]);
 
 export function SharedNotePage() {
@@ -42,12 +36,18 @@ export function SharedNotePage() {
   const user = useAuthUser();
   const isAuthLoading = useAuthLoading();
   const { data: artifacts } = useSharedNoteArtifacts(token);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPreparingEdit, setIsPreparingEdit] = useState(false);
-  const [latestContent, setLatestContent] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const {
+    isEditing,
+    isPreparingEdit,
+    latestContent,
+    handleStartEditing,
+    handleStopEditing,
+    handleEditDenied,
+    handleUpdate,
+  } = useSharedNoteEditing();
   const { copied, copy: copyLink } = useCopyLink();
-  const hasArtifacts = !!artifacts && artifacts.length > 0;
+  const sharedArtifacts = artifacts ?? NO_ARTIFACTS;
+  const hasArtifacts = sharedArtifacts.length > 0;
   const sharedPath = sharedNotePath(token);
   const capturedTokenRef = useRef<string | null>(null);
   const permission =
@@ -62,6 +62,8 @@ export function SharedNotePage() {
   // A registered visitor gets nothing from the login page but a bounce back here.
   const offerSignIn = !isAuthLoading && isAnonymousVisitor;
 
+  useWorkspaceTabReset(token);
+
   useEffect(() => {
     if (!isResolved || !permission || capturedTokenRef.current === token) {
       return;
@@ -73,31 +75,6 @@ export function SharedNotePage() {
       actor_type: actorType,
     });
   }, [actorType, isResolved, permission, token]);
-
-  const handleEditDenied = useCallback(() => {
-    toast.error(t('shared.editDenied'));
-  }, [t]);
-
-  const handleStartEditing = useCallback(() => {
-    setIsPreparingEdit(true);
-    void ensureGuestSession()
-      .then((ready) => {
-        if (ready) {
-          setIsEditing(true);
-          return;
-        }
-        toast.error(t('shared.editUnavailable'));
-      })
-      .finally(() => setIsPreparingEdit(false));
-  }, [t]);
-
-  const handleUpdate = useCallback((content: string) => {
-    setLatestContent(content);
-  }, []);
-
-  const handleStopEditing = useCallback(() => {
-    setIsEditing(false);
-  }, []);
 
   if (isLoading) {
     return (
@@ -112,43 +89,15 @@ export function SharedNotePage() {
     TERMINAL_ACCESS_STATUSES.has(error.status);
 
   if (isError && (!data || isTerminalAccessError)) {
-    const isNotFound =
-      ApiClientError.isApiClientError(error) && error.status === HTTP_NOT_FOUND;
-
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-        <ErrorState
-          fullHeight={false}
-          title={
-            isNotFound
-              ? t('shared.linkNotFound')
-              : tCommon('errors.somethingWentWrong')
-          }
-          message={
-            isNotFound
-              ? t('shared.linkNotFoundDesc')
-              : t('shared.failedToLoadShared')
-          }
-          {...(isNotFound
-            ? {}
-            : {
-                onRetry: () => refetch(),
-                retryLabel: tCommon('buttons.tryAgain'),
-              })}
-        />
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {offerSignIn ? (
-            <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
-              <Button size="sm">{t('shared.signIn')}</Button>
-            </Link>
-          ) : null}
-          <Link to={ROUTES.DASHBOARD}>
-            <Button variant="outline" size="sm">
-              {t('shared.goToKnowtis')}
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <SharedNoteAccessError
+        isNotFound={
+          ApiClientError.isApiClientError(error) &&
+          error.status === HTTP_NOT_FOUND
+        }
+        offerSignIn={offerSignIn}
+        onRetry={() => void refetch()}
+      />
     );
   }
 
@@ -158,179 +107,48 @@ export function SharedNotePage() {
 
   const canEdit = data.accessLevel === PERMISSION.EDITOR;
   const displayContent = latestContent ?? data.content;
-  const CopyIcon = copied ? Check : Share2;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-(--background)">
-      {/* Mobile header */}
-      <header className="md:hidden shrink-0 border-b border-border/30 bg-(--card)/50 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <KnowtisLogo className="h-5 w-auto text-primary" />
-            <Badge variant={canEdit ? 'default' : 'secondary'}>
-              {canEdit ? (
-                <span className="flex items-center gap-1">
-                  <Pencil className="h-3 w-3" />
-                  {t('shared.editorBadge')}
-                </span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <Eye className="h-3 w-3" />
-                  {t('shared.viewOnlyBadge')}
-                </span>
-              )}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={copyLink}
-              className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer"
-              aria-label={tCommon('buttons.copyLink')}
+      <SharedNoteHeader
+        canEdit={canEdit}
+        isEditing={isEditing}
+        isPreparingEdit={isPreparingEdit}
+        copied={copied}
+        offerSignIn={offerSignIn}
+        sharedPath={sharedPath}
+        ownerName={data.owner.name}
+        updatedAt={data.updatedAt}
+        onCopyLink={copyLink}
+        onStartEditing={handleStartEditing}
+        onStopEditing={handleStopEditing}
+      />
+
+      <div className="flex flex-1 flex-col min-w-0 min-h-0">
+        {isError && (
+          <div
+            role="alert"
+            className="mx-4 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm md:mx-8"
+          >
+            <span>{t('shared.failedToLoadShared')}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isFetching}
+              onClick={() => void refetch()}
             >
-              <CopyIcon className="h-4 w-4" />
-            </button>
-            {canEdit && !isEditing && (
-              <button
-                type="button"
-                onClick={handleStartEditing}
-                disabled={isPreparingEdit}
-                className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer disabled:opacity-50"
-                aria-label={t('shared.editButton')}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            )}
-            {isEditing && (
-              <button
-                type="button"
-                onClick={handleStopEditing}
-                className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer"
-                aria-label={t('shared.viewButton')}
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-            )}
-            {offerSignIn ? (
-              <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
-                <Button variant="outline" size="sm">
-                  {t('shared.signIn')}
-                </Button>
-              </Link>
-            ) : null}
+              {tCommon('buttons.tryAgain')}
+            </Button>
           </div>
-        </div>
-      </header>
+        )}
 
-      {/* Desktop: content column + sidebar side-by-side */}
-      <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0 min-h-0">
-          <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
-            <div className="flex items-center gap-3">
-              <KnowtisLogo className="h-5 w-auto text-primary" />
-              <Badge variant={canEdit ? 'default' : 'secondary'}>
-                {canEdit ? (
-                  <span className="flex items-center gap-1">
-                    <Pencil className="h-3 w-3" />
-                    {t('shared.editorBadge')}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <Eye className="h-3 w-3" />
-                    {t('shared.viewOnlyBadge')}
-                  </span>
-                )}
-              </Badge>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                <span>{data.owner.name}</span>
-                <span>&middot;</span>
-                <span>{format(new Date(data.updatedAt), 'MMM d, yyyy')}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
-                    onClick={copyLink}
-                  >
-                    <CopyIcon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{tCommon('buttons.copyLink')}</TooltipContent>
-              </Tooltip>
-              {(canEdit || isEditing) && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
-                      disabled={isPreparingEdit}
-                      aria-label={
-                        isEditing
-                          ? t('shared.viewButton')
-                          : t('shared.editButton')
-                      }
-                      onClick={
-                        isEditing ? handleStopEditing : handleStartEditing
-                      }
-                    >
-                      {isEditing ? (
-                        <Eye className="h-4 w-4" />
-                      ) : (
-                        <Pencil className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {isEditing
-                      ? t('shared.viewButton')
-                      : t('shared.editButton')}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {offerSignIn ? (
-                <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
-                  <Button variant="outline" size="sm">
-                    {t('shared.signIn')}
-                  </Button>
-                </Link>
-              ) : null}
-              {hasArtifacts && (
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen((prev) => !prev)}
-                  className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
-                  aria-label={t('ai.artifacts.sidebar.openPanel')}
-                >
-                  <PanelLeft className="h-4 w-4 -scale-x-100" />
-                </button>
-              )}
-            </div>
-          </div>
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:px-8 md:pt-3 md:pb-8">
+          <div className="mx-auto max-w-4xl">
+            {hasArtifacts && (
+              <WorkspaceTabBar studyCount={sharedArtifacts.length} />
+            )}
 
-          {isError && (
-            <div
-              role="alert"
-              className="mx-4 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm md:mx-8"
-            >
-              <span>{t('shared.failedToLoadShared')}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isFetching}
-                onClick={() => void refetch()}
-              >
-                {tCommon('buttons.tryAgain')}
-              </Button>
-            </div>
-          )}
-
-          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:px-8 md:pt-3 md:pb-8">
-            <div className="mx-auto max-w-4xl">
+            <WorkspaceTabPanel tab="note" tabbed={hasArtifacts}>
               {isEditing ? (
                 <CollaborativeEditor
                   noteId={data.id}
@@ -343,29 +161,20 @@ export function SharedNotePage() {
               ) : (
                 <ReadOnlyEditor content={displayContent} />
               )}
-            </div>
-          </main>
-        </div>
+            </WorkspaceTabPanel>
 
-        {hasArtifacts && (
-          <SharedArtifactSidebar
-            artifacts={artifacts}
-            open={sidebarOpen}
-            onToggle={() => setSidebarOpen((prev) => !prev)}
-          />
-        )}
+            {hasArtifacts && (
+              <WorkspaceTabPanel tab="estudio" tabbed>
+                <StudyToolsTab
+                  noteId={data.id}
+                  artifacts={sharedArtifacts}
+                  readOnly
+                />
+              </WorkspaceTabPanel>
+            )}
+          </div>
+        </main>
       </div>
-
-      {hasArtifacts && (
-        <button
-          type="button"
-          onClick={() => setSidebarOpen((prev) => !prev)}
-          className="fixed bottom-4 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
-          aria-label={t('ai.artifacts.sidebar.studyTools')}
-        >
-          <Sparkles className="h-5 w-5" />
-        </button>
-      )}
     </div>
   );
 }
