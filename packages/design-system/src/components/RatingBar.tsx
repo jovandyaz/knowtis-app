@@ -1,9 +1,8 @@
 import { forwardRef, type HTMLAttributes } from 'react';
 
-import { cva } from 'class-variance-authority';
-
 import type { PredictedIntervals, SM2Quality } from '@knowtis/shared-types';
 
+import type { LearnToneButtonTone } from '../constants/learn-tone';
 import {
   RATING_ORDER,
   RATING_QUALITY,
@@ -11,21 +10,17 @@ import {
 } from '../constants/rating';
 import { cn } from '../utils';
 import { Kbd } from './Kbd';
+import { learnToneButton } from './learn-tone-button';
 
-const ratingButton = cva(
-  'flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium ring-1 transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
-  {
-    variants: {
-      rating: {
-        again:
-          'bg-learn-incorrect/15 text-learn-incorrect-text ring-learn-incorrect/25 hover:bg-learn-incorrect/25',
-        hard: 'bg-(--muted) text-(--foreground) ring-(--border) hover:bg-(--accent)',
-        good: 'bg-learn-correct/15 text-learn-correct-text ring-learn-correct/25 hover:bg-learn-correct/25',
-        easy: 'bg-(--primary)/15 text-(--primary) ring-(--primary)/25 hover:bg-(--primary)/25',
-      },
-    },
-  }
-);
+const RATING_TONE: Record<RatingKey, LearnToneButtonTone> = {
+  again: 'incorrect',
+  hard: 'muted',
+  good: 'correct',
+  easy: 'primary',
+};
+
+const RATING_BUTTON_LAYOUT =
+  'flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium';
 
 export interface RatingBarProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -89,7 +84,10 @@ const RatingBar = forwardRef<HTMLDivElement, RatingBarProps>(
               aria-label={caption ? `${labels[key]}, ${caption}` : labels[key]}
               aria-keyshortcuts={showKeys ? String(index + 1) : undefined}
               onClick={() => onRate(RATING_QUALITY[key])}
-              className={ratingButton({ rating: key })}
+              className={cn(
+                RATING_BUTTON_LAYOUT,
+                learnToneButton({ tone: RATING_TONE[key] })
+              )}
             >
               <span className="flex items-center gap-1.5">
                 {showKeys ? <Kbd>{index + 1}</Kbd> : null}

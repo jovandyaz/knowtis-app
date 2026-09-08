@@ -22,3 +22,12 @@ export const DONUT_TONES = [
 ] as const satisfies readonly LearnTone[];
 
 export type DonutTone = (typeof DONUT_TONES)[number];
+
+export const TONE_BUTTON_TONES = [
+  'primary',
+  'correct',
+  'incorrect',
+  'muted',
+] as const satisfies readonly LearnTone[];
+
+export type LearnToneButtonTone = (typeof TONE_BUTTON_TONES)[number];
