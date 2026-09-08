@@ -83,6 +83,18 @@ describe('SharedNoteHeader', () => {
     expect(buttonsNamed('shared.viewButton')).toHaveLength(0);
   });
 
+  it('still offers a way out of the editor after a mid-session downgrade', async () => {
+    const onStopEditing = vi.fn();
+    renderHeader({ canEdit: false, isEditing: true, onStopEditing });
+
+    const viewButtons = buttonsNamed('shared.viewButton');
+    expect(viewButtons).toHaveLength(2);
+    expect(buttonsNamed('shared.editButton')).toHaveLength(0);
+
+    await userEvent.click(viewButtons[0]);
+    expect(onStopEditing).toHaveBeenCalledTimes(1);
+  });
+
   it('starts and stops editing through the toggle', async () => {
     const onStartEditing = vi.fn();
     const onStopEditing = vi.fn();

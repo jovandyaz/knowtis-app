@@ -96,7 +96,7 @@ export function SharedNoteActions({
         disabled={false}
         onClick={onCopyLink}
       />
-      {canEdit && (
+      {(canEdit || isEditing) && (
         <SharedNoteAction
           variant={variant}
           label={isEditing ? t('shared.viewButton') : t('shared.editButton')}
