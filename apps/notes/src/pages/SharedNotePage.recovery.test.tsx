@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import { queryClient } from '@/lib/query-client';
+import type { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/react';
@@ -21,6 +22,10 @@ import { SharedNotePage } from './SharedNotePage';
 interface ProviderOptions {
   document: Y.Doc;
   awareness: Awareness;
+  websocketProvider: Pick<
+    HocuspocusProviderWebsocket,
+    'status' | 'connect' | 'disconnect' | 'destroy'
+  >;
   onClose(event: { event: { code: number; reason: string } }): void;
   onAuthenticated(event: { scope: string }): void;
   onSynced(event: { state: boolean }): void;
@@ -40,18 +45,23 @@ vi.mock('@hocuspocus/provider', () => ({
     Connected: 'connected',
     Disconnected: 'disconnected',
   },
+  HocuspocusProviderWebsocket: vi.fn(function () {
+    return {
+      status: 'connected',
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn(),
+      destroy: vi.fn(),
+    };
+  }),
   HocuspocusProvider: vi.fn(function (options: ProviderOptions) {
     const provider = {
       options,
       destroy: vi.fn(() => options.awareness.destroy()),
       sendToken: vi.fn().mockResolvedValue(undefined),
       startSync: vi.fn(),
+      attach: vi.fn(),
       configuration: {
-        websocketProvider: {
-          status: 'connected',
-          connect: vi.fn().mockResolvedValue(undefined),
-          disconnect: vi.fn(),
-        },
+        websocketProvider: options.websocketProvider,
       },
     };
     providers.push(provider);
