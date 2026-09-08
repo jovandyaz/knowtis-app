@@ -9,6 +9,7 @@ import { FlashcardSummary } from '@/components/artifacts/flashcard/FlashcardSumm
 import { useFlashcardSession } from '@/components/artifacts/flashcard/use-flashcard-session';
 import { ROUTES } from '@/config';
 import { useStudyFocusMode } from '@/hooks/useStudyFocusMode';
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { CheckCircle2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -45,6 +46,8 @@ import {
   type StudyCard,
 } from '@knowtis/shared-types';
 import { formatRelativeTime } from '@knowtis/shared-util';
+
+import { studyDurationBucket } from './study-duration-bucket';
 
 const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
@@ -187,6 +190,37 @@ function StudyQueueSession({
   const advancedLabelId = useId();
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
+
+  const hasStartedRef = useRef(false);
+  useEffect(() => {
+    if (hasStartedRef.current) {
+      return;
+    }
+    hasStartedRef.current = true;
+    captureProductEvent('study session started', {
+      source: 'queue',
+      due_count: initialCards.filter(
+        (card) => card.kind === STUDY_CARD_KIND.DUE
+      ).length,
+      new_count: initialCards.filter(
+        (card) => card.kind === STUDY_CARD_KIND.NEW
+      ).length,
+    });
+  }, [initialCards]);
+
+  const hasCompletedRef = useRef(false);
+  useEffect(() => {
+    if (!session.isComplete || hasCompletedRef.current) {
+      return;
+    }
+    hasCompletedRef.current = true;
+    captureProductEvent('study session completed', {
+      source: 'queue',
+      reviewed_count: session.sessionResult.total,
+      correct_count: session.sessionResult.correct,
+      duration_bucket: studyDurationBucket(session.sessionResult.durationMs),
+    });
+  }, [session.isComplete, session.sessionResult]);
 
   const submitReview = useCallback(
     (quality: SM2Quality) => {
