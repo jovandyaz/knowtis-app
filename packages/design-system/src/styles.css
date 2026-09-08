@@ -43,6 +43,24 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
+  --ease-standard: var(--motion-easing-standard);
+  --ease-enter: var(--motion-easing-enter);
+  --ease-exit: var(--motion-easing-exit);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-tag-purple: var(--tag-purple);
+  --color-tag-blue: var(--tag-blue);
+  --color-tag-green: var(--tag-green);
+  --color-tag-yellow: var(--tag-yellow);
+  --color-tag-red: var(--tag-red);
+  --color-tag-pink: var(--tag-pink);
+}
+
+/* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */
+@theme inline {
   --color-learn-correct: var(--learn-correct);
   --color-learn-incorrect: var(--learn-incorrect);
   --color-learn-correct-text: var(--learn-correct-text);
@@ -52,25 +70,10 @@
   --color-learn-difficulty-medium: var(--learn-difficulty-medium);
   --color-learn-difficulty-hard: var(--learn-difficulty-hard);
 
-  --ease-standard: var(--motion-easing-standard);
-  --ease-enter: var(--motion-easing-enter);
-  --ease-exit: var(--motion-easing-exit);
-
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-
   --color-bucket-projects: var(--bucket-projects);
   --color-bucket-areas: var(--bucket-areas);
   --color-bucket-resources: var(--bucket-resources);
   --color-bucket-archive: var(--bucket-archive);
-
-  --color-tag-purple: var(--tag-purple);
-  --color-tag-blue: var(--tag-blue);
-  --color-tag-green: var(--tag-green);
-  --color-tag-yellow: var(--tag-yellow);
-  --color-tag-red: var(--tag-red);
-  --color-tag-pink: var(--tag-pink);
 }
 
 :root {
