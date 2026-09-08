@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import {
   HocuspocusProvider,
+  HocuspocusProviderWebsocket,
   WebSocketStatus,
   type onAuthenticatedParameters,
   type onStatusParameters,
@@ -193,6 +194,7 @@ export function useHocuspocusCollaboration({
           halted = true;
           clearRecovery();
           provider.destroy();
+          transport.destroy();
           onSessionExpiredRef.current?.();
         },
         onError: () =>
@@ -202,8 +204,16 @@ export function useHocuspocusCollaboration({
       });
     };
 
-    const provider = new HocuspocusProvider({
+    // One retry owner: stop raw-socket reconnects before Hocuspocus schedules
+    // its own close timer. Document CLOSE messages still reuse a healthy socket.
+    const transport = new HocuspocusProviderWebsocket({
       url,
+      autoConnect: false,
+      maxAttempts: 1,
+      onClose: () => transport.disconnect(),
+    });
+    const provider = new HocuspocusProvider({
+      websocketProvider: transport,
       name: noteId,
       document: yDoc,
       awareness,
@@ -244,6 +254,8 @@ export function useHocuspocusCollaboration({
               ? 500
               : 0
           );
+        } else if (transport.status !== WebSocketStatus.Connected) {
+          scheduleRecovery(500);
         }
       },
       onAuthenticated: ({ scope }: onAuthenticatedParameters) => {
@@ -294,11 +306,14 @@ export function useHocuspocusCollaboration({
         }
       },
     });
+    provider.attach();
+    void transport.connect().catch(() => scheduleRecovery(500));
 
     return () => {
       disposed = true;
       clearRecovery();
       provider.destroy();
+      transport.destroy();
       setStatus('connecting');
       setIsSynced(false);
       setReadOnly(false);

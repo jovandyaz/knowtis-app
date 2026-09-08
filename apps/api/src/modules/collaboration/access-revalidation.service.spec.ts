@@ -1,7 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
+import {
+  COLLABORATION_CLOSE_REASON,
+  HANDSHAKE_FAILURE,
+} from '@knowtis/shared-types';
 
 import type { AccessSnapshot } from '../notes/domain/access-policy';
 import { AccessRevalidationService } from './access-revalidation.service';
@@ -53,6 +56,10 @@ describe('active access leases', () => {
       service.acquire('note', guest),
       service.acquire('note', owner),
     ]);
+    const editorConnection = { close: vi.fn(), onClose: vi.fn() };
+    const ownerConnection = { close: vi.fn(), onClose: vi.fn() };
+    service.register(editor, editorConnection);
+    service.register(own, ownerConnection);
     snapshot = {
       ...initial,
       directPermissions: [{ userId: 'guest', permission: 'viewer' }],
@@ -60,7 +67,12 @@ describe('active access leases', () => {
     await service.invalidate('note');
     await vi.advanceTimersByTimeAsync(1);
     expect(editor.closed).toBe(true);
+    expect(editorConnection.close).toHaveBeenCalledExactlyOnceWith({
+      code: 4403,
+      reason: COLLABORATION_CLOSE_REASON.ACCESS_CHANGED,
+    });
     expect(own.closed).toBe(false);
+    expect(ownerConnection.close).not.toHaveBeenCalled();
     expect((await service.acquire('note', guest)).effectiveAccess).toBe(
       'viewer'
     );
@@ -129,6 +141,59 @@ describe('active access leases', () => {
     await vi.advanceTimersByTimeAsync(2100);
     expect(lease.closed).toBe(true);
     expect(service.diagnostics.activeNotes).toBe(0);
+  });
+
+  it('closes a connection registered after revocation with the original reason', async () => {
+    const lease = await service.acquire('note', guest);
+    snapshot = { ...initial, directPermissions: [] };
+    await service.invalidate('note');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(lease.closed).toBe(true);
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+
+    service.register(lease, connection);
+
+    expect(connection.close).toHaveBeenCalledExactlyOnceWith({
+      code: 4403,
+      reason: COLLABORATION_CLOSE_REASON.ACCESS_CHANGED,
+    });
+    expect(service.diagnostics.activeNotes).toBe(0);
+  });
+
+  it('closes once when registration reaches expiry before the periodic sweep', async () => {
+    const lease = await service.acquire('note', guest);
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+    vi.spyOn(performance, 'now').mockReturnValue(lease.expiresAt);
+    expect(lease.closed).toBe(false);
+
+    service.register(lease, connection);
+
+    expect(lease.closed).toBe(true);
+    expect(connection.close).toHaveBeenCalledExactlyOnceWith({
+      code: 4403,
+      reason: COLLABORATION_CLOSE_REASON.ACCESS_UNAVAILABLE,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(service.diagnostics.activeNotes).toBe(0);
+  });
+
+  it('releases the lease and stops renewal when the registered socket closes', async () => {
+    const lease = await service.acquire('note', guest);
+    const connection = {
+      close: vi.fn(),
+      onClose: vi.fn<(callback: () => void) => void>(),
+    };
+    service.register(lease, connection);
+    expect(connection.onClose).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(0);
+
+    connection.onClose.mock.calls[0][0]();
+
+    expect(lease.closed).toBe(true);
+    expect(service.diagnostics.activeNotes).toBe(0);
+    const completedReads = reads.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(reads).toHaveBeenCalledTimes(completedReads);
   });
 
   it('expires idle and preconnected sessions and never revives them on late SQL completion', async () => {

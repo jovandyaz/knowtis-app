@@ -86,3 +86,6 @@ export const COLLABORATION_CLOSE_REASON = {
   ACCESS_UNAVAILABLE: 'Note access unavailable',
   TOKEN_EXPIRED: 'Token expired',
 } as const;
+
+export type CollaborationCloseReason =
+  (typeof COLLABORATION_CLOSE_REASON)[keyof typeof COLLABORATION_CLOSE_REASON];

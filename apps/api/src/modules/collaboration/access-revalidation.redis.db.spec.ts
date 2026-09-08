@@ -41,9 +41,22 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     servers = [];
   });
   afterEach(async () => {
-    await Promise.all(servers.map((server) => server.close()));
-    redis.disconnect();
-    await f.close();
+    const closed = await Promise.allSettled(
+      servers.map((server) => server.close())
+    );
+    const cleanup = await Promise.allSettled([
+      Promise.resolve().then(() => redis.disconnect()),
+      f.close(),
+    ]);
+    const failures = [...closed, ...cleanup]
+      .filter((result) => result.status === 'rejected')
+      .map((result) => result.reason);
+    if (failures.length) {
+      throw new AggregateError(
+        failures,
+        'Active access fixture cleanup failed'
+      );
+    }
   });
   async function server(authorityUrl?: string) {
     const instance = new ActiveAccessServer(f, [], authorityUrl);
