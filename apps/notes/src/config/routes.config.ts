@@ -16,6 +16,8 @@ export const ROUTES = {
   VERIFY_EMAIL: '/verify-email',
 } as const satisfies Record<string, AppRoute>;
 
+export const STUDY_SESSION_PATTERN = /^\/study$/;
+
 const SHARE_TOKEN_PARAM = '$token';
 
 /**

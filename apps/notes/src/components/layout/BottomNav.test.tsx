@@ -21,6 +21,8 @@ let statsQuery: {
   isError: boolean;
 };
 
+const PRIMARY_TAB_COUNT = 4;
+
 function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
   return {
     dueCount: 0,
@@ -208,7 +210,7 @@ describe('BottomNav', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the review tab hidden (not flickering) while the flag is still loading', () => {
+  it('renders no review tab, not even a placeholder, while the flag is still loading', () => {
     flagsQuery = { isPending: true, isError: false };
     isStudyEnabled = false;
 
@@ -217,6 +219,9 @@ describe('BottomNav', () => {
     expect(
       screen.queryByRole('button', { name: /labels\.study/ })
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('navigation').firstElementChild?.children
+    ).toHaveLength(PRIMARY_TAB_COUNT);
   });
 
   it('asks for no study stats while the flag is off', () => {

@@ -17,7 +17,9 @@ export function useStudyFocusMode() {
       if (wasDockOpen.current) {
         useRightDockStore.getState().open();
       }
-      useSidebarStore.getState().setCollapsed(wasSidebarCollapsed.current);
+      if (useSidebarStore.getState().collapsed) {
+        useSidebarStore.getState().setCollapsed(wasSidebarCollapsed.current);
+      }
     };
   }, []);
 }

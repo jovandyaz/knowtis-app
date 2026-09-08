@@ -9,7 +9,6 @@ import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 
 import { useStudyStats } from '@knowtis/data-access-artifacts';
-import { Skeleton } from '@knowtis/design-system';
 
 /**
  * Navigation links props interface
@@ -23,7 +22,7 @@ interface NavigationLinksProps {
 
 export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
   const { t } = useTranslation('common');
-  const { isEnabled: isStudyEnabled, isPending } = useStudyQueueAccess();
+  const { isEnabled: isStudyEnabled } = useStudyQueueAccess();
   const stats = useStudyStats(BROWSER_TIME_ZONE, { enabled: isStudyEnabled });
   const dueCount = stats.data?.dueCount ?? 0;
 
@@ -31,19 +30,6 @@ export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
     <nav className="py-2 px-4 flex flex-col gap-1">
       {links.map((link) => {
         const isStudyLink = link.to === ROUTES.STUDY;
-
-        if (isStudyLink && isPending) {
-          return (
-            <div
-              key={link.labelKey}
-              aria-hidden="true"
-              className="flex items-center gap-3 rounded-lg px-3 py-2"
-            >
-              <Skeleton className="h-4 w-4 shrink-0 rounded" />
-              <Skeleton className="h-4 w-16 rounded" />
-            </div>
-          );
-        }
 
         if (isStudyLink && !isStudyEnabled) {
           return null;

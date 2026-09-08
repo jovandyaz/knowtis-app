@@ -174,6 +174,7 @@ function StudyQueueSession({
   const session = useFlashcardSession(initialCards);
   const advancedLabelId = useId();
   const [restartFailed, setRestartFailed] = useState(false);
+  const [isReplay, setIsReplay] = useState(false);
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
 
@@ -256,6 +257,7 @@ function StudyQueueSession({
         }
         return;
       }
+      setIsReplay(true);
       session.restart(filter);
     },
     [onNewQueue, session]
@@ -437,7 +439,7 @@ function StudyQueueSession({
           <FlashcardRating
             isAdvancedMode={session.isAdvancedMode}
             disabled={isReviewPending}
-            intervals={card.predictedIntervals}
+            intervals={isReplay ? undefined : card.predictedIntervals}
             showKeys
             onWrong={handleWrong}
             onCorrect={handleCorrect}

@@ -507,7 +507,7 @@ describe('StudySessionPage', () => {
 
   it('rates good with the 3 key and announces the shortcut', async () => {
     queueOf([makeCard({ artifactId: 'deck-3', cardIndex: 7 }), CARD_TWO]);
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
     await userEvent.click(advancedToggle());
     await userEvent.click(front(/Frente uno/));
@@ -516,7 +516,7 @@ describe('StudySessionPage', () => {
       screen.getByRole('button', { name: /quality\.good/ })
     ).toHaveAttribute('aria-keyshortcuts', '3');
 
-    fireEvent.keyDown(container.firstElementChild as HTMLElement, { key: '3' });
+    fireEvent.keyDown(document.body, { key: '3' });
 
     expect(reviewCard).toHaveBeenCalledWith({
       artifactId: 'deck-3',
@@ -524,6 +524,36 @@ describe('StudySessionPage', () => {
       quality: SM2_QUALITY.GOOD,
     });
     expect(front(/Frente dos/)).toBeInTheDocument();
+  });
+
+  it('drops the stale intervals when replaying the cards that were missed', async () => {
+    queueOf([CARD_ONE]);
+    render(<StudySessionPage />);
+
+    await userEvent.click(advancedToggle());
+    await userEvent.click(front(/Frente uno/));
+    expect(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.quality.good, ai.artifacts.flashcards.intervalDays {"count":4}',
+      })
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: /quality\.again/ })
+    );
+
+    await userEvent.click(practiseAgain());
+    await userEvent.click(
+      screen.getByRole('menuitem', {
+        name: 'ai.artifacts.flashcards.summary.onlyMissed',
+      })
+    );
+    await userEvent.click(front(/Frente uno/));
+
+    expect(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.quality.good',
+      })
+    ).toBeInTheDocument();
   });
 
   it('keeps playing when the refetched queue comes back empty', async () => {

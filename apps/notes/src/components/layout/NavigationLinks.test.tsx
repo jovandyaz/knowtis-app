@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { NAVIGATION_LINKS } from '@/config/navigation.config';
+import { ROUTES } from '@/config/routes.config';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -89,7 +90,7 @@ describe('NavigationLinks', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders the nav without a hard pop-in while the flag is still loading', () => {
+  it('renders no review item, not even a placeholder, while the flag is still loading', () => {
     flagsQuery = { isPending: true, isError: false };
     isStudyEnabled = false;
 
@@ -98,7 +99,9 @@ describe('NavigationLinks', () => {
     expect(
       screen.queryByRole('link', { name: /labels\.study/ })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation')).not.toBeEmptyDOMElement();
+    expect(screen.getByRole('navigation').children).toHaveLength(
+      NAVIGATION_LINKS.filter((link) => link.to !== ROUTES.STUDY).length
+    );
   });
 
   it('asks for no study stats while the flag is off', () => {

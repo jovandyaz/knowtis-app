@@ -48,6 +48,17 @@ describe('useStudyFocusMode', () => {
     expect(useSidebarStore.getState().collapsed).toBe(false);
   });
 
+  it('leaves a sidebar the user expanded during the session expanded', () => {
+    useSidebarStore.setState({ collapsed: true });
+
+    const { unmount } = renderHook(() => useStudyFocusMode());
+
+    useSidebarStore.getState().setCollapsed(false);
+    unmount();
+
+    expect(useSidebarStore.getState().collapsed).toBe(false);
+  });
+
   it('leaves an already-collapsed sidebar collapsed after unmount', () => {
     useSidebarStore.setState({ collapsed: true });
 
