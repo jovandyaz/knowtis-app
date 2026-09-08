@@ -1282,6 +1282,12 @@ Tool groups (`apps/api/src/modules/agent/infrastructure/tools/`, each implementi
 
 `agent:done` carries `{ usage: { inputTokens, outputTokens, model, costUsd }, sources, knownNotes, webSources, stopReason, conversationId? }`.
 
+The Notes client stores `stopReason` on the active assistant response only. It
+shows a polite status message for `max_steps`, `token_budget`, `length`, and
+`content_filter`, including when the response text is empty; `completed` adds no
+notice. This state belongs to the live in-memory conversation and is not
+hydrated from persisted conversation history.
+
 ### Agent error codes
 
 `AgentErrors` (`agent/domain/agent-errors.ts`) is emitted over `agent:error` alongside the [AI error codes](#error-codes):

@@ -376,6 +376,12 @@
       "sources": "Fuentes",
       "webSources": "Fuentes web",
       "stop": "Detener",
+      "stopReason": {
+        "max_steps": "Se alcanzó el límite de pasos.",
+        "token_budget": "Se alcanzó el presupuesto del turno.",
+        "length": "La respuesta quedó incompleta.",
+        "content_filter": "El proveedor limitó esta respuesta."
+      },
       "empty": {
         "title": "Pregúntale a tus notas",
         "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",
