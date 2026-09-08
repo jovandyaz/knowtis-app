@@ -73,7 +73,8 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const [score, setScore] = useState(0);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const advanceRef = useRef<HTMLButtonElement>(null);
-  const isFirstQuestion = useRef(true);
+  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const isFirstRender = useRef(true);
 
   const totalQuestions = content.questions.length;
   const currentQuestion = content.questions[currentIndex];
@@ -125,12 +126,16 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   }, [answered]);
 
   useEffect(() => {
-    if (isFirstQuestion.current) {
-      isFirstQuestion.current = false;
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (completed) {
+      resultsHeadingRef.current?.focus();
       return;
     }
     optionRefs.current[FIRST_OPTION]?.focus();
-  }, [currentIndex]);
+  }, [currentIndex, completed]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < totalQuestions - 1) {
@@ -170,7 +175,11 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     return (
       <div className="flex flex-col items-center space-y-6 py-8">
         <Trophy className="h-16 w-16 text-(--primary)" />
-        <h3 className="text-2xl font-bold">
+        <h3
+          ref={resultsHeadingRef}
+          tabIndex={-1}
+          className="text-2xl font-bold outline-none"
+        >
           {t('ai.artifacts.quiz.completed')}
         </h3>
         <p className="text-lg text-(--muted-foreground)">{scoreLabel}</p>

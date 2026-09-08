@@ -168,6 +168,48 @@ describe('QuizSession', () => {
     expect(first).toHaveAttribute('tabindex', '0');
   });
 
+  it('moves focus to the results heading once the quiz is finished', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    );
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Tres$/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
+    );
+
+    const heading = screen.getByRole('heading', {
+      name: 'ai.artifacts.quiz.completed',
+    });
+    expect(heading).toHaveFocus();
+    expect(heading).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('returns focus to the first option after restarting a one-question quiz', async () => {
+    const oneQuestionArtifact = {
+      ...twoQuestionArtifact,
+      content: {
+        ...twoQuestionArtifact.content,
+        questions: [twoQuestionArtifact.content.questions[0]],
+      },
+    } as unknown as QuizArtifact;
+    render(<QuizSession artifact={oneQuestionArtifact} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    );
+
+    const [first] = screen.getAllByRole('radio');
+    expect(first).toHaveFocus();
+    expect(first).toHaveAttribute('tabindex', '0');
+  });
+
   it('keeps the advance button mounted and disabled until an answer is picked', () => {
     render(<QuizSession artifact={twoQuestionArtifact} />);
 
