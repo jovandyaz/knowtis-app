@@ -12,10 +12,10 @@ interface FlashcardCardProps {
 }
 
 const DIFFICULTY_CLASS: Record<FlashcardDifficulty, string> = {
-  easy: 'border-learn-difficulty-easy/20 bg-learn-difficulty-easy/10 text-learn-difficulty-easy',
+  easy: 'border-learn-difficulty-easy/20 bg-learn-difficulty-easy/10 text-learn-difficulty-easy-text',
   medium:
-    'border-learn-difficulty-medium/20 bg-learn-difficulty-medium/10 text-learn-difficulty-medium',
-  hard: 'border-learn-difficulty-hard/20 bg-learn-difficulty-hard/10 text-learn-difficulty-hard',
+    'border-learn-difficulty-medium/20 bg-learn-difficulty-medium/10 text-learn-difficulty-medium-text',
+  hard: 'border-learn-difficulty-hard/20 bg-learn-difficulty-hard/10 text-learn-difficulty-hard-text',
 };
 
 const DIFFICULTY_KEYS = {
