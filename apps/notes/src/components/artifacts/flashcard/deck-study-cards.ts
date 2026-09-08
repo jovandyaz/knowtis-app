@@ -14,7 +14,11 @@ const NEUTRAL_PREDICTED_INTERVALS: PredictedIntervals = {
   easy: 1,
 };
 
-/** Gives a deck's cards their identity and truthful `kind`, from the deck's saved progress. */
+/**
+ * Gives a deck's cards their identity from the artifact and its saved progress.
+ * `kind` is `'due'` when a progress row exists for the card, `'new'` otherwise —
+ * it does not read `nextReview`; the server, not the client, decides what's due.
+ */
 export function deckStudyCards(
   artifact: FlashcardArtifact,
   progress: FlashcardProgress[] | undefined

@@ -63,4 +63,16 @@ describe('FlashcardHeader', () => {
       screen.queryByRole('button', { name: 'ai.artifacts.flashcards.shuffle' })
     ).not.toBeInTheDocument();
   });
+
+  it('sizes the shuffle control the same as its restart neighbour', () => {
+    renderHeader();
+
+    const shuffle = screen.getByRole('button', {
+      name: 'ai.artifacts.flashcards.shuffle',
+    });
+    const restart = screen.getByRole('button', {
+      name: 'ai.artifacts.flashcards.restart',
+    });
+    expect(shuffle.className).toBe(restart.className);
+  });
 });

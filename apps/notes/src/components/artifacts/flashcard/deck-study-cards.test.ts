@@ -7,10 +7,14 @@ import type {
 
 import { deckStudyCards } from './deck-study-cards';
 
-const artifact = {
+const artifact: FlashcardArtifact = {
   id: 'deck-1',
+  userId: 'user-1',
   sourceNoteId: 'note-1',
   title: 'Spanish verbs',
+  type: 'flashcard_deck',
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
   content: {
     cards: [
       { front: 'Front zero', back: 'Back zero', difficulty: 'easy' },
@@ -18,7 +22,7 @@ const artifact = {
       { front: 'Front two', back: 'Back two', difficulty: 'hard' },
     ],
   },
-} as unknown as FlashcardArtifact;
+};
 
 function makeProgress(cardIndex: number): FlashcardProgress {
   return {

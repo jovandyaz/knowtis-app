@@ -77,6 +77,8 @@ async function rateCorrect(front: RegExp) {
 }
 
 describe('FlashcardStudy', () => {
+  let randomSpy: ReturnType<typeof vi.spyOn> | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
     useFlashcardProgressMock.mockReturnValue(DEFAULT_PROGRESS_RESULT);
@@ -84,6 +86,8 @@ describe('FlashcardStudy', () => {
 
   afterEach(() => {
     reducedMotion.value = true;
+    randomSpy?.mockRestore();
+    randomSpy = undefined;
   });
 
   it('does not request flashcard progress for a read-only viewer', () => {
@@ -191,7 +195,7 @@ describe('FlashcardStudy', () => {
   });
 
   it('rates the shuffled card by its own identity, not by position', async () => {
-    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
 
     renderStudy();
     await userEvent.click(
@@ -202,8 +206,6 @@ describe('FlashcardStudy', () => {
     expect(reviewCard).toHaveBeenCalledWith(
       expect.objectContaining({ artifactId: 'deck-1', cardIndex: 1 })
     );
-
-    randomSpy.mockRestore();
   });
 
   it('crossfades the two faces instead of flipping under reduced motion', () => {

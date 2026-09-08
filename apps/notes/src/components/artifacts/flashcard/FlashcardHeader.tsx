@@ -78,7 +78,7 @@ export function FlashcardHeader({
                 variant="ghost"
                 size="icon"
                 onClick={onShuffle}
-                className={cn(TOUCH_TARGET_CLASS, 'w-8')}
+                className={cn(TOUCH_TARGET_CLASS, 'w-11')}
                 aria-label={t('ai.artifacts.flashcards.shuffle')}
               >
                 <Shuffle className="h-4 w-4" />
@@ -94,7 +94,7 @@ export function FlashcardHeader({
                 variant="ghost"
                 size="icon"
                 onClick={onRestart}
-                className="h-8 w-8"
+                className={cn(TOUCH_TARGET_CLASS, 'w-11')}
                 aria-label={t('ai.artifacts.flashcards.restart')}
               >
                 <RotateCcw className="h-4 w-4" />
