@@ -172,7 +172,6 @@ function StudyQueueSession({
 }: StudyQueueSessionProps) {
   const { t } = useTranslation('notes');
   const session = useFlashcardSession(initialCards);
-  const containerRef = useRef<HTMLDivElement>(null);
   const advancedLabelId = useId();
   const [restartFailed, setRestartFailed] = useState(false);
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
@@ -277,7 +276,9 @@ function StudyQueueSession({
       const target = event.target;
       if (
         target instanceof HTMLElement &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
       ) {
         return;
       }
@@ -327,13 +328,12 @@ function StudyQueueSession({
   );
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
+    if (session.isComplete) {
       return;
     }
-    container.addEventListener('keydown', handleKeyDown);
-    return () => container.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown, session.isComplete]);
 
   if (session.isComplete) {
     return (
@@ -376,7 +376,6 @@ function StudyQueueSession({
 
   return (
     <div
-      ref={containerRef}
       className={cn(PAGE_LAYOUT, session.flipped && RATING_BAR_MOBILE_PADDING)}
     >
       <div className="flex flex-col gap-3">

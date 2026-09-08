@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -105,10 +105,6 @@ function correctButton() {
   });
 }
 
-function pageRoot(container: HTMLElement) {
-  return container.firstElementChild as HTMLElement;
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   reviewCard.mockResolvedValue({ ok: true });
@@ -179,44 +175,44 @@ describe('resolveStudyKeyAction', () => {
 
 describe('StudySessionPage keyboard map', () => {
   it('flips the card with Space', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
     expect(correctButton()).toBeNull();
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
+    fireEvent.keyDown(document.body, { key: ' ' });
 
     expect(correctButton()).toBeInTheDocument();
   });
 
   it('flips the card with Enter', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
-    fireEvent.keyDown(pageRoot(container), { key: 'Enter' });
+    fireEvent.keyDown(document.body, { key: 'Enter' });
 
     expect(correctButton()).toBeInTheDocument();
   });
 
   it('navigates to the next and previous card with the arrow keys', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
-    fireEvent.keyDown(pageRoot(container), { key: 'ArrowRight' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
     expect(front(/Frente dos/)).toBeInTheDocument();
     expect(reviewCard).not.toHaveBeenCalled();
 
-    fireEvent.keyDown(pageRoot(container), { key: 'ArrowLeft' });
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
     expect(front(/Frente uno/)).toBeInTheDocument();
   });
 
   it('comes back to the card the cursor skipped instead of re-rating the answered one', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
-    fireEvent.keyDown(pageRoot(container), { key: 'ArrowRight' });
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
-    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
 
     expect(front(/Frente uno/)).toBeInTheDocument();
 
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
-    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
 
     expect(reviewCard).toHaveBeenNthCalledWith(1, {
       artifactId: 'deck-1',
@@ -235,15 +231,15 @@ describe('StudySessionPage keyboard map', () => {
   });
 
   it('posts no second review for a card that was already answered', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
-    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
     expect(front(/Frente dos/)).toBeInTheDocument();
 
-    fireEvent.keyDown(pageRoot(container), { key: 'ArrowLeft' });
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
-    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
 
     expect(reviewCard).toHaveBeenCalledTimes(1);
     expect(reviewCard).toHaveBeenCalledWith({
@@ -254,10 +250,10 @@ describe('StudySessionPage keyboard map', () => {
   });
 
   it('rates wrong with 1 and correct with 2 in simple mode', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
-    fireEvent.keyDown(pageRoot(container), { key: '1' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '1' });
 
     expect(reviewCard).toHaveBeenCalledWith({
       artifactId: 'deck-1',
@@ -266,8 +262,8 @@ describe('StudySessionPage keyboard map', () => {
     });
     expect(front(/Frente dos/)).toBeInTheDocument();
 
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
-    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
 
     expect(reviewCard).toHaveBeenCalledWith({
       artifactId: 'deck-1',
@@ -277,12 +273,29 @@ describe('StudySessionPage keyboard map', () => {
   });
 
   it('ignores a rating key before the card is flipped', () => {
-    const { container } = render(<StudySessionPage />);
+    render(<StudySessionPage />);
 
-    fireEvent.keyDown(pageRoot(container), { key: '2' });
+    fireEvent.keyDown(document.body, { key: '2' });
 
     expect(reviewCard).not.toHaveBeenCalled();
     expect(correctButton()).toBeNull();
+  });
+
+  it('hands the keyboard back once the summary is up', () => {
+    render(<StudySessionPage />);
+
+    for (const key of [' ', '2', ' ', '2']) {
+      fireEvent.keyDown(document.body, { key });
+    }
+    expect(
+      screen.getByRole('link', { name: 'study.summary.backHome' })
+    ).toBeInTheDocument();
+
+    const event = createEvent.keyDown(document.body, { key: ' ' });
+    fireEvent(document.body, event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(reviewCard).toHaveBeenCalledTimes(2);
   });
 
   it('announces no shortcut the page does not answer', () => {
@@ -300,17 +313,42 @@ describe('StudySessionPage keyboard map', () => {
     }
   });
 
+  it('announces the rating keys the simple mode buttons answer', () => {
+    render(<StudySessionPage />);
+    fireEvent.keyDown(document.body, { key: ' ' });
+
+    const announced: [HTMLElement, number][] = [
+      [
+        screen.getByRole('button', { name: 'ai.artifacts.flashcards.wrong' }),
+        SM2_QUALITY.AGAIN,
+      ],
+      [
+        screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' }),
+        SM2_QUALITY.GOOD,
+      ],
+    ];
+
+    for (const [button, quality] of announced) {
+      const key = button.getAttribute('aria-keyshortcuts');
+      expect(key).not.toBeNull();
+      expect(resolveStudyKeyAction(key ?? '', false)).toEqual({
+        type: 'rate',
+        quality,
+      });
+    }
+  });
+
   it('never rates while a text input has focus', () => {
-    const { container } = render(<StudySessionPage />);
-    fireEvent.keyDown(pageRoot(container), { key: ' ' });
+    render(<StudySessionPage />);
+    fireEvent.keyDown(document.body, { key: ' ' });
     expect(correctButton()).toBeInTheDocument();
 
-    const input = document.createElement('input');
-    pageRoot(container).appendChild(input);
+    const input = document.body.appendChild(document.createElement('input'));
     input.focus();
 
     fireEvent.keyDown(input, { key: '2' });
 
     expect(reviewCard).not.toHaveBeenCalled();
+    input.remove();
   });
 });
