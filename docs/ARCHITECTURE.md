@@ -602,11 +602,16 @@ On the client, `libs/api-client/src/lib/session-refresh.ts` makes refresh single
 
 ### Testing Strategy
 
-| Layer       | Focus                                           | Tools                                                                          |
-| ----------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| Unit        | Business logic, utilities                       | Vitest                                                                         |
-| Component   | UI interaction, rendering                       | React Testing Library                                                          |
-| Integration | Handlers and repositories against real Postgres | Vitest, `*.db.spec.ts` (own sequential project in `apps/api/vitest.config.ts`) |
+| Layer       | Focus                                                            | Tools                                                                          |
+| ----------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Unit        | Business logic, utilities                                        | Vitest                                                                         |
+| Component   | UI interaction, rendering                                        | React Testing Library                                                          |
+| Integration | Handlers and repositories against real Postgres                  | Vitest, `*.db.spec.ts` (own sequential project in `apps/api/vitest.config.ts`) |
+| End to end  | Sharing UI, HTTP and live collaboration across two API processes | Playwright, isolated PostgreSQL/Redis, production build + preview              |
+
+The `notes-e2e` project owns its complete disposable runtime. See
+[Sharing acceptance](SHARING_E2E.md) for commands, fault scenarios, evidence and
+the limits of the measured access-revocation bound.
 
 ### CI/CD Pipeline
 
@@ -614,7 +619,7 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected*
 
 **Triggers:** pushes to `main`/`develop`, and pull requests whose **base** branch is `main`, `develop`, or any Conventional-prefixed feature branch (`feat/**`, `fix/**`, …) — the latter so stacked PRs run CI against their parent branch instead of showing up with no checks. For stacked PRs, `nx-set-shas` computes affected against the PR's real base ref (`git merge-base origin/<base> HEAD`), so each level only re-verifies its own changes.
 
-**CI job** (single job, sequential steps): `pnpm skills:check` → lint → typecheck → apply migrations (`nx db:migrate:run api` against the CI Postgres) → test (`--parallel=2`, hosted runners OOM beyond that) → migration-drift check (`nx db:generate api` must produce no diff) → production build. It then exposes one `*_affected` output per app.
+**CI job** (single job, sequential steps): `pnpm skills:check` → lint → typecheck → apply migrations (`nx db:migrate:run api` against the CI Postgres) → test (`--parallel=2`, hosted runners OOM beyond that) → migration-drift check (`nx db:generate api` must produce no diff) → production build → sharing E2E when `notes-e2e` is affected. The E2E target starts separate services, rebuilds with its own loopback URLs without Nx cache, and retains Playwright evidence for seven days. CI then exposes one `*_affected` output per app.
 
 **Deploy jobs** (main push only, each gated on its app being affected):
 

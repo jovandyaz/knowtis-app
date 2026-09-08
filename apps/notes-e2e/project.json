@@ -1,0 +1,33 @@
+{
+  "name": "notes-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/notes-e2e/src",
+  "projectType": "application",
+  "tags": ["type:app", "scope:notes"],
+  "implicitDependencies": ["notes", "api"],
+  "targets": {
+    "e2e": {
+      "executor": "@nx/playwright:playwright",
+      "outputs": ["{workspaceRoot}/dist/.playwright/apps/notes-e2e"],
+      "options": {
+        "config": "apps/notes-e2e/playwright.config.ts",
+        "skipInstall": true,
+        "passWithNoTests": false
+      },
+      "cache": false
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/notes-e2e/tsconfig.json --noEmit"
+      }
+    },
+    "serve-preview": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "vite preview --config apps/notes/vite.config.ts --host=127.0.0.1 --port=4273 --strictPort"
+      }
+    }
+  }
+}
