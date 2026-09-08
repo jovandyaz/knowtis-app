@@ -88,6 +88,31 @@ describe('ProgressRing', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders a zero count in the centre instead of swallowing it', () => {
+    render(
+      <ProgressRing value={0} max={12} label="0 of 12 cards">
+        {0}
+      </ProgressRing>
+    );
+    expect(screen.getByText('0')).toBeInTheDocument();
+  });
+
+  it('draws no centre overlay when there is no centre content', () => {
+    const { container } = render(
+      <ProgressRing value={0} max={12} label="0 of 12 cards" />
+    );
+    expect(container.querySelector('[aria-hidden="true"]:not(svg)')).toBeNull();
+  });
+
+  it('draws no centre overlay for an explicitly empty child', () => {
+    const { container } = render(
+      <ProgressRing value={0} max={12} label="0 of 12 cards">
+        {null}
+      </ProgressRing>
+    );
+    expect(container.querySelector('[aria-hidden="true"]:not(svg)')).toBeNull();
+  });
+
   it('hides the centre overlay from assistive tech, keeping the root name', () => {
     render(
       <ProgressRing value={1} max={2} label="1 of 2 cards">
