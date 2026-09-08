@@ -152,7 +152,6 @@ export {
   type StatDelta,
 } from './components/StatTile';
 export { RatingBar, type RatingBarProps } from './components/RatingBar';
-export { RATING_ORDER, type RatingKey } from './constants/rating';
 export {
   AnswerOption,
   type AnswerOptionProps,
@@ -173,6 +172,7 @@ export {
   type ProgressRingTone,
   type DonutTone,
 } from './constants/learn-tone';
+export { RATING_ORDER, type RatingKey } from './constants/rating';
 export { THEMES, type Theme } from './constants/theme';
 
 export { cn } from './utils';

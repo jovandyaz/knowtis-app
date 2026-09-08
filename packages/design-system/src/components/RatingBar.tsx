@@ -36,7 +36,7 @@ const ratingButton = cva(
 
 export interface RatingBarProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
-  'children'
+  'children' | 'role' | 'aria-label'
 > {
   /** Accessible name for the rating group (e.g. "Rate this card"). */
   label: string;
@@ -45,6 +45,8 @@ export interface RatingBarProps extends Omit<
   formatInterval: (days: number) => string;
   onRate: (quality: SM2Quality) => void;
   disabled?: boolean;
+  /** Renders the predicted interval under each label; off for layouts too narrow to carry it. */
+  showIntervals?: boolean;
   showKeys?: boolean;
 }
 
@@ -52,7 +54,8 @@ export interface RatingBarProps extends Omit<
  * Four-button SM-2 rating strip. Captions showing the predicted interval are
  * hidden when every rating predicts the same interval (the first-review case),
  * since four identical numbers carry no information. Keyboard handling (1-4)
- * is the consumer's responsibility; `showKeys` only renders the hint.
+ * is the consumer's responsibility; `showKeys` renders the hint and announces
+ * it through `aria-keyshortcuts`.
  */
 const RatingBar = forwardRef<HTMLDivElement, RatingBarProps>(
   (
@@ -63,13 +66,14 @@ const RatingBar = forwardRef<HTMLDivElement, RatingBarProps>(
       formatInterval,
       onRate,
       disabled = false,
+      showIntervals = true,
       showKeys = false,
       className,
       ...rest
     },
     ref
   ) => {
-    const distinct =
+    const hasDistinctIntervals =
       new Set(RATING_ORDER.map((key) => intervals[key])).size > 1;
     return (
       <div
@@ -80,13 +84,17 @@ const RatingBar = forwardRef<HTMLDivElement, RatingBarProps>(
         className={cn('flex w-full gap-2', className)}
       >
         {RATING_ORDER.map((key, index) => {
-          const caption = distinct ? formatInterval(intervals[key]) : null;
+          const caption =
+            showIntervals && hasDistinctIntervals
+              ? formatInterval(intervals[key])
+              : null;
           return (
             <button
               key={key}
               type="button"
               disabled={disabled}
               aria-label={caption ? `${labels[key]}, ${caption}` : labels[key]}
+              aria-keyshortcuts={showKeys ? String(index + 1) : undefined}
               onClick={() => onRate(RATING_QUALITY[key])}
               className={ratingButton({ rating: key })}
             >
@@ -95,9 +103,7 @@ const RatingBar = forwardRef<HTMLDivElement, RatingBarProps>(
                 {labels[key]}
               </span>
               {caption ? (
-                <span className="text-2xs tabular-nums opacity-80">
-                  {caption}
-                </span>
+                <span className="text-2xs tabular-nums">{caption}</span>
               ) : null}
             </button>
           );
