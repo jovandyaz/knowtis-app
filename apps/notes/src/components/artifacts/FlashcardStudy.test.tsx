@@ -22,6 +22,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
   useReviewCard: () => ({ mutateAsync: reviewCard, isPending: false }),
+  useFlashcardProgress: () => ({ data: undefined }),
 }));
 vi.mock('motion/react', async () => {
   const actual = await vi.importActual<typeof MotionReact>('motion/react');
@@ -116,6 +117,22 @@ describe('FlashcardStudy', () => {
     expect(
       screen.getByText('ai.artifacts.flashcards.correct').parentElement
     ).toHaveTextContent('ai.artifacts.flashcards.correct0');
+  });
+
+  it('rates the shuffled card by its own identity, not by position', async () => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    renderStudy();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.shuffle' })
+    );
+    await rateCorrect(/Front two/);
+
+    expect(reviewCard).toHaveBeenCalledWith(
+      expect.objectContaining({ artifactId: 'deck-1', cardIndex: 1 })
+    );
+
+    randomSpy.mockRestore();
   });
 
   it('crossfades the two faces instead of flipping under reduced motion', () => {

@@ -521,6 +521,7 @@
         "next": "Next",
         "reviewError": "Failed to submit review",
         "restart": "Start over",
+        "shuffle": "Shuffle",
         "difficulty": {
           "easy": "Easy",
           "medium": "Medium",

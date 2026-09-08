@@ -24,6 +24,7 @@ function renderHeader(
         isAdvancedMode={false}
         onToggleAdvanced={vi.fn()}
         onRestart={vi.fn()}
+        onShuffle={vi.fn()}
         {...overrides}
       />
     </TooltipProvider>
@@ -57,6 +58,9 @@ describe('FlashcardHeader', () => {
 
     expect(
       screen.queryByRole('button', { name: 'ai.artifacts.flashcards.restart' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'ai.artifacts.flashcards.shuffle' })
     ).not.toBeInTheDocument();
   });
 });

@@ -521,6 +521,7 @@
         "next": "Siguiente",
         "reviewError": "Error al enviar la revisión",
         "restart": "Empezar de nuevo",
+        "shuffle": "Barajar",
         "difficulty": {
           "easy": "Fácil",
           "medium": "Medio",
