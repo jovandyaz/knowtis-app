@@ -19,6 +19,9 @@ interface FlashcardSummaryProps {
   onRestart: (filter: RestartFilter) => void;
 }
 
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+
 const MOTIVATIONAL_THRESHOLDS = [
   { min: 90, key: 'ai.artifacts.flashcards.summary.excellentMastery' },
   { min: 70, key: 'ai.artifacts.flashcards.summary.greatJob' },
@@ -27,13 +30,24 @@ const MOTIVATIONAL_THRESHOLDS = [
   { min: 0, key: 'ai.artifacts.flashcards.summary.nextTimeBetter' },
 ] as const;
 
+function formatDuration(ms: number): { minutes: number; seconds: number } {
+  const totalSeconds = Math.floor(ms / MS_PER_SECOND);
+  return {
+    minutes: Math.floor(totalSeconds / SECONDS_PER_MINUTE),
+    seconds: totalSeconds % SECONDS_PER_MINUTE,
+  };
+}
+
 export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
   const { t } = useTranslation('notes');
   const preset = useMotionPreset();
 
-  const answered = result.correct + result.wrong;
   const percentage =
-    answered > 0 ? Math.round((result.correct / answered) * 100) : 0;
+    result.total > 0 ? Math.round((result.correct / result.total) * 100) : 0;
+  const timeSpent = t(
+    'ai.artifacts.flashcards.summary.timeSpent',
+    formatDuration(result.durationMs)
+  );
 
   const segments: DonutSegment[] = [
     {
@@ -95,10 +109,13 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
             correct: result.correct,
             wrong: result.wrong,
             skipped: result.skipped,
+            duration: timeSpent,
           })}
           centerLabel={`${result.correct}/${result.total}`}
           centerSublabel={`${percentage}%`}
-        />
+        >
+          {timeSpent}
+        </DonutChart>
 
         <div className="grid w-full max-w-sm grid-cols-1 gap-3 sm:grid-cols-3">
           {stats.map((stat, index) => (
