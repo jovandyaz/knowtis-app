@@ -28,6 +28,12 @@ paths:
 - Never hardcode color values (hex, rgb, oklch) in components — always reference tokens via CSS custom properties.
 - Never hardcode spacing values — use Tailwind spacing scale (`p-4`, `gap-2`, `mt-6`).
 
+## Motion
+
+- CSS-driven primitives animate with the token utilities — `duration-(--motion-duration-fast)`, `duration-(--motion-duration-base)`, `duration-(--motion-duration-slow)` and `ease-standard`/`ease-enter`/`ease-exit` — plus a `motion-reduce:` escape hatch (`motion-reduce:transition-none`).
+- Components animating through `motion/react` take every transition from `useMotionPreset()` — never a hand-written duration, easing or spring.
+- Never branch on `prefers-reduced-motion` by hand: `motion-reduce:` covers CSS and `useMotionPreset()` covers JS.
+
 ## Accessibility (a11y)
 
 - Every interactive element must have an accessible name (visible label, `aria-label`, or `aria-labelledby`).
