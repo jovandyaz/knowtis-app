@@ -140,4 +140,16 @@ describe('StudyToolsTab', () => {
     expect(screen.getByText('ai.copilot.estudio.noNote')).toBeInTheDocument();
     expect(listProps.last).toBeUndefined();
   });
+
+  it('rejects illegal prop combinations at compile time', () => {
+    const artifactsWithoutReadOnly = (
+      // @ts-expect-error - injected artifacts without readOnly must not compile
+      <StudyToolsTab noteId="note-1" artifacts={artifacts} />
+    );
+    // @ts-expect-error - readOnly without injected artifacts must not compile
+    const readOnlyWithoutArtifacts = <StudyToolsTab noteId="note-1" readOnly />;
+
+    expect(artifactsWithoutReadOnly).toBeDefined();
+    expect(readOnlyWithoutArtifacts).toBeDefined();
+  });
 });

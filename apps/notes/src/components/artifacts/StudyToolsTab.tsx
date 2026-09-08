@@ -10,7 +10,7 @@ import { ArtifactList } from './ArtifactList';
 import { ArtifactViewer } from './ArtifactViewer';
 
 type StudyToolsTabProps =
-  | { noteId: string | null }
+  | { noteId: string | null; artifacts?: never; readOnly?: never }
   | { noteId: string; artifacts: Artifact[]; readOnly: true };
 
 export function StudyToolsTab(props: StudyToolsTabProps) {
