@@ -408,6 +408,12 @@
       "sources": "Sources",
       "webSources": "Web sources",
       "stop": "Stop",
+      "stopReason": {
+        "max_steps": "The step limit was reached.",
+        "token_budget": "The turn budget was reached.",
+        "length": "The response was cut short.",
+        "content_filter": "The provider filtered this response."
+      },
       "empty": {
         "title": "Ask your notes",
         "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",
@@ -429,7 +435,7 @@
           }
         }
       },
-      "estudio": {
+      "study": {
         "noNote": "Open a note to use study tools."
       },
       "proposal": {
@@ -509,11 +515,8 @@
         "summary": "Summary",
         "mindMap": "Mind Map"
       },
+      "back": "Back",
       "sidebar": {
-        "back": "Back",
-        "openPanel": "Open study panel",
-        "closePanel": "Close study panel",
-        "studyTools": "Study Tools",
         "resizePanel": "Resize panel"
       },
       "list": {
@@ -542,16 +545,19 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf_one": "{{reviewed}} of {{count}} card reviewed",
+        "reviewedOf_other": "{{reviewed}} of {{count}} cards reviewed",
         "showAnswer": "Show Answer",
         "showFront": "Show front of card",
         "showBack": "Show back of card",
-        "clickToFlip": "Click to flip",
         "prev": "Previous",
         "next": "Next",
         "reviewError": "Failed to submit review",
-        "complete": "Session complete!",
-        "reviewedAll": "You reviewed all {{total}} cards",
+        "progressError": "We couldn't load this deck's progress",
         "restart": "Start over",
+        "shuffle": "Shuffle",
+        "intervalDays_one": "{{count}} day",
+        "intervalDays_other": "{{count}} days",
         "difficulty": {
           "easy": "Easy",
           "medium": "Medium",
@@ -565,9 +571,10 @@
         },
         "wrong": "Incorrect",
         "correct": "Correct",
-        "skip": "Skip",
         "advancedMode": "Advanced mode",
+        "rateCard": "Rate this card",
         "summary": {
+          "description": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped, in {{duration}}.",
           "excellentMastery": "Excellent mastery!",
           "greatJob": "Great job, keep it up!",
           "goodProgress": "Good progress!",
@@ -586,6 +593,9 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} of {{total}} answered",
+        "outcomeCorrect": "Correct — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrect — the answer is {{letter}}. {{answer}}",
         "explanation": "Explanation",
         "next": "Next",
         "finish": "Finish",
@@ -692,6 +702,33 @@
       "note": "Note",
       "study": "Study"
     },
-    "tabsLabel": "Note workspace"
+    "tabsLabel": "Note workspace",
+    "tabsLoading": "Loading the note workspace"
+  },
+  "study": {
+    "loading": "Loading your review",
+    "newBadge": "New",
+    "caughtUp": {
+      "title": "All caught up",
+      "nextReview": "Your next card arrives {{when}}",
+      "nothingScheduled": "You have no cards scheduled yet",
+      "cta": "Go to my notes"
+    },
+    "summary": {
+      "streak_zero": "Your streak starts today",
+      "streak_one": "Streak of {{count}} day",
+      "streak_other": "Streak of {{count}} days",
+      "backHome": "Back to home",
+      "restartFailed": "We couldn't load new cards. Try again."
+    },
+    "todayCard": {
+      "title": "Today's review",
+      "dueLabel": "due today",
+      "newLabel_one": "new",
+      "newLabel_other": "new",
+      "streakLabel_one": "day streak",
+      "streakLabel_other": "day streak",
+      "cta": "Start"
+    }
   }
 }

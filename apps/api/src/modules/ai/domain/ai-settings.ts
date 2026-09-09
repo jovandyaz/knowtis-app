@@ -10,4 +10,5 @@ export const AI_SETTING_DEFAULTS = {
   ai_free_tier_ceiling: '4.00',
   ai_reasoning_effort: 'medium',
   ai_openrouter_providers: 'fireworks,baseten',
+  ai_openrouter_ignored_providers: '',
 } as const satisfies Record<AIConfigKey, string>;

@@ -1,125 +1,212 @@
-import { useCallback, useEffect, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  type RefCallback,
+} from 'react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
+
+const BAR_COLOR_PROPERTY = '--muted-foreground';
+const BAR_ACTIVE_COLOR_PROPERTY = '--primary';
+
+// Canvas ignores an empty fillStyle, so an unresolved token must never reach it.
+const FALLBACK_BAR_COLOR = 'oklch(0.560 0.008 290)';
+const FALLBACK_BAR_ACTIVE_COLOR = 'oklch(0.47 0.22 295)';
+
+// The theme tokens carry no alpha, so the bars keep their translucency here.
+const QUIET_BAR_ALPHA = 0.3;
+const LOUD_BAR_ALPHA = 0.8;
+
+const readThemeColor = (
+  styles: CSSStyleDeclaration,
+  property: string,
+  fallback: string
+) => {
+  const value = styles.getPropertyValue(property).trim();
+  return value.length > 0 ? value : fallback;
+};
 
 export interface AudioWaveformProps {
   analyserNode?: AnalyserNode | null;
   mockData?: Uint8Array;
   barCount?: number;
   barGap?: number;
+  /** Overrides the `--muted-foreground` token the quiet bars are painted with. */
   barColor?: string;
+  /** Overrides the `--primary` token the loud bars are painted with. */
   barActiveColor?: string;
   className?: string;
 }
 
-export function AudioWaveform({
-  analyserNode,
-  mockData,
-  barCount = 40,
-  barGap = 2,
-  barColor = 'rgba(148, 163, 184, 0.3)',
-  barActiveColor = 'rgba(59, 130, 246, 0.8)',
-  className,
-}: AudioWaveformProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>(0);
-
-  const draw = useCallback(
-    (ctx: CanvasRenderingContext2D, data: Uint8Array) => {
-      const { width, height } = ctx.canvas;
-      const dpr = window.devicePixelRatio || 1;
-
-      ctx.clearRect(0, 0, width, height);
-
-      const logicalWidth = width / dpr;
-      const logicalHeight = height / dpr;
-
-      const totalGap = barGap * (barCount - 1);
-      const barWidth = (logicalWidth - totalGap) / barCount;
-      const barRadius = barWidth / 2;
-
-      const usableBins = Math.floor(data.length * 0.3);
-
-      for (let i = 0; i < barCount; i++) {
-        const dataIndex = Math.floor((i / barCount) * usableBins);
-        const value = data[dataIndex] / 255;
-
-        const minHeight = 4;
-        const barHeight = Math.max(minHeight, value * logicalHeight);
-
-        const x = i * (barWidth + barGap);
-        const y = (logicalHeight - barHeight) / 2;
-
-        ctx.fillStyle = value > 0.1 ? barActiveColor : barColor;
-
-        ctx.beginPath();
-        ctx.roundRect(
-          x * dpr,
-          y * dpr,
-          barWidth * dpr,
-          barHeight * dpr,
-          barRadius * dpr
-        );
-        ctx.fill();
-      }
+const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
+  (
+    {
+      analyserNode,
+      mockData,
+      barCount = 40,
+      barGap = 2,
+      barColor,
+      barActiveColor,
+      className,
     },
-    [barCount, barGap, barColor, barActiveColor]
-  );
+    ref
+  ) => {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const animationRef = useRef<number>(0);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
+    // The draw loop and the caller both need the node, so the ref fans out here.
+    const attachCanvas = useCallback(
+      (node: HTMLCanvasElement | null) => {
+        canvasRef.current = node;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return;
-    }
+        if (typeof ref !== 'function') {
+          if (ref) {
+            ref.current = node;
+          }
+          return () => {
+            canvasRef.current = null;
+            if (ref) {
+              ref.current = null;
+            }
+          };
+        }
 
-    const resizeCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-    };
+        const callerRef: RefCallback<HTMLCanvasElement> = ref;
+        const detachCaller = callerRef(node);
 
-    resizeCanvas();
+        return () => {
+          canvasRef.current = null;
+          if (typeof detachCaller === 'function') {
+            detachCaller();
+            return;
+          }
+          // Returning a cleanup stops React from calling this ref back with
+          // null, so a caller without one still needs that detach signal.
+          callerRef(null);
+        };
+      },
+      [ref]
+    );
 
-    const resizeObserver = new ResizeObserver(resizeCanvas);
-    resizeObserver.observe(canvas);
+    const draw = useCallback(
+      (ctx: CanvasRenderingContext2D, data: Uint8Array) => {
+        const { width, height } = ctx.canvas;
+        const dpr = window.devicePixelRatio || 1;
 
-    if (analyserNode) {
-      const bufferLength = analyserNode.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+        const themeStyles = getComputedStyle(ctx.canvas);
+        const inactiveFill =
+          barColor ??
+          readThemeColor(themeStyles, BAR_COLOR_PROPERTY, FALLBACK_BAR_COLOR);
+        const activeFill =
+          barActiveColor ??
+          readThemeColor(
+            themeStyles,
+            BAR_ACTIVE_COLOR_PROPERTY,
+            FALLBACK_BAR_ACTIVE_COLOR
+          );
 
-      const animate = () => {
-        analyserNode.getByteFrequencyData(dataArray);
-        draw(ctx, dataArray);
-        animationRef.current = requestAnimationFrame(animate);
+        const inactiveAlpha = barColor ? 1 : QUIET_BAR_ALPHA;
+        const activeAlpha = barActiveColor ? 1 : LOUD_BAR_ALPHA;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const logicalWidth = width / dpr;
+        const logicalHeight = height / dpr;
+
+        const totalGap = barGap * (barCount - 1);
+        const barWidth = (logicalWidth - totalGap) / barCount;
+        const barRadius = barWidth / 2;
+
+        const usableBins = Math.floor(data.length * 0.3);
+
+        for (let i = 0; i < barCount; i++) {
+          const dataIndex = Math.floor((i / barCount) * usableBins);
+          const value = data[dataIndex] / 255;
+
+          const minHeight = 4;
+          const barHeight = Math.max(minHeight, value * logicalHeight);
+
+          const x = i * (barWidth + barGap);
+          const y = (logicalHeight - barHeight) / 2;
+
+          const isLoud = value > 0.1;
+          ctx.fillStyle = isLoud ? activeFill : inactiveFill;
+          ctx.globalAlpha = isLoud ? activeAlpha : inactiveAlpha;
+
+          ctx.beginPath();
+          ctx.roundRect(
+            x * dpr,
+            y * dpr,
+            barWidth * dpr,
+            barHeight * dpr,
+            barRadius * dpr
+          );
+          ctx.fill();
+        }
+
+        ctx.globalAlpha = 1;
+      },
+      [barCount, barGap, barColor, barActiveColor]
+    );
+
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        return;
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return;
+      }
+
+      const resizeCanvas = () => {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
       };
 
-      animate();
-    } else if (mockData) {
-      draw(ctx, mockData);
-    } else {
-      const emptyData = new Uint8Array(barCount);
-      draw(ctx, emptyData);
-    }
+      resizeCanvas();
 
-    return () => {
-      cancelAnimationFrame(animationRef.current);
-      resizeObserver.disconnect();
-    };
-  }, [analyserNode, mockData, barCount, draw]);
+      const resizeObserver = new ResizeObserver(resizeCanvas);
+      resizeObserver.observe(canvas);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className={cn('h-16 w-full', className)}
-      aria-hidden="true"
-    />
-  );
-}
+      if (analyserNode) {
+        const bufferLength = analyserNode.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
 
+        const animate = () => {
+          analyserNode.getByteFrequencyData(dataArray);
+          draw(ctx, dataArray);
+          animationRef.current = requestAnimationFrame(animate);
+        };
+
+        animate();
+      } else if (mockData) {
+        draw(ctx, mockData);
+      } else {
+        const emptyData = new Uint8Array(barCount);
+        draw(ctx, emptyData);
+      }
+
+      return () => {
+        cancelAnimationFrame(animationRef.current);
+        resizeObserver.disconnect();
+      };
+    }, [analyserNode, mockData, barCount, draw]);
+
+    return (
+      <canvas
+        ref={attachCanvas}
+        className={cn('h-16 w-full', className)}
+        aria-hidden="true"
+      />
+    );
+  }
+);
 AudioWaveform.displayName = 'AudioWaveform';
+
+export { AudioWaveform };

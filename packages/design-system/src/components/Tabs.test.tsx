@@ -8,6 +8,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { triggerResizeObservers } from '../test-setup';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
 import {
@@ -50,6 +51,13 @@ describe('Tabs', () => {
     expect(
       screen.queryByRole('tabpanel', { name: 'One' })
     ).not.toBeInTheDocument();
+  });
+
+  it('floors every trigger at a full touch target on coarse pointers', () => {
+    renderTabs();
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab).toHaveClass(...TOUCH_TARGET_CLASS.split(' '));
+    }
   });
 
   it('marks the active trigger as selected for assistive tech', () => {
@@ -287,7 +295,7 @@ describe('TabsList overflow affordance', () => {
   });
 
   it('still forwards the ref to the list element', () => {
-    const ref = { current: null as HTMLElement | null };
+    const ref = { current: null as HTMLDivElement | null };
     render(
       <Tabs defaultValue="one">
         <TabsList ref={ref}>
@@ -300,7 +308,7 @@ describe('TabsList overflow affordance', () => {
   });
 
   it('releases the forwarded ref when the list unmounts', () => {
-    const ref = { current: null as HTMLElement | null };
+    const ref = { current: null as HTMLDivElement | null };
     const { unmount } = render(
       <Tabs defaultValue="one">
         <TabsList ref={ref}>

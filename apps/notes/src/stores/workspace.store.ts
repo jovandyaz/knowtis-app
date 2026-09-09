@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type WorkspaceTab = 'note' | 'estudio';
+export type WorkspaceTab = 'note' | 'study';
 
 interface WorkspaceStore {
   activeTab: WorkspaceTab;

@@ -12,12 +12,12 @@ describe('useWorkspaceStore', () => {
   });
 
   it('switches the active tab to the study workspace', () => {
-    useWorkspaceStore.getState().setTab('estudio');
-    expect(useWorkspaceStore.getState().activeTab).toBe('estudio');
+    useWorkspaceStore.getState().setTab('study');
+    expect(useWorkspaceStore.getState().activeTab).toBe('study');
   });
 
   it('switches the active tab back to the note', () => {
-    useWorkspaceStore.getState().setTab('estudio');
+    useWorkspaceStore.getState().setTab('study');
     useWorkspaceStore.getState().setTab('note');
     expect(useWorkspaceStore.getState().activeTab).toBe('note');
   });

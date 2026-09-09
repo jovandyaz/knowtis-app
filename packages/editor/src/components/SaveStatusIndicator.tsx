@@ -28,7 +28,7 @@ export function SaveStatusIndicator({
       {status === 'saving' ? (
         <Loader2 className="h-3 w-3 animate-spin" />
       ) : (
-        <Check className="h-3 w-3 text-emerald-500" />
+        <Check className="h-3 w-3 text-(--success)" />
       )}
       {label && <span>{label}</span>}
     </div>

@@ -408,6 +408,12 @@
       "sources": "Fuentes",
       "webSources": "Fuentes web",
       "stop": "Detener",
+      "stopReason": {
+        "max_steps": "Se alcanzó el límite de pasos.",
+        "token_budget": "Se alcanzó el presupuesto del turno.",
+        "length": "La respuesta quedó incompleta.",
+        "content_filter": "El proveedor limitó esta respuesta."
+      },
       "empty": {
         "title": "Pregúntale a tus notas",
         "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",
@@ -429,7 +435,7 @@
           }
         }
       },
-      "estudio": {
+      "study": {
         "noNote": "Abre una nota para usar las herramientas de estudio."
       },
       "proposal": {
@@ -509,11 +515,8 @@
         "summary": "Resumen",
         "mindMap": "Mapa mental"
       },
+      "back": "Volver",
       "sidebar": {
-        "back": "Volver",
-        "openPanel": "Abrir panel de estudio",
-        "closePanel": "Cerrar panel de estudio",
-        "studyTools": "Herramientas de Estudio",
         "resizePanel": "Redimensionar panel"
       },
       "list": {
@@ -542,16 +545,19 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf_one": "{{reviewed}} de {{count}} tarjeta repasada",
+        "reviewedOf_other": "{{reviewed}} de {{count}} tarjetas repasadas",
         "showAnswer": "Mostrar respuesta",
         "showFront": "Mostrar frente de la tarjeta",
         "showBack": "Mostrar dorso de la tarjeta",
-        "clickToFlip": "Haz clic para voltear",
         "prev": "Anterior",
         "next": "Siguiente",
         "reviewError": "Error al enviar la revisión",
-        "complete": "Sesión completada!",
-        "reviewedAll": "Revisaste las {{total}} tarjetas",
+        "progressError": "No pudimos cargar el progreso de este mazo",
         "restart": "Empezar de nuevo",
+        "shuffle": "Barajar",
+        "intervalDays_one": "{{count}} día",
+        "intervalDays_other": "{{count}} días",
         "difficulty": {
           "easy": "Fácil",
           "medium": "Medio",
@@ -565,9 +571,10 @@
         },
         "wrong": "Incorrecto",
         "correct": "Correcto",
-        "skip": "Saltar",
         "advancedMode": "Modo avanzado",
+        "rateCard": "Califica esta tarjeta",
         "summary": {
+          "description": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas, en {{duration}}.",
           "excellentMastery": "¡Excelente dominio!",
           "greatJob": "¡Muy bien, sigue así!",
           "goodProgress": "¡Buen progreso!",
@@ -586,6 +593,9 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} de {{total}} respondidas",
+        "outcomeCorrect": "Correcto — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrecto — la respuesta es {{letter}}. {{answer}}",
         "explanation": "Explicación",
         "next": "Siguiente",
         "finish": "Finalizar",
@@ -692,6 +702,33 @@
       "note": "Nota",
       "study": "Estudio"
     },
-    "tabsLabel": "Espacio de la nota"
+    "tabsLabel": "Espacio de la nota",
+    "tabsLoading": "Cargando el espacio de la nota"
+  },
+  "study": {
+    "loading": "Cargando tu repaso",
+    "newBadge": "Nueva",
+    "caughtUp": {
+      "title": "Todo al día",
+      "nextReview": "Tu próxima tarjeta llega {{when}}",
+      "nothingScheduled": "Aún no tienes tarjetas programadas",
+      "cta": "Ir a mis notas"
+    },
+    "summary": {
+      "streak_zero": "Tu racha empieza hoy",
+      "streak_one": "Racha de {{count}} día",
+      "streak_other": "Racha de {{count}} días",
+      "backHome": "Volver al inicio",
+      "restartFailed": "No pudimos cargar tarjetas nuevas. Inténtalo de nuevo."
+    },
+    "todayCard": {
+      "title": "Repaso de hoy",
+      "dueLabel": "para hoy",
+      "newLabel_one": "nueva",
+      "newLabel_other": "nuevas",
+      "streakLabel_one": "día de racha",
+      "streakLabel_other": "días de racha",
+      "cta": "Empezar"
+    }
   }
 }

@@ -124,6 +124,59 @@ describe('artifacts study hooks', () => {
     expect(result.current.data).toEqual({ latest: null });
   });
 
+  it('refreshes a mounted study-stats query after a review', async () => {
+    vi.mocked(artifactsApi.getStudyStats).mockResolvedValue(STATS);
+    vi.mocked(artifactsApi.reviewCard).mockResolvedValue(PROGRESS);
+    const { result: stats } = renderHook(() => useStudyStats(TIME_ZONE), {
+      wrapper,
+    });
+    await waitFor(() => expect(stats.current.isSuccess).toBe(true));
+
+    const reviewed: StudyStats = { ...STATS, dueCount: 1, reviewedToday: 2 };
+    vi.mocked(artifactsApi.getStudyStats).mockResolvedValue(reviewed);
+    const { result } = renderHook(() => useReviewCard(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        artifactId: 'deck-1',
+        cardIndex: 2,
+        quality: 5,
+      });
+    });
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(artifactsQueryKeys.studyStats(TIME_ZONE))
+      ).toEqual(reviewed)
+    );
+    expect(artifactsApi.getStudyStats).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks the study session stale without refetching the snapshot in play', async () => {
+    vi.mocked(artifactsApi.getStudySession).mockResolvedValue(SESSION);
+    vi.mocked(artifactsApi.reviewCard).mockResolvedValue(PROGRESS);
+    const { result: session } = renderHook(() => useStudySession(TIME_ZONE), {
+      wrapper,
+    });
+    await waitFor(() => expect(session.current.isSuccess).toBe(true));
+
+    const { result } = renderHook(() => useReviewCard(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        artifactId: 'deck-1',
+        cardIndex: 2,
+        quality: 5,
+      });
+    });
+
+    expect(artifactsApi.getStudySession).toHaveBeenCalledTimes(1);
+    expect(
+      queryClient.getQueryState(artifactsQueryKeys.studySession(TIME_ZONE))
+        ?.isInvalidated
+    ).toBe(true);
+  });
+
   it('posts a review positionally and invalidates every artifacts query', async () => {
     vi.mocked(artifactsApi.reviewCard).mockResolvedValue(PROGRESS);
     const seeded = [

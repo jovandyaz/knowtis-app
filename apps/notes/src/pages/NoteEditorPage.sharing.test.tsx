@@ -47,6 +47,7 @@ vi.mock('@knowtis/crdt', () => ({
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: () => false,
+  useFeatureFlags: () => ({ isPending: false }),
 }));
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
   CollaborativeEditor: () => null,

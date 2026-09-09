@@ -52,7 +52,9 @@ function renderSection(
   value = 'fireworks,baseten',
   source: AiConfigEntry['source'] = 'default'
 ) {
-  return render(<UpstreamSection entry={entryWith(value, source)} />);
+  return render(
+    <UpstreamSection mode="preference" entry={entryWith(value, source)} />
+  );
 }
 
 describe('UpstreamSection', () => {
@@ -61,6 +63,93 @@ describe('UpstreamSection', () => {
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
+  });
+
+  it('edits independent preference and exclusion lists with distinct labels', async () => {
+    render(
+      <>
+        <UpstreamSection
+          mode="preference"
+          entry={entryWith('fireworks', 'custom')}
+        />
+        <UpstreamSection
+          mode="ignore"
+          entry={{
+            ...entryWith('', 'default'),
+            key: 'ai_openrouter_ignored_providers',
+          }}
+        />
+      </>
+    );
+    const preference = screen.getByRole('textbox', {
+      name: 'Preferred providers',
+    });
+    const ignored = screen.getByRole('textbox', { name: 'Ignored providers' });
+    expect(preference.id).not.toBe(ignored.id);
+    expect(
+      screen.getByText(/Leave it empty to exclude no providers/)
+    ).toBeInTheDocument();
+    await userEvent.type(ignored, ' parasail ');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(setConfigMutate).toHaveBeenCalledWith(
+      { key: 'ai_openrouter_ignored_providers', value: 'parasail' },
+      expect.anything()
+    );
+    expect(preference).toHaveValue('fireworks');
+  });
+
+  it.each(['set', 'reset'])(
+    'blocks conflicting mutations for ignored providers while %s is pending',
+    async (pending) => {
+      const entry = {
+        ...entryWith('parasail', 'custom'),
+        key: 'ai_openrouter_ignored_providers' as const,
+      };
+      const { rerender } = render(
+        <UpstreamSection mode="ignore" entry={entry} />
+      );
+      await userEvent.type(screen.getByRole('textbox'), ',fireworks');
+      if (pending === 'set') {
+        setConfigState.isPending = true;
+      } else {
+        resetConfigState.isPending = true;
+      }
+      rerender(<UpstreamSection mode="ignore" entry={entry} />);
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', {
+          name: /reset to default: ignored providers/i,
+        })
+      ).toBeDisabled();
+      expect(screen.getByRole('textbox')).toBeDisabled();
+    }
+  );
+
+  it('drops an exclusion draft after a remote update and resets its own key', async () => {
+    const entry = {
+      ...entryWith('parasail', 'custom'),
+      key: 'ai_openrouter_ignored_providers' as const,
+    };
+    const { rerender } = render(
+      <UpstreamSection mode="ignore" entry={entry} />
+    );
+    await userEvent.type(screen.getByRole('textbox'), ',fireworks');
+    rerender(
+      <UpstreamSection mode="ignore" entry={{ ...entry, value: 'novita' }} />
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('novita');
+    expect(
+      screen.queryByRole('button', { name: 'Save' })
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: /reset to default: ignored providers/i,
+      })
+    );
+    expect(resetConfigMutate).toHaveBeenCalledWith(
+      { key: 'ai_openrouter_ignored_providers' },
+      expect.anything()
+    );
   });
 
   it('names the measured-good defaults in its helper text', () => {
@@ -82,8 +171,18 @@ describe('UpstreamSection', () => {
     await userEvent.type(input, 'baseten');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    rerender(<UpstreamSection entry={entryWith('baseten', 'custom')} />);
-    rerender(<UpstreamSection entry={entryWith('fireworks', 'default')} />);
+    rerender(
+      <UpstreamSection
+        mode="preference"
+        entry={entryWith('baseten', 'custom')}
+      />
+    );
+    rerender(
+      <UpstreamSection
+        mode="preference"
+        entry={entryWith('fireworks', 'default')}
+      />
+    );
 
     expect(screen.getByRole('textbox')).toHaveValue('fireworks');
   });
@@ -144,7 +243,7 @@ describe('UpstreamSection', () => {
 
     expect(
       screen.getByRole('button', {
-        name: /^reset to default: provider allowlist$/i,
+        name: /^reset to default: preferred providers$/i,
       })
     ).toBeInTheDocument();
   });
@@ -154,7 +253,7 @@ describe('UpstreamSection', () => {
 
     expect(
       screen.queryByRole('button', {
-        name: /^reset to default: provider allowlist$/i,
+        name: /^reset to default: preferred providers$/i,
       })
     ).not.toBeInTheDocument();
   });
@@ -164,13 +263,14 @@ describe('UpstreamSection', () => {
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: /^reset to default: provider allowlist$/i,
+        name: /^reset to default: preferred providers$/i,
       })
     );
 
-    expect(resetConfigMutate).toHaveBeenCalledWith({
-      key: 'ai_openrouter_providers',
-    });
+    expect(resetConfigMutate).toHaveBeenCalledWith(
+      { key: 'ai_openrouter_providers' },
+      expect.anything()
+    );
   });
 
   it('disables the input while a reset is in flight', () => {
@@ -191,7 +291,12 @@ describe('UpstreamSection', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
 
-    rerender(<UpstreamSection entry={entryWith('together', 'custom')} />);
+    rerender(
+      <UpstreamSection
+        mode="preference"
+        entry={entryWith('together', 'custom')}
+      />
+    );
 
     expect(screen.getByRole('textbox')).toHaveValue('together');
     expect(

@@ -1,11 +1,11 @@
-import type { HTMLAttributes } from 'react';
+import { createElement, forwardRef, type HTMLAttributes } from 'react';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2',
+  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2',
   {
     variants: {
       variant: {
@@ -15,8 +15,10 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-(--destructive) text-(--destructive-foreground)',
         outline: 'text-(--foreground)',
-        success: 'border-transparent bg-emerald-500/15 text-emerald-600',
-        warning: 'border-transparent bg-amber-500/15 text-amber-600',
+        success: 'border-transparent bg-(--success)/15 text-(--success)',
+        warning: 'border-transparent bg-(--warning)/15 text-(--warning)',
+        count:
+          'h-5 min-w-5 justify-center border-transparent bg-(--primary) px-1.5 text-2xs tabular-nums text-(--primary-foreground)',
       },
     },
     defaultVariants: {
@@ -26,13 +28,20 @@ const badgeVariants = cva(
 );
 
 export interface BadgeProps
-  extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
-
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
+  extends HTMLAttributes<HTMLElement>, VariantProps<typeof badgeVariants> {
+  /** A badge is phrasing content; reach for `div` only where flow content is expected. */
+  as?: 'span' | 'div';
 }
+
+const Badge = forwardRef<HTMLElement, BadgeProps>(
+  ({ as = 'span', className, variant, ...props }, ref) =>
+    createElement(as, {
+      ...props,
+      ref,
+      className: cn(badgeVariants({ variant }), className),
+    })
+);
+Badge.displayName = 'Badge';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export { Badge, badgeVariants };
