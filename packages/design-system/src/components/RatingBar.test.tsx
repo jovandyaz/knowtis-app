@@ -104,6 +104,16 @@ describe('RatingBar', () => {
     );
   });
 
+  it('floors the tap target at 44px only where the pointer is coarse', () => {
+    renderBar();
+    const button = screen.getByRole('button', { name: 'Good, 6d' });
+    expect(button).toHaveClass(
+      'pointer-coarse:min-h-11',
+      'pointer-coarse:min-w-11'
+    );
+    expect(button.className.split(' ')).not.toContain('min-h-11');
+  });
+
   it('keeps the transition disabled under reduced motion', () => {
     renderBar();
     expect(
