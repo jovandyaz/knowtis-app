@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as MotionReact from 'motion/react';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -132,6 +133,17 @@ function failOnRefetch() {
   refetchQueue.mockImplementation(() =>
     Promise.resolve({ isError: true, data: undefined })
   );
+}
+
+function deferReview() {
+  let release: (() => void) | undefined;
+  reviewCard.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = () => resolve({ ok: true });
+      })
+  );
+  return () => release?.();
 }
 
 const CARD_ONE = makeCard();
@@ -274,6 +286,64 @@ describe('StudySessionPage', () => {
       quality: SM2_QUALITY.GOOD,
     });
     expect(front(/Frente dos/)).toBeInTheDocument();
+  });
+
+  it('leaves a refused card unrated instead of counting it and moving on', async () => {
+    queueOf([CARD_ONE]);
+    reviewCard.mockRejectedValueOnce(new Error('refused'));
+    render(<StudySessionPage />);
+
+    await rateCurrentCorrect(/Frente uno/);
+
+    expect(
+      await screen.findByRole('button', { name: 'Dorso uno' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.artifacts.flashcards.summary.gotIt')
+    ).toBeNull();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    expect(toast.error).toHaveBeenCalledWith(
+      'ai.artifacts.flashcards.reviewError'
+    );
+    expect(correctButton()).toBeInTheDocument();
+  });
+
+  it('counts the card once a refused review is accepted on the retry', async () => {
+    queueOf([CARD_ONE]);
+    reviewCard.mockRejectedValueOnce(new Error('refused'));
+    render(<StudySessionPage />);
+
+    await rateCurrentCorrect(/Frente uno/);
+    await userEvent.click(correctButton());
+
+    expect(
+      within(
+        await screen.findByRole('group', {
+          name: 'ai.artifacts.flashcards.summary.gotIt',
+        })
+      ).getByText('1')
+    ).toBeInTheDocument();
+    expect(reviewCard).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes no second rating while the first is still in flight', async () => {
+    const releaseReview = deferReview();
+    render(<StudySessionPage />);
+
+    await rateCurrentCorrect(/Frente uno/);
+    await userEvent.click(correctButton());
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+
+    releaseReview();
+
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
+    expect(reviewCard).toHaveBeenCalledTimes(1);
   });
 
   it('shows the summary with the counts and the streak once the queue is done', async () => {
@@ -523,7 +593,9 @@ describe('StudySessionPage', () => {
       cardIndex: 7,
       quality: SM2_QUALITY.GOOD,
     });
-    expect(front(/Frente dos/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
   });
 
   it('drops the stale intervals when replaying the cards that were missed', async () => {

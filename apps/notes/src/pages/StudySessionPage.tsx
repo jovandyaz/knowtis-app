@@ -215,42 +215,54 @@ function StudyQueueSession({
   const isCurrentCardPending =
     session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
 
+  const isReviewInFlightRef = useRef(false);
+
   const submitReview = useCallback(
-    (quality: SM2Quality) => {
-      if (!session.currentCard) {
-        return;
+    async (quality: SM2Quality) => {
+      if (isReviewInFlightRef.current || !session.currentCard) {
+        return false;
       }
       const { artifactId, cardIndex } = session.currentCard;
-      void reviewCard({ artifactId, cardIndex, quality }).catch(() => {
+      isReviewInFlightRef.current = true;
+      try {
+        await reviewCard({ artifactId, cardIndex, quality });
+        return true;
+      } catch {
         toast.error(t('ai.artifacts.flashcards.reviewError'));
-      });
+        return false;
+      } finally {
+        isReviewInFlightRef.current = false;
+      }
     },
     [session.currentCard, reviewCard, t]
   );
 
-  const handleWrong = useCallback(() => {
+  const handleWrong = useCallback(async () => {
     if (!isCurrentCardPending) {
       return;
     }
-    submitReview(SM2_QUALITY.AGAIN);
-    session.rate('wrong');
+    if (await submitReview(SM2_QUALITY.AGAIN)) {
+      session.rate('wrong');
+    }
   }, [isCurrentCardPending, submitReview, session]);
 
-  const handleCorrect = useCallback(() => {
+  const handleCorrect = useCallback(async () => {
     if (!isCurrentCardPending) {
       return;
     }
-    submitReview(SM2_QUALITY.GOOD);
-    session.rate('correct');
+    if (await submitReview(SM2_QUALITY.GOOD)) {
+      session.rate('correct');
+    }
   }, [isCurrentCardPending, submitReview, session]);
 
   const handleRateAdvanced = useCallback(
-    (quality: SM2Quality) => {
+    async (quality: SM2Quality) => {
       if (!isCurrentCardPending) {
         return;
       }
-      submitReview(quality);
-      session.rateAdvanced(quality);
+      if (await submitReview(quality)) {
+        session.rateAdvanced(quality);
+      }
     },
     [isCurrentCardPending, submitReview, session]
   );
@@ -282,6 +294,9 @@ function StudyQueueSession({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      if (isReviewInFlightRef.current) {
+        return;
+      }
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -330,11 +345,11 @@ function StudyQueueSession({
           break;
         case STUDY_KEY_ACTION_TYPES.RATE:
           if (session.isAdvancedMode) {
-            handleRateAdvanced(action.quality);
+            void handleRateAdvanced(action.quality);
           } else if (action.quality === SM2_QUALITY.AGAIN) {
-            handleWrong();
+            void handleWrong();
           } else {
-            handleCorrect();
+            void handleCorrect();
           }
           break;
       }
@@ -454,9 +469,9 @@ function StudyQueueSession({
             disabled={isReviewPending}
             intervals={isReplay ? undefined : card.predictedIntervals}
             showKeys
-            onWrong={handleWrong}
-            onCorrect={handleCorrect}
-            onRateAdvanced={handleRateAdvanced}
+            onWrong={() => void handleWrong()}
+            onCorrect={() => void handleCorrect()}
+            onRateAdvanced={(quality) => void handleRateAdvanced(quality)}
           />
         </div>
       ) : null}

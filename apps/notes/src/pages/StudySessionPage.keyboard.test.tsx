@@ -105,6 +105,17 @@ function correctButton() {
   });
 }
 
+function deferReview() {
+  let release: (() => void) | undefined;
+  reviewCard.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = () => resolve({ ok: true });
+      })
+  );
+  return () => release?.();
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   reviewCard.mockResolvedValue({ ok: true });
@@ -202,18 +213,23 @@ describe('StudySessionPage keyboard map', () => {
     expect(front(/Frente uno/)).toBeInTheDocument();
   });
 
-  it('comes back to the card the cursor skipped instead of re-rating the answered one', () => {
+  it('comes back to the card the cursor skipped instead of re-rating the answered one', async () => {
     render(<StudySessionPage />);
 
     fireEvent.keyDown(document.body, { key: 'ArrowRight' });
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
 
-    expect(front(/Frente uno/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Frente uno/ })
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
 
+    expect(
+      await screen.findByRole('link', { name: 'study.summary.backHome' })
+    ).toBeInTheDocument();
     expect(reviewCard).toHaveBeenNthCalledWith(1, {
       artifactId: 'deck-1',
       cardIndex: 1,
@@ -225,17 +241,16 @@ describe('StudySessionPage keyboard map', () => {
       quality: SM2_QUALITY.GOOD,
     });
     expect(reviewCard).toHaveBeenCalledTimes(2);
-    expect(
-      screen.getByRole('link', { name: 'study.summary.backHome' })
-    ).toBeInTheDocument();
   });
 
-  it('posts no second review for a card that was already answered', () => {
+  it('posts no second review for a card that was already answered', async () => {
     render(<StudySessionPage />);
 
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
-    expect(front(/Frente dos/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
     fireEvent.keyDown(document.body, { key: ' ' });
@@ -253,7 +268,53 @@ describe('StudySessionPage keyboard map', () => {
     );
   });
 
-  it('ignores a rating key raised inside a dialog, then rates once focus is back on the page', () => {
+  it('takes no second rating key while the first is still in flight', async () => {
+    const releaseReview = deferReview();
+    render(<StudySessionPage />);
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+
+    expect(
+      screen.getByRole('button', { name: 'Dorso uno' })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: '2' });
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+
+    releaseReview();
+
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the cursor on the card being recorded until the server answers', async () => {
+    const releaseReview = deferReview();
+    render(<StudySessionPage />);
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+
+    expect(
+      screen.getByRole('button', { name: 'Dorso uno' })
+    ).toBeInTheDocument();
+
+    releaseReview();
+
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '1'
+    );
+  });
+
+  it('ignores a rating key raised inside a dialog, then rates once focus is back on the page', async () => {
     render(<StudySessionPage />);
 
     fireEvent.keyDown(document.body, { key: ' ' });
@@ -278,10 +339,12 @@ describe('StudySessionPage keyboard map', () => {
       cardIndex: 0,
       quality: SM2_QUALITY.GOOD,
     });
-    expect(front(/Frente dos/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
   });
 
-  it('rates wrong with 1 and correct with 2 in simple mode', () => {
+  it('rates wrong with 1 and correct with 2 in simple mode', async () => {
     render(<StudySessionPage />);
 
     fireEvent.keyDown(document.body, { key: ' ' });
@@ -292,7 +355,9 @@ describe('StudySessionPage keyboard map', () => {
       cardIndex: 0,
       quality: SM2_QUALITY.AGAIN,
     });
-    expect(front(/Frente dos/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
@@ -302,6 +367,9 @@ describe('StudySessionPage keyboard map', () => {
       cardIndex: 1,
       quality: SM2_QUALITY.GOOD,
     });
+    expect(
+      await screen.findByRole('link', { name: 'study.summary.backHome' })
+    ).toBeInTheDocument();
   });
 
   it('ignores a rating key before the card is flipped', () => {
@@ -313,14 +381,19 @@ describe('StudySessionPage keyboard map', () => {
     expect(correctButton()).toBeNull();
   });
 
-  it('hands the keyboard back once the summary is up', () => {
+  it('hands the keyboard back once the summary is up', async () => {
     render(<StudySessionPage />);
 
-    for (const key of [' ', '2', ' ', '2']) {
-      fireEvent.keyDown(document.body, { key });
-    }
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
     expect(
-      screen.getByRole('link', { name: 'study.summary.backHome' })
+      await screen.findByRole('button', { name: /Frente dos/ })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+    expect(
+      await screen.findByRole('link', { name: 'study.summary.backHome' })
     ).toBeInTheDocument();
 
     const event = createEvent.keyDown(document.body, { key: ' ' });

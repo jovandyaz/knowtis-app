@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as MotionReact from 'motion/react';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@knowtis/design-system';
@@ -13,7 +14,7 @@ import { useFlashcardSession } from './flashcard/use-flashcard-session';
 import type * as UseFlashcardSessionModule from './flashcard/use-flashcard-session';
 import { FlashcardStudy } from './FlashcardStudy';
 
-const reviewCard = vi.fn().mockResolvedValue({ ok: true });
+const reviewCard = vi.fn();
 const { useFlashcardProgressMock } = vi.hoisted(() => ({
   useFlashcardProgressMock: vi.fn(() => ({
     data: undefined as FlashcardProgress[] | undefined,
@@ -76,11 +77,23 @@ async function rateCorrect(front: RegExp) {
   await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
 }
 
+function deferReview() {
+  let release: (() => void) | undefined;
+  reviewCard.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = () => resolve({ ok: true });
+      })
+  );
+  return () => release?.();
+}
+
 describe('FlashcardStudy', () => {
   let randomSpy: ReturnType<typeof vi.spyOn> | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    reviewCard.mockResolvedValue({ ok: true });
     useFlashcardProgressMock.mockReturnValue(DEFAULT_PROGRESS_RESULT);
   });
 
@@ -171,6 +184,55 @@ describe('FlashcardStudy', () => {
     expect(
       vi.mocked(useFlashcardSession).mock.results.at(-1)?.value.counts
     ).toEqual({ correct: 1, wrong: 0, skipped: 0 });
+  });
+
+  it('leaves the card unrated when the server refuses the review', async () => {
+    reviewCard.mockRejectedValueOnce(new Error('refused'));
+    renderStudy();
+
+    await rateCorrect(/Front one/);
+
+    expect(
+      await screen.findByRole('button', { name: 'Back one' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Front two/ })).toBeNull();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    expect(toast.error).toHaveBeenCalledWith(
+      'ai.artifacts.flashcards.reviewError'
+    );
+  });
+
+  it('advances once a refused review is accepted on the retry', async () => {
+    reviewCard.mockRejectedValueOnce(new Error('refused'));
+    renderStudy();
+
+    await rateCorrect(/Front one/);
+    await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
+
+    expect(
+      await screen.findByRole('button', { name: /Front two/ })
+    ).toBeInTheDocument();
+    expect(reviewCard).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes no second rating while the first is still in flight', async () => {
+    const releaseReview = deferReview();
+    renderStudy();
+
+    await rateCorrect(/Front one/);
+    await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+
+    releaseReview();
+
+    expect(
+      await screen.findByRole('button', { name: /Front two/ })
+    ).toBeInTheDocument();
+    expect(reviewCard).toHaveBeenCalledTimes(1);
   });
 
   it('counts a card skipped when the next arrow leaves it unflipped', async () => {
