@@ -23,20 +23,25 @@ const indicatorVariants = cva(
   }
 );
 
-export interface ProgressProps
-  extends
-    Omit<
-      ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>,
-      'value' | 'max' | 'aria-label'
-    >,
-    VariantProps<typeof indicatorVariants> {
-  value: number;
-  max: number;
-  label: string;
-}
+/**
+ * Exactly one of `label` (an invisible accessible name) or `labelledBy` (the id
+ * of a visible caption). A bar rendered next to its own caption must use
+ * `labelledBy`, or assistive tech announces that text twice.
+ */
+export type ProgressProps = Omit<
+  ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>,
+  'value' | 'max' | 'aria-label' | 'aria-labelledby'
+> &
+  VariantProps<typeof indicatorVariants> & {
+    value: number;
+    max: number;
+  } & (
+    | { label: string; labelledBy?: never }
+    | { labelledBy: string; label?: never }
+  );
 
 const Progress = forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value, max, label, tone, ...props }, ref) => {
+  ({ className, value, max, label, labelledBy, tone, ...props }, ref) => {
     const { safeMax, clamped, ratio } = clampProgress(value, max);
     const percent = ratio * PERCENT;
     return (
@@ -45,6 +50,7 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
         value={clamped}
         max={safeMax}
         aria-label={label}
+        aria-labelledby={labelledBy}
         className={cn(
           'relative h-1.5 w-full overflow-hidden rounded-full bg-(--muted)',
           className

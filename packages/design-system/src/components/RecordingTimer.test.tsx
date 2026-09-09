@@ -10,9 +10,11 @@ function indicatorOf(bar: HTMLElement): HTMLElement {
 }
 
 describe('RecordingTimer', () => {
-  it('names the progress bar with the time it displays', () => {
+  it('names the progress bar with the clock it already displays', () => {
     render(<RecordingTimer elapsed={45} maxDuration={300} isRecording />);
-    const bar = screen.getByRole('progressbar', { name: '00:45 / 05:00' });
+    const bar = screen.getByRole('progressbar');
+    expect(bar).toHaveAccessibleName('00:45/ 05:00');
+    expect(bar).not.toHaveAttribute('aria-label');
     expect(bar).toHaveAttribute('aria-valuenow', '45');
     expect(bar).toHaveAttribute('aria-valuemax', '300');
   });

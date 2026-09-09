@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 
 import { cn } from '../utils/cn';
 import { Progress } from './Progress';
@@ -21,13 +21,14 @@ function formatTime(seconds: number): string {
 
 const RecordingTimer = forwardRef<HTMLDivElement, RecordingTimerProps>(
   ({ elapsed, maxDuration, isRecording, className }, ref) => {
+    const captionId = useId();
     const isNearLimit = maxDuration - elapsed <= NEAR_LIMIT_SECONDS;
     const elapsedLabel = formatTime(elapsed);
     const totalLabel = formatTime(maxDuration);
 
     return (
       <div ref={ref} className={cn('flex flex-col gap-2', className)}>
-        <div className="flex items-center justify-center gap-2">
+        <div id={captionId} className="flex items-center justify-center gap-2">
           {isRecording && (
             <span
               className="inline-block h-2.5 w-2.5 rounded-full bg-(--destructive) motion-safe:animate-pulse"
@@ -50,7 +51,7 @@ const RecordingTimer = forwardRef<HTMLDivElement, RecordingTimerProps>(
         <Progress
           value={elapsed}
           max={maxDuration}
-          label={`${elapsedLabel} / ${totalLabel}`}
+          labelledBy={captionId}
           tone={isNearLimit ? 'danger' : 'primary'}
         />
       </div>

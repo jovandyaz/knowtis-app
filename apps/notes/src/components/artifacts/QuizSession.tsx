@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent,
@@ -63,6 +64,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const content = artifact.content;
   const submitQuiz = useSubmitQuiz(artifact.id);
 
+  const scoreCaptionId = useId();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -181,12 +183,14 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         >
           {t('ai.artifacts.quiz.completed')}
         </h3>
-        <p className="text-lg text-(--muted-foreground)">{scoreLabel}</p>
+        <p id={scoreCaptionId} className="text-lg text-(--muted-foreground)">
+          {scoreLabel}
+        </p>
         <Progress
           className="h-4 w-48"
           value={percentage}
           max={PERCENT}
-          label={scoreLabel}
+          labelledBy={scoreCaptionId}
           tone={scoreTone(percentage)}
         />
         <Button variant="outline" onClick={handleRestart}>
