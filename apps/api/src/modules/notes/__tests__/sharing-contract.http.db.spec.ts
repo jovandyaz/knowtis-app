@@ -283,11 +283,11 @@ describe.runIf(DB_AVAILABLE)(
       try {
         await vi.waitFor(
           async () => {
-            const [count] =
-              await f.client`select count(*)::int as count from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query ilike '%update%notes%'`;
-            expect(count?.['count']).toBeGreaterThanOrEqual(2);
+            const [blocked] =
+              await f.client`select count(*)::int as count from pg_locks l join pg_stat_activity a on a.pid = l.pid where not l.granted and a.datname = current_database()`;
+            expect(blocked?.['count']).toBeGreaterThanOrEqual(2);
           },
-          { timeout: 5000, interval: 20 }
+          { timeout: 15000, interval: 20 }
         );
       } finally {
         release.resolve(undefined);

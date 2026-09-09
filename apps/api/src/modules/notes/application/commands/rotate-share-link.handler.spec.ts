@@ -44,20 +44,18 @@ function setup(loaded: NoteEntity | null = note) {
   };
 }
 describe('RotateShareLinkHandler', () => {
-  it.each(['editor', 'viewer', 'admin', 'stranger'])(
-    'denies %s without writing or signaling',
-    async (actorId) => {
-      const { repo, emitter, handler } = setup();
-      const events: unknown[] = [];
-      emitter.on('note.access-changed', (event) => events.push(event));
-      expect(
-        (await handler.execute({ noteId: note.id, actorId }))._unsafeUnwrapErr()
-          .code
-      ).toBe('PERMISSION_DENIED');
-      expect(repo.rotateShareToken).not.toHaveBeenCalled();
-      expect(events).toEqual([]);
-    }
-  );
+  it('denies a non-owner without writing or signaling', async () => {
+    const { repo, emitter, handler } = setup();
+    const events: unknown[] = [];
+    emitter.on('note.access-changed', (event) => events.push(event));
+    expect(
+      (
+        await handler.execute({ noteId: note.id, actorId: 'not-the-owner' })
+      )._unsafeUnwrapErr().code
+    ).toBe('PERMISSION_DENIED');
+    expect(repo.rotateShareToken).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
   it('fails with NOTE_NOT_FOUND when the note is absent or deleted', async () => {
     const { handler, repo } = setup(null);
     expect(

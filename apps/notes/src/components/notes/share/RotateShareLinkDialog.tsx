@@ -34,9 +34,9 @@ export function RotateShareLinkDialog({
   const { t } = useTranslation('notes');
   const [open, setOpen] = useState(false);
   const [errorKey, setErrorKey] = useState<
-    | 'sharing.rotation.conflict'
-    | 'sharing.rotation.uncertain'
-    | 'sharing.rotation.failed'
+    | 'share.rotation.conflict'
+    | 'share.rotation.uncertain'
+    | 'share.rotation.failed'
     | null
   >(null);
   const rotate = useRotateShareLink(note.id);
@@ -52,15 +52,15 @@ export function RotateShareLinkDialog({
       try {
         await rotate.mutateAsync();
         setOpen(false);
-        toast.success(t('sharing.rotation.saved'));
+        toast.success(t('share.rotation.saved'));
       } catch (error) {
         const status = error instanceof ApiClientError ? error.status : 0;
         setErrorKey(
           status === 409
-            ? 'sharing.rotation.conflict'
+            ? 'share.rotation.conflict'
             : status === 0 || status >= 500
-              ? 'sharing.rotation.uncertain'
-              : 'sharing.rotation.failed'
+              ? 'share.rotation.uncertain'
+              : 'share.rotation.failed'
         );
       }
     });
@@ -82,7 +82,7 @@ export function RotateShareLinkDialog({
           setOpen(true);
         }}
       >
-        {t('sharing.rotation.action')}
+        {t('share.rotation.action')}
       </Button>
       <Dialog
         open={open}
@@ -92,16 +92,16 @@ export function RotateShareLinkDialog({
           }
         }}
       >
-        <DialogContent closeLabel={t('sharing.rotation.close')}>
+        <DialogContent closeLabel={t('share.rotation.close')}>
           <form
             onSubmit={confirm}
             className="flex flex-col gap-4"
             aria-busy={pending}
           >
             <DialogHeader>
-              <DialogTitle>{t('sharing.rotation.title')}</DialogTitle>
+              <DialogTitle>{t('share.rotation.title')}</DialogTitle>
               <DialogDescription>
-                {t('sharing.rotation.description')}
+                {t('share.rotation.description')}
               </DialogDescription>
             </DialogHeader>
             {errorKey ? (
@@ -116,11 +116,7 @@ export function RotateShareLinkDialog({
                 disabled={pending}
                 onClick={() => setOpen(false)}
               >
-                {t(
-                  errorKey
-                    ? 'sharing.rotation.close'
-                    : 'sharing.rotation.cancel'
-                )}
+                {t(errorKey ? 'share.rotation.close' : 'share.rotation.cancel')}
               </Button>
               {!errorKey ? (
                 <Button
@@ -128,7 +124,7 @@ export function RotateShareLinkDialog({
                   variant="destructive"
                   disabled={disabled || pending}
                 >
-                  {t('sharing.rotation.confirm')}
+                  {t('share.rotation.confirm')}
                 </Button>
               ) : null}
             </DialogFooter>

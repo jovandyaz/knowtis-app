@@ -85,17 +85,15 @@ describe('RotateShareLinkDialog', () => {
     const user = userEvent.setup();
     render(<Harness />, { wrapper });
     const trigger = screen.getByRole('button', {
-      name: 'sharing.rotation.action',
+      name: 'share.rotation.action',
     });
     await user.click(trigger);
     expect(
-      screen.getByRole('dialog', { name: 'sharing.rotation.title' })
+      screen.getByRole('dialog', { name: 'share.rotation.title' })
     ).toBeInTheDocument();
-    expect(
-      screen.getByText('sharing.rotation.description')
-    ).toBeInTheDocument();
+    expect(screen.getByText('share.rotation.description')).toBeInTheDocument();
     await user.click(
-      screen.getByRole('button', { name: 'sharing.rotation.cancel' })
+      screen.getByRole('button', { name: 'share.rotation.cancel' })
     );
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(fetcher).not.toHaveBeenCalled();
@@ -107,10 +105,10 @@ describe('RotateShareLinkDialog', () => {
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
     }
   );
-  it('does not open while authorization is refreshing', () => {
+  it('disables the rotation trigger while authorization is refreshing', () => {
     render(<Harness disabled />, { wrapper });
     expect(
-      screen.getByRole('button', { name: 'sharing.rotation.action' })
+      screen.getByRole('button', { name: 'share.rotation.action' })
     ).toBeDisabled();
   });
   it('accepts one native submit across same-tick repeated confirmation', async () => {
@@ -120,10 +118,10 @@ describe('RotateShareLinkDialog', () => {
     const user = userEvent.setup();
     render(<Harness />, { wrapper });
     await user.click(
-      screen.getByRole('button', { name: 'sharing.rotation.action' })
+      screen.getByRole('button', { name: 'share.rotation.action' })
     );
     const form = screen
-      .getByRole('button', { name: 'sharing.rotation.confirm' })
+      .getByRole('button', { name: 'share.rotation.confirm' })
       .closest('form');
     if (!form) {
       throw new Error('Expected native confirmation form');
@@ -134,7 +132,7 @@ describe('RotateShareLinkDialog', () => {
     });
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
     expect(
-      screen.getByRole('button', { name: 'sharing.rotation.confirm' })
+      screen.getByRole('button', { name: 'share.rotation.confirm' })
     ).toBeDisabled();
     await act(async () => {
       response.resolve(
@@ -165,17 +163,17 @@ describe('RotateShareLinkDialog', () => {
     const user = userEvent.setup();
     render(<Harness />, { wrapper });
     await user.click(
-      screen.getByRole('button', { name: 'sharing.rotation.action' })
+      screen.getByRole('button', { name: 'share.rotation.action' })
     );
     await user.click(
-      screen.getByRole('button', { name: 'sharing.rotation.confirm' })
+      screen.getByRole('button', { name: 'share.rotation.confirm' })
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'sharing.rotation.uncertain'
+      'share.rotation.uncertain'
     );
     expect(methods).toEqual(['POST', 'GET']);
     expect(
-      screen.queryByRole('button', { name: 'sharing.rotation.confirm' })
+      screen.queryByRole('button', { name: 'share.rotation.confirm' })
     ).not.toBeInTheDocument();
   });
 });

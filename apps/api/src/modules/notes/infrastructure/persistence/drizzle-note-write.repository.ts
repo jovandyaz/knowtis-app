@@ -28,12 +28,9 @@ import {
 import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
 import { mapToNoteEntity } from './note-entity.mapper';
 
-function rotationFailureCategory(error: unknown) {
-  const cause = error instanceof DrizzleQueryError ? error.cause : error;
-  const code =
-    typeof cause === 'object' && cause !== null && 'code' in cause
-      ? cause.code
-      : undefined;
+const SQLSTATE_PATTERN = /^[A-Z0-9]{5}$/;
+
+function rotationFailureCategory(code: unknown) {
   switch (code) {
     case '23505':
       return 'unique_violation';
@@ -45,6 +42,20 @@ function rotationFailureCategory(error: unknown) {
     default:
       return 'unclassified';
   }
+}
+
+function rotationDiagnostics(error: unknown) {
+  const cause = error instanceof DrizzleQueryError ? error.cause : error;
+  const code =
+    typeof cause === 'object' && cause !== null && 'code' in cause
+      ? cause.code
+      : undefined;
+  return {
+    failureCategory: rotationFailureCategory(code),
+    sqlState:
+      typeof code === 'string' && SQLSTATE_PATTERN.test(code) ? code : null,
+    errorName: error instanceof Error ? error.constructor.name : typeof error,
+  };
 }
 
 type NoteUpdatePayload = Omit<Partial<NewNote>, 'shareToken'> & {
@@ -155,7 +166,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       this.logger.error({
         operation: 'rotateShareToken',
         noteId: data.noteId,
-        failureCategory: rotationFailureCategory(error),
+        ...rotationDiagnostics(error),
       });
       return err(NoteErrors.persistenceError('rotateShareToken', data.noteId));
     }
