@@ -276,6 +276,20 @@ describe('registerNotesTools', () => {
     expect(page2.structuredContent?.nextCursor).toBeUndefined();
   });
 
+  it('should return an empty page without a cursor when there are no notes', async () => {
+    const list = vi
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, page: 1, limit: 2 });
+    notesApi = createMockNotesApi({ list });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'list-notes').cb({ limit: 2 });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ notes: [] });
+  });
+
   it('should return note content as Markdown from the get-note handler', async () => {
     const fullNote: NoteResponse = {
       id: 'note-1',
