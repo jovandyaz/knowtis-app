@@ -121,6 +121,35 @@ jobs:
       - name: Build (affected)
         run: npx nx affected -t build --configuration=production
 
+      - name: Check if sharing acceptance is affected
+        id: check-sharing-e2e
+        run: |
+          if npx nx show projects --affected --withTarget=e2e | grep -qx notes-e2e; then
+            echo "affected=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "affected=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Chromium for sharing acceptance
+        if: steps.check-sharing-e2e.outputs.affected == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Sharing acceptance against production builds
+        if: steps.check-sharing-e2e.outputs.affected == 'true'
+        timeout-minutes: 15
+        # Own Compose project and ports; setup strips inherited service credentials.
+        run: npx nx e2e notes-e2e
+
+      - name: Upload sharing acceptance evidence
+        if: always() && steps.check-sharing-e2e.outputs.affected == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sharing-acceptance
+          path: dist/.playwright/apps/notes-e2e/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Check if API is affected
         id: check-api
         run: |

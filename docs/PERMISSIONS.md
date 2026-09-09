@@ -519,3 +519,10 @@ Design notes: CASL is encapsulated in `permissions-core` (only `can`/`cannot` le
 | `apps/notes/src/hooks/useVerifyEmailGate.ts`           | Decides who is offered the verify-email dialog         |
 | `apps/notes/src/components/auth/VerifyEmailBanner.tsx` | Persistent unverified-email nudge                      |
 | `apps/notes/src/components/auth/VerifyEmailDialog.tsx` | In-place OTP verification dialog                       |
+
+### Sharing acceptance
+
+The [sharing E2E suite](SHARING_E2E.md) verifies People changes, old-link rejection,
+direct/link permission precedence, live-session cutoffs and recovery through the
+real HTTP and Hocuspocus boundaries. Its isolated runtime keeps the normal
+authorization, verification and throttling policies active.

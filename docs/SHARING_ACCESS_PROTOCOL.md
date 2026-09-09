@@ -170,7 +170,10 @@ packet delay and a stalled Node event loop are not claimed. Stock Hocuspocus can
 send Awareness in its connection constructor before `connected`; these hooks do
 not claim to suppress every Awareness frame in that narrow window. Already
 received content and previously accepted edits cannot be recovered or undone.
-Final integrated browser acceptance and independent review remain release gates.
+The [browser acceptance suite](SHARING_E2E.md) adds two independent API
+processes, real HTTP-authenticated browser sessions, and controlled Redis/SQL
+faults. Its measurements supplement these server-level tests; both suites and
+independent review remain release gates.
 
 ## Primary sources and decisions
 
