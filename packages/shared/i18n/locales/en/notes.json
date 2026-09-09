@@ -403,7 +403,7 @@
           }
         }
       },
-      "estudio": {
+      "study": {
         "noNote": "Open a note to use study tools."
       },
       "proposal": {
@@ -670,7 +670,8 @@
       "note": "Note",
       "study": "Study"
     },
-    "tabsLabel": "Note workspace"
+    "tabsLabel": "Note workspace",
+    "tabsLoading": "Loading the note workspace"
   },
   "study": {
     "loading": "Loading your review",

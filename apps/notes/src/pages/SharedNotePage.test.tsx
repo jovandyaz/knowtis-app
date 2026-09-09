@@ -54,7 +54,7 @@ const {
   return {
     captureProductEvent: vi.fn(),
     artifactFixtures,
-    sharedArtifacts: { data: [] as Artifact[] },
+    sharedArtifacts: { data: [] as Artifact[], isPending: false },
     studyToolsProps: { last: undefined as StudyToolsTabProps | undefined },
   };
 });
@@ -111,7 +111,10 @@ vi.mock('@knowtis/editor', () => ({
   ),
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useSharedNoteArtifacts: () => ({ data: sharedArtifacts.data }),
+  useSharedNoteArtifacts: () => ({
+    data: sharedArtifacts.data,
+    isPending: sharedArtifacts.isPending,
+  }),
 }));
 vi.mock('@/components/artifacts/StudyToolsTab', () => ({
   StudyToolsTab: (props: StudyToolsTabProps) => {
@@ -130,9 +133,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 const renderPage = () => render(<SharedNotePage />, { wrapper });
 
 const clickEdit = () =>
-  userEvent.click(
-    screen.getAllByRole('button', { name: 'shared.editButton' })[0]
-  );
+  userEvent.click(screen.getByRole('button', { name: 'shared.editButton' }));
 
 const signInLinks = () =>
   screen.queryAllByRole('link', { name: 'shared.signIn' });
@@ -142,6 +143,7 @@ beforeEach(() => {
   denyEdit = undefined;
   token = 'tok';
   sharedArtifacts.data = [];
+  sharedArtifacts.isPending = false;
   studyToolsProps.last = undefined;
   useWorkspaceStore.setState({ activeTab: 'note' });
   authUser.mockReturnValue({ isAnonymous: true });
@@ -166,13 +168,13 @@ describe('SharedNotePage sign-in call to action', () => {
   it('offers sign-in to an anonymous visitor', () => {
     authUser.mockReturnValue({ isAnonymous: true });
     renderPage();
-    expect(signInLinks().length).toBeGreaterThan(0);
+    expect(signInLinks()).toHaveLength(1);
   });
 
   it('offers sign-in to a visitor with no session at all', () => {
     authUser.mockReturnValue(null);
     renderPage();
-    expect(signInLinks().length).toBeGreaterThan(0);
+    expect(signInLinks()).toHaveLength(1);
   });
 
   it('hides sign-in from a signed-in account', () => {
@@ -353,7 +355,25 @@ describe('SharedNotePage study tab', () => {
   const noteTab = () =>
     screen.getByRole('tab', { name: /workspace.tabs.note/ });
   const notePanel = () => document.getElementById(workspacePanelId('note'));
-  const studyPanel = () => document.getElementById(workspacePanelId('estudio'));
+  const studyPanel = () => document.getElementById(workspacePanelId('study'));
+
+  const tabStripPlaceholder = () =>
+    screen.queryByRole('status', { name: 'workspace.tabsLoading' });
+
+  it('reserves the tab strip height while the artifacts are still loading', () => {
+    sharedArtifacts.isPending = true;
+    renderPage();
+
+    expect(tabStripPlaceholder()).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('drops the placeholder once the artifacts settle with none', () => {
+    renderPage();
+
+    expect(tabStripPlaceholder()).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
 
   it('leaves the page untabbed when the shared note has no artifacts', () => {
     renderPage();
@@ -397,7 +417,7 @@ describe('SharedNotePage study tab', () => {
 
   it('opens on the note tab even when the workspace was left on study', () => {
     sharedArtifacts.data = artifactFixtures;
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
 
     renderPage();
 
@@ -437,7 +457,7 @@ describe('SharedNotePage study tab', () => {
     expect(studyPanel()).not.toHaveClass('hidden');
 
     await userEvent.click(
-      screen.getAllByRole('button', { name: 'shared.viewButton' })[0]
+      screen.getByRole('button', { name: 'shared.viewButton' })
     );
 
     expect(noteTab()).toHaveAttribute('aria-selected', 'true');

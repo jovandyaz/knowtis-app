@@ -9,7 +9,8 @@ import {
   type StudySession,
 } from '@knowtis/shared-types';
 
-import { resolveStudyKeyAction, StudySessionPage } from './StudySessionPage';
+import { resolveStudyKeyAction } from './study-key-action';
+import { StudySessionPage } from './StudySessionPage';
 
 const { reviewCard } = vi.hoisted(() => ({
   reviewCard: vi.fn(),
@@ -105,6 +106,27 @@ function correctButton() {
   });
 }
 
+// Resolves a microtask after the commit that satisfies `seen`, so no passive effect can have run yet.
+function onCommit(seen: () => boolean): Promise<void> {
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (seen()) {
+        observer.disconnect();
+        resolve();
+      }
+    });
+    observer.observe(document.body, { subtree: true, childList: true });
+  });
+}
+
+const REVIEW_SETTLE_MICROTASKS = 6;
+
+async function settleReview() {
+  for (let step = 0; step < REVIEW_SETTLE_MICROTASKS; step++) {
+    await Promise.resolve();
+  }
+}
+
 function deferReview() {
   let release: (() => void) | undefined;
   reviewCard.mockImplementation(
@@ -120,68 +142,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   reviewCard.mockResolvedValue({ ok: true });
   queueOf([CARD_ONE, CARD_TWO]);
-});
-
-describe('resolveStudyKeyAction', () => {
-  it('flips on Space and Enter in both modes', () => {
-    for (const key of [' ', 'Enter']) {
-      expect(resolveStudyKeyAction(key, false)).toEqual({ type: 'flip' });
-      expect(resolveStudyKeyAction(key, true)).toEqual({ type: 'flip' });
-    }
-  });
-
-  it('navigates with the arrow keys in both modes', () => {
-    for (const isAdvancedMode of [false, true]) {
-      expect(resolveStudyKeyAction('ArrowLeft', isAdvancedMode)).toEqual({
-        type: 'navigate',
-        direction: -1,
-      });
-      expect(resolveStudyKeyAction('ArrowRight', isAdvancedMode)).toEqual({
-        type: 'navigate',
-        direction: 1,
-      });
-    }
-  });
-
-  it('maps 1/2 to wrong/correct in simple mode', () => {
-    expect(resolveStudyKeyAction('1', false)).toEqual({
-      type: 'rate',
-      quality: SM2_QUALITY.AGAIN,
-    });
-    expect(resolveStudyKeyAction('2', false)).toEqual({
-      type: 'rate',
-      quality: SM2_QUALITY.GOOD,
-    });
-  });
-
-  it('ignores 3 and 4 in simple mode', () => {
-    expect(resolveStudyKeyAction('3', false)).toBeUndefined();
-    expect(resolveStudyKeyAction('4', false)).toBeUndefined();
-  });
-
-  it('maps 1-4 to Again/Hard/Good/Easy in advanced mode', () => {
-    expect(resolveStudyKeyAction('1', true)).toEqual({
-      type: 'rate',
-      quality: SM2_QUALITY.AGAIN,
-    });
-    expect(resolveStudyKeyAction('2', true)).toEqual({
-      type: 'rate',
-      quality: SM2_QUALITY.HARD,
-    });
-    expect(resolveStudyKeyAction('3', true)).toEqual({
-      type: 'rate',
-      quality: SM2_QUALITY.GOOD,
-    });
-    expect(resolveStudyKeyAction('4', true)).toEqual({
-      type: 'rate',
-      quality: SM2_QUALITY.EASY,
-    });
-  });
-
-  it('ignores an unrelated key in both modes', () => {
-    expect(resolveStudyKeyAction('a', false)).toBeUndefined();
-    expect(resolveStudyKeyAction('a', true)).toBeUndefined();
-  });
 });
 
 describe('StudySessionPage keyboard map', () => {
@@ -243,6 +203,24 @@ describe('StudySessionPage keyboard map', () => {
     expect(reviewCard).toHaveBeenCalledTimes(2);
   });
 
+  it('answers the next key with the card the deck advanced to, not the last one', async () => {
+    render(<StudySessionPage />);
+
+    const advanced = onCommit(
+      () => screen.queryByRole('button', { name: /Frente dos/ }) !== null
+    );
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+    await advanced;
+
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+
+    expect(
+      screen.getByRole('button', { name: /Frente uno/ })
+    ).toBeInTheDocument();
+  });
+
   it('posts no second review for a card that was already answered', async () => {
     render(<StudySessionPage />);
 
@@ -289,6 +267,30 @@ describe('StudySessionPage keyboard map', () => {
       await screen.findByRole('button', { name: /Frente dos/ })
     ).toBeInTheDocument();
     expect(reviewCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes no second rating key between the answer and the card it advances', async () => {
+    const releaseReview = deferReview();
+    render(<StudySessionPage />);
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+
+    releaseReview();
+    await settleReview();
+    expect(
+      screen.getByRole('button', { name: 'Dorso uno' })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: '2' });
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+    expect(reviewCard).toHaveBeenCalledWith({
+      artifactId: 'deck-1',
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
   });
 
   it('keeps the cursor on the card being recorded until the server answers', async () => {
@@ -381,20 +383,22 @@ describe('StudySessionPage keyboard map', () => {
     expect(correctButton()).toBeNull();
   });
 
-  it('hands the keyboard back once the summary is up', async () => {
+  it('hands the keyboard back in the commit that shows the summary', async () => {
     render(<StudySessionPage />);
+
+    const summaryUp = onCommit(
+      () =>
+        screen.queryByRole('link', { name: 'study.summary.backHome' }) !== null
+    );
 
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
     expect(
       await screen.findByRole('button', { name: /Frente dos/ })
     ).toBeInTheDocument();
-
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
-    expect(
-      await screen.findByRole('link', { name: 'study.summary.backHome' })
-    ).toBeInTheDocument();
+    await summaryUp;
 
     const event = createEvent.keyDown(document.body, { key: ' ' });
     fireEvent(document.body, event);

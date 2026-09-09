@@ -12,10 +12,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
-const { aiState, artifactsState, useArtifacts } = vi.hoisted(() => {
+const { aiState, artifactsState, flagsState, useArtifacts } = vi.hoisted(() => {
   const artifactsState = { data: [] as { id: string }[] };
   return {
     aiState: { aiEnabled: false },
+    flagsState: { isPending: false },
     artifactsState,
     useArtifacts: vi.fn<(noteId?: string) => { data: { id: string }[] }>(
       () => ({
@@ -74,6 +75,11 @@ vi.mock('@/components/artifacts/StudyToolsTab', () => ({
 
 vi.mock('@knowtis/data-access-artifacts', () => ({ useArtifacts }));
 
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlags: () => ({ isPending: flagsState.isPending }),
+  useFeatureFlag: () => false,
+}));
+
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => ({
     data: {
@@ -110,8 +116,28 @@ describe('NoteEditorPage workspace tabs', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ activeTab: 'note' });
     aiState.aiEnabled = false;
+    flagsState.isPending = false;
     artifactsState.data = [];
     useArtifacts.mockClear();
+  });
+
+  const tabStripPlaceholder = () =>
+    screen.queryByRole('status', { name: 'workspace.tabsLoading' });
+
+  it('reserves the tab strip height while the feature flags are pending', () => {
+    flagsState.isPending = true;
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(tabStripPlaceholder()).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('drops the placeholder once the flags settle with AI off', () => {
+    renderWithClient(<NoteEditorPage />);
+
+    expect(tabStripPlaceholder()).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 
   describe('when AI is disabled', () => {
@@ -148,19 +174,19 @@ describe('NoteEditorPage workspace tabs', () => {
       expect(screen.getByRole('tablist')).toBeInTheDocument();
 
       const notePanel = document.getElementById(workspacePanelId('note'));
-      const estudioPanel = document.getElementById(workspacePanelId('estudio'));
+      const studyPanel = document.getElementById(workspacePanelId('study'));
       expect(notePanel).toBeInTheDocument();
-      expect(estudioPanel).toBeInTheDocument();
+      expect(studyPanel).toBeInTheDocument();
       expect(notePanel).toHaveAttribute(
         'aria-labelledby',
         workspaceTabId('note')
       );
-      expect(estudioPanel).toHaveAttribute(
+      expect(studyPanel).toHaveAttribute(
         'aria-labelledby',
-        workspaceTabId('estudio')
+        workspaceTabId('study')
       );
       expect(notePanel).toHaveAttribute('tabindex', '0');
-      expect(estudioPanel).toHaveAttribute('tabindex', '0');
+      expect(studyPanel).toHaveAttribute('tabindex', '0');
     });
 
     it('shows the note artifact count on the study tab', () => {
@@ -173,19 +199,19 @@ describe('NoteEditorPage workspace tabs', () => {
       ).toHaveTextContent('2');
     });
 
-    it('keeps the editor mounted and only hides the note panel when switching to Estudio', () => {
+    it('keeps the editor mounted and only hides the note panel when switching to the study tab', () => {
       renderWithClient(<NoteEditorPage />);
 
       const editorBefore = screen.getByTestId('collaborative-editor');
       const notePanel = document.getElementById(workspacePanelId('note'));
-      const estudioPanel = document.getElementById(workspacePanelId('estudio'));
+      const studyPanel = document.getElementById(workspacePanelId('study'));
 
       expect(notePanel).toBeInTheDocument();
       expect(notePanel).not.toHaveClass('hidden');
-      expect(estudioPanel).toHaveClass('hidden');
+      expect(studyPanel).toHaveClass('hidden');
 
       act(() => {
-        useWorkspaceStore.getState().setTab('estudio');
+        useWorkspaceStore.getState().setTab('study');
       });
 
       expect(document.getElementById(workspacePanelId('note'))).toBe(notePanel);
@@ -193,7 +219,7 @@ describe('NoteEditorPage workspace tabs', () => {
       expect(notePanel).toBeInTheDocument();
       expect(notePanel).toHaveClass('hidden');
 
-      expect(estudioPanel).not.toHaveClass('hidden');
+      expect(studyPanel).not.toHaveClass('hidden');
     });
   });
 });

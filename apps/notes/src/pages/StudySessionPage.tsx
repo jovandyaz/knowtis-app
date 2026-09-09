@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, Navigate } from '@tanstack/react-router';
@@ -23,11 +30,8 @@ import {
   EmptyState,
   ErrorState,
   Progress,
-  RATING_ORDER,
-  RATING_QUALITY,
   Skeleton,
   Switch,
-  type RatingKey,
 } from '@knowtis/design-system';
 import {
   CARD_STATUS,
@@ -40,6 +44,10 @@ import {
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { studyDurationBucket } from './study-duration-bucket';
+import {
+  resolveStudyKeyAction,
+  STUDY_KEY_ACTION_TYPES,
+} from './study-key-action';
 
 const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
@@ -51,48 +59,10 @@ const ADVANCED_TOGGLE_TAP_AREA =
 const RATING_BAR_CLASS =
   'fixed inset-x-0 bottom-0 z-30 border-t border-(--border) bg-(--background)/95 px-4 py-3 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:pb-0 md:backdrop-blur-none';
 
-const STUDY_KEY_ACTION_TYPES = {
-  FLIP: 'flip',
-  NAVIGATE: 'navigate',
-  RATE: 'rate',
-} as const;
-
-export type StudyKeyAction =
-  | { type: typeof STUDY_KEY_ACTION_TYPES.FLIP }
-  | { type: typeof STUDY_KEY_ACTION_TYPES.NAVIGATE; direction: -1 | 1 }
-  | { type: typeof STUDY_KEY_ACTION_TYPES.RATE; quality: SM2Quality };
-
 const STUDY_CARD_SHORTCUTS = 'Space Enter ArrowLeft ArrowRight';
 
 const DIALOG_OR_MENU_SELECTOR =
   '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]';
-
-const SIMPLE_MODE_RATING_KEYS: Record<string, RatingKey> = {
-  '1': RATING_ORDER[0],
-  '2': RATING_ORDER[2],
-};
-
-/** Space/Enter flip, arrows navigate; 1/2 rate wrong/correct in simple mode, 1-4 rate Again/Hard/Good/Easy in advanced mode. */
-export function resolveStudyKeyAction(
-  key: string,
-  isAdvancedMode: boolean
-): StudyKeyAction | undefined {
-  if (key === ' ' || key === 'Enter') {
-    return { type: STUDY_KEY_ACTION_TYPES.FLIP };
-  }
-  if (key === 'ArrowLeft') {
-    return { type: STUDY_KEY_ACTION_TYPES.NAVIGATE, direction: -1 };
-  }
-  if (key === 'ArrowRight') {
-    return { type: STUDY_KEY_ACTION_TYPES.NAVIGATE, direction: 1 };
-  }
-  const ratingKey = isAdvancedMode
-    ? RATING_ORDER[Number(key) - 1]
-    : SIMPLE_MODE_RATING_KEYS[key];
-  return ratingKey
-    ? { type: STUDY_KEY_ACTION_TYPES.RATE, quality: RATING_QUALITY[ratingKey] }
-    : undefined;
-}
 
 export function StudySessionPage() {
   const access = useStudyQueueAccess();
@@ -215,6 +185,7 @@ function StudyQueueSession({
     session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
 
   const isReviewInFlightRef = useRef(false);
+  const submittedCardsRef = useRef(new Set<string>());
 
   const submitReview = useCallback(
     async (quality: SM2Quality) => {
@@ -222,11 +193,17 @@ function StudyQueueSession({
         return false;
       }
       const { artifactId, cardIndex } = session.currentCard;
+      const cardKey = `${artifactId}:${cardIndex}`;
+      if (submittedCardsRef.current.has(cardKey)) {
+        return false;
+      }
+      submittedCardsRef.current.add(cardKey);
       isReviewInFlightRef.current = true;
       try {
         await reviewCard({ artifactId, cardIndex, quality });
         return true;
       } catch {
+        submittedCardsRef.current.delete(cardKey);
         toast.error(t('ai.artifacts.flashcards.reviewError'));
         return false;
       } finally {
@@ -276,6 +253,7 @@ function StudyQueueSession({
         return;
       }
       setIsReplay(true);
+      submittedCardsRef.current.clear();
       session.restart(filter);
     },
     [onNewQueue, session]
@@ -356,7 +334,7 @@ function StudyQueueSession({
     [session, handleNavigate, handleRateAdvanced, handleWrong, handleCorrect]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (session.isComplete) {
       return;
     }

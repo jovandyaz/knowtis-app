@@ -126,7 +126,7 @@ describe('ArtifactGeneratorDialog — feedback outlives the dialog', () => {
       expect(toastSuccess).toHaveBeenCalledWith('ai.artifacts.generate.success')
     );
     expect(useArtifactSidebarStore.getState().generatorOpen).toBe(false);
-    expect(useWorkspaceStore.getState().activeTab).toBe('estudio');
+    expect(useWorkspaceStore.getState().activeTab).toBe('study');
   });
 
   it('leaves the next note alone when the previous generation lands late', async () => {

@@ -10,7 +10,7 @@ beforeEach(() => {
 
 describe('useWorkspaceTabReset', () => {
   it('opens on the note tab even when the store was left on study', () => {
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
 
     renderHook(() => useWorkspaceTabReset('note-1'));
 
@@ -23,7 +23,7 @@ describe('useWorkspaceTabReset', () => {
       { initialProps: { noteKey: 'note-1' } }
     );
 
-    useWorkspaceStore.getState().setTab('estudio');
+    useWorkspaceStore.getState().setTab('study');
     rerender({ noteKey: 'note-2' });
 
     expect(useWorkspaceStore.getState().activeTab).toBe('note');
@@ -35,9 +35,9 @@ describe('useWorkspaceTabReset', () => {
       { initialProps: { noteKey: 'note-1' } }
     );
 
-    useWorkspaceStore.getState().setTab('estudio');
+    useWorkspaceStore.getState().setTab('study');
     rerender({ noteKey: 'note-1' });
 
-    expect(useWorkspaceStore.getState().activeTab).toBe('estudio');
+    expect(useWorkspaceStore.getState().activeTab).toBe('study');
   });
 });

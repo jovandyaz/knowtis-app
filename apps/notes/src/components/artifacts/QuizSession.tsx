@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MOBILE_FAB_RAIL_CLEARANCE_CLASS } from '@/components/layout/MobileFabRail';
 import { RotateCcw, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ import {
   answerLetter,
   AnswerOption,
   Button,
+  cn,
   Progress,
   type AnswerOutcome,
 } from '@knowtis/design-system';
@@ -37,6 +39,13 @@ const ARROW_KEY_STEP: Partial<Record<string, number>> = {
   ArrowUp: -1,
   ArrowLeft: -1,
 };
+
+const FOCUS_INTENT = {
+  OPTION: 'option',
+  RESULTS: 'results',
+} as const;
+
+type FocusIntent = (typeof FOCUS_INTENT)[keyof typeof FOCUS_INTENT];
 
 const OUTCOME_FEEDBACK = {
   correct: {
@@ -72,10 +81,10 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [completed, setCompleted] = useState(false);
   const [score, setScore] = useState(0);
+  const [focusIntent, setFocusIntent] = useState<FocusIntent | null>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const advanceRef = useRef<HTMLButtonElement>(null);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
-  const isFirstRender = useRef(true);
 
   const totalQuestions = content.questions.length;
   const currentQuestion = content.questions[currentIndex];
@@ -127,16 +136,15 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   }, [answered]);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+    if (focusIntent === null) {
       return;
     }
-    if (completed) {
+    if (focusIntent === FOCUS_INTENT.RESULTS) {
       resultsHeadingRef.current?.focus();
-      return;
+    } else {
+      optionRefs.current[FIRST_OPTION]?.focus();
     }
-    optionRefs.current[FIRST_OPTION]?.focus();
-  }, [currentIndex, completed]);
+  }, [focusIntent, currentIndex, completed]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < totalQuestions - 1) {
@@ -144,8 +152,10 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
       setSelectedOption(null);
       setAnswered(false);
       setFocusedIndex(FIRST_OPTION);
+      setFocusIntent(FOCUS_INTENT.OPTION);
     } else {
       setCompleted(true);
+      setFocusIntent(FOCUS_INTENT.RESULTS);
       if (!readOnly) {
         void submitQuiz.mutateAsync({ answers: [...answers] }).catch(() => {
           toast.error(t('ai.artifacts.quiz.submitError'));
@@ -162,6 +172,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     setAnswers([]);
     setCompleted(false);
     setScore(0);
+    setFocusIntent(FOCUS_INTENT.OPTION);
   }, []);
 
   if (completed) {
@@ -293,7 +304,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className={cn('flex justify-end', MOBILE_FAB_RAIL_CLEARANCE_CLASS)}>
         <Button ref={advanceRef} onClick={handleNext} disabled={!answered}>
           {currentIndex < totalQuestions - 1
             ? t('ai.artifacts.quiz.next')

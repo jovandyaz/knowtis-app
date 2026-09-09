@@ -10,6 +10,8 @@ import type {
 } from '@knowtis/shared-types';
 import { CARD_STATUS, SM2_QUALITY } from '@knowtis/shared-types';
 
+const NO_ELAPSED_TIME = 0;
+
 interface SessionState {
   currentIndex: number;
   flipped: boolean;
@@ -17,7 +19,7 @@ interface SessionState {
   isAdvancedMode: boolean;
   isComplete: boolean;
   startTime: number;
-  endTime: number | null;
+  durationMs: number;
   originalCards: StudyCard[];
   activeCards: StudyCard[];
 }
@@ -62,16 +64,23 @@ function checkComplete(statuses: CardSessionStatus[]): boolean {
   return statuses.every((s) => s !== CARD_STATUS.PENDING);
 }
 
+function durationOnFinish(state: SessionState): number {
+  return state.isComplete ? state.durationMs : Date.now() - state.startTime;
+}
+
 function advanceAfterAction(
   state: SessionState,
   newStatuses: CardSessionStatus[]
-): Pick<SessionState, 'isComplete' | 'endTime' | 'currentIndex' | 'flipped'> {
+): Pick<
+  SessionState,
+  'isComplete' | 'durationMs' | 'currentIndex' | 'flipped'
+> {
   const complete = checkComplete(newStatuses);
   const nextIndex = findNextPendingIndex(newStatuses, state.currentIndex);
   return {
     flipped: false,
     isComplete: complete,
-    endTime: complete ? Date.now() : null,
+    durationMs: complete ? durationOnFinish(state) : NO_ELAPSED_TIME,
     currentIndex: complete
       ? state.currentIndex
       : nextIndex !== -1
@@ -119,7 +128,7 @@ function sessionReducer(
         ...state,
         cardStatuses: finishedStatuses,
         isComplete: true,
-        endTime: Date.now(),
+        durationMs: durationOnFinish(state),
         flipped: false,
       };
     }
@@ -144,7 +153,7 @@ function sessionReducer(
         flipped: false,
         cardStatuses: shuffledStatuses,
         isComplete: false,
-        endTime: null,
+        durationMs: NO_ELAPSED_TIME,
         activeCards: action.cards,
       };
     }
@@ -164,7 +173,7 @@ function sessionReducer(
             cardStatuses: Array(filteredCards.length).fill(CARD_STATUS.PENDING),
             isComplete: false,
             startTime: Date.now(),
-            endTime: null,
+            durationMs: NO_ELAPSED_TIME,
             activeCards: filteredCards,
           };
         }
@@ -178,7 +187,7 @@ function sessionReducer(
         ),
         isComplete: false,
         startTime: Date.now(),
-        endTime: null,
+        durationMs: NO_ELAPSED_TIME,
         activeCards: state.originalCards,
       };
     }
@@ -196,7 +205,7 @@ function createInitialState(cards: StudyCard[]): SessionState {
     isAdvancedMode: false,
     isComplete: false,
     startTime: Date.now(),
-    endTime: null,
+    durationMs: NO_ELAPSED_TIME,
     originalCards: cards,
     activeCards: cards,
   };
@@ -265,7 +274,6 @@ export function useFlashcardSession(
   }, [shuffleFn, state.activeCards]);
 
   const sessionResult = useMemo((): StudySessionResult => {
-    const durationMs = (state.endTime ?? state.startTime) - state.startTime;
     const cardResults: CardResult[] = state.activeCards.map((card, i) => ({
       artifactId: card.artifactId,
       cardIndex: card.cardIndex,
@@ -278,16 +286,10 @@ export function useFlashcardSession(
       wrong: counts.wrong,
       skipped: counts.skipped,
       total: state.activeCards.length,
-      durationMs,
+      durationMs: state.durationMs,
       cardResults,
     };
-  }, [
-    counts,
-    state.startTime,
-    state.endTime,
-    state.cardStatuses,
-    state.activeCards,
-  ]);
+  }, [counts, state.durationMs, state.cardStatuses, state.activeCards]);
 
   return {
     currentIndex: state.currentIndex,

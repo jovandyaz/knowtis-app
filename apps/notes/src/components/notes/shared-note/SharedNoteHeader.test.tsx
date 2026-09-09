@@ -44,54 +44,54 @@ const renderHeader = (props: Partial<typeof defaultProps> = {}) =>
     </TooltipProvider>
   );
 
-const buttonsNamed = (name: string) =>
-  screen.queryAllByRole('button', { name });
+const buttonNamed = (name: string) => screen.getByRole('button', { name });
+
+const noButtonNamed = (name: string) =>
+  expect(screen.queryByRole('button', { name })).toBeNull();
 
 describe('SharedNoteHeader', () => {
-  it('badges an editor on every variant', () => {
+  it('badges an editor once', () => {
     renderHeader({ canEdit: true });
 
-    expect(screen.getAllByText('shared.editorBadge')).toHaveLength(2);
+    expect(screen.getByText('shared.editorBadge')).toBeInTheDocument();
     expect(screen.queryByText('shared.viewOnlyBadge')).toBeNull();
   });
 
-  it('badges a viewer on every variant', () => {
+  it('badges a viewer once', () => {
     renderHeader({ canEdit: false });
 
-    expect(screen.getAllByText('shared.viewOnlyBadge')).toHaveLength(2);
+    expect(screen.getByText('shared.viewOnlyBadge')).toBeInTheDocument();
     expect(screen.queryByText('shared.editorBadge')).toBeNull();
   });
 
   it('offers the edit toggle to an editor who is reading', () => {
     renderHeader({ canEdit: true, isEditing: false });
 
-    expect(buttonsNamed('shared.editButton')).toHaveLength(2);
-    expect(buttonsNamed('shared.viewButton')).toHaveLength(0);
+    expect(buttonNamed('shared.editButton')).toBeInTheDocument();
+    noButtonNamed('shared.viewButton');
   });
 
   it('flips the toggle to view once the editor is editing', () => {
     renderHeader({ canEdit: true, isEditing: true });
 
-    expect(buttonsNamed('shared.viewButton')).toHaveLength(2);
-    expect(buttonsNamed('shared.editButton')).toHaveLength(0);
+    expect(buttonNamed('shared.viewButton')).toBeInTheDocument();
+    noButtonNamed('shared.editButton');
   });
 
   it('withholds the toggle from a viewer', () => {
     renderHeader({ canEdit: false });
 
-    expect(buttonsNamed('shared.editButton')).toHaveLength(0);
-    expect(buttonsNamed('shared.viewButton')).toHaveLength(0);
+    noButtonNamed('shared.editButton');
+    noButtonNamed('shared.viewButton');
   });
 
   it('still offers a way out of the editor after a mid-session downgrade', async () => {
     const onStopEditing = vi.fn();
     renderHeader({ canEdit: false, isEditing: true, onStopEditing });
 
-    const viewButtons = buttonsNamed('shared.viewButton');
-    expect(viewButtons).toHaveLength(2);
-    expect(buttonsNamed('shared.editButton')).toHaveLength(0);
+    noButtonNamed('shared.editButton');
 
-    await userEvent.click(viewButtons[0]);
+    await userEvent.click(buttonNamed('shared.viewButton'));
     expect(onStopEditing).toHaveBeenCalledTimes(1);
   });
 
@@ -100,40 +100,34 @@ describe('SharedNoteHeader', () => {
     const onStopEditing = vi.fn();
     const { unmount } = renderHeader({ onStartEditing, onStopEditing });
 
-    await userEvent.click(buttonsNamed('shared.editButton')[0]);
+    await userEvent.click(buttonNamed('shared.editButton'));
     expect(onStartEditing).toHaveBeenCalledTimes(1);
     unmount();
 
     renderHeader({ isEditing: true, onStartEditing, onStopEditing });
-    await userEvent.click(buttonsNamed('shared.viewButton')[0]);
+    await userEvent.click(buttonNamed('shared.viewButton'));
     expect(onStopEditing).toHaveBeenCalledTimes(1);
   });
 
-  it('offers sign-in on every variant when the visitor has no account', () => {
+  it('offers sign-in when the visitor has no account', () => {
     renderHeader({ offerSignIn: true });
 
-    expect(screen.getAllByRole('link', { name: 'shared.signIn' })).toHaveLength(
-      2
-    );
+    expect(
+      screen.getByRole('link', { name: 'shared.signIn' })
+    ).toBeInTheDocument();
   });
 
   it('hides sign-in from a visitor who already has one', () => {
     renderHeader({ offerSignIn: false });
 
-    expect(screen.queryAllByRole('link', { name: 'shared.signIn' })).toEqual(
-      []
-    );
+    expect(screen.queryByRole('link', { name: 'shared.signIn' })).toBeNull();
   });
 
-  it('builds both variants out of design-system buttons', () => {
+  it('builds its controls out of design-system buttons', () => {
     renderHeader();
 
-    const copyButtons = buttonsNamed('buttons.copyLink');
-    const editButtons = buttonsNamed('shared.editButton');
-    expect(copyButtons).toHaveLength(2);
-    expect(editButtons).toHaveLength(2);
-    for (const button of [...copyButtons, ...editButtons]) {
-      expect(button).toHaveClass(...DESIGN_SYSTEM_BUTTON_CLASSES);
+    for (const name of ['buttons.copyLink', 'shared.editButton']) {
+      expect(buttonNamed(name)).toHaveClass(...DESIGN_SYSTEM_BUTTON_CLASSES);
     }
   });
 });

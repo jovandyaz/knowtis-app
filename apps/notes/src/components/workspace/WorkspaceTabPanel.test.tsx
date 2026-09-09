@@ -14,7 +14,7 @@ beforeEach(() => {
 
 describe('WorkspaceTabPanel', () => {
   it('renders a plain wrapper with no tab semantics when untabbed', () => {
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
 
     render(
       <WorkspaceTabPanel tab="note" tabbed={false}>
@@ -44,7 +44,7 @@ describe('WorkspaceTabPanel', () => {
   });
 
   it('hides an inactive panel without unmounting its children', () => {
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
 
     render(
       <WorkspaceTabPanel tab="note" tabbed>

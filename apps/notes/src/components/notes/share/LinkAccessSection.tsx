@@ -76,7 +76,7 @@ export function LinkAccessSection({
               className="flex-shrink-0 h-8 w-8"
             >
               {copiedLink ? (
-                <Check className="h-4 w-4 text-emerald-500" />
+                <Check className="h-4 w-4 text-(--success)" />
               ) : (
                 <Copy className="h-4 w-4" />
               )}

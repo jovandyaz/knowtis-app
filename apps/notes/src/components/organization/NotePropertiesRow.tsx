@@ -11,6 +11,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  TOUCH_TARGET_HEIGHT_CLASS,
 } from '@knowtis/design-system';
 import {
   INBOX_FILTER,
@@ -24,8 +25,7 @@ import {
 import { SupertagFieldsForm } from './SupertagFieldsForm';
 import { TagPicker } from './TagPicker';
 
-const CHIP_CLASSES =
-  'inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-[13px] text-muted-foreground';
+const CHIP_CLASSES = `inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-[13px] text-muted-foreground ${TOUCH_TARGET_HEIGHT_CLASS}`;
 
 // The chips describe the note, so they sit close under its title; the editor
 // toolbar below is `sticky top-0` and would otherwise start flush against them.
@@ -136,7 +136,7 @@ export function NotePropertiesRow({
     <div className={ROW_CLASSES}>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className={`${CHIP_CLASSES} min-h-11 transition-colors hover:bg-muted/40 md:min-h-0`}
+          className={`${CHIP_CLASSES} transition-colors hover:bg-muted/40`}
         >
           <BucketDot bucket={activeFilter} />
           {label}
@@ -167,7 +167,7 @@ export function NotePropertiesRow({
           type="button"
           onClick={() => setTags(tags.filter((current) => current !== path))}
           aria-label={t('organization.tags.remove', { path })}
-          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+          className={`${CHIP_CLASSES} cursor-pointer transition-colors hover:bg-muted/40`}
         >
           <Hash className="size-3 opacity-60" />
           {path}
@@ -178,7 +178,7 @@ export function NotePropertiesRow({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={t('organization.supertags.label')}
-          className={`${CHIP_CLASSES} min-h-11 transition-colors hover:bg-muted/40 md:min-h-0`}
+          className={`${CHIP_CLASSES} transition-colors hover:bg-muted/40`}
         >
           <Shapes className="size-3 opacity-60" />
           {supertag
@@ -210,7 +210,7 @@ export function NotePropertiesRow({
       <TagPicker
         selected={tags}
         onAdd={(path) => setTags([...tags, path])}
-        triggerClassName={`${CHIP_CLASSES} min-h-11 transition-colors hover:bg-muted/40 md:min-h-0`}
+        triggerClassName={`${CHIP_CLASSES} transition-colors hover:bg-muted/40`}
       />
 
       {onSuggest && (
@@ -219,7 +219,7 @@ export function NotePropertiesRow({
           onClick={() => onSuggest()}
           disabled={isSuggesting}
           aria-busy={isSuggesting}
-          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-60 md:min-h-0`}
+          className={`${CHIP_CLASSES} cursor-pointer transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-60`}
         >
           <Sparkles className="size-3 opacity-70" />
           {isSuggesting

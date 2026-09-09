@@ -17,7 +17,6 @@ export const FEATURE_FLAG_KEYS = {
   AI_CATALOG_SYNC: 'ai_catalog_sync',
   AI_AUTO_ORGANIZE: 'ai_auto_organize',
   EMAIL_VERIFICATION_GATE: 'email_verification_gate',
-  STUDY_REVIEW_QUEUE: 'study_review_queue',
 } as const;
 
 export type FeatureFlagKey =
@@ -159,11 +158,6 @@ export const FEATURE_FLAG_CATALOG = {
     domain: FLAG_DOMAIN.PRODUCT,
     group: FLAG_GROUP.ACCESS,
     label: 'Verified email required',
-  },
-  study_review_queue: {
-    domain: FLAG_DOMAIN.PRODUCT,
-    group: FLAG_GROUP.RELEASE,
-    label: 'Study review queue',
   },
 } as const satisfies Record<FeatureFlagKey, FlagMeta>;
 

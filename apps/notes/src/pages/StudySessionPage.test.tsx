@@ -329,6 +329,31 @@ describe('StudySessionPage', () => {
     expect(reviewCard).toHaveBeenCalledTimes(2);
   });
 
+  it('records a card again once the replay puts it back in the deck', async () => {
+    queueOf([CARD_ONE]);
+    render(<StudySessionPage />);
+
+    await userEvent.click(front(/Frente uno/));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.wrong' })
+    );
+
+    await userEvent.click(practiseAgain());
+    await userEvent.click(
+      screen.getByRole('menuitem', {
+        name: 'ai.artifacts.flashcards.summary.onlyMissed',
+      })
+    );
+    await rateCurrentCorrect(/Frente uno/);
+
+    expect(reviewCard).toHaveBeenCalledTimes(2);
+    expect(reviewCard).toHaveBeenNthCalledWith(2, {
+      artifactId: 'deck-1',
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
+  });
+
   it('takes no second rating while the first is still in flight', async () => {
     const releaseReview = deferReview();
     render(<StudySessionPage />);

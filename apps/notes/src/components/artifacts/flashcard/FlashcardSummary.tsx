@@ -108,21 +108,23 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
           {timeSpent}
         </DonutChart>
 
-        <div className="grid w-full max-w-sm grid-cols-1 gap-3 sm:grid-cols-3">
-          {stats.map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ ...preset.fade, delay: index * preset.stagger }}
-            >
-              <StatTile
-                label={stat.label}
-                value={stat.value}
-                icon={stat.icon}
-              />
-            </motion.div>
-          ))}
+        <div className="@container w-full max-w-sm">
+          <div className="grid grid-cols-1 gap-3 @sm:grid-cols-3">
+            {stats.map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ ...preset.fade, delay: index * preset.stagger }}
+              >
+                <StatTile
+                  label={stat.label}
+                  value={stat.value}
+                  icon={stat.icon}
+                />
+              </motion.div>
+            ))}
+          </div>
         </div>
       </div>
 

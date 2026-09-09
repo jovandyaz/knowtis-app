@@ -6,6 +6,9 @@ import { STUDY_SESSION_PATTERN } from '@/config/routes.config';
 
 export const MOBILE_FAB_SLOT_ID = 'mobile-fab-slot';
 
+export const MOBILE_FAB_RAIL_CLEARANCE_CLASS =
+  'pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0';
+
 interface MobileFabRailProps {
   children?: ReactNode;
 }

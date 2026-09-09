@@ -28,7 +28,7 @@ export function StudyToolsTab(props: StudyToolsTabProps) {
   if (!noteId) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        {t('ai.copilot.estudio.noNote')}
+        {t('ai.copilot.study.noNote')}
       </div>
     );
   }

@@ -1,3 +1,6 @@
+import { StrictMode } from 'react';
+
+import { MOBILE_FAB_RAIL_CLEARANCE_CLASS } from '@/components/layout/MobileFabRail';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -155,6 +158,20 @@ describe('QuizSession', () => {
     ).toHaveFocus();
   });
 
+  it('leaves focus alone on mount, even under StrictMode double effects', () => {
+    const outside = document.body.appendChild(document.createElement('button'));
+    outside.focus();
+
+    render(
+      <StrictMode>
+        <QuizSession artifact={artifact} />
+      </StrictMode>
+    );
+
+    expect(outside).toHaveFocus();
+    outside.remove();
+  });
+
   it('moves focus back to the first option after advancing', async () => {
     render(<QuizSession artifact={twoQuestionArtifact} />);
 
@@ -300,6 +317,18 @@ describe('QuizSession', () => {
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
     ).toHaveClass('pointer-coarse:min-h-11');
+  });
+
+  it('keeps the advance button clear of the mobile floating action rail', () => {
+    render(<QuizSession artifact={twoQuestionArtifact} />);
+
+    const actionRow = screen.getByRole('button', {
+      name: 'ai.artifacts.quiz.next',
+    }).parentElement;
+
+    expect(actionRow).toHaveClass(
+      ...MOBILE_FAB_RAIL_CLEARANCE_CLASS.split(' ')
+    );
   });
 
   it('gives the advance button a 44px touch target', () => {
