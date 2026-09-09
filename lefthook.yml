@@ -2,26 +2,37 @@
 # https://github.com/evilmartians/lefthook
 
 pre-commit:
-  parallel: true
-  commands:
-    lint:
-      glob: '*.{ts,tsx}'
-      run: npx eslint --fix --no-warn-ignored {staged_files} && git add {staged_files}
-      stage_fixed: true
-    format-code:
-      glob: '*.{ts,tsx}'
-      run: npx prettier --write {staged_files}
-      stage_fixed: true
-    format-other:
-      glob: '*.{json,md,yaml,yml}'
-      run: npx prettier --write {staged_files}
-      stage_fixed: true
-    typecheck:
-      run: NX_DAEMON=false npx nx affected -t typecheck --base=origin/main --head=HEAD --output-style=stream
+  jobs:
+    # Ordered, not parallel: the fixers rewrite staged files, so they must all
+    # finish before typecheck reads them.
+    - name: fix
+      group:
+        piped: true
+        jobs:
+          - name: lint
+            glob: '*.{ts,tsx}'
+            run: npx eslint --fix --no-warn-ignored {staged_files}
+            stage_fixed: true
+          - name: format-code
+            glob: '*.{ts,tsx}'
+            run: npx prettier --write {staged_files}
+            stage_fixed: true
+          - name: format-other
+            glob: '*.{json,md,yaml,yml}'
+            run: npx prettier --write {staged_files}
+            stage_fixed: true
+    - name: typecheck
+      # --no-renames so a rename is gated as both its old and its new path, and
+      # the list is read here rather than from {files} because lefthook drops
+      # paths that no longer exist on disk - exactly the deletions this gates.
+      run: |
+        files=$(git diff --cached --name-only --no-renames | paste -sd, -)
+        [ -n "$files" ] || exit 0
+        NX_DAEMON=false npx nx affected -t typecheck --files="$files" --output-style=stream
       skip:
         - merge
         - rebase
-    check-migrations:
+    - name: check-migrations
       glob:
         - 'apps/api/src/database/schema/**/*.ts'
         - 'packages/shared/types/src/lib/ai.types.ts'
