@@ -58,12 +58,16 @@ describe('RotateShareLinkHandler', () => {
       expect(events).toEqual([]);
     }
   );
-  it('returns 404 for an absent/deleted note and conflict for no token', async () => {
+  it('fails with NOTE_NOT_FOUND when the note is absent or deleted', async () => {
+    const { handler, repo } = setup(null);
     expect(
       (
-        await setup(null).handler.execute({ noteId: note.id, actorId: 'owner' })
+        await handler.execute({ noteId: note.id, actorId: 'owner' })
       )._unsafeUnwrapErr().code
     ).toBe('NOTE_NOT_FOUND');
+    expect(repo.rotateShareToken).not.toHaveBeenCalled();
+  });
+  it('fails with SHARE_LINK_CONFLICT when the note has no active link', async () => {
     const { handler, repo } = setup({ ...note, shareToken: null });
     expect(
       (

@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
+import { authorizeShareLinkRotation } from '../../domain/access-policy';
 import type { NoteEntity } from '../../domain/entities/note.entity';
 import {
   NoteErrors,
@@ -41,16 +42,14 @@ export class RotateShareLinkHandler {
     if (!note) {
       return err(NoteErrors.noteNotFound(input.noteId));
     }
-    if (note.ownerId !== input.actorId) {
-      return err(NoteErrors.ownerOnly('rotate the share link'));
-    }
-    if (!note.shareToken) {
-      return err(NoteErrors.shareLinkConflict());
+    const rotation = authorizeShareLinkRotation(note, input.actorId);
+    if (rotation.isErr()) {
+      return err(rotation.error);
     }
     const result = await this.noteWriter.rotateShareToken({
       noteId: input.noteId,
       ownerId: input.actorId,
-      expectedToken: note.shareToken,
+      expectedToken: rotation.value,
       newToken: randomBytes(16).toString('hex'),
     });
     if (result.isOk()) {
