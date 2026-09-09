@@ -38,7 +38,10 @@ export const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
     >
       <div className="flex flex-col items-center gap-4">
         <Loader2
-          className={cn('animate-spin text-(--primary)', sizeClasses[size])}
+          className={cn(
+            'animate-spin motion-reduce:animate-none text-(--primary)',
+            sizeClasses[size]
+          )}
         />
         {message && (
           <p className="text-sm text-(--muted-foreground)">{message}</p>

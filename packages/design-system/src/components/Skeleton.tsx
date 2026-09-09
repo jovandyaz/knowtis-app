@@ -9,7 +9,10 @@ const Skeleton = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('animate-pulse rounded-md bg-(--muted)', className)}
+      className={cn(
+        'animate-pulse motion-reduce:animate-none rounded-md bg-(--muted)',
+        className
+      )}
       {...props}
     />
   )

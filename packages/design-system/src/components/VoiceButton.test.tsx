@@ -48,6 +48,18 @@ describe('VoiceButton', () => {
     expect(screen.getByRole('button').className).toContain('size-12');
   });
 
+  it('stops the listening pulse under reduced motion', () => {
+    render(<VoiceButton state="listening" />);
+    const button = screen.getByRole('button', { name: 'Stop recording' });
+    expect(button.className).toContain('motion-reduce:animate-none');
+  });
+
+  it('stops the processing spinner under reduced motion', () => {
+    render(<VoiceButton state="processing" />);
+    const button = screen.getByRole('button', { name: 'Processing audio' });
+    expect(button.innerHTML).toContain('motion-reduce:animate-none');
+  });
+
   it('disables the button while processing', () => {
     render(<VoiceButton state="processing" emphasis="quiet" />);
     expect(
