@@ -521,6 +521,7 @@
         "prev": "Previous",
         "next": "Next",
         "reviewError": "Failed to submit review",
+        "progressError": "We couldn't load this deck's progress",
         "restart": "Start over",
         "shuffle": "Shuffle",
         "intervalDays_one": "{{count}} day",

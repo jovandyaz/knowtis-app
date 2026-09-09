@@ -8,7 +8,11 @@ import {
   useFlashcardProgress,
   useReviewCard,
 } from '@knowtis/data-access-artifacts';
-import { LoadingState, useMotionPreset } from '@knowtis/design-system';
+import {
+  ErrorState,
+  LoadingState,
+  useMotionPreset,
+} from '@knowtis/design-system';
 import {
   CARD_STATUS,
   SM2_QUALITY,
@@ -34,12 +38,27 @@ interface FlashcardStudyProps {
 
 export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
-  const { data: progress, isLoading } = useFlashcardProgress(
-    readOnly ? undefined : artifact.id
-  );
+  const { t: tCommon } = useTranslation('common');
+  const {
+    data: progress,
+    isLoading,
+    isError,
+    refetch,
+  } = useFlashcardProgress(readOnly ? undefined : artifact.id);
 
   if (isLoading) {
     return <LoadingState message={t('ai.artifacts.loadingStudy')} />;
+  }
+
+  if (isError) {
+    return (
+      <ErrorState
+        title={t('ai.artifacts.flashcards.progressError')}
+        message={tCommon('errors.tryAgainLater')}
+        retryLabel={tCommon('buttons.tryAgain')}
+        onRetry={() => void refetch()}
+      />
+    );
   }
 
   return (

@@ -15,18 +15,32 @@ import type * as UseFlashcardSessionModule from './flashcard/use-flashcard-sessi
 import { FlashcardStudy } from './FlashcardStudy';
 
 const reviewCard = vi.fn();
-const { useFlashcardProgressMock } = vi.hoisted(() => ({
-  useFlashcardProgressMock: vi.fn(() => ({
-    data: undefined as FlashcardProgress[] | undefined,
+const { useFlashcardProgressMock, refetchProgress } = vi.hoisted(() => {
+  const refetchProgress = vi.fn();
+  return {
+    refetchProgress,
+    useFlashcardProgressMock: vi.fn(() => ({
+      data: undefined as FlashcardProgress[] | undefined,
+      isLoading: false,
+      isError: false,
+      refetch: refetchProgress,
+    })),
+  };
+});
+
+type ProgressResult = ReturnType<typeof useFlashcardProgressMock>;
+
+function progressResult(
+  overrides: Partial<ProgressResult> = {}
+): ProgressResult {
+  return {
+    data: undefined,
     isLoading: false,
     isError: false,
-  })),
-}));
-const DEFAULT_PROGRESS_RESULT: ReturnType<typeof useFlashcardProgressMock> = {
-  data: undefined,
-  isLoading: false,
-  isError: false,
-};
+    refetch: refetchProgress,
+    ...overrides,
+  };
+}
 
 /** The jsdom matchMedia stub answers every non-width query, so the suite runs reduced by default. */
 const reducedMotion = { value: true };
@@ -94,7 +108,7 @@ describe('FlashcardStudy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     reviewCard.mockResolvedValue({ ok: true });
-    useFlashcardProgressMock.mockReturnValue(DEFAULT_PROGRESS_RESULT);
+    useFlashcardProgressMock.mockReturnValue(progressResult());
   });
 
   afterEach(() => {
@@ -116,16 +130,31 @@ describe('FlashcardStudy', () => {
   });
 
   it('shows a loading state and does not mount the session while progress is loading', () => {
-    useFlashcardProgressMock.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      isError: false,
-    });
+    useFlashcardProgressMock.mockReturnValue(
+      progressResult({ isLoading: true })
+    );
 
     renderStudy();
 
     expect(screen.getByText('ai.artifacts.loadingStudy')).toBeInTheDocument();
     expect(useFlashcardSession).not.toHaveBeenCalled();
+  });
+
+  it('says the progress failed instead of studying the deck as new', async () => {
+    useFlashcardProgressMock.mockReturnValue(progressResult({ isError: true }));
+
+    renderStudy();
+
+    expect(
+      screen.getByText('ai.artifacts.flashcards.progressError')
+    ).toBeInTheDocument();
+    expect(useFlashcardSession).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'buttons.tryAgain' })
+    );
+
+    expect(refetchProgress).toHaveBeenCalledTimes(1);
   });
 
   it("mounts the session with a card's kind once its progress has loaded", async () => {
@@ -139,11 +168,9 @@ describe('FlashcardStudy', () => {
         nextReview: '2026-09-09T00:00:00.000Z',
       },
     ];
-    useFlashcardProgressMock.mockReturnValue({
-      data: progress,
-      isLoading: false,
-      isError: false,
-    });
+    useFlashcardProgressMock.mockReturnValue(
+      progressResult({ data: progress })
+    );
 
     renderStudy();
 

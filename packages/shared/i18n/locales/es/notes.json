@@ -521,6 +521,7 @@
         "prev": "Anterior",
         "next": "Siguiente",
         "reviewError": "Error al enviar la revisión",
+        "progressError": "No pudimos cargar el progreso de este mazo",
         "restart": "Empezar de nuevo",
         "shuffle": "Barajar",
         "intervalDays_one": "{{count}} día",
