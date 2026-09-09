@@ -14,7 +14,7 @@ const voiceButtonVariants = cva(
         listening:
           'bg-red-500 text-white cursor-pointer animate-pulse motion-reduce:animate-none shadow-[0_0_16px_4px_rgba(239,68,68,0.4)]',
         paused:
-          'bg-(--warning) text-white cursor-pointer hover:bg-(--warning)/90',
+          'bg-(--warning) text-(--background) cursor-pointer hover:bg-(--warning)/90',
         processing: 'bg-(--muted) text-(--muted-foreground) cursor-wait',
         disabled:
           'bg-(--muted) text-(--muted-foreground) opacity-50 cursor-not-allowed',

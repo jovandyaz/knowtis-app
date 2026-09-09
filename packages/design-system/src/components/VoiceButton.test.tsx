@@ -32,6 +32,8 @@ describe('VoiceButton', () => {
     render(<VoiceButton state="paused" emphasis="quiet" />);
     const button = screen.getByRole('button', { name: 'Resume recording' });
     expect(button.className).toContain('bg-(--warning)');
+    expect(button.className).toContain('text-(--background)');
+    expect(button.className).not.toContain('text-white');
     expect(button.className).not.toContain('bg-(--card)');
   });
 
