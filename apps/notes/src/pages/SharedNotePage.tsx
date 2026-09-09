@@ -14,6 +14,7 @@ import { sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { useSharedNoteEditing } from '@/hooks/useSharedNoteEditing';
 import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
+import { HTTP_NOT_FOUND, TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 
@@ -24,9 +25,7 @@ import { Button, LoadingState } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION, type Artifact } from '@knowtis/shared-types';
 
-const HTTP_NOT_FOUND = 404;
 const NO_ARTIFACTS: Artifact[] = [];
-const TERMINAL_ACCESS_STATUSES = new Set([401, 403, HTTP_NOT_FOUND]);
 
 export function SharedNotePage() {
   const { t } = useTranslation('notes');

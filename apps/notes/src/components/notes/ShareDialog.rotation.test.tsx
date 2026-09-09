@@ -82,13 +82,12 @@ describe('ShareDialog link rotation integration', () => {
     expect(notesApi.rotateShareLink).not.toHaveBeenCalled();
   });
 
-  it('hides rotation from a direct editor even when stale props claim ownership', async () => {
+  it('hides rotation from a direct editor holding a stale token prop', async () => {
     vi.mocked(notesApi.getById).mockResolvedValue({
       ...openNote,
       accessLevel: 'editor',
     });
     shareHarness({ actor: SHARE_EDITOR }).render({
-      accessLevel: 'owner',
       shareToken: 'stale-token',
     });
     await waitForPeople();

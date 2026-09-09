@@ -300,6 +300,7 @@
       "removeAccess": "Remove access",
       "removing": "Removing…",
       "denied": "You cannot manage people for this note.",
+      "deniedHelp": "Ask the note owner to give you access, then reopen this dialog.",
       "refreshError": "Couldn't refresh access",
       "retryHelp": "Refresh access before making another change.",
       "retry": "Try again",
