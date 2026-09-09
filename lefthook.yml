@@ -25,8 +25,15 @@ pre-commit:
       # --no-renames so a rename is gated as both its old and its new path, and
       # the list is read here rather than from {files} because lefthook drops
       # paths that no longer exist on disk - exactly the deletions this gates.
+      # -z stops git octal-quoting non-ASCII paths into names nx cannot map, and
+      # git writes to a file rather than a pipe so that a git failure aborts the
+      # commit: a substitution around a pipeline reports only the last command.
       run: |
-        files=$(git diff --cached --name-only --no-renames | paste -sd, -)
+        set -e
+        staged=$(mktemp)
+        trap 'rm -f "$staged"' EXIT
+        git diff --cached --name-only --no-renames -z >"$staged"
+        files=$(tr '\0' ',' <"$staged" | sed 's/,$//')
         [ -n "$files" ] || exit 0
         NX_DAEMON=false npx nx affected -t typecheck --files="$files" --output-style=stream
       skip:
