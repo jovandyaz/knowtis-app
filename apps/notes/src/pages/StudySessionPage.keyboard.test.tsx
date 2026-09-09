@@ -247,6 +247,38 @@ describe('StudySessionPage keyboard map', () => {
       cardIndex: 0,
       quality: SM2_QUALITY.GOOD,
     });
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '1'
+    );
+  });
+
+  it('ignores a rating key raised inside a dialog, then rates once focus is back on the page', () => {
+    render(<StudySessionPage />);
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(correctButton()).toBeInTheDocument();
+
+    const dialog = document.body.appendChild(document.createElement('div'));
+    dialog.setAttribute('role', 'dialog');
+    const dialogTarget = dialog.appendChild(document.createElement('div'));
+    dialogTarget.tabIndex = -1;
+    dialogTarget.focus();
+
+    fireEvent.keyDown(dialogTarget, { key: '2' });
+
+    expect(reviewCard).not.toHaveBeenCalled();
+    expect(correctButton()).toBeInTheDocument();
+
+    dialog.remove();
+    fireEvent.keyDown(document.body, { key: '2' });
+
+    expect(reviewCard).toHaveBeenCalledWith({
+      artifactId: 'deck-1',
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
+    expect(front(/Frente dos/)).toBeInTheDocument();
   });
 
   it('rates wrong with 1 and correct with 2 in simple mode', () => {

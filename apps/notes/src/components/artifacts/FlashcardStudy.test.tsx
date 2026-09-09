@@ -168,6 +168,9 @@ describe('FlashcardStudy', () => {
     await rateCorrect(/Front one/);
 
     expect(reviewCard).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(useFlashcardSession).mock.results.at(-1)?.value.counts
+    ).toEqual({ correct: 1, wrong: 0, skipped: 0 });
   });
 
   it('counts a card skipped when the next arrow leaves it unflipped', async () => {

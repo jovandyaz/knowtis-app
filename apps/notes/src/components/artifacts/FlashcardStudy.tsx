@@ -72,11 +72,12 @@ function FlashcardDeckSession({
   const session = useFlashcardSession(cards);
   const preset = useMotionPreset();
 
+  const isCurrentCardPending =
+    session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
+
   const submitReview = useCallback(
     (quality: SM2Quality) => {
-      const isPendingCard =
-        session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
-      if (readOnly || !session.currentCard || !isPendingCard) {
+      if (readOnly || !session.currentCard) {
         return;
       }
       const { artifactId, cardIndex } = session.currentCard;
@@ -84,32 +85,34 @@ function FlashcardDeckSession({
         toast.error(t('ai.artifacts.flashcards.reviewError'));
       });
     },
-    [
-      session.currentCard,
-      session.cardStatuses,
-      session.currentIndex,
-      reviewCard,
-      t,
-      readOnly,
-    ]
+    [session.currentCard, reviewCard, t, readOnly]
   );
 
   const handleWrong = useCallback(() => {
+    if (!isCurrentCardPending) {
+      return;
+    }
     submitReview(SM2_QUALITY.AGAIN);
     session.rate('wrong');
-  }, [submitReview, session]);
+  }, [isCurrentCardPending, submitReview, session]);
 
   const handleCorrect = useCallback(() => {
+    if (!isCurrentCardPending) {
+      return;
+    }
     submitReview(SM2_QUALITY.GOOD);
     session.rate('correct');
-  }, [submitReview, session]);
+  }, [isCurrentCardPending, submitReview, session]);
 
   const handleRateAdvanced = useCallback(
     (quality: SM2Quality) => {
+      if (!isCurrentCardPending) {
+        return;
+      }
       submitReview(quality);
       session.rateAdvanced(quality);
     },
-    [submitReview, session]
+    [isCurrentCardPending, submitReview, session]
   );
 
   const handleNavigatePrev = useCallback(() => {

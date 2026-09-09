@@ -65,6 +65,9 @@ export type StudyKeyAction =
 
 const STUDY_CARD_SHORTCUTS = 'Space Enter ArrowLeft ArrowRight';
 
+const DIALOG_OR_MENU_SELECTOR =
+  '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]';
+
 const SIMPLE_MODE_RATING_KEYS: Record<string, RatingKey> = {
   '1': RATING_ORDER[0],
   '2': RATING_ORDER[2],
@@ -209,11 +212,12 @@ function StudyQueueSession({
     });
   }, [session.isComplete, session.sessionResult]);
 
+  const isCurrentCardPending =
+    session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
+
   const submitReview = useCallback(
     (quality: SM2Quality) => {
-      const isPendingCard =
-        session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
-      if (!session.currentCard || !isPendingCard) {
+      if (!session.currentCard) {
         return;
       }
       const { artifactId, cardIndex } = session.currentCard;
@@ -221,31 +225,34 @@ function StudyQueueSession({
         toast.error(t('ai.artifacts.flashcards.reviewError'));
       });
     },
-    [
-      session.currentCard,
-      session.cardStatuses,
-      session.currentIndex,
-      reviewCard,
-      t,
-    ]
+    [session.currentCard, reviewCard, t]
   );
 
   const handleWrong = useCallback(() => {
+    if (!isCurrentCardPending) {
+      return;
+    }
     submitReview(SM2_QUALITY.AGAIN);
     session.rate('wrong');
-  }, [submitReview, session]);
+  }, [isCurrentCardPending, submitReview, session]);
 
   const handleCorrect = useCallback(() => {
+    if (!isCurrentCardPending) {
+      return;
+    }
     submitReview(SM2_QUALITY.GOOD);
     session.rate('correct');
-  }, [submitReview, session]);
+  }, [isCurrentCardPending, submitReview, session]);
 
   const handleRateAdvanced = useCallback(
     (quality: SM2Quality) => {
+      if (!isCurrentCardPending) {
+        return;
+      }
       submitReview(quality);
       session.rateAdvanced(quality);
     },
-    [submitReview, session]
+    [isCurrentCardPending, submitReview, session]
   );
 
   const handleRestart = useCallback(
@@ -281,6 +288,12 @@ function StudyQueueSession({
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable)
+      ) {
+        return;
+      }
+      if (
+        target instanceof HTMLElement &&
+        target.closest(DIALOG_OR_MENU_SELECTOR)
       ) {
         return;
       }
