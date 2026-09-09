@@ -13,6 +13,8 @@ import type {
   PaginationState,
 } from '@tanstack/react-table';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
+import { cn } from '../utils/cn';
 import { Button } from './Button';
 import { EmptyState } from './EmptyState';
 import { Skeleton } from './Skeleton';
@@ -187,7 +189,10 @@ export function DataTable<TData, TValue = unknown>({
                       {header.column.getCanSort() ? (
                         <button
                           type="button"
-                          className="flex cursor-pointer items-center gap-1 hover:text-(--foreground)"
+                          className={cn(
+                            TOUCH_TARGET_CLASS,
+                            'flex cursor-pointer items-center gap-1 hover:text-(--foreground)'
+                          )}
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {headerContent}

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
 
 export interface RecordingModalProps {
@@ -77,7 +78,10 @@ export function RecordingModal({
           {children}
           {!preventClose && (
             <DialogPrimitive.Close
-              className="absolute right-4 top-4 max-md:top-5 cursor-pointer rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
+              className={cn(
+                TOUCH_TARGET_CLASS,
+                'absolute right-4 top-4 max-md:top-5 inline-flex cursor-pointer items-center justify-center rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2'
+              )}
               aria-label="Close"
             >
               <X className="h-4 w-4" />

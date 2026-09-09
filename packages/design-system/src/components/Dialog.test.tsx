@@ -18,6 +18,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import {
   Dialog,
   DialogContent,
@@ -346,6 +347,14 @@ describe('Dialog accessibility', () => {
 
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(last);
+  });
+
+  it('floors the close control at a full touch target on coarse pointers', () => {
+    renderDialog();
+
+    expect(screen.getByRole('button', { name: 'Close dialog' })).toHaveClass(
+      ...TOUCH_TARGET_CLASS.split(' ')
+    );
   });
 
   it('composes consumer keydown with forward and backward focus looping', async () => {

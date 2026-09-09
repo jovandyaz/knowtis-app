@@ -7,6 +7,7 @@ import {
 
 import { ChevronRight } from 'lucide-react';
 
+import { TOUCH_TARGET_HEIGHT_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
 
 /* ─── Content (outer container) ─── */
@@ -83,6 +84,7 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       ref={ref}
       type="button"
       className={cn(
+        TOUCH_TARGET_HEIGHT_CLASS,
         'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
         'transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
         selected
@@ -125,6 +127,7 @@ const CommandMenuBack = forwardRef<HTMLButtonElement, CommandMenuBackProps>(
       ref={ref}
       type="button"
       className={cn(
+        TOUCH_TARGET_HEIGHT_CLASS,
         'mb-1 flex cursor-pointer items-center gap-1 px-2 py-1 text-xs',
         'text-muted-foreground transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:text-foreground',
         className
