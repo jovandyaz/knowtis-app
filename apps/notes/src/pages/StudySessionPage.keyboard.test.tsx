@@ -119,6 +119,15 @@ function onCommit(seen: () => boolean): Promise<void> {
   });
 }
 
+const REVIEW_SETTLE_MICROTASKS = 6;
+
+/** Unwinds the released review's promise chain but not the macrotask React commits the advance in, so the rated card is still on screen. */
+async function settleReview() {
+  for (let step = 0; step < REVIEW_SETTLE_MICROTASKS; step++) {
+    await Promise.resolve();
+  }
+}
+
 function deferReview() {
   let release: (() => void) | undefined;
   reviewCard.mockImplementation(
@@ -259,6 +268,30 @@ describe('StudySessionPage keyboard map', () => {
       await screen.findByRole('button', { name: /Frente dos/ })
     ).toBeInTheDocument();
     expect(reviewCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes no second rating key between the answer and the card it advances', async () => {
+    const releaseReview = deferReview();
+    render(<StudySessionPage />);
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+
+    releaseReview();
+    await settleReview();
+    expect(
+      screen.getByRole('button', { name: 'Dorso uno' })
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: '2' });
+
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+    expect(reviewCard).toHaveBeenCalledWith({
+      artifactId: 'deck-1',
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
   });
 
   it('keeps the cursor on the card being recorded until the server answers', async () => {

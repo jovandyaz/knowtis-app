@@ -185,6 +185,10 @@ function StudyQueueSession({
     session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
 
   const isReviewInFlightRef = useRef(false);
+  // The in-flight flag clears before `session.rate` dispatches and React commits
+  // that advance a task later, so a key pressed in between still reaches the
+  // rated card's closure. Card identity is what survives that window.
+  const submittedCardsRef = useRef(new Set<string>());
 
   const submitReview = useCallback(
     async (quality: SM2Quality) => {
@@ -192,11 +196,17 @@ function StudyQueueSession({
         return false;
       }
       const { artifactId, cardIndex } = session.currentCard;
+      const cardKey = `${artifactId}:${cardIndex}`;
+      if (submittedCardsRef.current.has(cardKey)) {
+        return false;
+      }
+      submittedCardsRef.current.add(cardKey);
       isReviewInFlightRef.current = true;
       try {
         await reviewCard({ artifactId, cardIndex, quality });
         return true;
       } catch {
+        submittedCardsRef.current.delete(cardKey);
         toast.error(t('ai.artifacts.flashcards.reviewError'));
         return false;
       } finally {
@@ -246,6 +256,8 @@ function StudyQueueSession({
         return;
       }
       setIsReplay(true);
+      // A replay re-deals cards this session already recorded, without unmounting.
+      submittedCardsRef.current.clear();
       session.restart(filter);
     },
     [onNewQueue, session]
