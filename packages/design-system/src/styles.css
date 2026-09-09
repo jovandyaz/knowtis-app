@@ -18,7 +18,10 @@
   --radius: 0.75rem;
 
   --tabs-fade-start: 85%;
+}
 
+/* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */
+@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
@@ -60,10 +63,7 @@
   --color-tag-yellow: var(--tag-yellow);
   --color-tag-red: var(--tag-red);
   --color-tag-pink: var(--tag-pink);
-}
 
-/* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */
-@theme inline {
   --color-learn-correct: var(--learn-correct);
   --color-learn-incorrect: var(--learn-incorrect);
   --color-learn-correct-text: var(--learn-correct-text);
