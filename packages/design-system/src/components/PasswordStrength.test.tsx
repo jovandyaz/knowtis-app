@@ -18,6 +18,7 @@ describe('PasswordStrength', () => {
     const { container } = render(
       <PasswordStrength ref={ref} password="hunter22" checks={CHECKS} />
     );
+    expect(ref.current).toBeInstanceOf(HTMLDivElement);
     expect(ref.current).toBe(container.firstElementChild);
   });
 });

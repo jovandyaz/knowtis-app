@@ -59,6 +59,7 @@ describe('RecordingTimer', () => {
         isRecording={false}
       />
     );
+    expect(ref.current).toBeInstanceOf(HTMLDivElement);
     expect(ref.current).toBe(container.firstElementChild);
   });
 });
