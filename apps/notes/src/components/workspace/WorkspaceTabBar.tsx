@@ -24,7 +24,7 @@ export function WorkspaceTabBar({ studyCount }: { studyCount: number }) {
   const tabs: WorkspaceTabItem[] = [
     { value: 'note', label: t('workspace.tabs.note'), icon: FileText },
     {
-      value: 'estudio',
+      value: 'study',
       label: t('workspace.tabs.study'),
       icon: BookOpen,
       count: studyCount,

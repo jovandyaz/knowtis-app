@@ -38,6 +38,6 @@ describe('WorkspaceTabBar', () => {
     render(<WorkspaceTabBar studyCount={2} />);
     await userEvent.click(studyTab());
     expect(studyTab()).toHaveAttribute('aria-selected', 'true');
-    expect(useWorkspaceStore.getState().activeTab).toBe('estudio');
+    expect(useWorkspaceStore.getState().activeTab).toBe('study');
   });
 });

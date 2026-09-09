@@ -355,7 +355,7 @@ describe('SharedNotePage study tab', () => {
   const noteTab = () =>
     screen.getByRole('tab', { name: /workspace.tabs.note/ });
   const notePanel = () => document.getElementById(workspacePanelId('note'));
-  const studyPanel = () => document.getElementById(workspacePanelId('estudio'));
+  const studyPanel = () => document.getElementById(workspacePanelId('study'));
 
   const tabStripPlaceholder = () =>
     screen.queryByRole('status', { name: 'workspace.tabsLoading' });
@@ -417,7 +417,7 @@ describe('SharedNotePage study tab', () => {
 
   it('opens on the note tab even when the workspace was left on study', () => {
     sharedArtifacts.data = artifactFixtures;
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
 
     renderPage();
 

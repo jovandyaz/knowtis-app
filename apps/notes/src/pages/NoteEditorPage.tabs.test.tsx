@@ -174,19 +174,19 @@ describe('NoteEditorPage workspace tabs', () => {
       expect(screen.getByRole('tablist')).toBeInTheDocument();
 
       const notePanel = document.getElementById(workspacePanelId('note'));
-      const estudioPanel = document.getElementById(workspacePanelId('estudio'));
+      const studyPanel = document.getElementById(workspacePanelId('study'));
       expect(notePanel).toBeInTheDocument();
-      expect(estudioPanel).toBeInTheDocument();
+      expect(studyPanel).toBeInTheDocument();
       expect(notePanel).toHaveAttribute(
         'aria-labelledby',
         workspaceTabId('note')
       );
-      expect(estudioPanel).toHaveAttribute(
+      expect(studyPanel).toHaveAttribute(
         'aria-labelledby',
-        workspaceTabId('estudio')
+        workspaceTabId('study')
       );
       expect(notePanel).toHaveAttribute('tabindex', '0');
-      expect(estudioPanel).toHaveAttribute('tabindex', '0');
+      expect(studyPanel).toHaveAttribute('tabindex', '0');
     });
 
     it('shows the note artifact count on the study tab', () => {
@@ -199,19 +199,19 @@ describe('NoteEditorPage workspace tabs', () => {
       ).toHaveTextContent('2');
     });
 
-    it('keeps the editor mounted and only hides the note panel when switching to Estudio', () => {
+    it('keeps the editor mounted and only hides the note panel when switching to the study tab', () => {
       renderWithClient(<NoteEditorPage />);
 
       const editorBefore = screen.getByTestId('collaborative-editor');
       const notePanel = document.getElementById(workspacePanelId('note'));
-      const estudioPanel = document.getElementById(workspacePanelId('estudio'));
+      const studyPanel = document.getElementById(workspacePanelId('study'));
 
       expect(notePanel).toBeInTheDocument();
       expect(notePanel).not.toHaveClass('hidden');
-      expect(estudioPanel).toHaveClass('hidden');
+      expect(studyPanel).toHaveClass('hidden');
 
       act(() => {
-        useWorkspaceStore.getState().setTab('estudio');
+        useWorkspaceStore.getState().setTab('study');
       });
 
       expect(document.getElementById(workspacePanelId('note'))).toBe(notePanel);
@@ -219,7 +219,7 @@ describe('NoteEditorPage workspace tabs', () => {
       expect(notePanel).toBeInTheDocument();
       expect(notePanel).toHaveClass('hidden');
 
-      expect(estudioPanel).not.toHaveClass('hidden');
+      expect(studyPanel).not.toHaveClass('hidden');
     });
   });
 });

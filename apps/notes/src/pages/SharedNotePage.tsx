@@ -167,7 +167,7 @@ export function SharedNotePage() {
             </WorkspaceTabPanel>
 
             {hasArtifacts && (
-              <WorkspaceTabPanel tab="estudio" tabbed>
+              <WorkspaceTabPanel tab="study" tabbed>
                 <StudyToolsTab
                   noteId={data.id}
                   artifacts={sharedArtifacts}

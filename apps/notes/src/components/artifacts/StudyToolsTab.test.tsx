@@ -137,7 +137,7 @@ describe('StudyToolsTab', () => {
   it('asks for a note when there is none', () => {
     render(<StudyToolsTab noteId={null} />);
 
-    expect(screen.getByText('ai.copilot.estudio.noNote')).toBeInTheDocument();
+    expect(screen.getByText('ai.copilot.study.noNote')).toBeInTheDocument();
     expect(listProps.last).toBeUndefined();
   });
 

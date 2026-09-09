@@ -392,7 +392,7 @@ function NoteEditor({
       </WorkspaceTabPanel>
 
       {aiEnabled && (
-        <WorkspaceTabPanel tab="estudio" tabbed>
+        <WorkspaceTabPanel tab="study" tabbed>
           <StudyToolsTab noteId={noteId} />
         </WorkspaceTabPanel>
       )}

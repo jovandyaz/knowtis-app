@@ -25,7 +25,7 @@ beforeEach(() => {
 describe('useSharedNoteEditing', () => {
   it('promotes the visitor to editing once a guest session exists', async () => {
     ensureGuestSession.mockResolvedValue(true);
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
     const { result } = renderHook(() => useSharedNoteEditing());
 
     act(() => result.current.handleStartEditing());
@@ -56,7 +56,7 @@ describe('useSharedNoteEditing', () => {
 
   it('keeps the visitor reading and says why when no session can be created', async () => {
     ensureGuestSession.mockResolvedValue(false);
-    useWorkspaceStore.setState({ activeTab: 'estudio' });
+    useWorkspaceStore.setState({ activeTab: 'study' });
     const { result } = renderHook(() => useSharedNoteEditing());
 
     act(() => result.current.handleStartEditing());
@@ -65,7 +65,7 @@ describe('useSharedNoteEditing', () => {
       expect(toastError).toHaveBeenCalledWith('shared.editUnavailable')
     );
     expect(result.current.isEditing).toBe(false);
-    expect(useWorkspaceStore.getState().activeTab).toBe('estudio');
+    expect(useWorkspaceStore.getState().activeTab).toBe('study');
   });
 
   it('returns to the note tab when the visitor stops editing', async () => {
@@ -74,7 +74,7 @@ describe('useSharedNoteEditing', () => {
 
     act(() => result.current.handleStartEditing());
     await waitFor(() => expect(result.current.isEditing).toBe(true));
-    act(() => useWorkspaceStore.getState().setTab('estudio'));
+    act(() => useWorkspaceStore.getState().setTab('study'));
 
     act(() => result.current.handleStopEditing());
 
