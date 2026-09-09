@@ -25,20 +25,28 @@ vi.mock('@knowtis/data-access-artifacts', () => ({
   }),
 }));
 
-const artifacts = [
+const ARTIFACTS: Artifact[] = [
   {
     id: 'a1',
+    userId: 'u1',
+    sourceNoteId: 'note-1',
     type: 'flashcard_deck',
     title: 'Fotosíntesis',
+    content: { cards: [] },
     createdAt: '2026-08-14T00:00:00.000Z',
+    updatedAt: '2026-08-14T00:00:00.000Z',
   },
   {
     id: 'a2',
+    userId: 'u1',
+    sourceNoteId: 'note-1',
     type: 'quiz',
     title: 'Mitosis',
+    content: { questions: [] },
     createdAt: '2026-08-15T00:00:00.000Z',
+    updatedAt: '2026-08-15T00:00:00.000Z',
   },
-] as Artifact[];
+];
 
 const deleteLabel = (title: string) =>
   `ai.artifacts.list.deleteAriaLabel ${JSON.stringify({ title })}`;
@@ -54,36 +62,34 @@ describe('ArtifactList', () => {
   });
 
   it('lists every artifact as a list item with a real open button', () => {
-    render(<ArtifactList artifacts={artifacts} onSelect={vi.fn()} />);
+    render(<ArtifactList artifacts={ARTIFACTS} onSelect={vi.fn()} />);
 
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    for (const artifact of artifacts) {
+    for (const artifact of ARTIFACTS) {
       expect(openButton(artifact.title)).toBeInTheDocument();
     }
   });
 
   it('opens an artifact from the keyboard without a re-implemented key handler', async () => {
     const onSelect = vi.fn();
-    render(<ArtifactList artifacts={artifacts} onSelect={onSelect} />);
+    render(<ArtifactList artifacts={ARTIFACTS} onSelect={onSelect} />);
 
     openButton('Fotosíntesis').focus();
     await userEvent.keyboard('{Enter}');
     await userEvent.keyboard(' ');
 
-    expect(onSelect).toHaveBeenNthCalledWith(1, artifacts[0]);
-    expect(onSelect).toHaveBeenNthCalledWith(2, artifacts[0]);
+    expect(onSelect).toHaveBeenNthCalledWith(1, ARTIFACTS[0]);
+    expect(onSelect).toHaveBeenNthCalledWith(2, ARTIFACTS[0]);
   });
 
   it('keeps delete a sibling button that never opens the artifact', async () => {
     const onSelect = vi.fn();
-    render(<ArtifactList artifacts={artifacts} onSelect={onSelect} />);
+    render(<ArtifactList artifacts={ARTIFACTS} onSelect={onSelect} />);
 
     const remove = screen.getByRole('button', {
       name: deleteLabel('Mitosis'),
     });
-    expect(
-      remove.closest('button[type="button"]:not([aria-label])')
-    ).toBeNull();
+    expect(openButton('Mitosis')).not.toContainElement(remove);
 
     await userEvent.click(remove);
 
@@ -92,7 +98,7 @@ describe('ArtifactList', () => {
   });
 
   it('withholds delete from a read-only viewer', () => {
-    render(<ArtifactList artifacts={artifacts} readOnly onSelect={vi.fn()} />);
+    render(<ArtifactList artifacts={ARTIFACTS} readOnly onSelect={vi.fn()} />);
 
     expect(
       screen.queryByRole('button', { name: deleteLabel('Mitosis') })
