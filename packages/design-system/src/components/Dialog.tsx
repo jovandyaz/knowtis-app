@@ -1,5 +1,6 @@
 import {
   createContext,
+  forwardRef,
   useCallback,
   useContext,
   useEffect,
@@ -376,29 +377,33 @@ function DialogContent({
   );
 }
 
-function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
+const DialogHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
+      ref={ref}
       className={cn(
         'flex flex-col space-y-1.5 text-center sm:text-left',
         className
       )}
       {...props}
     />
-  );
-}
+  )
+);
+DialogHeader.displayName = 'DialogHeader';
 
-function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
+const DialogFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
+      ref={ref}
       className={cn(
         'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
         className
       )}
       {...props}
     />
-  );
-}
+  )
+);
+DialogFooter.displayName = 'DialogFooter';
 
 type DialogTitleProps = Omit<
   ComponentPropsWithoutRef<typeof DialogPrimitive.Title>,

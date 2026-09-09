@@ -1,4 +1,5 @@
 import {
+  createRef,
   StrictMode,
   useEffect,
   useLayoutEffect,
@@ -21,6 +22,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from './Dialog';
@@ -1002,5 +1004,19 @@ describe('Dialog body scroll lock', () => {
     rerender(<StackedDialogs bottomOpen={false} topOpen={false} />);
 
     expect(document.body.style.overflow).toBe('');
+  });
+});
+
+describe('Dialog layout slots', () => {
+  it('forwards a ref to the rendered header element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<DialogHeader ref={ref} data-testid="dialog-header" />);
+    expect(ref.current).toBe(screen.getByTestId('dialog-header'));
+  });
+
+  it('forwards a ref to the rendered footer element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<DialogFooter ref={ref} data-testid="dialog-footer" />);
+    expect(ref.current).toBe(screen.getByTestId('dialog-footer'));
   });
 });
