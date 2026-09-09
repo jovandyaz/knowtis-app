@@ -24,6 +24,9 @@ function makeCard(i: number): StudyCard {
   };
 }
 
+/** A real wall-clock base, so a stored timestamp cannot pass for a stored elapsed time. */
+const SESSION_EPOCH_MS = Date.UTC(2026, 0, 1);
+
 function reverse<T>(items: T[]): T[] {
   return [...items].reverse();
 }
@@ -134,32 +137,63 @@ describe('useFlashcardSession', () => {
     expect(result.current.currentCard?.cardIndex).toBe(cards[1].cardIndex);
   });
 
-  it('reports a duration that starts at the first render, freezes on completion, and restarts fresh', () => {
+  it('reports no elapsed time until the deck ends, then the wall time it took', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(0);
+    vi.setSystemTime(SESSION_EPOCH_MS);
 
     const cards = [makeCard(0), makeCard(1)];
-    const { result, rerender } = renderHook(() => useFlashcardSession(cards));
+    const { result } = renderHook(() => useFlashcardSession(cards));
 
-    vi.setSystemTime(5_000);
-    act(() => result.current.rate('correct'));
-    act(() => result.current.rate('correct'));
+    expect(result.current.sessionResult.durationMs).toBe(0);
 
+    vi.setSystemTime(SESSION_EPOCH_MS + 5_000);
+    act(() => result.current.rate('correct'));
+    expect(result.current.sessionResult.durationMs).toBe(0);
+
+    act(() => result.current.rate('correct'));
     expect(result.current.isComplete).toBe(true);
     expect(result.current.sessionResult.durationMs).toBe(5_000);
+  });
 
-    vi.setSystemTime(9_000);
-    rerender();
-    expect(result.current.sessionResult.durationMs).toBe(5_000);
+  it('restarts the clock from zero and measures the replay on its own', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(SESSION_EPOCH_MS);
 
-    vi.setSystemTime(9_500);
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    vi.setSystemTime(SESSION_EPOCH_MS + 5_000);
+    act(() => result.current.rate('correct'));
+    act(() => result.current.rate('correct'));
+
+    vi.setSystemTime(SESSION_EPOCH_MS + 9_500);
     act(() => result.current.restart());
     expect(result.current.sessionResult.durationMs).toBe(0);
 
-    vi.setSystemTime(11_500);
+    vi.setSystemTime(SESSION_EPOCH_MS + 11_500);
     act(() => result.current.rate('correct'));
     act(() => result.current.rate('correct'));
     expect(result.current.sessionResult.durationMs).toBe(2_000);
+  });
+
+  it('stamps the duration once the deck ends and never re-stamps it', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(SESSION_EPOCH_MS);
+
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    vi.setSystemTime(SESSION_EPOCH_MS + 5_000);
+    act(() => result.current.rate('correct'));
+    act(() => result.current.rate('correct'));
+    expect(result.current.sessionResult.durationMs).toBe(5_000);
+
+    vi.setSystemTime(SESSION_EPOCH_MS + 60_000);
+    act(() => result.current.finish());
+    expect(result.current.sessionResult.durationMs).toBe(5_000);
+
+    act(() => result.current.rate('correct'));
+    expect(result.current.sessionResult.durationMs).toBe(5_000);
   });
 
   it('shuffles without losing or duplicating a card', () => {
