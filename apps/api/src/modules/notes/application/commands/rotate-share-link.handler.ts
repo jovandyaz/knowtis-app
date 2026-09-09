@@ -18,6 +18,7 @@ import {
   NOTE_WRITE_REPOSITORY,
   type NoteWriteRepository,
 } from '../../domain/ports/note-write.repository';
+import { SHARE_TOKEN_BYTES } from '../../domain/share-token';
 import { emitAccessChanged } from '../emit-access-changed';
 
 export interface RotateShareLinkInput {
@@ -50,7 +51,7 @@ export class RotateShareLinkHandler {
       noteId: input.noteId,
       ownerId: input.actorId,
       expectedToken: rotation.value,
-      newToken: randomBytes(16).toString('hex'),
+      newToken: randomBytes(SHARE_TOKEN_BYTES).toString('hex'),
     });
     if (result.isOk()) {
       emitAccessChanged(this.eventEmitter, input.noteId);

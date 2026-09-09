@@ -24,7 +24,8 @@ export interface UpdateNoteData {
   readonly content?: string;
   readonly generalAccess?: GeneralAccessLevel;
   readonly generalAccessPermission?: PermissionLevel;
-  readonly shareToken?: string | null;
+  /** First-mint only: a delayed write must never clobber a committed rotation. */
+  readonly shareToken?: string;
   readonly editorsCanShare?: boolean;
   readonly bucket?: ParaBucket | null;
   readonly supertag?: Supertag | null;
