@@ -104,7 +104,7 @@ function AppLayout() {
     setAIEnabled(aiEnabled);
   }, [aiEnabled, setAIEnabled]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setVoiceNotesEnabled(voiceNotesEnabled);
   }, [voiceNotesEnabled, setVoiceNotesEnabled]);
 
