@@ -22,7 +22,7 @@ const RATING_TONE: Record<RatingKey, LearnToneButtonTone> = {
 
 const RATING_BUTTON_LAYOUT = cn(
   TOUCH_TARGET_CLASS,
-  'flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium'
+  'flex flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full px-3 py-2 text-sm font-medium'
 );
 
 export interface RatingBarProps extends Omit<

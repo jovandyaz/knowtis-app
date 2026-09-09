@@ -12,7 +12,17 @@ import { cn } from '../utils/cn';
 import { Switch } from './Switch';
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+const DropdownMenuTrigger = forwardRef<
+  ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Trigger
+    ref={ref}
+    className={cn('cursor-pointer', className)}
+    {...props}
+  />
+));
+DropdownMenuTrigger.displayName = 'DropdownMenuTrigger';
 
 const DropdownMenuContent = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.Content>,
@@ -24,7 +34,7 @@ const DropdownMenuContent = forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 min-w-[8rem] overflow-hidden rounded-md border border-(--border) bg-(--card) p-1 shadow-md',
-        'animate-in fade-in-0 zoom-in-95',
+        'animate-overlay-pop motion-reduce:animate-none',
         className
       )}
       {...props}
@@ -85,7 +95,7 @@ const DropdownMenuSubContent = forwardRef<
       className={cn(
         'z-50 min-w-32 max-w-[calc(100vw-1rem)] overflow-hidden rounded-md border border-(--border) bg-(--card) p-1 shadow-md',
         'max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto',
-        'animate-in fade-in-0 zoom-in-95',
+        'animate-overlay-pop motion-reduce:animate-none',
         className
       )}
       {...props}

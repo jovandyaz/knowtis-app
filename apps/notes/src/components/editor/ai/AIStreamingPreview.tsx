@@ -40,7 +40,7 @@ export function AIStreamingPreview({
       aria-busy={status === 'streaming'}
       className={cn(
         'rounded-xl border border-primary/20 border-t-2 border-t-primary/30 bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/25 backdrop-blur-xl',
-        'animate-in fade-in slide-in-from-top-2 duration-200'
+        'animate-drop-in motion-reduce:animate-none'
       )}
       style={width ? { width: `${width}px` } : { width: 420, maxWidth: '90vw' }}
     >

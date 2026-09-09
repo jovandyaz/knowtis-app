@@ -2,10 +2,19 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
 
+/**
+ * `TOUCH_TARGET_CLASS` in the base is what gives every button a 44x44px touch
+ * target: `min-height`/`min-width` outrank a consumer's `h-7` or `w-8`, and the
+ * variant gate keeps fine-pointer density identical.
+ */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  cn(
+    TOUCH_TARGET_CLASS,
+    'inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50'
+  ),
   {
     variants: {
       variant: {

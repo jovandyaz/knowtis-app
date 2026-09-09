@@ -131,7 +131,11 @@ export {
 export { DataTable, type DataTableProps } from './components/DataTable';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
 export { Kbd, type KbdProps } from './components/Kbd';
-export { Progress, type ProgressProps } from './components/Progress';
+export {
+  Progress,
+  type ProgressProps,
+  type ProgressTone,
+} from './components/Progress';
 export { FlipCard, type FlipCardProps } from './components/FlipCard';
 export {
   ProgressRing,
@@ -157,6 +161,11 @@ export {
   AnswerOption,
   type AnswerOptionProps,
 } from './components/AnswerOption';
+export {
+  BucketDot,
+  type BucketDotProps,
+  type BucketDotTone,
+} from './components/BucketDot';
 export { DeckChip, type DeckChipProps } from './components/DeckChip';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
@@ -183,6 +192,5 @@ export {
 } from './constants/rating';
 export { DECK_CHIP_TONES, type DeckChipTone } from './constants/deck-chip';
 export { THEMES, type Theme } from './constants/theme';
-export { TOUCH_TARGET_CLASS } from './constants/touch-target';
 
 export { cn } from './utils/cn';

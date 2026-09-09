@@ -3,14 +3,7 @@ import { forwardRef, type HTMLAttributes } from 'react';
 import type { DeckChipTone } from '../constants/deck-chip';
 import { cn } from '../utils/cn';
 import { badgeVariants } from './Badge';
-
-const DOT_CLASS: Record<DeckChipTone, string> = {
-  neutral: 'bg-(--muted-foreground)',
-  projects: 'bg-bucket-projects',
-  areas: 'bg-bucket-areas',
-  resources: 'bg-bucket-resources',
-  archive: 'border-[1.5px] border-bucket-archive',
-};
+import { BucketDot } from './BucketDot';
 
 export interface DeckChipProps extends Omit<
   HTMLAttributes<HTMLSpanElement>,
@@ -36,11 +29,7 @@ const DeckChip = forwardRef<HTMLSpanElement, DeckChipProps>(
         className
       )}
     >
-      <span
-        data-tone={tone}
-        aria-hidden="true"
-        className={cn('size-1.5 shrink-0 rounded-full', DOT_CLASS[tone])}
-      />
+      <BucketDot bucket={tone} data-tone={tone} className="size-1.5" />
       <span className="truncate" title={title}>
         {title}
       </span>

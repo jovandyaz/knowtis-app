@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SM2_QUALITY } from '@knowtis/shared-types';
 
 import { RATING_ORDER, type RatingKey } from '../constants/rating';
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { RatingBar } from './RatingBar';
 
 const LABELS = { again: 'Again', hard: 'Hard', good: 'Good', easy: 'Easy' };
@@ -102,6 +103,14 @@ describe('RatingBar', () => {
     expect(screen.getByRole('button', { name: 'Good, 6d' })).toHaveClass(
       'text-learn-correct-text'
     );
+  });
+
+  it('floors the tap target at 44px only where the pointer is coarse', () => {
+    renderBar();
+    const button = screen.getByRole('button', { name: 'Good, 6d' });
+    expect(
+      button.className.split(' ').filter((name) => name.includes('min-'))
+    ).toEqual(TOUCH_TARGET_CLASS.split(' '));
   });
 
   it('keeps the transition disabled under reduced motion', () => {

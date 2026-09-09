@@ -19,6 +19,54 @@
 
   --tabs-fade-start: 85%;
 
+  --size-bucket-dot: 9px;
+
+  --animate-overlay-fade: overlay-fade var(--motion-duration-fast)
+    var(--motion-easing-enter);
+  --animate-overlay-pop: overlay-pop var(--motion-duration-fast)
+    var(--motion-easing-enter);
+  --animate-sheet-rise: sheet-rise var(--motion-duration-base)
+    var(--motion-easing-enter);
+  --animate-panel-slide-in: panel-slide-in var(--motion-duration-base)
+    var(--motion-easing-enter);
+  --animate-drop-in: drop-in var(--motion-duration-fast)
+    var(--motion-easing-enter);
+
+  /* Overlays that Tailwind centres with `-translate-*` may only animate `scale`
+     and `opacity`; a `translate` keyframe would fight the centring utility. */
+  @keyframes overlay-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes overlay-pop {
+    from {
+      opacity: 0;
+      scale: 0.95;
+    }
+  }
+  @keyframes sheet-rise {
+    from {
+      opacity: 0;
+      translate: 0 100%;
+    }
+  }
+  @keyframes panel-slide-in {
+    from {
+      opacity: 0;
+      translate: 100% 0;
+    }
+  }
+  @keyframes drop-in {
+    from {
+      opacity: 0;
+      translate: 0 -0.5rem;
+    }
+  }
+}
+
+/* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */
+@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
@@ -43,6 +91,9 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
   --ease-standard: var(--motion-easing-standard);
   --ease-enter: var(--motion-easing-enter);
   --ease-exit: var(--motion-easing-exit);
@@ -57,10 +108,7 @@
   --color-tag-yellow: var(--tag-yellow);
   --color-tag-red: var(--tag-red);
   --color-tag-pink: var(--tag-pink);
-}
 
-/* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */
-@theme inline {
   --color-learn-correct: var(--learn-correct);
   --color-learn-incorrect: var(--learn-incorrect);
   --color-learn-correct-text: var(--learn-correct-text);
@@ -96,6 +144,8 @@
   --accent-foreground: var(--color-semantic-light-accent-foreground);
   --destructive: var(--color-semantic-light-destructive);
   --destructive-foreground: var(--color-semantic-light-destructive-foreground);
+  --success: var(--color-semantic-light-success);
+  --warning: var(--color-semantic-light-warning);
   --learn-correct: var(--color-semantic-light-learn-correct);
   --learn-incorrect: var(--color-semantic-light-learn-incorrect);
   --learn-correct-text: var(--color-semantic-light-learn-correct-text);
@@ -153,6 +203,8 @@
   --accent-foreground: var(--color-semantic-dark-accent-foreground);
   --destructive: var(--color-semantic-dark-destructive);
   --destructive-foreground: var(--color-semantic-dark-destructive-foreground);
+  --success: var(--color-semantic-dark-success);
+  --warning: var(--color-semantic-dark-warning);
   --learn-correct: var(--color-semantic-dark-learn-correct);
   --learn-incorrect: var(--color-semantic-dark-learn-incorrect);
   --learn-correct-text: var(--color-semantic-dark-learn-correct-text);

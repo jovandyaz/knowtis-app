@@ -54,7 +54,7 @@ const FlipCard = forwardRef<HTMLButtonElement, FlipCardProps>(
           aria-pressed={flipped}
           aria-describedby={hintId}
           onClick={onFlip}
-          className="grid min-h-56 w-full rounded-lg text-left perspective-distant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2"
+          className="grid min-h-56 w-full cursor-pointer rounded-lg text-left perspective-distant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2"
         >
           {preset.reduced ? (
             <>

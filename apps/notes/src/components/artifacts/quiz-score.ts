@@ -1,6 +1,4 @@
-import type { ProgressProps } from '@knowtis/design-system';
-
-type ProgressTone = NonNullable<ProgressProps['tone']>;
+import type { ProgressTone } from '@knowtis/design-system';
 
 const QUIZ_SCORE_THRESHOLD = {
   GOOD: 70,

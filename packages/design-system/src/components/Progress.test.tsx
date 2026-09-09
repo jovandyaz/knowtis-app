@@ -11,6 +11,19 @@ describe('Progress', () => {
     const bar = screen.getByRole('progressbar', { name: '3 of 10 questions' });
     expect(bar).toHaveAttribute('aria-valuenow', '3');
     expect(bar).toHaveAttribute('aria-valuemax', '10');
+    expect(bar).not.toHaveAttribute('aria-labelledby');
+  });
+
+  it('borrows its name from a visible caption instead of repeating it', () => {
+    render(
+      <>
+        <span id="elapsed">00:45 / 05:00</span>
+        <Progress value={45} max={300} labelledBy="elapsed" />
+      </>
+    );
+    const bar = screen.getByRole('progressbar', { name: '00:45 / 05:00' });
+    expect(bar).toHaveAttribute('aria-labelledby', 'elapsed');
+    expect(bar).not.toHaveAttribute('aria-label');
   });
 
   it('fills the indicator proportionally', () => {

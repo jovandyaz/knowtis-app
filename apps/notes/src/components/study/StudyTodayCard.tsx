@@ -7,13 +7,7 @@ import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 
 import { useStudyStats } from '@knowtis/data-access-artifacts';
-import {
-  buttonVariants,
-  cn,
-  Skeleton,
-  StatTile,
-  TOUCH_TARGET_CLASS,
-} from '@knowtis/design-system';
+import { buttonVariants, cn, Skeleton, StatTile } from '@knowtis/design-system';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 const CARD_LAYOUT = 'mt-8 flex flex-col gap-4';
@@ -77,11 +71,7 @@ export function StudyTodayCard() {
           </div>
           <Link
             to={ROUTES.STUDY}
-            className={cn(
-              buttonVariants({ variant: 'default' }),
-              TOUCH_TARGET_CLASS,
-              CTA_CLASS
-            )}
+            className={cn(buttonVariants({ variant: 'default' }), CTA_CLASS)}
           >
             {t('study.todayCard.cta')}
           </Link>

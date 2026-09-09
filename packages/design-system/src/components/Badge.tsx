@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes } from 'react';
+import { createElement, forwardRef, type HTMLAttributes } from 'react';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -15,8 +15,8 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-(--destructive) text-(--destructive-foreground)',
         outline: 'text-(--foreground)',
-        success: 'border-transparent bg-emerald-500/15 text-emerald-600',
-        warning: 'border-transparent bg-amber-500/15 text-amber-600',
+        success: 'border-transparent bg-(--success)/15 text-(--success)',
+        warning: 'border-transparent bg-(--warning)/15 text-(--warning)',
         count:
           'h-5 min-w-5 justify-center border-transparent bg-(--primary) px-1.5 text-2xs tabular-nums text-(--primary-foreground)',
       },
@@ -28,16 +28,18 @@ const badgeVariants = cva(
 );
 
 export interface BadgeProps
-  extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
+  extends HTMLAttributes<HTMLElement>, VariantProps<typeof badgeVariants> {
+  /** A badge is phrasing content; reach for `div` only where flow content is expected. */
+  as?: 'span' | 'div';
+}
 
-const Badge = forwardRef<HTMLDivElement, BadgeProps>(
-  ({ className, variant, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
-    />
-  )
+const Badge = forwardRef<HTMLElement, BadgeProps>(
+  ({ as = 'span', className, variant, ...props }, ref) =>
+    createElement(as, {
+      ...props,
+      ref,
+      className: cn(badgeVariants({ variant }), className),
+    })
 );
 Badge.displayName = 'Badge';
 

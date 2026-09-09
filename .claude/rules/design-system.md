@@ -48,6 +48,7 @@ paths:
 
 - Components must be generic and reusable — no app-specific business logic.
 - Props API should follow composition patterns (Radix-style): compound components with `Root`, `Trigger`, `Content` subcomponents where applicable.
+- Interactive primitives declare their own cursor — `cursor-pointer` in the base, or the cursor the gesture implies (`cursor-col-resize`) — and consumers never add one to a design-system component.
 - Support `className` prop for consumer customization (merged via `cn()`).
 - Handle all interactive states: default, hover, focus, active, disabled.
 

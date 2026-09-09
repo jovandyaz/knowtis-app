@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent,
@@ -16,7 +17,6 @@ import {
   AnswerOption,
   Button,
   Progress,
-  TOUCH_TARGET_CLASS,
   type AnswerOutcome,
 } from '@knowtis/design-system';
 import type { QuizArtifact } from '@knowtis/shared-types';
@@ -64,6 +64,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const content = artifact.content;
   const submitQuiz = useSubmitQuiz(artifact.id);
 
+  const scoreCaptionId = useId();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -182,19 +183,17 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         >
           {t('ai.artifacts.quiz.completed')}
         </h3>
-        <p className="text-lg text-(--muted-foreground)">{scoreLabel}</p>
+        <p id={scoreCaptionId} className="text-lg text-(--muted-foreground)">
+          {scoreLabel}
+        </p>
         <Progress
           className="h-4 w-48"
           value={percentage}
           max={PERCENT}
-          label={scoreLabel}
+          labelledBy={scoreCaptionId}
           tone={scoreTone(percentage)}
         />
-        <Button
-          variant="outline"
-          className={TOUCH_TARGET_CLASS}
-          onClick={handleRestart}
-        >
+        <Button variant="outline" onClick={handleRestart}>
           <RotateCcw className="mr-2 h-4 w-4" />
           {t('ai.artifacts.quiz.tryAgain')}
         </Button>
@@ -295,12 +294,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
       )}
 
       <div className="flex justify-end">
-        <Button
-          ref={advanceRef}
-          className={TOUCH_TARGET_CLASS}
-          onClick={handleNext}
-          disabled={!answered}
-        >
+        <Button ref={advanceRef} onClick={handleNext} disabled={!answered}>
           {currentIndex < totalQuestions - 1
             ? t('ai.artifacts.quiz.next')
             : t('ai.artifacts.quiz.finish')}

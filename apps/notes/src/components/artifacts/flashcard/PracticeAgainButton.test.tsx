@@ -31,7 +31,7 @@ describe('PracticeAgainButton', () => {
     const button = screen.getByRole('button', {
       name: 'ai.artifacts.flashcards.summary.practiceAgain',
     });
-    expect(button).toHaveClass('min-h-11');
+    expect(button).toHaveClass('pointer-coarse:min-h-11');
 
     await userEvent.click(button);
 
@@ -45,6 +45,6 @@ describe('PracticeAgainButton', () => {
       screen.getByRole('button', {
         name: 'ai.artifacts.flashcards.summary.practiceAgain',
       })
-    ).toHaveClass('min-h-11');
+    ).toHaveClass('pointer-coarse:min-h-11');
   });
 });

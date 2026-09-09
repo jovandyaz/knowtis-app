@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { DataTable } from './DataTable';
 
 interface Row {
@@ -117,6 +118,15 @@ describe('DataTable', () => {
     expect(rows[1]).toHaveTextContent('Linus');
     expect(rows[2]).toHaveTextContent('Grace');
     expect(rows[3]).toHaveTextContent('Ada');
+  });
+
+  it('floors the sortable header at a full touch target on coarse pointers', () => {
+    render(<DataTable columns={columns} data={data} />);
+
+    const nameHeader = screen.getByRole('columnheader', { name: 'Name' });
+    expect(
+      within(nameHeader).getByRole('button', { name: 'Name' })
+    ).toHaveClass(...TOUCH_TARGET_CLASS.split(' '));
   });
 
   it('does not render a sort button on headers in server-paginated mode', () => {

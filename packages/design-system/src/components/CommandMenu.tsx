@@ -7,9 +7,8 @@ import {
 
 import { ChevronRight } from 'lucide-react';
 
+import { TOUCH_TARGET_HEIGHT_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
-
-/* ─── Content (outer container) ─── */
 
 interface CommandMenuContentProps extends HTMLAttributes<HTMLDivElement> {
   /** Fixed width preset */
@@ -29,7 +28,7 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
       className={cn(
         'z-50 overflow-hidden rounded-xl border border-primary/20',
         'bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/20 backdrop-blur-xl',
-        'animate-in fade-in zoom-in-95 duration-(--motion-duration-fast) motion-reduce:animate-none',
+        'animate-overlay-pop motion-reduce:animate-none',
         WIDTH_MAP[width],
         className
       )}
@@ -40,8 +39,6 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
   )
 );
 CommandMenuContent.displayName = 'CommandMenuContent';
-
-/* ─── Group ─── */
 
 interface CommandMenuGroupProps extends HTMLAttributes<HTMLDivElement> {
   label?: string;
@@ -64,8 +61,6 @@ const CommandMenuGroup = forwardRef<HTMLDivElement, CommandMenuGroupProps>(
 );
 CommandMenuGroup.displayName = 'CommandMenuGroup';
 
-/* ─── Item ─── */
-
 interface CommandMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   label: string;
@@ -83,7 +78,8 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       ref={ref}
       type="button"
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
+        TOUCH_TARGET_HEIGHT_CLASS,
+        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
         'transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
         selected
           ? 'bg-foreground/7 text-foreground'
@@ -113,8 +109,6 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
 );
 CommandMenuItem.displayName = 'CommandMenuItem';
 
-/* ─── Back button ─── */
-
 interface CommandMenuBackProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
 }
@@ -125,7 +119,8 @@ const CommandMenuBack = forwardRef<HTMLButtonElement, CommandMenuBackProps>(
       ref={ref}
       type="button"
       className={cn(
-        'mb-1 flex items-center gap-1 px-2 py-1 text-xs',
+        TOUCH_TARGET_HEIGHT_CLASS,
+        'mb-1 flex cursor-pointer items-center gap-1 px-2 py-1 text-xs',
         'text-muted-foreground transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:text-foreground',
         className
       )}

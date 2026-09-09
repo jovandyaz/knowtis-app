@@ -9,6 +9,7 @@ import {
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
 import {
   readOverflow,
@@ -98,7 +99,8 @@ export const TabsTrigger = forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5',
+      TOUCH_TARGET_CLASS,
+      'inline-flex shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5',
       'text-sm font-medium text-(--muted-foreground) transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--primary)',
       'disabled:pointer-events-none disabled:opacity-50',

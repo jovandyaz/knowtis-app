@@ -39,7 +39,6 @@
     "affected:build": "nx affected -t build",
     "storybook": "nx storybook design-system",
     "storybook:build": "nx storybook:build design-system",
-    "tokens:build": "nx tokens:build design-system",
     "db:generate": "nx db:generate api",
     "db:migrate": "nx db:migrate api",
     "db:migrate:run": "nx db:migrate:run api",

@@ -299,7 +299,7 @@ describe('QuizSession', () => {
     expect(bar.firstElementChild).toHaveClass('bg-(--primary)');
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
-    ).toHaveClass('min-h-11');
+    ).toHaveClass('pointer-coarse:min-h-11');
   });
 
   it('gives the advance button a 44px touch target', () => {
@@ -307,7 +307,7 @@ describe('QuizSession', () => {
 
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
-    ).toHaveClass('min-h-11');
+    ).toHaveClass('pointer-coarse:min-h-11');
   });
 
   it('lets a read-only viewer practise the whole quiz without submitting it', async () => {
