@@ -18,9 +18,46 @@ describe('Badge', () => {
     expect(screen.getByText('New').className).toContain('bg-(--foreground)');
   });
 
+  it('renders phrasing content by default', () => {
+    render(<Badge>Inline</Badge>);
+    expect(screen.getByText('Inline').tagName).toBe('SPAN');
+  });
+
+  it('renders a div when the caller asks for flow content', () => {
+    render(<Badge as="div">Block</Badge>);
+    expect(screen.getByText('Block').tagName).toBe('DIV');
+  });
+
+  it('paints the success and warning variants from semantic tokens', () => {
+    render(
+      <>
+        <Badge variant="success">Live</Badge>
+        <Badge variant="warning">Stale</Badge>
+      </>
+    );
+    expect(screen.getByText('Live')).toHaveClass(
+      'bg-(--success)/15',
+      'text-(--success)'
+    );
+    expect(screen.getByText('Stale')).toHaveClass(
+      'bg-(--warning)/15',
+      'text-(--warning)'
+    );
+  });
+
   it('forwards a ref to the rendered element', () => {
-    const ref = createRef<HTMLDivElement>();
+    const ref = createRef<HTMLElement>();
     render(<Badge ref={ref}>Ref</Badge>);
+    expect(ref.current).toBe(screen.getByText('Ref'));
+  });
+
+  it('forwards a ref to the div it was asked to render', () => {
+    const ref = createRef<HTMLElement>();
+    render(
+      <Badge as="div" ref={ref}>
+        Ref
+      </Badge>
+    );
     expect(ref.current).toBe(screen.getByText('Ref'));
   });
 });

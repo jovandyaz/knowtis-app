@@ -43,6 +43,9 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
   --ease-standard: var(--motion-easing-standard);
   --ease-enter: var(--motion-easing-enter);
   --ease-exit: var(--motion-easing-exit);
@@ -96,6 +99,8 @@
   --accent-foreground: var(--color-semantic-light-accent-foreground);
   --destructive: var(--color-semantic-light-destructive);
   --destructive-foreground: var(--color-semantic-light-destructive-foreground);
+  --success: var(--color-semantic-light-success);
+  --warning: var(--color-semantic-light-warning);
   --learn-correct: var(--color-semantic-light-learn-correct);
   --learn-incorrect: var(--color-semantic-light-learn-incorrect);
   --learn-correct-text: var(--color-semantic-light-learn-correct-text);
@@ -153,6 +158,8 @@
   --accent-foreground: var(--color-semantic-dark-accent-foreground);
   --destructive: var(--color-semantic-dark-destructive);
   --destructive-foreground: var(--color-semantic-dark-destructive-foreground);
+  --success: var(--color-semantic-dark-success);
+  --warning: var(--color-semantic-dark-warning);
   --learn-correct: var(--color-semantic-dark-learn-correct);
   --learn-incorrect: var(--color-semantic-dark-learn-incorrect);
   --learn-correct-text: var(--color-semantic-dark-learn-correct-text);

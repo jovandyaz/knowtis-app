@@ -106,6 +106,14 @@
           "value": "{color.primitive.red.50}",
           "type": "color"
         },
+        "success": {
+          "value": "{color.primitive.green.700}",
+          "type": "color"
+        },
+        "warning": {
+          "value": "{color.primitive.yellow.700}",
+          "type": "color"
+        },
         "border": { "value": "{color.primitive.neutral.200}", "type": "color" },
         "input": { "value": "{color.primitive.neutral.200}", "type": "color" },
         "ring": { "value": "{color.primitive.purple.500}", "type": "color" },
@@ -191,6 +199,14 @@
         },
         "destructive-foreground": {
           "value": "{color.primitive.red.50}",
+          "type": "color"
+        },
+        "success": {
+          "value": "{color.primitive.green.300}",
+          "type": "color"
+        },
+        "warning": {
+          "value": "{color.primitive.yellow.300}",
           "type": "color"
         },
         "border": { "value": "{color.primitive.neutral.700}", "type": "color" },

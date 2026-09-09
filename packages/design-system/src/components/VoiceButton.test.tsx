@@ -31,7 +31,7 @@ describe('VoiceButton', () => {
   it('keeps the paused state loud regardless of emphasis', () => {
     render(<VoiceButton state="paused" emphasis="quiet" />);
     const button = screen.getByRole('button', { name: 'Resume recording' });
-    expect(button.className).toContain('bg-amber-500');
+    expect(button.className).toContain('bg-(--warning)');
     expect(button.className).not.toContain('bg-(--card)');
   });
 
