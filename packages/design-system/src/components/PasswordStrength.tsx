@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { forwardRef, useMemo } from 'react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 interface PasswordCheck {
   readonly label: string;
@@ -47,62 +47,65 @@ function calculateStrength(
   return { score, label: strengthLabels[score] || '', checks: results };
 }
 
-function PasswordStrength({ password, checks, labels }: PasswordStrengthProps) {
-  const mergedLabels = useMemo(
-    () => ({ ...DEFAULT_LABELS, ...labels }),
-    [labels]
-  );
-  const {
-    score,
-    label,
-    checks: results,
-  } = useMemo(
-    () => calculateStrength(password, checks, mergedLabels),
-    [password, checks, mergedLabels]
-  );
+const PasswordStrength = forwardRef<HTMLDivElement, PasswordStrengthProps>(
+  ({ password, checks, labels }, ref) => {
+    const mergedLabels = useMemo(
+      () => ({ ...DEFAULT_LABELS, ...labels }),
+      [labels]
+    );
+    const {
+      score,
+      label,
+      checks: results,
+    } = useMemo(
+      () => calculateStrength(password, checks, mergedLabels),
+      [password, checks, mergedLabels]
+    );
 
-  if (!password) {
-    return null;
-  }
+    if (!password) {
+      return null;
+    }
 
-  const colors = [
-    '',
-    'bg-(--destructive)',
-    'bg-orange-500',
-    'bg-yellow-500',
-    'bg-green-500',
-  ];
+    const colors = [
+      '',
+      'bg-(--destructive)',
+      'bg-orange-500',
+      'bg-yellow-500',
+      'bg-green-500',
+    ];
 
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-1">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-1.5 flex-1 rounded-full transition-colors',
-              i <= score ? colors[score] : 'bg-(--muted)'
-            )}
-          />
-        ))}
+    return (
+      <div ref={ref} className="space-y-2">
+        <div className="flex gap-1">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className={cn(
+                'h-1.5 flex-1 rounded-full transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
+                i <= score ? colors[score] : 'bg-(--muted)'
+              )}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-(--muted-foreground)">{label}</p>
+        <ul className="space-y-1">
+          {results.map((check) => (
+            <li
+              key={check.label}
+              className={cn(
+                'text-xs flex items-center gap-1',
+                check.met ? 'text-green-600' : 'text-(--muted-foreground)'
+              )}
+            >
+              {check.met ? '\u2713' : '\u25CB'} {check.label}
+            </li>
+          ))}
+        </ul>
       </div>
-      <p className="text-xs text-(--muted-foreground)">{label}</p>
-      <ul className="space-y-1">
-        {results.map((check) => (
-          <li
-            key={check.label}
-            className={cn(
-              'text-xs flex items-center gap-1',
-              check.met ? 'text-green-600' : 'text-(--muted-foreground)'
-            )}
-          >
-            {check.met ? '\u2713' : '\u25CB'} {check.label}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+    );
+  }
+);
+PasswordStrength.displayName = 'PasswordStrength';
 
 export {
   PasswordStrength,

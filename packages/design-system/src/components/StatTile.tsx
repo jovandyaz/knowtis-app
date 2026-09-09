@@ -1,7 +1,7 @@
 import { forwardRef, useId, type HTMLAttributes, type ReactNode } from 'react';
 
 import type { LearnTone } from '../constants/learn-tone';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { CARD_SURFACE } from './Card';
 
 export interface StatDelta {

@@ -8,7 +8,7 @@ import {
 import { motion } from 'motion/react';
 
 import { useMotionPreset } from '../motion/useMotionPreset';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { CARD_SURFACE } from './Card';
 
 export interface FlipCardProps extends Omit<

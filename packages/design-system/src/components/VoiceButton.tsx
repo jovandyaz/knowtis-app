@@ -3,16 +3,16 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2, Mic, MicOff, Pause } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 const voiceButtonVariants = cva(
-  'inline-flex items-center justify-center rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2',
+  'inline-flex items-center justify-center rounded-full transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2',
   {
     variants: {
       state: {
         idle: 'cursor-pointer',
         listening:
-          'bg-red-500 text-white cursor-pointer animate-pulse shadow-[0_0_16px_4px_rgba(239,68,68,0.4)]',
+          'bg-red-500 text-white cursor-pointer animate-pulse motion-reduce:animate-none shadow-[0_0_16px_4px_rgba(239,68,68,0.4)]',
         paused: 'bg-amber-500 text-white cursor-pointer hover:bg-amber-500/90',
         processing: 'bg-(--muted) text-(--muted-foreground) cursor-wait',
         disabled:
@@ -86,7 +86,14 @@ export const VoiceButton = forwardRef<HTMLButtonElement, VoiceButtonProps>(
         case 'paused':
           return <Pause className={iconClass} />;
         case 'processing':
-          return <Loader2 className={cn(iconClass, 'animate-spin')} />;
+          return (
+            <Loader2
+              className={cn(
+                iconClass,
+                'animate-spin motion-reduce:animate-none'
+              )}
+            />
+          );
         case 'disabled':
           return <MicOff className={iconClass} />;
         default:

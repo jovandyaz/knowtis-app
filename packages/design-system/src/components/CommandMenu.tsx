@@ -7,7 +7,7 @@ import {
 
 import { ChevronRight } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 /* ─── Content (outer container) ─── */
 
@@ -29,7 +29,7 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
       className={cn(
         'z-50 overflow-hidden rounded-xl border border-primary/20',
         'bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/20 backdrop-blur-xl',
-        'animate-in fade-in zoom-in-95 duration-150',
+        'animate-in fade-in zoom-in-95 duration-(--motion-duration-fast) motion-reduce:animate-none',
         WIDTH_MAP[width],
         className
       )}
@@ -84,7 +84,7 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       type="button"
       className={cn(
         'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
-        'transition-all duration-150',
+        'transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
         selected
           ? 'bg-foreground/7 text-foreground'
           : 'text-foreground hover:bg-foreground/5',
@@ -126,7 +126,7 @@ const CommandMenuBack = forwardRef<HTMLButtonElement, CommandMenuBackProps>(
       type="button"
       className={cn(
         'mb-1 flex items-center gap-1 px-2 py-1 text-xs',
-        'text-muted-foreground transition-colors hover:text-foreground',
+        'text-muted-foreground transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:text-foreground',
         className
       )}
       {...props}

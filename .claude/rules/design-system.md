@@ -8,6 +8,7 @@ paths:
 ## Component Structure
 
 - Use `forwardRef` for all components that render a DOM element.
+- The rule does not reach a component whose outermost render is a third-party or Radix root that renders no DOM of its own (`Dialog` — the Root; its layout slots do forward refs — `RecordingModal`, `Toaster`) or another component (`LoadingButton`, `ThemeToggle`, `ModelSelect`, `ModelMenu`); nor a generic component, whose type parameter `forwardRef` erases (`SegmentedControl`, `RadioCardGroup`, `DataTable`).
 - Define variants with `class-variance-authority` (CVA):
   ```typescript
   const buttonVariants = cva('base-classes', {

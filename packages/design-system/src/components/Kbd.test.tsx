@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -14,5 +16,10 @@ describe('Kbd', () => {
   it('can be exposed to assistive tech when it is the only hint', () => {
     render(<Kbd aria-hidden={false}>1</Kbd>);
     expect(screen.getByText('1')).toHaveAttribute('aria-hidden', 'false');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLElement>();
+    render(<Kbd ref={ref}>Enter</Kbd>);
+    expect(ref.current).toBe(screen.getByText('Enter'));
   });
 });

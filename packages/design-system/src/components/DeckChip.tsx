@@ -1,7 +1,7 @@
 import { forwardRef, type HTMLAttributes } from 'react';
 
 import type { DeckChipTone } from '../constants/deck-chip';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { badgeVariants } from './Badge';
 
 const DOT_CLASS: Record<DeckChipTone, string> = {

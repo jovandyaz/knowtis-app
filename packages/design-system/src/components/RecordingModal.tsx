@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 export interface RecordingModalProps {
   open: boolean;
@@ -36,7 +36,8 @@ export function RecordingModal({
           className={cn(
             'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
             'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out-0'
+            'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+            'motion-reduce:animate-none'
           )}
         />
         <DialogPrimitive.Content
@@ -67,6 +68,7 @@ export function RecordingModal({
             'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
             'md:data-[state=open]:zoom-in-95 md:data-[state=open]:slide-in-from-left-1/2 md:data-[state=open]:slide-in-from-top-[48%]',
             'md:data-[state=closed]:zoom-out-95 md:data-[state=closed]:slide-out-to-left-1/2 md:data-[state=closed]:slide-out-to-top-[48%]',
+            'motion-reduce:animate-none',
             'max-md:data-[state=open]:slide-in-from-bottom-full',
             'max-md:data-[state=closed]:slide-out-to-bottom-full',
             className
@@ -81,7 +83,7 @@ export function RecordingModal({
           {children}
           {!preventClose && (
             <DialogPrimitive.Close
-              className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
+              className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
