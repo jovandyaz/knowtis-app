@@ -180,6 +180,10 @@ describe.runIf(DB_AVAILABLE)(
         .set({ emailVerifiedAt: new Date() })
         .where(eq(users.id, f.ids.owner));
       await f.db
+        .update(users)
+        .set({ role: 'user' })
+        .where(eq(users.id, f.ids.stranger));
+      await f.db
         .update(notes)
         .set({
           generalAccess: 'anyone_with_link',

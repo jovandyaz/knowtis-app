@@ -525,6 +525,7 @@ export class NotesController {
   @ApiAuthErrors('only the owner can rotate the share link')
   @ApiNotFound('note does not exist')
   @Post(':id/share-link/rotate')
+  @Throttle(NOTE_UPDATE_THROTTLE)
   @RequirePermission('share', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.SHARE)
   @HttpCode(HttpStatus.OK)

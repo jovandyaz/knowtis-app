@@ -698,7 +698,7 @@
     "rotation": {
       "action": "Cambiar enlace para compartir",
       "title": "¿Cambiar este enlace?",
-      "description": "El enlace actual dejará de funcionar. Las personas agregadas directamente conservan sus permisos. Las sesiones abiertas se actualizarán en unos segundos; el contenido ya descargado no se puede recuperar.",
+      "description": "El enlace actual dejará de funcionar. Las personas agregadas directamente conservan sus permisos. Las sesiones abiertas se actualizarán en unos segundos; el contenido que ya se descargó no se puede retirar.",
       "cancel": "Cancelar",
       "confirm": "Cambiar enlace",
       "close": "Cerrar",
