@@ -38,6 +38,13 @@ const ARROW_KEY_STEP: Partial<Record<string, number>> = {
   ArrowLeft: -1,
 };
 
+const PENDING_FOCUS = {
+  OPTION: 'option',
+  RESULTS: 'results',
+} as const;
+
+type PendingFocus = (typeof PENDING_FOCUS)[keyof typeof PENDING_FOCUS];
+
 const OUTCOME_FEEDBACK = {
   correct: {
     key: 'ai.artifacts.quiz.outcomeCorrect',
@@ -72,10 +79,10 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [completed, setCompleted] = useState(false);
   const [score, setScore] = useState(0);
+  const [pendingFocus, setPendingFocus] = useState<PendingFocus | null>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const advanceRef = useRef<HTMLButtonElement>(null);
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
-  const isFirstRender = useRef(true);
 
   const totalQuestions = content.questions.length;
   const currentQuestion = content.questions[currentIndex];
@@ -126,17 +133,18 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     }
   }, [answered]);
 
+  // Two Next presses in a row carry the same intent, so it alone cannot re-arm
+  // the effect — the transition they cause is what tells them apart.
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+    if (pendingFocus === null) {
       return;
     }
-    if (completed) {
+    if (pendingFocus === PENDING_FOCUS.RESULTS) {
       resultsHeadingRef.current?.focus();
-      return;
+    } else {
+      optionRefs.current[FIRST_OPTION]?.focus();
     }
-    optionRefs.current[FIRST_OPTION]?.focus();
-  }, [currentIndex, completed]);
+  }, [pendingFocus, currentIndex, completed]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < totalQuestions - 1) {
@@ -144,8 +152,10 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
       setSelectedOption(null);
       setAnswered(false);
       setFocusedIndex(FIRST_OPTION);
+      setPendingFocus(PENDING_FOCUS.OPTION);
     } else {
       setCompleted(true);
+      setPendingFocus(PENDING_FOCUS.RESULTS);
       if (!readOnly) {
         void submitQuiz.mutateAsync({ answers: [...answers] }).catch(() => {
           toast.error(t('ai.artifacts.quiz.submitError'));
@@ -162,6 +172,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     setAnswers([]);
     setCompleted(false);
     setScore(0);
+    setPendingFocus(PENDING_FOCUS.OPTION);
   }, []);
 
   if (completed) {

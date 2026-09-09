@@ -1,3 +1,5 @@
+import { StrictMode } from 'react';
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -153,6 +155,20 @@ describe('QuizSession', () => {
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
     ).toHaveFocus();
+  });
+
+  it('leaves focus alone on mount, even under StrictMode double effects', () => {
+    const outside = document.body.appendChild(document.createElement('button'));
+    outside.focus();
+
+    render(
+      <StrictMode>
+        <QuizSession artifact={artifact} />
+      </StrictMode>
+    );
+
+    expect(outside).toHaveFocus();
+    outside.remove();
   });
 
   it('moves focus back to the first option after advancing', async () => {
