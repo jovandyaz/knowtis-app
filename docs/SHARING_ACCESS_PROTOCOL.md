@@ -206,12 +206,11 @@ pnpm nx test api \
   --run --skip-nx-cache
 ```
 
-The sequential CI database project supplies PostgreSQL but no Redis service, so
-those six cases skip explicitly when `SHARING_PROBE_REDIS_URL` is absent. A CI
-pass alone therefore does not establish the complete distributed proof; all 16
-cases must run before relying on it. Providers, Y.Docs, servers, subscriptions,
-timers and database clients close during teardown; disposable external services
-stay owned by the runner.
+CI runs this file in the sequential database project but sets only `REDIS_URL`,
+so its six Redis cases skip explicitly there. A CI pass alone therefore does not
+establish the complete distributed proof; all 16 cases must run before relying
+on it. Providers, Y.Docs, servers, subscriptions, timers and database clients
+close during teardown; disposable external services stay owned by the runner.
 
 The probe reaches unavailable authority through a real SQL error and read
 timeout, not a killed database container or a production TCP partition. Its
