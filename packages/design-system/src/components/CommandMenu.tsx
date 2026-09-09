@@ -10,8 +10,6 @@ import { ChevronRight } from 'lucide-react';
 import { TOUCH_TARGET_HEIGHT_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
 
-/* ─── Content (outer container) ─── */
-
 interface CommandMenuContentProps extends HTMLAttributes<HTMLDivElement> {
   /** Fixed width preset */
   width?: 'sm' | 'md' | 'lg';
@@ -42,8 +40,6 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
 );
 CommandMenuContent.displayName = 'CommandMenuContent';
 
-/* ─── Group ─── */
-
 interface CommandMenuGroupProps extends HTMLAttributes<HTMLDivElement> {
   label?: string;
   /** Show separator above this group */
@@ -64,8 +60,6 @@ const CommandMenuGroup = forwardRef<HTMLDivElement, CommandMenuGroupProps>(
   )
 );
 CommandMenuGroup.displayName = 'CommandMenuGroup';
-
-/* ─── Item ─── */
 
 interface CommandMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
@@ -114,8 +108,6 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
   )
 );
 CommandMenuItem.displayName = 'CommandMenuItem';
-
-/* ─── Back button ─── */
 
 interface CommandMenuBackProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
