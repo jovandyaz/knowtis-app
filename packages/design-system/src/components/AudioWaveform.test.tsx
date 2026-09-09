@@ -66,6 +66,41 @@ describe('AudioWaveform', () => {
     expect(ref.current).toBe(container.querySelector('canvas'));
   });
 
+  it('runs the cleanup a callback ref returned when the canvas detaches', () => {
+    const detach = vi.fn();
+    const { unmount } = render(<AudioWaveform ref={() => detach} />);
+
+    expect(detach).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(detach).toHaveBeenCalledTimes(1);
+  });
+
+  it('detaches a callback ref that returned no cleanup with null', () => {
+    const received: Array<HTMLCanvasElement | null> = [];
+    const { unmount } = render(
+      <AudioWaveform
+        ref={(node) => {
+          received.push(node);
+        }}
+      />
+    );
+
+    unmount();
+
+    expect(received).toEqual([expect.any(HTMLCanvasElement), null]);
+  });
+
+  it('clears an object ref when the canvas detaches', () => {
+    const ref = createRef<HTMLCanvasElement>();
+    const { unmount } = render(<AudioWaveform ref={ref} />);
+
+    unmount();
+
+    expect(ref.current).toBeNull();
+  });
+
   it('paints the bars with the theme tokens instead of the fallbacks', () => {
     const mockData = new Uint8Array(128);
     mockData[0] = 255;

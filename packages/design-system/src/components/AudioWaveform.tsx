@@ -1,4 +1,10 @@
-import { forwardRef, useCallback, useEffect, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  type RefCallback,
+} from 'react';
 
 import { cn } from '../utils/cn';
 
@@ -50,13 +56,32 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
     const attachCanvas = useCallback(
       (node: HTMLCanvasElement | null) => {
         canvasRef.current = node;
-        if (typeof ref === 'function') {
-          ref(node);
-          return;
+
+        if (typeof ref !== 'function') {
+          if (ref) {
+            ref.current = node;
+          }
+          return () => {
+            canvasRef.current = null;
+            if (ref) {
+              ref.current = null;
+            }
+          };
         }
-        if (ref) {
-          ref.current = node;
-        }
+
+        const callerRef: RefCallback<HTMLCanvasElement> = ref;
+        const detachCaller = callerRef(node);
+
+        return () => {
+          canvasRef.current = null;
+          if (typeof detachCaller === 'function') {
+            detachCaller();
+            return;
+          }
+          // Returning a cleanup stops React from calling this ref back with
+          // null, so a caller without one still needs that detach signal.
+          callerRef(null);
+        };
       },
       [ref]
     );
