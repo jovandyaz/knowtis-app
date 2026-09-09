@@ -29,7 +29,7 @@ Stories are co-located with each component (`Button.stories.tsx` next to `Button
 
 - **Global styles:** `src/styles.css`
 - **Theme constants:** `src/constants/theme.ts` (`THEMES`, `Theme`)
-- **Tokens:** `tokens/colors.json` (OKLCH), `radii.json`, `shadows.json`, `spacing.json`, `typography.json`. `style-dictionary.config.mjs` reads `tokens/**/*.json` and emits `build/css/variables.css`, `build/ts/tokens.ts` and `build/json/tokens.json`. `nx build design-system` and `nx tokens:build design-system` run the same command.
+- **Tokens:** `tokens/colors.json` (OKLCH), `radii.json`, `shadows.json`, `spacing.json`, `typography.json`. `style-dictionary.config.mjs` reads `tokens/**/*.json` and emits `build/css/variables.css`, `build/ts/tokens.ts` and `build/json/tokens.json`. `nx build design-system` regenerates them.
 - Reference tokens through CSS custom properties (`bg-(--background)`, `text-(--foreground)`) — never hardcode color or spacing values.
 - `cn()` (clsx + tailwind-merge) is exported for merging class names.
 

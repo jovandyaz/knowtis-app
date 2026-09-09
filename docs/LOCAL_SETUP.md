@@ -73,7 +73,7 @@ The design system generates its CSS variables (`packages/design-system/build/css
 If you ever want to regenerate tokens by hand (e.g. after editing `packages/design-system/tokens/*.json`):
 
 ```bash
-pnpm nx run design-system:tokens:build
+pnpm nx build design-system
 ```
 
 ## Getting past the login wall to reach Settings
@@ -144,12 +144,12 @@ See [MCP.md](./MCP.md) for the full protocol details (discovery, PKCE, scopes, e
 
 ## Troubleshooting
 
-| Symptom                                              | Cause                                                                      | Fix                                                                                          |
-| ---------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `Docker is not running` on `pnpm run setup`          | Daemon down                                                                | Start Docker Desktop, re-run `pnpm run setup`.                                               |
-| `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn)         | `pnpm nx run design-system:tokens:build`, then restart. On current `main` this is automatic. |
-| `Node 22.x required`                                 | Wrong Node                                                                 | `nvm install 22 && nvm use 22`.                                                              |
-| "Your email address hasn't been verified yet" stays  | The code was never typed in (local dev only logs it)                       | Copy the 6-digit code from the API terminal into **Verify now**, or run the SQL above.       |
-| MCP OAuth discovery returns `404`                    | OAuth env (`MCP_OAUTH_ISSUER`/`MCP_RESOURCE_URL`, API's `OAUTH_*`) not set | Set the OAuth env vars (see above), or use the API-key path.                                 |
-| `role "postgres" does not exist`                     | Wrong psql user                                                            | The local DB user is `knowtis`, not `postgres`.                                              |
-| Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                           | `pnpm dev:stop` (kills stale `nx serve` processes), or `lsof -ti:4200 \| xargs kill -9`.     |
+| Symptom                                              | Cause                                                                      | Fix                                                                                      |
+| ---------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `Docker is not running` on `pnpm run setup`          | Daemon down                                                                | Start Docker Desktop, re-run `pnpm run setup`.                                           |
+| `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn)         | `pnpm nx build design-system`, then restart. On current `main` this is automatic.        |
+| `Node 22.x required`                                 | Wrong Node                                                                 | `nvm install 22 && nvm use 22`.                                                          |
+| "Your email address hasn't been verified yet" stays  | The code was never typed in (local dev only logs it)                       | Copy the 6-digit code from the API terminal into **Verify now**, or run the SQL above.   |
+| MCP OAuth discovery returns `404`                    | OAuth env (`MCP_OAUTH_ISSUER`/`MCP_RESOURCE_URL`, API's `OAUTH_*`) not set | Set the OAuth env vars (see above), or use the API-key path.                             |
+| `role "postgres" does not exist`                     | Wrong psql user                                                            | The local DB user is `knowtis`, not `postgres`.                                          |
+| Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                           | `pnpm dev:stop` (kills stale `nx serve` processes), or `lsof -ti:4200 \| xargs kill -9`. |
