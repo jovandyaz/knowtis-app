@@ -243,6 +243,20 @@ describe('ShareDialog authority', () => {
     expect(screen.queryByText('private server detail')).not.toBeInTheDocument();
   });
 
+  it('withholds a copyable link while the authority read is failing', async () => {
+    vi.mocked(notesApi.getById).mockRejectedValue(new Error('offline'));
+    shareHarness().render({
+      generalAccess: 'anyone_with_link',
+      shareToken: 'stale-token',
+    });
+    await screen.findByRole('alert');
+    expect(
+      screen.queryByRole('button', { name: 'Copy link' })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/stale-token/)).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Private/ })).toBeChecked();
+  });
+
   it('uses a freshly absent share token instead of a stale prop token', async () => {
     shareHarness().render({ shareToken: 'outdated-token' });
     await waitForPeople();

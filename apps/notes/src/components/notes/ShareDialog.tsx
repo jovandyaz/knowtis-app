@@ -148,15 +148,22 @@ function ShareDialogAccess({
       (person) => person.permission === 'editor' && person.user.id === actor?.id
     );
   const canManagePeople = isOwner || isDirectEditor;
-  const generalAccess = authority.data?.generalAccess ?? initialAccess;
-  const permission =
-    authority.data?.generalAccessPermission ?? initialPermission;
-  const shareToken = authority.data ? authority.data.shareToken : initialToken;
+  const refreshError = people.error ?? authority.error;
+  const generalAccess = refreshError
+    ? GENERAL_ACCESS.RESTRICTED
+    : (authority.data?.generalAccess ?? initialAccess);
+  const permission = refreshError
+    ? PERMISSION.VIEWER
+    : (authority.data?.generalAccessPermission ?? initialPermission);
+  const shareToken = refreshError
+    ? null
+    : authority.data
+      ? authority.data.shareToken
+      : initialToken;
   const linkIsOpen = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
   const shareUrl = shareToken
     ? `${window.location.origin}${sharedNotePath(shareToken)}`
     : null;
-  const refreshError = people.error ?? authority.error;
   const denied =
     ApiClientError.isApiClientError(refreshError) &&
     [401, 403, 404].includes(refreshError.status);

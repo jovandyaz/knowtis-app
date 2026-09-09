@@ -260,7 +260,7 @@ All endpoints are under `POST|GET|PATCH|DELETE /notes/...` and require `JwtAuthG
 | `GET`    | `/notes/counts`      | JWT  | `read`               | Accessible note counts per PARA bucket and supertag                                                |
 | `GET`    | `/notes/:id`         | JWT  | `read`               | Get single note with access level                                                                  |
 | `POST`   | `/notes`             | JWT  | `create`             | Create note (also passes `AnonymousNoteLimitGuard`)                                                |
-| `PATCH`  | `/notes/:id`         | JWT  | `update`             | Update note (owner: all fields; editor: title+content+sharing if editorsCanShare)                  |
+| `PATCH`  | `/notes/:id`         | JWT  | `update`             | Update note (owner: all fields; editor: title+content only)                                        |
 | `DELETE` | `/notes/:id`         | JWT  | `delete`             | **Soft-delete** note (owner only): sets `deleted_at`, `204`                                        |
 | `POST`   | `/notes/:id/restore` | JWT  | `delete`             | Restore a soft-deleted note (owner only)                                                           |
 | `POST`   | `/notes/:id/images`  | JWT  | `update`             | Upload an image (`multipart/form-data`, ≤ 10 MB, png/jpeg/gif/webp); needs edit access to the note |
@@ -271,8 +271,8 @@ The `PATCH /notes/:id` endpoint accepts:
 
 - `title` (owner/editor)
 - `content` (owner/editor)
-- `generalAccess` (owner, or editor if `editorsCanShare=true`)
-- `generalAccessPermission` (owner, or editor if `editorsCanShare=true`)
+- `generalAccess` (owner only)
+- `generalAccessPermission` (owner only)
 - `editorsCanShare` (owner only)
 
 When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exists, one is generated. The token is then **permanent**: changing back to `'restricted'` leaves it in place, so re-enabling sharing resumes the same link instead of minting a different one.
