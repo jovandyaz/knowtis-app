@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, Navigate } from '@tanstack/react-router';
@@ -319,7 +326,10 @@ function StudyQueueSession({
     [session, handleNavigate, handleRateAdvanced, handleWrong, handleCorrect]
   );
 
-  useEffect(() => {
+  // Layout effect, not passive: a passive swap lands a macrotask after the commit,
+  // so a key pressed in between would still reach the previous card's closure and
+  // post a second review for a card that was already answered.
+  useLayoutEffect(() => {
     if (session.isComplete) {
       return;
     }

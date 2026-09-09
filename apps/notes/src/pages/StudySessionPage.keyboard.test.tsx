@@ -106,6 +106,19 @@ function correctButton() {
   });
 }
 
+/** Resolves a microtask after the commit that satisfies `seen`, so no passive effect can have run yet. */
+function onCommit(seen: () => boolean): Promise<void> {
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (seen()) {
+        observer.disconnect();
+        resolve();
+      }
+    });
+    observer.observe(document.body, { subtree: true, childList: true });
+  });
+}
+
 function deferReview() {
   let release: (() => void) | undefined;
   reviewCard.mockImplementation(
@@ -180,6 +193,24 @@ describe('StudySessionPage keyboard map', () => {
       quality: SM2_QUALITY.GOOD,
     });
     expect(reviewCard).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers the next key with the card the deck advanced to, not the last one', async () => {
+    render(<StudySessionPage />);
+
+    const advanced = onCommit(
+      () => screen.queryByRole('button', { name: /Frente dos/ }) !== null
+    );
+
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyDown(document.body, { key: '2' });
+    await advanced;
+
+    fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+
+    expect(
+      screen.getByRole('button', { name: /Frente uno/ })
+    ).toBeInTheDocument();
   });
 
   it('posts no second review for a card that was already answered', async () => {
@@ -320,20 +351,22 @@ describe('StudySessionPage keyboard map', () => {
     expect(correctButton()).toBeNull();
   });
 
-  it('hands the keyboard back once the summary is up', async () => {
+  it('hands the keyboard back in the commit that shows the summary', async () => {
     render(<StudySessionPage />);
+
+    const summaryUp = onCommit(
+      () =>
+        screen.queryByRole('link', { name: 'study.summary.backHome' }) !== null
+    );
 
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
     expect(
       await screen.findByRole('button', { name: /Frente dos/ })
     ).toBeInTheDocument();
-
     fireEvent.keyDown(document.body, { key: ' ' });
     fireEvent.keyDown(document.body, { key: '2' });
-    expect(
-      await screen.findByRole('link', { name: 'study.summary.backHome' })
-    ).toBeInTheDocument();
+    await summaryUp;
 
     const event = createEvent.keyDown(document.body, { key: ' ' });
     fireEvent(document.body, event);
