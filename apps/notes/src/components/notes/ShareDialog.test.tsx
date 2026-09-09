@@ -342,26 +342,23 @@ describe('ShareDialog authority', () => {
     ).toBeEnabled();
   });
 
-  it.each(['link editor', 'administrator'])(
-    'does not infer People management from %s effective access',
-    async () => {
-      vi.mocked(notesApi.getById).mockResolvedValue({
-        ...SHARE_NOTE,
-        accessLevel: 'editor',
-      });
-      vi.mocked(notesApi.getPeople).mockResolvedValue([
-        SHARE_OWNER,
-        SHARE_VIEWER,
-      ]);
-      shareHarness({ actor: SHARE_EDITOR }).render();
-      await waitFor(() => expect(notesApi.getPeople).toHaveBeenCalled());
-      await screen.findByText('You cannot manage people for this note.');
-      expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
-      expect(
-        screen.getByRole('radio', { name: /Anyone with the link/ })
-      ).toBeDisabled();
-    }
-  );
+  it('does not infer People management from link editor effective access', async () => {
+    vi.mocked(notesApi.getById).mockResolvedValue({
+      ...SHARE_NOTE,
+      accessLevel: 'editor',
+    });
+    vi.mocked(notesApi.getPeople).mockResolvedValue([
+      SHARE_OWNER,
+      SHARE_VIEWER,
+    ]);
+    shareHarness({ actor: SHARE_EDITOR }).render();
+    await waitFor(() => expect(notesApi.getPeople).toHaveBeenCalled());
+    await screen.findByText('You cannot manage people for this note.');
+    expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
+    expect(
+      screen.getByRole('radio', { name: /Anyone with the link/ })
+    ).toBeDisabled();
+  });
 
   it('routes an actual widening refusal to verification while narrowing stays available', async () => {
     vi.mocked(notesApi.update).mockRejectedValueOnce(

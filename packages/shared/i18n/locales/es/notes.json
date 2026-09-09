@@ -300,6 +300,7 @@
       "removeAccess": "Quitar acceso",
       "removing": "Quitando…",
       "denied": "No puedes administrar personas en esta nota.",
+      "deniedHelp": "Pide acceso al propietario de la nota y vuelve a abrir este diálogo.",
       "refreshError": "No se pudo actualizar el acceso",
       "retryHelp": "Actualiza el acceso antes de hacer otro cambio.",
       "retry": "Intentar de nuevo",

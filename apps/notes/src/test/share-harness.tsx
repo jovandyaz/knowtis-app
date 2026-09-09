@@ -115,8 +115,6 @@ export function shareHarness({
         generalAccess={SHARE_NOTE.generalAccess}
         generalAccessPermission={SHARE_NOTE.generalAccessPermission}
         shareToken={SHARE_NOTE.shareToken}
-        editorsCanShare={SHARE_NOTE.editorsCanShare}
-        accessLevel={actor.permission}
         {...props}
       />
     );

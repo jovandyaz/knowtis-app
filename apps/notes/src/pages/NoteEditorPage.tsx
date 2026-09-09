@@ -19,6 +19,7 @@ import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
 import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
+import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
@@ -418,7 +419,7 @@ export function NoteEditorPage() {
   } = useNote(noteId);
   const terminalError =
     ApiClientError.isApiClientError(error) &&
-    [401, 403, 404].includes(error.status);
+    TERMINAL_ACCESS_STATUSES.has(error.status);
 
   if (isLoading) {
     return <LoadingState message={t('editor.loadingNote')} />;

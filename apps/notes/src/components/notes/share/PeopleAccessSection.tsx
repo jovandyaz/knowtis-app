@@ -2,6 +2,8 @@ import { useId, useState, type FormEvent } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
+import type { ShareActionLock } from '@/hooks/useShareActionLock';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 
@@ -20,10 +22,13 @@ import {
   LoadingButton,
   SegmentedControl,
 } from '@knowtis/design-system';
-import type { NotePerson, PermissionLevel } from '@knowtis/shared-types';
+import {
+  ACCESS,
+  PERMISSION,
+  type NotePerson,
+  type PermissionLevel,
+} from '@knowtis/shared-types';
 
-import type { ShareActionLock } from '../../../hooks/useShareActionLock';
-import { useVerifyEmailGate } from '../../../hooks/useVerifyEmailGate';
 import { RemovePersonDialog } from './RemovePersonDialog';
 
 interface PeopleAccessSectionProps {
@@ -55,11 +60,11 @@ export function PeopleAccessSection({
   const [saved, setSaved] = useState(false);
   const form = useForm<PersonInput>({
     resolver: zodResolver(PersonInputSchema),
-    defaultValues: { email: '', permission: 'viewer' },
+    defaultValues: { email: '', permission: PERMISSION.VIEWER },
   });
   const options = [
-    { value: 'viewer' as const, label: t('share.viewer') },
-    { value: 'editor' as const, label: t('share.editor') },
+    { value: PERMISSION.VIEWER, label: t('share.viewer') },
+    { value: PERMISSION.EDITOR, label: t('share.editor') },
   ];
   const selectedPerson = people.find((person) => person.user.id === removeId);
   const isDisabled = disabled || actionLock.pending;
@@ -79,10 +84,10 @@ export function PeopleAccessSection({
     if (isDisabled) {
       return;
     }
+    setAddError(null);
+    setSaved(false);
     void actionLock.run(async () => {
       await form.handleSubmit(async (input) => {
-        setAddError(null);
-        setSaved(false);
         try {
           await upsert.mutateAsync({ noteId, input });
           form.reset();
@@ -105,7 +110,7 @@ export function PeopleAccessSection({
     if (
       isDisabled ||
       person.permission === permission ||
-      person.permission === 'owner' ||
+      person.permission === ACCESS.OWNER ||
       person.user.id === actorId
     ) {
       return;
@@ -133,7 +138,7 @@ export function PeopleAccessSection({
     if (
       isDisabled ||
       !selectedPerson ||
-      selectedPerson.permission === 'owner' ||
+      selectedPerson.permission === ACCESS.OWNER ||
       selectedPerson.user.id === actorId
     ) {
       return;
@@ -226,7 +231,7 @@ export function PeopleAccessSection({
       >
         {people.map((person) => {
           const immutable =
-            person.permission === 'owner' || person.user.id === actorId;
+            person.permission === ACCESS.OWNER || person.user.id === actorId;
           return (
             <li
               key={person.user.id}
@@ -260,7 +265,11 @@ export function PeopleAccessSection({
                       email: person.user.email,
                     })}
                     options={options}
-                    value={person.permission === 'editor' ? 'editor' : 'viewer'}
+                    value={
+                      person.permission === PERMISSION.EDITOR
+                        ? PERMISSION.EDITOR
+                        : PERMISSION.VIEWER
+                    }
                     disabled={isDisabled}
                     onValueChange={(permission) =>
                       changePermission(person, permission)

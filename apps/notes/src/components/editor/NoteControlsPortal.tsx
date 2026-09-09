@@ -116,8 +116,6 @@ export function NoteControlsPortal({
             generalAccess={note.generalAccess}
             generalAccessPermission={note.generalAccessPermission}
             shareToken={note.shareToken}
-            editorsCanShare={note.editorsCanShare}
-            accessLevel={note.accessLevel}
           />
         </>
       )}
