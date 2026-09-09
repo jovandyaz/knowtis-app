@@ -7,6 +7,9 @@ import { RecordingModal } from './RecordingModal';
 import { RecordingTimer } from './RecordingTimer';
 import { VoiceButton } from './VoiceButton';
 
+const MAX_DURATION_SECONDS = 300;
+const NEAR_LIMIT_SECONDS = 30;
+
 const meta: Meta<typeof RecordingModal> = {
   title: 'Components/RecordingModal',
   component: RecordingModal,
@@ -79,7 +82,12 @@ function RecordingStateDemo() {
             Recording...
           </h3>
           <AudioWaveform mockData={mockData} className="w-full" />
-          <RecordingTimer elapsed={elapsed} maxDuration={300} isRecording />
+          <RecordingTimer
+            elapsed={elapsed}
+            maxDuration={MAX_DURATION_SECONDS}
+            isRecording
+            isNearLimit={MAX_DURATION_SECONDS - elapsed <= NEAR_LIMIT_SECONDS}
+          />
           <VoiceButton state="listening" size="xl" />
         </div>
       </RecordingModal>
