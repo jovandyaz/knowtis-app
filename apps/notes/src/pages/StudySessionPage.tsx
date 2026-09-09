@@ -27,7 +27,6 @@ import {
   RATING_QUALITY,
   Skeleton,
   Switch,
-  TOUCH_TARGET_CLASS,
   type RatingKey,
 } from '@knowtis/design-system';
 import {
@@ -383,11 +382,7 @@ function StudyQueueSession({
           </p>
           <Link
             to={ROUTES.DASHBOARD}
-            className={cn(
-              buttonVariants({ variant: 'outline' }),
-              TOUCH_TARGET_CLASS,
-              CTA_CLASS
-            )}
+            className={cn(buttonVariants({ variant: 'outline' }), CTA_CLASS)}
           >
             {t('study.summary.backHome')}
           </Link>
@@ -501,11 +496,7 @@ function StudyCaughtUp({ nextDueAt }: StudyCaughtUpProps) {
       >
         <Link
           to={ROUTES.NOTES}
-          className={cn(
-            buttonVariants({ variant: 'outline' }),
-            TOUCH_TARGET_CLASS,
-            CTA_CLASS
-          )}
+          className={cn(buttonVariants({ variant: 'outline' }), CTA_CLASS)}
         >
           {t('study.caughtUp.cta')}
         </Link>
