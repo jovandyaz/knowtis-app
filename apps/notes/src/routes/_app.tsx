@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
@@ -100,7 +100,7 @@ function AppLayout() {
     setSidebarCollapsed(isAnonymous);
   }, [isAnonymous, setSidebarCollapsed]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setAIEnabled(aiEnabled);
   }, [aiEnabled, setAIEnabled]);
 
