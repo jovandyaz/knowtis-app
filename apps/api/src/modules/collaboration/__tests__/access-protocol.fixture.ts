@@ -74,9 +74,21 @@ export class ProbeAuthority {
   }
 
   async stop() {
-    await this.reader.end({ timeout: 0 });
-    await this.admin`drop table ${this.admin(this.table)}`;
-    await this.admin.end({ timeout: 0 });
+    let failure: unknown;
+    try {
+      await this.reader.end({ timeout: 0 });
+      await this.admin`drop table ${this.admin(this.table)}`;
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      await this.admin.end({ timeout: 0 });
+    } catch (error) {
+      failure ??= error;
+    }
+    if (failure !== undefined) {
+      throw failure;
+    }
   }
 }
 
@@ -368,9 +380,12 @@ export class AccessProtocolProbe {
       provider.destroy();
       provider.document.destroy();
     }
-    await this.server.destroy();
-    this.subscription?.disconnect(false);
-    this.publisher?.disconnect(false);
+    try {
+      await this.server.destroy();
+    } finally {
+      this.subscription?.disconnect(false);
+      this.publisher?.disconnect(false);
+    }
   }
 }
 

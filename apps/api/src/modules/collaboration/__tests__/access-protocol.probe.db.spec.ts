@@ -43,10 +43,17 @@ describe.runIf(DB_AVAILABLE)(
       for (const control of checkpoints.splice(0)) {
         control.release();
       }
-      for (const probe of probes.splice(0)) {
-        await probe.stop();
-      }
+      const stopped = await Promise.allSettled(
+        probes.splice(0).map((probe) => probe.stop())
+      );
       await authority?.stop();
+      const failed = stopped.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected'
+      );
+      if (failed) {
+        throw failed.reason;
+      }
     });
 
     it('characterizes handshake-only access: revoked clients still write and receive content', async () => {
@@ -235,7 +242,12 @@ describe.runIf(DB_AVAILABLE)(
         locked.release();
         await unlock.promise;
       });
-      await locked.promise;
+      await Promise.race([
+        locked.promise,
+        transaction.then(() => {
+          throw new Error('Lock transaction ended before fault observation');
+        }),
+      ]);
       const blockedAt = performance.now();
       try {
         await until(() =>
