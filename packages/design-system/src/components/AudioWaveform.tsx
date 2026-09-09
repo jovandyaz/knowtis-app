@@ -15,6 +15,10 @@ const BAR_ACTIVE_COLOR_PROPERTY = '--primary';
 const FALLBACK_BAR_COLOR = 'oklch(0.560 0.008 290)';
 const FALLBACK_BAR_ACTIVE_COLOR = 'oklch(0.47 0.22 295)';
 
+// The theme tokens carry no alpha, so the bars keep their translucency here.
+const QUIET_BAR_ALPHA = 0.3;
+const LOUD_BAR_ALPHA = 0.8;
+
 const readThemeColor = (
   styles: CSSStyleDeclaration,
   property: string,
@@ -103,6 +107,9 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
             FALLBACK_BAR_ACTIVE_COLOR
           );
 
+        const inactiveAlpha = barColor ? 1 : QUIET_BAR_ALPHA;
+        const activeAlpha = barActiveColor ? 1 : LOUD_BAR_ALPHA;
+
         ctx.clearRect(0, 0, width, height);
 
         const logicalWidth = width / dpr;
@@ -124,7 +131,9 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
           const x = i * (barWidth + barGap);
           const y = (logicalHeight - barHeight) / 2;
 
-          ctx.fillStyle = value > 0.1 ? activeFill : inactiveFill;
+          const isLoud = value > 0.1;
+          ctx.fillStyle = isLoud ? activeFill : inactiveFill;
+          ctx.globalAlpha = isLoud ? activeAlpha : inactiveAlpha;
 
           ctx.beginPath();
           ctx.roundRect(
@@ -136,6 +145,8 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
           );
           ctx.fill();
         }
+
+        ctx.globalAlpha = 1;
       },
       [barCount, barGap, barColor, barActiveColor]
     );

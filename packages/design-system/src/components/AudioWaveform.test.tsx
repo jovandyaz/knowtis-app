@@ -14,13 +14,23 @@ const themeStyleRule = `canvas { --muted-foreground: ${THEME_BAR_COLOR}; --prima
 
 type RecordingContext = Pick<
   CanvasRenderingContext2D,
-  'canvas' | 'fillStyle' | 'clearRect' | 'beginPath' | 'roundRect' | 'fill'
+  | 'canvas'
+  | 'fillStyle'
+  | 'globalAlpha'
+  | 'clearRect'
+  | 'beginPath'
+  | 'roundRect'
+  | 'fill'
 >;
 
 let paintedFills: Array<string | CanvasGradient | CanvasPattern>;
+let paintedAlphas: number[];
 
 function createRecordingContext(canvas: HTMLCanvasElement) {
-  const state = { fillStyle: '' as string | CanvasGradient | CanvasPattern };
+  const state = {
+    fillStyle: '' as string | CanvasGradient | CanvasPattern,
+    globalAlpha: 1,
+  };
 
   const context: RecordingContext = {
     canvas,
@@ -30,11 +40,18 @@ function createRecordingContext(canvas: HTMLCanvasElement) {
     set fillStyle(value: string | CanvasGradient | CanvasPattern) {
       state.fillStyle = value;
     },
+    get globalAlpha() {
+      return state.globalAlpha;
+    },
+    set globalAlpha(value: number) {
+      state.globalAlpha = value;
+    },
     clearRect: vi.fn(),
     beginPath: vi.fn(),
     roundRect: vi.fn(),
     fill: vi.fn(() => {
       paintedFills.push(state.fillStyle);
+      paintedAlphas.push(state.globalAlpha);
     }),
   };
 
@@ -43,6 +60,7 @@ function createRecordingContext(canvas: HTMLCanvasElement) {
 
 beforeEach(() => {
   paintedFills = [];
+  paintedAlphas = [];
   // jsdom ships no canvas backend, so the drawing surface is a recording stub.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
     function (this: HTMLCanvasElement) {
@@ -115,6 +133,28 @@ describe('AudioWaveform', () => {
     expect(new Set(paintedFills)).toEqual(
       new Set([THEME_BAR_ACTIVE_COLOR, THEME_BAR_COLOR])
     );
+  });
+
+  it('keeps the bars translucent now that the tokens carry no alpha', () => {
+    const mockData = new Uint8Array(128);
+    mockData[0] = 255;
+
+    render(
+      <>
+        <style>{themeStyleRule}</style>
+        <AudioWaveform mockData={mockData} />
+      </>
+    );
+
+    expect(new Set(paintedAlphas)).toEqual(new Set([0.8, 0.3]));
+  });
+
+  it('paints an overridden colour at full opacity', () => {
+    const override = 'oklch(0.9 0.05 120)';
+
+    render(<AudioWaveform barColor={override} barActiveColor={override} />);
+
+    expect(new Set(paintedAlphas)).toEqual(new Set([1]));
   });
 
   it('honours an explicit colour override over the theme tokens', () => {
