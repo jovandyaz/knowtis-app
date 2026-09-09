@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sharedNotePath } from './routes.config';
+import { ROUTES, sharedNotePath, STUDY_SESSION_PATTERN } from './routes.config';
 
 describe('sharedNotePath', () => {
   it('builds the concrete path for a share token', () => {
@@ -18,5 +18,16 @@ describe('sharedNotePath', () => {
 
   it('encodes characters that would otherwise change the URL structure', () => {
     expect(sharedNotePath('a?b#c/d')).toBe('/s/a%3Fb%23c%2Fd');
+  });
+});
+
+describe('STUDY_SESSION_PATTERN', () => {
+  it('matches the study route', () => {
+    expect(STUDY_SESSION_PATTERN.test(ROUTES.STUDY)).toBe(true);
+  });
+
+  it('does not match a neighbouring route', () => {
+    expect(STUDY_SESSION_PATTERN.test(ROUTES.DASHBOARD)).toBe(false);
+    expect(STUDY_SESSION_PATTERN.test('/notes/note-1')).toBe(false);
   });
 });

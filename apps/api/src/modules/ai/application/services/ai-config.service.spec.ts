@@ -469,6 +469,15 @@ describe('AIConfigService', () => {
         updatedAt: null,
       },
       {
+        key: 'ai_openrouter_ignored_providers',
+        value: '',
+        kind: 'list',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
+      {
         key: 'ai_free_tier_ceiling',
         value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
         kind: 'money',
@@ -532,6 +541,15 @@ describe('AIConfigService', () => {
       {
         key: 'ai_openrouter_providers',
         value: AI_SETTING_DEFAULTS.ai_openrouter_providers,
+        kind: 'list',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_openrouter_ignored_providers',
+        value: '',
         kind: 'list',
         source: 'default',
         storedValue: null,
@@ -762,6 +780,77 @@ describe('AIConfigService', () => {
     it('falls back to the default on an out-of-band row value', async () => {
       mockRepo.get.mockResolvedValueOnce('turbo');
       await expect(service.getReasoningEffort()).resolves.toBe('medium');
+    });
+  });
+
+  describe('ignored OpenRouter providers', () => {
+    const key = 'ai_openrouter_ignored_providers';
+    it('defaults to no exclusions', async () => {
+      await expect(service.getOpenRouterIgnoredProviders()).resolves.toEqual(
+        []
+      );
+      expect(
+        (await service.getEffectiveConfig()).find((entry) => entry.key === key)
+      ).toMatchObject({ value: '', kind: 'list', source: 'default' });
+    });
+    it('accepts trimmed unique slugs and caches the configured exclusions for 30 seconds', async () => {
+      await service.setConfig(key, ' parasail,novita/fp8 ', ACTOR);
+      mockRepo.get.mockResolvedValue(' parasail,novita/fp8 ');
+      await expect(service.getOpenRouterIgnoredProviders()).resolves.toEqual([
+        'parasail',
+        'novita/fp8',
+      ]);
+      expect(mockCache.set).toHaveBeenCalledWith(
+        `ai:config:${key}`,
+        ' parasail,novita/fp8 ',
+        30_000
+      );
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetId: key,
+          after: { value: ' parasail,novita/fp8 ' },
+        })
+      );
+    });
+    it.each([
+      'Parasail',
+      'parasail,parasail',
+      'a,b,c,d,e,f,g,h,i',
+      'a,',
+      '../invalid',
+    ])('rejects invalid exclusions: %s', async (value) => {
+      await expect(service.setConfig(key, value, ACTOR)).rejects.toThrow(
+        InvalidAIConfigError
+      );
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+    it('caches an explicit empty list instead of refetching it', async () => {
+      mockCache.get.mockResolvedValue('');
+      await expect(service.getOpenRouterIgnoredProviders()).resolves.toEqual(
+        []
+      );
+      expect(mockRepo.get).not.toHaveBeenCalled();
+    });
+    it.each(['get', 'set'] as const)(
+      'uses persisted exclusions when cache %s fails',
+      async (operation) => {
+        mockCache[operation].mockRejectedValue(new Error('cache unavailable'));
+        mockRepo.get.mockResolvedValue('parasail');
+        await expect(service.getOpenRouterIgnoredProviders()).resolves.toEqual([
+          'parasail',
+        ]);
+      }
+    );
+    it('resets and audits exclusions through the existing config lifecycle', async () => {
+      mockRepo.delete.mockResolvedValue({ ...deletedRow('parasail'), key });
+      await service.resetConfig(key, ACTOR);
+      expect(mockCache.del).toHaveBeenCalledWith(`ai:config:${key}`);
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ targetId: key, action: 'ai_config.reset' })
+      );
+      await expect(service.getOpenRouterIgnoredProviders()).resolves.toEqual(
+        []
+      );
     });
   });
 

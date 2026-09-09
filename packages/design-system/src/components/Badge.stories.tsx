@@ -16,6 +16,7 @@ const meta: Meta<typeof Badge> = {
         'outline',
         'success',
         'warning',
+        'count',
       ],
     },
   },
@@ -66,6 +67,13 @@ export const Warning: Story = {
   },
 };
 
+export const Count: Story = {
+  args: {
+    children: '12',
+    variant: 'count',
+  },
+};
+
 export const AllVariants: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
@@ -75,6 +83,7 @@ export const AllVariants: Story = {
       <Badge variant="outline">Outline</Badge>
       <Badge variant="success">Success</Badge>
       <Badge variant="warning">Warning</Badge>
+      <Badge variant="count">12</Badge>
     </div>
   ),
 };

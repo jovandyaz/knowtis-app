@@ -1,11 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  IDENTITY_STATE,
-  policyFor,
-  type IdentityState,
-} from '../../../test-support/verified-identity';
 import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { NoteErrors } from '../../notes/domain/errors/note.errors';
 import { ProposedMutation } from '../domain/proposed-mutation';
@@ -77,8 +72,6 @@ function deps(over: Record<string, unknown> = {}) {
     shareHandler: { execute: vi.fn() },
     abilityFactory: new AppAbilityFactory(),
     noteRepo: { findById: vi.fn() },
-    userRepo: { findByEmail: vi.fn() },
-    identity: IDENTITY_STATE.VERIFIED as IdentityState,
     ...over,
   };
 }
@@ -90,9 +83,7 @@ function make(d: ReturnType<typeof deps>) {
     d.updateHandler as never,
     d.shareHandler as never,
     d.abilityFactory as never,
-    d.noteRepo as never,
-    d.userRepo as never,
-    policyFor(d.identity)
+    d.noteRepo as never
   );
 }
 
@@ -311,9 +302,6 @@ describe('ApproveMutationHandler', () => {
           updatedAt: new Date('2024-03-01'),
         }),
       },
-      userRepo: {
-        findByEmail: vi.fn().mockResolvedValue({ id: 'target' }),
-      },
       shareHandler: {
         execute: vi
           .fn()
@@ -329,7 +317,7 @@ describe('ApproveMutationHandler', () => {
     }
   });
 
-  it('gates an unverified sharer before it can probe whether an address exists', async () => {
+  it('propagates canonical authorization denial before fetching the title', async () => {
     const d = deps({
       store: {
         take: vi.fn().mockResolvedValue({
@@ -339,24 +327,16 @@ describe('ApproveMutationHandler', () => {
         }),
         save: vi.fn(),
       },
-      noteRepo: { findById: vi.fn() },
-      userRepo: { findByEmail: vi.fn().mockResolvedValue(null) },
-      shareHandler: { execute: vi.fn() },
-      identity: IDENTITY_STATE.UNVERIFIED,
+      shareHandler: {
+        execute: vi.fn().mockResolvedValue(err(NoteErrors.permissionDenied())),
+      },
     });
-
-    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
-
-    expect(r.isErr()).toBe(true);
-    if (r.isErr()) {
-      expect(r.error.code).toBe('AGENT_EMAIL_NOT_VERIFIED');
-    }
-    expect(d.userRepo.findByEmail).not.toHaveBeenCalled();
+    const result = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+    expect(result._unsafeUnwrapErr().code).toBe('AGENT_PERMISSION_DENIED');
     expect(d.noteRepo.findById).not.toHaveBeenCalled();
-    expect(d.shareHandler.execute).not.toHaveBeenCalled();
   });
 
-  it('lets an unverified sharer through while the gate flag is off', async () => {
+  it('delegates the email and permission to the canonical ShareNoteHandler', async () => {
     const d = deps({
       store: {
         take: vi.fn().mockResolvedValue({
@@ -375,15 +355,18 @@ describe('ApproveMutationHandler', () => {
           updatedAt: new Date('2024-03-01'),
         }),
       },
-      userRepo: { findByEmail: vi.fn().mockResolvedValue({ id: 'target' }) },
       shareHandler: { execute: vi.fn().mockResolvedValue(ok({})) },
-      identity: IDENTITY_STATE.GATE_OFF,
     });
 
     const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
 
     expect(r.isOk()).toBe(true);
-    expect(d.shareHandler.execute).toHaveBeenCalled();
+    expect(d.shareHandler.execute).toHaveBeenCalledWith({
+      noteId: 'note-1',
+      userId: 'u1',
+      email: 'bob@example.com',
+      permission: 'viewer',
+    });
   });
 
   it('surfaces an unverified sharer as AGENT_EMAIL_NOT_VERIFIED', async () => {
@@ -405,9 +388,6 @@ describe('ApproveMutationHandler', () => {
           updatedAt: new Date('2024-03-01'),
         }),
       },
-      userRepo: {
-        findByEmail: vi.fn().mockResolvedValue({ id: 'target' }),
-      },
       shareHandler: {
         execute: vi
           .fn()
@@ -421,7 +401,7 @@ describe('ApproveMutationHandler', () => {
     }
   });
 
-  it('commits a share proposal to the resolved target user', async () => {
+  it('returns a successful share result after canonical execution', async () => {
     const d = deps({
       store: {
         take: vi.fn().mockResolvedValue({
@@ -439,9 +419,6 @@ describe('ApproveMutationHandler', () => {
           generalAccess: 'restricted',
           updatedAt: new Date('2024-03-01'),
         }),
-      },
-      userRepo: {
-        findByEmail: vi.fn().mockResolvedValue({ id: 'target' }),
       },
       shareHandler: {
         execute: vi.fn().mockResolvedValue(ok({ id: 'perm-1' })),
@@ -456,13 +433,13 @@ describe('ApproveMutationHandler', () => {
       expect.objectContaining({
         noteId: 'note-1',
         userId: 'u1',
-        targetUserId: 'target',
+        email: 'bob@example.com',
         permission: 'viewer',
       })
     );
   });
 
-  it('fails a share when the target email has no user', async () => {
+  it('surfaces the generic not-addable result without a redundant lookup', async () => {
     const d = deps({
       store: {
         take: vi.fn().mockResolvedValue({
@@ -481,12 +458,14 @@ describe('ApproveMutationHandler', () => {
           updatedAt: new Date('2024-03-01'),
         }),
       },
-      userRepo: { findByEmail: vi.fn().mockResolvedValue(null) },
+      shareHandler: {
+        execute: vi.fn().mockResolvedValue(err(NoteErrors.personNotAddable())),
+      },
     });
     const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
-      expect(r.error.code).toBe('AGENT_TARGET_USER_NOT_FOUND');
+      expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
     }
   });
 });

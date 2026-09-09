@@ -1,42 +1,61 @@
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsFetching, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { sharedNotePath } from '@/config';
+import {
+  useShareActionLock,
+  type ShareActionLock,
+} from '@/hooks/useShareActionLock';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
+import { useAuthUser } from '@jovandyaz/auth-react';
 import { Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { ZodError } from 'zod';
 
-import { notesQueryKeys, useUpdateNote } from '@knowtis/data-access-notes';
+import { ApiClientError } from '@knowtis/api-client';
+import {
+  notesQueryKeys,
+  usePeople,
+  useSharingAuthority,
+  useUpdateNote,
+} from '@knowtis/data-access-notes';
 import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
+  ErrorState,
   RadioCardGroup,
+  Skeleton,
+  Switch,
 } from '@knowtis/design-system';
 import {
   ACCESS,
   GENERAL_ACCESS,
   PERMISSION,
   type GeneralAccessLevel,
-  type NoteAccessLevel,
   type PermissionLevel,
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
-import { AccessInfoBanner, LinkAccessSection } from './share';
+import { AccessInfoBanner } from './share/AccessInfoBanner';
+import { LinkAccessSection } from './share/LinkAccessSection';
+import { PeopleAccessSection } from './share/PeopleAccessSection';
+import { RotateShareLinkDialog } from './share/RotateShareLinkDialog';
 
 type ToastKey =
   | 'share.linkCreatedToast'
   | 'share.linkPausedToast'
   | 'share.linkResumedToast'
   | 'share.permissionEditorToast'
-  | 'share.permissionViewerToast';
+  | 'share.permissionViewerToast'
+  | 'share.people.saved';
 
-// A retained token means the note was shared before, so resuming returns the same link.
 function accessToastKey(
   next: GeneralAccessLevel,
   shareToken: string | null
@@ -55,150 +74,281 @@ interface ShareDialogProps {
   generalAccess: GeneralAccessLevel;
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
-  editorsCanShare: boolean;
-  accessLevel: NoteAccessLevel;
 }
 
-export function ShareDialog({
-  open,
-  onOpenChange,
-  noteId,
-  noteTitle,
-  generalAccess,
-  generalAccessPermission,
-  shareToken,
-  editorsCanShare,
-  accessLevel,
-}: ShareDialogProps) {
+export function ShareDialog(props: ShareDialogProps) {
   const { t } = useTranslation(['notes', 'common']);
-  const updateNote = useUpdateNote();
-  const queryClient = useQueryClient();
-  const verifyEmailGate = useVerifyEmailGate();
-
-  // The detail query only refetches on its own staleness, so sharing state
-  // changed from another tab or device can be minutes old when this opens.
-  useEffect(() => {
-    if (open) {
-      void queryClient.invalidateQueries({
-        queryKey: notesQueryKeys.detail(noteId),
-      });
-    }
-  }, [open, queryClient, noteId]);
-
-  const isRefreshing =
-    useIsFetching({ queryKey: notesQueryKeys.detail(noteId) }) > 0;
-
-  const isOwner = accessLevel === ACCESS.OWNER;
-  const isEditor = accessLevel === ACCESS.EDITOR;
-  const canShare = isOwner || (isEditor && editorsCanShare);
-  const isPublicAccess = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
-  const generalAccessOptions = [
-    {
-      value: GENERAL_ACCESS.RESTRICTED,
-      icon: Lock,
-      title: t('share.restricted'),
-      description: shareToken
-        ? t('share.restrictedDescPaused')
-        : t('share.restrictedDesc'),
-    },
-    {
-      value: GENERAL_ACCESS.ANYONE_WITH_LINK,
-      icon: Globe,
-      title: t('share.anyoneWithLink'),
-      description: t('share.anyoneWithLinkDesc'),
-    },
-  ];
-  const shareUrl = shareToken
-    ? `${window.location.origin}${sharedNotePath(shareToken)}`
-    : null;
-
-  const applyAccessChange = (input: UpdateNoteInput, successKey: ToastKey) => {
-    // Per-call mutate callbacks are skipped once the observer loses its
-    // listeners, so navigating away would silently drop the confirmation.
-    void updateNote
-      .mutateAsync({ id: noteId, input })
-      .then(() => toast.success(t(successKey)))
-      .catch((error: unknown) => {
-        if (!verifyEmailGate.handleError(error)) {
-          toast.error(t('share.accessChangeError'));
-        }
-      });
-  };
-
-  const handleGeneralAccessChange = (next: GeneralAccessLevel) => {
-    if (next !== generalAccess) {
-      applyAccessChange(
-        { generalAccess: next },
-        accessToastKey(next, shareToken)
-      );
-    }
-  };
-
-  const handlePermissionChange = (next: PermissionLevel) => {
-    if (next !== generalAccessPermission) {
-      applyAccessChange(
-        { generalAccessPermission: next },
-        next === PERMISSION.EDITOR
-          ? 'share.permissionEditorToast'
-          : 'share.permissionViewerToast'
-      );
-    }
-  };
-
+  const actionLock = useShareActionLock();
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
-        className="max-w-[520px] p-0 gap-0 overflow-hidden"
+        className="flex max-h-[90dvh] min-w-0 flex-col gap-0 overflow-hidden p-0 md:max-w-[520px] md:p-0 max-md:p-0"
         closeLabel={t('common:labels.closeDialog')}
       >
-        <DialogHeader className="px-6 pt-6 pb-4 space-y-1">
-          <DialogTitle className="text-xl font-semibold">
-            {t('share.title', { noteTitle })}
+        <DialogHeader className="shrink-0 px-6 pb-4 pt-6 pr-12">
+          <DialogTitle className="break-words">
+            {t('share.title', { noteTitle: props.noteTitle })}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {t('share.description')}
-          </p>
+          <DialogDescription>{t('share.description')}</DialogDescription>
         </DialogHeader>
-
-        <div className="border-t border-border mb-0" />
-
-        <div className="px-6 py-5 space-y-6 max-h-[500px] overflow-y-auto">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-medium">
-                {t('share.generalAccess')}
-              </h3>
-            </div>
-
-            <RadioCardGroup
-              aria-label={t('share.generalAccess')}
-              options={generalAccessOptions}
-              value={generalAccess}
-              onValueChange={handleGeneralAccessChange}
-              disabled={!canShare || updateNote.isPending || isRefreshing}
-            />
-          </div>
-
-          {isPublicAccess && shareUrl && (
-            <LinkAccessSection
-              shareUrl={shareUrl}
-              permission={generalAccessPermission}
-              disabled={!canShare || updateNote.isPending || isRefreshing}
-              onPermissionChange={handlePermissionChange}
-            />
-          )}
-
-          {!isOwner && <AccessInfoBanner canShare={canShare} />}
-        </div>
-
-        <div className="border-t border-border mt-0" />
-        <div className="px-6 py-4 flex justify-end">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <div role="separator" className="shrink-0 border-t border-(--border)" />
+        {props.open ? (
+          <ShareDialogAccess
+            key={props.noteId}
+            {...props}
+            actionLock={actionLock}
+          />
+        ) : null}
+        <div role="separator" className="shrink-0 border-t border-(--border)" />
+        <div className="flex shrink-0 justify-end px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <Button variant="outline" onClick={() => props.onOpenChange(false)}>
             {t('common:buttons.done')}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ShareDialogAccess({
+  noteId,
+  generalAccess: initialAccess,
+  generalAccessPermission: initialPermission,
+  shareToken: initialToken,
+  actionLock,
+}: ShareDialogProps & { actionLock: ShareActionLock }) {
+  const { t } = useTranslation(['notes', 'common']);
+  const actor = useAuthUser();
+  const people = usePeople(noteId, true);
+  const authority = useSharingAuthority(noteId, true);
+  const updateNote = useUpdateNote();
+  const client = useQueryClient();
+  const gate = useVerifyEmailGate();
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessStatus, setAccessStatus] = useState<string | null>(null);
+  const hasFreshData =
+    people.isFetchedAfterMount &&
+    authority.isFetchedAfterMount &&
+    people.isSuccess &&
+    authority.isSuccess;
+  const refreshing = people.isFetching || authority.isFetching;
+  const disabled =
+    !hasFreshData || refreshing || actionLock.pending || updateNote.isPending;
+  const freshPeople = hasFreshData ? people.data : [];
+  const isOwner =
+    hasFreshData &&
+    authority.data.ownerId === actor?.id &&
+    freshPeople.some(
+      (person) =>
+        person.permission === ACCESS.OWNER && person.user.id === actor?.id
+    );
+  const isDirectEditor =
+    hasFreshData &&
+    authority.data.editorsCanShare &&
+    freshPeople.some(
+      (person) =>
+        person.permission === PERMISSION.EDITOR && person.user.id === actor?.id
+    );
+  const canManagePeople = isOwner || isDirectEditor;
+  const refreshError = people.error ?? authority.error;
+  const generalAccess = refreshError
+    ? GENERAL_ACCESS.RESTRICTED
+    : (authority.data?.generalAccess ?? initialAccess);
+  const permission = refreshError
+    ? PERMISSION.VIEWER
+    : (authority.data?.generalAccessPermission ?? initialPermission);
+  const shareToken = refreshError
+    ? null
+    : authority.data
+      ? authority.data.shareToken
+      : initialToken;
+  const linkIsOpen = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
+  const shareUrl = shareToken
+    ? `${window.location.origin}${sharedNotePath(shareToken)}`
+    : null;
+  const denied =
+    ApiClientError.isApiClientError(refreshError) &&
+    TERMINAL_ACCESS_STATUSES.has(refreshError.status);
+
+  const retry = () => {
+    void Promise.all([
+      people.refetch(),
+      authority.refetch(),
+      client.invalidateQueries({ queryKey: notesQueryKeys.detail(noteId) }),
+    ]);
+  };
+  const applyAccessChange = (input: UpdateNoteInput, successKey: ToastKey) => {
+    if (disabled || !isOwner) {
+      return;
+    }
+    void actionLock.run(async () => {
+      setAccessError(null);
+      setAccessStatus(null);
+      try {
+        await updateNote.mutateAsync({ id: noteId, input });
+        setAccessStatus(t(successKey));
+        toast.success(t(successKey));
+      } catch (error) {
+        if (gate.handleError(error)) {
+          setAccessError(t('share.people.verifyRequired'));
+        } else {
+          setAccessError(t('share.accessChangeError'));
+          toast.error(t('share.accessChangeError'));
+        }
+      } finally {
+        await Promise.all([
+          client.invalidateQueries({ queryKey: notesQueryKeys.people(noteId) }),
+          client.invalidateQueries({
+            queryKey: notesQueryKeys.sharingAuthority(noteId),
+          }),
+          // Reuse the detail read because useUpdateNote starts it after the write settles.
+          client.invalidateQueries(
+            { queryKey: notesQueryKeys.detail(noteId) },
+            { cancelRefetch: false }
+          ),
+        ]);
+      }
+    });
+  };
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto px-6 py-5">
+      {refreshError ? (
+        <ErrorState
+          role="alert"
+          fullHeight={false}
+          title={t(
+            denied
+              ? 'share.people.denied'
+              : refreshError instanceof ZodError
+                ? 'share.people.invalidResponse'
+                : 'share.people.refreshError'
+          )}
+          message={t(
+            denied ? 'share.people.deniedHelp' : 'share.people.retryHelp'
+          )}
+          {...(!denied && !refreshing ? { onRetry: retry } : {})}
+          retryLabel={t('share.people.retry')}
+        />
+      ) : refreshing ? (
+        <div aria-live="polite" className="flex flex-col gap-2">
+          <p className="text-sm text-(--muted-foreground)">
+            {t(
+              hasFreshData ? 'share.people.refreshing' : 'share.people.loading'
+            )}
+          </p>
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      ) : null}
+      {!refreshError && hasFreshData && !canManagePeople ? (
+        <p role="status" className="text-sm text-(--muted-foreground)">
+          {t('share.people.denied')}
+        </p>
+      ) : null}
+      <PeopleAccessSection
+        noteId={noteId}
+        actorId={actor?.id}
+        people={canManagePeople ? freshPeople : []}
+        disabled={disabled || !canManagePeople}
+        linkIsOpen={linkIsOpen}
+        actionLock={actionLock}
+      />
+      <div role="separator" className="shrink-0 border-t border-(--border)" />
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <Globe className="size-4 text-(--muted-foreground)" />
+          <h3 className="text-sm font-medium">{t('share.generalAccess')}</h3>
+        </div>
+        <RadioCardGroup
+          aria-label={t('share.generalAccess')}
+          options={[
+            {
+              value: GENERAL_ACCESS.RESTRICTED,
+              icon: Lock,
+              title: t('share.restricted'),
+              description: shareToken
+                ? t('share.restrictedDescPaused')
+                : t('share.restrictedDesc'),
+            },
+            {
+              value: GENERAL_ACCESS.ANYONE_WITH_LINK,
+              icon: Globe,
+              title: t('share.anyoneWithLink'),
+              description: t('share.anyoneWithLinkDesc'),
+            },
+          ]}
+          value={generalAccess}
+          onValueChange={(next) => {
+            if (next !== generalAccess) {
+              applyAccessChange(
+                { generalAccess: next },
+                accessToastKey(next, shareToken)
+              );
+            }
+          }}
+          disabled={disabled || !isOwner}
+        />
+      </div>
+      {hasFreshData && linkIsOpen && shareUrl ? (
+        <LinkAccessSection
+          shareUrl={shareUrl}
+          permission={permission}
+          disabled={disabled || !isOwner}
+          onPermissionChange={(next) => {
+            if (next !== permission) {
+              applyAccessChange(
+                { generalAccessPermission: next },
+                next === PERMISSION.EDITOR
+                  ? 'share.permissionEditorToast'
+                  : 'share.permissionViewerToast'
+              );
+            }
+          }}
+        />
+      ) : null}
+      {authority.data ? (
+        <RotateShareLinkDialog
+          note={authority.data}
+          isOwner={isOwner}
+          disabled={disabled}
+          actionLock={actionLock}
+        />
+      ) : null}
+      {isOwner ? (
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`editors-share-${noteId}`}
+              className="text-sm font-medium"
+            >
+              {t('share.editorsCanShare')}
+            </label>
+            <p className="text-xs text-(--muted-foreground)">
+              {t('share.editorsCanShareToggleDesc')}
+            </p>
+          </div>
+          <Switch
+            id={`editors-share-${noteId}`}
+            checked={authority.data?.editorsCanShare ?? false}
+            disabled={disabled}
+            onCheckedChange={(next) =>
+              applyAccessChange({ editorsCanShare: next }, 'share.people.saved')
+            }
+          />
+        </div>
+      ) : hasFreshData ? (
+        <AccessInfoBanner canShare={canManagePeople} />
+      ) : null}
+      {accessError ? (
+        <p role="alert" className="text-sm text-(--destructive)">
+          {accessError}
+        </p>
+      ) : null}
+      {accessStatus ? (
+        <p role="status" className="text-sm text-(--muted-foreground)">
+          {accessStatus}
+        </p>
+      ) : null}
+    </div>
   );
 }

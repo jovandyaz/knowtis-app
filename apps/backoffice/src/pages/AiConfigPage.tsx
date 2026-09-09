@@ -94,7 +94,12 @@ export function AiConfigPage() {
   const chain = config.data?.find((entry) => entry.kind === 'chain');
   const ceiling = config.data?.find((entry) => entry.kind === 'money');
   const effort = config.data?.find((entry) => entry.kind === 'choice');
-  const upstreams = config.data?.find((entry) => entry.kind === 'list');
+  const upstreams = config.data?.find(
+    (entry) => entry.key === AI_CONFIG_KEYS.OPENROUTER_PROVIDERS
+  );
+  const ignoredUpstreams = config.data?.find(
+    (entry) => entry.key === AI_CONFIG_KEYS.OPENROUTER_IGNORED_PROVIDERS
+  );
   const modelEntries = (config.data ?? []).filter(
     (entry) => entry.kind === 'model'
   );
@@ -221,7 +226,14 @@ export function AiConfigPage() {
         </TabsContent>
         <TabsContent value={TAB.providers} className="flex flex-col gap-8 pt-4">
           {renderConfigPanel(
-            upstreams ? <UpstreamSection entry={upstreams} /> : null
+            <>
+              {upstreams ? (
+                <UpstreamSection entry={upstreams} mode="preference" />
+              ) : null}
+              {ignoredUpstreams ? (
+                <UpstreamSection entry={ignoredUpstreams} mode="ignore" />
+              ) : null}
+            </>
           )}
           <ProvidersSection />
         </TabsContent>

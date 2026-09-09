@@ -17,6 +17,7 @@ import {
   UpdateNoteHandler,
   UpdateTagHandler,
 } from './application';
+import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
 import {
   NOTE_READ_REPOSITORY,
@@ -25,9 +26,15 @@ import {
   PERMISSION_REPOSITORY,
   TAG_REPOSITORY,
 } from './domain';
+import { ACCESS_SNAPSHOT_REPOSITORY } from './domain/ports/access-snapshot.repository';
 import { IMAGE_STORAGE } from './domain/ports/image-storage.port';
 import { NOTE_IMAGE_REPOSITORY } from './domain/ports/note-image.repository';
 import { DrizzleNoteRepository } from './infrastructure';
+import {
+  ACCESS_DATABASE_CONNECTION,
+  AccessDatabase,
+} from './infrastructure/persistence/access-database';
+import { DrizzleAccessSnapshotRepository } from './infrastructure/persistence/drizzle-access-snapshot.repository';
 import { DrizzleNoteImageRepository } from './infrastructure/persistence/drizzle-note-image.repository';
 import { DrizzleTagRepository } from './infrastructure/persistence/drizzle-tag.repository';
 import { VercelBlobStorage } from './infrastructure/storage/vercel-blob.storage';
@@ -38,6 +45,16 @@ import { TagsController } from './tags.controller';
   imports: [UsersModule],
   controllers: [NotesController, TagsController],
   providers: [
+    AccessDatabase,
+    {
+      provide: ACCESS_DATABASE_CONNECTION,
+      useFactory: (access: AccessDatabase) => access.db,
+      inject: [AccessDatabase],
+    },
+    {
+      provide: ACCESS_SNAPSHOT_REPOSITORY,
+      useClass: DrizzleAccessSnapshotRepository,
+    },
     {
       provide: NOTE_REPOSITORY,
       useClass: DrizzleNoteRepository,
@@ -73,10 +90,12 @@ import { TagsController } from './tags.controller';
     UpdateTagHandler,
     DeleteTagHandler,
     UploadImageHandler,
+    RotateShareLinkHandler,
     { provide: IMAGE_STORAGE, useClass: VercelBlobStorage },
     { provide: NOTE_IMAGE_REPOSITORY, useClass: DrizzleNoteImageRepository },
   ],
   exports: [
+    ACCESS_SNAPSHOT_REPOSITORY,
     CreateNoteHandler,
     UpdateNoteHandler,
     ShareNoteHandler,

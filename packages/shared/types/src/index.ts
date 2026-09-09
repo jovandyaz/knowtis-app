@@ -12,6 +12,7 @@ export {
   PERMISSION,
   ACCESS,
   PERMISSION_LEVELS,
+  ACCESS_LEVELS,
   GENERAL_ACCESS,
   GENERAL_ACCESS_LEVELS,
   type Note,
@@ -22,11 +23,14 @@ export {
   type NoteAccessLevel,
   type GeneralAccessLevel,
   type NotePermission,
+  type NotePerson,
   type ShareNoteInput,
 } from './lib/note.types';
 
 export {
   HANDSHAKE_FAILURE,
+  COLLABORATION_CLOSE_REASON,
+  type CollaborationCloseReason,
   type HandshakeFailureReason,
   type CollaborationUser,
   type JoinRoomPayload,

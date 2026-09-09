@@ -225,7 +225,9 @@
       "fitToScreen": "Ajustar a la pantalla",
       "canvasLabel": "Lienzo del diagrama, usa las flechas para moverlo",
       "closeViewer": "Cerrar el diagrama"
-    }
+    },
+    "refreshError": "No se pudo actualizar esta nota. Tu nota abierta sigue aquí.",
+    "retryRefresh": "Actualizar nota"
   },
   "create": {
     "newNote": "Nueva nota",
@@ -251,7 +253,7 @@
     "description": "Administra quién puede acceder a esta nota",
     "generalAccess": "Acceso general",
     "restricted": "Privado",
-    "restrictedDesc": "Solo tú puedes ver esta nota",
+    "restrictedDesc": "Solo las personas con acceso directo pueden abrir esta nota",
     "linkCreatedToast": "Enlace creado. Ya puedes compartirlo",
     "linkPausedToast": "Enlace pausado. Deja de funcionar hasta que vuelvas a compartir",
     "linkResumedToast": "Enlace activo otra vez. Es el mismo de siempre",
@@ -265,16 +267,59 @@
     "editorHelp": "Las personas con este enlace pueden ver y editar la nota.",
     "canShare": "Puedes compartir esta nota",
     "limitedAccess": "Acceso limitado",
-    "editorsCanShareDesc": "El propietario ha permitido que los editores compartan esta nota.",
+    "editorsCanShareDesc": "Puedes administrar personas. Solo el propietario puede cambiar el enlace.",
     "onlyOwnerCanShare": "Solo el propietario puede cambiar la configuración de compartir esta nota.",
     "editorsCanShare": "Los editores pueden compartir",
-    "editorsCanShareToggleDesc": "Permitir que los editores inviten a otros y administren el acceso",
+    "editorsCanShareToggleDesc": "Permitir que los editores directos agreguen personas y administren su acceso",
     "editorsCanShareTitle": "Los editores pueden compartir esta nota",
     "onlyYouCanShare": "Solo tú puedes compartir esta nota",
-    "restrictedDescPaused": "Solo tú puedes verla. El enlace queda pausado, no se elimina",
+    "restrictedDescPaused": "Solo las personas con acceso directo pueden abrirla. El enlace está pausado",
     "permissionViewerToast": "El enlace ahora es de solo lectura",
     "permissionEditorToast": "Quien tenga el enlace ya puede editar",
-    "accessChangeError": "No se pudo cambiar el acceso. Inténtalo de nuevo"
+    "accessChangeError": "No se pudo cambiar el acceso. Inténtalo de nuevo",
+    "people": {
+      "title": "Personas con acceso",
+      "add": "Agregar persona",
+      "email": "Correo electrónico",
+      "emailHelp": "Escribe el correo exacto de una cuenta existente. No se envía una invitación por correo.",
+      "invalidEmail": "Escribe un correo electrónico válido.",
+      "newPermission": "Permiso de la nueva persona",
+      "adding": "Agregando…",
+      "saved": "Permisos guardados.",
+      "notAddable": "No se puede agregar a esta persona. Revisa el correo e intenta con otra persona.",
+      "saveError": "No se pudo guardar el acceso. Intenta de nuevo.",
+      "removeError": "No se pudo quitar el acceso. Intenta de nuevo.",
+      "verifyRequired": "Verifica tu correo para ampliar el acceso. Puedes seguir reduciendo o quitando el acceso.",
+      "you": "Tú",
+      "permissionFor": "Permiso de {{email}}",
+      "removePerson": "Quitar a {{name}}",
+      "remove": "Quitar",
+      "removeTitle": "¿Quitar el acceso a {{name}}?",
+      "removeDescription": "Esto quita el acceso directo.",
+      "removeLinkCaveat": "Esta persona aún podría acceder a la nota mediante un enlace abierto.",
+      "removeAccess": "Quitar acceso",
+      "removing": "Quitando…",
+      "denied": "No puedes administrar personas en esta nota.",
+      "deniedHelp": "Pide acceso al propietario de la nota y vuelve a abrir este diálogo.",
+      "refreshError": "No se pudo actualizar el acceso",
+      "retryHelp": "Actualiza el acceso antes de hacer otro cambio.",
+      "retry": "Intentar de nuevo",
+      "refreshing": "Actualizando acceso…",
+      "loading": "Cargando acceso…",
+      "invalidResponse": "No se pudo validar la información de acceso."
+    },
+    "rotation": {
+      "action": "Cambiar enlace para compartir",
+      "title": "¿Cambiar este enlace?",
+      "description": "El enlace actual dejará de funcionar. Las personas agregadas directamente conservan sus permisos. Las sesiones abiertas se actualizarán en unos segundos; el contenido que ya se descargó no se puede retirar.",
+      "cancel": "Cancelar",
+      "confirm": "Cambiar enlace",
+      "close": "Cerrar",
+      "saved": "Enlace cambiado. Las sesiones abiertas se actualizarán en unos segundos.",
+      "uncertain": "No pudimos confirmar si cambió el enlace. Comprueba el enlace actual antes de volver a intentarlo.",
+      "conflict": "El enlace cambió en otra sesión o todavía no se ha creado. Comprueba el enlace actual antes de volver a intentarlo.",
+      "failed": "No se pudo cambiar el enlace. Comprueba tu acceso antes de volver a intentarlo."
+    }
   },
   "shared": {
     "loadingSharedNote": "Cargando nota compartida...",
@@ -376,6 +421,12 @@
       "sources": "Fuentes",
       "webSources": "Fuentes web",
       "stop": "Detener",
+      "stopReason": {
+        "max_steps": "Se alcanzó el límite de pasos.",
+        "token_budget": "Se alcanzó el presupuesto del turno.",
+        "length": "La respuesta quedó incompleta.",
+        "content_filter": "El proveedor limitó esta respuesta."
+      },
       "empty": {
         "title": "Pregúntale a tus notas",
         "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",
@@ -397,7 +448,7 @@
           }
         }
       },
-      "estudio": {
+      "study": {
         "noNote": "Abre una nota para usar las herramientas de estudio."
       },
       "proposal": {
@@ -477,11 +528,8 @@
         "summary": "Resumen",
         "mindMap": "Mapa mental"
       },
+      "back": "Volver",
       "sidebar": {
-        "back": "Volver",
-        "openPanel": "Abrir panel de estudio",
-        "closePanel": "Cerrar panel de estudio",
-        "studyTools": "Herramientas de Estudio",
         "resizePanel": "Redimensionar panel"
       },
       "list": {
@@ -510,16 +558,19 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf_one": "{{reviewed}} de {{count}} tarjeta repasada",
+        "reviewedOf_other": "{{reviewed}} de {{count}} tarjetas repasadas",
         "showAnswer": "Mostrar respuesta",
         "showFront": "Mostrar frente de la tarjeta",
         "showBack": "Mostrar dorso de la tarjeta",
-        "clickToFlip": "Haz clic para voltear",
         "prev": "Anterior",
         "next": "Siguiente",
         "reviewError": "Error al enviar la revisión",
-        "complete": "Sesión completada!",
-        "reviewedAll": "Revisaste las {{total}} tarjetas",
+        "progressError": "No pudimos cargar el progreso de este mazo",
         "restart": "Empezar de nuevo",
+        "shuffle": "Barajar",
+        "intervalDays_one": "{{count}} día",
+        "intervalDays_other": "{{count}} días",
         "difficulty": {
           "easy": "Fácil",
           "medium": "Medio",
@@ -533,9 +584,10 @@
         },
         "wrong": "Incorrecto",
         "correct": "Correcto",
-        "skip": "Saltar",
         "advancedMode": "Modo avanzado",
+        "rateCard": "Califica esta tarjeta",
         "summary": {
+          "description": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas, en {{duration}}.",
           "excellentMastery": "¡Excelente dominio!",
           "greatJob": "¡Muy bien, sigue así!",
           "goodProgress": "¡Buen progreso!",
@@ -554,6 +606,9 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} de {{total}} respondidas",
+        "outcomeCorrect": "Correcto — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrecto — la respuesta es {{letter}}. {{answer}}",
         "explanation": "Explicación",
         "next": "Siguiente",
         "finish": "Finalizar",
@@ -660,6 +715,33 @@
       "note": "Nota",
       "study": "Estudio"
     },
-    "tabsLabel": "Espacio de la nota"
+    "tabsLabel": "Espacio de la nota",
+    "tabsLoading": "Cargando el espacio de la nota"
+  },
+  "study": {
+    "loading": "Cargando tu repaso",
+    "newBadge": "Nueva",
+    "caughtUp": {
+      "title": "Todo al día",
+      "nextReview": "Tu próxima tarjeta llega {{when}}",
+      "nothingScheduled": "Aún no tienes tarjetas programadas",
+      "cta": "Ir a mis notas"
+    },
+    "summary": {
+      "streak_zero": "Tu racha empieza hoy",
+      "streak_one": "Racha de {{count}} día",
+      "streak_other": "Racha de {{count}} días",
+      "backHome": "Volver al inicio",
+      "restartFailed": "No pudimos cargar tarjetas nuevas. Inténtalo de nuevo."
+    },
+    "todayCard": {
+      "title": "Repaso de hoy",
+      "dueLabel": "para hoy",
+      "newLabel_one": "nueva",
+      "newLabel_other": "nuevas",
+      "streakLabel_one": "día de racha",
+      "streakLabel_other": "días de racha",
+      "cta": "Empezar"
+    }
   }
 }

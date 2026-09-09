@@ -21,6 +21,10 @@ const config: StorybookConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@knowtis/design-system': resolve(__dirname, '../src/index.ts'),
+      '@knowtis/shared-types': resolve(
+        __dirname,
+        '../../shared/types/src/index.ts'
+      ),
     };
     return config;
   },

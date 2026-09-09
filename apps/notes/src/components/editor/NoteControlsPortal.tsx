@@ -110,23 +110,12 @@ export function NoteControlsPortal({
           </Tooltip>
           <ShareDialog
             open={shareDialogOpen}
-            onOpenChange={(open) => {
-              onShareDialogOpenChange(open);
-              if (!open) {
-                requestAnimationFrame(() => {
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
-                });
-              }
-            }}
+            onOpenChange={onShareDialogOpenChange}
             noteId={note.id}
             noteTitle={note.title}
             generalAccess={note.generalAccess}
             generalAccessPermission={note.generalAccessPermission}
             shareToken={note.shareToken}
-            editorsCanShare={note.editorsCanShare}
-            accessLevel={note.accessLevel}
           />
         </>
       )}

@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import swc from 'unplugin-swc';
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -8,6 +10,7 @@ const DB_SPECS = 'src/**/*.db.spec.ts';
 const plugins = () => [
   nxViteTsPaths(),
   swc.vite({
+    tsconfigFile: join(__dirname, 'tsconfig.json'),
     module: { type: 'es6' },
     jsc: { target: 'es2022' },
   }),
@@ -28,6 +31,15 @@ export default defineConfig({
     projects: [
       {
         plugins: plugins(),
+        resolve: {
+          dedupe: [
+            '@nestjs/core',
+            '@nestjs/common',
+            '@nestjs/passport',
+            '@nestjs/jwt',
+            'reflect-metadata',
+          ],
+        },
         test: {
           name: 'unit',
           globals: true,
@@ -41,6 +53,15 @@ export default defineConfig({
       },
       {
         plugins: plugins(),
+        resolve: {
+          dedupe: [
+            '@nestjs/core',
+            '@nestjs/common',
+            '@nestjs/passport',
+            '@nestjs/jwt',
+            'reflect-metadata',
+          ],
+        },
         test: {
           name: 'database',
           globals: true,

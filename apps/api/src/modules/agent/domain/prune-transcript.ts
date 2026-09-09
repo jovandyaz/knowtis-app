@@ -120,7 +120,9 @@ function stripOrphans(messages: AgentMessage[]): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const m of messages) {
     if (!m.parts) {
-      out.push(m);
+      if (m.role !== 'assistant' || m.content.length > 0) {
+        out.push(m);
+      }
       continue;
     }
     const parts: AgentMessagePart[] = m.parts.filter((p) =>

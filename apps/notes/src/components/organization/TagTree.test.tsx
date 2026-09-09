@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TagNode } from '@knowtis/shared-types';
 
+import { NAV_ROW } from './nav-row.styles';
 import { TagTree } from './TagTree';
 
 const tagTree = vi.fn<() => TagNode[] | undefined>();
@@ -234,13 +235,12 @@ describe('TagTree', () => {
     );
   });
 
-  it('should give a tag row a touch-sized height on mobile', async () => {
+  it('should give a tag row a touch-sized height on a coarse pointer', async () => {
     await renderAt('/notes');
 
-    expect(rowFor('personal')?.parentElement).toHaveClass(
-      'min-h-11',
-      'md:min-h-8'
-    );
+    const row = rowFor('personal')?.parentElement;
+    expect(row).toHaveClass(...NAV_ROW.split(' '));
+    expect(row?.className).not.toMatch(/(^|\s)md:min-h-/);
   });
   const openMenuFor = async (
     user: ReturnType<typeof userEvent.setup>,

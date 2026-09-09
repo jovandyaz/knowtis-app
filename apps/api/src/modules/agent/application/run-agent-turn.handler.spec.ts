@@ -183,11 +183,13 @@ function makeTurnEffort(effort: ReasoningEffort = 'medium') {
 
 function makeAIConfig(
   effort: ReasoningEffort = 'medium',
-  providerOrder: readonly string[] = []
+  providerOrder: readonly string[] = [],
+  ignoredProviders: readonly string[] = []
 ) {
   return {
     getReasoningEffort: vi.fn().mockResolvedValue(effort),
     getOpenRouterProviderOrder: vi.fn().mockResolvedValue(providerOrder),
+    getOpenRouterIgnoredProviders: vi.fn().mockResolvedValue(ignoredProviders),
   } as unknown as AIConfigService;
 }
 
@@ -2502,7 +2504,7 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig('medium', ['fireworks', 'together']),
+      makeAIConfig('medium', ['fireworks', 'together'], ['parasail']),
       makeTurnEffort()
     );
 
@@ -2519,6 +2521,7 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({
         openrouterProviderOrder: ['fireworks', 'together'],
+        openrouterIgnoredProviders: ['parasail'],
       })
     );
   });
@@ -4654,7 +4657,7 @@ describe('RunAgentTurnHandler', () => {
       expect(appended.messages).toHaveLength(4);
     });
 
-    it('persists the tool rows with no stop reason when the turn ends on a tool result', async () => {
+    it('preserves tool rows and persists the terminal stop reason after a tool result', async () => {
       const { conversations, execute } = run([
         { type: 'step', messages: [...stepWithTool] },
         doneEvent,
@@ -4667,6 +4670,12 @@ describe('RunAgentTurnHandler', () => {
         { role: 'user', content: 'what is in N1?' },
         stepWithTool[0],
         stepWithTool[1],
+        {
+          role: 'assistant',
+          content: '',
+          sources: doneEvent.sources,
+          stopReason: 'completed',
+        },
       ]);
     });
 

@@ -130,8 +130,71 @@ export {
 } from './components/Table';
 export { DataTable, type DataTableProps } from './components/DataTable';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
+export { Kbd, type KbdProps } from './components/Kbd';
+export {
+  Progress,
+  type ProgressProps,
+  type ProgressTone,
+} from './components/Progress';
+export { FlipCard, type FlipCardProps } from './components/FlipCard';
+export {
+  ProgressRing,
+  type ProgressRingProps,
+  RING_SIZE_DEFAULT,
+  RING_STROKE_DEFAULT,
+} from './components/ProgressRing';
+export {
+  DonutChart,
+  type DonutChartProps,
+  type DonutSegment,
+  DONUT_SIZE_DEFAULT,
+  DONUT_STROKE,
+} from './components/DonutChart';
+export {
+  StatTile,
+  type StatTileProps,
+  type StatDelta,
+} from './components/StatTile';
+export { RatingBar, type RatingBarProps } from './components/RatingBar';
+export { learnToneButton } from './components/learn-tone-button';
+export {
+  AnswerOption,
+  type AnswerOptionProps,
+} from './components/AnswerOption';
+export {
+  BucketDot,
+  type BucketDotProps,
+  type BucketDotTone,
+} from './components/BucketDot';
+export { DeckChip, type DeckChipProps } from './components/DeckChip';
+
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
+export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
 
+export {
+  LEARN_TONES,
+  type LearnTone,
+  type ProgressRingTone,
+  type DonutTone,
+  type LearnToneButtonTone,
+} from './constants/learn-tone';
+export {
+  ANSWER_OPTION_STATES,
+  type AnswerOptionState,
+  ANSWER_OUTCOMES,
+  type AnswerOutcome,
+  answerLetter,
+} from './constants/answer-option';
+export {
+  RATING_ORDER,
+  RATING_QUALITY,
+  type RatingKey,
+} from './constants/rating';
+export { DECK_CHIP_TONES, type DeckChipTone } from './constants/deck-chip';
 export { THEMES, type Theme } from './constants/theme';
+export {
+  TOUCH_TARGET_CLASS,
+  TOUCH_TARGET_HEIGHT_CLASS,
+} from './constants/touch-target';
 
-export { cn } from './utils';
+export { cn } from './utils/cn';

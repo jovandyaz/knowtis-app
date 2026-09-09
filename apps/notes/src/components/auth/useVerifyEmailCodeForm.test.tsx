@@ -43,6 +43,63 @@ describe('useVerifyEmailCodeForm', () => {
     expect(onCodeCleared).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['success', 'error'] as const)(
+    'allows verification after resend resets an in-flight mutation that ends in %s',
+    async (outcome) => {
+      const pending = Promise.withResolvers<undefined>();
+      const api = createAuthApiMock({
+        verifyEmailCode: vi
+          .fn()
+          .mockReturnValueOnce(pending.promise)
+          .mockResolvedValue(undefined),
+      });
+      const onVerified = vi.fn();
+      const { result } = renderHook(
+        () => useVerifyEmailCodeForm({ onVerified, startHeld: false }),
+        { wrapper: createAuthWrapper(api) }
+      );
+
+      act(() => result.current.onCodeChange(CODE));
+      act(() => result.current.onSubmit(submitEvent()));
+      await waitFor(() => expect(result.current.isVerifying).toBe(true));
+      act(() => result.current.onResend());
+      await waitFor(() =>
+        expect(result.current.resendNotice?.tone).toBe('success')
+      );
+      expect(result.current.code).toBe('');
+      expect(result.current.isVerifying).toBe(false);
+      act(() => result.current.onCodeChange('654321'));
+      await act(async () => {
+        result.current.onSubmit(submitEvent());
+      });
+      expect(api.verifyEmailCode).toHaveBeenCalledExactlyOnceWith(CODE);
+
+      await act(async () => {
+        if (outcome === 'success') {
+          pending.resolve(undefined);
+        } else {
+          pending.reject(
+            new ApiClientError(
+              'Invalid old code',
+              400,
+              'INVALID_VERIFICATION_CODE'
+            )
+          );
+        }
+        await pending.promise.catch(() => undefined);
+      });
+      expect(onVerified).not.toHaveBeenCalled();
+      act(() => result.current.onCodeChange('654321'));
+      act(() => {
+        result.current.onSubmit(submitEvent());
+        result.current.onSubmit(submitEvent());
+      });
+      await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
+      expect(api.verifyEmailCode).toHaveBeenCalledTimes(2);
+      expect(api.verifyEmailCode).toHaveBeenLastCalledWith('654321');
+    }
+  );
+
   it('does not notify when resend fails', async () => {
     const api = createAuthApiMock({
       resendVerification: vi

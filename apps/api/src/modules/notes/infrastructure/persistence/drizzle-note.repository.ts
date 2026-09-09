@@ -4,6 +4,7 @@ import type { Result } from 'neverthrow';
 
 import type {
   NoteBucketCounts,
+  NotePerson,
   NoteSupertagCounts,
   PermissionLevel as PermissionLevelType,
 } from '@knowtis/shared-types';
@@ -27,6 +28,7 @@ import type {
   UpdateNoteData,
   UpsertPermissionData,
 } from '../../domain';
+import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 import { DrizzleNoteWriteRepository } from './drizzle-note-write.repository';
 import { DrizzlePermissionRepository } from './drizzle-permission.repository';
@@ -133,6 +135,12 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.writeRepo.createWithYjsState(data, yjsState);
   }
 
+  rotateShareToken(
+    data: RotateShareTokenData
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.writeRepo.rotateShareToken(data);
+  }
+
   update(
     id: string,
     data: UpdateNoteData
@@ -173,18 +181,8 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.permissionRepo.findPermission(noteId, userId);
   }
 
-  findPermissionsByNote(noteId: string): Promise<
-    {
-      permission: NotePermissionEntity;
-      user: {
-        id: string;
-        name: string;
-        email: string;
-        avatarUrl: string | null;
-      };
-    }[]
-  > {
-    return this.permissionRepo.findPermissionsByNote(noteId);
+  findPeopleByNote(noteId: string): Promise<NotePerson[]> {
+    return this.permissionRepo.findPeopleByNote(noteId);
   }
 
   upsertPermission(

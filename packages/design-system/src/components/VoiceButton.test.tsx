@@ -31,7 +31,9 @@ describe('VoiceButton', () => {
   it('keeps the paused state loud regardless of emphasis', () => {
     render(<VoiceButton state="paused" emphasis="quiet" />);
     const button = screen.getByRole('button', { name: 'Resume recording' });
-    expect(button.className).toContain('bg-amber-500');
+    expect(button.className).toContain('bg-(--warning)');
+    expect(button.className).toContain('text-(--background)');
+    expect(button.className).not.toContain('text-white');
     expect(button.className).not.toContain('bg-(--card)');
   });
 
@@ -46,6 +48,18 @@ describe('VoiceButton', () => {
   it('keeps the md size above the 44px tap-target floor', () => {
     render(<VoiceButton size="md" emphasis="quiet" />);
     expect(screen.getByRole('button').className).toContain('size-12');
+  });
+
+  it('stops the listening pulse under reduced motion', () => {
+    render(<VoiceButton state="listening" />);
+    const button = screen.getByRole('button', { name: 'Stop recording' });
+    expect(button.className).toContain('motion-reduce:animate-none');
+  });
+
+  it('stops the processing spinner under reduced motion', () => {
+    render(<VoiceButton state="processing" />);
+    const button = screen.getByRole('button', { name: 'Processing audio' });
+    expect(button.innerHTML).toContain('motion-reduce:animate-none');
   });
 
   it('disables the button while processing', () => {

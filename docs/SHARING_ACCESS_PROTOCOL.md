@@ -1,196 +1,201 @@
-# Active sharing access: protocol proof
+# Active note access protocol
 
-Status: isolated protocol proof for #245 and #246, verified against main
-`1aa9426029cba9c48ae4c76d4de7ea0d659653bb` on 2026-09-07. The fixture is not
-registered in Nest. Production collaboration, note permissions, migrations,
-learning-loop code and UI remain unchanged by this proof.
+This runtime uses PostgreSQL primary as the authority for each collaboration
+session. Redis requests rereads; it never grants permission. The HTTP response
+confirms the access write, not acknowledgments from every active session.
 
-## Decision
+## Enforcement and resource bounds
 
-Use PostgreSQL as the authority for a short-lived permission on each document
-session. Renew every 1 second; limit waiting for a read to 1 second; expire the
-permission 2 seconds after the **start** of that read using a monotonic clock.
-An error, timeout, missing permission or changed permission closes the document
-connection. Reconnection must authenticate again and obtain the current access.
-A delayed response must never extend a closed session or replace a newer
-invalidation generation.
+`AccessRevalidationService` groups reads by note and process. It renews every
+1 second, gives the caller a 1-second read deadline, and expires authorization
+2 seconds after the monotonic start of the read. A delayed or superseded result
+cannot extend a lease. Invalidation increments a generation and coalesces any
+additional event into the next read. Events carry no access verdict.
 
-The measured objective is removal of write and receive capabilities within
-5 seconds after a committed access reduction on a healthy process and local
-network, including a lost invalidation notification. This is a bounded
-convergence objective, not instantaneous revocation or a formal guarantee for a
-blocked event loop or an arbitrarily delayed network.
+Every authenticated context owns a lease before Hocuspocus loads its document.
+A context awaiting connection registration retains its initial expiry; it cannot
+renew indefinitely after failed or abandoned hydration. Registered sessions
+renew only while their effective capability remains identical. A changed grant,
+a missing note, unavailable authority or expiry closes that document connection.
+Closing is terminal for that lease. Reauthentication creates a separate lease.
 
-The supported implementation mechanism is an expiry timer plus synchronous
-removal from the Hocuspocus document, guarded inbound handling and guarded sync.
-There is no general outgoing Yjs-update interceptor in the installed version.
-The proof therefore checks actual provider receipts after removal rather than
-assuming that throwing in an inbound hook also stops broadcasts.
+Final configured `beforeHandleMessage` and `beforeSync` hooks check the lease
+after awaited extension work. A 50 ms process scheduler closes idle recipients,
+which removes them synchronously from Hocuspocus broadcasts. The existing JWT
+expiry timer and rejection of MCP credentials remain in place. Admin content
+access remains editor-capable without manufacturing ownership; deletion denies
+admin as well. Actual ownership takes precedence.
 
-## Installed APIs and official guidance
+The dedicated access-read pool has two PostgreSQL connections, a 1-second
+connection timeout, a 900 ms server statement timeout and `read-write` primary
+selection. URL `statement_timeout`, `options` and `application_name` cannot
+weaken its session defaults. The ordinary application pool is unchanged. The
+snapshot remains one LEFT JOIN statement, so note and direct grants come from
+one PostgreSQL statement snapshot.
 
-The proof uses Node 24.20.0, Hocuspocus server/provider/Redis extension 4.1.0,
-Yjs 13.6.27, application ioredis 5.10.0, postgres.js 3.4.7, PostgreSQL 16 and
-Vitest 4.1.0. Hocuspocus Redis has its own ioredis 5.6.1 dependency. Configure
-its public host/port options instead of casting an application Redis client
-across incompatible dependency types.
+Application admission permits at most two underlying SQL operations and 64
+queued notes per process. A full or expired queue fails closed. Events do not
+create new queued promises. Crucially, caller timeout **does not release SQL
+admission**: the slot stays occupied until the underlying query resolves or
+rejects. A permanently stalled transport can exhaust those two slots, while
+sessions expire; this version deliberately does not replace the pool behind an
+unsettled query. Recovery requires transport recovery or process restart.
 
-Sources consulted on 2026-09-07:
+The scheduler and invalidation clients are lifecycle-owned. Note state is
+removed when no session or unfinished read owns it. Shutdown closes leases,
+clears the scheduler/subscription retries, disconnects owned Redis clients and
+ends the owned SQL pool with a 1-second teardown timeout. Diagnostics expose
+active/peak reads, current/peak queued notes, coalesced invalidations, expired
+sessions, completed reads and cumulative SQL latency without identity labels.
+Pool teardown logs contain operation name and duration only.
 
-- [Hocuspocus hooks](https://tiptap.dev/docs/hocuspocus/server/hooks): rejected
-  authentication and inbound hooks stop the operation. The current page and
-  installed source differ in some signatures; use 4.1.0 `connectionConfig`,
-  not the older documentation example's `connection.readOnly` during auth.
-- [Hocuspocus 4.1.0 Connection source](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/server/src/Connection.ts)
-  and adjacent `ClientConnection.ts`, `MessageReceiver.ts` and `Document.ts`,
-  also inspected in the installed package: `close()` removes the connection
-  from the document synchronously before sending the protocol close frame.
-  Pending messages can still be drained, so they must recheck authorization.
-  `beforeSync` is awaited before sync content is applied or a sync response
-  is produced.
-- [Hocuspocus Redis extension](https://tiptap.dev/docs/hocuspocus/server/extensions/redis):
-  Redis propagates document updates; it does not persist them. The page's
-  `awaitInitialSyncTimeout` is absent from the installed 4.1.0 configuration
-  and is deliberately not used.
-- [Redis Pub/Sub](https://redis.io/docs/latest/develop/pubsub/): delivery can
-  be lost permanently. A successful publish cannot establish that remote
-  sessions have applied a permission change.
-- [PostgreSQL 16 locking](https://www.postgresql.org/docs/16/explicit-locking.html)
-  and [statement timeouts](https://www.postgresql.org/docs/16/runtime-config-client.html):
-  an exclusive table lock is used to exercise a genuinely blocked read.
-  Production integration must also bound server query duration and pool
-  occupancy; abandoning a JavaScript promise does not cancel PostgreSQL work.
+## Invalidation and effective permissions
 
-`ClientConnection` drains queued messages before running `connected`.
-Consequently the permission starts in `onAuthenticate`, not `connected`.
-Both `beforeHandleMessage` and `beforeSync` validate it. Once a connection is
-available, attach its close callback and immediately close any already-expired
-session. Set server `readOnly` during authentication; client editing controls
-are not an authorization boundary.
+Share/upsert, revoke, link-setting updates and soft deletion emit
+`NoteAccessChangedEvent` after the relevant write succeeds. Updates emit before
+later tag operations, which can fail independently. A synchronous emitter error
+cannot turn a committed access write into a failed operation. The listener runs
+local invalidation independently from Redis publication. Periodic primary
+rereads cover missing events, process death between commit and publication, and
+unavailable Redis.
 
-A failed initial proposal exposed another race: an editor was downgraded while
-`onLoadDocument` was pending, before a `Connection` was attached. Updating the
-cached permission left the original writable connection configuration intact,
-and one queued Yjs update was accepted. The revised fixture closes sessions on
-an access change even while the handshake is still loading. That case now
-rejects the queued update.
+The dedicated channel is `knowtis-collab:access-invalidations:v1`. Separate
+publisher/subscriber clients validate a payload of at most 256 bytes with exact
+shape `{ version: 1, noteId: UUID }`. Reconnection explicitly resubscribes and
+then rereads all locally active notes. No permission, email, token, fingerprint
+or content travels in this event. Publication uses bounded command/connect
+waits with its offline queue disabled.
 
-## Authority and invalidation contract
+The effective permission is owner, otherwise the strongest valid direct/link
+grant. A direct editor survives token rotation; a direct viewer editing through
+a link returns to viewer after that token becomes invalid. Removing a direct
+grant does not revoke an independently valid link. An `editorsCanShare` change
+does not change document read/write capability.
 
-After the database commit, publish `{ version: 1, noteId }`. An instance uses
-that signal to re-read authoritative access, never to grant permission directly.
-Coalesce an invalidation arriving during an outstanding read, increment a local
-generation and ignore that read's obsolete result. On subscription recovery,
-re-read all local sessions. Periodic renewal covers missed events and a crash
-between commit and publication.
+## Client recovery
 
-The proposed production resolver takes the maximum of direct access and a
-currently valid link grant, with owner access taking precedence. Removing a
-direct permission does not remove a valid link grant; rotating a link does not
-remove direct access. A direct viewer who edited through the old link becomes
-a viewer when that link is invalidated. Preserve existing explicit
-administrative read/edit permissions without making administrators owners or
-People managers. Reject effective access `none` before applying a general
-public-read CASL rule.
+Hocuspocus 4.1.0 document CLOSE transmits only a reason: its provider synthesizes
+code 1000, and a physical WebSocket need not close. Server/client share stable
+`Note access changed`, `Note access unavailable` and `Token expired` reasons.
+Physical 4403 and 4401 are also recognized.
 
-This resolver, actual note snapshots, JWT/token validation, People REST
-endpoints and link rotation are subsequent implementation work. The probe's
-synthetic identity/access table deliberately represents an already-resolved
-permission and does not claim to test those contracts.
+An access close immediately marks the editor readonly/unsynced and invalidates
+the notes query family, including detail, share-route, People, sharing authority,
+lists and counts. The hook keeps its existing provider, Y.Doc and Awareness. On
+the open transport it calls `sendToken()`,
+then restarts sync after a successful authentication verdict. Duplicate close
+callbacks share one recovery attempt. It allows at most three attempts, with
+2-second deadlines through authentication and synchronization, with bounded
+backoff; only successful sync clears the deadline and resets that budget.
+Transient exhaustion disconnects without clearing local state or logging
+out. FORBIDDEN/NOTE_NOT_FOUND stops retries and renders access lost. Credential
+expiry uses the existing judged-refresh policy; only rejected/exhausted
+credentials end the user session. Cached query reconciliation is UI behavior;
+the server lease enforces authorization independently.
 
-A successful mutation response confirms persistence, not acknowledgements from
-all sessions. Proposed user copy: “Permisos guardados. Las sesiones abiertas se
-actualizarán en unos segundos”. Already downloaded content cannot be recalled;
-previously accepted edits are not rolled back.
+The shared-link page retains a previously loaded editor through recoverable
+background HTTP failures and offers an inline retry. A fresh viewer permission
+or readonly authentication keeps the same collaboration session, now readonly.
+Terminal HTTP 401/403/404 still removes the editor even if the query retains
+cached data. A successful authentication without synchronization cannot leave
+recovery pending indefinitely: the same attempt deadline remains active.
 
-## Executable evidence
+## Executed integration evidence
 
-`access-protocol.probe.db.spec.ts` uses real providers, real WebSocket listeners
-on OS-assigned loopback ports and disposable PostgreSQL tables. Five cases run
-two Hocuspocus servers with independent subscriptions and real Redis document
-propagation; a sixth Redis case isolates a stale read on one server. The servers
-run in one Node process; independent process failures are not represented.
+Local acceptance on 2026-09-07 used Node 24.20.0, Hocuspocus server/provider and
+Redis extension 4.1.0, ioredis 5.10.0, postgres.js 3.4.7, Drizzle 0.45.2,
+PostgreSQL 16, Redis 7 and Vitest 4.1.0. Each case used migrated disposable
+application tables, real UsersService/JWT/snapshot/persistence implementations,
+two real Hocuspocus servers where distribution matters, and real providers.
 
-The suite covers:
+Continuous traffic writes from guests and broadcasts from an owner every
+20 ms. Application timestamps come from synchronous server Y.Doc `update`
+events; receipt timestamps come from provider-origin Y.Doc updates. They are
+not timestamps from `beforeSync` or asynchronous configured `onChange` hooks,
+which can include Redis publication latency. Measurement starts before the
+mutation/fault SQL round trip, conservatively including commit latency.
 
-- Handshake-only characterization: a revoked client still writes and receives
-  content without the proposed renewal mechanism.
-- Viewer enforcement against raw Yjs writes, independent of UI controls.
-- Revocation without any invalidation message; no writes or broadcasts after
-  document removal.
-- A downgraded handshake, stale initial read, pending inbound update, a stale
-  read completing after invalidation, and read-start-based expiry.
-- Real PostgreSQL query failure and a query blocked by an exclusive lock. Both
-  remove permission; late completion does not revive it.
-- Reconnection after downgrade with read-only enforcement, and denied
-  authentication after complete revocation.
-- Two-server traffic with delivered, lost and recovered invalidation
-  subscriptions, plus SQL read errors and blocked reads. Changes are generated
-  every 20 milliseconds; measurements include the latest applied guest update
-  and latest guest provider receipt, not only the server close callback.
-- Both database traffic cases first establish real writes and receipts, then
-  continue traffic through the fault. After recovering readable authority,
-  new owner sessions exchange content across Redis while the original sessions
-  stay closed, receive no new content and cannot apply further writes. The
-  blocked case also waits for the outstanding SQL reads to complete.
+Representative measured latest removal/application/receipt boundaries:
 
-Timing starts immediately **before** the committed mutation query. This is a
-conservative lower bound on the commit time, so the reported window includes
-the database round trip rather than subtracting it. Zero for the last accepted
-update/receipt means none occurred after that starting point.
+| Scenario                                  | Latest boundary |
+| ----------------------------------------- | --------------: |
+| Delivered invalidation                    |           13 ms |
+| Lost publication                          |          888 ms |
+| Subscriber killed and resubscribed        |          116 ms |
+| Child emitter SIGKILL after SQL commit    |          895 ms |
+| Real SQL read error                       |          896 ms |
+| Exclusive lock / server statement timeout |        1,816 ms |
+| Paused authority TCP transport            |        1,913 ms |
 
-Applied-update timestamps come from the server Y.Doc's synchronous `update`
-event after the transaction, not from an authorization hook or a client send.
-[The Y.Doc event order](https://docs.yjs.dev/api/y.doc) places this event after
-application. Hocuspocus 4.1.0 `Hocuspocus.handleDocumentUpdate` instead starts a
-promise chain for `onChange`; the Redis extension's `onChange` awaits publication
-before the configured hook runs. An initial blocked-read run exposed that this
-later callback could timestamp an already-applied update after expiry. The
-fixture now observes the actual Yjs event and retains the strict assertion that
-every sampled application precedes its lease expiry. See the installed-version
-[hook chain](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/server/src/Hocuspocus.ts)
-and [Redis hook](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/extension-redis/src/Redis.ts).
+All cases enforce the 5-second measured objective. After removal, additional
+writes do not apply, receipts stop, and recovered authority never revives the
+original lease. New authorized sessions can reconnect. A downgrade on the same
+provider reauthenticates readonly, and persisted Yjs state excludes the denied
+write. Tests also cover token/direct grant combinations, soft deletion,
+duplicate events, slow shared hydration, and an awaited sync extension.
 
-The verified local run passed 16 tests. Local timings on 2026-09-07 were:
+The 100-note saturated-pool case observed two actual blocked backend queries,
+a peak of two admitted reads and 64 queued notes. Pending callers expired,
+queued work was removed, and SQL admission remained occupied until settlement.
+The controlled TCP fault paused owned proxy sockets rather than substituting a
+mock repository; admission remained held through the pause, then recovered.
+The owned pool test reads `SHOW statement_timeout`, attempts `pg_sleep(2)`,
+terminates its own backend, and checks session defaults after reconnect.
 
-| Invalidation | Last removal | Last accepted update | Last received content | Reads during window |
-| ------------ | -----------: | -------------------: | --------------------: | ------------------: |
-| Delivered    |         2 ms |                 0 ms |                  0 ms |                   3 |
-| Lost         |       985 ms |               982 ms |                983 ms |                   3 |
-| Reconnected  |         4 ms |                 0 ms |                  0 ms |                   3 |
+The negative control disables renewal and message guards only in the test
+fixture: the lost-publication case then fails its 5-second removal wait.
+Normal acceptance must run without `SHARING_ACCESS_NEGATIVE_CONTROL`.
 
-Database-fault timings start immediately before the fault-inducing SQL command,
-including its round trip. These are fault boundaries, not permission commits:
-the stored guest grant remains `editor` to test that recovery cannot revive an
-expired session. A new authenticated session may obtain that still-valid grant.
+```sh
+DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:PORT/DISPOSABLE_DATABASE \
+REDIS_URL=redis://127.0.0.1:REDIS_PORT \
+NX_DAEMON=false NX_ISOLATE_PLUGINS=false NX_PARALLEL=1 VITEST_MAX_WORKERS=2 \
+pnpm nx test api \
+  --testFile=src/modules/collaboration/access-revalidation.redis.db.spec.ts \
+  --run --skip-nx-cache
+```
 
-| Authority fault | Last removal | Last applied update | Last received content | Reads during fault |
-| --------------- | -----------: | ------------------: | --------------------: | -----------------: |
-| SQL read error  |       954 ms |              951 ms |                952 ms |                  3 |
-| Exclusive lock  |     1,938 ms |            1,919 ms |              1,922 ms |                  3 |
+The file ends in `.db.spec.ts` so Nx/Vitest routes it into the sequential database
+project. Missing database or Redis URLs fail the acceptance suite rather than
+silently skipping its cases. CI provisions both services. No migrations change.
 
-All five two-server cases assert a maximum of 5 seconds for removal, applied
-updates and received content. Every sampled applied update also precedes its
-session's permission expiry. The fault cases check that no guest update is
-applied after that server removes the guest. After allowing in-flight frames to
-drain, received-update counts remain unchanged through database recovery and
-fresh cross-server owner traffic. Extra writes after removal do not reach the
-owner, and newly generated owner content does not reach removed guests. Both
-fault cases report zero revived original sessions. Disabling renewal with the
-existing handshake-only control makes both new cases fail their removal wait.
+## Limits
 
-Steady-state query cost in this unbatched fixture is one read per active
-session per second, plus authentication and invalidation/recovery reads. Three
-sessions issued three reads during each measured invalidation window. This is
-not a production capacity claim. Production work must group reads by note,
-bound outstanding queries, coalesce invalidation bursts and measure pool load.
+Five seconds is a measured convergence objective on healthy processes/local
+network, not instantaneous revocation, distributed acknowledgment or a universal
+SLA. The two collaboration servers in these tests run in one Node process; the
+killed emitter is a separate real child process. SQL errors, locks and a paused
+owned TCP proxy are tested; a killed production database, arbitrary distributed
+packet delay and a stalled Node event loop are not claimed. Stock Hocuspocus can
+send Awareness in its connection constructor before `connected`; these hooks do
+not claim to suppress every Awareness frame in that narrow window. Already
+received content and previously accepted edits cannot be recovered or undone.
+The [browser acceptance suite](SHARING_E2E.md) adds two independent API
+processes, real HTTP-authenticated browser sessions, and controlled Redis/SQL
+faults. Its measurements supplement these server-level tests; both suites and
+independent review remain release gates.
 
-## Running the proof
+## Primary sources and decisions
 
-Use a disposable PostgreSQL database. The fixture creates and drops uniquely
-named `sharing_probe_*` tables; it does not require application migrations.
-Supply a separate disposable Redis instance to run the six Redis cases. Its
-URL must be plain `redis://HOST:PORT` without credentials or a database path.
+Consulted 2026-09-07; installed-version source resolves documentation ambiguity.
+
+- [Hocuspocus 4.1.0 ClientConnection](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/server/src/ClientConnection.ts): queued frames and construction precede `connected`.
+- [Hocuspocus 4.1.0 MessageReceiver](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/server/src/MessageReceiver.ts) and [hook reference](https://tiptap.dev/docs/hocuspocus/server/hooks): installed `beforeSync` is awaited, so the configured guard must run last.
+- [Provider 4.1.0](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/provider/src/HocuspocusProvider.ts) and [CLOSE decoder](https://github.com/ueberdosis/hocuspocus/blob/v4.1.0/packages/provider/src/MessageReceiver.ts): preserve provider/document state and explicitly reauthenticate document closes.
+- [PostgreSQL 16 statement snapshots](https://www.postgresql.org/docs/16/transaction-iso.html), [timeout scope](https://www.postgresql.org/docs/16/runtime-config-client.html), and [postgres.js 3.4.7](https://github.com/porsager/postgres/blob/v3.4.7/README.md): one primary statement, dedicated bounded pool, separate caller deadline/admission lifetime.
+- [Redis Pub/Sub semantics](https://redis.io/docs/latest/develop/pubsub/) and [ioredis 5.10.0](https://github.com/redis/ioredis/blob/v5.10.0/README.md): delivery is lossy; subscription recovery requests primary rereads.
+- [Nest event handling](https://docs.nestjs.com/techniques/events): handler events reach the local listener across REST/MCP/application entrypoints.
+- [TanStack Query invalidation](https://tanstack.com/query/latest/docs/framework/react/reference/classes/QueryClient) and [disabled queries](https://tanstack.com/query/latest/docs/framework/react/guides/disabling-queries): reconcile active detail/share-route queries; cached metadata is not authorization.
+- [Node 24 monotonic time](https://nodejs.org/docs/latest-v24.x/api/perf_hooks.html#performancenow) and [Y.Doc event order](https://docs.yjs.dev/api/y.doc): measure process-local read starts and actual applied/received updates.
+
+## Protocol probe
+
+`apps/api/src/modules/collaboration/__tests__/access-protocol.probe.db.spec.ts`
+probes the lease/close mechanism in isolation. It needs a disposable PostgreSQL
+database: its fixture creates and drops uniquely named `sharing_probe_*` tables
+and requires no application migrations. Six of its cases additionally need a
+separate disposable Redis instance whose URL is plain `redis://HOST:PORT`,
+without credentials or a database path.
 
 ```sh
 DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:PORT/TEST_DATABASE \
@@ -201,27 +206,18 @@ pnpm nx test api \
   --run --skip-nx-cache
 ```
 
-The existing CI database project runs sequentially and supplies PostgreSQL,
-but has no Redis service. Without `SHARING_PROBE_REDIS_URL`, those six cases
-are explicitly skipped. A CI pass alone therefore does not establish the
-complete distributed proof; running all 16 cases is required before relying
-on it. The local verification supplied both services. Providers, Y.Docs,
-servers, subscriptions, timers and database clients are closed during teardown;
-disposable external services remain owned by the runner.
+The sequential CI database project supplies PostgreSQL but no Redis service, so
+those six cases skip explicitly when `SHARING_PROBE_REDIS_URL` is absent. A CI
+pass alone therefore does not establish the complete distributed proof; all 16
+cases must run before relying on it. Providers, Y.Docs, servers, subscriptions,
+timers and database clients close during teardown; disposable external services
+stay owned by the runner.
 
-## Limits and integration gate
-
-The proof supports the lease/close mechanism under the tested conditions. It
-does not enable revocation in production. The next integration must repeat
-these tests with the real resolver and actual Hocuspocus extension ordering,
-then exercise People/rotation through API and browser workflows.
-
-The fault cases exercise unavailable authority through a real SQL error and
-read timeout, not a killed database container or a production TCP partition.
-The lost-notification case unsubscribes the invalidation consumers while
-keeping Redis document propagation alive, allowing receipt cutoff to be
-measured. Subscription reconnection is also real. A full Redis outage,
-process pauses, saturated database pools, distributed clock behavior and
-buffered packets delayed by a remote network remain outside this local proof.
-No expiry timer can establish a strict outgoing deadline while its event loop
-is blocked. Do not promise instantaneous revocation or a universal 5-second SLA.
+The probe reaches unavailable authority through a real SQL error and read
+timeout, not a killed database container or a production TCP partition. Its
+lost-notification case unsubscribes the invalidation consumers while keeping
+Redis document propagation alive, so receipt cutoff stays measurable, and
+subscription reconnection is real. A full Redis outage, process pauses,
+saturated database pools, distributed clock behavior and buffered packets
+delayed by a remote network stay outside this probe. No expiry timer can hold a
+strict outgoing deadline while its event loop is blocked.

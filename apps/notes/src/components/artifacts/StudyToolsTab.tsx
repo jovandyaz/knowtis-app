@@ -9,7 +9,13 @@ import { ArtifactGeneratorButton } from './ArtifactGenerator';
 import { ArtifactList } from './ArtifactList';
 import { ArtifactViewer } from './ArtifactViewer';
 
-export function StudyToolsTab({ noteId }: { noteId: string | null }) {
+type StudyToolsTabProps =
+  | { noteId: string | null; artifacts?: never; readOnly?: never }
+  | { noteId: string; artifacts: Artifact[]; readOnly: true };
+
+export function StudyToolsTab(props: StudyToolsTabProps) {
+  const { noteId } = props;
+  const readOnly = 'artifacts' in props;
   const { t } = useTranslation('notes');
   const [selected, setSelected] = useState<Artifact | null>(null);
   const [prevNoteId, setPrevNoteId] = useState(noteId);
@@ -22,7 +28,7 @@ export function StudyToolsTab({ noteId }: { noteId: string | null }) {
   if (!noteId) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        {t('ai.copilot.estudio.noNote')}
+        {t('ai.copilot.study.noNote')}
       </div>
     );
   }
@@ -35,7 +41,7 @@ export function StudyToolsTab({ noteId }: { noteId: string | null }) {
             type="button"
             onClick={() => setSelected(null)}
             className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={t('ai.artifacts.sidebar.back')}
+            aria-label={t('ai.artifacts.back')}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -43,7 +49,7 @@ export function StudyToolsTab({ noteId }: { noteId: string | null }) {
             {selected.title}
           </h2>
         </div>
-        <ArtifactViewer artifact={selected} />
+        <ArtifactViewer artifact={selected} readOnly={readOnly} />
       </div>
     );
   }
@@ -54,9 +60,17 @@ export function StudyToolsTab({ noteId }: { noteId: string | null }) {
         <h2 className="text-sm font-semibold text-foreground">
           {t('ai.artifacts.studyTools')}
         </h2>
-        <ArtifactGeneratorButton />
+        {!readOnly && <ArtifactGeneratorButton />}
       </div>
-      <ArtifactList noteId={noteId} onSelect={setSelected} />
+      {'artifacts' in props ? (
+        <ArtifactList
+          artifacts={props.artifacts}
+          readOnly={true}
+          onSelect={setSelected}
+        />
+      ) : (
+        <ArtifactList noteId={noteId} readOnly={false} onSelect={setSelected} />
+      )}
     </div>
   );
 }
