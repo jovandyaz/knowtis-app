@@ -71,6 +71,7 @@ function RecordingStateDemo() {
         open={open}
         onOpenChange={setOpen}
         title="Recording"
+        closeLabel="Close recording"
         preventClose
       >
         <div className="flex flex-col items-center gap-6 py-4">

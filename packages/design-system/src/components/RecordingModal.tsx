@@ -10,6 +10,8 @@ export interface RecordingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** Accessible name for the close control; the design system ships no copy. */
+  closeLabel: string;
   children: ReactNode;
   preventClose?: boolean;
   className?: string;
@@ -19,6 +21,7 @@ export function RecordingModal({
   open,
   onOpenChange,
   title,
+  closeLabel,
   children,
   preventClose = false,
   className,
@@ -82,7 +85,7 @@ export function RecordingModal({
                 TOUCH_TARGET_CLASS,
                 'absolute right-4 top-4 max-md:top-5 inline-flex cursor-pointer items-center justify-center rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2'
               )}
-              aria-label="Close"
+              aria-label={closeLabel}
             >
               <X className="h-4 w-4" />
             </DialogPrimitive.Close>

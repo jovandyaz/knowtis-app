@@ -63,6 +63,7 @@ export function VoiceNoteRecorder({
   preAcquiredStream,
 }: VoiceNoteRecorderProps) {
   const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
   const [internalOpen, setInternalOpen] = useState(false);
 
   const isInsertMode = mode === 'insert';
@@ -266,6 +267,7 @@ export function VoiceNoteRecorder({
       <RecordingModal
         open={modalOpen}
         title={t('ai.voice.title')}
+        closeLabel={tCommon('labels.closeDialog')}
         onOpenChange={(open) => {
           if (!open) {
             handleClose();

@@ -10,6 +10,7 @@ function renderModal(preventClose = false) {
       open
       onOpenChange={vi.fn()}
       title="Recording"
+      closeLabel="Close recording"
       preventClose={preventClose}
     >
       <p>Listening</p>
@@ -29,7 +30,7 @@ describe('RecordingModal', () => {
   it('floors the close control at a full touch target on coarse pointers', () => {
     renderModal();
 
-    expect(screen.getByRole('button', { name: 'Close' })).toHaveClass(
+    expect(screen.getByRole('button', { name: 'Close recording' })).toHaveClass(
       ...TOUCH_TARGET_CLASS.split(' ')
     );
   });
@@ -38,7 +39,7 @@ describe('RecordingModal', () => {
     renderModal(true);
 
     expect(
-      screen.queryByRole('button', { name: 'Close' })
+      screen.queryByRole('button', { name: 'Close recording' })
     ).not.toBeInTheDocument();
   });
 });
