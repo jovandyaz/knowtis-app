@@ -131,7 +131,11 @@ export {
 export { DataTable, type DataTableProps } from './components/DataTable';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
 export { Kbd, type KbdProps } from './components/Kbd';
-export { Progress, type ProgressProps } from './components/Progress';
+export {
+  Progress,
+  type ProgressProps,
+  type ProgressTone,
+} from './components/Progress';
 export { FlipCard, type FlipCardProps } from './components/FlipCard';
 export {
   ProgressRing,

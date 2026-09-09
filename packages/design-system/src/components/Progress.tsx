@@ -23,6 +23,10 @@ const indicatorVariants = cva(
   }
 );
 
+export type ProgressTone = NonNullable<
+  VariantProps<typeof indicatorVariants>['tone']
+>;
+
 /**
  * Exactly one of `label` (an invisible accessible name) or `labelledBy` (the id
  * of a visible caption). A bar rendered next to its own caption must use
