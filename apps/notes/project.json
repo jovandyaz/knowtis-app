@@ -16,6 +16,17 @@
     "build": {
       "executor": "@nx/vite:build",
       "outputs": ["{options.outputPath}"],
+      "inputs": [
+        "production",
+        "^production",
+        { "env": "VITE_API_URL" },
+        { "env": "VITE_WS_URL" },
+        { "env": "VITE_COLLABORATION_MODE" },
+        { "env": "VITE_MCP_URL" },
+        { "env": "VITE_PUBLIC_POSTHOG_KEY" },
+        { "env": "VITE_PUBLIC_POSTHOG_HOST" },
+        { "env": "VERCEL_GIT_COMMIT_SHA" }
+      ],
       "defaultConfiguration": "production",
       "options": {
         "outputPath": "dist/apps/notes"
