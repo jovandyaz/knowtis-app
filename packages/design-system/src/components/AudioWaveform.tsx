@@ -2,12 +2,30 @@ import { forwardRef, useCallback, useEffect, useRef } from 'react';
 
 import { cn } from '../utils/cn';
 
+const BAR_COLOR_PROPERTY = '--muted-foreground';
+const BAR_ACTIVE_COLOR_PROPERTY = '--primary';
+
+// Canvas ignores an empty fillStyle, so an unresolved token must never reach it.
+const FALLBACK_BAR_COLOR = 'oklch(0.560 0.008 290)';
+const FALLBACK_BAR_ACTIVE_COLOR = 'oklch(0.47 0.22 295)';
+
+const readThemeColor = (
+  styles: CSSStyleDeclaration,
+  property: string,
+  fallback: string
+) => {
+  const value = styles.getPropertyValue(property).trim();
+  return value.length > 0 ? value : fallback;
+};
+
 export interface AudioWaveformProps {
   analyserNode?: AnalyserNode | null;
   mockData?: Uint8Array;
   barCount?: number;
   barGap?: number;
+  /** Overrides the `--muted-foreground` token the quiet bars are painted with. */
   barColor?: string;
+  /** Overrides the `--primary` token the loud bars are painted with. */
   barActiveColor?: string;
   className?: string;
 }
@@ -19,8 +37,8 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
       mockData,
       barCount = 40,
       barGap = 2,
-      barColor = 'rgba(148, 163, 184, 0.3)',
-      barActiveColor = 'rgba(59, 130, 246, 0.8)',
+      barColor,
+      barActiveColor,
       className,
     },
     ref
@@ -48,6 +66,18 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
         const { width, height } = ctx.canvas;
         const dpr = window.devicePixelRatio || 1;
 
+        const themeStyles = getComputedStyle(ctx.canvas);
+        const inactiveFill =
+          barColor ??
+          readThemeColor(themeStyles, BAR_COLOR_PROPERTY, FALLBACK_BAR_COLOR);
+        const activeFill =
+          barActiveColor ??
+          readThemeColor(
+            themeStyles,
+            BAR_ACTIVE_COLOR_PROPERTY,
+            FALLBACK_BAR_ACTIVE_COLOR
+          );
+
         ctx.clearRect(0, 0, width, height);
 
         const logicalWidth = width / dpr;
@@ -69,7 +99,7 @@ const AudioWaveform = forwardRef<HTMLCanvasElement, AudioWaveformProps>(
           const x = i * (barWidth + barGap);
           const y = (logicalHeight - barHeight) / 2;
 
-          ctx.fillStyle = value > 0.1 ? barActiveColor : barColor;
+          ctx.fillStyle = value > 0.1 ? activeFill : inactiveFill;
 
           ctx.beginPath();
           ctx.roundRect(
