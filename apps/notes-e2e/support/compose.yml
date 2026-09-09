@@ -1,0 +1,25 @@
+services:
+  database:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: knowtis_e2e
+      POSTGRES_PASSWORD: local_e2e_only
+      POSTGRES_DB: knowtis_sharing_e2e
+    ports:
+      - '127.0.0.1:5573:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U knowtis_e2e -d knowtis_sharing_e2e']
+      interval: 1s
+      timeout: 2s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '127.0.0.1:6573:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 1s
+      timeout: 2s
+      retries: 30

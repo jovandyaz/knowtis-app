@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useState } from 'react';
 
 import { Eye, EyeOff } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Button } from './Button';
 import { Input } from './Input';
 

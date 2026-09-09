@@ -25,3 +25,12 @@ export { useSuggestOrganization } from './organization.hooks';
 export { useTags, useUpdateTag, useDeleteTag } from './tags.hooks';
 
 export { useUploadImage } from './image-upload.hooks';
+
+export {
+  usePeople,
+  useUpsertPerson,
+  useRevokePerson,
+  useSharingAuthority,
+} from './people.hooks';
+export { PersonInputSchema, type PersonInput } from './people.schemas';
+export { useRotateShareLink } from './rotation.hooks';

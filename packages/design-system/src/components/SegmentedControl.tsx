@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 
-import { cn } from '../utils';
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
+import { cn } from '../utils/cn';
 
 export interface SegmentedControlOption<T extends string> {
   value: T;
@@ -53,7 +54,8 @@ export function SegmentedControl<T extends string>({
           value={option.value}
           title={option.title}
           className={cn(
-            'rounded-md px-2.5 py-1 text-xs font-medium text-(--muted-foreground) transition-colors',
+            TOUCH_TARGET_CLASS,
+            'cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium text-(--muted-foreground) transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
             'hover:text-(--foreground) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)',
             'disabled:pointer-events-none disabled:opacity-50',
             'data-[state=on]:bg-(--background) data-[state=on]:text-(--foreground) data-[state=on]:shadow-sm'

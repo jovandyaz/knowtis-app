@@ -61,6 +61,7 @@ const guardStub = {
 const aiConfigStub = {
   getReasoningEffort: vi.fn().mockResolvedValue('medium'),
   getOpenRouterProviderOrder: vi.fn().mockResolvedValue([]),
+  getOpenRouterIgnoredProviders: vi.fn().mockResolvedValue([]),
 } as unknown as AIConfigService;
 
 const turnEffortStub = {

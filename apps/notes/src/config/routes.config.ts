@@ -7,6 +7,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   NOTES: '/notes',
   NOTE: '/notes/$noteId',
+  STUDY: '/study',
   SHARED_NOTE: '/s/$token',
   LOGIN: '/login',
   REGISTER: '/register',
@@ -14,6 +15,8 @@ export const ROUTES = {
   RESET_PASSWORD: '/reset-password',
   VERIFY_EMAIL: '/verify-email',
 } as const satisfies Record<string, AppRoute>;
+
+export const STUDY_SESSION_PATTERN = /^\/study$/;
 
 const SHARE_TOKEN_PARAM = '$token';
 

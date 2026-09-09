@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 
+import { useLocation } from '@tanstack/react-router';
+
+import { STUDY_SESSION_PATTERN } from '@/config/routes.config';
+
 export const MOBILE_FAB_SLOT_ID = 'mobile-fab-slot';
+
+export const MOBILE_FAB_RAIL_CLEARANCE_CLASS =
+  'pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0';
 
 interface MobileFabRailProps {
   children?: ReactNode;
@@ -12,6 +19,12 @@ interface MobileFabRailProps {
  * so no two floating buttons can claim the same coordinates.
  */
 export function MobileFabRail({ children }: MobileFabRailProps) {
+  const { pathname } = useLocation();
+
+  if (STUDY_SESSION_PATTERN.test(pathname)) {
+    return null;
+  }
+
   return (
     <div className="fixed end-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-4 md:hidden">
       {children}

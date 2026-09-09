@@ -68,6 +68,8 @@ function capture(): {
   };
 }
 
+const USAGE = { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 };
+
 describe('useAgentStore', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -155,12 +157,71 @@ describe('useAgentStore', () => {
       sources: [{ id: 'n1', title: 'Productividad' }],
       knownNotes: [],
       webSources: [],
+      stopReason: 'completed',
     });
     const { status, messages } = useAgentStore.getState();
     expect(status).toBe('done');
     expect(messages.at(-1)?.sources).toEqual([
       { id: 'n1', title: 'Productividad' },
     ]);
+  });
+
+  it('keeps the stop reason on an empty done response', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+
+    get().onDone({
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'token_budget',
+    });
+
+    expect(useAgentStore.getState().messages.at(-1)?.stopReason).toBe(
+      'token_budget'
+    );
+    expect(useAgentStore.getState().status).toBe('done');
+  });
+
+  it('does not let a stale done callback mark the active response', () => {
+    const first = capture();
+    useAgentStore.getState().sendMessage('first');
+    const staleDone = first.get().onDone;
+
+    capture();
+    useAgentStore.getState().sendMessage('second');
+    staleDone({
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'token_budget',
+    });
+
+    expect(
+      useAgentStore.getState().messages.at(-1)?.stopReason
+    ).toBeUndefined();
+    expect(useAgentStore.getState().status).toBe('streaming');
+  });
+
+  it('starts a new response without the previous stop reason', () => {
+    const first = capture();
+    useAgentStore.getState().sendMessage('first');
+    first.get().onDone({
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'length',
+    });
+
+    capture();
+    useAgentStore.getState().sendMessage('second');
+
+    expect(
+      useAgentStore.getState().messages.at(-1)?.stopReason
+    ).toBeUndefined();
   });
 
   it('captures successful copilot completion without response metadata', () => {
@@ -172,6 +233,7 @@ describe('useAgentStore', () => {
       sources: [{ id: 'private-id', title: 'Private title' }],
       knownNotes: [],
       webSources: [{ title: 'Private source', url: 'https://example.com' }],
+      stopReason: 'completed',
     });
 
     expect(captureProductEvent).toHaveBeenCalledWith('ai response completed', {
@@ -190,6 +252,7 @@ describe('useAgentStore', () => {
       sources: [],
       knownNotes: [],
       webSources: [],
+      stopReason: 'completed',
     });
 
     expect(captureProductEvent).not.toHaveBeenCalled();
@@ -204,6 +267,7 @@ describe('useAgentStore', () => {
       sources: [],
       knownNotes: [],
       webSources: [],
+      stopReason: 'completed',
     });
 
     expect(captureProductEvent).not.toHaveBeenCalled();
@@ -218,6 +282,7 @@ describe('useAgentStore', () => {
       sources: [],
       knownNotes: [],
       webSources: [],
+      stopReason: 'completed',
     });
 
     expect(captureProductEvent).not.toHaveBeenCalled();
@@ -235,6 +300,7 @@ describe('useAgentStore', () => {
       sources: [],
       knownNotes: [],
       webSources: [],
+      stopReason: 'completed',
     });
 
     expect(captureProductEvent).not.toHaveBeenCalled();
@@ -266,6 +332,7 @@ describe('useAgentStore', () => {
       sources: [],
       knownNotes: [],
       webSources: [],
+      stopReason: 'completed',
     });
     useAgentStore.getState().sendMessage('  second  ');
     expect(vi.mocked(agentClient.sendMessage).mock.calls[0][0]).toBe('first');
@@ -336,7 +403,13 @@ describe('agent.store server-authoritative wire', () => {
       proposalId: 'p1',
       result: { noteId: 'n1', title: 'My Note', kind: 'create' },
     });
-    get().onDone({ usage: USAGE, sources: [], knownNotes: [], webSources: [] });
+    get().onDone({
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    });
 
     const committedMsg = useAgentStore
       .getState()
@@ -421,6 +494,7 @@ describe('agent.store server-authoritative wire', () => {
       ],
       knownNotes: [],
       webSources: [{ title: 'MDN', url: 'https://developer.mozilla.org' }],
+      stopReason: 'completed',
     });
 
     expect(useAgentStore.getState().messages.at(-1)?.sources).toEqual([
@@ -570,12 +644,12 @@ describe('agent.store proposals', () => {
 });
 
 describe('agent.store thinking tail', () => {
-  const USAGE = { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 };
   const DONE: AgentDonePayload = {
     usage: USAGE,
     sources: [],
     knownNotes: [],
     webSources: [],
+    stopReason: 'completed',
   };
   const PROPOSAL: AgentProposalPayload = {
     id: 'p1',

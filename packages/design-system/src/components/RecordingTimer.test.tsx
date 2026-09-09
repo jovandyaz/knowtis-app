@@ -1,0 +1,69 @@
+import { createRef } from 'react';
+
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+
+import { RecordingTimer } from './RecordingTimer';
+
+function indicatorOf(bar: HTMLElement): HTMLElement {
+  return bar.firstElementChild as HTMLElement;
+}
+
+describe('RecordingTimer', () => {
+  it('names the progress bar with the clock it already displays', () => {
+    render(<RecordingTimer elapsed={45} maxDuration={300} isRecording />);
+    const bar = screen.getByRole('progressbar');
+    expect(bar).toHaveAccessibleName('00:45/ 05:00');
+    expect(bar).not.toHaveAttribute('aria-label');
+    expect(bar).toHaveAttribute('aria-valuenow', '45');
+    expect(bar).toHaveAttribute('aria-valuemax', '300');
+  });
+
+  it('keeps the primary tone until the caller flags the limit', () => {
+    render(<RecordingTimer elapsed={275} maxDuration={300} isRecording />);
+    expect(indicatorOf(screen.getByRole('progressbar')).className).toContain(
+      'bg-(--primary)'
+    );
+  });
+
+  it('turns the bar and the clock destructive when the caller says so', () => {
+    render(
+      <RecordingTimer elapsed={275} maxDuration={300} isRecording isNearLimit />
+    );
+    expect(indicatorOf(screen.getByRole('progressbar')).className).toContain(
+      'bg-(--destructive)'
+    );
+    expect(screen.getByText('04:35').className).toContain(
+      'text-(--destructive)'
+    );
+  });
+
+  it('hides the recording dot when the recorder is paused', () => {
+    const { container } = render(
+      <RecordingTimer elapsed={120} maxDuration={300} isRecording={false} />
+    );
+    expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('only animates the recording dot when motion is safe', () => {
+    const { container } = render(
+      <RecordingTimer elapsed={120} maxDuration={300} isRecording />
+    );
+    expect(
+      container.querySelector('[aria-hidden="true"]')?.className
+    ).toContain('motion-safe:animate-pulse');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    const { container } = render(
+      <RecordingTimer
+        ref={ref}
+        elapsed={30}
+        maxDuration={300}
+        isRecording={false}
+      />
+    );
+    expect(ref.current).toBeInstanceOf(HTMLDivElement);
+    expect(ref.current).toBe(container.firstElementChild);
+  });
+});

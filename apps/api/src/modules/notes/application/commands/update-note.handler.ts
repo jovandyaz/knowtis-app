@@ -38,12 +38,14 @@ import {
   NoteUpdatedEvent,
   type NoteUpdatedEventUpdates,
 } from '../../domain/events/note-updated.event';
+import { SHARE_TOKEN_BYTES } from '../../domain/share-token';
 import {
   evolveYjsState,
   htmlToYjsState,
 } from '../../infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../infrastructure/trivial-html';
 import { decodeYjsStateUpdate } from '../../infrastructure/yjs-state-update';
+import { emitAccessChanged } from '../emit-access-changed';
 
 export interface UpdateNoteInput {
   readonly noteId: string;
@@ -170,6 +172,13 @@ export class UpdateNoteHandler {
 
     if (persisted.isErr()) {
       return err(persisted.error);
+    }
+
+    if (
+      input.generalAccess !== undefined ||
+      input.generalAccessPermission !== undefined
+    ) {
+      emitAccessChanged(this.eventEmitter, input.noteId);
     }
 
     if (isOwner && linkExposureWidened) {
@@ -395,18 +404,13 @@ export class UpdateNoteHandler {
     return ok(undefined);
   }
 
-  /**
-   * A note's share token is minted once and never rotated: going restricted
-   * only flips `generalAccess`, which every share-token reader gates on, so the
-   * link resumes working — same URL — when sharing is re-enabled.
-   */
   private resolveShareToken(
     input: UpdateNoteInput,
     note: NoteEntity
   ): { shareToken?: string } {
     return input.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
       !note.shareToken
-      ? { shareToken: randomBytes(16).toString('hex') }
+      ? { shareToken: randomBytes(SHARE_TOKEN_BYTES).toString('hex') }
       : {};
   }
 

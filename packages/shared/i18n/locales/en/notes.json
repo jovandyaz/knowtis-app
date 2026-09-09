@@ -225,7 +225,9 @@
       "fitToScreen": "Fit to screen",
       "canvasLabel": "Diagram canvas, use the arrow keys to move",
       "closeViewer": "Close the diagram"
-    }
+    },
+    "refreshError": "Couldn't refresh this note. Your open note is still here.",
+    "retryRefresh": "Refresh note"
   },
   "create": {
     "newNote": "New Note",
@@ -251,7 +253,7 @@
     "description": "Manage who can access this note",
     "generalAccess": "General access",
     "restricted": "Private",
-    "restrictedDesc": "Only you can see this note",
+    "restrictedDesc": "Only people with direct access can open this note",
     "linkCreatedToast": "Link created. It's ready to share",
     "linkPausedToast": "Link paused. It stops working until you share again",
     "linkResumedToast": "Link active again. It's the same one as before",
@@ -265,16 +267,59 @@
     "editorHelp": "People with this link can view and edit the note.",
     "canShare": "You can share this note",
     "limitedAccess": "Limited access",
-    "editorsCanShareDesc": "The owner has allowed editors to share this note.",
+    "editorsCanShareDesc": "You can manage people. Only the owner can change the link.",
     "onlyOwnerCanShare": "Only the owner can change sharing settings for this note.",
     "editorsCanShare": "Editors can share",
-    "editorsCanShareToggleDesc": "Allow editors to invite others and manage access",
+    "editorsCanShareToggleDesc": "Allow direct editors to add people and manage their access",
     "editorsCanShareTitle": "Editors can share this note",
     "onlyYouCanShare": "Only you can share this note",
-    "restrictedDescPaused": "Only you can see it. The link is paused, not deleted",
+    "restrictedDescPaused": "Only people with direct access can open it. The link is paused",
     "permissionViewerToast": "The link is now read-only",
     "permissionEditorToast": "People with the link can now edit",
-    "accessChangeError": "Couldn't change access. Try again"
+    "accessChangeError": "Couldn't change access. Try again",
+    "people": {
+      "title": "People with access",
+      "add": "Add person",
+      "email": "Email",
+      "emailHelp": "Enter the exact email of an existing account. No invitation email is sent.",
+      "invalidEmail": "Enter a valid email address.",
+      "newPermission": "New person permission",
+      "adding": "Adding…",
+      "saved": "Permissions saved.",
+      "notAddable": "This person cannot be added. Check the email and try another person.",
+      "saveError": "Couldn't save access. Try again.",
+      "removeError": "Couldn't remove access. Try again.",
+      "verifyRequired": "Verify your email to expand access. You can still reduce or remove access.",
+      "you": "You",
+      "permissionFor": "Permission for {{email}}",
+      "removePerson": "Remove {{name}}",
+      "remove": "Remove",
+      "removeTitle": "Remove access for {{name}}?",
+      "removeDescription": "This removes direct access.",
+      "removeLinkCaveat": "They may still access the note through an open link.",
+      "removeAccess": "Remove access",
+      "removing": "Removing…",
+      "denied": "You cannot manage people for this note.",
+      "deniedHelp": "Ask the note owner to give you access, then reopen this dialog.",
+      "refreshError": "Couldn't refresh access",
+      "retryHelp": "Refresh access before making another change.",
+      "retry": "Try again",
+      "refreshing": "Refreshing access…",
+      "loading": "Loading access…",
+      "invalidResponse": "Access information could not be validated."
+    },
+    "rotation": {
+      "action": "Change share link",
+      "title": "Change this share link?",
+      "description": "The current link will stop working. People added directly keep their permissions. Open sessions will update in a few seconds; previously downloaded content cannot be recalled.",
+      "cancel": "Cancel",
+      "confirm": "Change link",
+      "close": "Close",
+      "saved": "Share link changed. Open sessions will update in a few seconds.",
+      "uncertain": "We could not confirm whether the link changed. Check the current link before trying again.",
+      "conflict": "The link changed elsewhere or has not been created. Check the current link before trying again.",
+      "failed": "The link could not be changed. Check your access before trying again."
+    }
   },
   "shared": {
     "loadingSharedNote": "Loading shared note...",
@@ -376,6 +421,12 @@
       "sources": "Sources",
       "webSources": "Web sources",
       "stop": "Stop",
+      "stopReason": {
+        "max_steps": "The step limit was reached.",
+        "token_budget": "The turn budget was reached.",
+        "length": "The response was cut short.",
+        "content_filter": "The provider filtered this response."
+      },
       "empty": {
         "title": "Ask your notes",
         "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",
@@ -397,7 +448,7 @@
           }
         }
       },
-      "estudio": {
+      "study": {
         "noNote": "Open a note to use study tools."
       },
       "proposal": {
@@ -477,11 +528,8 @@
         "summary": "Summary",
         "mindMap": "Mind Map"
       },
+      "back": "Back",
       "sidebar": {
-        "back": "Back",
-        "openPanel": "Open study panel",
-        "closePanel": "Close study panel",
-        "studyTools": "Study Tools",
         "resizePanel": "Resize panel"
       },
       "list": {
@@ -510,16 +558,19 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
+        "reviewedOf_one": "{{reviewed}} of {{count}} card reviewed",
+        "reviewedOf_other": "{{reviewed}} of {{count}} cards reviewed",
         "showAnswer": "Show Answer",
         "showFront": "Show front of card",
         "showBack": "Show back of card",
-        "clickToFlip": "Click to flip",
         "prev": "Previous",
         "next": "Next",
         "reviewError": "Failed to submit review",
-        "complete": "Session complete!",
-        "reviewedAll": "You reviewed all {{total}} cards",
+        "progressError": "We couldn't load this deck's progress",
         "restart": "Start over",
+        "shuffle": "Shuffle",
+        "intervalDays_one": "{{count}} day",
+        "intervalDays_other": "{{count}} days",
         "difficulty": {
           "easy": "Easy",
           "medium": "Medium",
@@ -533,9 +584,10 @@
         },
         "wrong": "Incorrect",
         "correct": "Correct",
-        "skip": "Skip",
         "advancedMode": "Advanced mode",
+        "rateCard": "Rate this card",
         "summary": {
+          "description": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped, in {{duration}}.",
           "excellentMastery": "Excellent mastery!",
           "greatJob": "Great job, keep it up!",
           "goodProgress": "Good progress!",
@@ -554,6 +606,9 @@
       },
       "quiz": {
         "questionOf": "{{current}} / {{total}}",
+        "answeredOf": "{{answered}} of {{total}} answered",
+        "outcomeCorrect": "Correct — {{letter}}. {{answer}}",
+        "outcomeIncorrect": "Incorrect — the answer is {{letter}}. {{answer}}",
         "explanation": "Explanation",
         "next": "Next",
         "finish": "Finish",
@@ -660,6 +715,33 @@
       "note": "Note",
       "study": "Study"
     },
-    "tabsLabel": "Note workspace"
+    "tabsLabel": "Note workspace",
+    "tabsLoading": "Loading the note workspace"
+  },
+  "study": {
+    "loading": "Loading your review",
+    "newBadge": "New",
+    "caughtUp": {
+      "title": "All caught up",
+      "nextReview": "Your next card arrives {{when}}",
+      "nothingScheduled": "You have no cards scheduled yet",
+      "cta": "Go to my notes"
+    },
+    "summary": {
+      "streak_zero": "Your streak starts today",
+      "streak_one": "Streak of {{count}} day",
+      "streak_other": "Streak of {{count}} days",
+      "backHome": "Back to home",
+      "restartFailed": "We couldn't load new cards. Try again."
+    },
+    "todayCard": {
+      "title": "Today's review",
+      "dueLabel": "due today",
+      "newLabel_one": "new",
+      "newLabel_other": "new",
+      "streakLabel_one": "day streak",
+      "streakLabel_other": "day streak",
+      "cta": "Start"
+    }
   }
 }

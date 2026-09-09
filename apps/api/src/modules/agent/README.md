@@ -25,6 +25,11 @@ Per-turn reasoning **effort** is plumbed here but resolved elsewhere: a turn car
 
 Connection-time checks mirror the `/ai` gateway: JWT from `auth.token` or the `Authorization: Bearer` header, `ai_enabled` flag, and a timer at the token's expiry that emits `agent:error` `AUTH_REQUIRED` and disconnects. Turns (fresh or resumed) run inside a `ConcurrencySlotTracker` slot capped at `AI_MAX_CONCURRENT_STREAMS` per user; an acquire past the cap emits `agent:error` `AI_RATE_LIMIT_EXCEEDED`.
 
+The Notes client attaches `agent:done.stopReason` only to the active assistant
+response. It renders a polite status notice for non-`completed` reasons even
+when the response has no text; persisted history hydration is outside this live
+stream protocol.
+
 Also exposes a REST `MemoryController` ([memory.controller.ts](memory.controller.ts)) for listing/deleting long-term memories — `JwtAuthGuard` only, no `ai_enabled` gate.
 
 ## Layer map

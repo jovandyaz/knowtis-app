@@ -20,6 +20,9 @@ export const notesQueryKeys = {
   supertagCatalog: () => [...notesQueryKeys.all, 'supertag-catalog'] as const,
   details: () => [...notesQueryKeys.all, 'detail'] as const,
   detail: (id: string) => [...notesQueryKeys.details(), id] as const,
+  people: (id: string) => [...notesQueryKeys.all, 'people', id] as const,
+  sharingAuthority: (id: string) =>
+    [...notesQueryKeys.all, 'sharing-authority', id] as const,
   sharedNote: (token: string) =>
     [...notesQueryKeys.all, 'shared', token] as const,
 } as const;

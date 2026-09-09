@@ -7,6 +7,8 @@ export const NOTE_UPDATE_THROTTLE = {
 } as const;
 
 export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
+  [NoteErrorCodes.SHARE_LINK_CONFLICT]: HttpStatus.CONFLICT,
+  [NoteErrorCodes.PERSON_NOT_ADDABLE]: HttpStatus.UNPROCESSABLE_ENTITY,
   [NoteErrorCodes.INVALID_TITLE]: HttpStatus.BAD_REQUEST,
   [NoteErrorCodes.INVALID_CONTENT]: HttpStatus.BAD_REQUEST,
   [NoteErrorCodes.INVALID_PERMISSION]: HttpStatus.BAD_REQUEST,

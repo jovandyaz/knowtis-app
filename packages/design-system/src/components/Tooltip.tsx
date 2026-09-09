@@ -6,7 +6,7 @@ import {
 
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 const TooltipProvider = TooltipPrimitive.Provider;
 const Tooltip = TooltipPrimitive.Root;
@@ -22,7 +22,7 @@ const TooltipContent = forwardRef<
       sideOffset={sideOffset}
       className={cn(
         'z-50 overflow-hidden rounded-md bg-(--foreground) px-2.5 py-1.5 text-xs text-(--background)',
-        'animate-in fade-in-0 zoom-in-95',
+        'animate-overlay-pop motion-reduce:animate-none',
         className
       )}
       {...props}

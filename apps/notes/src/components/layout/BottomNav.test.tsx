@@ -1,15 +1,42 @@
 import type { ComponentProps, ReactNode } from 'react';
 
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { StudyStats } from '@knowtis/shared-types';
+
 import { BottomNav } from './BottomNav';
 
+const { studyStatsSpy } = vi.hoisted(() => ({ studyStatsSpy: vi.fn() }));
+
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
+const currentPathname = vi.fn<() => string>();
+let flagsQuery: { isPending: boolean; isError: boolean };
+let isStudyEnabled: boolean;
+let statsQuery: {
+  data: StudyStats | undefined;
+  isPending: boolean;
+  isError: boolean;
+};
+
+const PRIMARY_TAB_COUNT = 4;
+
+function makeStats(overrides: Partial<StudyStats> = {}): StudyStats {
+  return {
+    dueCount: 0,
+    newCount: 0,
+    reviewedToday: 0,
+    currentStreak: 0,
+    totalCardsStudied: 0,
+    nextDueAt: null,
+    ...overrides,
+  };
+}
 
 vi.mock('@tanstack/react-router', () => ({
-  useLocation: () => ({ pathname: '/notes' }),
+  useLocation: () => ({ pathname: currentPathname() }),
   useNavigate: () => vi.fn(),
   useRouter: () => ({ navigate: vi.fn() }),
 }));
@@ -19,6 +46,16 @@ vi.mock('@jovandyaz/auth-react', () => ({
 vi.mock('@/stores/settings.store', () => ({
   useSettingsStore: (selector: (state: { open: () => void }) => unknown) =>
     selector({ open: vi.fn() }),
+}));
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlags: () => flagsQuery,
+  useFeatureFlag: () => isStudyEnabled,
+}));
+vi.mock('@knowtis/data-access-artifacts', () => ({
+  useStudyStats: (timeZone: string, options?: { enabled?: boolean }) => {
+    studyStatsSpy(timeZone, options);
+    return statsQuery;
+  },
 }));
 vi.mock('@/components/organization/BucketNav', () => ({
   BucketNav: ({ onNavigate }: { onNavigate?: () => void }) => (
@@ -34,7 +71,10 @@ vi.mock('@/components/organization/SupertagNav', () => ({
   SupertagNav: () => <div data-testid="supertag-nav" />,
 }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts ? `${key} ${JSON.stringify(opts)}` : key,
+  }),
 }));
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -54,7 +94,20 @@ vi.mock('motion/react', () => ({
 
 describe('BottomNav', () => {
   beforeEach(() => {
+    studyStatsSpy.mockClear();
     authUser.mockReturnValue({ isAnonymous: false });
+    currentPathname.mockReturnValue('/notes');
+    flagsQuery = { isPending: false, isError: false };
+    isStudyEnabled = false;
+    statsQuery = { data: makeStats(), isPending: false, isError: false };
+  });
+
+  it('renders nothing on the study session route', () => {
+    currentPathname.mockReturnValue('/study');
+
+    const { container } = render(<BottomNav />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('offers explore next to the primary destinations', () => {
@@ -138,5 +191,119 @@ describe('BottomNav', () => {
     expect(
       screen.getByRole('button', { name: 'nav.signIn' })
     ).toBeInTheDocument();
+  });
+
+  it('offers the review tab when the flag is on', () => {
+    isStudyEnabled = true;
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.study/ })
+    ).toBeInTheDocument();
+  });
+
+  it('hides the review tab when the flag is off', () => {
+    isStudyEnabled = false;
+
+    render(<BottomNav />);
+
+    expect(
+      screen.queryByRole('button', { name: /labels\.study/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders no review tab, not even a placeholder, while the flag is still loading', () => {
+    flagsQuery = { isPending: true, isError: false };
+    isStudyEnabled = false;
+
+    render(<BottomNav />);
+
+    expect(
+      screen.queryByRole('button', { name: /labels\.study/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('navigation').firstElementChild?.children
+    ).toHaveLength(PRIMARY_TAB_COUNT);
+  });
+
+  it('asks for no study stats while the flag is off', () => {
+    isStudyEnabled = false;
+
+    render(<BottomNav />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for no study stats until the flags have settled', () => {
+    flagsQuery = { isPending: true, isError: false };
+    isStudyEnabled = true;
+
+    render(<BottomNav />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: false,
+    });
+  });
+
+  it('asks for the study stats once the flag is on', () => {
+    isStudyEnabled = true;
+
+    render(<BottomNav />);
+
+    expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
+      enabled: true,
+    });
+  });
+
+  it('shows the due count on the review tab', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 5 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.study/ })
+    ).toHaveTextContent('5');
+  });
+
+  it('names the due count instead of leaving a bare number', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 5 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.studyDueCount/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText('labels.studyDueCount {"count":5}')).toHaveClass(
+      'sr-only'
+    );
+    expect(screen.getByText('5')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders no badge on the review tab when nothing is due', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 0 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.study/ }).textContent
+    ).toBe('labels.study');
   });
 });

@@ -1,11 +1,15 @@
 import { ROUTES } from '@/config';
+import { queryClient } from '@/lib/query-client';
 import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { notesQueryKeys } from '@knowtis/data-access-notes';
 
 import { CollaborativeEditor } from './CollaborativeEditor';
 
 const performSessionLogout = vi.fn();
 const navigate = vi.fn();
+let accessChanged: (() => void) | undefined;
 let expireSession: (() => void) | undefined;
 
 vi.mock('@/auth', () => ({
@@ -20,8 +24,12 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
   getCollaborationServerUrl: () => 'ws://test/collaboration',
   isWebSocketEnabled: () => true,
-  useHocuspocusCollaboration: (opts: { onSessionExpired?: () => void }) => {
+  useHocuspocusCollaboration: (opts: {
+    onSessionExpired?: () => void;
+    onAccessChanged?: () => void;
+  }) => {
     expireSession = opts.onSessionExpired;
+    accessChanged = opts.onAccessChanged;
     return {
       status: 'connected',
       isConnected: true,
@@ -51,6 +59,47 @@ describe('CollaborativeEditor session expiry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     expireSession = undefined;
+  });
+
+  it('invalidates both detail and share-route permission snapshots after access changes', () => {
+    queryClient.setQueryData([...notesQueryKeys.all, 'people', 'n1'], []);
+    queryClient.setQueryData(
+      [...notesQueryKeys.all, 'sharing-authority', 'n1'],
+      { permission: 'editor' }
+    );
+    queryClient.setQueryData(notesQueryKeys.detail('n1'), {
+      permission: 'editor',
+    });
+    queryClient.setQueryData(notesQueryKeys.sharedNote('tok'), {
+      permission: 'editor',
+    });
+    render(
+      <CollaborativeEditor
+        noteId="n1"
+        shareToken="tok"
+        initialContent=""
+        onUpdate={vi.fn()}
+      />
+    );
+    accessChanged?.();
+    expect(
+      queryClient.getQueryState(notesQueryKeys.detail('n1'))?.isInvalidated
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState(notesQueryKeys.sharedNote('tok'))?.isInvalidated
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState([...notesQueryKeys.all, 'people', 'n1'])
+        ?.isInvalidated
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState([
+        ...notesQueryKeys.all,
+        'sharing-authority',
+        'n1',
+      ])?.isInvalidated
+    ).toBe(true);
+    queryClient.clear();
   });
 
   it('sends a signed-in user to the login page', () => {

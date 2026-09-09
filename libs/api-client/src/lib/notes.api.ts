@@ -4,7 +4,7 @@ import {
   type Note,
   type NoteAccessLevel,
   type NoteBucketCounts,
-  type NotePermission,
+  type NotePerson,
   type NotesListFilters,
   type NotesPage,
   type NoteSupertagCounts,
@@ -35,19 +35,6 @@ export type SupertagCatalog = Record<Supertag, readonly SupertagField[]>;
 export interface NoteDetail extends NoteWithOwner {
   accessLevel: NoteAccessLevel;
   tags: string[];
-}
-
-/**
- * Collaborator with user info
- */
-export interface NoteCollaborator {
-  permission: NotePermission;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    avatarUrl?: string;
-  };
 }
 
 export const notesApi = {
@@ -114,21 +101,21 @@ export const notesApi = {
     return httpClient.post<Note>(`/notes/${id}/restore`, {});
   },
 
-  async share(noteId: string, input: ShareNoteInput): Promise<NotePermission> {
-    return httpClient.post<NotePermission>(`/notes/${noteId}/share`, input);
+  async rotateShareLink(noteId: string): Promise<Note> {
+    return httpClient.post<Note>(`/notes/${noteId}/share-link/rotate`);
   },
 
-  async getCollaborators(noteId: string): Promise<NoteCollaborator[]> {
-    return httpClient.get<NoteCollaborator[]>(`/notes/${noteId}/collaborators`);
-  },
-
-  async revokeAccess(
+  async upsertPerson(
     noteId: string,
-    userId: string
-  ): Promise<{ success: boolean }> {
-    return httpClient.delete<{ success: boolean }>(
-      `/notes/${noteId}/share/${userId}`
-    );
+    input: ShareNoteInput
+  ): Promise<NotePerson> {
+    return httpClient.post<NotePerson>(`/notes/${noteId}/share`, input);
+  },
+  async getPeople(noteId: string): Promise<NotePerson[]> {
+    return httpClient.get<NotePerson[]>(`/notes/${noteId}/collaborators`);
+  },
+  async revokePerson(noteId: string, userId: string): Promise<void> {
+    await httpClient.delete<unknown>(`/notes/${noteId}/share/${userId}`);
   },
 
   /**

@@ -7,34 +7,42 @@ import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
-import {
-  workspacePanelId,
-  workspaceTabId,
-} from '@/components/editor/workspace-tab-ids';
-import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
 import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
+import { WorkspaceTabBarSkeleton } from '@/components/workspace/WorkspaceTabBarSkeleton';
+import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
+import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
+import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
-import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
-import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { useArtifacts } from '@knowtis/data-access-artifacts';
+import {
+  useFeatureFlag,
+  useFeatureFlags,
+} from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
+import {
+  Button,
+  ErrorState,
+  Input,
+  LoadingState,
+} from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import {
   ACCESS,
@@ -186,14 +194,15 @@ function NoteEditor({
   });
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
-  const workspaceTab = useWorkspaceStore((s) => s.activeTab);
-  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
+  const { data: noteArtifacts } = useArtifacts(aiEnabled ? noteId : undefined);
+  const { isPending: flagsPending } = useFeatureFlags();
+
+  useWorkspaceTabReset(noteId);
 
   useEffect(() => {
     setActiveNoteId(noteId);
-    setWorkspaceTab('note');
     return () => setActiveNoteId(null);
-  }, [noteId, setActiveNoteId, setWorkspaceTab]);
+  }, [noteId, setActiveNoteId]);
 
   const voiceNoteOpen = useVoiceNoteEditorStore((s) => s.isOpen);
   const voiceNoteClose = useVoiceNoteEditorStore((s) => s.close);
@@ -325,19 +334,10 @@ function NoteEditor({
         onShareDialogOpenChange={setIsShareDialogOpen}
       />
 
-      {aiEnabled && <WorkspaceTabBar noteId={noteId} />}
+      {flagsPending ? <WorkspaceTabBarSkeleton /> : null}
+      {aiEnabled && <WorkspaceTabBar studyCount={noteArtifacts?.length ?? 0} />}
 
-      <div
-        {...(aiEnabled
-          ? {
-              id: workspacePanelId('note'),
-              role: 'tabpanel' as const,
-              'aria-labelledby': workspaceTabId('note'),
-              tabIndex: 0,
-            }
-          : {})}
-        className={cn(aiEnabled && workspaceTab !== 'note' && 'hidden')}
-      >
+      <WorkspaceTabPanel tab="note" tabbed={aiEnabled}>
         <div className="mb-4">
           <Input
             ref={titleInputRef}
@@ -393,18 +393,12 @@ function NoteEditor({
             preAcquiredStream={preAcquiredStream}
           />
         )}
-      </div>
+      </WorkspaceTabPanel>
 
       {aiEnabled && (
-        <div
-          id={workspacePanelId('estudio')}
-          role="tabpanel"
-          aria-labelledby={workspaceTabId('estudio')}
-          tabIndex={0}
-          className={cn(workspaceTab !== 'estudio' && 'hidden')}
-        >
+        <WorkspaceTabPanel tab="study" tabbed>
           <StudyToolsTab noteId={noteId} />
-        </div>
+        </WorkspaceTabPanel>
       )}
     </div>
   );
@@ -415,13 +409,23 @@ export function NoteEditorPage() {
   const navigate = useNavigate();
   const { t } = useTranslation('notes');
 
-  const { data: note, isLoading, isError, error } = useNote(noteId);
+  const {
+    data: note,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useNote(noteId);
+  const terminalError =
+    ApiClientError.isApiClientError(error) &&
+    TERMINAL_ACCESS_STATUSES.has(error.status);
 
   if (isLoading) {
     return <LoadingState message={t('editor.loadingNote')} />;
   }
 
-  if (isError) {
+  if (isError && (!note || terminalError)) {
     return (
       <ErrorState
         title={t('editor.failedToLoad')}
@@ -437,20 +441,42 @@ export function NoteEditorPage() {
   }
 
   return (
-    <NoteEditor
-      key={note.id}
-      noteId={note.id}
-      initialTitle={note.title}
-      initialContent={note.content}
-      accessLevel={note.accessLevel}
-      bucket={note.bucket}
-      tags={note.tags}
-      supertag={note.supertag}
-      supertagFields={note.supertagFields}
-      generalAccess={note.generalAccess}
-      generalAccessPermission={note.generalAccessPermission}
-      shareToken={note.shareToken}
-      editorsCanShare={note.editorsCanShare}
-    />
+    <>
+      {isError ? (
+        <div
+          role="alert"
+          className="mx-auto mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 rounded-lg border border-(--border) p-4"
+        >
+          <p className="text-sm text-(--muted-foreground)">
+            {t('editor.refreshError')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isFetching}
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            {t('editor.retryRefresh')}
+          </Button>
+        </div>
+      ) : null}
+      <NoteEditor
+        key={note.id}
+        noteId={note.id}
+        initialTitle={note.title}
+        initialContent={note.content}
+        accessLevel={note.accessLevel}
+        bucket={note.bucket}
+        tags={note.tags}
+        supertag={note.supertag}
+        supertagFields={note.supertagFields}
+        generalAccess={note.generalAccess}
+        generalAccessPermission={note.generalAccessPermission}
+        shareToken={note.shareToken}
+        editorsCanShare={note.editorsCanShare}
+      />
+    </>
   );
 }

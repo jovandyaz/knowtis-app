@@ -1,4 +1,5 @@
 import {
+  createRef,
   StrictMode,
   useEffect,
   useLayoutEffect,
@@ -17,10 +18,12 @@ import {
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from './Dialog';
@@ -344,6 +347,14 @@ describe('Dialog accessibility', () => {
 
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(last);
+  });
+
+  it('floors the close control at a full touch target on coarse pointers', () => {
+    renderDialog();
+
+    expect(screen.getByRole('button', { name: 'Close dialog' })).toHaveClass(
+      ...TOUCH_TARGET_CLASS.split(' ')
+    );
   });
 
   it('composes consumer keydown with forward and backward focus looping', async () => {
@@ -1002,5 +1013,19 @@ describe('Dialog body scroll lock', () => {
     rerender(<StackedDialogs bottomOpen={false} topOpen={false} />);
 
     expect(document.body.style.overflow).toBe('');
+  });
+});
+
+describe('Dialog layout slots', () => {
+  it('forwards a ref to the rendered header element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<DialogHeader ref={ref} data-testid="dialog-header" />);
+    expect(ref.current).toBe(screen.getByTestId('dialog-header'));
+  });
+
+  it('forwards a ref to the rendered footer element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<DialogFooter ref={ref} data-testid="dialog-footer" />);
+    expect(ref.current).toBe(screen.getByTestId('dialog-footer'));
   });
 });

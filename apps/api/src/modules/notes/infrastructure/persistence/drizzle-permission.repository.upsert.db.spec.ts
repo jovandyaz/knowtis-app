@@ -89,6 +89,7 @@ describe.runIf(DB_AVAILABLE)('DrizzlePermissionRepository upsert', () => {
       noteId: NOTE,
       userId: targetId,
       permission: PERMISSION.VIEWER,
+      allowAmplification: true,
     });
 
     expect(result.isOk()).toBe(true);
@@ -102,11 +103,13 @@ describe.runIf(DB_AVAILABLE)('DrizzlePermissionRepository upsert', () => {
       noteId: NOTE,
       userId: targetId,
       permission: PERMISSION.VIEWER,
+      allowAmplification: true,
     });
     const result = await repo.upsertPermission({
       noteId: NOTE,
       userId: targetId,
       permission: PERMISSION.EDITOR,
+      allowAmplification: true,
     });
 
     expect(result.isOk()).toBe(true);
@@ -122,6 +125,7 @@ describe.runIf(DB_AVAILABLE)('DrizzlePermissionRepository upsert', () => {
           noteId: NOTE,
           userId: targetId,
           permission: PERMISSION.EDITOR,
+          allowAmplification: true,
         })
       )
     );

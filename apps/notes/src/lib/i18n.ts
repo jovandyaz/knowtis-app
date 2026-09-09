@@ -19,6 +19,13 @@ import {
   SUPPORTED_LOCALES,
 } from '@knowtis/shared-util';
 
+function syncDocumentLanguage(): void {
+  document.documentElement.lang = i18n.resolvedLanguage ?? DEFAULT_LOCALE;
+}
+
+i18n.on('initialized', syncDocumentLanguage);
+i18n.on('languageChanged', syncDocumentLanguage);
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)

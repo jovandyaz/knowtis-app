@@ -22,7 +22,9 @@ export function LoadingButton({
     <Button disabled={loading || disabled} {...props}>
       {loading ? (
         <>
-          {loadingIcon ?? <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {loadingIcon ?? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+          )}
           {loadingText}
         </>
       ) : (
