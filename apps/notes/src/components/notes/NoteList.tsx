@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 
-import { BucketDot } from '@/components/organization/BucketDot';
 import { BucketEmptyState } from '@/components/organization/BucketEmptyState';
 import { SupertagEmptyState } from '@/components/organization/SupertagEmptyState';
 import { TagEmptyState } from '@/components/organization/TagEmptyState';
@@ -22,6 +21,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { useNotes } from '@knowtis/data-access-notes';
 import {
+  BucketDot,
   Button,
   ErrorState,
   Input,

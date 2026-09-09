@@ -57,11 +57,10 @@ function parseUsdPerMillion(value: string): number | null {
 }
 
 /**
- * Parses an OpenRouter provider allowlist CSV into an ordered, de-duplicated
- * slug list. An empty (or whitespace-only) value means "no preference" and
- * yields `[]`. Returns `null` when the value is not a valid allowlist.
+ * Parses a CSV of unique OpenRouter provider slugs. Empty means no constraint;
+ * malformed values return `null`.
  */
-function parseProviderOrder(value: string): readonly string[] | null {
+function parseProviderList(value: string): readonly string[] | null {
   const trimmed = value.trim();
   if (trimmed === '') {
     return [];
@@ -92,6 +91,10 @@ const CONFIG_KEYS = {
   },
   ai_openrouter_providers: {
     default: AI_SETTING_DEFAULTS.ai_openrouter_providers,
+    kind: 'list',
+  },
+  ai_openrouter_ignored_providers: {
+    default: AI_SETTING_DEFAULTS.ai_openrouter_ignored_providers,
     kind: 'list',
   },
   ai_free_tier_ceiling: {
@@ -245,19 +248,28 @@ export class AIConfigService {
     return FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
   }
 
-  /** Resolves the OpenRouter upstream allowlist; `[]` means no preference (OpenRouter default routing). */
+  /** Resolves preferred OpenRouter upstreams; other upstreams remain eligible. */
   async getOpenRouterProviderOrder(): Promise<readonly string[]> {
-    const value = await this.getConfigValue('ai_openrouter_providers');
-    const parsed = parseProviderOrder(value);
+    return this.getOpenRouterProviderList('ai_openrouter_providers');
+  }
+
+  /** Resolves excluded OpenRouter upstreams; an empty list excludes nothing. */
+  async getOpenRouterIgnoredProviders(): Promise<readonly string[]> {
+    return this.getOpenRouterProviderList('ai_openrouter_ignored_providers');
+  }
+
+  private async getOpenRouterProviderList(
+    key: 'ai_openrouter_providers' | 'ai_openrouter_ignored_providers'
+  ): Promise<readonly string[]> {
+    const value = await this.getConfigValue(key);
+    const parsed = parseProviderList(value);
     if (parsed !== null) {
       return parsed;
     }
     this.logger.warn(
-      `Ignoring invalid OpenRouter provider list '${value}', using the code default`
+      `Ignoring invalid OpenRouter list '${key}', using the code default`
     );
-    return (
-      parseProviderOrder(AI_SETTING_DEFAULTS.ai_openrouter_providers) ?? []
-    );
+    return parseProviderList(AI_SETTING_DEFAULTS[key]) ?? [];
   }
 
   async setConfig(
@@ -343,7 +355,7 @@ export class AIConfigService {
         }
         return;
       case 'list':
-        if (parseProviderOrder(value) === null) {
+        if (parseProviderList(value) === null) {
           throw new InvalidAIConfigError(
             `'${value}' is not a valid provider allowlist: 1–${MAX_OPENROUTER_PROVIDERS} comma-separated lowercase slugs, no duplicates (empty allowed for default routing)`
           );
@@ -457,7 +469,7 @@ export class AIConfigService {
           ? row.value
           : def.default;
       case 'list':
-        return parseProviderOrder(row.value) !== null ? row.value : def.default;
+        return parseProviderList(row.value) !== null ? row.value : def.default;
       case 'money':
         return parseUsdPerMillion(row.value) !== null
           ? row.value.trim()
@@ -496,26 +508,39 @@ export class AIConfigService {
   private async getConfigValue(dbKey: AIConfigKey): Promise<string> {
     const cacheKey = `${CACHE_PREFIX}${dbKey}`;
 
-    const cached = await this.cache.get<string>(cacheKey);
-    if (cached) {
-      return cached;
+    try {
+      const cached = await this.cache.get<string>(cacheKey);
+      if (cached !== undefined && cached !== null) {
+        return cached;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to read AI config '${dbKey}' from cache, reading DB`,
+        error
+      );
     }
 
+    let dbValue: string | null;
     try {
-      const dbValue = await this.repository.get(dbKey);
-      // An empty string is a valid stored value (the "no preference" allowlist);
-      // only a null row means "unset" and falls through to the code default.
-      if (dbValue !== null) {
-        await this.cache.set(cacheKey, dbValue, CACHE_TTL_MS);
-        return dbValue;
-      }
+      dbValue = await this.repository.get(dbKey);
     } catch (error) {
       this.logger.warn(
         `Failed to read AI config '${dbKey}' from DB, using the code default`,
         error
       );
+      return CONFIG_KEYS[dbKey].default;
     }
-
-    return CONFIG_KEYS[dbKey].default;
+    if (dbValue === null) {
+      return CONFIG_KEYS[dbKey].default;
+    }
+    try {
+      await this.cache.set(cacheKey, dbValue, CACHE_TTL_MS);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to cache AI config '${dbKey}', using the DB value`,
+        error
+      );
+    }
+    return dbValue;
   }
 }

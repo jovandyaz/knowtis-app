@@ -2,7 +2,7 @@ import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 import { FileText } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Button } from './Button';
 
 export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {

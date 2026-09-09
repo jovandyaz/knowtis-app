@@ -27,6 +27,7 @@ interface GenerateParams<T> {
   readonly schema: ZodType<T>;
   readonly options: StructuredOutputOptions;
   readonly providerOrder: readonly string[];
+  readonly ignoredProviders: readonly string[];
   readonly timeoutSignal: AbortSignal | undefined;
 }
 
@@ -46,8 +47,10 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
     schema: ZodType<T>,
     options: StructuredOutputOptions
   ): Promise<StructuredOutputResult<T>> {
-    const providerOrder =
-      await this.openrouterRouting.getOpenRouterProviderOrder();
+    const [providerOrder, ignoredProviders] = await Promise.all([
+      this.openrouterRouting.getOpenRouterProviderOrder(),
+      this.openrouterRouting.getOpenRouterIgnoredProviders(),
+    ]);
 
     return executeWithChain(
       (model) => {
@@ -59,6 +62,7 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
           schema,
           options: { ...options, model },
           providerOrder,
+          ignoredProviders,
           timeoutSignal,
         });
       },
@@ -78,6 +82,7 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
     schema,
     options,
     providerOrder,
+    ignoredProviders,
     timeoutSignal,
   }: GenerateParams<T>): Promise<StructuredOutputResult<T>> {
     const result = await withTraceIdentity(options.telemetry, () =>
@@ -91,6 +96,7 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
         ...turnProviderOptions({
           model: options.model,
           providerOrder,
+          ignoredProviders,
           requireParameters: true,
         }),
         ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),

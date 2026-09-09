@@ -1,4 +1,8 @@
-import type { AIAction } from '@knowtis/shared-types';
+import type {
+  AIAction,
+  StudyDurationBucket,
+  StudySessionSource,
+} from '@knowtis/shared-types';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { posthog } from '../posthog';
@@ -27,6 +31,17 @@ export interface BrowserProductEventMap {
     assistant_type: 'selection' | 'agent' | 'ghost_text';
     action?: AIAction;
   };
+  'study session started': {
+    source: StudySessionSource;
+    due_count: number;
+    new_count: number;
+  };
+  'study session completed': {
+    source: StudySessionSource;
+    reviewed_count: number;
+    correct_count: number;
+    duration_bucket: StudyDurationBucket;
+  };
 }
 
 export type BrowserProductEventName = keyof BrowserProductEventMap;
@@ -36,6 +51,13 @@ const PRODUCT_EVENT_PROPERTY_KEYS = {
   'note activated': ['source'],
   'shared note viewed': ['source', 'permission', 'actor_type'],
   'ai response completed': ['source', 'assistant_type', 'action'],
+  'study session started': ['source', 'due_count', 'new_count'],
+  'study session completed': [
+    'source',
+    'reviewed_count',
+    'correct_count',
+    'duration_bucket',
+  ],
 } as const satisfies {
   [E in BrowserProductEventName]: readonly (keyof BrowserProductEventMap[E])[];
 };

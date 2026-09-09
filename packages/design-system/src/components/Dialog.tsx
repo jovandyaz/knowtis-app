@@ -1,5 +1,6 @@
 import {
   createContext,
+  forwardRef,
   useCallback,
   useContext,
   useEffect,
@@ -15,7 +16,8 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { DIALOG_SIDE, type DialogSide } from '../constants/dialog';
-import { cn } from '../utils';
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
+import { cn } from '../utils/cn';
 
 const DIALOG_CONTENT_SELECTOR = '[data-knowtis-dialog-content]';
 const FOCUSABLE_SELECTOR =
@@ -329,7 +331,7 @@ function DialogContent({
         ref={handleOverlayRef}
         className={cn(
           'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
-          'animate-in fade-in-0'
+          'animate-overlay-fade motion-reduce:animate-none'
         )}
       />
       <DialogPrimitive.Content
@@ -340,20 +342,20 @@ function DialogContent({
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
         className={cn(
-          'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg duration-200',
+          'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg motion-reduce:animate-none',
           side === DIALOG_SIDE.CENTER && [
             'md:left-1/2 md:top-1/2 md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-6',
-            'md:animate-in md:fade-in-0 md:zoom-in-95 md:slide-in-from-left-1/2 md:slide-in-from-top-[48%]',
+            'md:animate-overlay-pop md:motion-reduce:animate-none',
             'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
-            'max-md:animate-in max-md:fade-in-0 max-md:slide-in-from-bottom-full',
+            'max-md:animate-sheet-rise max-md:motion-reduce:animate-none',
           ],
           side === DIALOG_SIDE.FULL && [
             'inset-0 h-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-none border-0 p-0',
-            'animate-in fade-in-0',
+            'animate-overlay-fade',
           ],
           side === DIALOG_SIDE.RIGHT && [
             'inset-y-0 right-0 h-full max-w-md content-start overflow-y-auto border-l p-6',
-            'animate-in fade-in-0 slide-in-from-right',
+            'animate-panel-slide-in',
           ],
           className
         )}
@@ -366,7 +368,10 @@ function DialogContent({
         {children}
         <DialogPrimitive.Close
           type="button"
-          className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
+          className={cn(
+            TOUCH_TARGET_CLASS,
+            'absolute right-4 top-4 max-md:top-5 inline-flex cursor-pointer items-center justify-center rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2'
+          )}
           aria-label={closeLabel}
         >
           <X className="h-4 w-4" />
@@ -376,29 +381,33 @@ function DialogContent({
   );
 }
 
-function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
+const DialogHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
+      ref={ref}
       className={cn(
         'flex flex-col space-y-1.5 text-center sm:text-left',
         className
       )}
       {...props}
     />
-  );
-}
+  )
+);
+DialogHeader.displayName = 'DialogHeader';
 
-function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
+const DialogFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
+      ref={ref}
       className={cn(
         'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
         className
       )}
       {...props}
     />
-  );
-}
+  )
+);
+DialogFooter.displayName = 'DialogFooter';
 
 type DialogTitleProps = Omit<
   ComponentPropsWithoutRef<typeof DialogPrimitive.Title>,

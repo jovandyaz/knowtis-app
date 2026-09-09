@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { StudyTodayCard } from '@/components/study/StudyTodayCard';
 import { ROUTES } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { preloadEditorChunk } from '@/lib/preload-editor';
@@ -85,6 +86,8 @@ export function WelcomePage() {
           </Link>
         )}
       </motion.div>
+
+      <StudyTodayCard />
 
       {/* Recent notes */}
       <motion.div

@@ -7,9 +7,8 @@ import {
 
 import { ChevronRight } from 'lucide-react';
 
-import { cn } from '../utils';
-
-/* ─── Content (outer container) ─── */
+import { TOUCH_TARGET_HEIGHT_CLASS } from '../constants/touch-target';
+import { cn } from '../utils/cn';
 
 interface CommandMenuContentProps extends HTMLAttributes<HTMLDivElement> {
   /** Fixed width preset */
@@ -29,7 +28,7 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
       className={cn(
         'z-50 overflow-hidden rounded-xl border border-primary/20',
         'bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/20 backdrop-blur-xl',
-        'animate-in fade-in zoom-in-95 duration-150',
+        'animate-overlay-pop motion-reduce:animate-none',
         WIDTH_MAP[width],
         className
       )}
@@ -40,8 +39,6 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
   )
 );
 CommandMenuContent.displayName = 'CommandMenuContent';
-
-/* ─── Group ─── */
 
 interface CommandMenuGroupProps extends HTMLAttributes<HTMLDivElement> {
   label?: string;
@@ -54,7 +51,7 @@ const CommandMenuGroup = forwardRef<HTMLDivElement, CommandMenuGroupProps>(
     <div ref={ref} className={className} {...props}>
       {showSeparator && <div className="mx-2 my-2 border-t border-border/20" />}
       {label && (
-        <div className="px-2 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground/70">
+        <div className="px-2 py-1.5 text-2xs font-medium tracking-wide text-muted-foreground/70">
           {label}
         </div>
       )}
@@ -63,8 +60,6 @@ const CommandMenuGroup = forwardRef<HTMLDivElement, CommandMenuGroupProps>(
   )
 );
 CommandMenuGroup.displayName = 'CommandMenuGroup';
-
-/* ─── Item ─── */
 
 interface CommandMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
@@ -83,8 +78,9 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       ref={ref}
       type="button"
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
-        'transition-all duration-150',
+        TOUCH_TARGET_HEIGHT_CLASS,
+        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
+        'transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
         selected
           ? 'bg-foreground/7 text-foreground'
           : 'text-foreground hover:bg-foreground/5',
@@ -100,7 +96,7 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium">{label}</span>
         {description && (
-          <span className="block truncate text-[11px] text-muted-foreground/70">
+          <span className="block truncate text-2xs text-muted-foreground/70">
             {description}
           </span>
         )}
@@ -113,8 +109,6 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
 );
 CommandMenuItem.displayName = 'CommandMenuItem';
 
-/* ─── Back button ─── */
-
 interface CommandMenuBackProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
 }
@@ -125,8 +119,9 @@ const CommandMenuBack = forwardRef<HTMLButtonElement, CommandMenuBackProps>(
       ref={ref}
       type="button"
       className={cn(
-        'mb-1 flex items-center gap-1 px-2 py-1 text-xs',
-        'text-muted-foreground transition-colors hover:text-foreground',
+        TOUCH_TARGET_HEIGHT_CLASS,
+        'mb-1 flex cursor-pointer items-center gap-1 px-2 py-1 text-xs',
+        'text-muted-foreground transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:text-foreground',
         className
       )}
       {...props}

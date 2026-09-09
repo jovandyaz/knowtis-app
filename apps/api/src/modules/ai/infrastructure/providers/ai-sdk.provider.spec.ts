@@ -10,9 +10,9 @@ vi.mock('ai', () => ({
     usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
   }),
   streamText: vi.fn().mockImplementation(() => ({
-    textStream: (async function* () {
-      yield 'Hello';
-      yield ' world';
+    stream: (async function* () {
+      yield { type: 'text-delta', id: 't1', text: 'Hello' };
+      yield { type: 'text-delta', id: 't1', text: ' world' };
     })(),
     usage: Promise.resolve({
       inputTokens: 80,
@@ -35,10 +35,14 @@ vi.mock('@ai-sdk/openai', () => ({
 
 function createProvider(
   config = createMockConfig({ OPENAI_API_KEY: 'test-openai-key' }),
-  fallbackChain?: string
+  fallbackChain?: string,
+  routing = {
+    getOpenRouterProviderOrder: vi.fn().mockResolvedValue([]),
+    getOpenRouterIgnoredProviders: vi.fn().mockResolvedValue([]),
+  }
 ) {
   const { registry, chain } = createTestChain(config, fallbackChain);
-  return new AISDKProvider(registry, chain);
+  return new AISDKProvider(registry, chain, routing);
 }
 
 async function drain(stream: { textStream: AsyncIterable<string> }) {
@@ -52,6 +56,81 @@ describe('AISDKProvider', () => {
 
   beforeEach(() => {
     provider = createProvider();
+  });
+
+  it.each(['generate', 'stream'] as const)(
+    'keeps ignored upstreams in every %s fallback attempt and loads config once',
+    async (mode) => {
+      const { generateText, streamText } = vi.mocked(await import('ai'));
+      generateText.mockClear();
+      streamText.mockClear();
+      const routing = {
+        getOpenRouterProviderOrder: vi
+          .fn()
+          .mockResolvedValue(['parasail', 'fireworks']),
+        getOpenRouterIgnoredProviders: vi.fn().mockResolvedValue(['parasail']),
+      };
+      const routed = createProvider(
+        createMockConfig({ OPENROUTER_API_KEY: 'test-key' }),
+        'openrouter:minimax/minimax-m2.5',
+        routing
+      );
+      if (mode === 'generate') {
+        generateText.mockRejectedValueOnce(new Error('primary unavailable'));
+        await routed.generateCompletion('test', {
+          model: 'openrouter:deepseek/deepseek-v3.2',
+        });
+      } else {
+        streamText.mockImplementationOnce(() => {
+          throw new Error('primary unavailable');
+        });
+        const result = routed.streamCompletion('test', {
+          model: 'openrouter:deepseek/deepseek-v3.2',
+        });
+        expect(result).toHaveProperty('textStream');
+        await drain(result);
+        await expect(result.usage).resolves.toHaveProperty(
+          'model',
+          'openrouter:minimax/minimax-m2.5'
+        );
+      }
+      const calls =
+        mode === 'generate' ? generateText.mock.calls : streamText.mock.calls;
+      expect(calls).toHaveLength(2);
+      for (const [options] of calls) {
+        expect(options).toMatchObject({
+          providerOptions: {
+            openrouter: {
+              provider: {
+                order: ['fireworks'],
+                allow_fallbacks: true,
+                ignore: ['parasail'],
+              },
+            },
+          },
+        });
+      }
+      expect(routing.getOpenRouterIgnoredProviders).toHaveBeenCalledTimes(1);
+      expect(routing.getOpenRouterProviderOrder).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('settles stream usage when loading routing fails before a stream opens', async () => {
+    const routing = {
+      getOpenRouterProviderOrder: vi.fn().mockResolvedValue([]),
+      getOpenRouterIgnoredProviders: vi
+        .fn()
+        .mockRejectedValue(new Error('routing unavailable')),
+    };
+    const routed = createProvider(createMockConfig(), undefined, routing);
+    const result = routed.streamCompletion('test', {
+      model: 'anthropic:claude-sonnet-5',
+    });
+    await expect(drain(result)).rejects.toThrow('routing unavailable');
+    await expect(result.usage).resolves.toMatchObject({
+      promptTokens: 0,
+      completionTokens: 0,
+    });
   });
 
   it('should generate a completion via registry', async () => {
@@ -284,14 +363,14 @@ describe('AISDKProvider', () => {
     streamText
       .mockReturnValueOnce({
         // eslint-disable-next-line require-yield -- mock: stream that fails before first chunk
-        textStream: (async function* () {
+        stream: (async function* () {
           throw new Error('Primary model unavailable');
         })(),
         usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
       } as unknown as ReturnType<typeof streamText>)
       .mockReturnValueOnce({
-        textStream: (async function* () {
-          yield 'recovered';
+        stream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'recovered' };
         })(),
         usage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
       } as unknown as ReturnType<typeof streamText>);
@@ -316,9 +395,9 @@ describe('AISDKProvider', () => {
     streamText.mockClear();
 
     streamText.mockReturnValueOnce({
-      textStream: (async function* () {
-        yield 'partial';
-        throw new Error('mid-stream failure');
+      stream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'partial' };
+        yield { type: 'error', error: new Error('mid-stream failure') };
       })(),
       usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
     } as unknown as ReturnType<typeof streamText>);
@@ -346,8 +425,8 @@ describe('AISDKProvider', () => {
     streamText.mockClear();
 
     streamText.mockReturnValueOnce({
-      textStream: (async function* () {
-        yield 'first';
+      stream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'first' };
         await new Promise(() => undefined);
       })(),
       usage: Promise.resolve({ inputTokens: 12, outputTokens: 3 }),
@@ -374,8 +453,8 @@ describe('AISDKProvider', () => {
       streamText.mockClear();
 
       streamText.mockReturnValueOnce({
-        textStream: (async function* () {
-          yield 'first';
+        stream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'first' };
           await new Promise(() => undefined);
         })(),
         usage: new Promise(() => undefined),
@@ -423,7 +502,7 @@ describe('AISDKProvider', () => {
     const controller = new AbortController();
     streamText.mockReturnValueOnce({
       // eslint-disable-next-line require-yield -- mock: stream aborted before first chunk
-      textStream: (async function* () {
+      stream: (async function* () {
         controller.abort();
         throw new Error('aborted');
       })(),

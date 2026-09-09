@@ -61,6 +61,7 @@ vi.mock('@/stores/ai.store', () => ({
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: () => autoOrganizeEnabled(),
+  useFeatureFlags: () => ({ isPending: false }),
 }));
 
 const editorRenders: { count: number } = { count: 0 };

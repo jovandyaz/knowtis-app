@@ -27,13 +27,6 @@
         "command": "vitest run --passWithNoTests"
       }
     },
-    "tokens:build": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/design-system",
-        "command": "node style-dictionary.config.mjs"
-      }
-    },
     "storybook": {
       "executor": "nx:run-commands",
       "options": {

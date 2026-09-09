@@ -33,7 +33,7 @@ describe('ModelSelect', () => {
         models={[...models]}
         value="a:fast"
         onSelect={onSelect}
-        renderDescription={(m) => m.descriptionKey}
+        renderDescription={(m) => m.descriptionKey ?? ''}
       />
     );
     await userEvent.click(screen.getByRole('button'));

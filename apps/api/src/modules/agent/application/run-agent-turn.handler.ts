@@ -620,8 +620,11 @@ export class RunAgentTurnHandler {
     const maxTurnTokens = this.rateLimit.turnTokenBudget(
       input.isAnonymous ?? false
     );
-    const openrouterProviderOrder =
-      await this.aiConfig.getOpenRouterProviderOrder();
+    const [openrouterProviderOrder, openrouterIgnoredProviders] =
+      await Promise.all([
+        this.aiConfig.getOpenRouterProviderOrder(),
+        this.aiConfig.getOpenRouterIgnoredProviders(),
+      ]);
 
     const limit = await this.rateLimit.checkLimit(
       input.userId,
@@ -682,6 +685,7 @@ export class RunAgentTurnHandler {
             requested: input.effort,
           }),
         openrouterProviderOrder,
+        openrouterIgnoredProviders,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(input.userMemories?.length

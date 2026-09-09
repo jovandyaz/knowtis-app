@@ -16,6 +16,9 @@ const meta: Meta<typeof RecordingTimer> = {
     isRecording: {
       control: 'boolean',
     },
+    isNearLimit: {
+      control: 'boolean',
+    },
   },
 };
 
@@ -35,6 +38,7 @@ export const NearLimit: Story = {
     elapsed: 275,
     maxDuration: 300,
     isRecording: true,
+    isNearLimit: true,
   },
 };
 

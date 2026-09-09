@@ -251,9 +251,17 @@ describe('AiConfigPage', () => {
     );
   });
 
-  it('routes the list kind to the upstream editor', async () => {
+  it('routes both upstream lists by key regardless of response order', async () => {
     useAiConfigMock.mockReturnValue({
       data: [
+        {
+          key: 'ai_openrouter_ignored_providers',
+          value: 'parasail',
+          kind: 'list',
+          source: 'custom',
+          description: null,
+          updatedAt: null,
+        },
         {
           key: 'ai_openrouter_providers',
           value: 'fireworks,baseten',
@@ -274,6 +282,12 @@ describe('AiConfigPage', () => {
     expect(
       screen.getByRole('heading', { name: 'OpenRouter upstreams' })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Preferred providers' })
+    ).toHaveValue('fireworks,baseten');
+    expect(
+      screen.getByRole('textbox', { name: 'Ignored providers' })
+    ).toHaveValue('parasail');
   });
 
   it('routes the money kind to the free-tier ceiling editor', () => {

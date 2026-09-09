@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { SegmentedControl } from './SegmentedControl';
 
 const OPTIONS = [
@@ -24,6 +25,20 @@ describe('SegmentedControl', () => {
       'on'
     );
     expect(screen.getAllByRole('radio')).toHaveLength(3);
+  });
+
+  it('floors every segment at a full touch target on coarse pointers', () => {
+    render(
+      <SegmentedControl
+        aria-label="Style"
+        options={OPTIONS}
+        value="balanced"
+        onValueChange={vi.fn()}
+      />
+    );
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio).toHaveClass(...TOUCH_TARGET_CLASS.split(' '));
+    }
   });
 
   it('fires onValueChange with the clicked value', () => {

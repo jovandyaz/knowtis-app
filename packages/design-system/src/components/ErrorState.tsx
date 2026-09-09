@@ -2,7 +2,7 @@ import { forwardRef, type HTMLAttributes } from 'react';
 
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Button } from './Button';
 
 export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
