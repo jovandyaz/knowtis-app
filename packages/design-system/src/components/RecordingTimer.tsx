@@ -4,12 +4,13 @@ import { cn } from '../utils/cn';
 import { Progress } from './Progress';
 
 const SECONDS_PER_MINUTE = 60;
-const NEAR_LIMIT_SECONDS = 30;
 
 export interface RecordingTimerProps {
   elapsed: number;
   maxDuration: number;
   isRecording: boolean;
+  /** Paints the clock and the bar with the destructive tone; the caller owns the threshold. */
+  isNearLimit?: boolean;
   className?: string;
 }
 
@@ -20,9 +21,11 @@ function formatTime(seconds: number): string {
 }
 
 const RecordingTimer = forwardRef<HTMLDivElement, RecordingTimerProps>(
-  ({ elapsed, maxDuration, isRecording, className }, ref) => {
+  (
+    { elapsed, maxDuration, isRecording, isNearLimit = false, className },
+    ref
+  ) => {
     const captionId = useId();
-    const isNearLimit = maxDuration - elapsed <= NEAR_LIMIT_SECONDS;
     const elapsedLabel = formatTime(elapsed);
     const totalLabel = formatTime(maxDuration);
 

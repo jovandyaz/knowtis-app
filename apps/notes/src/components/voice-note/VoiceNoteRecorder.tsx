@@ -41,6 +41,7 @@ function getMicrophoneErrorMessage(
 type FlowState = 'idle' | 'recording' | 'processing' | 'result' | 'error';
 
 const MAX_DURATION = 300;
+const NEAR_LIMIT_SECONDS = 30;
 
 interface VoiceNoteRecorderProps {
   size?: VoiceButtonProps['size'];
@@ -289,6 +290,9 @@ export function VoiceNoteRecorder({
                 elapsed={recorder.duration}
                 maxDuration={MAX_DURATION}
                 isRecording={recorder.state === 'recording'}
+                isNearLimit={
+                  MAX_DURATION - recorder.duration <= NEAR_LIMIT_SECONDS
+                }
               />
 
               <LivePreview

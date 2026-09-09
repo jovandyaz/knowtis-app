@@ -19,15 +19,17 @@ describe('RecordingTimer', () => {
     expect(bar).toHaveAttribute('aria-valuemax', '300');
   });
 
-  it('keeps the primary tone while the limit is far away', () => {
-    render(<RecordingTimer elapsed={45} maxDuration={300} isRecording />);
+  it('keeps the primary tone until the caller flags the limit', () => {
+    render(<RecordingTimer elapsed={275} maxDuration={300} isRecording />);
     expect(indicatorOf(screen.getByRole('progressbar')).className).toContain(
       'bg-(--primary)'
     );
   });
 
-  it('turns the bar and the clock destructive near the limit', () => {
-    render(<RecordingTimer elapsed={275} maxDuration={300} isRecording />);
+  it('turns the bar and the clock destructive when the caller says so', () => {
+    render(
+      <RecordingTimer elapsed={275} maxDuration={300} isRecording isNearLimit />
+    );
     expect(indicatorOf(screen.getByRole('progressbar')).className).toContain(
       'bg-(--destructive)'
     );
