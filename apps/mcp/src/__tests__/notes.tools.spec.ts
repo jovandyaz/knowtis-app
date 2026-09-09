@@ -237,12 +237,22 @@ describe('registerNotesTools', () => {
       page: 1,
       limit: 2,
     });
-    expect(page1.structuredContent?.notes.map((n) => n.id)).toEqual([
-      'note-3',
-      'note-2',
-    ]);
+    expect(page1.structuredContent).toEqual({
+      notes: [
+        {
+          id: 'note-3',
+          title: 'Note note-3',
+          updatedAt: '2026-01-03T00:00:00.000Z',
+        },
+        {
+          id: 'note-2',
+          title: 'Note note-2',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+      nextCursor: expect.any(String),
+    });
     const nextCursor = page1.structuredContent?.nextCursor;
-    expect(typeof nextCursor).toBe('string');
 
     const page2 = await getTool(tools, 'list-notes').cb({
       limit: 2,
@@ -254,8 +264,30 @@ describe('registerNotesTools', () => {
       page: 2,
       limit: 2,
     });
-    expect(page2.structuredContent?.notes.map((n) => n.id)).toEqual(['note-1']);
+    expect(page2.structuredContent).toEqual({
+      notes: [
+        {
+          id: 'note-1',
+          title: 'Note note-1',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
     expect(page2.structuredContent?.nextCursor).toBeUndefined();
+  });
+
+  it('should return an empty page without a cursor when there are no notes', async () => {
+    const list = vi
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, page: 1, limit: 2 });
+    notesApi = createMockNotesApi({ list });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'list-notes').cb({ limit: 2 });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ notes: [] });
   });
 
   it('should return note content as Markdown from the get-note handler', async () => {
