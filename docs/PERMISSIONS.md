@@ -47,17 +47,11 @@ Only the note owner can:
 - Change General Access settings (restricted / anyone with the link)
 - Set the general access permission level (viewer / editor)
 - Toggle "Editors can share"
-- Grant and revoke direct permissions to other users
-- View the collaborators list
 - Delete the note
 
 ### Editor Operations (when `editorsCanShare` is enabled)
 
-Editors can:
-
-- Change General Access settings
-- Set the general access permission level
-- Grant direct permissions to other users (if allowed by owner)
+The owner and direct editors with `editorsCanShare=true` can list, add, change, and remove other people. Owner and current actor rows are immutable. A link-only editor or administrator without a qualifying direct grant cannot manage people. Only the owner changes link settings and `editorsCanShare`.
 
 ---
 
@@ -89,7 +83,7 @@ Key features:
 
 ### 2. Direct Permissions (user-to-user)
 
-The owner (or editors if `editorsCanShare` is true) can grant specific users `viewer` or `editor` access. This creates a record in the `note_permissions` table.
+The owner (or direct editors if `editorsCanShare` is true) can grant existing accounts `viewer` or `editor` access by exact email, normalized with `trim().toLowerCase()`. No invitation email or pending account is created. This creates a record in the `note_permissions` table.
 
 - If a permission already exists for the user, it is updated (upsert behavior)
 - Notes shared via direct permissions appear in the recipient's dashboard ("My Notes")
@@ -99,7 +93,7 @@ The owner (or editors if `editorsCanShare` is true) can grant specific users `vi
 
 The `editorsCanShare` boolean (owner-only setting) controls whether editors can manage sharing:
 
-- When `true`: Editors can change General Access settings and invite other users
+- When `true`: Direct editors can add people and manage their direct access; link settings remain owner-only
 - When `false`: Only the owner can share the note
 
 ---
@@ -266,7 +260,7 @@ All endpoints are under `POST|GET|PATCH|DELETE /notes/...` and require `JwtAuthG
 | `GET`    | `/notes/counts`      | JWT  | `read`               | Accessible note counts per PARA bucket and supertag                                                |
 | `GET`    | `/notes/:id`         | JWT  | `read`               | Get single note with access level                                                                  |
 | `POST`   | `/notes`             | JWT  | `create`             | Create note (also passes `AnonymousNoteLimitGuard`)                                                |
-| `PATCH`  | `/notes/:id`         | JWT  | `update`             | Update note (owner: all fields; editor: title+content+sharing if editorsCanShare)                  |
+| `PATCH`  | `/notes/:id`         | JWT  | `update`             | Update note (owner: all fields; editor: title+content only)                                        |
 | `DELETE` | `/notes/:id`         | JWT  | `delete`             | **Soft-delete** note (owner only): sets `deleted_at`, `204`                                        |
 | `POST`   | `/notes/:id/restore` | JWT  | `delete`             | Restore a soft-deleted note (owner only)                                                           |
 | `POST`   | `/notes/:id/images`  | JWT  | `update`             | Upload an image (`multipart/form-data`, ≤ 10 MB, png/jpeg/gif/webp); needs edit access to the note |
@@ -277,8 +271,8 @@ The `PATCH /notes/:id` endpoint accepts:
 
 - `title` (owner/editor)
 - `content` (owner/editor)
-- `generalAccess` (owner, or editor if `editorsCanShare=true`)
-- `generalAccessPermission` (owner, or editor if `editorsCanShare=true`)
+- `generalAccess` (owner only)
+- `generalAccessPermission` (owner only)
 - `editorsCanShare` (owner only)
 
 When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exists, one is generated. The token is then **permanent**: changing back to `'restricted'` leaves it in place, so re-enabling sharing resumes the same link instead of minting a different one.
@@ -287,11 +281,13 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 
 ### Direct Permissions
 
-| Method   | Path                       | Auth | `@RequirePermission` | Description                                       |
-| -------- | -------------------------- | ---- | -------------------- | ------------------------------------------------- |
-| `POST`   | `/notes/:id/share`         | JWT  | `share`              | Grant/update permission (owner or sharing editor) |
-| `DELETE` | `/notes/:id/share/:userId` | JWT  | `share`              | Revoke user access (owner only)                   |
-| `GET`    | `/notes/:id/collaborators` | JWT  | `read`               | List collaborators (owner only)                   |
+| Method   | Path                       | Auth | `@RequirePermission` | Description                                                                              |
+| -------- | -------------------------- | ---- | -------------------- | ---------------------------------------------------------------------------------------- |
+| `POST`   | `/notes/:id/share`         | JWT  | `share`              | Grant/update permission (owner or sharing editor)                                        |
+| `DELETE` | `/notes/:id/share/:userId` | JWT  | `share`              | Remove another person’s direct access (owner or sharing direct editor); 204 with no body |
+| `GET`    | `/notes/:id/collaborators` | JWT  | `read`               | List people (owner or sharing direct editor)                                             |
+
+`GET /notes/:id/collaborators` returns `NotePerson[]`, ordered owner first, then name, email, and ID. Each item is `{ user: { id, name, email, avatarUrl }, permission }`; `permission` is `owner`, `viewer`, or `editor`. The owner is a projection, not a direct-grant row. `POST /notes/:id/share` accepts `{ email, permission }` (`viewer` or `editor`) and returns the authoritative `NotePerson` with status 201. An unavailable, anonymous, owner, or self target produces the same 422 `PERSON_NOT_ADDABLE`; actor authorization precedes recipient lookup. Removing a direct grant preserves access through a valid open link.
 
 ### Public Share Link Access
 
@@ -344,25 +340,15 @@ An access badge displays the current permission level.
 
 ### Share Dialog
 
-The ShareDialog component provides:
+The dialog refreshes both note detail and People every time it opens. All mutation controls stay disabled until both reads succeed, and during refresh or mutation. A failed refresh hides recipient data and keeps controls disabled until the visible retry succeeds. A successful write remains reported as saved even if the subsequent read fails. Sharing authority uses `notesQueryKeys.sharingAuthority(noteId)`, separate from the optimistic editor detail cache; autosave cannot cancel or satisfy that fresh read. Recoverable background detail failures preserve the loaded editor and dialog, with a visible retry; terminal 401/403/404 still replace the editor with its error state.
 
-1. **General Access Toggle**:
-   - "Restricted" (default)
-   - "Anyone with the link"
+- **People with access:** Add an existing account by exact email, choose Viewer/Editor, change another person's permission, or confirm removal. Owner and current actor rows are read-only. The current actor must be the owner or a direct editor with the sharing policy enabled; effective link editing alone is insufficient.
+- **General access and link permission:** Owner-only controls, with a copy link action when access is open. Restricted notes retain their token, so resuming uses the same URL.
+- **Editors can share:** Owner-only switch allowing direct editors to manage other people.
+- **Verification:** Only an actual server `EMAIL_NOT_VERIFIED` refusal opens the existing verification flow. Adding people, viewer→editor, and widening link exposure require verification when the flag is enabled; listing, removing, reducing permissions, restricting links, and changing the sharing-policy switch remain available without verification.
+- **Removal confirmation:** Names the person and states that direct access is removed. When the link remains open, it explains that the person may still access the note through that link.
 
-2. **Permission Selector** (visible when "Anyone with the link"):
-   - Viewer
-   - Editor
-
-3. **Copy Link Button** (visible when "Anyone with the link" is selected):
-   - Copies `${origin}/s/${shareToken}` to clipboard
-   - A restricted note may still hold a token; the link stays hidden until sharing is on
-
-4. **Editors Can Share Toggle** (owner only):
-   - Allows editors to manage sharing
-
-5. **Info Badge** (for non-owners):
-   - Displays sharing capabilities based on `editorsCanShare`
+People writes are pessimistic: no temporary UUIDs or speculative rows. Hooks parse runtime responses with Zod and await invalidation of People, detail, lists, recents, and counts. The dialog shares a synchronous action lock across People, removal, link, and policy actions, including close/reopen while a write is pending. EN/ES labels, visible inline errors/status, independent drafts, keyboard permission choices, and nested-dialog focus restoration are included.
 
 ### Shared Note Page (`/s/:token`)
 
@@ -382,9 +368,9 @@ The ShareDialog component provides:
 | Read note             | ✓     | ✓               | ✓               | ✓                  | ✓                  | ✗         |
 | Edit content          | ✓     | ✓               | ✗               | ✓                  | ✗                  | ✗         |
 | Edit title            | ✓     | ✓               | ✗               | ✓                  | ✗                  | ✗         |
-| Change general access | ✓     | ✓\*             | ✗               | ✓\*                | ✗                  | ✗         |
+| Change general access | ✓     | ✗               | ✗               | ✗                  | ✗                  | ✗         |
 | Toggle editors share  | ✓     | ✗               | ✗               | ✗                  | ✗                  | ✗         |
-| Share with users      | ✓     | ✓\*             | ✗               | ✓\*                | ✗                  | ✗         |
+| Manage people         | ✓     | ✓\*             | ✗               | ✗                  | ✗                  | ✗         |
 | Delete note           | ✓     | ✗               | ✗               | ✗                  | ✗                  | ✗         |
 | Real-time edit (WS)   | ✓     | ✓               | ✗               | ✓                  | ✗                  | ✗         |
 | Appears in dashboard  | ✓     | ✓               | ✓               | ✗                  | ✗                  | ✗         |

@@ -19,6 +19,7 @@ import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
 import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
+import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
@@ -36,7 +37,12 @@ import {
   useFeatureFlags,
 } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import { ErrorState, Input, LoadingState } from '@knowtis/design-system';
+import {
+  Button,
+  ErrorState,
+  Input,
+  LoadingState,
+} from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import {
   ACCESS,
@@ -403,13 +409,23 @@ export function NoteEditorPage() {
   const navigate = useNavigate();
   const { t } = useTranslation('notes');
 
-  const { data: note, isLoading, isError, error } = useNote(noteId);
+  const {
+    data: note,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useNote(noteId);
+  const terminalError =
+    ApiClientError.isApiClientError(error) &&
+    TERMINAL_ACCESS_STATUSES.has(error.status);
 
   if (isLoading) {
     return <LoadingState message={t('editor.loadingNote')} />;
   }
 
-  if (isError) {
+  if (isError && (!note || terminalError)) {
     return (
       <ErrorState
         title={t('editor.failedToLoad')}
@@ -425,20 +441,42 @@ export function NoteEditorPage() {
   }
 
   return (
-    <NoteEditor
-      key={note.id}
-      noteId={note.id}
-      initialTitle={note.title}
-      initialContent={note.content}
-      accessLevel={note.accessLevel}
-      bucket={note.bucket}
-      tags={note.tags}
-      supertag={note.supertag}
-      supertagFields={note.supertagFields}
-      generalAccess={note.generalAccess}
-      generalAccessPermission={note.generalAccessPermission}
-      shareToken={note.shareToken}
-      editorsCanShare={note.editorsCanShare}
-    />
+    <>
+      {isError ? (
+        <div
+          role="alert"
+          className="mx-auto mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 rounded-lg border border-(--border) p-4"
+        >
+          <p className="text-sm text-(--muted-foreground)">
+            {t('editor.refreshError')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isFetching}
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            {t('editor.retryRefresh')}
+          </Button>
+        </div>
+      ) : null}
+      <NoteEditor
+        key={note.id}
+        noteId={note.id}
+        initialTitle={note.title}
+        initialContent={note.content}
+        accessLevel={note.accessLevel}
+        bucket={note.bucket}
+        tags={note.tags}
+        supertag={note.supertag}
+        supertagFields={note.supertagFields}
+        generalAccess={note.generalAccess}
+        generalAccessPermission={note.generalAccessPermission}
+        shareToken={note.shareToken}
+        editorsCanShare={note.editorsCanShare}
+      />
+    </>
   );
 }
