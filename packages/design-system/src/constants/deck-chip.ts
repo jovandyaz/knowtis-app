@@ -1,9 +1,6 @@
-export const DECK_CHIP_TONES = [
-  'neutral',
-  'projects',
-  'areas',
-  'resources',
-  'archive',
-] as const;
+import { PARA_BUCKETS, type ParaBucket } from '@knowtis/shared-types';
 
-export type DeckChipTone = (typeof DECK_CHIP_TONES)[number];
+/** Every tone a deck chip draws: its PARA bucket, or none. A deck is never in the inbox. */
+export const DECK_CHIP_TONES = ['neutral', ...PARA_BUCKETS] as const;
+
+export type DeckChipTone = ParaBucket | 'neutral';
