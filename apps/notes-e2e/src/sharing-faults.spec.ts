@@ -2,7 +2,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { expect } from '@playwright/test';
 
-import { E2E } from '../support/environment';
+import {
+  E2E,
+  QUIESCENCE_WINDOW_MS,
+  TRAFFIC_INTERVAL_MS,
+} from '../support/environment';
 import { compose } from '../support/faults';
 import {
   assertCutoff,
@@ -43,12 +47,16 @@ for (const fault of ['redis', 'postgres'] as const) {
         guests.forEach((client, index) =>
           client.write(`guest-${index}`, sequence)
         );
-      }, 20);
+      }, TRAFFIC_INTERVAL_MS);
       await expect
         .poll(() => clients.every(({ receipts }) => receipts.length > 3))
         .toBe(true);
-      expect(ownerA.read('guest-0')).toBeDefined();
-      expect(ownerB.read('guest-1')).toBeDefined();
+      await expect
+        .poll(() => ownerA.read('guest-1'))
+        .toEqual(expect.any(Number));
+      await expect
+        .poll(() => ownerB.read('guest-0'))
+        .toEqual(expect.any(Number));
       const closed = fault === 'redis' ? guests : clients.slice();
       const observation = beginCutoff(closed, [ownerA, ownerB]);
       restoreNeeded = true;
@@ -89,7 +97,10 @@ for (const fault of ['redis', 'postgres'] as const) {
       const freshOwner = connect(owner.accessToken, 'a');
       await freshOwner.synced();
       freshOwner.write('recovered', 'new session');
-      await delay(350);
+      const witness = connect(owner.accessToken, 'a');
+      await witness.synced();
+      await expect.poll(() => witness.read('recovered')).toBe('new session');
+      await delay(QUIESCENCE_WINDOW_MS);
       expect(guests.map(({ receipts }) => receipts.length)).toEqual(
         receiptCounts
       );
@@ -110,12 +121,12 @@ for (const fault of ['redis', 'postgres'] as const) {
       }
     } finally {
       clearInterval(traffic);
+      clients.forEach((client) => client.close());
       if (restoreNeeded) {
         await compose(
           ...(fault === 'redis' ? ['start', 'redis'] : ['unpause', 'database'])
         );
       }
-      clients.forEach((client) => client.close());
     }
   });
 }

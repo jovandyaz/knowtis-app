@@ -14,7 +14,11 @@ import {
 } from 'lib0/decoding';
 import * as Y from 'yjs';
 
-import { E2E } from '../../support/environment';
+import {
+  CUTOFF_BUDGET_MS,
+  E2E,
+  QUIESCENCE_WINDOW_MS,
+} from '../../support/environment';
 
 export interface RealtimeClient {
   provider: HocuspocusProvider;
@@ -224,7 +228,7 @@ export async function assertCutoff(
   const { clients, observers, started } = observation;
   await expect
     .poll(() => clients.every(({ closes }) => closes.length > 0), {
-      timeout: 5000,
+      timeout: CUTOFF_BUDGET_MS,
     })
     .toBe(true);
   for (const client of clients) {
@@ -239,7 +243,7 @@ export async function assertCutoff(
   const applications = observers.map(
     (observer) => observer.guestApplications.length
   );
-  await delay(350);
+  await delay(QUIESCENCE_WINDOW_MS);
   expect(
     clients.map((client) => [
       client.receipts.length,
@@ -274,9 +278,5 @@ export async function assertCutoff(
       )
     ),
   };
-  for (const value of Object.values(measurements)) {
-    expect(value).toBeGreaterThanOrEqual(0);
-    expect(value).toBeLessThan(5000);
-  }
   return measurements;
 }

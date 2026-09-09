@@ -1,5 +1,4 @@
 import { expect } from '@playwright/test';
-import { z } from 'zod';
 
 import { E2E } from '../support/environment';
 import { test } from './fixtures/sharing.fixture';
@@ -34,27 +33,16 @@ for (const layout of layouts) {
     const { owner, recipient, viewer } = sharing;
     const note = await owner.createNote('Sharing interface acceptance');
     await owner.share(note.id, recipient.email, 'viewer');
+    const desktop = owner.page.viewportSize();
     await owner.page.setViewportSize({
       width: layout.width,
       height: layout.height,
     });
-    async function setLocale(locale: 'en' | 'es') {
-      const response = await owner.context.request.patch(
-        `${E2E.apiA}/users/profile`,
-        { headers: owner.headers, data: { locale } }
-      );
-      expect(response.status()).toBe(200);
-      expect(
-        z
-          .object({ user: z.object({ locale: z.string() }) })
-          .parse(await response.json()).user.locale
-      ).toBe(locale);
-    }
-    await setLocale(layout.language);
-    await owner.page.goto(`/notes/${note.id}`);
+    await owner.setLocale(layout.language);
     const errors: string[] = [];
     const collectError = (error: Error) => errors.push(error.message);
     owner.page.on('pageerror', collectError);
+    await owner.page.goto(`/notes/${note.id}`);
     const noteUrl = `${E2E.apiA}/notes/${note.id}`;
     try {
       const trigger = owner.page.getByRole('button', {
@@ -123,8 +111,10 @@ for (const layout of layouts) {
     } finally {
       await owner.page.unroute(noteUrl);
       owner.page.off('pageerror', collectError);
-      await setLocale('en');
-      await owner.page.setViewportSize({ width: 1440, height: 900 });
+      await owner.setLocale('en');
+      if (desktop) {
+        await owner.page.setViewportSize(desktop);
+      }
     }
   });
 }

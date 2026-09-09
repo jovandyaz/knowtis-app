@@ -12,7 +12,12 @@ import { z } from 'zod';
 
 import { I18N_STORAGE_KEY } from '@knowtis/shared-util';
 
-import { E2E } from '../../support/environment';
+import {
+  BCRYPT_ROUNDS,
+  E2E,
+  E2E_PORT,
+  LOGIN_THROTTLE_LIMIT,
+} from '../../support/environment';
 
 const accountSchema = z.object({
   id: z.uuid(),
@@ -28,6 +33,7 @@ const noteSchema = z.object({
   id: z.uuid(),
   shareToken: z.string().nullable(),
 });
+const profileSchema = z.object({ user: z.object({ locale: z.string() }) });
 
 async function createGuest(browser: Browser) {
   const context = await browser.newContext({
@@ -88,7 +94,7 @@ async function createActor(browser: Browser, db: postgres.Sql, label: string) {
   const id = randomUUID();
   const email = `sharing-${id}@example.test`;
   const password = `${randomBytes(24).toString('base64url')}Aa1!`;
-  const passwordHash = await hash(password, 10);
+  const passwordHash = await hash(password, BCRYPT_ROUNDS);
   await db`insert into users (id, email, name, password_hash, email_verified_at)
     values (${id}, ${email}, ${label}, ${passwordHash}, now())`;
   const context = await browser.newContext({
@@ -160,6 +166,16 @@ async function createActor(browser: Browser, db: postgres.Sql, label: string) {
         );
         expect(response.status()).toBe(201);
       },
+      async setLocale(locale: 'en' | 'es') {
+        const response = await context.request.patch(
+          `${E2E.apiA}/users/profile`,
+          { headers, data: { locale } }
+        );
+        expect(response.status()).toBe(200);
+        expect(profileSchema.parse(await response.json()).user.locale).toBe(
+          locale
+        );
+      },
       async update(noteId: string, data: Record<string, unknown>) {
         const response = await context.request.patch(
           `${E2E.apiA}/notes/${noteId}`,
@@ -180,22 +196,30 @@ async function createActor(browser: Browser, db: postgres.Sql, label: string) {
 
 /** Routes native collaboration sockets to the second real API without mocking frames. */
 export async function useSecondApi(context: BrowserContext) {
-  await context.addInitScript(() => {
-    const NativeWebSocket = window.WebSocket;
-    window.WebSocket = class extends NativeWebSocket {
-      constructor(url: string | URL, protocols?: string | string[]) {
-        const target = new URL(url);
-        if (
-          target.hostname === '127.0.0.1' &&
-          target.port === '3373' &&
-          target.pathname.startsWith('/collaboration')
-        ) {
-          target.port = '3374';
+  await context.addInitScript(
+    ({ host, path, from, to }) => {
+      const NativeWebSocket = window.WebSocket;
+      window.WebSocket = class extends NativeWebSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          const target = new URL(url);
+          if (
+            target.hostname === host &&
+            target.port === from &&
+            target.pathname.startsWith(path)
+          ) {
+            target.port = to;
+          }
+          super(target, protocols);
         }
-        super(target, protocols);
-      }
-    };
-  });
+      };
+    },
+    {
+      host: E2E.host,
+      path: E2E.collaborationPath,
+      from: String(E2E_PORT.apiA),
+      to: String(E2E_PORT.apiB),
+    }
+  );
 }
 
 export type SharingActor = Awaited<ReturnType<typeof createActor>>;
@@ -218,13 +242,16 @@ export const test = base.extend<
       const actors: SharingActor[] = [];
       let guest: Awaited<ReturnType<typeof createGuest>> | undefined;
       try {
-        await db`update feature_flags set enabled = true where key = 'email_verification_gate'`;
-        for (const label of [
-          'Owner',
-          'Recipient',
-          'Direct Editor',
-          'Direct Viewer',
-        ]) {
+        const gated =
+          await db`update feature_flags set enabled = true where key = 'email_verification_gate'`;
+        expect(gated.count).toBe(1);
+        const labels = ['Owner', 'Recipient', 'Direct Editor', 'Direct Viewer'];
+        if (labels.length >= LOGIN_THROTTLE_LIMIT) {
+          throw new Error(
+            `Sharing actors must stay under the ${LOGIN_THROTTLE_LIMIT} logins the auth throttle allows per window`
+          );
+        }
+        for (const label of labels) {
           actors.push(await createActor(browser, db, label));
         }
         const [owner, recipient, editor, viewer] = actors;

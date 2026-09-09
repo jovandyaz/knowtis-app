@@ -1,7 +1,11 @@
 import { expect } from '@playwright/test';
 import { z } from 'zod';
 
-import { E2E } from '../support/environment';
+import {
+  CUTOFF_BUDGET_MS,
+  E2E,
+  TRAFFIC_INTERVAL_MS,
+} from '../support/environment';
 import {
   assertCutoff,
   beginCutoff,
@@ -26,6 +30,7 @@ test('rotation retires the old link while direct permissions survive, including 
   sharing,
 }, testInfo) => {
   const { owner, guest, editor, viewer } = sharing;
+  await owner.setLocale('en');
   const note = await owner.createNote('Rotation acceptance');
   await owner.share(note.id, editor.email, 'editor');
   await owner.share(note.id, viewer.email, 'viewer');
@@ -79,9 +84,14 @@ test('rotation retires the old link while direct permissions survive, including 
       owner.page.getByRole('button', { name: 'Cancel', exact: true })
     ).toBeFocused();
     let rotations = 0;
+    let releaseRotation: (() => void) | undefined;
+    const heldRotation = new Promise<void>((done) => {
+      releaseRotation = done;
+    });
     const rotationUrl = `${E2E.apiA}/notes/${note.id}/share-link/rotate`;
     await owner.page.route(rotationUrl, async (route) => {
       rotations++;
+      await heldRotation;
       await route.continue();
     });
     let sequence = 0;
@@ -90,15 +100,20 @@ test('rotation retires the old link while direct permissions survive, including 
       ownerWire.write('owner-traffic', sequence);
       linkA.write('guest-link', sequence);
       directViewer.write('guest-direct-viewer', sequence);
-    }, 20);
+    }, TRAFFIC_INTERVAL_MS);
     await expect
       .poll(() => ownerWire.guestApplications.length)
       .toBeGreaterThan(2);
     await expect.poll(() => linkA.receipts.length).toBeGreaterThan(2);
+    const changeLink = owner.page.getByRole('button', {
+      name: 'Change link',
+      exact: true,
+    });
+    await changeLink.click();
+    await expect(changeLink).toBeDisabled();
+    await changeLink.click({ force: true });
     const observation = beginCutoff([linkA, directViewer], [ownerWire]);
-    await owner.page
-      .getByRole('button', { name: 'Change link', exact: true })
-      .dblclick();
+    releaseRotation?.();
     await expect(
       owner.page.getByRole('dialog', { name: 'Change this share link?' })
     ).toHaveCount(0);
@@ -114,7 +129,7 @@ test('rotation retires the old link while direct permissions survive, including 
       contentType: 'application/json',
     });
     await expect(guest.page.locator('.tiptap')).toHaveCount(0, {
-      timeout: 5000,
+      timeout: CUTOFF_BUDGET_MS,
     });
     await directViewer.reauthenticate();
     expect(directViewer.scopes.at(-1)).toBe('readonly');
@@ -180,6 +195,7 @@ test('a lost response after commit reconciles the link without repeating rotatio
   sharing,
 }) => {
   const { owner } = sharing;
+  await owner.setLocale('en');
   const note = await owner.createNote('Uncertain rotation');
   await owner.update(note.id, { generalAccess: 'anyone_with_link' });
   const before = await currentToken(owner, note.id);

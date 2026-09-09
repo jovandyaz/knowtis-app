@@ -10,8 +10,8 @@ are verified in the disposable database; verification and throttling stay enable
 Use the repository's Node 24 and pnpm versions, with Docker running:
 
 ```sh
-pnpm exec playwright install chromium
-NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm nx e2e notes-e2e --skip-nx-cache
+pnpm exec playwright install --with-deps chromium
+NX_DAEMON=false NX_ISOLATE_PLUGINS=false pnpm nx e2e notes-e2e
 ```
 
 An installed Chrome can be selected with `SHARING_E2E_BROWSER_CHANNEL=chrome`.
@@ -27,8 +27,11 @@ It rejects local dotenv files in the workspace root and API, Notes and E2E
 project directories, and disables Nx dotenv loading for child tasks. Example
 files are allowed; local files are never renamed, removed or read by the guard.
 It creates a uniquely named Compose project, generates disposable authentication
-secrets, migrates its own database, builds API and Notes in production mode without
-reading or writing the Nx cache, and serves the built frontend with Vite preview. The build explicitly selects
+secrets, migrates its own database, builds API and Notes in production mode
+without reading the Nx cache, and serves the built frontend with Vite preview.
+The Notes build target hashes the `VITE_*` variables Vite inlines, so the
+loopback bundle this harness builds occupies its own cache entry and can neither
+replace nor be served a normal production build. The build explicitly selects
 WebSocket collaboration; browser assertions confirm connections to both APIs.
 The API runs with test-mode cookie settings for loopback HTTP. Normal guards,
 session validation and authorization remain active. No existing development

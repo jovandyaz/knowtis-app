@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 
+import { CUTOFF_BUDGET_MS, E2E, E2E_PORT } from '../support/environment';
 import {
   connectNote,
   deniedWrite,
@@ -7,20 +8,23 @@ import {
 } from './fixtures/realtime.fixture';
 import { test } from './fixtures/sharing.fixture';
 
+function connectedTo(url: string, port: number) {
+  const target = new URL(url);
+  return (
+    target.port === String(port) &&
+    target.pathname.startsWith(E2E.collaborationPath)
+  );
+}
+
 test('owner manages people while the recipient keeps the note open', async ({
   sharing,
 }) => {
   const { owner, recipient } = sharing;
+  await owner.setLocale('en');
   const note = await owner.createNote('People acceptance');
   await owner.page.goto(`/notes/${note.id}`);
   await expect
-    .poll(() =>
-      owner.sockets.some(
-        (url) =>
-          new URL(url).port === '3373' &&
-          new URL(url).pathname.startsWith('/collaboration')
-      )
-    )
+    .poll(() => owner.sockets.some((url) => connectedTo(url, E2E_PORT.apiA)))
     .toBe(true);
   await owner.page.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(
@@ -38,11 +42,7 @@ test('owner manages people while the recipient keeps the note open', async ({
   await recipient.page.goto(`/notes/${note.id}`);
   await expect
     .poll(() =>
-      recipient.sockets.some(
-        (url) =>
-          new URL(url).port === '3374' &&
-          new URL(url).pathname.startsWith('/collaboration')
-      )
+      recipient.sockets.some((url) => connectedTo(url, E2E_PORT.apiB))
     )
     .toBe(true);
   await expect(recipient.page.locator('.tiptap')).toHaveAttribute(
@@ -53,7 +53,7 @@ test('owner manages people while the recipient keeps the note open', async ({
   await expect(recipient.page.locator('.tiptap')).toHaveAttribute(
     'contenteditable',
     'true',
-    { timeout: 5000 }
+    { timeout: CUTOFF_BUDGET_MS }
   );
   await recipient.page.locator('.tiptap').click();
   await recipient.page.keyboard.press('ControlOrMeta+End');
@@ -71,7 +71,7 @@ test('owner manages people while the recipient keeps the note open', async ({
     await expect(recipient.page.locator('.tiptap')).toHaveAttribute(
       'contenteditable',
       'false',
-      { timeout: 5000 }
+      { timeout: CUTOFF_BUDGET_MS }
     );
     await expect.poll(() => attacker.closes.length).toBeGreaterThan(0);
     await attacker.reauthenticate();
@@ -88,7 +88,7 @@ test('owner manages people while the recipient keeps the note open', async ({
       .click();
     await expect(row).toHaveCount(0);
     await expect(recipient.page.locator('.tiptap')).toHaveCount(0, {
-      timeout: 5000,
+      timeout: CUTOFF_BUDGET_MS,
     });
     await revokedWrite(attacker, observer, 'after-revocation');
   } finally {

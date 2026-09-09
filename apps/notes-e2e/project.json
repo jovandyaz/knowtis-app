@@ -19,14 +19,14 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsc -p apps/notes-e2e/tsconfig.json --noEmit"
+        "command": "tools/typecheck-project.sh {projectRoot}"
       }
     },
     "serve-preview": {
       "executor": "nx:run-commands",
       "cache": false,
       "options": {
-        "command": "vite preview --config apps/notes/vite.config.ts --host=127.0.0.1 --port=4273 --strictPort"
+        "command": "vite preview --config apps/notes/vite.config.ts --strictPort --host={args.host} --port={args.port}"
       }
     }
   }

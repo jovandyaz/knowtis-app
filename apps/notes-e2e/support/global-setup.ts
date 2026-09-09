@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { workspaceRoot } from '@nx/devkit';
 
-import { E2E } from './environment';
+import { BCRYPT_ROUNDS, E2E, E2E_PORT } from './environment';
 
 async function requireFreePort(port: number): Promise<void> {
   await new Promise<void>((done, reject) => {
@@ -58,14 +58,14 @@ export default async function globalSetup() {
     FRONTEND_URL: E2E.frontend,
     BACKOFFICE_URL: 'http://127.0.0.1:4473',
     EMAIL_PROVIDER: 'console',
-    BCRYPT_ROUNDS: '10',
+    BCRYPT_ROUNDS: String(BCRYPT_ROUNDS),
     NX_DAEMON: 'false',
     NX_LOAD_DOT_ENV_FILES: 'false',
     NX_ISOLATE_PLUGINS: 'false',
     NX_PARALLEL: '1',
     VITEST_MAX_WORKERS: '2',
     VITE_API_URL: E2E.apiA,
-    VITE_WS_URL: 'ws://127.0.0.1:3373',
+    VITE_WS_URL: E2E.websocketA,
     VITE_COLLABORATION_MODE: 'websocket',
   };
   const children: ChildProcess[] = [];
@@ -171,9 +171,14 @@ export default async function globalSetup() {
         ]);
       }
     } finally {
-      for (const log of logStreams) {
-        log.end();
-      }
+      await Promise.all(
+        logStreams.map(
+          (log) =>
+            new Promise<void>((done) => {
+              log.end(done);
+            })
+        )
+      );
     }
   }
 
@@ -198,10 +203,10 @@ export default async function globalSetup() {
       { NODE_ENV: 'production' }
     );
     const apiA = start('api-a', process.execPath, ['dist/apps/api/main.js'], {
-      PORT: '3373',
+      PORT: String(E2E_PORT.apiA),
     });
     const apiB = start('api-b', process.execPath, ['dist/apps/api/main.js'], {
-      PORT: '3374',
+      PORT: String(E2E_PORT.apiB),
     });
     await Promise.all([
       ready(`${E2E.apiA}/health/ready`, apiA),
@@ -210,7 +215,13 @@ export default async function globalSetup() {
     const preview = start(
       'notes',
       'pnpm',
-      ['nx', 'run', 'notes-e2e:serve-preview'],
+      [
+        'nx',
+        'run',
+        'notes-e2e:serve-preview',
+        `--host=${E2E.host}`,
+        `--port=${E2E_PORT.frontend}`,
+      ],
       { NODE_ENV: 'production' }
     );
     await ready(E2E.frontend, preview);
@@ -228,7 +239,7 @@ export default async function globalSetup() {
     );
     return cleanup;
   } catch (error) {
-    await cleanup();
+    await cleanup().catch(() => undefined);
     throw error;
   }
 }
