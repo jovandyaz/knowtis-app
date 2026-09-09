@@ -81,7 +81,7 @@ const PasswordStrength = forwardRef<HTMLDivElement, PasswordStrengthProps>(
             <div
               key={i}
               className={cn(
-                'h-1.5 flex-1 rounded-full transition-colors',
+                'h-1.5 flex-1 rounded-full transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
                 i <= score ? colors[score] : 'bg-(--muted)'
               )}
             />

@@ -22,7 +22,7 @@ const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(
       ref={ref}
       {...props}
       className={cn(
-        'absolute top-0 bottom-0 w-1.5 z-10 cursor-col-resize outline-none transition-colors',
+        'absolute top-0 bottom-0 w-1.5 z-10 cursor-col-resize outline-none transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
         POSITION_CLASSES[side],
         isDragging
           ? 'bg-primary'

@@ -47,7 +47,7 @@ export function RadioCardGroup<T extends string>({
           key={optionValue}
           value={optionValue}
           className={cn(
-            'flex w-full items-start gap-3 rounded-lg border-2 p-3 text-left transition-all',
+            'flex w-full items-start gap-3 rounded-lg border-2 p-3 text-left transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'border-(--border) hover:border-(--muted-foreground)/30 hover:bg-(--accent)/50',

@@ -6,7 +6,7 @@ import { Loader2, Mic, MicOff, Pause } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 const voiceButtonVariants = cva(
-  'inline-flex items-center justify-center rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2',
+  'inline-flex items-center justify-center rounded-full transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2',
   {
     variants: {
       state: {
