@@ -5,6 +5,7 @@ import { ChevronDown, Hash, Shapes, Sparkles, X } from 'lucide-react';
 
 import { useSupertagCatalog, useUpdateNote } from '@knowtis/data-access-notes';
 import {
+  BucketDot,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
@@ -20,7 +21,6 @@ import {
   type SupertagFields,
 } from '@knowtis/shared-types';
 
-import { BucketDot } from './BucketDot';
 import { SupertagFieldsForm } from './SupertagFieldsForm';
 import { TagPicker } from './TagPicker';
 

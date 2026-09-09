@@ -8,14 +8,12 @@ import { Hash, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
-import { Button } from '@knowtis/design-system';
+import { BucketDot, Button } from '@knowtis/design-system';
 import {
   TAG_MAX_PER_NOTE,
   type OrganizationSuggestion,
   type ParaBucket,
 } from '@knowtis/shared-types';
-
-import { BucketDot } from './BucketDot';
 
 const CHIP_BASE =
   'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer md:min-h-0';

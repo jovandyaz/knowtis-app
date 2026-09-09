@@ -161,6 +161,11 @@ export {
   AnswerOption,
   type AnswerOptionProps,
 } from './components/AnswerOption';
+export {
+  BucketDot,
+  type BucketDotProps,
+  type BucketDotTone,
+} from './components/BucketDot';
 export { DeckChip, type DeckChipProps } from './components/DeckChip';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
