@@ -11,7 +11,7 @@ import {
 import { cn } from '../utils/cn';
 
 const optionVariants = cva(
-  'flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none',
+  'flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none',
   {
     variants: {
       state: {

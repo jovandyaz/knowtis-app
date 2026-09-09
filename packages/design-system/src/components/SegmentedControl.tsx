@@ -53,7 +53,7 @@ export function SegmentedControl<T extends string>({
           value={option.value}
           title={option.title}
           className={cn(
-            'rounded-md px-2.5 py-1 text-xs font-medium text-(--muted-foreground) transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
+            'cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium text-(--muted-foreground) transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
             'hover:text-(--foreground) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)',
             'disabled:pointer-events-none disabled:opacity-50',
             'data-[state=on]:bg-(--background) data-[state=on]:text-(--foreground) data-[state=on]:shadow-sm'

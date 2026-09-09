@@ -31,6 +31,14 @@ describe('Button', () => {
     expect(button).toHaveClass('h-9', 'px-4', 'py-2');
   });
 
+  it('declares the pointer cursor so consumers never have to', () => {
+    render(<Button>Save</Button>);
+
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
+      'cursor-pointer'
+    );
+  });
+
   it('forwards a ref to the rendered element', () => {
     const ref = createRef<HTMLButtonElement>();
     render(<Button ref={ref}>Save</Button>);

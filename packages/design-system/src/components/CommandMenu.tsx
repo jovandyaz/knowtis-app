@@ -83,7 +83,7 @@ const CommandMenuItem = forwardRef<HTMLButtonElement, CommandMenuItemProps>(
       ref={ref}
       type="button"
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
+        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs',
         'transition-all duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
         selected
           ? 'bg-foreground/7 text-foreground'
@@ -125,7 +125,7 @@ const CommandMenuBack = forwardRef<HTMLButtonElement, CommandMenuBackProps>(
       ref={ref}
       type="button"
       className={cn(
-        'mb-1 flex items-center gap-1 px-2 py-1 text-xs',
+        'mb-1 flex cursor-pointer items-center gap-1 px-2 py-1 text-xs',
         'text-muted-foreground transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:text-foreground',
         className
       )}
