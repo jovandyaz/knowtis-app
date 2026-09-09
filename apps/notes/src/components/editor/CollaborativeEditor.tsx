@@ -353,7 +353,7 @@ export function CollaborativeEditor({
             <div
               className={cn(
                 'w-2 h-2 rounded-full',
-                isConnected ? 'bg-emerald-500' : 'bg-amber-500'
+                isConnected ? 'bg-(--success)' : 'bg-(--warning)'
               )}
               title={
                 isConnected ? t('editor.connected') : t('editor.connecting')
