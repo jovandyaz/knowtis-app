@@ -6,7 +6,7 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
-import { ArtifactGeneratorDialog } from '@/components/artifacts';
+import { ArtifactGeneratorDialog } from '@/components/artifacts/ArtifactGenerator';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
 import { VerifyEmailDialog } from '@/components/auth/VerifyEmailDialog';
 import { BottomNav } from '@/components/layout/BottomNav';
