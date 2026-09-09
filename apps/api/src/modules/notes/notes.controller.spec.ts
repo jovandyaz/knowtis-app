@@ -21,6 +21,7 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
 import type { NoteEntity } from './domain';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
@@ -53,6 +54,7 @@ function createController(overrides: Partial<Record<string, unknown>> = {}) {
     handler() as never,
     handler() as never,
     (overrides['update'] ?? handler()) as never,
+    handler() as never,
     handler() as never,
     handler() as never,
     handler() as never,
@@ -121,6 +123,7 @@ describe('NotesController route order', () => {
         { provide: GetCollaboratorsHandler, useValue: {} },
         { provide: GetNoteByTokenHandler, useValue: {} },
         { provide: UploadImageHandler, useValue: {} },
+        { provide: RotateShareLinkHandler, useValue: {} },
       ],
     })
       .overrideGuard(JwtAuthGuard)

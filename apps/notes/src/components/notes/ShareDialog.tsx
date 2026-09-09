@@ -46,6 +46,7 @@ import {
 import { AccessInfoBanner } from './share/AccessInfoBanner';
 import { LinkAccessSection } from './share/LinkAccessSection';
 import { PeopleAccessSection } from './share/PeopleAccessSection';
+import { RotateShareLinkDialog } from './share/RotateShareLinkDialog';
 
 type ToastKey =
   | 'share.linkCreatedToast'
@@ -303,6 +304,14 @@ function ShareDialogAccess({
               );
             }
           }}
+        />
+      ) : null}
+      {authority.data ? (
+        <RotateShareLinkDialog
+          note={authority.data}
+          isOwner={isOwner}
+          disabled={disabled}
+          actionLock={actionLock}
         />
       ) : null}
       {isOwner ? (

@@ -13,7 +13,15 @@ import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { AcceptLanguageResolver, I18nModule } from 'nestjs-i18n';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
@@ -172,11 +180,16 @@ describe.runIf(DB_AVAILABLE)(
         .set({ emailVerifiedAt: new Date() })
         .where(eq(users.id, f.ids.owner));
       await f.db
+        .update(users)
+        .set({ role: 'user' })
+        .where(eq(users.id, f.ids.stranger));
+      await f.db
         .update(notes)
         .set({
           generalAccess: 'anyone_with_link',
           generalAccessPermission: 'editor',
           editorsCanShare: true,
+          shareToken: `s1-${f.ids.note}`,
         })
         .where(eq(notes.id, f.ids.note));
       await f.db
@@ -201,6 +214,107 @@ describe.runIf(DB_AVAILABLE)(
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+    it('rotates through HTTP for an unverified owner while paused, returning only a note view', async () => {
+      await f.db
+        .update(users)
+        .set({ emailVerifiedAt: null })
+        .where(eq(users.id, f.ids.owner));
+      await f.db
+        .update(notes)
+        .set({ generalAccess: 'restricted', shareToken: 'rotation-before' })
+        .where(eq(notes.id, f.ids.note));
+      const response = await request('POST', '/share-link/rotate', f.ids.owner);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.shareToken).toMatch(/^[a-f0-9]{32}$/);
+      expect(body.generalAccess).toBe('restricted');
+      expect(body.content).toBe('<p>Existing note content</p>');
+      expect(body).not.toHaveProperty('yjsState');
+      const [persisted] = await f.db
+        .select()
+        .from(notes)
+        .where(eq(notes.id, f.ids.note));
+      expect(persisted?.shareToken).toBe(body.shareToken);
+    });
+    it('denies rotation to editors, viewers, strangers and administrators', async () => {
+      for (const actor of [f.ids.editor, f.ids.viewer, f.ids.stranger]) {
+        expect(
+          (await request('POST', '/share-link/rotate', actor)).status
+        ).toBe(403);
+      }
+      await f.db
+        .update(users)
+        .set({ role: 'admin' })
+        .where(eq(users.id, f.ids.stranger));
+      expect(
+        (await request('POST', '/share-link/rotate', f.ids.stranger)).status
+      ).toBe(403);
+      expect((await request('POST', '/share-link/rotate')).status).toBe(401);
+    });
+    it('rejects missing tokens with 409 and non-empty rotation bodies with 400', async () => {
+      await f.db
+        .update(notes)
+        .set({ shareToken: null })
+        .where(eq(notes.id, f.ids.note));
+      expect(
+        (await request('POST', '/share-link/rotate', f.ids.owner)).status
+      ).toBe(409);
+      expect(
+        (
+          await request('POST', '/share-link/rotate', f.ids.owner, {
+            shareToken: 'supplied',
+          })
+        ).status
+      ).toBe(400);
+    });
+    it('lets exactly one concurrent HTTP rotation win and rejects the old public URL while preserving direct access', async () => {
+      const locked = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+      const hold = f.client.begin(async (tx) => {
+        await tx`select id from notes where id = ${f.ids.note} for update`;
+        locked.resolve(undefined);
+        await release.promise;
+      });
+      await locked.promise;
+      const attempts = [
+        request('POST', '/share-link/rotate', f.ids.owner),
+        request('POST', '/share-link/rotate', f.ids.owner),
+      ];
+      try {
+        await vi.waitFor(
+          async () => {
+            const [blocked] =
+              await f.client`select count(*)::int as count from pg_locks l join pg_stat_activity a on a.pid = l.pid where not l.granted and a.datname = current_database()`;
+            expect(blocked?.['count']).toBeGreaterThanOrEqual(2);
+          },
+          { timeout: 15000, interval: 20 }
+        );
+      } finally {
+        release.resolve(undefined);
+        await hold;
+      }
+      const responses = await Promise.all(attempts);
+      expect(responses.map((response) => response.status).sort()).toEqual([
+        200, 409,
+      ]);
+      const changed = await responses
+        .find((response) => response.status === 200)
+        ?.json();
+      const previous = `s1-${f.ids.note}`;
+      expect(
+        (await fetch(`${base}/api/v1/notes/shared/${previous}`)).status
+      ).toBe(404);
+      expect(
+        (await fetch(`${base}/api/v1/notes/shared/${changed.shareToken}`))
+          .status
+      ).toBe(200);
+      expect((await request('GET', '', f.ids.viewer)).status).toBe(200);
+      const [persisted] = await f.db
+        .select()
+        .from(notes)
+        .where(eq(notes.id, f.ids.note));
+      expect(persisted?.shareToken).toBe(changed.shareToken);
+    });
     it('requires actual valid JWT/session authentication', async () => {
       expect((await request('GET', '/collaborators')).status).toBe(401);
     });

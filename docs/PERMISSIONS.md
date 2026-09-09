@@ -68,7 +68,7 @@ Similar to Google Docs, each note has a **General Access** setting:
 
 When "Anyone with the link" is enabled:
 
-- A unique `shareToken` (128-bit, 32-char hex via `crypto.randomBytes(16)`) is generated the first time the note is shared, and reused from then on
+- A unique `shareToken` (128-bit, 32-char hex via `crypto.randomBytes(16)`) is generated the first time the note is shared, and reused until the owner explicitly changes the link
 - The `generalAccessPermission` determines what people with the link can do:
   - **Viewer**: Read-only access
   - **Editor**: Can read and edit
@@ -78,7 +78,7 @@ Key features:
 
 - **Single token per note**: Unlike the old model, there's only one share link per note
 - **No expiration**: A link never expires on its own
-- **Permanent token**: The token is minted the first time the note is shared and kept for the life of the note. Setting access back to "Restricted" disables the link without clearing the token, so re-enabling resumes the same URL
+- **Retained, rotatable token**: The token is minted when sharing first opens. Restricting access preserves it so sharing can resume the same URL; the owner can explicitly change the link to invalidate the previous URL.
 - **Public access**: Shared notes can be accessed without authentication via `/s/:token`
 
 ### 2. Direct Permissions (user-to-user)
@@ -275,9 +275,9 @@ The `PATCH /notes/:id` endpoint accepts:
 - `generalAccessPermission` (owner only)
 - `editorsCanShare` (owner only)
 
-When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exists, one is generated. The token is then **permanent**: changing back to `'restricted'` leaves it in place, so re-enabling sharing resumes the same link instead of minting a different one.
+When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exists, one is generated. Changing back to `'restricted'` leaves the token in place, so re-enabling sharing resumes the same link. An explicit owner rotation replaces that token. Initial token writes preserve any existing token, including a concurrently rotated one.
 
-A retained token grants nothing on its own. Every reader gates on `generalAccess` as well — `findByShareToken` (REST), the Hocuspocus handshake, and the shared-artifacts query all require `'anyone_with_link'` — so a restricted note's token resolves to a 404 until sharing is re-enabled. The consequence to be aware of: there is no way to invalidate a leaked link, because re-sharing revives every link previously handed out.
+A retained token grants nothing on its own. Every reader gates on `generalAccess` as well — `findByShareToken` (REST), the Hocuspocus handshake, and the shared-artifacts query all require `'anyone_with_link'` — so a restricted note's token resolves to a 404 until sharing is re-enabled. The owner can invalidate a previously distributed URL using `POST /notes/:id/share-link/rotate`, including while sharing is paused. This takes an empty body, requires no email verification, and returns the updated note (200). A missing token or losing concurrent compare-and-swap returns `SHARE_LINK_CONFLICT` (409). Only the token and modification time change; direct permissions and note content remain intact. Open sessions revalidate against PostgreSQL through the access protocol; HTTP success confirms persistence, not completion on every session.
 
 ### Direct Permissions
 
@@ -288,6 +288,10 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 | `GET`    | `/notes/:id/collaborators` | JWT  | `read`               | List people (owner or sharing direct editor)                                             |
 
 `GET /notes/:id/collaborators` returns `NotePerson[]`, ordered owner first, then name, email, and ID. Each item is `{ user: { id, name, email, avatarUrl }, permission }`; `permission` is `owner`, `viewer`, or `editor`. The owner is a projection, not a direct-grant row. `POST /notes/:id/share` accepts `{ email, permission }` (`viewer` or `editor`) and returns the authoritative `NotePerson` with status 201. An unavailable, anonymous, owner, or self target produces the same 422 `PERSON_NOT_ADDABLE`; actor authorization precedes recipient lookup. Removing a direct grant preserves access through a valid open link.
+
+### Link Rotation
+
+`POST /notes/:id/share-link/rotate` is owner-only, accepts no input fields, and generates 16 random bytes as a 32-character hex token. The client never retries an uncertain mutation automatically: it refetches the current note and asks the owner to check the link. The confirmation explains that direct access persists and already downloaded content cannot be recalled.
 
 ### Public Share Link Access
 
@@ -303,6 +307,7 @@ The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.e
 | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
 | `NOTE_NOT_FOUND`        | 404         | Note does not exist or is soft-deleted                                                            |
 | `PERMISSION_DENIED`     | 403         | User lacks required permission (incl. owner-only operations, via `NoteErrors.ownerOnly()`)        |
+| `SHARE_LINK_CONFLICT`   | 409         | Share token absent or another rotation won; refresh before an explicit retry                      |
 | `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                                      |
 | `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                          |
 | `EMAIL_NOT_VERIFIED`    | 403         | Verified-identity gate refused the action — see [Verified-Identity Gate](#verified-identity-gate) |

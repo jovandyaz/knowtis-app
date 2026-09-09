@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  authorizeShareLinkRotation,
   canManagePeople,
   isEligibleRecipient,
   isPermissionWidening,
@@ -97,5 +98,37 @@ describe('People management domain policy', () => {
     ['editor', 'editor', false],
   ] as const)('direct %s to %s widens: %s', (current, requested, expected) => {
     expect(isPermissionWidening(current, requested)).toBe(expected);
+  });
+});
+
+describe('authorizeShareLinkRotation', () => {
+  it.each(['editor', 'viewer', 'admin', 'stranger'])(
+    'denies %s with PERMISSION_DENIED',
+    (actorId) => {
+      expect(
+        authorizeShareLinkRotation(
+          { ownerId: 'owner', shareToken: 'current' },
+          actorId
+        )._unsafeUnwrapErr().code
+      ).toBe('PERMISSION_DENIED');
+    }
+  );
+
+  it('fails with SHARE_LINK_CONFLICT when the owner has no active link', () => {
+    expect(
+      authorizeShareLinkRotation(
+        { ownerId: 'owner', shareToken: null },
+        'owner'
+      )._unsafeUnwrapErr().code
+    ).toBe('SHARE_LINK_CONFLICT');
+  });
+
+  it('returns the active token the owner rotation must replace', () => {
+    expect(
+      authorizeShareLinkRotation(
+        { ownerId: 'owner', shareToken: 'current' },
+        'owner'
+      )._unsafeUnwrap()
+    ).toBe('current');
   });
 });

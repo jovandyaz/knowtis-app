@@ -6,6 +6,7 @@ export interface NoteDomainError {
 }
 
 export const NoteErrorCodes = {
+  SHARE_LINK_CONFLICT: 'SHARE_LINK_CONFLICT',
   PERSON_NOT_ADDABLE: 'PERSON_NOT_ADDABLE',
   INVALID_TITLE: 'INVALID_TITLE',
   INVALID_CONTENT: 'INVALID_CONTENT',
@@ -33,6 +34,11 @@ export function createNoteError(
 }
 
 export const NoteErrors = {
+  shareLinkConflict: () =>
+    createNoteError(
+      NoteErrorCodes.SHARE_LINK_CONFLICT,
+      'The share link changed or has not been created. Refresh the note before trying again.'
+    ),
   personNotAddable: () =>
     createNoteError(
       NoteErrorCodes.PERSON_NOT_ADDABLE,

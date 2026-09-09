@@ -30,6 +30,7 @@ describe('CreateNoteHandler', () => {
 
   beforeEach(() => {
     mockRepository = {
+      rotateShareToken: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),

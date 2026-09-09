@@ -307,6 +307,18 @@
       "refreshing": "Refreshing access…",
       "loading": "Loading access…",
       "invalidResponse": "Access information could not be validated."
+    },
+    "rotation": {
+      "action": "Change share link",
+      "title": "Change this share link?",
+      "description": "The current link will stop working. People added directly keep their permissions. Open sessions will update in a few seconds; previously downloaded content cannot be recalled.",
+      "cancel": "Cancel",
+      "confirm": "Change link",
+      "close": "Close",
+      "saved": "Share link changed. Open sessions will update in a few seconds.",
+      "uncertain": "We could not confirm whether the link changed. Check the current link before trying again.",
+      "conflict": "The link changed elsewhere or has not been created. Check the current link before trying again.",
+      "failed": "The link could not be changed. Check your access before trying again."
     }
   },
   "shared": {

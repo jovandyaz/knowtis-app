@@ -5,6 +5,7 @@ import {
   RequirePermission,
 } from '@jovandyaz/permissions-nestjs';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -68,6 +69,7 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
 import { toNoteView } from './domain';
 import {
@@ -173,7 +175,8 @@ export class NotesController {
     private readonly revokeAccessHandler: RevokeAccessHandler,
     private readonly getCollaboratorsHandler: GetCollaboratorsHandler,
     private readonly getNoteByTokenHandler: GetNoteByTokenHandler,
-    private readonly uploadImageHandler: UploadImageHandler
+    private readonly uploadImageHandler: UploadImageHandler,
+    private readonly rotateShareLinkHandler: RotateShareLinkHandler
   ) {}
 
   @ApiOperation({
@@ -500,6 +503,51 @@ export class NotesController {
       permission: dto.permission,
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+  }
+
+  @ApiOperation({
+    summary: 'Rotate the share link',
+    description:
+      'Owner only. Available while restricted and without verified email. Takes an empty body. Returns the persisted note; open sessions revalidate separately.',
+  })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Share link rotated',
+    schema: noteSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'SHARE_LINK_CONFLICT: link absent or a concurrent rotation won',
+  })
+  @ApiBadRequest('the request body must be empty')
+  @ApiAuthErrors('only the owner can rotate the share link')
+  @ApiNotFound('note does not exist')
+  @Post(':id/share-link/rotate')
+  @Throttle(NOTE_UPDATE_THROTTLE)
+  @RequirePermission('share', SUBJECTS.Note)
+  @RequireMcpScope(MCP_SCOPES.SHARE)
+  @HttpCode(HttpStatus.OK)
+  async rotateShareLink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() body: unknown
+  ) {
+    if (
+      body !== undefined &&
+      (body === null ||
+        typeof body !== 'object' ||
+        Array.isArray(body) ||
+        Object.keys(body).length > 0)
+    ) {
+      throw new BadRequestException('The request body must be empty');
+    }
+    const result = await this.rotateShareLinkHandler.execute({
+      noteId: id,
+      actorId: user.id,
+    });
+    return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({

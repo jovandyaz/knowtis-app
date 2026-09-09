@@ -24,7 +24,8 @@ export interface UpdateNoteData {
   readonly content?: string;
   readonly generalAccess?: GeneralAccessLevel;
   readonly generalAccessPermission?: PermissionLevel;
-  readonly shareToken?: string | null;
+  /** First-mint only: a delayed write must never clobber a committed rotation. */
+  readonly shareToken?: string;
   readonly editorsCanShare?: boolean;
   readonly bucket?: ParaBucket | null;
   readonly supertag?: Supertag | null;
@@ -35,7 +36,17 @@ export type UpdateNoteContentData = UpdateNoteData & {
   readonly content: string;
 };
 
+export interface RotateShareTokenData {
+  readonly noteId: string;
+  readonly ownerId: string;
+  readonly expectedToken: string;
+  readonly newToken: string;
+}
+
 export interface NoteWriteRepository {
+  rotateShareToken(
+    data: RotateShareTokenData
+  ): Promise<Result<NoteEntity, NoteDomainError>>;
   create(data: CreateNoteData): Promise<Result<NoteEntity, NoteDomainError>>;
   createWithYjsState(
     data: CreateNoteData,
