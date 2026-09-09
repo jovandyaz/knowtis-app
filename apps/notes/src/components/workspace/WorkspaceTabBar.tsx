@@ -7,6 +7,7 @@ import { BookOpen, FileText, type LucideIcon } from 'lucide-react';
 import { cn } from '@knowtis/design-system';
 
 import { workspacePanelId, workspaceTabId } from './workspace-tab-ids';
+import { WORKSPACE_TAB, WORKSPACE_TAB_STRIP } from './workspace-tab.styles';
 
 interface WorkspaceTabItem {
   value: WorkspaceTab;
@@ -61,7 +62,7 @@ export function WorkspaceTabBar({ studyCount }: { studyCount: number }) {
     <div
       role="tablist"
       aria-label={t('workspace.tabsLabel')}
-      className="mb-6 flex items-center gap-6 border-b border-border/60"
+      className={WORKSPACE_TAB_STRIP}
     >
       {tabs.map(({ value, label, icon: Icon, count }) => {
         const selected = value === activeTab;
@@ -80,7 +81,7 @@ export function WorkspaceTabBar({ studyCount }: { studyCount: number }) {
             onClick={() => setTab(value)}
             onKeyDown={onKeyDown}
             className={cn(
-              '-mb-px flex items-center gap-2 rounded-t-sm border-b-2 px-0.5 pb-2.5 pt-1 text-sm font-medium',
+              WORKSPACE_TAB,
               'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2',
               selected
                 ? 'border-(--primary) text-foreground'

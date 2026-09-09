@@ -8,6 +8,7 @@ import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { SharedNoteAccessError } from '@/components/notes/shared-note/SharedNoteAccessError';
 import { SharedNoteHeader } from '@/components/notes/shared-note/SharedNoteHeader';
 import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
+import { WorkspaceTabBarSkeleton } from '@/components/workspace/WorkspaceTabBarSkeleton';
 import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
@@ -35,7 +36,8 @@ export function SharedNotePage() {
     useNoteByToken(token);
   const user = useAuthUser();
   const isAuthLoading = useAuthLoading();
-  const { data: artifacts } = useSharedNoteArtifacts(token);
+  const { data: artifacts, isPending: artifactsPending } =
+    useSharedNoteArtifacts(token);
   const {
     isEditing,
     isPreparingEdit,
@@ -144,6 +146,7 @@ export function SharedNotePage() {
 
         <main className="flex-1 min-h-0 overflow-y-auto p-4 md:px-8 md:pt-3 md:pb-8">
           <div className="mx-auto max-w-4xl">
+            {artifactsPending ? <WorkspaceTabBarSkeleton /> : null}
             {hasArtifacts && (
               <WorkspaceTabBar studyCount={sharedArtifacts.length} />
             )}

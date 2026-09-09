@@ -54,7 +54,7 @@ const {
   return {
     captureProductEvent: vi.fn(),
     artifactFixtures,
-    sharedArtifacts: { data: [] as Artifact[] },
+    sharedArtifacts: { data: [] as Artifact[], isPending: false },
     studyToolsProps: { last: undefined as StudyToolsTabProps | undefined },
   };
 });
@@ -111,7 +111,10 @@ vi.mock('@knowtis/editor', () => ({
   ),
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useSharedNoteArtifacts: () => ({ data: sharedArtifacts.data }),
+  useSharedNoteArtifacts: () => ({
+    data: sharedArtifacts.data,
+    isPending: sharedArtifacts.isPending,
+  }),
 }));
 vi.mock('@/components/artifacts/StudyToolsTab', () => ({
   StudyToolsTab: (props: StudyToolsTabProps) => {
@@ -142,6 +145,7 @@ beforeEach(() => {
   denyEdit = undefined;
   token = 'tok';
   sharedArtifacts.data = [];
+  sharedArtifacts.isPending = false;
   studyToolsProps.last = undefined;
   useWorkspaceStore.setState({ activeTab: 'note' });
   authUser.mockReturnValue({ isAnonymous: true });
@@ -354,6 +358,24 @@ describe('SharedNotePage study tab', () => {
     screen.getByRole('tab', { name: /workspace.tabs.note/ });
   const notePanel = () => document.getElementById(workspacePanelId('note'));
   const studyPanel = () => document.getElementById(workspacePanelId('estudio'));
+
+  const tabStripPlaceholder = () =>
+    screen.queryByRole('status', { name: 'workspace.tabsLoading' });
+
+  it('reserves the tab strip height while the artifacts are still loading', () => {
+    sharedArtifacts.isPending = true;
+    renderPage();
+
+    expect(tabStripPlaceholder()).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('drops the placeholder once the artifacts settle with none', () => {
+    renderPage();
+
+    expect(tabStripPlaceholder()).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
 
   it('leaves the page untabbed when the shared note has no artifacts', () => {
     renderPage();

@@ -670,7 +670,8 @@
       "note": "Nota",
       "study": "Estudio"
     },
-    "tabsLabel": "Espacio de la nota"
+    "tabsLabel": "Espacio de la nota",
+    "tabsLoading": "Cargando el espacio de la nota"
   },
   "study": {
     "loading": "Cargando tu repaso",

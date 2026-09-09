@@ -11,6 +11,7 @@ import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
+import { WorkspaceTabBarSkeleton } from '@/components/workspace/WorkspaceTabBarSkeleton';
 import { WorkspaceTabPanel } from '@/components/workspace/WorkspaceTabPanel';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
@@ -30,7 +31,10 @@ import { toast } from 'sonner';
 import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useArtifacts } from '@knowtis/data-access-artifacts';
-import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import {
+  useFeatureFlag,
+  useFeatureFlags,
+} from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
@@ -185,6 +189,9 @@ function NoteEditor({
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
   const { data: noteArtifacts } = useArtifacts(aiEnabled ? noteId : undefined);
+  // The strip is gated on `ai_enabled`, so until the flags land nobody knows
+  // whether it will be there; reserving its height avoids the jump either way.
+  const { isPending: flagsPending } = useFeatureFlags();
 
   useWorkspaceTabReset(noteId);
 
@@ -323,6 +330,7 @@ function NoteEditor({
         onShareDialogOpenChange={setIsShareDialogOpen}
       />
 
+      {flagsPending ? <WorkspaceTabBarSkeleton /> : null}
       {aiEnabled && <WorkspaceTabBar studyCount={noteArtifacts?.length ?? 0} />}
 
       <WorkspaceTabPanel tab="note" tabbed={aiEnabled}>

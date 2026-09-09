@@ -12,10 +12,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
-const { aiState, artifactsState, useArtifacts } = vi.hoisted(() => {
+const { aiState, artifactsState, flagsState, useArtifacts } = vi.hoisted(() => {
   const artifactsState = { data: [] as { id: string }[] };
   return {
     aiState: { aiEnabled: false },
+    flagsState: { isPending: false },
     artifactsState,
     useArtifacts: vi.fn<(noteId?: string) => { data: { id: string }[] }>(
       () => ({
@@ -74,6 +75,11 @@ vi.mock('@/components/artifacts/StudyToolsTab', () => ({
 
 vi.mock('@knowtis/data-access-artifacts', () => ({ useArtifacts }));
 
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlags: () => ({ isPending: flagsState.isPending }),
+  useFeatureFlag: () => false,
+}));
+
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => ({
     data: {
@@ -110,8 +116,28 @@ describe('NoteEditorPage workspace tabs', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ activeTab: 'note' });
     aiState.aiEnabled = false;
+    flagsState.isPending = false;
     artifactsState.data = [];
     useArtifacts.mockClear();
+  });
+
+  const tabStripPlaceholder = () =>
+    screen.queryByRole('status', { name: 'workspace.tabsLoading' });
+
+  it('reserves the tab strip height while the feature flags are pending', () => {
+    flagsState.isPending = true;
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(tabStripPlaceholder()).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('drops the placeholder once the flags settle with AI off', () => {
+    renderWithClient(<NoteEditorPage />);
+
+    expect(tabStripPlaceholder()).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 
   describe('when AI is disabled', () => {
