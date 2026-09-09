@@ -330,7 +330,7 @@ function DialogContent({
         ref={handleOverlayRef}
         className={cn(
           'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
-          'animate-in fade-in-0 motion-reduce:animate-none'
+          'animate-overlay-fade motion-reduce:animate-none'
         )}
       />
       <DialogPrimitive.Content
@@ -341,20 +341,20 @@ function DialogContent({
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
         className={cn(
-          'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg duration-(--motion-duration-base) motion-reduce:animate-none',
+          'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg motion-reduce:animate-none',
           side === DIALOG_SIDE.CENTER && [
             'md:left-1/2 md:top-1/2 md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-6',
-            'md:animate-in md:fade-in-0 md:zoom-in-95 md:slide-in-from-left-1/2 md:slide-in-from-top-[48%]',
+            'md:animate-overlay-pop md:motion-reduce:animate-none',
             'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
-            'max-md:animate-in max-md:fade-in-0 max-md:slide-in-from-bottom-full',
+            'max-md:animate-sheet-rise max-md:motion-reduce:animate-none',
           ],
           side === DIALOG_SIDE.FULL && [
             'inset-0 h-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-none border-0 p-0',
-            'animate-in fade-in-0',
+            'animate-overlay-fade',
           ],
           side === DIALOG_SIDE.RIGHT && [
             'inset-y-0 right-0 h-full max-w-md content-start overflow-y-auto border-l p-6',
-            'animate-in fade-in-0 slide-in-from-right',
+            'animate-panel-slide-in',
           ],
           className
         )}

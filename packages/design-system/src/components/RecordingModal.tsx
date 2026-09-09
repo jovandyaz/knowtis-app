@@ -35,8 +35,7 @@ export function RecordingModal({
         <DialogPrimitive.Overlay
           className={cn(
             'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
-            'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+            'animate-overlay-fade',
             'motion-reduce:animate-none'
           )}
         />
@@ -64,13 +63,9 @@ export function RecordingModal({
             'shadow-xl',
             'md:left-1/2 md:top-1/2 md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:p-6',
             'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-2xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
-            'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-            'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
-            'md:data-[state=open]:zoom-in-95 md:data-[state=open]:slide-in-from-left-1/2 md:data-[state=open]:slide-in-from-top-[48%]',
-            'md:data-[state=closed]:zoom-out-95 md:data-[state=closed]:slide-out-to-left-1/2 md:data-[state=closed]:slide-out-to-top-[48%]',
+            'md:animate-overlay-pop md:motion-reduce:animate-none',
+            'max-md:animate-sheet-rise max-md:motion-reduce:animate-none',
             'motion-reduce:animate-none',
-            'max-md:data-[state=open]:slide-in-from-bottom-full',
-            'max-md:data-[state=closed]:slide-out-to-bottom-full',
             className
           )}
         >

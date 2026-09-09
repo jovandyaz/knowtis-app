@@ -18,6 +18,49 @@
   --radius: 0.75rem;
 
   --tabs-fade-start: 85%;
+
+  --animate-overlay-fade: overlay-fade var(--motion-duration-fast)
+    var(--motion-easing-enter);
+  --animate-overlay-pop: overlay-pop var(--motion-duration-fast)
+    var(--motion-easing-enter);
+  --animate-sheet-rise: sheet-rise var(--motion-duration-base)
+    var(--motion-easing-enter);
+  --animate-panel-slide-in: panel-slide-in var(--motion-duration-base)
+    var(--motion-easing-enter);
+  --animate-drop-in: drop-in var(--motion-duration-fast)
+    var(--motion-easing-enter);
+
+  /* Overlays that Tailwind centres with `-translate-*` may only animate `scale`
+     and `opacity`; a `translate` keyframe would fight the centring utility. */
+  @keyframes overlay-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes overlay-pop {
+    from {
+      opacity: 0;
+      scale: 0.95;
+    }
+  }
+  @keyframes sheet-rise {
+    from {
+      opacity: 0;
+      translate: 0 100%;
+    }
+  }
+  @keyframes panel-slide-in {
+    from {
+      opacity: 0;
+      translate: 100% 0;
+    }
+  }
+  @keyframes drop-in {
+    from {
+      opacity: 0;
+      translate: 0 -0.5rem;
+    }
+  }
 }
 
 /* Inline: a plain alias resolves once at :root, so a nested .dark (Storybook's preview wrapper) never reaches these utilities — only .dark on <html> would. */

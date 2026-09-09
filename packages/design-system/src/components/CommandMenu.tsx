@@ -29,7 +29,7 @@ const CommandMenuContent = forwardRef<HTMLDivElement, CommandMenuContentProps>(
       className={cn(
         'z-50 overflow-hidden rounded-xl border border-primary/20',
         'bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/20 backdrop-blur-xl',
-        'animate-in fade-in zoom-in-95 duration-(--motion-duration-fast) motion-reduce:animate-none',
+        'animate-overlay-pop motion-reduce:animate-none',
         WIDTH_MAP[width],
         className
       )}
