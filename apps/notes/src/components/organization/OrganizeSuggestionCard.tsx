@@ -16,7 +16,7 @@ import {
 } from '@knowtis/shared-types';
 
 const CHIP_BASE =
-  'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer md:min-h-0';
+  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer pointer-coarse:min-h-11';
 const CHIP_ACCEPTED = 'border-border/60 bg-muted/25 text-foreground';
 const CHIP_REJECTED =
   'border-dashed border-border/40 text-muted-foreground/60 line-through';
@@ -95,7 +95,7 @@ export function OrganizeSuggestionCard({
           type="button"
           onClick={onDismiss}
           aria-label={t('organization.suggestion.dismiss')}
-          className="ml-auto flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer md:min-h-0 md:min-w-0 md:p-1"
+          className="ml-auto flex items-center justify-center rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer pointer-coarse:min-h-11 pointer-coarse:min-w-11"
         >
           <X className="size-3.5" />
         </button>
