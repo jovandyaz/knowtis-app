@@ -65,7 +65,6 @@ export function RecordingModal({
             'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-2xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
             'md:animate-overlay-pop md:motion-reduce:animate-none',
             'max-md:animate-sheet-rise max-md:motion-reduce:animate-none',
-            'motion-reduce:animate-none',
             className
           )}
         >
