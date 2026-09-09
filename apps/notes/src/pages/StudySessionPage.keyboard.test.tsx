@@ -106,7 +106,7 @@ function correctButton() {
   });
 }
 
-/** Resolves a microtask after the commit that satisfies `seen`, so no passive effect can have run yet. */
+// Resolves a microtask after the commit that satisfies `seen`, so no passive effect can have run yet.
 function onCommit(seen: () => boolean): Promise<void> {
   return new Promise((resolve) => {
     const observer = new MutationObserver(() => {
