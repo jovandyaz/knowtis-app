@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -93,5 +95,10 @@ describe('StatTile', () => {
     );
     const root = screen.getByTestId('stat-root');
     expect(root).toHaveAttribute('id', 'stat-streak');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<StatTile ref={ref} value={7} label="Day streak" />);
+    expect(ref.current).toBe(screen.getByRole('group', { name: 'Day streak' }));
   });
 });

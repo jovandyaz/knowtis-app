@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -76,5 +78,10 @@ describe('Progress', () => {
     const indicator = screen.getByRole('progressbar')
       .firstElementChild as HTMLElement;
     expect(indicator.className).toContain('ease-enter');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<Progress ref={ref} value={1} max={2} label="Half" />);
+    expect(ref.current).toBe(screen.getByRole('progressbar'));
   });
 });

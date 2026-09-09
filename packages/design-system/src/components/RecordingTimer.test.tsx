@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -46,5 +48,17 @@ describe('RecordingTimer', () => {
     expect(
       container.querySelector('[aria-hidden="true"]')?.className
     ).toContain('motion-safe:animate-pulse');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    const { container } = render(
+      <RecordingTimer
+        ref={ref}
+        elapsed={30}
+        maxDuration={300}
+        isRecording={false}
+      />
+    );
+    expect(ref.current).toBe(container.firstElementChild);
   });
 });

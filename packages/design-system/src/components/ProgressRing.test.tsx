@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -160,5 +162,18 @@ describe('ProgressRing', () => {
     expect(root.style.marginTop).toBe('8px');
     expect(root.style.width).toBe('40px');
     expect(root.style.height).toBe('40px');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(
+      <ProgressRing
+        ref={ref}
+        value={4}
+        max={18}
+        label="4 of 18 cards"
+        data-testid="ring-root"
+      />
+    );
+    expect(ref.current).toBe(screen.getByTestId('ring-root'));
   });
 });

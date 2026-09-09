@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 
 export interface FormFieldProps {
   id: string;
@@ -7,9 +7,9 @@ export interface FormFieldProps {
   children: ReactNode;
 }
 
-export function FormField({ id, label, error, children }: FormFieldProps) {
-  return (
-    <div className="space-y-2">
+const FormField = forwardRef<HTMLDivElement, FormFieldProps>(
+  ({ id, label, error, children }, ref) => (
+    <div ref={ref} className="space-y-2">
       <label htmlFor={id} className="text-sm font-medium text-(--foreground)">
         {label}
       </label>
@@ -24,5 +24,8 @@ export function FormField({ id, label, error, children }: FormFieldProps) {
         </p>
       )}
     </div>
-  );
-}
+  )
+);
+FormField.displayName = 'FormField';
+
+export { FormField };

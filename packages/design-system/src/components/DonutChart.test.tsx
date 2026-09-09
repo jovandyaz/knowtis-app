@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -159,5 +161,18 @@ describe('DonutChart', () => {
     );
     const root = screen.getByTestId('donut-root');
     expect(root).toHaveAttribute('id', 'quiz-donut');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(
+      <DonutChart
+        ref={ref}
+        segments={[...SEGMENTS]}
+        centerLabel="60%"
+        description={DESCRIPTION}
+        data-testid="donut-root"
+      />
+    );
+    expect(ref.current).toBe(screen.getByTestId('donut-root'));
   });
 });

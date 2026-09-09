@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -128,5 +130,20 @@ describe('FlipCard', () => {
     const wrapper = screen.getByRole('button').parentElement;
     expect(wrapper).toHaveClass('min-h-96');
     expect(wrapper).toHaveClass('grid');
+  });
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(
+      <FlipCard
+        ref={ref}
+        front={<p>Question</p>}
+        back={<p>Answer</p>}
+        flipped={false}
+        onFlip={vi.fn()}
+        frontHint="Show answer"
+        backHint="Show question"
+      />
+    );
+    expect(ref.current).toBe(screen.getByRole('button'));
   });
 });
