@@ -2,7 +2,13 @@ import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { NAV_COUNT, NAV_LABEL } from '@/components/organization/nav-row.styles';
 import type { NavigationLink } from '@/config/navigation.config';
+import { ROUTES } from '@/config/routes.config';
+import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
+
+import { useStudyStats } from '@knowtis/data-access-artifacts';
 
 /**
  * Navigation links props interface
@@ -16,10 +22,19 @@ interface NavigationLinksProps {
 
 export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
   const { t } = useTranslation('common');
+  const { isEnabled: isStudyEnabled } = useStudyQueueAccess();
+  const stats = useStudyStats(BROWSER_TIME_ZONE, { enabled: isStudyEnabled });
+  const dueCount = stats.data?.dueCount ?? 0;
 
   return (
     <nav className="py-2 px-4 flex flex-col gap-1">
       {links.map((link) => {
+        const isStudyLink = link.to === ROUTES.STUDY;
+
+        if (isStudyLink && !isStudyEnabled) {
+          return null;
+        }
+
         if (link.disabled) {
           return (
             <span
@@ -49,7 +64,15 @@ export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
             {...link.linkProps}
           >
             <link.icon className="h-4 w-4" />
-            {t(link.labelKey)}
+            <span className={NAV_LABEL}>{t(link.labelKey)}</span>
+            {isStudyLink && dueCount > 0 && (
+              <span className={NAV_COUNT}>
+                <span aria-hidden="true">{dueCount}</span>
+                <span className="sr-only">
+                  {t('labels.studyDueCount', { count: dueCount })}
+                </span>
+              </span>
+            )}
           </Link>
         );
       })}

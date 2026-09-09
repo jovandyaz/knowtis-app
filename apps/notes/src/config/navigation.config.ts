@@ -1,7 +1,7 @@
 import type { LinkProps } from '@tanstack/react-router';
 
 import type { LucideIcon } from 'lucide-react';
-import { Home } from 'lucide-react';
+import { Home, Repeat } from 'lucide-react';
 
 import type { enCommon } from '@knowtis/shared-i18n';
 
@@ -46,5 +46,10 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Home,
     labelKey: 'labels.home',
     to: ROUTES.DASHBOARD,
+  },
+  {
+    icon: Repeat,
+    labelKey: 'labels.study',
+    to: ROUTES.STUDY,
   },
 ] as const satisfies NavigationLink[];

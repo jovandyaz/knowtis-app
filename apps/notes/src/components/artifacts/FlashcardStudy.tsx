@@ -1,23 +1,33 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 
-import { useReviewCard } from '@knowtis/data-access-artifacts';
-import { useMotionPreset } from '@knowtis/design-system';
 import {
+  useFlashcardProgress,
+  useReviewCard,
+} from '@knowtis/data-access-artifacts';
+import {
+  ErrorState,
+  LoadingState,
+  useMotionPreset,
+} from '@knowtis/design-system';
+import {
+  CARD_STATUS,
   SM2_QUALITY,
   type FlashcardArtifact,
+  type FlashcardProgress,
   type SM2Quality,
 } from '@knowtis/shared-types';
 
+import { deckStudyCards } from './flashcard/deck-study-cards';
 import { FlashcardCard } from './flashcard/FlashcardCard';
 import { FlashcardHeader } from './flashcard/FlashcardHeader';
 import { FlashcardNav } from './flashcard/FlashcardNav';
 import { FlashcardRating } from './flashcard/FlashcardRating';
 import { FlashcardSummary } from './flashcard/FlashcardSummary';
-import { useStudySession } from './flashcard/use-study-session';
+import { useFlashcardSession } from './flashcard/use-flashcard-session';
 
 const CARD_ENTER_X = 60;
 
@@ -28,43 +38,115 @@ interface FlashcardStudyProps {
 
 export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
+  const {
+    data: progress,
+    isLoading,
+    isError,
+    refetch,
+  } = useFlashcardProgress(readOnly ? undefined : artifact.id);
+
+  if (isLoading) {
+    return <LoadingState message={t('ai.artifacts.loadingStudy')} />;
+  }
+
+  if (isError) {
+    return (
+      <ErrorState
+        title={t('ai.artifacts.flashcards.progressError')}
+        message={tCommon('errors.tryAgainLater')}
+        retryLabel={tCommon('buttons.tryAgain')}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  return (
+    <FlashcardDeckSession
+      artifact={artifact}
+      progress={progress}
+      readOnly={readOnly}
+    />
+  );
+}
+
+interface FlashcardDeckSessionProps {
+  artifact: FlashcardArtifact;
+  progress: FlashcardProgress[] | undefined;
+  readOnly?: boolean | undefined;
+}
+
+function FlashcardDeckSession({
+  artifact,
+  progress,
+  readOnly,
+}: FlashcardDeckSessionProps) {
+  const { t } = useTranslation('notes');
   const { mutateAsync: reviewCard, isPending: isReviewPending } =
     useReviewCard();
-  const session = useStudySession(artifact.content);
+  const cards = useMemo(
+    () => deckStudyCards(artifact, progress),
+    [artifact, progress]
+  );
+  const session = useFlashcardSession(cards);
   const preset = useMotionPreset();
 
+  const isCurrentCardPending =
+    session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
+
+  const isReviewInFlightRef = useRef(false);
+
   const submitReview = useCallback(
-    (quality: SM2Quality) => {
+    async (quality: SM2Quality) => {
       if (readOnly) {
-        return;
+        return true;
       }
-      void reviewCard({
-        artifactId: artifact.id,
-        cardIndex: session.currentIndex,
-        quality,
-      }).catch(() => {
+      if (isReviewInFlightRef.current || !session.currentCard) {
+        return false;
+      }
+      const { artifactId, cardIndex } = session.currentCard;
+      isReviewInFlightRef.current = true;
+      try {
+        await reviewCard({ artifactId, cardIndex, quality });
+        return true;
+      } catch {
         toast.error(t('ai.artifacts.flashcards.reviewError'));
-      });
+        return false;
+      } finally {
+        isReviewInFlightRef.current = false;
+      }
     },
-    [artifact.id, session.currentIndex, reviewCard, t, readOnly]
+    [session.currentCard, reviewCard, t, readOnly]
   );
 
-  const handleWrong = useCallback(() => {
-    submitReview(SM2_QUALITY.AGAIN);
-    session.rate('wrong');
-  }, [submitReview, session]);
+  const handleWrong = useCallback(async () => {
+    if (!isCurrentCardPending) {
+      return;
+    }
+    if (await submitReview(SM2_QUALITY.AGAIN)) {
+      session.rate('wrong');
+    }
+  }, [isCurrentCardPending, submitReview, session]);
 
-  const handleCorrect = useCallback(() => {
-    submitReview(SM2_QUALITY.GOOD);
-    session.rate('correct');
-  }, [submitReview, session]);
+  const handleCorrect = useCallback(async () => {
+    if (!isCurrentCardPending) {
+      return;
+    }
+    if (await submitReview(SM2_QUALITY.GOOD)) {
+      session.rate('correct');
+    }
+  }, [isCurrentCardPending, submitReview, session]);
 
   const handleRateAdvanced = useCallback(
-    (quality: SM2Quality) => {
-      submitReview(quality);
-      session.rateAdvanced(quality);
+    async (quality: SM2Quality) => {
+      if (!isCurrentCardPending) {
+        return;
+      }
+      if (await submitReview(quality)) {
+        session.rateAdvanced(quality);
+      }
     },
-    [submitReview, session]
+    [isCurrentCardPending, submitReview, session]
   );
 
   const handleNavigatePrev = useCallback(() => {
@@ -106,6 +188,7 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
         isAdvancedMode={session.isAdvancedMode}
         onToggleAdvanced={session.toggleAdvanced}
         onRestart={() => session.restart('all')}
+        onShuffle={session.shuffle}
         readOnly={readOnly}
       />
 
@@ -132,9 +215,9 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
           isAdvancedMode={session.isAdvancedMode}
           readOnly={readOnly}
           disabled={isReviewPending}
-          onWrong={handleWrong}
-          onCorrect={handleCorrect}
-          onRateAdvanced={handleRateAdvanced}
+          onWrong={() => void handleWrong()}
+          onCorrect={() => void handleCorrect()}
+          onRateAdvanced={(quality) => void handleRateAdvanced(quality)}
         />
       ) : (
         <FlashcardNav

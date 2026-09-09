@@ -513,14 +513,19 @@
       },
       "flashcards": {
         "cardOf": "{{current}} / {{total}}",
-        "reviewedOf": "{{reviewed}} of {{total}} cards reviewed",
+        "reviewedOf_one": "{{reviewed}} of {{count}} card reviewed",
+        "reviewedOf_other": "{{reviewed}} of {{count}} cards reviewed",
         "showAnswer": "Show Answer",
         "showFront": "Show front of card",
         "showBack": "Show back of card",
         "prev": "Previous",
         "next": "Next",
         "reviewError": "Failed to submit review",
+        "progressError": "We couldn't load this deck's progress",
         "restart": "Start over",
+        "shuffle": "Shuffle",
+        "intervalDays_one": "{{count}} day",
+        "intervalDays_other": "{{count}} days",
         "difficulty": {
           "easy": "Easy",
           "medium": "Medium",
@@ -666,5 +671,31 @@
       "study": "Study"
     },
     "tabsLabel": "Note workspace"
+  },
+  "study": {
+    "loading": "Loading your review",
+    "newBadge": "New",
+    "caughtUp": {
+      "title": "All caught up",
+      "nextReview": "Your next card arrives {{when}}",
+      "nothingScheduled": "You have no cards scheduled yet",
+      "cta": "Go to my notes"
+    },
+    "summary": {
+      "streak_zero": "Your streak starts today",
+      "streak_one": "Streak of {{count}} day",
+      "streak_other": "Streak of {{count}} days",
+      "backHome": "Back to home",
+      "restartFailed": "We couldn't load new cards. Try again."
+    },
+    "todayCard": {
+      "title": "Today's review",
+      "dueLabel": "due today",
+      "newLabel_one": "new",
+      "newLabel_other": "new",
+      "streakLabel_one": "day streak",
+      "streakLabel_other": "day streak",
+      "cta": "Start"
+    }
   }
 }

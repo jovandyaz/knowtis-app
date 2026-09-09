@@ -23,6 +23,9 @@ import {
 } from './__tests__/active-access.fixture';
 import { ACCESS_INVALIDATION_CHANNEL } from './access-invalidation.bus';
 
+const ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME =
+  'knowtis-access-invalidations-sub';
+
 if (!process.env['DATABASE_URL'] || !process.env['REDIS_URL']) {
   throw new Error(
     'DATABASE_URL and REDIS_URL are required for active-access acceptance'
@@ -63,6 +66,16 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     servers.push(instance);
     await instance.start();
     return instance;
+  }
+  async function listAccessInvalidationSubscriberIds() {
+    const list = (await redis.client('LIST')) as string;
+    return list
+      .split('\n')
+      .filter((line) =>
+        line.includes(`name=${ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME}`)
+      )
+      .map((line) => /id=(\d+)/.exec(line)?.[1])
+      .filter(Boolean);
   }
   async function revoke() {
     await f.db
@@ -148,6 +161,10 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
   ] as const)(
     'stops incoming and outgoing traffic when invalidation is %s',
     async (mode) => {
+      const baselineSubscriberIds =
+        mode === 'subscriber-reconnected'
+          ? await listAccessInvalidationSubscriberIds()
+          : [];
       const pair = await trafficPair();
       try {
         const started = performance.now();
@@ -172,14 +189,9 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
           await pair.a.bus.publish(f.ids.note);
         }
         if (mode === 'subscriber-reconnected') {
-          const list = (await redis.client('LIST')) as string;
-          const ids = list
-            .split('\n')
-            .filter((line) =>
-              line.includes('name=knowtis-access-invalidations-sub')
-            )
-            .map((line) => /id=(\d+)/.exec(line)?.[1])
-            .filter(Boolean);
+          const ids = (await listAccessInvalidationSubscriberIds()).filter(
+            (id) => !baselineSubscriberIds.includes(id)
+          );
           expect(ids).toHaveLength(2);
           await Promise.all(
             ids.map((id) => redis.client('KILL', 'ID', required(id)))

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TooltipProvider } from '@knowtis/design-system';
+import { TooltipProvider, TOUCH_TARGET_CLASS } from '@knowtis/design-system';
 
 import { FlashcardHeader } from './FlashcardHeader';
 
@@ -24,6 +24,7 @@ function renderHeader(
         isAdvancedMode={false}
         onToggleAdvanced={vi.fn()}
         onRestart={vi.fn()}
+        onShuffle={vi.fn()}
         {...overrides}
       />
     </TooltipProvider>
@@ -36,7 +37,7 @@ describe('FlashcardHeader', () => {
 
     const ring = screen.getByRole('progressbar');
     expect(ring).toHaveAccessibleName(
-      'ai.artifacts.flashcards.reviewedOf {"reviewed":3,"total":10}'
+      'ai.artifacts.flashcards.reviewedOf {"reviewed":3,"count":10}'
     );
     expect(ring).toHaveAttribute('aria-valuenow', '3');
     expect(ring).toHaveAttribute('aria-valuemax', '10');
@@ -58,5 +59,22 @@ describe('FlashcardHeader', () => {
     expect(
       screen.queryByRole('button', { name: 'ai.artifacts.flashcards.restart' })
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'ai.artifacts.flashcards.shuffle' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('gives the shuffle and restart controls a full touch target', () => {
+    renderHeader();
+
+    const shuffle = screen.getByRole('button', {
+      name: 'ai.artifacts.flashcards.shuffle',
+    });
+    const restart = screen.getByRole('button', {
+      name: 'ai.artifacts.flashcards.restart',
+    });
+    for (const control of [shuffle, restart]) {
+      expect(control).toHaveClass(TOUCH_TARGET_CLASS, 'w-11');
+    }
   });
 });

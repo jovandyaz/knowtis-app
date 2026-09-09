@@ -4,9 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 
 import { BucketNav } from '@/components/organization/BucketNav';
+import { NAV_COUNT } from '@/components/organization/nav-row.styles';
 import { SupertagNav } from '@/components/organization/SupertagNav';
 import { TagTree } from '@/components/organization/TagTree';
 import { ROUTES } from '@/config';
+import { STUDY_SESSION_PATTERN } from '@/config/routes.config';
+import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
+import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import {
@@ -14,10 +18,12 @@ import {
   FolderOpen,
   Home,
   LogIn,
+  Repeat,
   Settings,
   UserPlus,
 } from 'lucide-react';
 
+import { useStudyStats } from '@knowtis/data-access-artifacts';
 import { cn } from '@knowtis/design-system';
 
 import { MobileSheet } from './MobileSheet';
@@ -30,6 +36,7 @@ interface BottomNavTab {
     | 'labels.home'
     | 'labels.notes'
     | 'labels.explore'
+    | 'labels.study'
     | 'settings.title';
   to?: string;
   action?: () => void;
@@ -47,8 +54,14 @@ export function BottomNav() {
   const isAnonymous = user?.isAnonymous ?? false;
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
   const [isExploreSheetOpen, setIsExploreSheetOpen] = useState(false);
+  const { isEnabled: isStudyEnabled } = useStudyQueueAccess();
+  const stats = useStudyStats(BROWSER_TIME_ZONE, { enabled: isStudyEnabled });
+  const dueCount = stats.data?.dueCount ?? 0;
 
-  if (NOTE_EDITOR_PATTERN.test(currentPath)) {
+  if (
+    NOTE_EDITOR_PATTERN.test(currentPath) ||
+    STUDY_SESSION_PATTERN.test(currentPath)
+  ) {
     return null;
   }
 
@@ -58,8 +71,15 @@ export function BottomNav() {
     action: () => setIsExploreSheetOpen(true),
   };
 
+  const studyTab: BottomNavTab = {
+    icon: Repeat,
+    labelKey: 'labels.study',
+    to: ROUTES.STUDY,
+  };
+
   const tabs: BottomNavTab[] = [
     { icon: Home, labelKey: 'labels.home', to: ROUTES.DASHBOARD },
+    ...(isStudyEnabled ? [studyTab] : []),
     { icon: FileText, labelKey: 'labels.notes', to: ROUTES.NOTES },
     ...(isAnonymous ? [] : [exploreTab]),
     {
@@ -115,8 +135,16 @@ export function BottomNav() {
                 >
                   <Icon className="h-5 w-5" />
                 </div>
-                <span className="text-[10px] font-medium leading-none">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium leading-none">
                   {t(tab.labelKey)}
+                  {tab.labelKey === 'labels.study' && dueCount > 0 && (
+                    <span className={NAV_COUNT}>
+                      <span aria-hidden="true">{dueCount}</span>
+                      <span className="sr-only">
+                        {t('labels.studyDueCount', { count: dueCount })}
+                      </span>
+                    </span>
+                  )}
                 </span>
               </button>
             );

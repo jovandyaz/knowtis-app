@@ -3,14 +3,12 @@ import { useCallback, useMemo, useReducer } from 'react';
 import type {
   CardResult,
   CardSessionStatus,
-  FlashcardContent,
   RestartFilter,
   SM2Quality,
+  StudyCard,
   StudySessionResult,
 } from '@knowtis/shared-types';
 import { CARD_STATUS, SM2_QUALITY } from '@knowtis/shared-types';
-
-type FlashcardCard = FlashcardContent['cards'][number];
 
 interface SessionState {
   currentIndex: number;
@@ -20,8 +18,8 @@ interface SessionState {
   isComplete: boolean;
   startTime: number;
   endTime: number | null;
-  originalCards: FlashcardCard[];
-  activeCards: FlashcardCard[];
+  originalCards: StudyCard[];
+  activeCards: StudyCard[];
 }
 
 type SessionAction =
@@ -31,15 +29,30 @@ type SessionAction =
   | { type: 'NAVIGATE'; index: number }
   | { type: 'TOGGLE_ADVANCED' }
   | { type: 'RESTART'; filter: RestartFilter }
-  | { type: 'FINISH' };
+  | { type: 'FINISH' }
+  | { type: 'SHUFFLE'; cards: StudyCard[] };
+
+function fisherYatesShuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function cardIdentityKey(card: StudyCard): string {
+  return `${card.artifactId}:${card.cardIndex}`;
+}
 
 function findNextPendingIndex(
   statuses: CardSessionStatus[],
   fromIndex: number
 ): number {
-  for (let i = fromIndex + 1; i < statuses.length; i++) {
-    if (statuses[i] === CARD_STATUS.PENDING) {
-      return i;
+  for (let offset = 1; offset <= statuses.length; offset++) {
+    const index = (fromIndex + offset) % statuses.length;
+    if (statuses[index] === CARD_STATUS.PENDING) {
+      return index;
     }
   }
   return -1;
@@ -114,11 +127,33 @@ function sessionReducer(
     case 'TOGGLE_ADVANCED':
       return { ...state, isAdvancedMode: !state.isAdvancedMode };
 
+    case 'SHUFFLE': {
+      const statusByIdentity = new Map(
+        state.activeCards.map((card, i) => [
+          cardIdentityKey(card),
+          state.cardStatuses[i],
+        ])
+      );
+      const shuffledStatuses = action.cards.map(
+        (card) =>
+          statusByIdentity.get(cardIdentityKey(card)) ?? CARD_STATUS.PENDING
+      );
+      return {
+        ...state,
+        currentIndex: 0,
+        flipped: false,
+        cardStatuses: shuffledStatuses,
+        isComplete: false,
+        endTime: null,
+        activeCards: action.cards,
+      };
+    }
+
     case 'RESTART': {
       if (action.filter === 'missed' || action.filter === 'skipped') {
         const targetStatus =
           action.filter === 'missed' ? CARD_STATUS.WRONG : CARD_STATUS.SKIPPED;
-        const filteredCards = state.originalCards.filter(
+        const filteredCards = state.activeCards.filter(
           (_, i) => state.cardStatuses[i] === targetStatus
         );
         if (filteredCards.length > 0) {
@@ -153,7 +188,7 @@ function sessionReducer(
   }
 }
 
-function createInitialState(cards: FlashcardCard[]): SessionState {
+function createInitialState(cards: StudyCard[]): SessionState {
   return {
     currentIndex: 0,
     flipped: false,
@@ -167,10 +202,13 @@ function createInitialState(cards: FlashcardCard[]): SessionState {
   };
 }
 
-export function useStudySession(content: FlashcardContent) {
+export function useFlashcardSession(
+  cards: StudyCard[],
+  shuffleFn: <T>(items: T[]) => T[] = fisherYatesShuffle
+) {
   const [state, dispatch] = useReducer(
     sessionReducer,
-    content.cards,
+    cards,
     createInitialState
   );
 
@@ -222,10 +260,15 @@ export function useStudySession(content: FlashcardContent) {
     dispatch({ type: 'RESTART', filter });
   }, []);
 
+  const shuffle = useCallback(() => {
+    dispatch({ type: 'SHUFFLE', cards: shuffleFn(state.activeCards) });
+  }, [shuffleFn, state.activeCards]);
+
   const sessionResult = useMemo((): StudySessionResult => {
     const durationMs = (state.endTime ?? state.startTime) - state.startTime;
     const cardResults: CardResult[] = state.activeCards.map((card, i) => ({
-      cardIndex: i,
+      artifactId: card.artifactId,
+      cardIndex: card.cardIndex,
       status: state.cardStatuses[i] ?? CARD_STATUS.PENDING,
       front: card.front,
       back: card.back,
@@ -265,5 +308,6 @@ export function useStudySession(content: FlashcardContent) {
     navigate,
     toggleAdvanced,
     restart,
+    shuffle,
   };
 }

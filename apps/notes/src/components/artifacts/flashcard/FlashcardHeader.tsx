@@ -1,14 +1,16 @@
 import { useTranslation } from 'react-i18next';
 
-import { RotateCcw, Settings2 } from 'lucide-react';
+import { RotateCcw, Settings2, Shuffle } from 'lucide-react';
 
 import {
   Button,
+  cn,
   ProgressRing,
   Switch,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  TOUCH_TARGET_CLASS,
 } from '@knowtis/design-system';
 
 interface FlashcardHeaderProps {
@@ -18,6 +20,7 @@ interface FlashcardHeaderProps {
   isAdvancedMode: boolean;
   onToggleAdvanced: () => void;
   onRestart: () => void;
+  onShuffle: () => void;
   readOnly?: boolean | undefined;
 }
 
@@ -28,6 +31,7 @@ export function FlashcardHeader({
   isAdvancedMode,
   onToggleAdvanced,
   onRestart,
+  onShuffle,
   readOnly,
 }: FlashcardHeaderProps) {
   const { t } = useTranslation('notes');
@@ -37,7 +41,7 @@ export function FlashcardHeader({
   });
   const reviewed = t('ai.artifacts.flashcards.reviewedOf', {
     reviewed: reviewedCount,
-    total,
+    count: total,
   });
 
   return (
@@ -73,8 +77,24 @@ export function FlashcardHeader({
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={onShuffle}
+                className={cn(TOUCH_TARGET_CLASS, 'w-11')}
+                aria-label={t('ai.artifacts.flashcards.shuffle')}
+              >
+                <Shuffle className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t('ai.artifacts.flashcards.shuffle')}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={onRestart}
-                className="h-8 w-8"
+                className={cn(TOUCH_TARGET_CLASS, 'w-11')}
                 aria-label={t('ai.artifacts.flashcards.restart')}
               >
                 <RotateCcw className="h-4 w-4" />

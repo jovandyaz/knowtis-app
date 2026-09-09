@@ -17,12 +17,14 @@ interface FlashcardRatingProps {
   isAdvancedMode: boolean;
   readOnly?: boolean | undefined;
   disabled: boolean;
+  intervals?: PredictedIntervals | undefined;
+  showKeys?: boolean | undefined;
   onWrong: () => void;
   onCorrect: () => void;
   onRateAdvanced: (quality: SM2Quality) => void;
 }
 
-/** Every rating schedules the card for tomorrow until the server predicts per-card intervals. */
+/** Every rating schedules the card for tomorrow until a caller passes per-card `intervals`. */
 const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
   again: 1,
   hard: 1,
@@ -32,10 +34,14 @@ const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
 
 const RATE_BUTTON_LAYOUT = `${TOUCH_TARGET_CLASS} rounded-full px-6 py-2.5`;
 
+const SIMPLE_MODE_KEYS = { wrong: '1', correct: '2' } as const;
+
 export function FlashcardRating({
   isAdvancedMode,
   readOnly,
   disabled,
+  intervals,
+  showKeys = false,
   onWrong,
   onCorrect,
   onRateAdvanced,
@@ -52,16 +58,19 @@ export function FlashcardRating({
       >
         <RatingBar
           label={t('ai.artifacts.flashcards.rateCard')}
-          intervals={FIRST_REVIEW_INTERVALS}
+          intervals={intervals ?? FIRST_REVIEW_INTERVALS}
           labels={{
             again: t('ai.artifacts.flashcards.quality.again'),
             hard: t('ai.artifacts.flashcards.quality.hard'),
             good: t('ai.artifacts.flashcards.quality.good'),
             easy: t('ai.artifacts.flashcards.quality.easy'),
           }}
-          formatInterval={(days) => `${days}d`}
+          formatInterval={(days) =>
+            t('ai.artifacts.flashcards.intervalDays', { count: days })
+          }
           onRate={onRateAdvanced}
           disabled={disabled}
+          showKeys={showKeys}
         />
       </motion.div>
     );
@@ -82,6 +91,7 @@ export function FlashcardRating({
         )}
         onClick={onWrong}
         disabled={disabled}
+        aria-keyshortcuts={showKeys ? SIMPLE_MODE_KEYS.wrong : undefined}
       >
         <X className="h-4 w-4" />
         {t('ai.artifacts.flashcards.wrong')}
@@ -92,6 +102,7 @@ export function FlashcardRating({
         className={cn(RATE_BUTTON_LAYOUT, learnToneButton({ tone: 'correct' }))}
         onClick={onCorrect}
         disabled={disabled}
+        aria-keyshortcuts={showKeys ? SIMPLE_MODE_KEYS.correct : undefined}
       >
         <Check className="h-4 w-4" />
         {t('ai.artifacts.flashcards.correct')}
