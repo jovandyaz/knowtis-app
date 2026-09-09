@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { ShareActionLock } from '@/hooks/useShareActionLock';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -16,7 +17,9 @@ import {
 } from '@knowtis/design-system';
 import type { Note } from '@knowtis/shared-types';
 
-import type { ShareActionLock } from '../../../hooks/useShareActionLock';
+const NO_RESPONSE_STATUS = 0;
+const HTTP_CONFLICT = 409;
+const HTTP_SERVER_ERROR = 500;
 
 interface RotateShareLinkDialogProps {
   note: Note;
@@ -54,11 +57,12 @@ export function RotateShareLinkDialog({
         setOpen(false);
         toast.success(t('share.rotation.saved'));
       } catch (error) {
-        const status = error instanceof ApiClientError ? error.status : 0;
+        const status =
+          error instanceof ApiClientError ? error.status : NO_RESPONSE_STATUS;
         setErrorKey(
-          status === 409
+          status === HTTP_CONFLICT
             ? 'share.rotation.conflict'
-            : status === 0 || status >= 500
+            : status === NO_RESPONSE_STATUS || status >= HTTP_SERVER_ERROR
               ? 'share.rotation.uncertain'
               : 'share.rotation.failed'
         );
