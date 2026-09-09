@@ -19,6 +19,8 @@
 
   --tabs-fade-start: 85%;
 
+  --size-bucket-dot: 9px;
+
   --animate-overlay-fade: overlay-fade var(--motion-duration-fast)
     var(--motion-easing-enter);
   --animate-overlay-pop: overlay-pop var(--motion-duration-fast)

@@ -31,7 +31,7 @@ const BucketDot = forwardRef<HTMLSpanElement, BucketDotProps>(
       {...rest}
       aria-hidden="true"
       className={cn(
-        'inline-block size-[9px] shrink-0',
+        'inline-block size-(--size-bucket-dot) shrink-0',
         DOT_CLASS[bucket],
         className
       )}
