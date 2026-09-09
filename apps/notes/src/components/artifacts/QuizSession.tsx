@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MOBILE_FAB_RAIL_CLEARANCE_CLASS } from '@/components/layout/MobileFabRail';
 import { RotateCcw, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ import {
   answerLetter,
   AnswerOption,
   Button,
+  cn,
   Progress,
   type AnswerOutcome,
 } from '@knowtis/design-system';
@@ -304,7 +306,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className={cn('flex justify-end', MOBILE_FAB_RAIL_CLEARANCE_CLASS)}>
         <Button ref={advanceRef} onClick={handleNext} disabled={!answered}>
           {currentIndex < totalQuestions - 1
             ? t('ai.artifacts.quiz.next')

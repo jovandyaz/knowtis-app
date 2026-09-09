@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MOBILE_FAB_RAIL_CLEARANCE_CLASS } from '@/components/layout/MobileFabRail';
 import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -9,6 +10,7 @@ import {
   useReviewCard,
 } from '@knowtis/data-access-artifacts';
 import {
+  cn,
   ErrorState,
   LoadingState,
   useMotionPreset,
@@ -180,7 +182,12 @@ function FlashcardDeckSession({
     session.counts.correct + session.counts.wrong + session.counts.skipped;
 
   return (
-    <div className="flex flex-col gap-6 min-w-0 overflow-x-hidden">
+    <div
+      className={cn(
+        'flex flex-col gap-6 min-w-0 overflow-x-hidden',
+        MOBILE_FAB_RAIL_CLEARANCE_CLASS
+      )}
+    >
       <FlashcardHeader
         current={session.currentIndex}
         total={session.totalCards}
