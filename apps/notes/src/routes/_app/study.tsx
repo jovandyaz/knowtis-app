@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { createFileRoute } from '@tanstack/react-router';
 
@@ -15,8 +16,18 @@ export const Route = createFileRoute('/_app/study')({
 });
 
 function StudyPageWrapper() {
+  const { t } = useTranslation('notes');
+
   return (
-    <Suspense fallback={<LoadingState message="" />}>
+    <Suspense
+      fallback={
+        <LoadingState
+          role="status"
+          aria-label={t('study.loading')}
+          message={t('study.loading')}
+        />
+      }
+    >
       <StudySessionPage />
     </Suspense>
   );

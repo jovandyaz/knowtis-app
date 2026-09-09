@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TooltipProvider } from '@knowtis/design-system';
+import { TooltipProvider, TOUCH_TARGET_CLASS } from '@knowtis/design-system';
 
 import { FlashcardHeader } from './FlashcardHeader';
 
@@ -64,7 +64,7 @@ describe('FlashcardHeader', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('sizes the shuffle control the same as its restart neighbour', () => {
+  it('gives the shuffle and restart controls a full touch target', () => {
     renderHeader();
 
     const shuffle = screen.getByRole('button', {
@@ -73,6 +73,8 @@ describe('FlashcardHeader', () => {
     const restart = screen.getByRole('button', {
       name: 'ai.artifacts.flashcards.restart',
     });
-    expect(shuffle.className).toBe(restart.className);
+    for (const control of [shuffle, restart]) {
+      expect(control).toHaveClass(TOUCH_TARGET_CLASS, 'w-11');
+    }
   });
 });

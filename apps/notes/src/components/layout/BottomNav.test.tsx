@@ -71,7 +71,10 @@ vi.mock('@/components/organization/SupertagNav', () => ({
   SupertagNav: () => <div data-testid="supertag-nav" />,
 }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts ? `${key} ${JSON.stringify(opts)}` : key,
+  }),
 }));
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -268,6 +271,25 @@ describe('BottomNav', () => {
     expect(
       screen.getByRole('button', { name: /labels\.study/ })
     ).toHaveTextContent('5');
+  });
+
+  it('names the due count instead of leaving a bare number', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 5 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<BottomNav />);
+
+    expect(
+      screen.getByRole('button', { name: /labels\.studyDueCount/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText('labels.studyDueCount {"count":5}')).toHaveClass(
+      'sr-only'
+    );
+    expect(screen.getByText('5')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders no badge on the review tab when nothing is due', () => {

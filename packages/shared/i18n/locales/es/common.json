@@ -17,6 +17,8 @@
     "name": "Nombre",
     "home": "Inicio",
     "study": "Repasar",
+    "studyDueCount_one": "{{count}} tarjeta pendiente",
+    "studyDueCount_other": "{{count}} tarjetas pendientes",
     "search": "Buscar",
     "notes": "Notas",
     "flashcards": "Flashcards",

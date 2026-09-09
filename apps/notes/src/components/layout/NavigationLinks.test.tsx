@@ -21,7 +21,10 @@ let statsQuery: {
 };
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts ? `${key} ${JSON.stringify(opts)}` : key,
+  }),
 }));
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -148,6 +151,25 @@ describe('NavigationLinks', () => {
     expect(
       screen.getByRole('link', { name: /labels\.study/ })
     ).toHaveTextContent('7');
+  });
+
+  it('names the due count instead of leaving a bare number', () => {
+    isStudyEnabled = true;
+    statsQuery = {
+      data: makeStats({ dueCount: 7 }),
+      isPending: false,
+      isError: false,
+    };
+
+    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+
+    expect(
+      screen.getByRole('link', { name: /labels\.studyDueCount/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText('labels.studyDueCount {"count":7}')).toHaveClass(
+      'sr-only'
+    );
+    expect(screen.getByText('7')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders no badge when nothing is due', () => {

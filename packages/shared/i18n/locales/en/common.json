@@ -17,6 +17,8 @@
     "name": "Name",
     "home": "Home",
     "study": "Review",
+    "studyDueCount_one": "{{count}} card due",
+    "studyDueCount_other": "{{count}} cards due",
     "search": "Search",
     "notes": "Notes",
     "flashcards": "Flashcards",

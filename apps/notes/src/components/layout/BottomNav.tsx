@@ -138,7 +138,12 @@ export function BottomNav() {
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium leading-none">
                   {t(tab.labelKey)}
                   {tab.labelKey === 'labels.study' && dueCount > 0 && (
-                    <span className={NAV_COUNT}>{dueCount}</span>
+                    <span className={NAV_COUNT}>
+                      <span aria-hidden="true">{dueCount}</span>
+                      <span className="sr-only">
+                        {t('labels.studyDueCount', { count: dueCount })}
+                      </span>
+                    </span>
                   )}
                 </span>
               </button>

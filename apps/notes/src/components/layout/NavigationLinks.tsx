@@ -66,7 +66,12 @@ export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
             <link.icon className="h-4 w-4" />
             <span className={NAV_LABEL}>{t(link.labelKey)}</span>
             {isStudyLink && dueCount > 0 && (
-              <span className={NAV_COUNT}>{dueCount}</span>
+              <span className={NAV_COUNT}>
+                <span aria-hidden="true">{dueCount}</span>
+                <span className="sr-only">
+                  {t('labels.studyDueCount', { count: dueCount })}
+                </span>
+              </span>
             )}
           </Link>
         );
