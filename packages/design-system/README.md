@@ -23,7 +23,7 @@ Stories are co-located with each component (`Button.stories.tsx` next to `Button
 
 ## Components
 
-44 components under `src/components/` (103 files in the directory, counting co-located stories, tests and shared helpers), every one re-exported from `src/index.ts`: primitives like `Button`, `Input`, `Textarea`, `Badge`, `Switch`, `Card`; overlays like `Dialog`, `DropdownMenu`, `Tooltip`, `CommandMenuContent` / `CommandMenuGroup` / `CommandMenuItem` / `CommandMenuBack`; state views `LoadingState` / `ErrorState` / `EmptyState`; plus app-shaped pieces such as `ModelMenu`, `ModelSelect`, `SegmentedControl`, `RadioCardGroup`, `VoiceButton`, `RecordingModal`, `ThemeToggle`, and `PasswordInput`/`PasswordStrength`. Also exported: `buttonVariants` and `badgeVariants` (class-variance-authority variants) and the `useEscapeDismiss` hook.
+45 components under `src/components/` (107 files in the directory, counting co-located stories, tests and shared helpers), every one re-exported from `src/index.ts`: primitives like `Button`, `Input`, `Textarea`, `Badge`, `Switch`, `Card`; overlays like `Dialog`, `DropdownMenu`, `Tooltip`, `CommandMenuContent` / `CommandMenuGroup` / `CommandMenuItem` / `CommandMenuBack`; state views `LoadingState` / `ErrorState` / `EmptyState`; plus app-shaped pieces such as `ModelMenu`, `ModelSelect`, `SegmentedControl`, `RadioCardGroup`, `VoiceButton`, `RecordingModal`, `ThemeToggle`, and `PasswordInput`/`PasswordStrength`. Also exported: `buttonVariants` and `badgeVariants` (class-variance-authority variants) and the `useEscapeDismiss` hook.
 
 ## Design tokens & styles
 
