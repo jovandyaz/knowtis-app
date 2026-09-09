@@ -1,7 +1,11 @@
+import { err, ok, type Result } from 'neverthrow';
+
 import type {
   GeneralAccessLevel,
   PermissionLevel,
 } from '@knowtis/shared-types';
+
+import { NoteErrors, type NoteDomainError } from './errors/note.errors';
 
 export interface AccessSnapshot {
   readonly ownerId: string;
@@ -77,4 +81,17 @@ export function isPermissionWidening(
   requested: PermissionLevel
 ): boolean {
   return current === null || (current === 'viewer' && requested === 'editor');
+}
+
+/** Resolves the share token a rotation must replace, or the reason the actor may not rotate. */
+export function authorizeShareLinkRotation(
+  note: { readonly ownerId: string; readonly shareToken: string | null },
+  actorId: string
+): Result<string, NoteDomainError> {
+  if (note.ownerId !== actorId) {
+    return err(NoteErrors.ownerOnly('rotate the share link'));
+  }
+  return note.shareToken
+    ? ok(note.shareToken)
+    : err(NoteErrors.shareLinkConflict());
 }

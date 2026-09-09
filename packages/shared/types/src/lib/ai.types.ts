@@ -138,6 +138,7 @@ export const AI_CONFIG_KEYS = {
   FALLBACK_CHAIN: 'ai_fallback_chain',
   REASONING_EFFORT: 'ai_reasoning_effort',
   OPENROUTER_PROVIDERS: 'ai_openrouter_providers',
+  OPENROUTER_IGNORED_PROVIDERS: 'ai_openrouter_ignored_providers',
   FREE_TIER_CEILING: 'ai_free_tier_ceiling',
 } as const;
 export type AIConfigKey = (typeof AI_CONFIG_KEYS)[keyof typeof AI_CONFIG_KEYS];

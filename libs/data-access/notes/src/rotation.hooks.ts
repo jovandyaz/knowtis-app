@@ -11,25 +11,29 @@ export function useRotateShareLink(noteId: string) {
   const removeSharedCopies = async (
     previousToken: string | null | undefined
   ) => {
-    const filters = {
+    if (previousToken != null) {
+      const previousLink = {
+        queryKey: notesQueryKeys.sharedNote(previousToken),
+        exact: true,
+      };
+      await queryClient.cancelQueries(previousLink);
+      queryClient.removeQueries(previousLink);
+    }
+    const copiesOfNote = {
       queryKey: [...notesQueryKeys.all, 'shared'],
-      predicate: (query: {
-        queryKey: readonly unknown[];
-        state: { data: unknown };
-      }) => {
+      predicate: (query: { state: { data: unknown } }) => {
         const { data } = query.state;
         return (
-          (previousToken != null && query.queryKey[2] === previousToken) ||
-          (typeof data === 'object' &&
-            data !== null &&
-            'id' in data &&
-            typeof data.id === 'string' &&
-            data.id === noteId)
+          typeof data === 'object' &&
+          data !== null &&
+          'id' in data &&
+          typeof data.id === 'string' &&
+          data.id === noteId
         );
       },
     };
-    await queryClient.cancelQueries(filters);
-    queryClient.removeQueries(filters);
+    await queryClient.cancelQueries(copiesOfNote);
+    queryClient.removeQueries(copiesOfNote);
   };
 
   return useMutation({

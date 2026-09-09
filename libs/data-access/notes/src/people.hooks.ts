@@ -17,15 +17,21 @@ import {
 import { notesQueryKeys } from './query-keys';
 
 async function refreshAccess(client: QueryClient, noteId: string) {
+  const peripheralKeys = [
+    notesQueryKeys.lists(),
+    notesQueryKeys.recents(),
+    notesQueryKeys.counts(),
+  ];
+  const accessKeys = [
+    notesQueryKeys.people(noteId),
+    notesQueryKeys.sharingAuthority(noteId),
+    notesQueryKeys.detail(noteId),
+  ];
+  for (const queryKey of peripheralKeys) {
+    void client.invalidateQueries({ queryKey });
+  }
   await Promise.all(
-    [
-      notesQueryKeys.people(noteId),
-      notesQueryKeys.sharingAuthority(noteId),
-      notesQueryKeys.detail(noteId),
-      notesQueryKeys.lists(),
-      notesQueryKeys.recents(),
-      notesQueryKeys.counts(),
-    ].map((queryKey) => client.invalidateQueries({ queryKey }))
+    accessKeys.map((queryKey) => client.invalidateQueries({ queryKey }))
   );
 }
 

@@ -132,6 +132,7 @@ export interface StepCallParams {
   readonly instructions: string;
   readonly cache: boolean;
   readonly tools: ToolSet;
+  readonly toolChoice?: 'none';
   readonly telemetry: TelemetryOptions;
   readonly traceIdentity: TraceIdentityAttrs;
   readonly providerOptions: TurnProviderOptions;
@@ -220,6 +221,7 @@ export async function* runStepCall(
           ? withLastMessageCache(model, params.history)
           : params.history,
         tools: params.tools,
+        ...(params.toolChoice ? { toolChoice: params.toolChoice } : {}),
         stopWhen: isStepCount(1),
         maxOutputTokens,
         maxRetries,

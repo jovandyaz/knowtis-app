@@ -73,6 +73,11 @@ describe('ShareDialog mutation lifetime', () => {
     view.rerender(harness.dialog({ open: false }));
     view.rerender(harness.dialog());
     await waitFor(() => expect(notesApi.getPeople).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('listitem', { name: SHARE_OWNER.user.email })
+      ).toBeInTheDocument()
+    );
     expect(screen.getByRole('button', { name: 'Add person' })).toBeDisabled();
     expect(
       screen.getByRole('radio', { name: /Anyone with the link/ })

@@ -27,6 +27,7 @@ export interface TurnProviderOptionsInput {
   readonly model: string;
   readonly reasoningEffort?: ReasoningEffort | undefined;
   readonly providerOrder?: readonly string[] | undefined;
+  readonly ignoredProviders?: readonly string[] | undefined;
   /**
    * Restricts routing to upstreams supporting every parameter sent. OpenRouter
    * records support per endpoint rather than per model, so this is what keeps a
@@ -38,11 +39,16 @@ export interface TurnProviderOptionsInput {
 function openrouterBlock({
   reasoningEffort,
   providerOrder,
+  ignoredProviders,
   requireParameters,
 }: TurnProviderOptionsInput) {
-  const order =
-    providerOrder && providerOrder.length > 0 ? [...providerOrder] : null;
-  const routed = order !== null || requireParameters === true;
+  const ignore = ignoredProviders?.length ? [...ignoredProviders] : null;
+  const effectiveOrder = providerOrder?.filter(
+    (slug) => !ignore?.includes(slug)
+  );
+  const order = effectiveOrder?.length ? effectiveOrder : null;
+  const routed =
+    order !== null || ignore !== null || requireParameters === true;
   if (!reasoningEffort && !routed) {
     return {};
   }
@@ -56,6 +62,7 @@ function openrouterBlock({
                 ...(order
                   ? { order, allow_fallbacks: OPENROUTER_ALLOW_FALLBACKS }
                   : {}),
+                ...(ignore ? { ignore } : {}),
                 ...(requireParameters ? { require_parameters: true } : {}),
               },
             }
@@ -121,7 +128,8 @@ export type TurnProviderOptions = ReturnType<typeof turnProviderOptions>;
 
 export const OPENROUTER_ROUTING_SOURCE = Symbol('OPENROUTER_ROUTING_SOURCE');
 
-/** Supplies the operator's vetted upstream allowlist; `[]` means no preference. */
+/** Supplies independent upstream preferences and exclusions; an empty list imposes no constraint. */
 export interface OpenRouterRoutingSource {
   getOpenRouterProviderOrder(): Promise<readonly string[]>;
+  getOpenRouterIgnoredProviders(): Promise<readonly string[]>;
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { generateText, streamText } from 'ai';
 
 import { executeWithChain, streamWithChain } from '@knowtis/ai-gateway';
@@ -14,6 +14,11 @@ import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
 import { withTraceIdentity } from './trace-identity';
+import {
+  OPENROUTER_ROUTING_SOURCE,
+  turnProviderOptions,
+  type OpenRouterRoutingSource,
+} from './turn-provider-options';
 
 const DEFAULT_TELEMETRY_FUNCTION_ID = 'ai-completion';
 
@@ -23,21 +28,32 @@ export class AISDKProvider implements AICompletionProvider {
 
   constructor(
     private readonly providerRegistry: ProviderRegistryFactory,
-    private readonly fallbackChain: FallbackChainService
+    private readonly fallbackChain: FallbackChainService,
+    @Inject(OPENROUTER_ROUTING_SOURCE)
+    private readonly openrouterRouting: OpenRouterRoutingSource
   ) {}
 
   async generateCompletion(
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
+    const routing = await this.loadRouting();
     return executeWithChain(
-      (model) => this.callGenerateText(prompt, { ...options, model }),
+      (model) => this.callGenerateText(prompt, { ...options, model }, routing),
       {
         candidates: this.fallbackChain.candidatesFor(options.model),
         cooldown: this.fallbackChain.cooldown,
         logger: this.logger,
       }
     );
+  }
+
+  private async loadRouting() {
+    const [providerOrder, ignoredProviders] = await Promise.all([
+      this.openrouterRouting.getOpenRouterProviderOrder(),
+      this.openrouterRouting.getOpenRouterIgnoredProviders(),
+    ]);
+    return { providerOrder, ignoredProviders };
   }
 
   private buildInstructionsParam(
@@ -75,11 +91,13 @@ export class AISDKProvider implements AICompletionProvider {
 
   private async callGenerateText(
     prompt: string,
-    options: CompletionOptions
+    options: CompletionOptions,
+    routing: Awaited<ReturnType<AISDKProvider['loadRouting']>>
   ): Promise<CompletionResult> {
     const result = await withTraceIdentity(options.telemetry, () =>
       generateText({
         model: this.providerRegistry.languageModel(options.model),
+        ...turnProviderOptions({ model: options.model, ...routing }),
         ...this.buildInstructionsParam(options.model, options.instructions),
         messages: [{ role: 'user', content: prompt }],
         maxOutputTokens: options.maxTokens ?? 2048,
@@ -113,10 +131,14 @@ export class AISDKProvider implements AICompletionProvider {
     }>();
 
     let activeModel = options.model;
-    const openStream = (model: string) => {
+    const openStream = (
+      model: string,
+      routing: Awaited<ReturnType<AISDKProvider['loadRouting']>>
+    ) => {
       const result = withTraceIdentity(options.telemetry, () =>
         streamText({
           model: this.providerRegistry.languageModel(model),
+          ...turnProviderOptions({ model, ...routing }),
           ...this.buildInstructionsParam(model, options.instructions),
           messages: [{ role: 'user', content: prompt }],
           maxOutputTokens: options.maxTokens ?? 2048,
@@ -159,15 +181,41 @@ export class AISDKProvider implements AICompletionProvider {
         .finally(() => clearTimeout(fallbackTimer));
     };
 
-    const textStream = streamWithChain({
+    const loadRouting = () => this.loadRouting();
+    const chainOptions = {
       candidates: this.fallbackChain.candidatesFor(options.model),
       cooldown: this.fallbackChain.cooldown,
       logger: this.logger,
-      open: openStream,
-      chunks: (result) => result.textStream,
-      isAborted: () => options.signal?.aborted ?? false,
-      onSettle: settleUsage,
-    });
+    };
+    const textStream = (async function* () {
+      let routing: Awaited<ReturnType<typeof loadRouting>>;
+      try {
+        routing = await loadRouting();
+      } catch (error) {
+        usageDeferred.resolve({
+          promptTokens: 0,
+          completionTokens: 0,
+          model: options.model,
+        });
+        throw error;
+      }
+      yield* streamWithChain({
+        ...chainOptions,
+        open: (model) => openStream(model, routing),
+        chunks: async function* (result) {
+          for await (const part of result.stream) {
+            if (part.type === 'error') {
+              throw part.error;
+            }
+            if (part.type === 'text-delta') {
+              yield part.text;
+            }
+          }
+        },
+        isAborted: () => options.signal?.aborted ?? false,
+        onSettle: settleUsage,
+      });
+    })();
 
     return { textStream, usage: usageDeferred.promise };
   }

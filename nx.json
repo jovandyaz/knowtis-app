@@ -31,7 +31,12 @@
   "targetDefaults": {
     "typecheck": {
       "cache": true,
-      "inputs": ["default", "^default", "{workspaceRoot}/tsconfig.base.json"],
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tsconfig.base.json",
+        "{workspaceRoot}/tools/typecheck-project.sh"
+      ],
       "outputs": []
     },
     "build": {

@@ -44,26 +44,28 @@ function setup(loaded: NoteEntity | null = note) {
   };
 }
 describe('RotateShareLinkHandler', () => {
-  it.each(['editor', 'viewer', 'admin', 'stranger'])(
-    'denies %s without writing or signaling',
-    async (actorId) => {
-      const { repo, emitter, handler } = setup();
-      const events: unknown[] = [];
-      emitter.on('note.access-changed', (event) => events.push(event));
-      expect(
-        (await handler.execute({ noteId: note.id, actorId }))._unsafeUnwrapErr()
-          .code
-      ).toBe('PERMISSION_DENIED');
-      expect(repo.rotateShareToken).not.toHaveBeenCalled();
-      expect(events).toEqual([]);
-    }
-  );
-  it('returns 404 for an absent/deleted note and conflict for no token', async () => {
+  it('denies a non-owner without writing or signaling', async () => {
+    const { repo, emitter, handler } = setup();
+    const events: unknown[] = [];
+    emitter.on('note.access-changed', (event) => events.push(event));
     expect(
       (
-        await setup(null).handler.execute({ noteId: note.id, actorId: 'owner' })
+        await handler.execute({ noteId: note.id, actorId: 'not-the-owner' })
+      )._unsafeUnwrapErr().code
+    ).toBe('PERMISSION_DENIED');
+    expect(repo.rotateShareToken).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+  it('fails with NOTE_NOT_FOUND when the note is absent or deleted', async () => {
+    const { handler, repo } = setup(null);
+    expect(
+      (
+        await handler.execute({ noteId: note.id, actorId: 'owner' })
       )._unsafeUnwrapErr().code
     ).toBe('NOTE_NOT_FOUND');
+    expect(repo.rotateShareToken).not.toHaveBeenCalled();
+  });
+  it('fails with SHARE_LINK_CONFLICT when the note has no active link', async () => {
     const { handler, repo } = setup({ ...note, shareToken: null });
     expect(
       (

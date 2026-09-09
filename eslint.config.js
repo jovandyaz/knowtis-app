@@ -36,7 +36,11 @@ export default defineConfig([
         'error',
         {
           enforceBuildableLibDependency: true,
-          allow: [],
+          // `allow` short-circuits every boundary check for this import, not only
+          // the buildable-lib one: design-system's `build` target compiles design
+          // tokens rather than TypeScript, so that check misfires on a lib the
+          // workspace consumes through tsconfig paths.
+          allow: ['^@knowtis/shared-types$'],
           depConstraints: [
             // Apps can depend on any library
             {

@@ -8,6 +8,7 @@ paths:
 ## Component Structure
 
 - Use `forwardRef` for all components that render a DOM element.
+- The rule does not reach a component whose outermost render is a third-party or Radix root that renders no DOM of its own (`Dialog` — the Root; its layout slots do forward refs — `RecordingModal`, `Toaster`) or another component (`LoadingButton`, `ThemeToggle`, `ModelSelect`, `ModelMenu`); nor a generic component, whose type parameter `forwardRef` erases (`SegmentedControl`, `RadioCardGroup`, `DataTable`).
 - Define variants with `class-variance-authority` (CVA):
   ```typescript
   const buttonVariants = cva('base-classes', {
@@ -26,7 +27,14 @@ paths:
 - Color system uses OKLCH colorspace defined in `tokens/colors.json`.
 - Semantic tokens map to CSS custom properties: `bg-(--background)`, `text-(--foreground)`, `border-(--border)`.
 - Never hardcode color values (hex, rgb, oklch) in components — always reference tokens via CSS custom properties.
+- Learn tones split fill from text: fills and rings use `learn-*` (`bg-learn-correct/15`, `ring-learn-incorrect/25`), text on a neutral or tinted surface uses `learn-*-text` (`text-learn-correct-text`) — the fill shades fail WCAG AA as text.
 - Never hardcode spacing values — use Tailwind spacing scale (`p-4`, `gap-2`, `mt-6`).
+
+## Motion
+
+- CSS-driven primitives animate with the token utilities — `duration-(--motion-duration-fast)`, `duration-(--motion-duration-base)`, `duration-(--motion-duration-slow)` and `ease-standard`/`ease-enter`/`ease-exit` — plus a `motion-reduce:` escape hatch (`motion-reduce:transition-none`).
+- Components animating through `motion/react` take every transition from `useMotionPreset()` — never a hand-written duration, easing or spring.
+- Never branch on `prefers-reduced-motion` by hand: `motion-reduce:` covers CSS and `useMotionPreset()` covers JS.
 
 ## Accessibility (a11y)
 
@@ -40,6 +48,7 @@ paths:
 
 - Components must be generic and reusable — no app-specific business logic.
 - Props API should follow composition patterns (Radix-style): compound components with `Root`, `Trigger`, `Content` subcomponents where applicable.
+- Interactive primitives declare their own cursor — `cursor-pointer` in the base, or the cursor the gesture implies (`cursor-col-resize`) — and consumers never add one to a design-system component.
 - Support `className` prop for consumer customization (merged via `cn()`).
 - Handle all interactive states: default, hover, focus, active, disabled.
 

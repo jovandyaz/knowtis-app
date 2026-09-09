@@ -12,14 +12,14 @@ describe('Rotation failure diagnostics', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([
-    ['23505', 'unique_violation'],
-    ['08006', 'connection_failure'],
-    ['ECONNREFUSED', 'connection_failure'],
-    ['55P03', 'transaction_conflict'],
-    [PRIVATE_CANARY, 'unclassified'],
+    ['23505', 'unique_violation', '23505'],
+    ['08006', 'connection_failure', '08006'],
+    ['ECONNREFUSED', 'connection_failure', null],
+    ['55P03', 'transaction_conflict', '55P03'],
+    [PRIVATE_CANARY, 'unclassified', null],
   ])(
     'records safe context for wrapped driver code %s without serializing the error',
-    async (code, category) => {
+    async (code, category, sqlState) => {
       const cause = Object.assign(new Error(PRIVATE_CANARY), {
         code,
         detail: PRIVATE_CANARY,
@@ -54,6 +54,8 @@ describe('Rotation failure diagnostics', () => {
             operation: 'rotateShareToken',
             noteId: NOTE_ID,
             failureCategory: category,
+            sqlState,
+            errorName: 'DrizzleQueryError',
           },
         ],
       ]);

@@ -1,4 +1,10 @@
-import { useEffect, useEffectEvent, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isRateLimited } from '@/hooks/useRateLimitState';
@@ -74,6 +80,7 @@ export function useVerifyEmailCodeForm({
 }: VerifyEmailCodeFormOptions): VerifyEmailCodeForm {
   const { t } = useTranslation('auth');
   const verifyCode = useVerifyEmailCode();
+  const verificationInFlight = useRef(false);
   const [code, setCode] = useState('');
   const [attemptsSpent, setAttemptsSpent] = useState(false);
 
@@ -118,21 +125,31 @@ export function useVerifyEmailCodeForm({
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    verifyCode.mutate(code, {
-      onSuccess: onVerified,
-      onError: (error) => {
-        if (verifyErrorKey(error) !== ATTEMPTS_SPENT_KEY) {
-          return;
-        }
-        setAttemptsSpent(true);
-        // A resend is the only way out of a spent budget, so this refusal
-        // quotes the wait until one is possible rather than its own.
-        const wait = retryAfterMsOf(error);
-        if (wait !== undefined) {
-          resend.hold(wait);
-        }
-      },
-    });
+    if (verificationInFlight.current) {
+      return;
+    }
+    verificationInFlight.current = true;
+    void verifyCode
+      .mutateAsync(code, {
+        onSuccess: onVerified,
+        onError: (error) => {
+          if (verifyErrorKey(error) !== ATTEMPTS_SPENT_KEY) {
+            return;
+          }
+          setAttemptsSpent(true);
+          // A resend is the only way out of a spent budget, so this refusal
+          // quotes the wait until one is possible rather than its own.
+          const wait = retryAfterMsOf(error);
+          if (wait !== undefined) {
+            resend.hold(wait);
+          }
+        },
+      })
+      .catch(() => undefined)
+      // Resending resets the observer, so per-call callbacks may never run.
+      .finally(() => {
+        verificationInFlight.current = false;
+      });
   };
 
   return {

@@ -3,6 +3,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import { sharedNotePath } from '@/config';
+import {
+  useShareActionLock,
+  type ShareActionLock,
+} from '@/hooks/useShareActionLock';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,20 +35,14 @@ import {
   Switch,
 } from '@knowtis/design-system';
 import {
+  ACCESS,
   GENERAL_ACCESS,
   PERMISSION,
   type GeneralAccessLevel,
-  type NoteAccessLevel,
   type PermissionLevel,
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
-import { sharedNotePath } from '../../config';
-import {
-  useShareActionLock,
-  type ShareActionLock,
-} from '../../hooks/useShareActionLock';
-import { useVerifyEmailGate } from '../../hooks/useVerifyEmailGate';
 import { AccessInfoBanner } from './share/AccessInfoBanner';
 import { LinkAccessSection } from './share/LinkAccessSection';
 import { PeopleAccessSection } from './share/PeopleAccessSection';
@@ -73,8 +74,6 @@ interface ShareDialogProps {
   generalAccess: GeneralAccessLevel;
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
-  editorsCanShare: boolean;
-  accessLevel: NoteAccessLevel;
 }
 
 export function ShareDialog(props: ShareDialogProps) {
@@ -140,27 +139,36 @@ function ShareDialogAccess({
     hasFreshData &&
     authority.data.ownerId === actor?.id &&
     freshPeople.some(
-      (person) => person.permission === 'owner' && person.user.id === actor?.id
+      (person) =>
+        person.permission === ACCESS.OWNER && person.user.id === actor?.id
     );
   const isDirectEditor =
     hasFreshData &&
     authority.data.editorsCanShare &&
     freshPeople.some(
-      (person) => person.permission === 'editor' && person.user.id === actor?.id
+      (person) =>
+        person.permission === PERMISSION.EDITOR && person.user.id === actor?.id
     );
   const canManagePeople = isOwner || isDirectEditor;
-  const generalAccess = authority.data?.generalAccess ?? initialAccess;
-  const permission =
-    authority.data?.generalAccessPermission ?? initialPermission;
-  const shareToken = authority.data ? authority.data.shareToken : initialToken;
+  const refreshError = people.error ?? authority.error;
+  const generalAccess = refreshError
+    ? GENERAL_ACCESS.RESTRICTED
+    : (authority.data?.generalAccess ?? initialAccess);
+  const permission = refreshError
+    ? PERMISSION.VIEWER
+    : (authority.data?.generalAccessPermission ?? initialPermission);
+  const shareToken = refreshError
+    ? null
+    : authority.data
+      ? authority.data.shareToken
+      : initialToken;
   const linkIsOpen = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
   const shareUrl = shareToken
     ? `${window.location.origin}${sharedNotePath(shareToken)}`
     : null;
-  const refreshError = people.error ?? authority.error;
   const denied =
     ApiClientError.isApiClientError(refreshError) &&
-    [401, 403, 404].includes(refreshError.status);
+    TERMINAL_ACCESS_STATUSES.has(refreshError.status);
 
   const retry = () => {
     void Promise.all([
@@ -216,8 +224,10 @@ function ShareDialogAccess({
                 ? 'share.people.invalidResponse'
                 : 'share.people.refreshError'
           )}
-          message={t('share.people.retryHelp')}
-          {...(!refreshing ? { onRetry: retry } : {})}
+          message={t(
+            denied ? 'share.people.deniedHelp' : 'share.people.retryHelp'
+          )}
+          {...(!denied && !refreshing ? { onRetry: retry } : {})}
           retryLabel={t('share.people.retry')}
         />
       ) : refreshing ? (
@@ -231,7 +241,7 @@ function ShareDialogAccess({
         </div>
       ) : null}
       {!refreshError && hasFreshData && !canManagePeople ? (
-        <p role="alert" className="text-sm text-(--muted-foreground)">
+        <p role="status" className="text-sm text-(--muted-foreground)">
           {t('share.people.denied')}
         </p>
       ) : null}
@@ -279,7 +289,7 @@ function ShareDialogAccess({
           disabled={disabled || !isOwner}
         />
       </div>
-      {linkIsOpen && shareUrl ? (
+      {hasFreshData && linkIsOpen && shareUrl ? (
         <LinkAccessSection
           shareUrl={shareUrl}
           permission={permission}

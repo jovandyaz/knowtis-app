@@ -120,15 +120,23 @@ describe('buildTurnRows', () => {
     ]);
   });
 
-  it('adds no row and stamps nothing when the turn ends on a tool row', () => {
-    const rows = buildTurnRows(
-      input({ turnMessages: toolStep, stopReason: 'max_steps' })
-    );
+  it.each([
+    'max_steps',
+    'token_budget',
+    'error',
+    'aborted',
+    'completed',
+  ] as const)(
+    'preserves tool results and appends a terminal assistant carrying %s',
+    (stopReason) => {
+      const rows = buildTurnRows(input({ turnMessages: toolStep, stopReason }));
 
-    expect(rows).toEqual([
-      { role: 'user', content: USER_CONTENT },
-      { role: 'assistant', content: '', parts: [call] },
-      { role: 'tool', content: '', parts: [result] },
-    ]);
-  });
+      expect(rows).toEqual([
+        { role: 'user', content: USER_CONTENT },
+        { role: 'assistant', content: '', parts: [call] },
+        { role: 'tool', content: '', parts: [result] },
+        { role: 'assistant', content: '', sources: SOURCES, stopReason },
+      ]);
+    }
+  );
 });

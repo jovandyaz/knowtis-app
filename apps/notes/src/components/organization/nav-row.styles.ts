@@ -1,7 +1,8 @@
+import { TOUCH_TARGET_HEIGHT_CLASS } from '@knowtis/design-system';
+
 export const NAV_ICON_SLOT = 'flex w-3 shrink-0 items-center justify-center';
 
-export const NAV_ROW =
-  'flex min-h-11 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer md:min-h-8';
+export const NAV_ROW = `flex min-h-8 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer ${TOUCH_TARGET_HEIGHT_CLASS}`;
 
 export const NAV_ROW_ACTIVE = 'bg-muted text-foreground font-medium';
 

@@ -171,6 +171,8 @@ describe.runIf(DB_AVAILABLE)('Share link rotation PostgreSQL contract', () => {
             operation: 'rotateShareToken',
             noteId: f.ids.note,
             failureCategory: 'unique_violation',
+            sqlState: '23505',
+            errorName: 'DrizzleQueryError',
           },
         ],
       ]);

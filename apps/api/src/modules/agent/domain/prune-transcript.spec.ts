@@ -75,6 +75,44 @@ describe('pruneTranscript', () => {
     ]);
   });
 
+  it.each([
+    'max_steps',
+    'token_budget',
+    'completed',
+    'content_filter',
+  ] as const)(
+    'omits an empty %s notice while retaining the recent tool call and result',
+    (stopReason) => {
+      const rows = [
+        ...toolTurn('t1', 'n1').slice(0, 3),
+        row({ role: 'assistant', content: '', stopReason, turnId: 't1' }),
+      ];
+
+      expect(pruneTranscript(rows, { keepToolTurns: 2 })).toEqual([
+        { role: 'user', content: 'q-t1' },
+        { role: 'assistant', content: '', parts: [call('n1')] },
+        { role: 'tool', content: '', parts: [result('n1')] },
+      ]);
+    }
+  );
+
+  it.each(['aborted', 'error', 'length'] as const)(
+    'preserves the %s partial-reply marker after an empty tool-ended reply',
+    (stopReason) => {
+      const rows = [
+        ...toolTurn('t1', 'n1').slice(0, 3),
+        row({ role: 'assistant', content: '', stopReason, turnId: 't1' }),
+      ];
+
+      expect(pruneTranscript(rows, { keepToolTurns: 2 })).toEqual([
+        { role: 'user', content: 'q-t1' },
+        { role: 'assistant', content: '', parts: [call('n1')] },
+        { role: 'tool', content: '', parts: [result('n1')] },
+        { role: 'assistant', content: `\n\n[reply cut off: ${stopReason}]` },
+      ]);
+    }
+  );
+
   it('passes legacy text rows through untouched', () => {
     const out = pruneTranscript(
       [

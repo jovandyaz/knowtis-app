@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
 import {
+  ACCESS_LEVELS,
   GENERAL_ACCESS_LEVELS,
   PERMISSION_LEVELS,
 } from '@knowtis/shared-types';
 
 export const SharingAuthoritySchema = z.object({
   ownerId: z.uuid(),
-  accessLevel: z.enum(['owner', 'viewer', 'editor']),
+  accessLevel: z.enum(ACCESS_LEVELS),
   generalAccess: z.enum(GENERAL_ACCESS_LEVELS),
   generalAccessPermission: z.enum(PERMISSION_LEVELS),
   shareToken: z.string().nullable(),
@@ -16,7 +17,7 @@ export const SharingAuthoritySchema = z.object({
 
 export const PersonInputSchema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email()),
-  permission: z.enum(['viewer', 'editor']),
+  permission: z.enum(PERMISSION_LEVELS),
 });
 
 export const NotePersonSchema = z.object({
@@ -26,7 +27,7 @@ export const NotePersonSchema = z.object({
     email: z.email(),
     avatarUrl: z.string().nullable(),
   }),
-  permission: z.enum(['owner', 'viewer', 'editor']),
+  permission: z.enum(ACCESS_LEVELS),
 });
 
 export const NotePeopleSchema = z.array(NotePersonSchema);

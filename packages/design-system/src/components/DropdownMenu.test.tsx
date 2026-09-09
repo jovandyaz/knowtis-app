@@ -105,3 +105,38 @@ describe('DropdownMenuSub', () => {
     expect(await screen.findByText('Alto')).toBeInTheDocument();
   });
 });
+
+describe('DropdownMenuTrigger', () => {
+  it('declares its own cursor so consumers never add one', () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Bucket</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>Areas</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    expect(screen.getByRole('button', { name: 'Bucket' })).toHaveClass(
+      'cursor-pointer'
+    );
+  });
+
+  it('keeps the class of an asChild trigger alongside the cursor', () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="chip">
+            Bucket
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>Areas</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    expect(screen.getByRole('button', { name: 'Bucket' })).toHaveClass(
+      'cursor-pointer',
+      'chip'
+    );
+  });
+});

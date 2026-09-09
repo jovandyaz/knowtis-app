@@ -5,10 +5,10 @@ import { Link, useLocation, useSearch } from '@tanstack/react-router';
 import { ROUTES } from '@/config';
 
 import { useNoteCounts } from '@knowtis/data-access-notes';
+import { BucketDot } from '@knowtis/design-system';
 import { INBOX_FILTER, PARA_BUCKETS } from '@knowtis/shared-types';
 import type { BucketFilter } from '@knowtis/shared-types';
 
-import { BucketDot } from './BucketDot';
 import {
   NAV_COUNT,
   NAV_ICON_SLOT,
