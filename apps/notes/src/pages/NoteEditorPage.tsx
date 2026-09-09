@@ -189,8 +189,6 @@ function NoteEditor({
 
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
   const { data: noteArtifacts } = useArtifacts(aiEnabled ? noteId : undefined);
-  // The strip is gated on `ai_enabled`, so until the flags land nobody knows
-  // whether it will be there; reserving its height avoids the jump either way.
   const { isPending: flagsPending } = useFeatureFlags();
 
   useWorkspaceTabReset(noteId);

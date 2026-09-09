@@ -51,7 +51,6 @@ const ARTIFACTS: Artifact[] = [
 const deleteLabel = (title: string) =>
   `ai.artifacts.list.deleteAriaLabel ${JSON.stringify({ title })}`;
 
-/** The delete label repeats the title, so the open button is matched from the start. */
 const openButton = (title: string) =>
   screen.getByRole('button', { name: new RegExp(`^${title}`) });
 

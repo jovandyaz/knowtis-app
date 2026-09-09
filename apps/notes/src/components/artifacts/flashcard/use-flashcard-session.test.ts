@@ -24,7 +24,6 @@ function makeCard(i: number): StudyCard {
   };
 }
 
-/** A real wall-clock base, so a stored timestamp cannot pass for a stored elapsed time. */
 const SESSION_EPOCH_MS = Date.UTC(2026, 0, 1);
 
 function reverse<T>(items: T[]): T[] {

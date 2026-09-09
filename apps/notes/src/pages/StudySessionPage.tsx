@@ -185,9 +185,6 @@ function StudyQueueSession({
     session.cardStatuses[session.currentIndex] === CARD_STATUS.PENDING;
 
   const isReviewInFlightRef = useRef(false);
-  // The in-flight flag clears before `session.rate` dispatches and React commits
-  // that advance a task later, so a key pressed in between still reaches the
-  // rated card's closure. Card identity is what survives that window.
   const submittedCardsRef = useRef(new Set<string>());
 
   const submitReview = useCallback(
@@ -256,7 +253,6 @@ function StudyQueueSession({
         return;
       }
       setIsReplay(true);
-      // A replay re-deals cards this session already recorded, without unmounting.
       submittedCardsRef.current.clear();
       session.restart(filter);
     },
@@ -338,9 +334,6 @@ function StudyQueueSession({
     [session, handleNavigate, handleRateAdvanced, handleWrong, handleCorrect]
   );
 
-  // Layout effect, not passive: a passive swap lands a macrotask after the commit,
-  // so a key pressed in between would still reach the previous card's closure and
-  // post a second review for a card that was already answered.
   useLayoutEffect(() => {
     if (session.isComplete) {
       return;

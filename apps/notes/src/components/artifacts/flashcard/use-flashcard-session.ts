@@ -64,7 +64,6 @@ function checkComplete(statuses: CardSessionStatus[]): boolean {
   return statuses.every((s) => s !== CARD_STATUS.PENDING);
 }
 
-/** Stamped once, on the transition into completion, so a later action cannot move it. */
 function durationOnFinish(state: SessionState): number {
   return state.isComplete ? state.durationMs : Date.now() - state.startTime;
 }

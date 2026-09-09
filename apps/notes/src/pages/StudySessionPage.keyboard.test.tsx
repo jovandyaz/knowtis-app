@@ -121,7 +121,6 @@ function onCommit(seen: () => boolean): Promise<void> {
 
 const REVIEW_SETTLE_MICROTASKS = 6;
 
-/** Unwinds the released review's promise chain but not the macrotask React commits the advance in, so the rated card is still on screen. */
 async function settleReview() {
   for (let step = 0; step < REVIEW_SETTLE_MICROTASKS; step++) {
     await Promise.resolve();
