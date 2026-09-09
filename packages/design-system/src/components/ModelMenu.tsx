@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 
 import { ChevronDown, KeyRound, Loader2, Lock } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Button } from './Button';
 import {
   DropdownMenu,

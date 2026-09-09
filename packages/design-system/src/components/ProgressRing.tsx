@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 
 import type { ProgressRingTone } from '../constants/learn-tone';
 import { useMotionPreset } from '../motion/useMotionPreset';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { clampProgress } from '../utils/progress';
 
 export const RING_SIZE_DEFAULT = 40;

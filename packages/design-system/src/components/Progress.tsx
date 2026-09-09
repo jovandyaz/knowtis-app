@@ -3,7 +3,7 @@ import { forwardRef, type ComponentPropsWithoutRef } from 'react';
 import * as ProgressPrimitive from '@radix-ui/react-progress';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { clampProgress } from '../utils/progress';
 
 const PERCENT = 100;

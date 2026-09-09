@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 interface PasswordCheck {
   readonly label: string;

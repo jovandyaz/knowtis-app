@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 
 import type { DonutTone } from '../constants/learn-tone';
 import { useMotionPreset } from '../motion/useMotionPreset';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 export const DONUT_SIZE_DEFAULT = 140;
 export const DONUT_STROKE = 12;

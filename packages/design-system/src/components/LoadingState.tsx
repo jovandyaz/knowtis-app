@@ -2,7 +2,7 @@ import { forwardRef, type HTMLAttributes } from 'react';
 
 import { Loader2 } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 export interface LoadingStateProps extends HTMLAttributes<HTMLDivElement> {
   message?: string;

@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from 'react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 /**
  * Pulsing placeholder block for loading states.

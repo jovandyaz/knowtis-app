@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 export interface AudioWaveformProps {
   analyserNode?: AnalyserNode | null;

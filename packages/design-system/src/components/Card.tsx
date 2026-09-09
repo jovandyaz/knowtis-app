@@ -1,6 +1,6 @@
 import { forwardRef, type HTMLAttributes } from 'react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 export const CARD_SURFACE =
   'rounded-lg border border-(--border) bg-(--card) text-(--card-foreground) shadow-sm';

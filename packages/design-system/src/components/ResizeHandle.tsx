@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef } from 'react';
 
 import type { PanelSide } from '../hooks/useResizablePanel';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 const POSITION_CLASSES: Record<PanelSide, string> = {
   left: 'left-0 -ml-px',

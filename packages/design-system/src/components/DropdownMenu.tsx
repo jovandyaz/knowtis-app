@@ -8,7 +8,7 @@ import {
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Switch } from './Switch';
 
 const DropdownMenu = DropdownMenuPrimitive.Root;

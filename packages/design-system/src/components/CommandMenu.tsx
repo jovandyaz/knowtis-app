@@ -7,7 +7,7 @@ import {
 
 import { ChevronRight } from 'lucide-react';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 /* ─── Content (outer container) ─── */
 

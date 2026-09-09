@@ -1,4 +1,4 @@
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Progress } from './Progress';
 
 const SECONDS_PER_MINUTE = 60;

@@ -9,7 +9,7 @@ import {
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import {
   readOverflow,
   TABS_FOCUS_MASK_RESET_CLASS,

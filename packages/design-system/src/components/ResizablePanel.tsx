@@ -5,7 +5,7 @@ import {
   type PanelSide,
   type ResizablePanelConfig,
 } from '../hooks/useResizablePanel';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { ResizeHandle } from './ResizeHandle';
 
 const HANDLE_SIDE: Record<PanelSide, PanelSide> = {

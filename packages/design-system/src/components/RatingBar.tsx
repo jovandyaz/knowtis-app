@@ -9,7 +9,7 @@ import {
   type RatingKey,
 } from '../constants/rating';
 import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 import { Kbd } from './Kbd';
 import { learnToneButton } from './learn-tone-button';
 

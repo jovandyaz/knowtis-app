@@ -15,7 +15,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { DIALOG_SIDE, type DialogSide } from '../constants/dialog';
-import { cn } from '../utils';
+import { cn } from '../utils/cn';
 
 const DIALOG_CONTENT_SELECTOR = '[data-knowtis-dialog-content]';
 const FOCUSABLE_SELECTOR =
