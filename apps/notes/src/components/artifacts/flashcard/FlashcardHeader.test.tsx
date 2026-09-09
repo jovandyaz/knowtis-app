@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TooltipProvider, TOUCH_TARGET_CLASS } from '@knowtis/design-system';
+import { TooltipProvider } from '@knowtis/design-system';
 
 import { FlashcardHeader } from './FlashcardHeader';
 
@@ -74,7 +74,10 @@ describe('FlashcardHeader', () => {
       name: 'ai.artifacts.flashcards.restart',
     });
     for (const control of [shuffle, restart]) {
-      expect(control).toHaveClass(TOUCH_TARGET_CLASS, 'w-11');
+      expect(control).toHaveClass(
+        'pointer-coarse:min-h-11',
+        'pointer-coarse:min-w-11'
+      );
     }
   });
 });

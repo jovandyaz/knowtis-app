@@ -52,7 +52,9 @@ describe('FlashcardRating', () => {
       'ai.artifacts.flashcards.wrong',
       'ai.artifacts.flashcards.correct',
     ]) {
-      expect(screen.getByRole('button', { name })).toHaveClass('min-h-11');
+      expect(screen.getByRole('button', { name })).toHaveClass(
+        'pointer-coarse:min-h-11'
+      );
     }
   });
 

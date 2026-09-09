@@ -8,7 +8,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  TOUCH_TARGET_CLASS,
 } from '@knowtis/design-system';
 import type { RestartFilter } from '@knowtis/shared-types';
 
@@ -29,11 +28,7 @@ export function PracticeAgainButton({
 
   if (!hasFilterOptions) {
     return (
-      <Button
-        variant="outline"
-        className={TOUCH_TARGET_CLASS}
-        onClick={() => onRestart('all')}
-      >
+      <Button variant="outline" onClick={() => onRestart('all')}>
         <Play className="mr-2 h-4 w-4" />
         {t('ai.artifacts.flashcards.summary.practiceAgain')}
       </Button>
@@ -43,7 +38,7 @@ export function PracticeAgainButton({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className={TOUCH_TARGET_CLASS}>
+        <Button variant="outline">
           <Play className="mr-2 h-4 w-4" />
           {t('ai.artifacts.flashcards.summary.practiceAgain')}
           <ChevronDown className="ml-1 h-4 w-4 opacity-50" />

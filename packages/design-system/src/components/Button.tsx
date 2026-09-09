@@ -4,8 +4,13 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../utils/cn';
 
+/**
+ * The `pointer-coarse:min-h-11` floor in the base is what gives every button a
+ * 44px touch target: `min-height` outranks a consumer's `h-7`/`h-8`, and the
+ * variant gate keeps fine-pointer density identical.
+ */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md pointer-coarse:min-h-11 text-sm font-medium transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -24,7 +29,7 @@ const buttonVariants = cva(
         default: 'h-9 px-4 py-2',
         sm: 'h-8 rounded-md px-3',
         lg: 'h-10 rounded-md px-8',
-        icon: 'h-8 w-8',
+        icon: 'h-8 w-8 pointer-coarse:min-w-11',
       },
     },
     defaultVariants: {

@@ -16,7 +16,6 @@ import {
   AnswerOption,
   Button,
   Progress,
-  TOUCH_TARGET_CLASS,
   type AnswerOutcome,
 } from '@knowtis/design-system';
 import type { QuizArtifact } from '@knowtis/shared-types';
@@ -190,11 +189,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
           label={scoreLabel}
           tone={scoreTone(percentage)}
         />
-        <Button
-          variant="outline"
-          className={TOUCH_TARGET_CLASS}
-          onClick={handleRestart}
-        >
+        <Button variant="outline" onClick={handleRestart}>
           <RotateCcw className="mr-2 h-4 w-4" />
           {t('ai.artifacts.quiz.tryAgain')}
         </Button>
@@ -295,12 +290,7 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
       )}
 
       <div className="flex justify-end">
-        <Button
-          ref={advanceRef}
-          className={TOUCH_TARGET_CLASS}
-          onClick={handleNext}
-          disabled={!answered}
-        >
+        <Button ref={advanceRef} onClick={handleNext} disabled={!answered}>
           {currentIndex < totalQuestions - 1
             ? t('ai.artifacts.quiz.next')
             : t('ai.artifacts.quiz.finish')}
