@@ -1,5 +1,7 @@
 import { resolve } from 'path';
 
+import { tanstackRouter } from '@tanstack/router-plugin/vite';
+
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
@@ -15,6 +17,11 @@ export default defineConfig({
     ),
   },
   plugins: [
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: false,
+      routeFileIgnorePattern: '\\.(test|spec)\\.',
+    }),
     react(),
     tailwindcss(),
     // Uses tsconfig.base.json paths for @knowtis/* aliases
