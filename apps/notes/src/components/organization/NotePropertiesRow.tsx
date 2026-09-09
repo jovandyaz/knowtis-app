@@ -136,7 +136,7 @@ export function NotePropertiesRow({
     <div className={ROW_CLASSES}>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+          className={`${CHIP_CLASSES} min-h-11 transition-colors hover:bg-muted/40 md:min-h-0`}
         >
           <BucketDot bucket={activeFilter} />
           {label}
@@ -178,7 +178,7 @@ export function NotePropertiesRow({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={t('organization.supertags.label')}
-          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+          className={`${CHIP_CLASSES} min-h-11 transition-colors hover:bg-muted/40 md:min-h-0`}
         >
           <Shapes className="size-3 opacity-60" />
           {supertag
@@ -210,7 +210,7 @@ export function NotePropertiesRow({
       <TagPicker
         selected={tags}
         onAdd={(path) => setTags([...tags, path])}
-        triggerClassName={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+        triggerClassName={`${CHIP_CLASSES} min-h-11 transition-colors hover:bg-muted/40 md:min-h-0`}
       />
 
       {onSuggest && (
