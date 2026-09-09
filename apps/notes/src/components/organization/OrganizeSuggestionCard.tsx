@@ -8,18 +8,23 @@ import { Hash, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
-import { BucketDot, Button } from '@knowtis/design-system';
+import {
+  BucketDot,
+  Button,
+  TOUCH_TARGET_CLASS,
+  TOUCH_TARGET_HEIGHT_CLASS,
+} from '@knowtis/design-system';
 import {
   TAG_MAX_PER_NOTE,
   type OrganizationSuggestion,
   type ParaBucket,
 } from '@knowtis/shared-types';
 
-const CHIP_BASE =
-  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer pointer-coarse:min-h-11';
+const CHIP_BASE = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors cursor-pointer ${TOUCH_TARGET_HEIGHT_CLASS}`;
 const CHIP_ACCEPTED = 'border-border/60 bg-muted/25 text-foreground';
 const CHIP_REJECTED =
   'border-dashed border-border/40 text-muted-foreground/60 line-through';
+const DISMISS_BUTTON = `ml-auto flex items-center justify-center rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer ${TOUCH_TARGET_CLASS}`;
 
 interface OrganizeSuggestionCardProps {
   suggestion: OrganizationSuggestion;
@@ -95,7 +100,7 @@ export function OrganizeSuggestionCard({
           type="button"
           onClick={onDismiss}
           aria-label={t('organization.suggestion.dismiss')}
-          className="ml-auto flex items-center justify-center rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+          className={DISMISS_BUTTON}
         >
           <X className="size-3.5" />
         </button>

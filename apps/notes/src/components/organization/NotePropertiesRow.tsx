@@ -11,6 +11,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  TOUCH_TARGET_HEIGHT_CLASS,
 } from '@knowtis/design-system';
 import {
   INBOX_FILTER,
@@ -24,8 +25,7 @@ import {
 import { SupertagFieldsForm } from './SupertagFieldsForm';
 import { TagPicker } from './TagPicker';
 
-const CHIP_CLASSES =
-  'inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-[13px] text-muted-foreground pointer-coarse:min-h-11';
+const CHIP_CLASSES = `inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-[13px] text-muted-foreground ${TOUCH_TARGET_HEIGHT_CLASS}`;
 
 // The chips describe the note, so they sit close under its title; the editor
 // toolbar below is `sticky top-0` and would otherwise start flush against them.
