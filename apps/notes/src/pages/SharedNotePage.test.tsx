@@ -133,9 +133,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 const renderPage = () => render(<SharedNotePage />, { wrapper });
 
 const clickEdit = () =>
-  userEvent.click(
-    screen.getAllByRole('button', { name: 'shared.editButton' })[0]
-  );
+  userEvent.click(screen.getByRole('button', { name: 'shared.editButton' }));
 
 const signInLinks = () =>
   screen.queryAllByRole('link', { name: 'shared.signIn' });
@@ -170,13 +168,13 @@ describe('SharedNotePage sign-in call to action', () => {
   it('offers sign-in to an anonymous visitor', () => {
     authUser.mockReturnValue({ isAnonymous: true });
     renderPage();
-    expect(signInLinks().length).toBeGreaterThan(0);
+    expect(signInLinks()).toHaveLength(1);
   });
 
   it('offers sign-in to a visitor with no session at all', () => {
     authUser.mockReturnValue(null);
     renderPage();
-    expect(signInLinks().length).toBeGreaterThan(0);
+    expect(signInLinks()).toHaveLength(1);
   });
 
   it('hides sign-in from a signed-in account', () => {
@@ -459,7 +457,7 @@ describe('SharedNotePage study tab', () => {
     expect(studyPanel()).not.toHaveClass('hidden');
 
     await userEvent.click(
-      screen.getAllByRole('button', { name: 'shared.viewButton' })[0]
+      screen.getByRole('button', { name: 'shared.viewButton' })
     );
 
     expect(noteTab()).toHaveAttribute('aria-selected', 'true');
