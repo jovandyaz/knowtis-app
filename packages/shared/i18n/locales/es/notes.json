@@ -472,7 +472,9 @@
         "discarded": "Propuesta descartada",
         "showMore": "Ver más",
         "showLess": "Ver menos"
-      }
+      },
+      "reasoning": "Ver razonamiento",
+      "openSource": "Abrir nota"
     },
     "groups": {
       "ai": "IA",

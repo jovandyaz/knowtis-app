@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentStatusIndicator } from './AgentStatusIndicator';
@@ -38,5 +39,22 @@ describe('AgentStatusIndicator', () => {
       'aria-live',
       'off'
     );
+  });
+
+  it('swaps the clamped tail for the scrollable reasoning once expanded', async () => {
+    const user = userEvent.setup();
+    render(<AgentStatusIndicator detail="scanning sources" />);
+    expect(screen.getByText('scanning sources')).toHaveClass('line-clamp-3');
+
+    await user.click(screen.getByRole('button'));
+
+    const expanded = screen.getByText('scanning sources');
+    expect(expanded).toHaveClass('overflow-y-auto');
+    expect(expanded).toHaveAttribute('aria-live', 'off');
+  });
+
+  it('offers no reasoning toggle without a detail', () => {
+    render(<AgentStatusIndicator />);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

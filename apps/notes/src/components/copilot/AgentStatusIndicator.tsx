@@ -1,6 +1,14 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { cn } from '@knowtis/design-system';
+import { ChevronDown } from 'lucide-react';
+
+import {
+  cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@knowtis/design-system';
 
 const LINE_WIDTHS = ['w-11/12', 'w-4/5', 'w-3/5'];
 
@@ -10,21 +18,45 @@ interface AgentStatusIndicatorProps {
 
 export function AgentStatusIndicator({ detail }: AgentStatusIndicatorProps) {
   const { t } = useTranslation('notes');
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="flex flex-col gap-2" role="status">
-      <span className="text-xs text-muted-foreground">
-        {t('ai.copilot.thinking')}
-      </span>
       {detail ? (
-        // Reasoning streams token by token inside role="status"; without opting
-        // out of the live region every update would be announced aloud.
-        <p
-          className="line-clamp-3 break-words text-xs text-muted-foreground/70"
-          aria-live="off"
-        >
-          {detail}
-        </p>
-      ) : null}
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <CollapsibleTrigger
+            className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            aria-label={t('ai.copilot.reasoning')}
+          >
+            {t('ai.copilot.thinking')}
+            <ChevronDown
+              className={cn(
+                'h-3 w-3 transition-transform duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
+                open && 'rotate-180'
+              )}
+              aria-hidden="true"
+            />
+          </CollapsibleTrigger>
+          {open ? null : (
+            <p
+              className="mt-1 line-clamp-3 break-words text-xs text-muted-foreground/70"
+              aria-live="off"
+            >
+              {detail}
+            </p>
+          )}
+          <CollapsibleContent
+            className="mt-1 max-h-32 overflow-y-auto break-words text-xs text-muted-foreground/70"
+            aria-live="off"
+          >
+            {detail}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          {t('ai.copilot.thinking')}
+        </span>
+      )}
       <div className="flex flex-col gap-1.5" aria-hidden="true">
         {LINE_WIDTHS.map((w, i) => (
           <span
