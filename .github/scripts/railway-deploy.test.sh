@@ -4,7 +4,7 @@
 # .github/scripts changes; run it locally with:
 #
 #   docker run --rm -v "$PWD/.github/scripts:/s" --entrypoint sh \
-#     ghcr.io/railwayapp/cli:latest /s/railway-deploy.test.sh
+#     ghcr.io/railwayapp/cli:latest@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f /s/railway-deploy.test.sh
 set -u
 
 gate="${1:-$(dirname "$0")/railway-deploy.sh}"

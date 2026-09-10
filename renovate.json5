@@ -7,6 +7,7 @@
     ':semanticCommitTypeAll(chore)',
     ':maintainLockFilesWeekly',
     'helpers:pinGitHubActionDigests',
+    'customManagers:githubActionsVersions',
     'group:jsTest',
     'group:definitelyTyped',
     'group:pnpm',
@@ -23,6 +24,18 @@
   // Security PRs have their own budget; unbounded they exceed the hosted 30 min job.
   vulnerabilityAlerts: { addLabels: ['security'], prConcurrentLimit: 5 },
   osvVulnerabilityAlerts: true,
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['.github/**'],
+      matchStrings: [
+        'ghcr\\.io/railwayapp/cli:latest@(?<currentDigest>sha256:[a-f0-9]{64})',
+      ],
+      depNameTemplate: 'ghcr.io/railwayapp/cli',
+      packageNameTemplate: 'ghcr.io/railwayapp/cli',
+      datasourceTemplate: 'docker',
+    },
+  ],
   packageRules: [
     {
       description: 'Peer ranges describe compatibility and are widened, never bumped',

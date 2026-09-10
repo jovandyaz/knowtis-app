@@ -23,20 +23,25 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  actions: read
+
+env:
+  # renovate: datasource=npm depName=@railway/cli
+  RAILWAY_CLI_VERSION: 5.49.0
 
 jobs:
   plan:
     name: Plan
     if: github.event.action != 'closed' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -46,18 +51,17 @@ jobs:
         # `railway config plan` strips types instead of checking them; a type
         # error would otherwise reach the plan as a runtime failure.
         run: pnpm exec tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck .railway/railway.ts
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli@5.49.0
       - name: Plan
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway config plan --out railway-plan.json | tee plan.txt
-      - uses: actions/upload-artifact@v4
+        shell: bash
+        run: pnpm dlx @railway/cli@${{ env.RAILWAY_CLI_VERSION }} config plan --out railway-plan.json | tee plan.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: railway-plan
           path: railway-plan.json
       - name: Comment plan
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
@@ -94,14 +98,17 @@ jobs:
     name: Apply
     if: github.event.action == 'closed' && github.event.pull_request.merged && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
-      - uses: railwayapp/config@v1
+      - uses: railwayapp/config@9e17d413dbe219f19d62538d9c06b5dbb5e9abf8 # v1
         with:
           command: apply
-          cli-version: 5.49.0
+          cli-version: ${{ env.RAILWAY_CLI_VERSION }}
           railway-token: ${{ secrets.RAILWAY_TOKEN }}
           confirm-destructive: false
