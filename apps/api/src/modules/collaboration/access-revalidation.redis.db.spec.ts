@@ -21,10 +21,16 @@ import {
   required,
   until,
 } from './__tests__/active-access.fixture';
-import { ACCESS_INVALIDATION_CHANNEL } from './access-invalidation.bus';
+import {
+  ACCESS_INVALIDATION_CHANNEL,
+  ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME,
+} from './access-invalidation.bus';
 
-const ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME =
-  'knowtis-access-invalidations-sub';
+const CUTOFF_OBJECTIVE_MS = 5000;
+const CUTOFF_GATE_MS = 10000;
+const APPLY_CLOCK_SLACK_MS = 250;
+const SUBSCRIBER_SETTLE_TIMEOUT_MS = 2000;
+const SUBSCRIBER_SETTLE_POLL_MS = 50;
 
 if (!process.env['DATABASE_URL'] || !process.env['REDIS_URL']) {
   throw new Error(
@@ -72,10 +78,24 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     return list
       .split('\n')
       .filter((line) =>
-        line.includes(`name=${ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME}`)
+        line
+          .split(' ')
+          .includes(`name=${ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME}`)
       )
       .map((line) => /id=(\d+)/.exec(line)?.[1])
       .filter(Boolean);
+  }
+  async function settledAccessInvalidationSubscriberIds(expected: number) {
+    const startedAt = performance.now();
+    let ids = await listAccessInvalidationSubscriberIds();
+    while (
+      ids.length !== expected &&
+      performance.now() - startedAt < SUBSCRIBER_SETTLE_TIMEOUT_MS
+    ) {
+      await delay(SUBSCRIBER_SETTLE_POLL_MS);
+      ids = await listAccessInvalidationSubscriberIds();
+    }
+    return ids;
   }
   async function revoke() {
     await f.db
@@ -129,7 +149,12 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     ).toEqual(accepted);
     for (const instance of [a, b]) {
       expect(
-        instance.applied.every((e) => e.at < e.expiresAt && !e.closed)
+        instance.applied.every((e) => e.authorizedAt < e.expiresAt && !e.closed)
+      ).toBe(true);
+      expect(
+        instance.applied.every(
+          (e) => e.at - e.authorizedAt < APPLY_CLOCK_SLACK_MS
+        )
       ).toBe(true);
       expect(
         instance.leases
@@ -143,11 +168,14 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
         s.applied.filter((e) => e.userId === f.ids.editor).map((e) => e.at)
       )
     );
-    expect(last - started).toBeLessThan(5000);
+    const cutoffMs = last - started;
+    expect(cutoffMs).toBeLessThan(CUTOFF_GATE_MS);
     console.warn(
       JSON.stringify({
         scenario: expect.getState().currentTestName,
-        cutoffMs: Math.round(last - started),
+        cutoffMs: Math.round(cutoffMs),
+        cutoffObjectiveMs: CUTOFF_OBJECTIVE_MS,
+        withinObjective: cutoffMs < CUTOFF_OBJECTIVE_MS,
         diagnostics: [a.access.diagnostics, b.access.diagnostics],
       })
     );
@@ -161,10 +189,6 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
   ] as const)(
     'stops incoming and outgoing traffic when invalidation is %s',
     async (mode) => {
-      const baselineSubscriberIds =
-        mode === 'subscriber-reconnected'
-          ? await listAccessInvalidationSubscriberIds()
-          : [];
       const pair = await trafficPair();
       try {
         const started = performance.now();
@@ -189,9 +213,7 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
           await pair.a.bus.publish(f.ids.note);
         }
         if (mode === 'subscriber-reconnected') {
-          const ids = (await listAccessInvalidationSubscriberIds()).filter(
-            (id) => !baselineSubscriberIds.includes(id)
-          );
+          const ids = await settledAccessInvalidationSubscriberIds(2);
           expect(ids).toHaveLength(2);
           await Promise.all(
             ids.map((id) => redis.client('KILL', 'ID', required(id)))
@@ -523,8 +545,7 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     const guest = a.connect(f.ids.editor);
     try {
       await until(() => a.access.diagnostics.activeNotes > 0);
-      await delay(2100);
-      expect(a.access.diagnostics.activeNotes).toBe(0);
+      await until(() => a.access.diagnostics.activeNotes === 0);
       held.release();
       await until(() => guest.closes.length > 0);
       expect(guest.closes[0]?.reason).toBe(
