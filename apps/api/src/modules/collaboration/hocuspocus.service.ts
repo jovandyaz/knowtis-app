@@ -54,10 +54,7 @@ export class HocuspocusService
   private boundHttpServer: HttpServer | null = null;
   private redisExtension: RedisExtension | null = null;
   private readonly redisClients = new Map<CollabRedisRole, IORedis>();
-  private readonly lastRedisFailureLogAt: Record<CollabRedisRole, number> = {
-    publisher: Number.NEGATIVE_INFINITY,
-    subscriber: Number.NEGATIVE_INFINITY,
-  };
+  private readonly lastRedisFailureLogAt = new Map<string, number>();
 
   constructor(
     private readonly auth: HocuspocusAuthExtension,
@@ -102,6 +99,9 @@ export class HocuspocusService
       this.upgradeHandler = null;
       this.boundHttpServer = null;
     }
+
+    this.redisExtension = null;
+    this.redisClients.clear();
 
     try {
       // Force pending debounced onStoreDocument calls to run before tearing
@@ -339,9 +339,6 @@ export class HocuspocusService
     }
     const instance = this.server.hocuspocus;
     for (const [documentName, document] of instance.documents) {
-      if (document.getConnectionsCount() === 0) {
-        continue;
-      }
       void extension
         .onChange({
           instance,
@@ -361,13 +358,13 @@ export class HocuspocusService
     reason: CollabRedisFailureReason = 'connection_failed'
   ): void {
     const now = performance.now();
-    if (
-      now - this.lastRedisFailureLogAt[role] <
-      COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS
-    ) {
+    const throttleKey = `${role}:${reason}`;
+    const loggedAt =
+      this.lastRedisFailureLogAt.get(throttleKey) ?? Number.NEGATIVE_INFINITY;
+    if (now - loggedAt < COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS) {
       return;
     }
-    this.lastRedisFailureLogAt[role] = now;
+    this.lastRedisFailureLogAt.set(throttleKey, now);
     this.logger.warn({
       operation: 'collaboration_redis',
       role,

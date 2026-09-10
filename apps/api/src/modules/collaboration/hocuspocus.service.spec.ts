@@ -21,6 +21,10 @@ interface FakeRedisClient extends EventEmitter {
 
 const clients: FakeRedisClient[] = [];
 
+function loadedDocument(connections: number): Document {
+  return { getConnectionsCount: () => connections } as unknown as Document;
+}
+
 function redisPair(): [FakeRedisClient, FakeRedisClient] {
   const [publisher, subscriber] = clients;
   if (!publisher || !subscriber) {
@@ -126,26 +130,63 @@ describe('collaboration redis clients', () => {
     });
   });
 
-  it('skips documents nobody is connected to when it re-announces', () => {
+  it('announces when the publisher is the one that recovers last', () => {
+    const announce = vi
+      .spyOn(redisExtensionOf(service), 'onChange')
+      .mockResolvedValue(undefined);
+    hocuspocusOf(service).documents.set('note-with-editors', loadedDocument(1));
+    const [publisher, subscriber] = redisPair();
+
+    publisher.status = 'ready';
+    publisher.emit('ready');
+    expect(announce).not.toHaveBeenCalled();
+
+    subscriber.status = 'ready';
+    subscriber.emit('ready');
+    expect(announce).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-announces a loaded document nobody is connected to, since a new client is served it from memory', () => {
     const announce = vi
       .spyOn(redisExtensionOf(service), 'onChange')
       .mockResolvedValue(undefined);
     const { documents } = hocuspocusOf(service);
-    documents.set('note-with-editors', {
-      getConnectionsCount: () => 1,
-    } as unknown as Document);
-    documents.set('note-nobody-is-editing', {
-      getConnectionsCount: () => 0,
-    } as unknown as Document);
+    documents.set('note-with-editors', loadedDocument(1));
+    documents.set('note-nobody-is-editing', loadedDocument(0));
     for (const client of clients) {
       client.status = 'ready';
     }
 
     redisPair()[1].emit('ready');
 
-    expect(announce).toHaveBeenCalledTimes(1);
-    expect(announce.mock.calls[0]?.[0]).toMatchObject({
-      documentName: 'note-with-editors',
+    expect(announce).toHaveBeenCalledTimes(2);
+    expect(announce.mock.calls.map((call) => call[0]?.documentName)).toEqual([
+      'note-with-editors',
+      'note-nobody-is-editing',
+    ]);
+  });
+
+  it('throttles each failure reason on its own clock', async () => {
+    const failure = new Error('connect ECONNREFUSED 10.0.0.4:6379');
+    vi.spyOn(redisExtensionOf(service), 'onChange').mockRejectedValue(failure);
+    hocuspocusOf(service).documents.set('note-with-editors', loadedDocument(1));
+    const [publisher, subscriber] = redisPair();
+
+    publisher.emit('error', failure);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(warnings).toHaveBeenCalledTimes(1);
+
+    publisher.status = 'ready';
+    subscriber.status = 'ready';
+    subscriber.emit('ready');
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(warnings).toHaveBeenCalledTimes(2);
+    expect(warnings).toHaveBeenCalledWith({
+      operation: 'collaboration_redis',
+      role: 'publisher',
+      reason: 'resync_failed',
+      message: failure.message,
     });
   });
 
