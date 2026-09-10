@@ -24,6 +24,7 @@ paths:
 
 ## Vendored shadcn primitives
 
+- **Reach for shadcn/ui before writing a primitive by hand.** Check [ui.shadcn.com](https://ui.shadcn.com/docs/components) first; if a primitive exists, vendor it with `pnpm ds:add` instead of reimplementing it. Write one by hand only when no shadcn primitive covers the behaviour, or when adopting one would mean disabling its core feature to fit our interaction model — say so in the PR when that is the reason.
 - `src/components/ui/` holds shadcn/ui primitives vendored through `pnpm ds:add`. They keep shadcn's kebab-case filenames and `data-slot` attributes; hand-written components stay PascalCase in `src/components/`.
 - Under `ui/`, hand-edit only the normalizations `pnpm ds:add` reports: replacing a stripped animation, and swapping hardcoded `duration-*` / `ease-*` for the motion tokens. Anything else is discarded by `--overwrite` — if a primitive needs design-system behaviour, wrap it in a PascalCase component instead.
 - Radix is imported from the unified `radix-ui` package, never from `@radix-ui/react-*` — two import surfaces produce two `DismissableLayer` registries and break nested overlays.
