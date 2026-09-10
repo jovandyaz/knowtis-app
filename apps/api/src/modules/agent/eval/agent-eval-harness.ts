@@ -42,7 +42,7 @@ const NOOP_PENDING_STORE = {
 
 export class AgentEvalHarness {
   private constructor(
-    private readonly moduleRef: TestingModule,
+    private readonly moduleRef: Pick<TestingModule, 'close'>,
     private readonly orchestrator: AgentOrchestrator,
     private readonly fallbackChain: FallbackChainService,
     private readonly catalog: ModelCatalog,
@@ -50,6 +50,27 @@ export class AgentEvalHarness {
     private readonly maxSteps: number,
     private readonly maxTurnTokens: number
   ) {}
+
+  /** Builds a harness over ready-made collaborators, for suites that must not boot the module graph. */
+  static withCollaborators(deps: {
+    moduleRef: Pick<TestingModule, 'close'>;
+    orchestrator: AgentOrchestrator;
+    fallbackChain: FallbackChainService;
+    catalog: ModelCatalog;
+    retrieval: RecordingFixtureRetrieval;
+    maxSteps: number;
+    maxTurnTokens: number;
+  }): AgentEvalHarness {
+    return new AgentEvalHarness(
+      deps.moduleRef,
+      deps.orchestrator,
+      deps.fallbackChain,
+      deps.catalog,
+      deps.retrieval,
+      deps.maxSteps,
+      deps.maxTurnTokens
+    );
+  }
 
   static async boot(): Promise<AgentEvalHarness> {
     const retrieval = new RecordingFixtureRetrieval();

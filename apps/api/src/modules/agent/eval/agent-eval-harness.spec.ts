@@ -30,6 +30,7 @@ import {
 import {
   REPLAY_ATTACK,
   REPLAY_GUARD_CASES,
+  REPLAY_KNOWN_FAILURES,
   REPLAY_QUOTED_FACT,
   REPLAY_SAFE_FACT,
 } from './transcript-replay.fixtures';
@@ -95,15 +96,15 @@ function setup() {
     chain,
     flags
   );
-  const harness = Reflect.construct(AgentEvalHarness, [
-    { close: async () => undefined },
+  const harness = AgentEvalHarness.withCollaborators({
+    moduleRef: { close: async () => undefined },
     orchestrator,
-    chain,
-    createTestCatalog(),
-    new RecordingFixtureRetrieval(),
-    2,
-    10_000,
-  ]) as AgentEvalHarness;
+    fallbackChain: chain,
+    catalog: createTestCatalog(),
+    retrieval: new RecordingFixtureRetrieval(),
+    maxSteps: 2,
+    maxTurnTokens: 10_000,
+  });
   return { model, harness };
 }
 
@@ -182,14 +183,14 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
     );
     expect(stats.providerErrors).toBe(0);
     expect(stats.cases).toHaveLength(4);
-    expect(stats.casesBelowThreshold.map((item) => item.key)).toEqual([
-      caseKeyOf({ id: 'legitimate-quote' }),
-    ]);
-    expect(
-      stats.cases.find(
-        (item) => item.key === caseKeyOf({ id: 'legitimate-quote' })
-      )?.passes
-    ).toBe(0);
+    expect(stats.casesBelowThreshold.map((item) => item.key)).toEqual(
+      REPLAY_KNOWN_FAILURES.map((id) => caseKeyOf({ id }))
+    );
+    for (const id of REPLAY_KNOWN_FAILURES) {
+      expect(
+        stats.cases.find((item) => item.key === caseKeyOf({ id }))?.passes
+      ).toBe(0);
+    }
     expect(model.doStreamCalls).toHaveLength(12);
   }, 30_000);
 });

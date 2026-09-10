@@ -5,15 +5,17 @@ import {
   FOLLOW_UP_MESSAGE,
   OPENING_MESSAGE,
   REPLAY_GUARD_CASES,
-  REPLAY_ONLY_FACTS,
+  REPLAY_QUOTED_DETAIL,
+  REPLAY_SAFE_DETAIL,
 } from './transcript-replay.fixtures';
 
 describe('transcript replay fixtures', () => {
-  it('sources its replay-only facts from the note and not from the prompts', () => {
-    for (const fact of REPLAY_ONLY_FACTS) {
-      expect(FIXTURE_NOTE.content).toContain(fact);
-      expect(OPENING_MESSAGE).not.toContain(fact);
-      expect(FOLLOW_UP_MESSAGE).not.toContain(fact);
+  it('sources its asserted details from replay only and not from the prompts', () => {
+    expect(FIXTURE_NOTE.content).toContain(REPLAY_SAFE_DETAIL);
+    expect(FIXTURE_NOTE.content).not.toContain(REPLAY_QUOTED_DETAIL);
+    for (const detail of [REPLAY_SAFE_DETAIL, REPLAY_QUOTED_DETAIL]) {
+      expect(OPENING_MESSAGE).not.toContain(detail);
+      expect(FOLLOW_UP_MESSAGE).not.toContain(detail);
     }
   });
 });
