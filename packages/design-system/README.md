@@ -19,11 +19,15 @@ nx storybook design-system          # dev server on http://localhost:6006
 nx storybook:build design-system    # static build to storybook-static/
 ```
 
-Stories are co-located with each component (`Button.stories.tsx` next to `Button.tsx`).
+Stories are co-located with each component (`Button.stories.tsx` next to `Button.tsx`; `collapsible.stories.tsx` next to `ui/collapsible.tsx`).
 
 ## Components
 
-45 components under `src/components/` (107 files in the directory, counting co-located stories, tests and shared helpers), every one re-exported from `src/index.ts`: primitives like `Button`, `Input`, `Textarea`, `Badge`, `Switch`, `Card`; overlays like `Dialog`, `DropdownMenu`, `Tooltip`, `CommandMenuContent` / `CommandMenuGroup` / `CommandMenuItem` / `CommandMenuBack`; state views `LoadingState` / `ErrorState` / `EmptyState`; plus app-shaped pieces such as `ModelMenu`, `ModelSelect`, `SegmentedControl`, `RadioCardGroup`, `VoiceButton`, `RecordingModal`, `ThemeToggle`, and `PasswordInput`/`PasswordStrength`. Also exported: `buttonVariants` and `badgeVariants` (class-variance-authority variants) and the `useEscapeDismiss` hook.
+47 components under `src/components/` (107 files in the directory, counting co-located stories, tests and shared helpers), every one re-exported from `src/index.ts`: primitives like `Button`, `Input`, `Textarea`, `Badge`, `Switch`, `Card`; overlays like `Dialog`, `DropdownMenu`, `Tooltip`, `CommandMenuContent` / `CommandMenuGroup` / `CommandMenuItem` / `CommandMenuBack`; state views `LoadingState` / `ErrorState` / `EmptyState`; plus app-shaped pieces such as `ModelMenu`, `ModelSelect`, `SegmentedControl`, `RadioCardGroup`, `VoiceButton`, `RecordingModal`, `ThemeToggle`, and `PasswordInput`/`PasswordStrength`. Also exported: `buttonVariants` and `badgeVariants` (class-variance-authority variants) and the `useEscapeDismiss` hook.
+
+`src/components/ui/` is a second tier holding shadcn/ui primitives vendored verbatim (`collapsible`, `hover-card`). They keep shadcn's kebab-case filenames and `data-slot` attributes so `pnpm ds:add --overwrite <name>` can refresh them in place; hand-written components stay PascalCase in `src/components/`. Both tiers are re-exported from `src/index.ts`, which remains the only public API.
+
+Add a primitive with `pnpm ds:add <name>` from the workspace root. It runs the shadcn CLI in an isolated stage directory (the CLI needs tsconfig `paths`, and adding them here would shadow the inherited `@knowtis/*` aliases), then rewrites the output to this package's conventions: relative `cn` import, `bg-(--token)` form, a `motion-reduce:` guard on every transition, and removal of `tw-animate-css` utilities that this workspace cannot resolve. It refuses to write a file that still fails those checks. Afterwards you must add any reported dependency to the root `package.json`, replace stripped animations with a design-system one, and add the exports to `src/index.ts`.
 
 ## Design tokens & styles
 

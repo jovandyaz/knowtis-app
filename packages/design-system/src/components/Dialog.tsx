@@ -12,8 +12,8 @@ import {
   type ReactNode,
 } from 'react';
 
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
+import { Dialog as DialogPrimitive } from 'radix-ui';
 
 import { DIALOG_SIDE, type DialogSide } from '../constants/dialog';
 import { TOUCH_TARGET_CLASS } from '../constants/touch-target';

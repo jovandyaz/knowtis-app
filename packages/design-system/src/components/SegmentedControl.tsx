@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
+import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 
 import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';
