@@ -79,6 +79,22 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     return reciprocalRankFusion([lexical, vector], undefined, MAX_HITS);
   }
 
+  async listUnindexed(userId: string, limit: number): Promise<NoteHit[]> {
+    if (!this.config.get('VOYAGE_API_KEY')) {
+      return [];
+    }
+    const branded = UserId.create(userId);
+    if (branded.isErr()) {
+      return [];
+    }
+    const rows = await this.notes.findAccessibleNotesUnindexed(
+      branded.value,
+      this.config.get('AI_EMBEDDING_MODEL'),
+      limit
+    );
+    return rows.map((r) => toNoteHit(r, userId));
+  }
+
   getById(userId: string, noteId: string): Promise<AgentNote | null> {
     return this.keyword.getById(userId, noteId);
   }

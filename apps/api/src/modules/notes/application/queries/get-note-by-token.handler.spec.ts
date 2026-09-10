@@ -42,6 +42,7 @@ describe('GetNoteByTokenHandler', () => {
       findAccessibleSummariesByUser: vi.fn(),
       findAccessibleNotesByLexicalRank: vi.fn(),
       findAccessibleNotesByEmbedding: vi.fn(),
+      findAccessibleNotesUnindexed: vi.fn(),
       countAccessibleByUser: vi.fn(),
       countAccessibleByBucket: vi.fn(),
       countAccessibleBySupertag: vi.fn(),

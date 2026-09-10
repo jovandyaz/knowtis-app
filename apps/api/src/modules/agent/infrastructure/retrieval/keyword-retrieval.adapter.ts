@@ -47,6 +47,10 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       .map((note) => toNoteHit(note, userId));
   }
 
+  async listUnindexed(): Promise<NoteHit[]> {
+    return [];
+  }
+
   async getById(userId: string, noteId: string): Promise<AgentNote | null> {
     const branded = this.brandUser(userId, 'getById');
     if (!branded) {

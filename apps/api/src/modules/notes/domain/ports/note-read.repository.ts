@@ -69,6 +69,13 @@ export interface NoteReadRepository {
     model: string,
     limit: number
   ): Promise<NoteSummary[]>;
+  /** Accessible notes the vector leg cannot reach yet: no embedding row, an
+   * embedding older than the note, or one built by a different model. */
+  findAccessibleNotesUnindexed(
+    userId: UserId,
+    model: string,
+    limit: number
+  ): Promise<NoteSummary[]>;
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount>;
   countAccessibleBySupertag(userId: UserId): Promise<NoteSupertagCounts>;
   countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts>;

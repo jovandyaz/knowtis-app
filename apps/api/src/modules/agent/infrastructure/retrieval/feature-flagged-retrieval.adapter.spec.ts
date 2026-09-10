@@ -21,6 +21,7 @@ function make(enabled: boolean, hybridThrows = false, flagThrows = false) {
       }
       return [{ id: 'hyb' }] as never;
     }),
+    listUnindexed: vi.fn(async () => [{ id: 'pending' }] as never),
   } as unknown as HybridRetrievalAdapter;
   const keyword = {
     search: vi.fn(async () => [{ id: 'kw' }] as never),
@@ -53,5 +54,23 @@ describe('FeatureFlaggedRetrievalAdapter.search', () => {
     const { adapter, keyword } = make(true, false, true);
     expect((await adapter.search('u', 'q'))[0].id).toBe('kw');
     expect(keyword.search).toHaveBeenCalledOnce();
+  });
+});
+
+describe('FeatureFlaggedRetrievalAdapter.listUnindexed', () => {
+  it('reports pending notes when the flag is on', async () => {
+    const { adapter } = make(true);
+    expect((await adapter.listUnindexed('u', 5))[0].id).toBe('pending');
+  });
+
+  it('reports none when the flag is off, since there is no vector leg to lag behind', async () => {
+    const { adapter, hybrid } = make(false);
+    expect(await adapter.listUnindexed('u', 5)).toEqual([]);
+    expect(hybrid.listUnindexed).not.toHaveBeenCalled();
+  });
+
+  it('reports none when the flag service is down', async () => {
+    const { adapter } = make(true, false, true);
+    expect(await adapter.listUnindexed('u', 5)).toEqual([]);
   });
 });

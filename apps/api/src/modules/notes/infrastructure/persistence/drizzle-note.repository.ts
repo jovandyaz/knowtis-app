@@ -108,6 +108,14 @@ export class DrizzleNoteRepository implements NoteRepository {
     );
   }
 
+  findAccessibleNotesUnindexed(
+    userId: UserId,
+    model: string,
+    limit: number
+  ): Promise<NoteSummary[]> {
+    return this.readRepo.findAccessibleNotesUnindexed(userId, model, limit);
+  }
+
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
     return this.readRepo.countAccessibleByUser(userId);
   }

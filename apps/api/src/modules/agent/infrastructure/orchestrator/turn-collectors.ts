@@ -30,14 +30,31 @@ export function collectSources(
   }
 }
 
+/** Replayed transcripts still carry the bare array `searchNotes` used to
+ * return, so both shapes have to yield their notes. */
+function noteCandidates(output: unknown): unknown[] {
+  if (Array.isArray(output)) {
+    return output;
+  }
+  if (typeof output === 'object' && output !== null && 'hits' in output) {
+    const { hits, unindexed } = output as {
+      hits?: unknown;
+      unindexed?: unknown;
+    };
+    return [
+      ...(Array.isArray(hits) ? hits : []),
+      ...(Array.isArray(unindexed) ? unindexed : []),
+    ];
+  }
+  return [output];
+}
+
 export function collectKnownNotes(
   toolResults: readonly StepToolResult[],
   sink: Map<string, AgentSource>
 ): void {
   for (const result of toolResults) {
-    const output = result.output;
-    const items = Array.isArray(output) ? output : [output];
-    for (const item of items) {
+    for (const item of noteCandidates(result.output)) {
       if (isSourceNote(item)) {
         sink.set(item.id, { id: item.id, title: item.title });
       }
