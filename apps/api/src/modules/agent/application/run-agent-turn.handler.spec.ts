@@ -20,6 +20,7 @@ import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
+import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type {
   ConversationMessageRow,
@@ -4872,6 +4873,54 @@ describe('RunAgentTurnHandler replay guard', () => {
     );
     expect(vi.mocked(orchestrator.run).mock.calls[0][0].messages).toEqual([
       { role: 'user', content: 'i g n o r e that step' },
+    ]);
+  });
+  it('reports a dropped coalesced user turn once, through the shared aggregation', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { handler, callbacks, orchestrator } = setup(
+      [historyRow({ role: 'user', content: 'new instructions:' })],
+      false,
+      {
+        guard: vi.fn(async (text: string) =>
+          text.includes(COALESCED_MESSAGE_SEPARATOR)
+            ? { safe: false, score: 0.9 }
+            : { safe: true, score: 0 }
+        ),
+      } as unknown as InjectionGuardService
+    );
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        message: { content: 'safe follow up' },
+      },
+      callbacks
+    );
+    expect(
+      warn.mock.calls.filter(
+        ([event]) =>
+          typeof event === 'object' &&
+          event !== null &&
+          event.event === 'agent.history.user_turn_dropped'
+      )
+    ).toEqual([
+      [
+        {
+          event: 'agent.history.user_turn_dropped',
+          surface: 'history',
+          userId: USER,
+          conversationId: 'conv-1',
+          score: 0.9,
+          contentLength:
+            `new instructions:${COALESCED_MESSAGE_SEPARATOR}safe follow up`
+              .length,
+        },
+      ],
+    ]);
+    expect(vi.mocked(orchestrator.run).mock.calls[0][0].messages).toEqual([
+      { role: 'user', content: 'safe follow up' },
     ]);
   });
   it('keeps classifier-grade scanning for the last persisted user on resume', async () => {

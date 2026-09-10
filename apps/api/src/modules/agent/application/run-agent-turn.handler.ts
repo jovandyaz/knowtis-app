@@ -25,6 +25,7 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import {
   logInputDetections,
   resolveInputEnforcement,
+  type DroppedUserTurn,
 } from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
@@ -541,6 +542,11 @@ export class RunAgentTurnHandler {
     const sanitized = sanitizeReplayHistory(inputMessages, {
       enforceAssistantAndTool: enforced,
     });
+    const guarded = await this.guardReplayedUserTurn(
+      sanitized.messages,
+      freshUserMessage,
+      input.userId
+    );
     logInputDetections(
       this.logger,
       sanitized.detections.map(({ index, detection, disposition }) => ({
@@ -552,14 +558,10 @@ export class RunAgentTurnHandler {
         surface: 'history',
         userId: input.userId,
         ...(persistence ? { conversationId: persistence.conversationId } : {}),
-      }
+      },
+      guarded.dropped
     );
-    const history = await this.guardReplayedUserTurn(
-      sanitized.messages,
-      freshUserMessage,
-      input.userId,
-      persistence?.conversationId
-    );
+    const history = guarded.messages;
     const messages = this.trimHistory(
       coalesceMessages(
         freshUserMessage ? [...history, freshUserMessage] : history
@@ -988,30 +990,25 @@ export class RunAgentTurnHandler {
   private async guardReplayedUserTurn(
     history: AgentMessage[],
     fresh: AgentMessage | undefined,
-    userId: string,
-    conversationId: string | undefined
-  ): Promise<AgentMessage[]> {
+    userId: string
+  ): Promise<{ messages: AgentMessage[]; dropped?: DroppedUserTurn }> {
     const last = fresh
       ? history.length - 1
       : history.findLastIndex((m) => m.role === 'user');
     if (history[last]?.role !== 'user') {
-      return history;
+      return { messages: history };
     }
     const text = fresh
       ? `${history[last].content}${COALESCED_MESSAGE_SEPARATOR}${fresh.content}`
       : history[last].content;
     const verdict = await this.injectionGuard.guard(text, userId);
     if (verdict.safe) {
-      return history;
+      return { messages: history };
     }
-    this.logger.warn({
-      event: 'agent.history.user_turn_dropped',
-      userId,
-      ...(conversationId ? { conversationId } : {}),
-      score: verdict.score,
-      contentLength: text.length,
-    });
-    return history.filter((_, index) => index !== last);
+    return {
+      messages: history.filter((_, index) => index !== last),
+      dropped: { score: verdict.score, contentLength: text.length },
+    };
   }
 
   private toolNameForKind(kind: MutationKind): string {

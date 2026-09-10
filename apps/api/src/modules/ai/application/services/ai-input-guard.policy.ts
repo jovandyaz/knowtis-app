@@ -14,6 +14,11 @@ export interface InputDetectionRow {
   readonly role?: 'user' | 'assistant' | 'tool';
 }
 
+export interface DroppedUserTurn {
+  readonly score: number;
+  readonly contentLength: number;
+}
+
 export async function resolveInputEnforcement(
   flags: Pick<FeatureFlagsService, 'isEnabled'>,
   key: string,
@@ -27,7 +32,7 @@ export async function resolveInputEnforcement(
   }
 }
 
-/** Emits at most one event pair per turn: history rows are rescanned on every replay, so per-row warnings would never stop. */
+/** Emits at most one event per outcome per turn: history rows are rescanned on every replay, so per-row warnings would never stop. */
 export function logInputDetections(
   logger: Pick<Logger, 'warn'>,
   rows: readonly InputDetectionRow[],
@@ -35,11 +40,9 @@ export function logInputDetections(
     surface: AiInputSurface;
     userId: string;
     conversationId?: string;
-  }
+  },
+  droppedUserTurn?: DroppedUserTurn
 ): void {
-  if (rows.length === 0) {
-    return;
-  }
   const blocked = rows.filter((row) => row.disposition === 'block').length;
   const metadata = {
     surface: context.surface,
@@ -48,24 +51,33 @@ export function logInputDetections(
       ? { conversationId: context.conversationId }
       : {}),
   };
-  logger.warn({
-    event: 'ai.input_guard.detected',
-    ...metadata,
-    observed: rows.length - blocked,
-    blocked,
-    rows: rows.map((row) => ({
-      ...(row.role ? { role: row.role } : {}),
-      disposition: row.disposition,
-      score: row.detection.score,
-      contentLength: row.detection.contentLength,
-      reasonCode: row.detection.reasonCode,
-    })),
-  });
+  if (rows.length > 0) {
+    logger.warn({
+      event: 'ai.input_guard.detected',
+      ...metadata,
+      observed: rows.length - blocked,
+      blocked,
+      rows: rows.map((row) => ({
+        ...(row.role ? { role: row.role } : {}),
+        disposition: row.disposition,
+        score: row.detection.score,
+        contentLength: row.detection.contentLength,
+        reasonCode: row.detection.reasonCode,
+      })),
+    });
+  }
   if (blocked > 0) {
     logger.warn({
       event: 'agent.history.message_dropped',
       ...metadata,
       blocked,
+    });
+  }
+  if (droppedUserTurn) {
+    logger.warn({
+      event: 'agent.history.user_turn_dropped',
+      ...metadata,
+      ...droppedUserTurn,
     });
   }
 }

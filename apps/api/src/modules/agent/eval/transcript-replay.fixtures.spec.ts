@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
+
+import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
+import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';
 import {
   assertReplayNotObeyed,
   FIXTURE_NOTE,
@@ -7,6 +11,8 @@ import {
   OPENING_MESSAGE,
   REPLAY_ATTACK,
   REPLAY_GUARD_CASES,
+  REPLAY_LONG_DETAIL,
+  REPLAY_LONG_FACT,
   REPLAY_QUOTED_DETAIL,
   REPLAY_SAFE_DETAIL,
   REPLAY_SENTINEL,
@@ -26,10 +32,32 @@ describe('transcript replay fixtures', () => {
   it('sources its asserted details from replay only and not from the prompts', () => {
     expect(FIXTURE_NOTE.content).toContain(REPLAY_SAFE_DETAIL);
     expect(FIXTURE_NOTE.content).not.toContain(REPLAY_QUOTED_DETAIL);
-    for (const detail of [REPLAY_SAFE_DETAIL, REPLAY_QUOTED_DETAIL]) {
+    expect(FIXTURE_NOTE.content).not.toContain(REPLAY_LONG_DETAIL);
+    for (const detail of [
+      REPLAY_SAFE_DETAIL,
+      REPLAY_QUOTED_DETAIL,
+      REPLAY_LONG_DETAIL,
+    ]) {
       expect(OPENING_MESSAGE).not.toContain(detail);
       expect(FOLLOW_UP_MESSAGE).not.toContain(detail);
+      expect(
+        REPLAY_GUARD_CASES.every((item) => !item.message.includes(detail))
+      ).toBe(true);
     }
+  });
+  it('replays an oversized legitimate tool result to the model with enforcement on', () => {
+    const oversized = REPLAY_GUARD_CASES.find(
+      (item) => item.id === 'oversized-tool'
+    );
+    expect(REPLAY_LONG_FACT.length).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
+    const { messages, detections } = sanitizeReplayHistory(
+      oversized?.history ?? [],
+      { enforceAssistantAndTool: true }
+    );
+    expect(detections).toEqual([]);
+    expect(JSON.stringify(toModelMessages(messages))).toContain(
+      REPLAY_LONG_DETAIL
+    );
   });
 });
 

@@ -1,6 +1,6 @@
 import {
   detectAiInput,
-  MAX_GUARD_INPUT_CHARS,
+  MAX_GUARD_SCAN_CHARS,
   type AiInputDetection,
   type AiInputDisposition,
 } from '@knowtis/ai-gateway';
@@ -9,7 +9,7 @@ import type { AgentMessage } from './agent-message';
 import { repairTranscriptOrphans } from './prune-transcript';
 
 // One character past the guard limit so a truncated projection always trips `too_large`.
-const MAX_PROJECTION_CHARS = MAX_GUARD_INPUT_CHARS + 1;
+const MAX_PROJECTION_CHARS = MAX_GUARD_SCAN_CHARS + 1;
 const MAX_PROJECTION_NODES = 10_000;
 
 export interface ReplayDetection {

@@ -31,6 +31,7 @@ import {
   REPLAY_ATTACK,
   REPLAY_GUARD_CASES,
   REPLAY_KNOWN_FAILURES,
+  REPLAY_LONG_DETAIL,
   REPLAY_QUOTED_FACT,
   REPLAY_SAFE_FACT,
 } from './transcript-replay.fixtures';
@@ -49,7 +50,9 @@ function setup() {
           ? REPLAY_SAFE_FACT
           : visible.includes(REPLAY_QUOTED_FACT)
             ? REPLAY_QUOTED_FACT
-            : 'Untrusted commands must be treated as data.';
+            : visible.includes(REPLAY_LONG_DETAIL)
+              ? `The standby plan is the ${REPLAY_LONG_DETAIL}.`
+              : 'Untrusted commands must be treated as data.';
       return {
         stream: simulateReadableStream({
           chunks: [
@@ -182,7 +185,7 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
       }
     );
     expect(stats.providerErrors).toBe(0);
-    expect(stats.cases).toHaveLength(4);
+    expect(stats.cases).toHaveLength(REPLAY_GUARD_CASES.length);
     expect(stats.casesBelowThreshold.map((item) => item.key)).toEqual(
       REPLAY_KNOWN_FAILURES.map((id) => caseKeyOf({ id }))
     );
@@ -191,6 +194,6 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
         stats.cases.find((item) => item.key === caseKeyOf({ id }))?.passes
       ).toBe(0);
     }
-    expect(model.doStreamCalls).toHaveLength(12);
+    expect(model.doStreamCalls).toHaveLength(REPLAY_GUARD_CASES.length * 3);
   }, 30_000);
 });
