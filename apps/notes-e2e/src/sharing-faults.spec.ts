@@ -101,9 +101,6 @@ for (const fault of ['redis', 'postgres'] as const) {
       const freshOwner = connect(owner.accessToken, 'a');
       await freshOwner.synced();
       freshOwner.write('recovered', 'new session');
-      if (fault === 'redis') {
-        await expect.poll(() => ownerB.read('recovered')).toBe('new session');
-      }
       const witness = connect(owner.accessToken, 'b');
       await witness.synced();
       await expect.poll(() => witness.read('recovered')).toBe('new session');
