@@ -23,10 +23,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=npm depName=vercel
+  VERCEL_CLI_VERSION: 59.15.1
+
 jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     services:
       postgres:
         # pgvector image: migrations create the `vector` extension for embeddings.
@@ -67,19 +77,19 @@ jobs:
       mcp_affected: ${{ steps.check-mcp.outputs.affected }}
       backoffice_affected: ${{ steps.check-backoffice.outputs.affected }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: tree:0
 
-      - uses: nrwl/nx-set-shas@v5
+      - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
         with:
           main-branch-name: main
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -92,6 +102,11 @@ jobs:
 
       - name: Verify ESLint config resolves per project
         run: pnpm lint:config
+
+      - name: Audit workflows with zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pipx run zizmor==1.30.1 .github/workflows/
 
       - name: Lint (affected)
         run: npx nx affected -t lint
@@ -200,27 +215,24 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
 
-      - name: Install Vercel CLI
-        run: npm i -g vercel@latest
-
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --token=$VERCEL_TOKEN
 
       - name: Build
-        run: vercel build --prod --token=$VERCEL_TOKEN
+        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} build --prod --token=$VERCEL_TOKEN
 
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --prod --token=$VERCEL_TOKEN
 
   deploy-backoffice:
     name: Deploy Backoffice to Vercel
@@ -235,27 +247,24 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_BACKOFFICE }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
 
-      - name: Install Vercel CLI
-        run: npm i -g vercel@latest
-
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --token=$VERCEL_TOKEN
 
       - name: Build
-        run: vercel build --prod --local-config=apps/backoffice/vercel.json --token=$VERCEL_TOKEN
+        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} build --prod --local-config=apps/backoffice/vercel.json --token=$VERCEL_TOKEN
 
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --local-config=apps/backoffice/vercel.json --token=$VERCEL_TOKEN
+        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --prod --local-config=apps/backoffice/vercel.json --token=$VERCEL_TOKEN
 
   deploy:
     name: Deploy API to Railway
@@ -265,13 +274,13 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
       needs.ci.outputs.api_affected == 'true'
-    container: ghcr.io/railwayapp/cli:latest
+    container: ghcr.io/railwayapp/cli:latest@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f
     timeout-minutes: 30
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -287,13 +296,13 @@ jobs:
       github.event_name == 'push' &&
       needs.ci.outputs.mcp_affected == 'true' &&
       vars.RAILWAY_MCP_SERVICE_ID != ''
-    container: ghcr.io/railwayapp/cli:latest
+    container: ghcr.io/railwayapp/cli:latest@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f
     timeout-minutes: 30
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_MCP_SERVICE_ID: ${{ vars.RAILWAY_MCP_SERVICE_ID }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
