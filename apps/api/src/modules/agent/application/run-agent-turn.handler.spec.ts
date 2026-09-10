@@ -4893,6 +4893,39 @@ describe('RunAgentTurnHandler replay guard', () => {
       { role: 'user', content: `${half}${COALESCED_MESSAGE_SEPARATOR}${half}` },
     ]);
   });
+  it('scans the seam from a token boundary and reports the joined length', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const persisted = `${'a'.repeat(40_000)} tail words`;
+    const fresh = 'fresh question';
+    const { handler, callbacks, guard } = setup(
+      [historyRow({ role: 'user', content: persisted })],
+      false,
+      {
+        guard: vi.fn(async (text: string) =>
+          text.includes(COALESCED_MESSAGE_SEPARATOR)
+            ? { safe: false, score: 0.9 }
+            : { safe: true, score: 0 }
+        ),
+      } as unknown as InjectionGuardService
+    );
+    await handler.execute(
+      { userId: USER, conversationId: 'conv-1', message: { content: fresh } },
+      callbacks
+    );
+    expect(guard.guard).toHaveBeenCalledWith(
+      `tail words${COALESCED_MESSAGE_SEPARATOR}${fresh}`,
+      USER
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.history.user_turn_dropped',
+        contentLength:
+          persisted.length + COALESCED_MESSAGE_SEPARATOR.length + fresh.length,
+      })
+    );
+  });
   it('reports a dropped coalesced user turn once, through the shared aggregation', async () => {
     const warn = vi
       .spyOn(Logger.prototype, 'warn')

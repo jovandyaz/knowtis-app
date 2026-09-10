@@ -4,10 +4,24 @@ export interface PromptGuardResult {
   readonly reason?: string;
 }
 
-const INJECTION_PATTERNS: {
+const MAX_PATTERN_BRIDGE_CHARS = 64;
+const MAX_PATTERN_BRIDGES = 5;
+const MAX_PATTERN_GAP_CHARS = 200;
+const MAX_PATTERN_ANCHOR_CHARS = 64;
+const BRIDGE = `{1,${MAX_PATTERN_BRIDGE_CHARS}}`;
+
+/** Upper bound on the span of any windowed pattern match in normalized, whitespace-collapsed text; run-anchored patterns are exempt because they are never scanned in windows. */
+export const MAX_INJECTION_PATTERN_SPAN_CHARS =
+  Math.max(
+    MAX_PATTERN_BRIDGES * MAX_PATTERN_BRIDGE_CHARS,
+    MAX_PATTERN_GAP_CHARS
+  ) + MAX_PATTERN_ANCHOR_CHARS;
+
+export const INJECTION_PATTERNS: readonly {
   pattern: RegExp;
   weight: number;
   reason: string;
+  runAnchored?: boolean;
 }[] = [
   // Role override
   {
@@ -42,7 +56,7 @@ const INJECTION_PATTERNS: {
     reason: 'Role hijacking attempt',
   },
   {
-    pattern: /\bDAN\b.{0,200}mode/i,
+    pattern: new RegExp(`\\bDAN\\b.{0,${MAX_PATTERN_GAP_CHARS}}mode`, 'i'),
     weight: 0.9,
     reason: 'Known jailbreak pattern',
   },
@@ -131,6 +145,7 @@ const INJECTION_PATTERNS: {
     pattern: /(?<![A-Za-z0-9+/=])[A-Za-z0-9+]{60,}={0,2}(?![A-Za-z0-9+/=])/,
     weight: 0.3,
     reason: 'Long base64-like payload',
+    runAnchored: true,
   },
   {
     pattern: /\bnew\s+(?:system\s+)?instructions?\s*:/i,
@@ -138,14 +153,18 @@ const INJECTION_PATTERNS: {
     reason: 'Instruction re-anchoring',
   },
   {
-    pattern:
-      /\bi[\s_.-]{1,8}g[\s_.-]{1,8}n[\s_.-]{1,8}o[\s_.-]{1,8}r[\s_.-]{1,8}e\b/i,
+    pattern: new RegExp(
+      `\\bi[\\s_.-]${BRIDGE}g[\\s_.-]${BRIDGE}n[\\s_.-]${BRIDGE}o[\\s_.-]${BRIDGE}r[\\s_.-]${BRIDGE}e\\b`,
+      'i'
+    ),
     weight: 0.4,
     reason: 'Obfuscated override keyword',
   },
   {
-    pattern:
-      /ignore[-_]{1,8}(?:all[-_]{1,8})?(?:previous|prior)[-_]{1,8}(?:instructions|rules)/i,
+    pattern: new RegExp(
+      `ignore[-_]${BRIDGE}(?:all[-_]${BRIDGE})?(?:previous|prior)[-_]${BRIDGE}(?:instructions|rules)`,
+      'i'
+    ),
     weight: 0.85,
     reason: 'Instruction override attempt (punctuated)',
   },
@@ -161,9 +180,6 @@ const INJECTION_THRESHOLD = 0.6;
 
 /** Longest input the heuristic guard will score; anything longer is refused outright. */
 export const MAX_GUARD_INPUT_CHARS = 50_000;
-
-/** Upper bound on the span of any single pattern match once text is normalized and its whitespace runs collapsed; every bridging quantifier above is capped so this holds. */
-export const MAX_INJECTION_PATTERN_SPAN_CHARS = 256;
 
 const STRIP_CODEPOINTS: readonly number[] = [
   0x200b,
@@ -184,19 +200,16 @@ const STRIP_CODEPOINTS: readonly number[] = [
   0x200f,
   0x061c, // bidi marks (LRM, RLM, ALM)
 ];
-const STRIP_CHARS: ReadonlySet<string> = new Set(
-  STRIP_CODEPOINTS.map((cp) => String.fromCharCode(cp))
+const STRIP_PATTERN = new RegExp(
+  `[${STRIP_CODEPOINTS.map(
+    (cp) => `\\u${cp.toString(16).padStart(4, '0')}`
+  ).join('')}]`,
+  'g'
 );
 
 /** Folds compatibility forms and drops invisible reordering marks; idempotent, so re-running it on a slice changes nothing. */
 export function normalizeForGuard(text: string): string {
-  let out = '';
-  for (const ch of text.normalize('NFKC')) {
-    if (!STRIP_CHARS.has(ch)) {
-      out += ch;
-    }
-  }
-  return out;
+  return text.normalize('NFKC').replace(STRIP_PATTERN, '');
 }
 
 export interface InjectionPatternHit {
@@ -205,30 +218,35 @@ export interface InjectionPatternHit {
   readonly reason: string;
 }
 
-/** Patterns matching already-normalized text; `id` identifies the pattern so hits collected from overlapping scans can be deduplicated. */
+export type InjectionScanScope = 'all' | 'windowed' | 'run-anchored';
+
+/** Patterns matching already-normalized text; `id` identifies the pattern so hits from overlapping scans deduplicate. Run-anchored patterns must see a whole character run, so a windowed caller scans them separately over the full text. */
 export function matchInjectionPatterns(
-  normalized: string
+  normalized: string,
+  scope: InjectionScanScope = 'all'
 ): InjectionPatternHit[] {
   const hits: InjectionPatternHit[] = [];
   for (const [
     id,
-    { pattern, weight, reason },
+    { pattern, weight, reason, runAnchored },
   ] of INJECTION_PATTERNS.entries()) {
-    if (pattern.test(normalized)) {
+    const inScope =
+      scope === 'all' || (scope === 'run-anchored') === Boolean(runAnchored);
+    if (inScope && pattern.test(normalized)) {
       hits.push({ id, weight, reason });
     }
   }
   return hits;
 }
 
-/** Cumulative verdict for a set of hits, counting each pattern once however many times it was seen. */
+/** Cumulative verdict for hits that are already unique per pattern. */
 export function scoreInjectionHits(
   hits: readonly InjectionPatternHit[]
 ): PromptGuardResult {
   let score = 0;
   let topWeight = 0;
   let matchedReason: string | undefined;
-  for (const hit of new Map(hits.map((h) => [h.id, h])).values()) {
+  for (const hit of hits) {
     score += hit.weight;
     if (hit.weight > topWeight) {
       topWeight = hit.weight;

@@ -147,6 +147,24 @@ const COALESCED_SEAM_CHARS = Math.floor(
   (MAX_GUARD_INPUT_CHARS - COALESCED_MESSAGE_SEPARATOR.length) / 2
 );
 
+function seamTail(text: string): string {
+  if (text.length <= COALESCED_SEAM_CHARS) {
+    return text;
+  }
+  const cut = text.slice(-COALESCED_SEAM_CHARS);
+  const at = cut.search(/\s/);
+  return at < 0 ? '' : cut.slice(at + 1);
+}
+
+function seamHead(text: string): string {
+  if (text.length <= COALESCED_SEAM_CHARS) {
+    return text;
+  }
+  const cut = text.slice(0, COALESCED_SEAM_CHARS);
+  const at = cut.search(/\s\S*$/);
+  return at < 0 ? '' : cut.slice(0, at);
+}
+
 function messageTooLongError() {
   return AIErrors.invalidInput(
     `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
@@ -990,8 +1008,7 @@ export class RunAgentTurnHandler {
 
   // The provider is handed consecutive user rows merged into one, so a pair that
   // is individually under the injection threshold can cross it only once joined.
-  // Only the seam is re-scanned: both halves are already guarded on their own,
-  // and joining them whole would exceed the guard's input limit.
+  // Only the seam is re-scanned; both halves are already guarded on their own.
   private async guardReplayedUserTurn(
     history: AgentMessage[],
     fresh: AgentMessage | undefined,
@@ -1003,16 +1020,19 @@ export class RunAgentTurnHandler {
     if (history[last]?.role !== 'user') {
       return { messages: history };
     }
-    const text = fresh
-      ? `${history[last].content.slice(-COALESCED_SEAM_CHARS)}${COALESCED_MESSAGE_SEPARATOR}${fresh.content.slice(0, COALESCED_SEAM_CHARS)}`
+    const joined = fresh
+      ? `${history[last].content}${COALESCED_MESSAGE_SEPARATOR}${fresh.content}`
       : history[last].content;
+    const text = fresh
+      ? `${seamTail(history[last].content)}${COALESCED_MESSAGE_SEPARATOR}${seamHead(fresh.content)}`
+      : joined;
     const verdict = await this.injectionGuard.guard(text, userId);
     if (verdict.safe) {
       return { messages: history };
     }
     return {
       messages: history.filter((_, index) => index !== last),
-      dropped: { score: verdict.score, contentLength: text.length },
+      dropped: { score: verdict.score, contentLength: joined.length },
     };
   }
 

@@ -17,11 +17,8 @@ const GUARD_WINDOW_OVERLAP_CHARS = MAX_INJECTION_PATTERN_SPAN_CHARS;
 const GUARD_WINDOW_STRIDE_CHARS =
   MAX_GUARD_INPUT_CHARS - GUARD_WINDOW_OVERLAP_CHARS;
 const MAX_GUARD_SCAN_WINDOWS = 8;
-// A cut run of base64 characters would otherwise satisfy the lookarounds that
-// bound the weak base64 signal, because they succeed vacuously at a slice edge.
-const WINDOW_CUT_SENTINEL = '=';
 
-/** Longest text `detectAiInput` will scan; past it the verdict is `too_large` and nothing is scored. */
+/** Longest text `detectAiInput` will scan, measured before and after normalization; past it the verdict is `too_large` and nothing is scored. */
 export const MAX_GUARD_SCAN_CHARS =
   GUARD_WINDOW_STRIDE_CHARS * MAX_GUARD_SCAN_WINDOWS;
 
@@ -32,30 +29,30 @@ export interface AiInputDetection {
   readonly reasonCode: 'clear' | 'heuristic_hit' | 'too_large';
 }
 
-function collapseForGuard(text: string): string {
-  return normalizeForGuard(text).replaceAll(/\s+/g, ' ');
+function refused(contentLength: number): AiInputDetection {
+  return { safe: false, score: 1, contentLength, reasonCode: 'too_large' };
 }
 
-/** Cumulative verdict over the whole text, scanned in overlapping windows; refuses text past `MAX_GUARD_SCAN_CHARS` unscanned. */
+/** Cumulative verdict over the whole text: run-anchored patterns scan it entire, the rest scan overlapping windows. Text past `MAX_GUARD_SCAN_CHARS` is refused unscanned, and the score is at least what a single unbounded scan would give. */
 export function detectAiInput(text: string): AiInputDetection {
   if (text.length > MAX_GUARD_SCAN_CHARS) {
-    return {
-      safe: false,
-      score: 1,
-      contentLength: text.length,
-      reasonCode: 'too_large',
-    };
+    return refused(text.length);
   }
-  const scanned = collapseForGuard(text);
+  const normalized = normalizeForGuard(text);
+  if (normalized.length > MAX_GUARD_SCAN_CHARS) {
+    return refused(text.length);
+  }
+  const scanned = normalized.replaceAll(/\s+/g, ' ');
   const hits = new Map<number, InjectionPatternHit>();
+  for (const hit of matchInjectionPatterns(scanned, 'run-anchored')) {
+    hits.set(hit.id, hit);
+  }
   let start = 0;
   do {
-    const end = start + MAX_GUARD_INPUT_CHARS;
-    const window = `${start > 0 ? WINDOW_CUT_SENTINEL : ''}${scanned.slice(
-      start,
-      end
-    )}${end < scanned.length ? WINDOW_CUT_SENTINEL : ''}`;
-    for (const hit of matchInjectionPatterns(window)) {
+    for (const hit of matchInjectionPatterns(
+      scanned.slice(start, start + MAX_GUARD_INPUT_CHARS),
+      'windowed'
+    )) {
       hits.set(hit.id, hit);
     }
     start += GUARD_WINDOW_STRIDE_CHARS;
