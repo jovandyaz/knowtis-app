@@ -51,6 +51,8 @@ import type { AgentMessage } from '../domain/agent-message';
 import {
   COALESCED_MESSAGE_SEPARATOR,
   coalesceMessages,
+  seamHead,
+  seamTail,
 } from '../domain/coalesce-messages';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
@@ -143,28 +145,6 @@ const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
-const COALESCED_SEAM_CHARS = Math.floor(
-  (MAX_GUARD_INPUT_CHARS - COALESCED_MESSAGE_SEPARATOR.length) / 2
-);
-
-function seamTail(text: string): string {
-  if (text.length <= COALESCED_SEAM_CHARS) {
-    return text;
-  }
-  const cut = text.slice(-COALESCED_SEAM_CHARS);
-  const at = cut.search(/\s/);
-  return at < 0 ? cut : cut.slice(at + 1);
-}
-
-function seamHead(text: string): string {
-  if (text.length <= COALESCED_SEAM_CHARS) {
-    return text;
-  }
-  const cut = text.slice(0, COALESCED_SEAM_CHARS);
-  const at = cut.search(/\s\S*$/);
-  return at < 0 ? cut : cut.slice(0, at);
-}
-
 function messageTooLongError() {
   return AIErrors.invalidInput(
     `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
