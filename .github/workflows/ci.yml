@@ -53,6 +53,7 @@ jobs:
           --health-retries 5
     env:
       REDIS_URL: redis://127.0.0.1:6379
+      SHARING_PROBE_REDIS_URL: redis://127.0.0.1:6379
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_test
       # Throwaway values: specs validate env shape only, they never issue real tokens.
       JWT_SECRET: ci-jwt-secret-0000000000000000000000
