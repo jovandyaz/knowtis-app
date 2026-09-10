@@ -23,8 +23,6 @@ export function AgentMessageList({
   const isAssistantTurn =
     status === 'streaming' && lastAssistant?.role === 'assistant';
   const answering = isAssistantTurn && lastAssistant.content.length > 0;
-  const showThinking =
-    isAssistantTurn && (!answering || Boolean(thinkingDetail));
 
   return (
     <Conversation aria-busy={status === 'streaming'} aria-live="polite">
@@ -38,7 +36,7 @@ export function AgentMessageList({
             }
           />
         ))}
-        {showThinking && (
+        {isAssistantTurn && (
           <AgentStatusIndicator detail={thinkingDetail} answering={answering} />
         )}
       </ConversationContent>

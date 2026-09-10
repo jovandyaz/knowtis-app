@@ -698,6 +698,10 @@ describe('agent.store thinking tail', () => {
     );
   });
 
+  it('retains more reasoning than the panel can show at once', () => {
+    expect(THINKING_TAIL_CHARS).toBeGreaterThanOrEqual(2_000);
+  });
+
   it('thinking activity resets the stream inactivity timer', () => {
     const { cancel, get } = capture();
     useAgentStore.getState().sendMessage('hola');
