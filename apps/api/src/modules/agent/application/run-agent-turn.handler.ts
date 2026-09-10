@@ -153,7 +153,7 @@ function seamTail(text: string): string {
   }
   const cut = text.slice(-COALESCED_SEAM_CHARS);
   const at = cut.search(/\s/);
-  return at < 0 ? '' : cut.slice(at + 1);
+  return at < 0 ? cut : cut.slice(at + 1);
 }
 
 function seamHead(text: string): string {
@@ -162,7 +162,7 @@ function seamHead(text: string): string {
   }
   const cut = text.slice(0, COALESCED_SEAM_CHARS);
   const at = cut.search(/\s\S*$/);
-  return at < 0 ? '' : cut.slice(0, at);
+  return at < 0 ? cut : cut.slice(0, at);
 }
 
 function messageTooLongError() {

@@ -4,17 +4,20 @@ export interface PromptGuardResult {
   readonly reason?: string;
 }
 
-const MAX_PATTERN_BRIDGE_CHARS = 64;
+export const MAX_PATTERN_BRIDGE_CHARS = 64;
+export const MAX_PATTERN_GAP_CHARS = 200;
+export const MAX_PATTERN_WORD_CHARS = 32;
+export const MAX_PATTERN_WORDS = 4;
 const MAX_PATTERN_BRIDGES = 5;
-const MAX_PATTERN_GAP_CHARS = 200;
 const MAX_PATTERN_ANCHOR_CHARS = 64;
 const BRIDGE = `{1,${MAX_PATTERN_BRIDGE_CHARS}}`;
 
-/** Upper bound on the span of any windowed pattern match in normalized, whitespace-collapsed text; run-anchored patterns are exempt because they are never scanned in windows. */
+/** Upper bound on the shortest match each windowed pattern needs to fire, in normalized whitespace-collapsed text; run-anchored patterns are exempt because they are never scanned in windows. */
 export const MAX_INJECTION_PATTERN_SPAN_CHARS =
   Math.max(
     MAX_PATTERN_BRIDGES * MAX_PATTERN_BRIDGE_CHARS,
-    MAX_PATTERN_GAP_CHARS
+    MAX_PATTERN_GAP_CHARS,
+    MAX_PATTERN_WORDS * (MAX_PATTERN_WORD_CHARS + 1)
   ) + MAX_PATTERN_ANCHOR_CHARS;
 
 export const INJECTION_PATTERNS: readonly {
@@ -44,8 +47,10 @@ export const INJECTION_PATTERNS: readonly {
 
   // Role hijacking
   {
-    pattern:
-      /you\s+are\s+now\s+(?:a |an |my |the )?(?:[\w,.]{1,32}\s+){0,4}(?:ai|assistant|bot|model|agent|persona|character)/i,
+    pattern: new RegExp(
+      `you\\s+are\\s+now\\s+(?:a |an |my |the )?(?:[\\w,.]{1,${MAX_PATTERN_WORD_CHARS}}\\s+){0,${MAX_PATTERN_WORDS}}(?:ai|assistant|bot|model|agent|persona|character)`,
+      'i'
+    ),
     weight: 0.8,
     reason: 'Role hijacking attempt',
   },
