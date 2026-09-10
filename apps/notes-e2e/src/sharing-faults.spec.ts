@@ -104,6 +104,8 @@ for (const fault of ['redis', 'postgres'] as const) {
       const witness = connect(owner.accessToken, 'b');
       await witness.synced();
       await expect.poll(() => witness.read('recovered')).toBe('new session');
+      witness.write('cross-instance', 'ok');
+      await expect.poll(() => freshOwner.read('cross-instance')).toBe('ok');
       await delay(QUIESCENCE_WINDOW_MS);
       expect(guests.map(({ receipts }) => receipts.length)).toEqual(
         receiptCounts
