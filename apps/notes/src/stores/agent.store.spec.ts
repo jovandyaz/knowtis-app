@@ -686,14 +686,16 @@ describe('agent.store thinking tail', () => {
   it('keeps only the trailing window once reasoning exceeds the cap', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('hola');
-    get().onThinking?.({ text: 'a'.repeat(300) });
+    get().onThinking?.({ text: 'a'.repeat(THINKING_TAIL_CHARS) });
     vi.advanceTimersByTime(50);
-    get().onThinking?.({ text: 'b'.repeat(300) });
+    get().onThinking?.({ text: 'b'.repeat(100) });
     vi.advanceTimersByTime(50);
 
     const { thinkingText } = useAgentStore.getState();
     expect(thinkingText).toHaveLength(THINKING_TAIL_CHARS);
-    expect(thinkingText).toBe('a'.repeat(100) + 'b'.repeat(300));
+    expect(thinkingText).toBe(
+      'a'.repeat(THINKING_TAIL_CHARS - 100) + 'b'.repeat(100)
+    );
   });
 
   it('thinking activity resets the stream inactivity timer', () => {

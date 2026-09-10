@@ -14,18 +14,23 @@ const LINE_WIDTHS = ['w-11/12', 'w-4/5', 'w-3/5'];
 
 interface AgentStatusIndicatorProps {
   detail?: string | undefined;
+  answering?: boolean;
 }
 
-export function AgentStatusIndicator({ detail }: AgentStatusIndicatorProps) {
+export function AgentStatusIndicator({
+  detail,
+  answering = false,
+}: AgentStatusIndicatorProps) {
   const { t } = useTranslation('notes');
   const [open, setOpen] = useState(false);
+  const label = t(answering ? 'ai.copilot.reasoning' : 'ai.copilot.thinking');
 
   return (
     <div className="flex flex-col gap-2" role="status">
       {detail ? (
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            {t('ai.copilot.thinking')}
+            {label}
             <ChevronDown
               className={cn(
                 'h-3 w-3 transition-transform duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
@@ -51,23 +56,23 @@ export function AgentStatusIndicator({ detail }: AgentStatusIndicatorProps) {
           </CollapsibleContent>
         </Collapsible>
       ) : (
-        <span className="text-xs text-muted-foreground">
-          {t('ai.copilot.thinking')}
-        </span>
+        <span className="text-xs text-muted-foreground">{label}</span>
       )}
-      <div className="flex flex-col gap-1.5" aria-hidden="true">
-        {LINE_WIDTHS.map((w, i) => (
-          <span
-            key={i}
-            data-testid="shimmer-line"
-            className={cn(
-              'h-2.5 rounded bg-muted',
-              'animate-pulse motion-reduce:animate-none',
-              w
-            )}
-          />
-        ))}
-      </div>
+      {!answering && (
+        <div className="flex flex-col gap-1.5" aria-hidden="true">
+          {LINE_WIDTHS.map((w, i) => (
+            <span
+              key={i}
+              data-testid="shimmer-line"
+              className={cn(
+                'h-2.5 rounded bg-muted',
+                'animate-pulse motion-reduce:animate-none',
+                w
+              )}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

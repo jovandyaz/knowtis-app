@@ -53,6 +53,16 @@ describe('AgentStatusIndicator', () => {
     expect(expanded).toHaveAttribute('aria-live', 'off');
   });
 
+  it('trades the shimmer for a reasoning label while answering', () => {
+    const { container } = render(
+      <AgentStatusIndicator detail="scanning sources" answering />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.copilot.reasoning'
+    );
+    expect(container.querySelector('[data-testid="shimmer-line"]')).toBeNull();
+  });
+
   it('offers no reasoning toggle without a detail', () => {
     render(<AgentStatusIndicator />);
     expect(screen.queryByRole('button')).toBeNull();
