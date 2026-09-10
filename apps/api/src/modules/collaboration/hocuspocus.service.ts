@@ -26,8 +26,16 @@ import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persiste
 const COLLABORATION_PATH_PREFIX = '/collaboration';
 const COLLAB_REDIS_PREFIX = 'knowtis-collab';
 const COLLAB_REDIS_CONNECT_TIMEOUT_MS = 1000;
-const COLLAB_REDIS_MAX_RETRIES_PER_REQUEST = 3;
 const COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS = 30000;
+const COLLAB_REDIS_ROLES = ['publisher', 'subscriber'] as const;
+type CollabRedisRole = (typeof COLLAB_REDIS_ROLES)[number];
+const COLLAB_REDIS_MAX_RETRIES_PER_REQUEST: Record<
+  CollabRedisRole,
+  number | null
+> = {
+  publisher: 20,
+  subscriber: null,
+};
 
 @Injectable()
 export class HocuspocusService
@@ -39,7 +47,10 @@ export class HocuspocusService
     | ((request: IncomingMessage, socket: Duplex, head: Buffer) => void)
     | null = null;
   private boundHttpServer: HttpServer | null = null;
-  private lastRedisFailureLogAt = Number.NEGATIVE_INFINITY;
+  private readonly lastRedisFailureLogAt: Record<CollabRedisRole, number> = {
+    publisher: Number.NEGATIVE_INFINITY,
+    subscriber: Number.NEGATIVE_INFINITY,
+  };
 
   constructor(
     private readonly auth: HocuspocusAuthExtension,
@@ -59,7 +70,6 @@ export class HocuspocusService
       // Skip Hocuspocus' SIGINT/SIGTERM hook — NestJS owns process lifecycle.
       stopOnSignals: false,
       quiet: true,
-      // Match the previous CollaborationService persistence cadence.
       debounce: 2000,
       maxDebounce: 10000,
       // Respect the debounce on disconnect so we don't clobber pending writes.
@@ -181,11 +191,6 @@ export class HocuspocusService
    *   - the server has not yet been initialised,
    *   - the input bytes are empty or malformed (no-op rejected),
    *   - no document is currently loaded for that note (no live editors).
-   *
-   * Note: the `documents.has(noteId)` guard below is a performance hint, not
-   * a correctness gate. `openDirectConnection` would still load the document
-   * from storage if it had been evicted between the guard and the call —
-   * skipping the early-return is harmless for correctness.
    */
   async applyExternalUpdate(
     noteId: string,
@@ -286,33 +291,43 @@ export class HocuspocusService
       return [];
     }
 
+    let created = 0;
+
     return [
       new RedisExtension({
-        createClient: (): RedisInstance => {
-          const client = new IORedis(redisUrl, {
-            connectionName: `${COLLAB_REDIS_PREFIX}:${process.pid}`,
-            connectTimeout: COLLAB_REDIS_CONNECT_TIMEOUT_MS,
-            maxRetriesPerRequest: COLLAB_REDIS_MAX_RETRIES_PER_REQUEST,
-          });
-          client.on('error', (error) => this.logRedisFailure(error));
-          return client as unknown as RedisInstance;
-        },
+        // Upstream ordering: extension-redis takes the first client as pub, the second as sub.
+        createClient: (): RedisInstance =>
+          this.createRedisClient(redisUrl, COLLAB_REDIS_ROLES[created++]),
         prefix: COLLAB_REDIS_PREFIX,
       }),
     ];
   }
 
-  private logRedisFailure(error: Error): void {
+  private createRedisClient(
+    redisUrl: string,
+    role: CollabRedisRole
+  ): RedisInstance {
+    const client = new IORedis(redisUrl, {
+      connectionName: `${COLLAB_REDIS_PREFIX}:${role}:${process.pid}`,
+      connectTimeout: COLLAB_REDIS_CONNECT_TIMEOUT_MS,
+      maxRetriesPerRequest: COLLAB_REDIS_MAX_RETRIES_PER_REQUEST[role],
+    });
+    client.on('error', (error) => this.logRedisFailure(role, error));
+    return client as unknown as RedisInstance;
+  }
+
+  private logRedisFailure(role: CollabRedisRole, error: Error): void {
     const now = performance.now();
     if (
-      now - this.lastRedisFailureLogAt <
+      now - this.lastRedisFailureLogAt[role] <
       COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS
     ) {
       return;
     }
-    this.lastRedisFailureLogAt = now;
+    this.lastRedisFailureLogAt[role] = now;
     this.logger.warn({
       operation: 'collaboration_redis',
+      role,
       reason: 'connection_failed',
       message: error.message,
     });

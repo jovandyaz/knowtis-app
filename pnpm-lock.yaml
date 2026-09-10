@@ -50,9 +50,6 @@ importers:
       '@casl/react':
         specifier: ^5.0.1
         version: 5.0.1(@casl/ability@6.8.1)(react@19.2.1)
-      '@hocuspocus/extension-logger':
-        specifier: ^4.7.0
-        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
       '@hocuspocus/extension-redis':
         specifier: ^4.7.0
         version: 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
@@ -3135,9 +3132,6 @@ packages:
 
   '@hocuspocus/common@4.7.0':
     resolution: {integrity: sha512-KyS6dXoIcWsd+v3gwd6nnZW04M77df5XstPNkOwqoDxwuncygobEN7xsf0x2PmdvlQdQyRaLm2SF4r1GZZGRnA==}
-
-  '@hocuspocus/extension-logger@4.7.0':
-    resolution: {integrity: sha512-bURtTft9doBwsEszYsZpOROnv2I9Kioau/+rBruDxTchGtd3DpjPTxL+v10X5Hq+swuvUt4r5dWIWKDhHal61A==}
 
   '@hocuspocus/extension-redis@4.7.0':
     resolution: {integrity: sha512-bEWwVxBZXVC0C8f5Tkb7SHoLOofv2+EgsWa/yUf/jb6WoxxbQDdFEREfi8XKurJEhlOqjtJTWAjec9TsFLw2uw==}
@@ -18773,14 +18767,6 @@ snapshots:
   '@hocuspocus/common@4.7.0':
     dependencies:
       lib0: 0.2.117
-
-  '@hocuspocus/extension-logger@4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
-    dependencies:
-      '@hocuspocus/server': 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
-    transitivePeerDependencies:
-      - srvx
-      - y-protocols
-      - yjs
 
   '@hocuspocus/extension-redis@4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
     dependencies:

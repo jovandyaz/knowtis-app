@@ -56,7 +56,6 @@
     "@ai-sdk/openai": "^4.0.52",
     "@casl/ability": "^6.8.0",
     "@casl/react": "^5.0.1",
-    "@hocuspocus/extension-logger": "^4.7.0",
     "@hocuspocus/extension-redis": "^4.7.0",
     "@hocuspocus/provider": "^4.7.0",
     "@hocuspocus/server": "^4.7.0",
