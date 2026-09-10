@@ -5,7 +5,10 @@ import {
   Redis as RedisExtension,
   type RedisInstance,
 } from '@hocuspocus/extension-redis';
-import { Server as HocuspocusServer } from '@hocuspocus/server';
+import {
+  Server as HocuspocusServer,
+  type onChangePayload,
+} from '@hocuspocus/server';
 import { Injectable, Logger } from '@nestjs/common';
 import type {
   OnApplicationBootstrap,
@@ -47,6 +50,7 @@ export class HocuspocusService
     | ((request: IncomingMessage, socket: Duplex, head: Buffer) => void)
     | null = null;
   private boundHttpServer: HttpServer | null = null;
+  private redisExtension: RedisExtension | null = null;
   private readonly lastRedisFailureLogAt: Record<CollabRedisRole, number> = {
     publisher: Number.NEGATIVE_INFINITY,
     subscriber: Number.NEGATIVE_INFINITY,
@@ -293,14 +297,14 @@ export class HocuspocusService
 
     let created = 0;
 
-    return [
-      new RedisExtension({
-        // Upstream ordering: extension-redis takes the first client as pub, the second as sub.
-        createClient: (): RedisInstance =>
-          this.createRedisClient(redisUrl, COLLAB_REDIS_ROLES[created++]),
-        prefix: COLLAB_REDIS_PREFIX,
-      }),
-    ];
+    this.redisExtension = new RedisExtension({
+      // Upstream ordering: extension-redis takes the first client as pub, the second as sub.
+      createClient: (): RedisInstance =>
+        this.createRedisClient(redisUrl, COLLAB_REDIS_ROLES[created++]),
+      prefix: COLLAB_REDIS_PREFIX,
+    });
+
+    return [this.redisExtension];
   }
 
   private createRedisClient(
@@ -313,7 +317,28 @@ export class HocuspocusService
       maxRetriesPerRequest: COLLAB_REDIS_MAX_RETRIES_PER_REQUEST[role],
     });
     client.on('error', (error) => this.logRedisFailure(role, error));
+    if (role === 'subscriber') {
+      client.on('ready', () => this.resyncLoadedDocumentsAfterResubscribe());
+    }
     return client as unknown as RedisInstance;
+  }
+
+  private resyncLoadedDocumentsAfterResubscribe(): void {
+    const extension = this.redisExtension;
+    if (!extension || !this.server) {
+      return;
+    }
+    const instance = this.server.hocuspocus;
+    for (const [documentName, document] of instance.documents) {
+      void extension
+        .onChange({
+          instance,
+          document,
+          documentName,
+          transactionOrigin: { source: 'local' },
+        } as onChangePayload)
+        .catch((error: Error) => this.logRedisFailure('publisher', error));
+    }
   }
 
   private logRedisFailure(role: CollabRedisRole, error: Error): void {

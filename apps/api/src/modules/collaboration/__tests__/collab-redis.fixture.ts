@@ -1,4 +1,12 @@
+import {
+  createConnection,
+  createServer,
+  type Server as NetServer,
+  type Socket,
+} from 'node:net';
+
 import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
+import type { Hocuspocus } from '@hocuspocus/server';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost } from '@nestjs/core';
 
@@ -39,4 +47,67 @@ export function redisExtensionOf(service: HocuspocusService): RedisExtension {
     throw new Error('Redis extension was not registered');
   }
   return extension;
+}
+
+/** The live Hocuspocus instance, so a spec can load documents the way production does. */
+export function hocuspocusOf(service: HocuspocusService): Hocuspocus {
+  return (service as unknown as { server: { hocuspocus: Hocuspocus } }).server
+    .hocuspocus;
+}
+
+/**
+ * A TCP proxy to `upstreamUrl` that can refuse connections on demand, keeping its
+ * port across restarts so a client reconnects to the same address.
+ */
+export async function createRedisOutage(upstreamUrl: string) {
+  const upstream = new URL(upstreamUrl);
+  const host = upstream.hostname;
+  const port = Number(upstream.port || 6379);
+  const sockets = new Set<Socket>();
+  let listener: NetServer | null = null;
+  let localPort = 0;
+
+  const start = async (): Promise<void> => {
+    const server = createServer((downstream) => {
+      const forward = createConnection({ host, port });
+      for (const socket of [downstream, forward]) {
+        sockets.add(socket);
+        socket.on('error', () => undefined);
+        socket.on('close', () => {
+          sockets.delete(socket);
+          downstream.destroy();
+          forward.destroy();
+        });
+      }
+      downstream.pipe(forward);
+      forward.pipe(downstream);
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(localPort, '127.0.0.1', resolve)
+    );
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected outage proxy TCP port');
+    }
+    localPort = address.port;
+    listener = server;
+  };
+
+  const stop = async (): Promise<void> => {
+    for (const socket of sockets) {
+      socket.destroy();
+    }
+    sockets.clear();
+    const server = listener;
+    listener = null;
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  };
+
+  await start();
+  const url = new URL(upstreamUrl);
+  url.hostname = '127.0.0.1';
+  url.port = String(localPort);
+  return { url: url.toString(), start, stop };
 }

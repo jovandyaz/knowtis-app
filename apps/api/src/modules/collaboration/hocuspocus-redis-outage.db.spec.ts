@@ -1,9 +1,3 @@
-import {
-  createConnection,
-  createServer,
-  type Server as NetServer,
-  type Socket,
-} from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import type { Redis as RedisExtension } from '@hocuspocus/extension-redis';
@@ -17,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildCollaborationService,
+  createRedisOutage,
   redisExtensionOf,
 } from './__tests__/collab-redis.fixture';
 import type { HocuspocusService } from './hocuspocus.service';
@@ -26,59 +21,6 @@ const READY_TIMEOUT_MS = 5000;
 
 if (!process.env['REDIS_URL']) {
   throw new Error('REDIS_URL is required for collaboration redis outage specs');
-}
-
-async function createRedisOutage(upstreamUrl: string) {
-  const upstream = new URL(upstreamUrl);
-  const host = upstream.hostname;
-  const port = Number(upstream.port || 6379);
-  const sockets = new Set<Socket>();
-  let listener: NetServer | null = null;
-  let localPort = 0;
-
-  const start = async (): Promise<void> => {
-    const server = createServer((downstream) => {
-      const forward = createConnection({ host, port });
-      for (const socket of [downstream, forward]) {
-        sockets.add(socket);
-        socket.on('error', () => undefined);
-        socket.on('close', () => {
-          sockets.delete(socket);
-          downstream.destroy();
-          forward.destroy();
-        });
-      }
-      downstream.pipe(forward);
-      forward.pipe(downstream);
-    });
-    await new Promise<void>((resolve) =>
-      server.listen(localPort, '127.0.0.1', resolve)
-    );
-    const address = server.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Expected outage proxy TCP port');
-    }
-    localPort = address.port;
-    listener = server;
-  };
-
-  const stop = async (): Promise<void> => {
-    for (const socket of sockets) {
-      socket.destroy();
-    }
-    sockets.clear();
-    const server = listener;
-    listener = null;
-    if (server) {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-  };
-
-  await start();
-  const url = new URL(upstreamUrl);
-  url.hostname = '127.0.0.1';
-  url.port = String(localPort);
-  return { url: url.toString(), start, stop };
 }
 
 describe('collaboration survives a redis outage shorter than its retry budget', () => {
