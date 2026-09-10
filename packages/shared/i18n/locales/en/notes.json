@@ -418,6 +418,7 @@
       "composerHint": "Enter to send · Shift+Enter for a new line",
       "newConversation": "New conversation",
       "thinking": "Thinking…",
+      "reasoning": "Reasoning",
       "sources": "Sources",
       "webSources": "Web sources",
       "stop": "Stop",
@@ -472,7 +473,8 @@
         "discarded": "Proposal dismissed",
         "showMore": "Show more",
         "showLess": "Show less"
-      }
+      },
+      "openSource": "Open note"
     },
     "groups": {
       "ai": "AI",

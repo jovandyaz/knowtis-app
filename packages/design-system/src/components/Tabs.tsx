@@ -7,7 +7,7 @@ import {
   type ForwardedRef,
 } from 'react';
 
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { Tabs as TabsPrimitive } from 'radix-ui';
 
 import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
 import { cn } from '../utils/cn';

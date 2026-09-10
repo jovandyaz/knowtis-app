@@ -1,5 +1,5 @@
-import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import type { LucideIcon } from 'lucide-react';
+import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 
 import { cn } from '../utils/cn';
 

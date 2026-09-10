@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react';
 
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   act,
   fireEvent,
@@ -16,6 +15,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Dialog as DialogPrimitive } from 'radix-ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TOUCH_TARGET_CLASS } from '../constants/touch-target';
@@ -428,9 +428,12 @@ describe('Dialog accessibility', () => {
     );
 
     await waitFor(() => expect(document.body.style.pointerEvents).toBe('none'));
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Background action', hidden: true })
-    );
+    const outside = screen.getByRole('button', {
+      name: 'Background action',
+      hidden: true,
+    });
+    fireEvent.pointerDown(outside);
+    fireEvent.click(outside);
 
     expect(onPointerDownOutside).toHaveBeenCalledTimes(1);
     expect(onOpenChange).not.toHaveBeenCalled();
