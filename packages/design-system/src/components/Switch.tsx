@@ -32,7 +32,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
       >
         <SwitchPrimitive.Thumb
           className={cn(
-            'pointer-events-none inline-block transform rounded-full bg-white shadow ring-0',
+            'pointer-events-none inline-block transform rounded-full bg-(--switch-thumb) shadow ring-0',
             'transition duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
             'data-[state=unchecked]:translate-x-0',
             isSmall

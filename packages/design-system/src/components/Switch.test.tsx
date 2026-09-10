@@ -73,8 +73,8 @@ describe('Switch', () => {
     expect(screen.getByRole('switch')).toHaveClass('h-4', 'w-7');
   });
 
-  it('submits its value inside a form', () => {
-    render(
+  it('serializes as a form field when checked', () => {
+    const { container } = render(
       <form>
         <Switch
           checked
@@ -85,10 +85,28 @@ describe('Switch', () => {
         />
       </form>
     );
-    const hidden = document.querySelector<HTMLInputElement>(
-      'input[name="notifications"]'
+    const form = container.querySelector('form');
+    expect(form).not.toBeNull();
+    expect(new FormData(form as HTMLFormElement).get('notifications')).toBe(
+      'on'
     );
-    expect(hidden).not.toBeNull();
-    expect(hidden?.value).toBe('on');
+  });
+
+  it('omits the field entirely when unchecked', () => {
+    const { container } = render(
+      <form>
+        <Switch
+          checked={false}
+          onCheckedChange={vi.fn()}
+          name="notifications"
+          value="on"
+          aria-label="notifications"
+        />
+      </form>
+    );
+    const form = container.querySelector('form');
+    expect(
+      new FormData(form as HTMLFormElement).get('notifications')
+    ).toBeNull();
   });
 });

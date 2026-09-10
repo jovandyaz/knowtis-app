@@ -19,6 +19,10 @@
 
   --tabs-fade-start: 85%;
 
+  /* The thumb rides both the `--primary` and `--muted` tracks, so it stays
+     light in either theme rather than following `--background`. */
+  --switch-thumb: var(--color-primitive-neutral-50);
+
   --size-bucket-dot: 9px;
 
   --animate-overlay-fade: overlay-fade var(--motion-duration-fast)

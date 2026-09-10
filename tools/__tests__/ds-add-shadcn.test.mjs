@@ -33,16 +33,39 @@ test('keeps real utilities that merely start like a motion one', () => {
 });
 
 test('pairs every transition form with a reduced-motion opt-out', () => {
-  const { content } = normalize(
-    wrap('transition-[color,box-shadow] rounded-md')
+  assert.equal(
+    classesOf(
+      normalize(wrap('transition-[color,box-shadow] rounded-md')).content
+    ),
+    'transition-[color,box-shadow] rounded-md motion-reduce:transition-none'
   );
-  assert.match(
-    content,
-    /transition-\[color,box-shadow\] motion-reduce:transition-none/
+  assert.equal(
+    classesOf(normalize(wrap('transition rounded-md')).content),
+    'transition rounded-md motion-reduce:transition-none'
   );
+});
 
-  const bare = normalize(wrap('transition rounded-md')).content;
-  assert.match(bare, /transition motion-reduce:transition-none/);
+test('guards a transition that sits behind a variant prefix', () => {
+  for (const input of [
+    'data-[state=open]:transition-opacity',
+    'dark:transition-colors',
+    'group-hover/item:transition-all',
+  ]) {
+    assert.equal(
+      classesOf(normalize(wrap(input)).content),
+      `${input} motion-reduce:transition-none`,
+      input
+    );
+  }
+});
+
+test('an unrelated motion-reduce utility does not count as the guard', () => {
+  const input = 'transition-colors motion-reduce:opacity-50';
+  assert.equal(
+    classesOf(normalize(wrap(input)).content),
+    `${input} motion-reduce:transition-none`
+  );
+  assert.throws(() => assertClean('x.tsx', wrap(input)), /is missing/);
 });
 
 test('leaves an already-guarded transition alone and never doubles up', () => {

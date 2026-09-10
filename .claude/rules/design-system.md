@@ -25,7 +25,7 @@ paths:
 ## Vendored shadcn primitives
 
 - `src/components/ui/` holds shadcn/ui primitives vendored through `pnpm ds:add`. They keep shadcn's kebab-case filenames and `data-slot` attributes; hand-written components stay PascalCase in `src/components/`.
-- Never hand-edit a file under `ui/` beyond replacing a stripped animation — `--overwrite` discards local changes. If a primitive needs design-system behaviour, wrap it in a PascalCase component instead.
+- Under `ui/`, hand-edit only the normalizations `pnpm ds:add` reports: replacing a stripped animation, and swapping hardcoded `duration-*` / `ease-*` for the motion tokens. Anything else is discarded by `--overwrite` — if a primitive needs design-system behaviour, wrap it in a PascalCase component instead.
 - Radix is imported from the unified `radix-ui` package, never from `@radix-ui/react-*` — two import surfaces produce two `DismissableLayer` registries and break nested overlays.
 
 ## Design Tokens

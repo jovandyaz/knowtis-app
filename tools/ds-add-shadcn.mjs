@@ -34,12 +34,35 @@ const DEAD_MOTION = new RegExp(
   'g'
 );
 
-const TRANSITION = /(?<![\w:-])transition(?:-(?:\w+|\[[^\]]*\]))?(?![\w-])/g;
+const MOTION_GUARD = 'motion-reduce:transition-none';
 
 const TOKEN_CLASS = new RegExp(
   `\\b(${TOKEN_UTILITIES})-(${SEMANTIC_TOKENS.join('|')})\\b`,
   'g'
 );
+
+const CLASS_STRING = /"([^"\n]*)"|'([^'\n]*)'/g;
+
+function isClassList(tokens) {
+  return tokens.some((token) => /^[a-z*[]/.test(token) && /[-:]/.test(token));
+}
+
+function needsMotionGuard(token) {
+  const utility = token.split(':').pop();
+  return /^transition(?:-|$)/.test(utility) && utility !== 'transition-none';
+}
+
+function mapClassLists(source, transform) {
+  return source.replace(CLASS_STRING, (whole, dq, sq) => {
+    const literal = dq ?? sq ?? '';
+    const tokens = literal.split(/\s+/).filter(Boolean);
+    if (!isClassList(tokens)) {
+      return whole;
+    }
+    const quote = dq === undefined ? "'" : '"';
+    return `${quote}${transform(literal, tokens)}${quote}`;
+  });
+}
 
 export function normalize(source) {
   let out = source
@@ -53,15 +76,11 @@ export function normalize(source) {
     out = `import ${typeOnly ? 'type ' : ''}* as React from 'react'\n${out}`;
   }
 
-  out = out.replace(TRANSITION, (match, offset, whole) => {
-    if (match === 'transition-none') {
-      return match;
-    }
-    const rest = whole.slice(offset, whole.indexOf('"', offset));
-    return rest.includes('motion-reduce')
-      ? match
-      : `${match} motion-reduce:transition-none`;
-  });
+  out = mapClassLists(out, (literal, tokens) =>
+    tokens.some(needsMotionGuard) && !tokens.includes(MOTION_GUARD)
+      ? `${literal} ${MOTION_GUARD}`
+      : literal
+  );
 
   const withoutDeadMotion = out.replace(DEAD_MOTION, '');
   const strippedMotion = withoutDeadMotion !== out;
@@ -80,7 +99,6 @@ export function normalize(source) {
   };
 }
 
-const CLASS_STRING = /"([^"\n]*)"|'([^'\n]*)'/g;
 const DEAD_MOTION_UTILITY =
   /(?:^|:)(?:animate-(?:in|out)|(?:fade|zoom)-(?:in|out)|slide-(?:in-from|out-to)-)/;
 
@@ -91,12 +109,7 @@ export function assertClean(file, content) {
     problems.push('unresolvable "@/" import survived normalization');
   }
 
-  for (const match of content.matchAll(CLASS_STRING)) {
-    const literal = match[1] ?? match[2] ?? '';
-    const tokens = literal.split(/\s+/).filter(Boolean);
-    if (!tokens.some((token) => /^[a-z*[]/.test(token) && /-|:/.test(token))) {
-      continue;
-    }
+  mapClassLists(content, (literal, tokens) => {
     for (const token of tokens) {
       if (/[:/]$/.test(token)) {
         problems.push(`class "${token}" ends in a dangling ":" or "/"`);
@@ -106,15 +119,12 @@ export function assertClean(file, content) {
           `"${token}" needs tw-animate-css, which is not installed`
         );
       }
-      if (
-        /^transition(?:-|$)/.test(token) &&
-        token !== 'transition-none' &&
-        !literal.includes('motion-reduce')
-      ) {
-        problems.push(`"${token}" has no motion-reduce escape hatch`);
+      if (needsMotionGuard(token) && !tokens.includes(MOTION_GUARD)) {
+        problems.push(`"${token}" is missing "${MOTION_GUARD}"`);
       }
     }
-  }
+    return literal;
+  });
 
   if (problems.length > 0) {
     throw new Error(`${file}:\n  - ${[...new Set(problems)].join('\n  - ')}`);
