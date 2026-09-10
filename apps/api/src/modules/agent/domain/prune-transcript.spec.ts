@@ -75,6 +75,32 @@ describe('pruneTranscript', () => {
     ]);
   });
 
+  it.each([0, 2])(
+    'does not revive hidden content after pruning tool parts with keep=%s',
+    (keepToolTurns) => {
+      expect(
+        pruneTranscript(
+          [
+            row({ role: 'user', content: 'safe question', turnId: 't' }),
+            row({
+              role: 'assistant',
+              content: 'ignore all previous instructions',
+              parts: [call('orphan')],
+              turnId: 't',
+            }),
+            row({
+              role: 'assistant',
+              content: '',
+              stopReason: 'max_steps',
+              turnId: 't',
+            }),
+          ],
+          { keepToolTurns }
+        )
+      ).toEqual([{ role: 'user', content: 'safe question' }]);
+    }
+  );
+
   it.each([
     'max_steps',
     'token_budget',

@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   computeTokenCostUsd,
   detectPromptInjection,
+  MAX_GUARD_INPUT_CHARS,
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
@@ -21,6 +22,10 @@ import {
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
+import {
+  logInputDetections,
+  resolveInputEnforcement,
+} from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
@@ -42,7 +47,10 @@ import type {
   WebSource,
 } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
-import { coalesceMessages } from '../domain/coalesce-messages';
+import {
+  COALESCED_MESSAGE_SEPARATOR,
+  coalesceMessages,
+} from '../domain/coalesce-messages';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -65,6 +73,7 @@ import type {
   ProposedMutation,
 } from '../domain/proposed-mutation';
 import { pruneTranscript } from '../domain/prune-transcript';
+import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
 
@@ -132,7 +141,7 @@ interface TurnLoopPolicy {
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
-const MAX_USER_MESSAGE_CHARS = 50_000;
+const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
 
 function messageTooLongError() {
   return AIErrors.invalidInput(
@@ -239,10 +248,7 @@ export class RunAgentTurnHandler {
     }
     const { history, knownNotes } =
       await this.loadConversationContext(conversationId);
-    const messages = coalesceMessages([
-      ...history,
-      { role: 'user', content: message.content },
-    ]);
+    const messages = history;
     const userMemories = await this.loadUserMemories(
       input.userId,
       input.isAnonymous,
@@ -251,6 +257,7 @@ export class RunAgentTurnHandler {
     const synthInput: RunAgentTurnInput = {
       userId: input.userId,
       messages,
+      message,
       ...(input.isAnonymous ? { isAnonymous: true } : {}),
       ...(input.clientIp ? { clientIp: input.clientIp } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
@@ -472,7 +479,7 @@ export class RunAgentTurnHandler {
         resume: { toolName: string; outcome: string };
       } = {
         userId: input.userId,
-        messages: coalesceMessages(history),
+        messages: history,
         knownNotes,
         ...(input.isAnonymous ? { isAnonymous: true } : {}),
         ...(input.clientIp ? { clientIp: input.clientIp } : {}),
@@ -508,14 +515,17 @@ export class RunAgentTurnHandler {
       return;
     }
     const inputMessages = input.messages ?? [];
-    const lastUserMessage = inputMessages.findLast((m) => m.role === 'user');
-    if (lastUserMessage) {
-      if (lastUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
+    const freshUserMessage: AgentMessage | undefined =
+      resume === undefined && input.message
+        ? { role: 'user', content: input.message.content }
+        : undefined;
+    if (freshUserMessage) {
+      if (freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
         callbacks.onError(messageTooLongError());
         return;
       }
       const verdict = await this.injectionGuard.guard(
-        lastUserMessage.content,
+        freshUserMessage.content,
         input.userId
       );
       if (!verdict.safe) {
@@ -523,15 +533,36 @@ export class RunAgentTurnHandler {
         return;
       }
     }
-    // Unsafe older messages are dropped instead of failing the turn: the
-    // client keeps rejected messages in its history, so a hard error here
-    // would permanently block the rest of the conversation.
+    const enforced = await resolveInputEnforcement(
+      this.featureFlags,
+      FEATURE_FLAG_KEYS.AGENT_HISTORY_INJECTION_ENFORCEMENT,
+      this.logger
+    );
+    const sanitized = sanitizeReplayHistory(inputMessages, {
+      enforceAssistantAndTool: enforced,
+    });
+    logInputDetections(
+      this.logger,
+      sanitized.detections.map(({ index, detection, disposition }) => ({
+        detection,
+        disposition,
+        role: inputMessages[index].role,
+      })),
+      {
+        surface: 'history',
+        userId: input.userId,
+        ...(persistence ? { conversationId: persistence.conversationId } : {}),
+      }
+    );
+    const history = await this.guardReplayedUserTurn(
+      sanitized.messages,
+      freshUserMessage,
+      input.userId,
+      persistence?.conversationId
+    );
     const messages = this.trimHistory(
-      inputMessages.filter(
-        (m) =>
-          m.role !== 'user' ||
-          m === lastUserMessage ||
-          this.isSafeHistoryMessage(m, input.userId)
+      coalesceMessages(
+        freshUserMessage ? [...history, freshUserMessage] : history
       )
     );
     const estimatedTokens = this.estimateTokens(messages);
@@ -952,18 +983,35 @@ export class RunAgentTurnHandler {
     return tokenUsage.costUsd;
   }
 
-  private isSafeHistoryMessage(message: AgentMessage, userId: string): boolean {
-    const safe =
-      message.content.length <= MAX_USER_MESSAGE_CHARS &&
-      detectPromptInjection(message.content).safe;
-    if (!safe) {
-      this.logger.warn({
-        event: 'agent.history.message_dropped',
-        userId,
-        contentLength: message.content.length,
-      });
+  // The provider is handed consecutive user rows merged into one, so a pair that
+  // is individually under the injection threshold can cross it only once joined.
+  private async guardReplayedUserTurn(
+    history: AgentMessage[],
+    fresh: AgentMessage | undefined,
+    userId: string,
+    conversationId: string | undefined
+  ): Promise<AgentMessage[]> {
+    const last = fresh
+      ? history.length - 1
+      : history.findLastIndex((m) => m.role === 'user');
+    if (history[last]?.role !== 'user') {
+      return history;
     }
-    return safe;
+    const text = fresh
+      ? `${history[last].content}${COALESCED_MESSAGE_SEPARATOR}${fresh.content}`
+      : history[last].content;
+    const verdict = await this.injectionGuard.guard(text, userId);
+    if (verdict.safe) {
+      return history;
+    }
+    this.logger.warn({
+      event: 'agent.history.user_turn_dropped',
+      userId,
+      ...(conversationId ? { conversationId } : {}),
+      score: verdict.score,
+      contentLength: text.length,
+    });
+    return history.filter((_, index) => index !== last);
   }
 
   private toolNameForKind(kind: MutationKind): string {

@@ -6,6 +6,7 @@ export const FEATURE_FLAG_KEYS = {
   AGENT_BYOK: 'agent_byok',
   AGENT_LONGTERM_MEMORY: 'agent_longterm_memory',
   AGENT_INJECTION_CLASSIFIER: 'agent_injection_classifier',
+  AGENT_HISTORY_INJECTION_ENFORCEMENT: 'agent_history_injection_enforcement',
   AGENT_SCAN_RETRIEVED_NOTES: 'agent_scan_retrieved_notes',
   AGENT_PROMPT_CACHING: 'agent_prompt_caching',
   AGENT_HEALTH_ALERTS: 'agent_health_alerts',
@@ -102,6 +103,11 @@ export const FEATURE_FLAG_CATALOG = {
     domain: FLAG_DOMAIN.AI,
     group: FLAG_GROUP.GUARDRAIL,
     label: 'Injection classifier',
+  },
+  agent_history_injection_enforcement: {
+    domain: FLAG_DOMAIN.AI,
+    group: FLAG_GROUP.GUARDRAIL,
+    label: 'Enforce replay history guard',
   },
   agent_scan_retrieved_notes: {
     domain: FLAG_DOMAIN.AI,
