@@ -51,17 +51,17 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@casl/ability@6.8.1)(react@19.2.1)
       '@hocuspocus/extension-logger':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
+        specifier: ^4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
       '@hocuspocus/extension-redis':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
+        specifier: ^4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
       '@hocuspocus/provider':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
+        specifier: ^4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
       '@hocuspocus/server':
-        specifier: ^4.1.0
-        version: 4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
+        specifier: ^4.7.0
+        version: 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
       '@hono/node-server':
         specifier: ^1.19.14
         version: 1.19.17(hono@4.12.34)
@@ -3133,26 +3133,26 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  '@hocuspocus/common@4.1.0':
-    resolution: {integrity: sha512-SOBbu0GcBMbLo7IYRDZC6gvEcoATbEFIC5KqzvLanC6dZZLkv91pYEBli+Exs/G71ELL3iUjSwnaf+gksxcjFA==}
+  '@hocuspocus/common@4.7.0':
+    resolution: {integrity: sha512-KyS6dXoIcWsd+v3gwd6nnZW04M77df5XstPNkOwqoDxwuncygobEN7xsf0x2PmdvlQdQyRaLm2SF4r1GZZGRnA==}
 
-  '@hocuspocus/extension-logger@4.1.0':
-    resolution: {integrity: sha512-2HkwcFl8uLk7Ffo/hyOIDrPfhGFmRbcebDXJgFuOMdG3J67NxxMC+DKqJSHOQ1pqF/ha+9cVh99w33NyH86FRw==}
+  '@hocuspocus/extension-logger@4.7.0':
+    resolution: {integrity: sha512-bURtTft9doBwsEszYsZpOROnv2I9Kioau/+rBruDxTchGtd3DpjPTxL+v10X5Hq+swuvUt4r5dWIWKDhHal61A==}
 
-  '@hocuspocus/extension-redis@4.1.0':
-    resolution: {integrity: sha512-3fu8e65IfbIt6Fm63ZbmaX5SH4xonHKL5Z7IHIGv38Bb8OeOViaylwULUeee5Xny9Q9GKQDDcQOMRgTzGgEyMA==}
+  '@hocuspocus/extension-redis@4.7.0':
+    resolution: {integrity: sha512-bEWwVxBZXVC0C8f5Tkb7SHoLOofv2+EgsWa/yUf/jb6WoxxbQDdFEREfi8XKurJEhlOqjtJTWAjec9TsFLw2uw==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/provider@4.1.0':
-    resolution: {integrity: sha512-K80V2yX4AMdpqgjIkexJioyI2Oq8pu8hjdFqY0INXKSpH8TQv9NMaDzJmlrZMYmUeKyRO2t7VhGyFK9jZQPnNw==}
+  '@hocuspocus/provider@4.7.0':
+    resolution: {integrity: sha512-BOAqoj6g4EZQ9pTwIiR7bNl1QkMAnrr8EY69jMcdhSLFtTrsKaE8hsDIEncPFnGq+khWRFCAPEJSM7F9HC7fvQ==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/server@4.1.0':
-    resolution: {integrity: sha512-mp0Of76kRkK/u+9pKXPLNV4NI2Cyjql/jVnudVb0z6xAd/i7mBDTK88p1I1sNoX9yvCvhY7lQlrvVx6sMcl8Xw==}
+  '@hocuspocus/server@4.7.0':
+    resolution: {integrity: sha512-rlHSxGXEkYvHgQa9Q8prjMHChIl7daZlXL1pezifS8j+svLHQPKLfevNBxFKc+ZW5pLpUiUJGU++O8eJlSt3Ew==}
     engines: {node: '>=22'}
     peerDependencies:
       y-protocols: ^1.0.6
@@ -3615,6 +3615,9 @@ packages:
     peerDependenciesMeta:
       '@types/node':
         optional: true
+
+  '@ioredis/commands@1.11.0':
+    resolution: {integrity: sha512-tuMmOu6dtyGFv/fzCjtapCJj/zgoHaFsqs3wKsroJSRXtlLmyL/t+B7uaQiavGk1F3WWFQcUqZwk92bpp9jKcA==}
 
   '@ioredis/commands@1.5.1':
     resolution: {integrity: sha512-JH8ZL/ywcJyR9MmJ5BNqZllXNZQqQbnVZOqpPQqE1vHiFgAw4NHbvE0FOduNU8IX9babitBT46571OnPTT0Zcw==}
@@ -9232,8 +9235,8 @@ packages:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
 
-  crossws@0.4.5:
-    resolution: {integrity: sha512-wUR89x/Rw7/8t+vn0CmGDYM9TD6VtARGb0LD5jq2wjtMy1vCP4M+sm6N6TigWeTYvnA8MoW29NqqXD0ep0rfBA==}
+  crossws@0.4.12:
+    resolution: {integrity: sha512-aypfsr6t0uNvkqaZc6zvBfXzC6pLI0/sIulpkV6RwCVtZqG5ebBzv4weImKK0VNCj91Wl9F5j7p5WU4MNrybng==}
     peerDependencies:
       srvx: '>=0.11.5'
     peerDependenciesMeta:
@@ -18767,22 +18770,22 @@ snapshots:
       protobufjs: 8.8.0
       yargs: 17.7.2
 
-  '@hocuspocus/common@4.1.0':
+  '@hocuspocus/common@4.7.0':
     dependencies:
       lib0: 0.2.117
 
-  '@hocuspocus/extension-logger@4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
+  '@hocuspocus/extension-logger@4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
     dependencies:
-      '@hocuspocus/server': 4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
+      '@hocuspocus/server': 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
     transitivePeerDependencies:
       - srvx
       - y-protocols
       - yjs
 
-  '@hocuspocus/extension-redis@4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
+  '@hocuspocus/extension-redis@4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
     dependencies:
-      '@hocuspocus/common': 4.1.0
-      '@hocuspocus/server': 4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
+      '@hocuspocus/common': 4.7.0
+      '@hocuspocus/server': 4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)
       '@sesamecare-oss/redlock': 1.4.0(ioredis@5.6.1)
       ioredis: 5.6.1
       kleur: 4.1.5
@@ -18792,19 +18795,19 @@ snapshots:
       - srvx
       - supports-color
 
-  '@hocuspocus/provider@4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
+  '@hocuspocus/provider@4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
     dependencies:
-      '@hocuspocus/common': 4.1.0
+      '@hocuspocus/common': 4.7.0
       '@lifeomic/attempt': 3.1.0
       lib0: 0.2.117
       y-protocols: 1.0.7(yjs@13.6.27)
       yjs: 13.6.27
 
-  '@hocuspocus/server@4.1.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
+  '@hocuspocus/server@4.7.0(y-protocols@1.0.7(yjs@13.6.27))(yjs@13.6.27)':
     dependencies:
-      '@hocuspocus/common': 4.1.0
+      '@hocuspocus/common': 4.7.0
       async-mutex: 0.5.0
-      crossws: 0.4.5
+      crossws: 0.4.12
       kleur: 4.1.5
       lib0: 0.2.117
       y-protocols: 1.0.7(yjs@13.6.27)
@@ -19197,6 +19200,8 @@ snapshots:
   '@inquirer/type@4.0.7(@types/node@24.13.3)':
     optionalDependencies:
       '@types/node': 24.13.3
+
+  '@ioredis/commands@1.11.0': {}
 
   '@ioredis/commands@1.5.1': {}
 
@@ -25731,7 +25736,7 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  crossws@0.4.5: {}
+  crossws@0.4.12: {}
 
   crypt@0.0.2:
     optional: true
@@ -28347,7 +28352,7 @@ snapshots:
 
   ioredis@5.6.1:
     dependencies:
-      '@ioredis/commands': 1.5.1
+      '@ioredis/commands': 1.11.0
       cluster-key-slot: 1.1.2
       debug: 4.4.3
       denque: 2.1.0

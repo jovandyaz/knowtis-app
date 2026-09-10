@@ -24,6 +24,10 @@ import { HocuspocusAuthExtension } from './extensions/hocuspocus-auth.extension'
 import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persistence.extension';
 
 const COLLABORATION_PATH_PREFIX = '/collaboration';
+const COLLAB_REDIS_PREFIX = 'knowtis-collab';
+const COLLAB_REDIS_CONNECT_TIMEOUT_MS = 1000;
+const COLLAB_REDIS_MAX_RETRIES_PER_REQUEST = 3;
+const COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS = 30000;
 
 @Injectable()
 export class HocuspocusService
@@ -35,6 +39,7 @@ export class HocuspocusService
     | ((request: IncomingMessage, socket: Duplex, head: Buffer) => void)
     | null = null;
   private boundHttpServer: HttpServer | null = null;
+  private lastRedisFailureLogAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly auth: HocuspocusAuthExtension,
@@ -283,10 +288,33 @@ export class HocuspocusService
 
     return [
       new RedisExtension({
-        createClient: (): RedisInstance =>
-          new IORedis(redisUrl) as unknown as RedisInstance,
-        prefix: 'knowtis-collab',
+        createClient: (): RedisInstance => {
+          const client = new IORedis(redisUrl, {
+            connectionName: `${COLLAB_REDIS_PREFIX}:${process.pid}`,
+            connectTimeout: COLLAB_REDIS_CONNECT_TIMEOUT_MS,
+            maxRetriesPerRequest: COLLAB_REDIS_MAX_RETRIES_PER_REQUEST,
+          });
+          client.on('error', (error) => this.logRedisFailure(error));
+          return client as unknown as RedisInstance;
+        },
+        prefix: COLLAB_REDIS_PREFIX,
       }),
     ];
+  }
+
+  private logRedisFailure(error: Error): void {
+    const now = performance.now();
+    if (
+      now - this.lastRedisFailureLogAt <
+      COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS
+    ) {
+      return;
+    }
+    this.lastRedisFailureLogAt = now;
+    this.logger.warn({
+      operation: 'collaboration_redis',
+      reason: 'connection_failed',
+      message: error.message,
+    });
   }
 }

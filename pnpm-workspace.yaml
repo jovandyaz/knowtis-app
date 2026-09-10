@@ -11,3 +11,9 @@ minimumReleaseAgeExclude:
   - pnpm@10.34.5
   # Renovate security update: nx@22.7.7
   - nx@22.7.7
+  # Crash fix: unhandled MaxRetriesPerRequestError kills the API on a Redis outage
+  - '@hocuspocus/server@4.7.0'
+  - '@hocuspocus/provider@4.7.0'
+  - '@hocuspocus/extension-redis@4.7.0'
+  - '@hocuspocus/extension-logger@4.7.0'
+  - '@hocuspocus/common@4.7.0'

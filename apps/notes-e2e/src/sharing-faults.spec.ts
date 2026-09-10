@@ -5,6 +5,7 @@ import { expect } from '@playwright/test';
 import {
   E2E,
   QUIESCENCE_WINDOW_MS,
+  REDIS_OUTAGE_BEYOND_RETRY_BUDGET_MS,
   TRAFFIC_INTERVAL_MS,
 } from '../support/environment';
 import { compose } from '../support/faults';
@@ -90,6 +91,9 @@ for (const fault of ['redis', 'postgres'] as const) {
         client.write(`post-expiry-${index}`, 'rejected')
       );
       const receiptCounts = guests.map(({ receipts }) => receipts.length);
+      if (fault === 'redis') {
+        await delay(REDIS_OUTAGE_BEYOND_RETRY_BUDGET_MS);
+      }
       await compose(
         ...(fault === 'redis' ? ['start', 'redis'] : ['unpause', 'database'])
       );
@@ -97,7 +101,10 @@ for (const fault of ['redis', 'postgres'] as const) {
       const freshOwner = connect(owner.accessToken, 'a');
       await freshOwner.synced();
       freshOwner.write('recovered', 'new session');
-      const witness = connect(owner.accessToken, 'a');
+      if (fault === 'redis') {
+        await expect.poll(() => ownerB.read('recovered')).toBe('new session');
+      }
+      const witness = connect(owner.accessToken, 'b');
       await witness.synced();
       await expect.poll(() => witness.read('recovered')).toBe('new session');
       await delay(QUIESCENCE_WINDOW_MS);
