@@ -6,7 +6,7 @@ import {
   RETRIEVAL_PORT,
   type RetrievalPort,
 } from '../../domain/ports/retrieval.port';
-import type { NoteHit } from '../../domain/retrieval';
+import type { SearchNotesResult } from '../../domain/retrieval';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
 import {
   TOOL_ERROR_CODES,
@@ -15,11 +15,6 @@ import {
 } from './tool-execution.error';
 
 const UNINDEXED_HINT_LIMIT = 5;
-
-export interface SearchNotesResult {
-  hits: NoteHit[];
-  unindexed?: NoteHit[];
-}
 
 function classifyNoteStoreFailure(error: unknown): ToolExecutionError {
   return new ToolExecutionError(
@@ -61,7 +56,7 @@ export class NoteReadToolGroup implements AgentToolGroup {
     return {
       searchNotes: tool({
         description:
-          "Search the user's notes. Returns {hits} — notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them. When nothing matches, the result may also carry `unindexed`: recently edited notes that are not searchable by meaning yet, only by the exact words they contain. Judge them by title — call getNote on any that could answer the question. If none fit, say the note may be too recent to search by meaning and will be in a couple of minutes; never say the user has no such note when `unindexed` is present.",
+          "Search the user's notes. Returns {hits} — notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them. When nothing matches, the result may also carry `unindexed`: recently created or edited notes whose current text is not searchable by meaning yet, only by the exact words it contains. Judge them by title — call getNote on any that could plausibly answer the question. If none fit, answer normally, but say a very recent note may not be searchable by meaning yet instead of stating flatly that no such note exists.",
         inputSchema: z.object({
           query: z
             .string()

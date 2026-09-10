@@ -1191,6 +1191,16 @@ The migration runs on deploy, so the table and `vector` extension are created au
 
 To roll back: set `agent_hybrid_retrieval` to `false`. Keyword search resumes instantly with no data loss.
 
+**Changing `AI_EMBEDDING_MODEL` needs the same sequence.** The vector leg filters on the model name, so a change makes every existing embedding unreachable and the whole corpus is re-embedded at 50 notes per 2-minute cycle. Flip the flag off first, or hybrid search returns nothing until the backfill completes.
+
+#### Notes the vector leg cannot reach yet
+
+The reconcile cron debounces (`QUIET_SECONDS = 90`, every 120 s), so a note is not semantically searchable for a few minutes after it is written. The lexical leg is computed live and still finds it by exact words, but a paraphrase misses.
+
+When `searchNotes` matches nothing at all, it therefore also returns `unindexed`: up to 5 accessible notes — newest first — with no embedding for the current model, or one older than the note. The agent judges them by title, opens promising ones with `getNote`, and otherwise tells the user a very recent note may not be searchable by meaning yet rather than claiming it does not exist. The list is empty whenever `VOYAGE_API_KEY` is unset or the flag is off, so the agent never implies indexing that is not running.
+
+It cannot, however, distinguish "waiting its turn" from "failing to embed": a note the embedding provider keeps rejecting is reported as pending forever. Watch the reconciler's `Failed to embed a batch` warnings.
+
 ### Retrieval-quality eval
 
 `apps/api/src/modules/agent/eval/retrieval-quality.eval.ts` verifies cross-lingual and paraphrase retrieval quality against the real Voyage model and a live DB. Runs under `nx run api:eval` (same target as the copilot eval). Gated on `VOYAGE_API_KEY` — the suite skips cleanly when the key is absent.
@@ -1265,17 +1275,17 @@ Long-term memory extraction never sees tool activity: it calls `loadMessages(con
 
 Tool groups (`apps/api/src/modules/agent/infrastructure/tools/`, each implementing `AgentToolGroup`), composed by `AgentToolRegistry`:
 
-| Group         | Tool                | Effect                                                                                                               |
-| ------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `note-read`   | `searchNotes`       | Keyword (or hybrid, behind `agent_hybrid_retrieval`) search over the user's accessible notes                         |
-| `note-read`   | `getNote`           | Full content of one note by id (ids must come from a prior search); body is data-fenced and optionally guard-scanned |
-| `note-read`   | `listRecentNotes`   | Most recently updated accessible notes                                                                               |
-| `note-read`   | `getNotesOverview`  | Counts: total accessible, owned, shared-with-me                                                                      |
-| `note-mutate` | `proposeCreateNote` | Proposal to create a note (HITL)                                                                                     |
-| `note-mutate` | `proposeUpdateNote` | Proposal to edit a note's title and/or content (HITL)                                                                |
-| `note-mutate` | `proposeShareNote`  | Proposal to share a note with another user by email, `viewer` or `editor` (HITL)                                     |
-| `web`         | `webSearch`         | Tavily search; results feed the per-turn `webFetch` allowlist. Flag `agent_web_search`                               |
-| `web`         | `webFetch`          | Fetch one allowlisted public URL (`web-fetch-allowlist.ts`). Flag `agent_web_search`                                 |
+| Group         | Tool                | Effect                                                                                                                                                      |
+| ------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `note-read`   | `searchNotes`       | Keyword (or hybrid, behind `agent_hybrid_retrieval`) search over the user's accessible notes; on a total miss also lists notes not yet semantically indexed |
+| `note-read`   | `getNote`           | Full content of one note by id (ids must come from a prior search); body is data-fenced and optionally guard-scanned                                        |
+| `note-read`   | `listRecentNotes`   | Most recently updated accessible notes                                                                                                                      |
+| `note-read`   | `getNotesOverview`  | Counts: total accessible, owned, shared-with-me                                                                                                             |
+| `note-mutate` | `proposeCreateNote` | Proposal to create a note (HITL)                                                                                                                            |
+| `note-mutate` | `proposeUpdateNote` | Proposal to edit a note's title and/or content (HITL)                                                                                                       |
+| `note-mutate` | `proposeShareNote`  | Proposal to share a note with another user by email, `viewer` or `editor` (HITL)                                                                            |
+| `web`         | `webSearch`         | Tavily search; results feed the per-turn `webFetch` allowlist. Flag `agent_web_search`                                                                      |
+| `web`         | `webFetch`          | Fetch one allowlisted public URL (`web-fetch-allowlist.ts`). Flag `agent_web_search`                                                                        |
 
 ### Human-in-the-loop
 

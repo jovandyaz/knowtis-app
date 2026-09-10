@@ -294,7 +294,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
                OR ${noteEmbeddings.model} <> ${model})`
         )
       )
-      .orderBy(desc(notes.updatedAt))
+      .orderBy(desc(notes.updatedAt), desc(notes.id))
       .limit(limit);
   }
 

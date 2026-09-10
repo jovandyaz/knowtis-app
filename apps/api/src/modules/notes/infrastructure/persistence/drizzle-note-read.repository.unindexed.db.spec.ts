@@ -9,6 +9,7 @@ import {
   DATABASE_CONNECTION,
   DatabaseModule,
   noteEmbeddings,
+  notePermissions,
   notes,
   users,
   type Database,
@@ -24,6 +25,7 @@ const OTHER_MODEL = '00000000-0000-4000-8000-000000000195';
 const UP_TO_DATE = '00000000-0000-4000-8000-000000000196';
 const SOFT_DELETED = '00000000-0000-4000-8000-000000000197';
 const FOREIGN = '00000000-0000-4000-8000-000000000198';
+const SHARED = '00000000-0000-4000-8000-000000000199';
 
 const MODEL = 'voyage-4';
 
@@ -96,8 +98,27 @@ describe.runIf(DB_AVAILABLE)(
             deletedAt: new Date(),
           },
           { id: FOREIGN, ownerId: OTHER, title: 'theirs', content: 'f' },
+          { id: SHARED, ownerId: OTHER, title: 'lent', content: 'g' },
         ])
         .onConflictDoNothing();
+
+      await db
+        .insert(notePermissions)
+        .values([{ noteId: SHARED, userId: MINE, permission: 'viewer' }])
+        .onConflictDoNothing();
+
+      // One insert stamps every row with the same transaction clock, which
+      // would make any ordering assertion pass by accident.
+      for (const [offset, id] of [
+        NO_EMBEDDING,
+        OTHER_MODEL,
+        SHARED,
+      ].entries()) {
+        await db
+          .update(notes)
+          .set({ updatedAt: sql`now() - make_interval(mins => ${offset + 1})` })
+          .where(eq(notes.id, id));
+      }
 
       await db
         .insert(noteEmbeddings)
@@ -134,9 +155,11 @@ describe.runIf(DB_AVAILABLE)(
     });
 
     afterAll(async () => {
-      await db.delete(users).where(eq(users.id, MINE));
-      await db.delete(users).where(eq(users.id, OTHER));
-      await moduleRef.close();
+      if (db) {
+        await db.delete(users).where(eq(users.id, MINE));
+        await db.delete(users).where(eq(users.id, OTHER));
+      }
+      await moduleRef?.close();
     });
 
     it('reports a note that has no embedding row', async () => {
@@ -163,6 +186,16 @@ describe.runIf(DB_AVAILABLE)(
 
     it('omits a note the user cannot access', async () => {
       expect(await unindexedIds()).not.toContain(FOREIGN);
+    });
+
+    it('reports a note shared with the user, not just an owned one', async () => {
+      expect(await unindexedIds()).toContain(SHARED);
+    });
+
+    it('puts the most recently touched note first', async () => {
+      const ids = await unindexedIds();
+      expect(ids.indexOf(NO_EMBEDDING)).toBeLessThan(ids.indexOf(OTHER_MODEL));
+      expect(ids.indexOf(OTHER_MODEL)).toBeLessThan(ids.indexOf(SHARED));
     });
 
     it('honours the limit', async () => {

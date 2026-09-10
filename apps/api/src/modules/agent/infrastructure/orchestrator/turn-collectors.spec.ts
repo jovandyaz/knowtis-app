@@ -29,8 +29,10 @@ describe('collectKnownNotes', () => {
     ).toEqual(['fresh']);
   });
 
-  it('still reads a replayed transcript that carries the bare array', () => {
-    expect(known(result('searchNotes', [note('old')]))).toEqual(['old']);
+  it('reads the bare array listRecentNotes returns', () => {
+    expect(known(result('listRecentNotes', [note('recent')]))).toEqual([
+      'recent',
+    ]);
   });
 
   it('reads a single-object result such as getNote', () => {

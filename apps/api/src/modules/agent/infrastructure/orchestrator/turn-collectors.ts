@@ -30,8 +30,7 @@ export function collectSources(
   }
 }
 
-/** Replayed transcripts still carry the bare array `searchNotes` used to
- * return, so both shapes have to yield their notes. */
+/** `searchNotes` reports `{hits, unindexed}`; `listRecentNotes` a bare array. */
 function noteCandidates(output: unknown): unknown[] {
   if (Array.isArray(output)) {
     return output;
