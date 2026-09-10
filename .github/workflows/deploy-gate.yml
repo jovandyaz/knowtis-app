@@ -10,17 +10,20 @@ on:
   pull_request:
     paths: ['.github/scripts/**']
 
+permissions:
+  contents: read
+
 jobs:
   gate-harness:
     name: Railway deploy gate harness
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Run harness in the Railway CLI image
         run: |
           docker run --rm -v "$PWD/.github/scripts:/s" --entrypoint sh \
-            ghcr.io/railwayapp/cli:latest /s/railway-deploy.test.sh
+            ghcr.io/railwayapp/cli@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f /s/railway-deploy.test.sh
