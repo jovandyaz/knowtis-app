@@ -21,7 +21,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -34,6 +34,7 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: read
@@ -114,16 +115,6 @@ jobs:
       - name: Typecheck (affected)
         run: npx nx affected -t typecheck
 
-      - name: Apply migrations
-        run: npx nx db:migrate:run api
-
-      - name: Test (affected)
-        # --parallel=2 bounds concurrent vitest projects; 3+ NestJS/jsdom
-        # suites at once exceed hosted-runner memory and get OOM-killed.
-        # Streamed output survives a killed child; nx's buffered default
-        # truncates mid-line and loses the vitest summary that names the failure.
-        run: npx nx affected -t test --parallel=2 --outputStyle=stream -- --run
-
       - name: Check for missing DB migrations
         run: |
           npx nx db:generate api
@@ -133,6 +124,16 @@ jobs:
             git status --short --untracked-files=all -- apps/api/drizzle/
             exit 1
           fi
+
+      - name: Apply migrations
+        run: npx nx db:migrate:run api
+
+      - name: Test (affected)
+        # --parallel=2 bounds concurrent vitest projects; 3+ NestJS/jsdom
+        # suites at once exceed hosted-runner memory and get OOM-killed.
+        # Streamed output survives a killed child; nx's buffered default
+        # truncates mid-line and loses the vitest summary that names the failure.
+        run: npx nx affected -t test --parallel=2 --outputStyle=stream -- --run
 
       - name: Build (affected)
         run: npx nx affected -t build --configuration=production
@@ -207,6 +208,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend to Vercel
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [ci]
     if: |
       github.ref == 'refs/heads/main' &&
@@ -239,6 +241,7 @@ jobs:
   deploy-backoffice:
     name: Deploy Backoffice to Vercel
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [ci]
     if: |
       github.ref == 'refs/heads/main' &&
