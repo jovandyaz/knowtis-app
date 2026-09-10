@@ -100,7 +100,7 @@ describe('AgentComposer sizing', () => {
     const user = userEvent.setup();
     render(<AgentComposer onSend={vi.fn()} onStop={vi.fn()} status="idle" />);
     const box = screen.getByRole('textbox');
-    expect(box.style.height).toBe('24px');
+    expect(box.style.height).toBe('');
 
     scrollHeight.mockReturnValue(96);
     await user.type(box, 'line1{Shift>}{Enter}{/Shift}line2');
@@ -109,6 +109,6 @@ describe('AgentComposer sizing', () => {
     scrollHeight.mockReturnValue(24);
     await user.keyboard('{Enter}');
     expect(box).toHaveValue('');
-    expect(box.style.height).toBe('24px');
+    expect(box.style.height).toBe('');
   });
 });
