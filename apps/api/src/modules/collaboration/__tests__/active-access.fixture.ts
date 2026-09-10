@@ -2,7 +2,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { Redis as HocuspocusRedis } from '@hocuspocus/extension-redis';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { Server, type Connection, type Extension } from '@hocuspocus/server';
+import {
+  Server,
+  type beforeHandleMessagePayload,
+  type beforeSyncPayload,
+  type Connection,
+  type Extension,
+} from '@hocuspocus/server';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as Y from 'yjs';
@@ -68,9 +74,14 @@ export class ActiveAccessServer {
   readonly applied: {
     userId: string;
     at: number;
+    authorizedAt: number;
     expiresAt: number;
     closed: boolean;
   }[] = [];
+  private readonly authorizedAt = new WeakMap<
+    Connection<HocuspocusAuthContext>,
+    number
+  >();
   readonly jwt = new JwtService({
     secret: 'disposable-active-access-integration-secret',
     signOptions: { algorithm: 'HS256', expiresIn: '10m' },
@@ -114,7 +125,7 @@ export class ActiveAccessServer {
       debounce: 100,
       maxDebounce: 200,
       unloadImmediately: false,
-      ...(negative ? {} : auth.guardHooks()),
+      ...(negative ? {} : this.stampedGuardHooks(auth)),
       extensions: [
         new HocuspocusRedis({
           host: redis.hostname,
@@ -134,12 +145,14 @@ export class ActiveAccessServer {
             origin !== null &&
             'connection' in origin
           ) {
-            const lease = (
-              origin.connection as Connection<HocuspocusAuthContext>
-            ).context.accessLease;
+            const connection =
+              origin.connection as Connection<HocuspocusAuthContext>;
+            const lease = connection.context.accessLease;
             this.applied.push({
               userId: lease.identity.userId,
               at: performance.now(),
+              authorizedAt:
+                this.authorizedAt.get(connection) ?? Number.POSITIVE_INFINITY,
               expiresAt: lease.expiresAt,
               closed: lease.closed,
             });
@@ -150,6 +163,23 @@ export class ActiveAccessServer {
         this.leases.push(context.accessLease);
       },
     });
+  }
+
+  private stampedGuardHooks(auth: HocuspocusAuthExtension) {
+    const guards = auth.guardHooks();
+    return {
+      ...guards,
+      beforeHandleMessage: async (
+        payload: beforeHandleMessagePayload<HocuspocusAuthContext>
+      ) => {
+        await guards.beforeHandleMessage?.(payload);
+        this.authorizedAt.set(payload.connection, performance.now());
+      },
+      beforeSync: async (payload: beforeSyncPayload<HocuspocusAuthContext>) => {
+        await guards.beforeSync?.(payload);
+        this.authorizedAt.set(payload.connection, performance.now());
+      },
+    };
   }
 
   async start() {

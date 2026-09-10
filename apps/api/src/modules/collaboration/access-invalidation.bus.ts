@@ -12,6 +12,8 @@ import { AccessRevalidationService } from './access-revalidation.service';
 
 export const ACCESS_INVALIDATION_CHANNEL =
   'knowtis-collab:access-invalidations:v1';
+/** Process-scoped so a Redis `CLIENT LIST` entry attributes a subscriber to one API process. */
+export const ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME = `knowtis-access-invalidations-sub:${process.pid}`;
 const FAILURE_LOG_INTERVAL_MS = 30000;
 const messageSchema = z
   .object({ version: z.literal(1), noteId: z.uuid() })
@@ -62,7 +64,7 @@ export class AccessInvalidationBus implements OnModuleInit, OnModuleDestroy {
     this.subscriber = new Redis(url, {
       ...options,
       autoResubscribe: false,
-      connectionName: 'knowtis-access-invalidations-sub',
+      connectionName: ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME,
     });
     this.publisher.on('error', () =>
       this.warnFailure('publisher', 'connection_failed')
