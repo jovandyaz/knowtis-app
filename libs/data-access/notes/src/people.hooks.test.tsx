@@ -8,6 +8,7 @@ import { ZodError } from 'zod';
 
 import { notesApi, type NoteDetail } from '@knowtis/api-client';
 
+import { useNote } from './notes.hooks';
 import {
   usePeople,
   useRevokePerson,
@@ -248,6 +249,31 @@ describe('People hooks', () => {
     expect(
       client.getQueryState(notesQueryKeys.people('two'))?.isInvalidated
     ).toBe(false);
+  });
+
+  it('marks the note detail stale without refetching it', async () => {
+    vi.mocked(notesApi.upsertPerson).mockResolvedValue(person);
+    vi.mocked(notesApi.getById).mockResolvedValue(note);
+    const { result } = renderHook(
+      () => ({ detail: useNote('one'), save: useUpsertPerson() }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.detail.isSuccess).toBe(true));
+    expect(notesApi.getById).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.save.mutateAsync({
+        noteId: 'one',
+        input: { email: 'person@example.com', permission: 'viewer' },
+      });
+    });
+
+    await waitFor(() =>
+      expect(
+        client.getQueryState(notesQueryKeys.detail('one'))?.isInvalidated
+      ).toBe(true)
+    );
+    expect(notesApi.getById).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a successful write successful when the permission refresh fails', async () => {
