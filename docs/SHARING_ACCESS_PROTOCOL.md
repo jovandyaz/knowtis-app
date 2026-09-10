@@ -187,3 +187,36 @@ Consulted 2026-09-07; installed-version source resolves documentation ambiguity.
 - [Nest event handling](https://docs.nestjs.com/techniques/events): handler events reach the local listener across REST/MCP/application entrypoints.
 - [TanStack Query invalidation](https://tanstack.com/query/latest/docs/framework/react/reference/classes/QueryClient) and [disabled queries](https://tanstack.com/query/latest/docs/framework/react/guides/disabling-queries): reconcile active detail/share-route queries; cached metadata is not authorization.
 - [Node 24 monotonic time](https://nodejs.org/docs/latest-v24.x/api/perf_hooks.html#performancenow) and [Y.Doc event order](https://docs.yjs.dev/api/y.doc): measure process-local read starts and actual applied/received updates.
+
+## Protocol probe
+
+`apps/api/src/modules/collaboration/__tests__/access-protocol.probe.db.spec.ts`
+probes the lease/close mechanism in isolation. It needs a disposable PostgreSQL
+database: its fixture creates and drops uniquely named `sharing_probe_*` tables
+and requires no application migrations. Six of its cases additionally need a
+separate disposable Redis instance whose URL is plain `redis://HOST:PORT`,
+without credentials or a database path.
+
+```sh
+DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:PORT/TEST_DATABASE \
+SHARING_PROBE_REDIS_URL=redis://127.0.0.1:REDIS_PORT \
+NX_DAEMON=false NX_ISOLATE_PLUGINS=false \
+pnpm nx test api \
+  --testFile=src/modules/collaboration/__tests__/access-protocol.probe.db.spec.ts \
+  --run --skip-nx-cache
+```
+
+CI runs this file in the sequential database project but sets only `REDIS_URL`,
+so its six Redis cases skip explicitly there. A CI pass alone therefore does not
+establish the complete distributed proof; all 16 cases must run before relying
+on it. Providers, Y.Docs, servers, subscriptions, timers and database clients
+close during teardown; disposable external services stay owned by the runner.
+
+The probe reaches unavailable authority through a real SQL error and read
+timeout, not a killed database container or a production TCP partition. Its
+lost-notification case unsubscribes the invalidation consumers while keeping
+Redis document propagation alive, so receipt cutoff stays measurable, and
+subscription reconnection is real. A full Redis outage, process pauses,
+saturated database pools, distributed clock behavior and buffered packets
+delayed by a remote network stay outside this probe. No expiry timer can hold a
+strict outgoing deadline while its event loop is blocked.
