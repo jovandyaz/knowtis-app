@@ -25,6 +25,7 @@ permissions:
   contents: read
 
 env:
+  # renovate: datasource=npm depName=@railway/cli
   RAILWAY_CLI_VERSION: 5.49.0
 
 jobs:
@@ -53,6 +54,7 @@ jobs:
       - name: Plan
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        shell: bash
         run: pnpm dlx @railway/cli@${{ env.RAILWAY_CLI_VERSION }} config plan --out railway-plan.json | tee plan.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

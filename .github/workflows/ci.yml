@@ -27,6 +27,7 @@ permissions:
   contents: read
 
 env:
+  # renovate: datasource=npm depName=vercel
   VERCEL_CLI_VERSION: 59.15.1
 
 jobs:
@@ -103,6 +104,8 @@ jobs:
         run: pnpm lint:config
 
       - name: Audit workflows with zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pipx run zizmor==1.30.1 .github/workflows/
 
       - name: Lint (affected)
@@ -271,7 +274,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
       needs.ci.outputs.api_affected == 'true'
-    container: ghcr.io/railwayapp/cli@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f # latest
+    container: ghcr.io/railwayapp/cli:latest@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f
     timeout-minutes: 30
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -293,7 +296,7 @@ jobs:
       github.event_name == 'push' &&
       needs.ci.outputs.mcp_affected == 'true' &&
       vars.RAILWAY_MCP_SERVICE_ID != ''
-    container: ghcr.io/railwayapp/cli@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f # latest
+    container: ghcr.io/railwayapp/cli:latest@sha256:61856c5b02d19d154ee35d7b36a263ce81cc7bf82c5e130a06a4b3f69ca88d7f
     timeout-minutes: 30
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
