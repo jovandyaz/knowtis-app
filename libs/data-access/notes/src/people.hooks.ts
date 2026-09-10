@@ -25,11 +25,14 @@ async function refreshAccess(client: QueryClient, noteId: string) {
   const accessKeys = [
     notesQueryKeys.people(noteId),
     notesQueryKeys.sharingAuthority(noteId),
-    notesQueryKeys.detail(noteId),
   ];
   for (const queryKey of peripheralKeys) {
     void client.invalidateQueries({ queryKey });
   }
+  void client.invalidateQueries({
+    queryKey: notesQueryKeys.detail(noteId),
+    refetchType: 'none',
+  });
   await Promise.all(
     accessKeys.map((queryKey) => client.invalidateQueries({ queryKey }))
   );
