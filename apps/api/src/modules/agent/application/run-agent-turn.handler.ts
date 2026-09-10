@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   computeTokenCostUsd,
   detectPromptInjection,
+  MAX_GUARD_INPUT_CHARS,
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
@@ -22,7 +23,7 @@ import {
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import {
-  logInputDetection,
+  logInputDetections,
   resolveInputEnforcement,
 } from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
@@ -46,7 +47,10 @@ import type {
   WebSource,
 } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
-import { coalesceMessages } from '../domain/coalesce-messages';
+import {
+  COALESCED_MESSAGE_SEPARATOR,
+  coalesceMessages,
+} from '../domain/coalesce-messages';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -137,7 +141,7 @@ interface TurnLoopPolicy {
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
-const MAX_USER_MESSAGE_CHARS = 50_000;
+const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
 
 function messageTooLongError() {
   return AIErrors.invalidInput(
@@ -537,19 +541,28 @@ export class RunAgentTurnHandler {
     const sanitized = sanitizeReplayHistory(inputMessages, {
       enforceAssistantAndTool: enforced,
     });
-    for (const { index, detection, disposition } of sanitized.detections) {
-      logInputDetection(this.logger, detection, {
-        surface: 'history',
+    logInputDetections(
+      this.logger,
+      sanitized.detections.map(({ index, detection, disposition }) => ({
+        detection,
         disposition,
         role: inputMessages[index].role,
+      })),
+      {
+        surface: 'history',
+        userId: input.userId,
         ...(persistence ? { conversationId: persistence.conversationId } : {}),
-      });
-    }
+      }
+    );
+    const history = await this.guardReplayedUserTurn(
+      sanitized.messages,
+      freshUserMessage,
+      input.userId,
+      persistence?.conversationId
+    );
     const messages = this.trimHistory(
       coalesceMessages(
-        freshUserMessage
-          ? [...sanitized.messages, freshUserMessage]
-          : sanitized.messages
+        freshUserMessage ? [...history, freshUserMessage] : history
       )
     );
     const estimatedTokens = this.estimateTokens(messages);
@@ -968,6 +981,37 @@ export class RunAgentTurnHandler {
         : {}),
     });
     return tokenUsage.costUsd;
+  }
+
+  // The provider is handed consecutive user rows merged into one, so a pair that
+  // is individually under the injection threshold can cross it only once joined.
+  private async guardReplayedUserTurn(
+    history: AgentMessage[],
+    fresh: AgentMessage | undefined,
+    userId: string,
+    conversationId: string | undefined
+  ): Promise<AgentMessage[]> {
+    const last = fresh
+      ? history.length - 1
+      : history.findLastIndex((m) => m.role === 'user');
+    if (history[last]?.role !== 'user') {
+      return history;
+    }
+    const text = fresh
+      ? `${history[last].content}${COALESCED_MESSAGE_SEPARATOR}${fresh.content}`
+      : history[last].content;
+    const verdict = await this.injectionGuard.guard(text, userId);
+    if (verdict.safe) {
+      return history;
+    }
+    this.logger.warn({
+      event: 'agent.history.user_turn_dropped',
+      userId,
+      ...(conversationId ? { conversationId } : {}),
+      score: verdict.score,
+      contentLength: text.length,
+    });
+    return history.filter((_, index) => index !== last);
   }
 
   private toolNameForKind(kind: MutationKind): string {

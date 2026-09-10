@@ -1,4 +1,10 @@
-import { detectPromptInjection } from './prompt-guard';
+import { detectPromptInjection, MAX_GUARD_INPUT_CHARS } from './prompt-guard';
+
+export type AiInputSurface = 'history';
+
+export const AI_INPUT_DISPOSITION = ['observe', 'block'] as const;
+
+export type AiInputDisposition = (typeof AI_INPUT_DISPOSITION)[number];
 
 export interface AiInputDetection {
   readonly safe: boolean;
@@ -15,6 +21,10 @@ export function detectAiInput(text: string): AiInputDetection {
     score,
     contentLength: text.length,
     reasonCode:
-      text.length > 50_000 ? 'too_large' : safe ? 'clear' : 'heuristic_hit',
+      text.length > MAX_GUARD_INPUT_CHARS
+        ? 'too_large'
+        : safe
+          ? 'clear'
+          : 'heuristic_hit',
   };
 }

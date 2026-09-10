@@ -158,6 +158,9 @@ const INJECTION_PATTERNS: {
 
 const INJECTION_THRESHOLD = 0.6;
 
+/** Longest input the heuristic guard will score; anything longer is refused outright. */
+export const MAX_GUARD_INPUT_CHARS = 50_000;
+
 const STRIP_CODEPOINTS: readonly number[] = [
   0x200b,
   0x200c,
@@ -196,7 +199,7 @@ export function detectPromptInjection(text: string): PromptGuardResult {
     return { safe: true, score: 0 };
   }
 
-  if (text.length > 50_000) {
+  if (text.length > MAX_GUARD_INPUT_CHARS) {
     return { safe: false, score: 1, reason: 'Input exceeds safety limit' };
   }
 

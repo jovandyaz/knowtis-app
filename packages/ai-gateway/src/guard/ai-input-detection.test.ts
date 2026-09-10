@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { detectAiInput } from './ai-input-detection';
+import { MAX_GUARD_INPUT_CHARS } from './prompt-guard';
 
 describe('detectAiInput', () => {
   it('classifies without exposing the input or free-form reason', () => {
@@ -16,10 +17,10 @@ describe('detectAiInput', () => {
     });
   });
   it('rejects oversized inputs before heuristic work', () => {
-    expect(detectAiInput('x'.repeat(50_001))).toEqual({
+    expect(detectAiInput('x'.repeat(MAX_GUARD_INPUT_CHARS + 1))).toEqual({
       safe: false,
       score: 1,
-      contentLength: 50_001,
+      contentLength: MAX_GUARD_INPUT_CHARS + 1,
       reasonCode: 'too_large',
     });
   });

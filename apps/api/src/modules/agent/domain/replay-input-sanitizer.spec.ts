@@ -17,7 +17,7 @@ const call: AgentMessage = {
       type: 'tool-call',
       toolCallId: 'c1',
       toolName: 'getNote',
-      input: { id: attack },
+      input: { id: 'note-1' },
     },
   ],
 };
@@ -46,13 +46,15 @@ describe('replay input sanitizer', () => {
         .messages
     ).toEqual(history);
   });
-  it('uses assistant text parts, excludes inputs and identifiers, and keeps safe history', () => {
+  it('projects assistant text and tool-call input, never identifiers or divergent content', () => {
     const message: AgentMessage = {
       ...call,
       content: attack,
       parts: [...call.parts!, { type: 'text', text: 'A useful safe answer.' }],
     };
-    expect(projectReplayText(message)).toBe('A useful safe answer.');
+    expect(projectReplayText(message)).toBe(
+      'id\nnote-1\nA useful safe answer.'
+    );
     expect(
       sanitizeReplayHistory([message, result({ body: 'safe' })], {
         enforceAssistantAndTool: true,
@@ -80,6 +82,25 @@ describe('replay input sanitizer', () => {
       sanitizeReplayHistory([call, message], { enforceAssistantAndTool: true })
         .detections[0]?.disposition
     ).toBe('block');
+  });
+  it('scans the tool-call input the mapper replays verbatim', () => {
+    const poisoned: AgentMessage = {
+      ...call,
+      parts: [
+        {
+          type: 'tool-call',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: attack },
+        },
+      ],
+    };
+    expect(projectReplayText(poisoned)).toContain(attack);
+    expect(
+      sanitizeReplayHistory([poisoned, result({ body: 'safe' })], {
+        enforceAssistantAndTool: true,
+      }).messages
+    ).toEqual([]);
   });
   it('joins assistant text parts without hiding a split instruction', () => {
     expect(

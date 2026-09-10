@@ -1,10 +1,22 @@
-import { detectAiInput, type AiInputDetection } from '@knowtis/ai-gateway';
+import {
+  detectAiInput,
+  MAX_GUARD_INPUT_CHARS,
+  type AiInputDetection,
+  type AiInputDisposition,
+} from '@knowtis/ai-gateway';
 
 import type { AgentMessage } from './agent-message';
 import { repairTranscriptOrphans } from './prune-transcript';
 
-const MAX_PROJECTION_CHARS = 50_001;
+// One character past the guard limit so a truncated projection always trips `too_large`.
+const MAX_PROJECTION_CHARS = MAX_GUARD_INPUT_CHARS + 1;
 const MAX_PROJECTION_NODES = 10_000;
+
+export interface ReplayDetection {
+  readonly index: number;
+  readonly detection: AiInputDetection;
+  readonly disposition: AiInputDisposition;
+}
 
 /** Projects the visible replay text without serializing unbounded tool payloads. */
 export function projectReplayText(message: AgentMessage): string {
@@ -16,6 +28,7 @@ export function projectReplayText(message: AgentMessage): string {
   }
   let text = '';
   let visited = 0;
+  let exhausted = false;
   const append = (value: string) => {
     text += value.slice(0, MAX_PROJECTION_CHARS - text.length);
   };
@@ -29,6 +42,27 @@ export function projectReplayText(message: AgentMessage): string {
       }
     }
   }
+  const appendLeaves = (root: unknown) => {
+    const stack: Iterator<unknown>[] = [[root][Symbol.iterator]()];
+    while (stack.length > 0 && text.length < MAX_PROJECTION_CHARS) {
+      const entry = stack[stack.length - 1].next();
+      if (entry.done) {
+        stack.pop();
+        continue;
+      }
+      visited += 1;
+      if (visited > MAX_PROJECTION_NODES) {
+        exhausted = true;
+        return;
+      }
+      if (typeof entry.value === 'string') {
+        append(entry.value);
+        append('\n');
+      } else if (entry.value !== null && typeof entry.value === 'object') {
+        stack.push(values(entry.value));
+      }
+    }
+  };
   for (const part of message.parts ?? []) {
     visited += 1;
     if (visited > MAX_PROJECTION_NODES) {
@@ -36,25 +70,13 @@ export function projectReplayText(message: AgentMessage): string {
     }
     if (message.role === 'assistant' && part.type === 'text') {
       append(part.text);
+    } else if (message.role === 'assistant' && part.type === 'tool-call') {
+      appendLeaves(part.input);
     } else if (message.role === 'tool' && part.type === 'tool-result') {
-      const stack: Iterator<unknown>[] = [[part.output][Symbol.iterator]()];
-      while (stack.length > 0 && text.length < MAX_PROJECTION_CHARS) {
-        const entry = stack[stack.length - 1].next();
-        if (entry.done) {
-          stack.pop();
-          continue;
-        }
-        visited += 1;
-        if (visited > MAX_PROJECTION_NODES) {
-          return ' '.repeat(MAX_PROJECTION_CHARS);
-        }
-        if (typeof entry.value === 'string') {
-          append(entry.value);
-          append('\n');
-        } else if (entry.value !== null && typeof entry.value === 'object') {
-          stack.push(values(entry.value));
-        }
-      }
+      appendLeaves(part.output);
+    }
+    if (exhausted) {
+      return ' '.repeat(MAX_PROJECTION_CHARS);
     }
     if (text.length >= MAX_PROJECTION_CHARS) {
       break;
@@ -67,19 +89,8 @@ export function projectReplayText(message: AgentMessage): string {
 export function sanitizeReplayHistory(
   messages: readonly AgentMessage[],
   options: { enforceAssistantAndTool: boolean }
-): {
-  messages: AgentMessage[];
-  detections: {
-    index: number;
-    detection: AiInputDetection;
-    disposition: 'observe' | 'block';
-  }[];
-} {
-  const detections: {
-    index: number;
-    detection: AiInputDetection;
-    disposition: 'observe' | 'block';
-  }[] = [];
+): { messages: AgentMessage[]; detections: ReplayDetection[] } {
+  const detections: ReplayDetection[] = [];
   const kept = messages.filter((message, index) => {
     const detection = detectAiInput(projectReplayText(message));
     if (detection.safe) {

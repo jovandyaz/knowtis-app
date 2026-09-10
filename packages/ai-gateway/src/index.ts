@@ -1,5 +1,15 @@
 export type { GatewayLogger } from './logger';
-export { detectPromptInjection } from './guard/prompt-guard';
+export {
+  detectPromptInjection,
+  MAX_GUARD_INPUT_CHARS,
+} from './guard/prompt-guard';
+export {
+  AI_INPUT_DISPOSITION,
+  detectAiInput,
+  type AiInputDetection,
+  type AiInputDisposition,
+  type AiInputSurface,
+} from './guard/ai-input-detection';
 export { sanitizeContent } from './guard/input-sanitizer';
 export { estimateTokenCount } from './tokens/token-estimator';
 export {
@@ -50,8 +60,3 @@ export type {
   WebSearchProvider,
   WebSearchResult,
 } from './web-search/web-search.types';
-
-export {
-  detectAiInput,
-  type AiInputDetection,
-} from './guard/ai-input-detection';

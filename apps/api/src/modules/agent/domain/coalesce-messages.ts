@@ -1,5 +1,8 @@
 import type { AgentMessage } from './agent-message';
 
+/** Blank line joining two merged same-role messages; the guard must scan the joined text. */
+export const COALESCED_MESSAGE_SEPARATOR = '\n\n';
+
 /** Merges consecutive same-role text messages (content joined with a blank line) so
  * the sequence strictly alternates user/assistant — required by the Anthropic
  * provider, which rejects consecutive same-role turns. A HITL turn persists two
@@ -15,7 +18,7 @@ export function coalesceMessages(
     if (last && last.role === m.role && !last.parts && !m.parts) {
       out[out.length - 1] = {
         role: last.role,
-        content: `${last.content}\n\n${m.content}`,
+        content: `${last.content}${COALESCED_MESSAGE_SEPARATOR}${m.content}`,
       };
     } else {
       out.push(
