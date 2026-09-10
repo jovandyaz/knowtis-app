@@ -32,6 +32,7 @@ const COLLAB_REDIS_CONNECT_TIMEOUT_MS = 1000;
 const COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS = 30000;
 const COLLAB_REDIS_ROLES = ['publisher', 'subscriber'] as const;
 type CollabRedisRole = (typeof COLLAB_REDIS_ROLES)[number];
+type CollabRedisFailureReason = 'connection_failed' | 'resync_failed';
 const COLLAB_REDIS_MAX_RETRIES_PER_REQUEST: Record<
   CollabRedisRole,
   number | null
@@ -39,6 +40,7 @@ const COLLAB_REDIS_MAX_RETRIES_PER_REQUEST: Record<
   publisher: 20,
   subscriber: null,
 };
+const COLLAB_REDIS_READY_STATUS = 'ready';
 
 @Injectable()
 export class HocuspocusService
@@ -51,6 +53,7 @@ export class HocuspocusService
     | null = null;
   private boundHttpServer: HttpServer | null = null;
   private redisExtension: RedisExtension | null = null;
+  private readonly redisClients = new Map<CollabRedisRole, IORedis>();
   private readonly lastRedisFailureLogAt: Record<CollabRedisRole, number> = {
     publisher: Number.NEGATIVE_INFINITY,
     subscriber: Number.NEGATIVE_INFINITY,
@@ -317,19 +320,28 @@ export class HocuspocusService
       maxRetriesPerRequest: COLLAB_REDIS_MAX_RETRIES_PER_REQUEST[role],
     });
     client.on('error', (error) => this.logRedisFailure(role, error));
-    if (role === 'subscriber') {
-      client.on('ready', () => this.resyncLoadedDocumentsAfterResubscribe());
-    }
+    client.on('ready', () => this.resyncLoadedDocumentsOnRedisRecovery());
+    this.redisClients.set(role, client);
     return client as unknown as RedisInstance;
   }
 
-  private resyncLoadedDocumentsAfterResubscribe(): void {
+  private isRedisFullyReady(): boolean {
+    return COLLAB_REDIS_ROLES.every(
+      (role) =>
+        this.redisClients.get(role)?.status === COLLAB_REDIS_READY_STATUS
+    );
+  }
+
+  private resyncLoadedDocumentsOnRedisRecovery(): void {
     const extension = this.redisExtension;
-    if (!extension || !this.server) {
+    if (!extension || !this.server || !this.isRedisFullyReady()) {
       return;
     }
     const instance = this.server.hocuspocus;
     for (const [documentName, document] of instance.documents) {
+      if (document.getConnectionsCount() === 0) {
+        continue;
+      }
       void extension
         .onChange({
           instance,
@@ -337,11 +349,17 @@ export class HocuspocusService
           documentName,
           transactionOrigin: { source: 'local' },
         } as onChangePayload)
-        .catch((error: Error) => this.logRedisFailure('publisher', error));
+        .catch((error: Error) =>
+          this.logRedisFailure('publisher', error, 'resync_failed')
+        );
     }
   }
 
-  private logRedisFailure(role: CollabRedisRole, error: Error): void {
+  private logRedisFailure(
+    role: CollabRedisRole,
+    error: Error,
+    reason: CollabRedisFailureReason = 'connection_failed'
+  ): void {
     const now = performance.now();
     if (
       now - this.lastRedisFailureLogAt[role] <
@@ -353,7 +371,7 @@ export class HocuspocusService
     this.logger.warn({
       operation: 'collaboration_redis',
       role,
-      reason: 'connection_failed',
+      reason,
       message: error.message,
     });
   }

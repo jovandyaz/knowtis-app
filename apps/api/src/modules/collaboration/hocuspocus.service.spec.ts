@@ -1,10 +1,12 @@
 import { EventEmitter } from 'node:events';
 
+import type { Document } from '@hocuspocus/server';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildCollaborationService,
+  hocuspocusOf,
   redisExtensionOf,
 } from './__tests__/collab-redis.fixture';
 import { HocuspocusService } from './hocuspocus.service';
@@ -14,14 +16,24 @@ const FAILURE_LOG_INTERVAL_MS = 30000;
 
 interface FakeRedisClient extends EventEmitter {
   options: Record<string, unknown>;
+  status: string;
 }
 
 const clients: FakeRedisClient[] = [];
+
+function redisPair(): [FakeRedisClient, FakeRedisClient] {
+  const [publisher, subscriber] = clients;
+  if (!publisher || !subscriber) {
+    throw new Error('Expected a publisher and a subscriber client');
+  }
+  return [publisher, subscriber];
+}
 
 vi.mock('ioredis', () => ({
   default: vi.fn(function (_url: string, options: Record<string, unknown>) {
     const client = Object.assign(new EventEmitter(), {
       options,
+      status: 'connecting',
       publish: vi.fn().mockResolvedValue(1),
       subscribe: vi.fn(),
       unsubscribe: vi.fn(),
@@ -50,6 +62,7 @@ describe('collaboration redis clients', () => {
   });
 
   afterEach(async () => {
+    hocuspocusOf(service).documents.clear();
     await service.onModuleDestroy();
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -90,6 +103,50 @@ describe('collaboration redis clients', () => {
     for (const client of clients) {
       expect(client.listenerCount('error')).toBeGreaterThan(0);
     }
+  });
+
+  it('announces nothing until both clients are ready, so a lagging publisher cannot drop it', () => {
+    const announce = vi
+      .spyOn(redisExtensionOf(service), 'onChange')
+      .mockResolvedValue(undefined);
+    hocuspocusOf(service).documents.set('note-with-editors', {
+      getConnectionsCount: () => 1,
+    } as unknown as Document);
+    const [publisher, subscriber] = redisPair();
+
+    subscriber.status = 'ready';
+    subscriber.emit('ready');
+    expect(announce).not.toHaveBeenCalled();
+
+    publisher.status = 'ready';
+    publisher.emit('ready');
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce.mock.calls[0]?.[0]).toMatchObject({
+      documentName: 'note-with-editors',
+    });
+  });
+
+  it('skips documents nobody is connected to when it re-announces', () => {
+    const announce = vi
+      .spyOn(redisExtensionOf(service), 'onChange')
+      .mockResolvedValue(undefined);
+    const { documents } = hocuspocusOf(service);
+    documents.set('note-with-editors', {
+      getConnectionsCount: () => 1,
+    } as unknown as Document);
+    documents.set('note-nobody-is-editing', {
+      getConnectionsCount: () => 0,
+    } as unknown as Document);
+    for (const client of clients) {
+      client.status = 'ready';
+    }
+
+    redisPair()[1].emit('ready');
+
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce.mock.calls[0]?.[0]).toMatchObject({
+      documentName: 'note-with-editors',
+    });
   });
 
   it('warns once per role per interval and never echoes the connection url', async () => {
