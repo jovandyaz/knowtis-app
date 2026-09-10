@@ -24,10 +24,7 @@ export function AgentStatusIndicator({ detail }: AgentStatusIndicatorProps) {
     <div className="flex flex-col gap-2" role="status">
       {detail ? (
         <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger
-            className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            aria-label={t('ai.copilot.reasoning')}
-          >
+          <CollapsibleTrigger className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             {t('ai.copilot.thinking')}
             <ChevronDown
               className={cn(
@@ -48,6 +45,7 @@ export function AgentStatusIndicator({ detail }: AgentStatusIndicatorProps) {
           <CollapsibleContent
             className="mt-1 max-h-32 overflow-y-auto break-words text-xs text-muted-foreground/70"
             aria-live="off"
+            tabIndex={0}
           >
             {detail}
           </CollapsibleContent>

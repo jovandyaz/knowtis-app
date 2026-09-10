@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -13,8 +14,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TARGET = join(ROOT, 'packages/design-system/src/components/ui');
-const STYLES = join(ROOT, 'packages/design-system/src/styles.css');
+const DESIGN_SYSTEM = join(ROOT, 'packages/design-system/src');
+const TARGET = join(DESIGN_SYSTEM, 'components/ui');
+const STYLES = join(DESIGN_SYSTEM, 'styles.css');
 
 const SEMANTIC_TOKENS = [
   ...readFileSync(STYLES, 'utf8').matchAll(/^\s*--color-([a-z0-9-]+):/gm),
@@ -25,15 +27,98 @@ const SEMANTIC_TOKENS = [
 const TOKEN_UTILITIES =
   'bg|text|border|ring|fill|stroke|from|to|via|outline|shadow|accent|caret|divide|decoration|placeholder';
 
-const DEAD_MOTION =
-  /(?:[a-z-]+(?:-\[[^\]]*\])?:)*(?:animate-(?:in|out)|fade-(?:in|out)-\d+|zoom-(?:in|out)-\d+|slide-in-from-[a-z]+-\d+)\s*/g;
+const VARIANT = String.raw`(?:[a-z*][\w*-]*(?:-\[[^\]]*\])?(?:\/[\w-]+)?|\[[^\]]*\]):`;
 
-const components = process.argv.slice(2).filter((a) => !a.startsWith('-'));
-const overwrite = process.argv.includes('--overwrite');
+const DEAD_MOTION = new RegExp(
+  `(?:${VARIANT})*(?:animate-(?:in|out)|(?:fade|zoom)-(?:in|out)(?:-\\d+)?|slide-(?:in-from|out-to)-[a-z]+(?:-\\d+)?)(?![\\w-])\\s*`,
+  'g'
+);
 
-if (components.length === 0) {
-  console.error('usage: pnpm ds:add <component>... [--overwrite]');
-  process.exit(1);
+const TRANSITION = /(?<![\w:-])transition(?:-(?:\w+|\[[^\]]*\]))?(?![\w-])/g;
+
+const TOKEN_CLASS = new RegExp(
+  `\\b(${TOKEN_UTILITIES})-(${SEMANTIC_TOKENS.join('|')})\\b`,
+  'g'
+);
+
+export function normalize(source) {
+  let out = source
+    .replace(/from ["']cn["']/g, "from '../../utils/cn'")
+    .replace(/^"use client"\n+/, '');
+
+  if (/\bReact\./.test(out) && !/^import (?:type )?\* as React/m.test(out)) {
+    const typeOnly = !/<[A-Z]|React\.(?:use|create|forward|memo|Fragment)/.test(
+      out
+    );
+    out = `import ${typeOnly ? 'type ' : ''}* as React from 'react'\n${out}`;
+  }
+
+  out = out.replace(TRANSITION, (match, offset, whole) => {
+    if (match === 'transition-none') {
+      return match;
+    }
+    const rest = whole.slice(offset, whole.indexOf('"', offset));
+    return rest.includes('motion-reduce')
+      ? match
+      : `${match} motion-reduce:transition-none`;
+  });
+
+  const withoutDeadMotion = out.replace(DEAD_MOTION, '');
+  const strippedMotion = withoutDeadMotion !== out;
+  const hardcodedMotion =
+    /\b(?:duration-\d+|ease-(?:in|out|linear|in-out))\b/.test(
+      withoutDeadMotion
+    );
+
+  return {
+    content: withoutDeadMotion.replace(
+      TOKEN_CLASS,
+      (_match, utility, token) => `${utility}-(--${token})`
+    ),
+    strippedMotion,
+    hardcodedMotion,
+  };
+}
+
+const CLASS_STRING = /"([^"\n]*)"|'([^'\n]*)'/g;
+const DEAD_MOTION_UTILITY =
+  /(?:^|:)(?:animate-(?:in|out)|(?:fade|zoom)-(?:in|out)|slide-(?:in-from|out-to)-)/;
+
+export function assertClean(file, content) {
+  const problems = [];
+
+  if (/from ['"]@\//.test(content)) {
+    problems.push('unresolvable "@/" import survived normalization');
+  }
+
+  for (const match of content.matchAll(CLASS_STRING)) {
+    const literal = match[1] ?? match[2] ?? '';
+    const tokens = literal.split(/\s+/).filter(Boolean);
+    if (!tokens.some((token) => /^[a-z*[]/.test(token) && /-|:/.test(token))) {
+      continue;
+    }
+    for (const token of tokens) {
+      if (/[:/]$/.test(token)) {
+        problems.push(`class "${token}" ends in a dangling ":" or "/"`);
+      }
+      if (DEAD_MOTION_UTILITY.test(token)) {
+        problems.push(
+          `"${token}" needs tw-animate-css, which is not installed`
+        );
+      }
+      if (
+        /^transition(?:-|$)/.test(token) &&
+        token !== 'transition-none' &&
+        !literal.includes('motion-reduce')
+      ) {
+        problems.push(`"${token}" has no motion-reduce escape hatch`);
+      }
+    }
+  }
+
+  if (problems.length > 0) {
+    throw new Error(`${file}:\n  - ${[...new Set(problems)].join('\n  - ')}`);
+  }
 }
 
 function createStage() {
@@ -75,79 +160,111 @@ function createStage() {
   return stage;
 }
 
-function normalize(source) {
-  let out = source
-    .replace(/from ["']cn["']/g, "from '../../utils/cn'")
-    .replace(/^"use client"\n+/, '');
-
-  if (/\bReact\./.test(out) && !/^import \* as React/m.test(out)) {
-    out = `import * as React from 'react'\n${out}`;
-  }
-
-  out = out.replace(
-    /\btransition-(all|colors|transform|opacity)\b(?![^"'`]*motion-reduce)/g,
-    (match) => `${match} motion-reduce:transition-none`
+function stagedDependencies(stage) {
+  const manifest = JSON.parse(
+    readFileSync(join(stage, 'package.json'), 'utf8')
   );
-
-  const withoutDeadMotion = out.replace(DEAD_MOTION, '');
-  const strippedMotion = withoutDeadMotion !== out;
-
-  const normalized = withoutDeadMotion.replace(
-    new RegExp(
-      `\\b(${TOKEN_UTILITIES})-(${SEMANTIC_TOKENS.join('|')})\\b`,
-      'g'
-    ),
-    (_match, utility, token) => `${utility}-(--${token})`
+  const root = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const installed = { ...root.dependencies, ...root.devDependencies };
+  return Object.keys(manifest.dependencies ?? {}).filter(
+    (name) => !(name in installed)
   );
-
-  return { content: normalized, strippedMotion };
 }
 
-const stage = createStage();
-execFileSync(
-  'pnpm',
-  ['dlx', 'shadcn@4', 'add', ...components, '--yes', '--cwd', '.'],
-  { cwd: stage, stdio: 'inherit' }
-);
+function run() {
+  const components = process.argv.slice(2).filter((a) => !a.startsWith('-'));
+  const overwrite = process.argv.includes('--overwrite');
 
-mkdirSync(TARGET, { recursive: true });
-const written = [];
-const needsMotion = [];
+  if (components.length === 0) {
+    console.error('usage: pnpm ds:add <component>... [--overwrite]');
+    process.exit(1);
+  }
 
-for (const file of readdirSync(join(stage, 'src/components/ui'))) {
-  const dest = join(TARGET, file);
+  const stage = createStage();
+  const written = [];
+  const needsMotion = [];
+  const needsTokens = [];
+  let missingDeps = [];
+
   try {
-    readFileSync(dest);
-    if (!overwrite) {
-      console.warn(`skip ${file} (exists; pass --overwrite to replace)`);
-      continue;
+    execFileSync(
+      'pnpm',
+      ['dlx', 'shadcn@4', 'add', ...components, '--yes', '--cwd', '.'],
+      { cwd: stage, stdio: 'inherit' }
+    );
+
+    missingDeps = stagedDependencies(stage);
+
+    const produced = readdirSync(join(stage, 'src'), {
+      recursive: true,
+      withFileTypes: true,
+    }).filter((entry) => entry.isFile() && entry.name.endsWith('.tsx'));
+
+    mkdirSync(TARGET, { recursive: true });
+
+    for (const entry of produced) {
+      const dest = join(TARGET, entry.name);
+      const pascal = entry.name
+        .replace(/(^|-)([a-z])/g, (_m, _sep, c) => c.toUpperCase())
+        .replace('.tsx', '');
+
+      if (existsSync(join(DESIGN_SYSTEM, 'components', `${pascal}.tsx`))) {
+        console.warn(
+          `warn ${entry.name}: the design system already owns ${pascal}.tsx — reconcile them before exporting both`
+        );
+      }
+      if (existsSync(dest) && !overwrite) {
+        console.warn(
+          `skip ${entry.name} (exists; pass --overwrite to replace)`
+        );
+        continue;
+      }
+      if (existsSync(dest)) {
+        console.warn(`overwrite ${entry.name}`);
+      }
+
+      const { content, strippedMotion, hardcodedMotion } = normalize(
+        readFileSync(join(entry.parentPath, entry.name), 'utf8')
+      );
+      assertClean(entry.name, content);
+
+      writeFileSync(dest, content);
+      written.push(dest);
+      if (strippedMotion) {
+        needsMotion.push(entry.name);
+      }
+      if (hardcodedMotion) {
+        needsTokens.push(entry.name);
+      }
     }
-  } catch {
-    /* new file */
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
   }
-  const { content, strippedMotion } = normalize(
-    readFileSync(join(stage, 'src/components/ui', file), 'utf8')
-  );
-  writeFileSync(dest, content);
-  written.push(dest);
-  if (strippedMotion) {
-    needsMotion.push(file);
+
+  if (written.length > 0) {
+    execFileSync('pnpm', ['exec', 'prettier', '--write', ...written], {
+      cwd: ROOT,
+      stdio: 'inherit',
+    });
   }
+
+  console.log(`\n${written.length} file(s) -> src/components/ui/`);
+  if (missingDeps.length > 0) {
+    console.log(`Install: pnpm add ${missingDeps.join(' ')} -w`);
+  }
+  if (needsMotion.length > 0) {
+    console.log(
+      `Dropped tw-animate-css from ${needsMotion.join(', ')} — add a DS animation (e.g. 'animate-overlay-pop motion-reduce:animate-none')`
+    );
+  }
+  if (needsTokens.length > 0) {
+    console.log(
+      `Hardcoded duration/easing in ${needsTokens.join(', ')} — swap for duration-(--motion-duration-fast) / ease-standard`
+    );
+  }
+  console.log('Add the exports to packages/design-system/src/index.ts');
 }
 
-rmSync(stage, { recursive: true, force: true });
-
-if (written.length > 0) {
-  execFileSync('pnpm', ['exec', 'prettier', '--write', ...written], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  run();
 }
-
-console.log(`\n${written.length} file(s) -> src/components/ui/`);
-if (needsMotion.length > 0) {
-  console.log(
-    `Dropped tw-animate-css classes from: ${needsMotion.join(', ')} — add a DS animation (e.g. 'animate-overlay-pop motion-reduce:animate-none')`
-  );
-}
-console.log('Add the exports to packages/design-system/src/index.ts');

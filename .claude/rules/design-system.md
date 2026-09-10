@@ -8,7 +8,7 @@ paths:
 ## Component Structure
 
 - Use `forwardRef` for all components that render a DOM element.
-- The rule does not reach a component whose outermost render is a third-party or Radix root that renders no DOM of its own (`Dialog` — the Root; its layout slots do forward refs — `RecordingModal`, `Toaster`) or another component (`LoadingButton`, `ThemeToggle`, `ModelSelect`, `ModelMenu`); nor a generic component, whose type parameter `forwardRef` erases (`SegmentedControl`, `RadioCardGroup`, `DataTable`).
+- The rule does not reach vendored shadcn primitives under `src/components/ui/`, which use React 19 ref-as-prop (`React.ComponentProps<…>` spread onto the primitive) so `pnpm ds:add --overwrite` can refresh them verbatim; nor a component whose outermost render is a third-party or Radix root that renders no DOM of its own (`Dialog` — the Root; its layout slots do forward refs — `RecordingModal`, `Toaster`) or another component (`LoadingButton`, `ThemeToggle`, `ModelSelect`, `ModelMenu`); nor a generic component, whose type parameter `forwardRef` erases (`SegmentedControl`, `RadioCardGroup`, `DataTable`).
 - Define variants with `class-variance-authority` (CVA):
   ```typescript
   const buttonVariants = cva('base-classes', {
@@ -21,6 +21,12 @@ paths:
   ```
 - Merge classNames with `cn()` utility (clsx + tailwind-merge): `cn(buttonVariants({ variant, size }), className)`.
 - Export both the component and its variants type: `export { Button, buttonVariants }`.
+
+## Vendored shadcn primitives
+
+- `src/components/ui/` holds shadcn/ui primitives vendored through `pnpm ds:add`. They keep shadcn's kebab-case filenames and `data-slot` attributes; hand-written components stay PascalCase in `src/components/`.
+- Never hand-edit a file under `ui/` beyond replacing a stripped animation — `--overwrite` discards local changes. If a primitive needs design-system behaviour, wrap it in a PascalCase component instead.
+- Radix is imported from the unified `radix-ui` package, never from `@radix-ui/react-*` — two import surfaces produce two `DismissableLayer` registries and break nested overlays.
 
 ## Design Tokens
 

@@ -40,6 +40,7 @@ pnpm lint             # Lint all projects
 pnpm lint:fix         # Fix auto-fixable issues
 pnpm typecheck        # TypeScript type checking
 pnpm format           # Format with Prettier
+pnpm ds:add <name>    # Vendor a shadcn/ui primitive into packages/design-system/src/components/ui/
 
 # Database (requires Docker)
 pnpm docker:up        # Start PostgreSQL + Redis
