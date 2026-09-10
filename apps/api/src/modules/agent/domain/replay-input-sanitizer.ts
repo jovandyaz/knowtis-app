@@ -8,7 +8,7 @@ import {
 import type { AgentMessage } from './agent-message';
 import { repairTranscriptOrphans } from './prune-transcript';
 
-// One character past the guard limit so a truncated projection always trips `too_large`.
+// One character past the scan ceiling so a truncated projection always trips `too_large`.
 const MAX_PROJECTION_CHARS = MAX_GUARD_SCAN_CHARS + 1;
 const MAX_PROJECTION_NODES = 10_000;
 

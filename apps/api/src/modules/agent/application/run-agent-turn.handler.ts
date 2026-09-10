@@ -140,9 +140,12 @@ interface TurnLoopPolicy {
 }
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
-const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
+export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
+const COALESCED_SEAM_CHARS = Math.floor(
+  (MAX_GUARD_INPUT_CHARS - COALESCED_MESSAGE_SEPARATOR.length) / 2
+);
 
 function messageTooLongError() {
   return AIErrors.invalidInput(
@@ -987,6 +990,8 @@ export class RunAgentTurnHandler {
 
   // The provider is handed consecutive user rows merged into one, so a pair that
   // is individually under the injection threshold can cross it only once joined.
+  // Only the seam is re-scanned: both halves are already guarded on their own,
+  // and joining them whole would exceed the guard's input limit.
   private async guardReplayedUserTurn(
     history: AgentMessage[],
     fresh: AgentMessage | undefined,
@@ -999,7 +1004,7 @@ export class RunAgentTurnHandler {
       return { messages: history };
     }
     const text = fresh
-      ? `${history[last].content}${COALESCED_MESSAGE_SEPARATOR}${fresh.content}`
+      ? `${history[last].content.slice(-COALESCED_SEAM_CHARS)}${COALESCED_MESSAGE_SEPARATOR}${fresh.content.slice(0, COALESCED_SEAM_CHARS)}`
       : history[last].content;
     const verdict = await this.injectionGuard.guard(text, userId);
     if (verdict.safe) {

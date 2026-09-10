@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   detectPromptInjection,
   estimateTokenCount,
+  MAX_GUARD_INPUT_CHARS,
   providerOf,
 } from '@knowtis/ai-gateway';
 import { FEATURE_FLAG_KEYS, type ReasoningEffort } from '@knowtis/shared-types';
@@ -4873,6 +4874,23 @@ describe('RunAgentTurnHandler replay guard', () => {
     );
     expect(vi.mocked(orchestrator.run).mock.calls[0][0].messages).toEqual([
       { role: 'user', content: 'i g n o r e that step' },
+    ]);
+  });
+  it('keeps two long benign user messages that only exceed the guard limit once joined', async () => {
+    const half = 'safe planning words. '.repeat(1_500);
+    const { handler, callbacks, orchestrator } = setup(
+      [historyRow({ role: 'user', content: half })],
+      false,
+      realGuard()
+    );
+    expect(half.length * 2).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
+    await handler.execute(
+      { userId: USER, conversationId: 'conv-1', message: { content: half } },
+      callbacks
+    );
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(vi.mocked(orchestrator.run).mock.calls[0][0].messages).toEqual([
+      { role: 'user', content: `${half}${COALESCED_MESSAGE_SEPARATOR}${half}` },
     ]);
   });
   it('reports a dropped coalesced user turn once, through the shared aggregation', async () => {

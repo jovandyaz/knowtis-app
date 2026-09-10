@@ -1,4 +1,4 @@
-interface PromptGuardResult {
+export interface PromptGuardResult {
   readonly safe: boolean;
   readonly score: number;
   readonly reason?: string;
@@ -31,7 +31,7 @@ const INJECTION_PATTERNS: {
   // Role hijacking
   {
     pattern:
-      /you\s+are\s+now\s+(?:a |an |my |the )?(?:[\w,.]+\s+){0,4}(?:ai|assistant|bot|model|agent|persona|character)/i,
+      /you\s+are\s+now\s+(?:a |an |my |the )?(?:[\w,.]{1,32}\s+){0,4}(?:ai|assistant|bot|model|agent|persona|character)/i,
     weight: 0.8,
     reason: 'Role hijacking attempt',
   },
@@ -42,7 +42,7 @@ const INJECTION_PATTERNS: {
     reason: 'Role hijacking attempt',
   },
   {
-    pattern: /\bDAN\b.*mode/i,
+    pattern: /\bDAN\b.{0,200}mode/i,
     weight: 0.9,
     reason: 'Known jailbreak pattern',
   },
@@ -138,13 +138,14 @@ const INJECTION_PATTERNS: {
     reason: 'Instruction re-anchoring',
   },
   {
-    pattern: /\bi[\s_.-]+g[\s_.-]+n[\s_.-]+o[\s_.-]+r[\s_.-]+e\b/i,
+    pattern:
+      /\bi[\s_.-]{1,8}g[\s_.-]{1,8}n[\s_.-]{1,8}o[\s_.-]{1,8}r[\s_.-]{1,8}e\b/i,
     weight: 0.4,
     reason: 'Obfuscated override keyword',
   },
   {
     pattern:
-      /ignore[-_]+(?:all[-_]+)?(?:previous|prior)[-_]+(?:instructions|rules)/i,
+      /ignore[-_]{1,8}(?:all[-_]{1,8})?(?:previous|prior)[-_]{1,8}(?:instructions|rules)/i,
     weight: 0.85,
     reason: 'Instruction override attempt (punctuated)',
   },
@@ -160,6 +161,9 @@ const INJECTION_THRESHOLD = 0.6;
 
 /** Longest input the heuristic guard will score; anything longer is refused outright. */
 export const MAX_GUARD_INPUT_CHARS = 50_000;
+
+/** Upper bound on the span of any single pattern match once text is normalized and its whitespace runs collapsed; every bridging quantifier above is capped so this holds. */
+export const MAX_INJECTION_PATTERN_SPAN_CHARS = 256;
 
 const STRIP_CODEPOINTS: readonly number[] = [
   0x200b,
@@ -184,7 +188,8 @@ const STRIP_CHARS: ReadonlySet<string> = new Set(
   STRIP_CODEPOINTS.map((cp) => String.fromCharCode(cp))
 );
 
-function normalizeForGuard(text: string): string {
+/** Folds compatibility forms and drops invisible reordering marks; idempotent, so re-running it on a slice changes nothing. */
+export function normalizeForGuard(text: string): string {
   let out = '';
   for (const ch of text.normalize('NFKC')) {
     if (!STRIP_CHARS.has(ch)) {
@@ -192,6 +197,49 @@ function normalizeForGuard(text: string): string {
     }
   }
   return out;
+}
+
+export interface InjectionPatternHit {
+  readonly id: number;
+  readonly weight: number;
+  readonly reason: string;
+}
+
+/** Patterns matching already-normalized text; `id` identifies the pattern so hits collected from overlapping scans can be deduplicated. */
+export function matchInjectionPatterns(
+  normalized: string
+): InjectionPatternHit[] {
+  const hits: InjectionPatternHit[] = [];
+  for (const [
+    id,
+    { pattern, weight, reason },
+  ] of INJECTION_PATTERNS.entries()) {
+    if (pattern.test(normalized)) {
+      hits.push({ id, weight, reason });
+    }
+  }
+  return hits;
+}
+
+/** Cumulative verdict for a set of hits, counting each pattern once however many times it was seen. */
+export function scoreInjectionHits(
+  hits: readonly InjectionPatternHit[]
+): PromptGuardResult {
+  let score = 0;
+  let topWeight = 0;
+  let matchedReason: string | undefined;
+  for (const hit of new Map(hits.map((h) => [h.id, h])).values()) {
+    score += hit.weight;
+    if (hit.weight > topWeight) {
+      topWeight = hit.weight;
+      matchedReason = hit.reason;
+    }
+  }
+  score = Math.min(score, 1);
+  const safe = score < INJECTION_THRESHOLD;
+  return !safe && matchedReason
+    ? { safe, score, reason: matchedReason }
+    : { safe, score };
 }
 
 export function detectPromptInjection(text: string): PromptGuardResult {
@@ -203,28 +251,5 @@ export function detectPromptInjection(text: string): PromptGuardResult {
     return { safe: false, score: 1, reason: 'Input exceeds safety limit' };
   }
 
-  const normalized = normalizeForGuard(text);
-
-  let score = 0;
-  let topWeight = 0;
-  let matchedReason: string | undefined;
-
-  for (const { pattern, weight, reason } of INJECTION_PATTERNS) {
-    if (pattern.test(normalized)) {
-      score += weight;
-      if (weight > topWeight) {
-        topWeight = weight;
-        matchedReason = reason;
-      }
-    }
-  }
-  score = Math.min(score, 1);
-
-  const safe = score < INJECTION_THRESHOLD;
-
-  if (!safe && matchedReason) {
-    return { safe, score, reason: matchedReason };
-  }
-
-  return { safe, score };
+  return scoreInjectionHits(matchInjectionPatterns(normalizeForGuard(text)));
 }

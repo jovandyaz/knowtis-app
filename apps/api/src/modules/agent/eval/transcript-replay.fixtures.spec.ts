@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
 
+import { AGENT_HISTORY_TOKEN_BUDGET } from '../application/run-agent-turn.handler';
+import { estimateMessageTokens } from '../domain/message-tokens';
 import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';
 import {
@@ -49,15 +51,19 @@ describe('transcript replay fixtures', () => {
     const oversized = REPLAY_GUARD_CASES.find(
       (item) => item.id === 'oversized-tool'
     );
+    expect(oversized).toBeDefined();
     expect(REPLAY_LONG_FACT.length).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
-    const { messages, detections } = sanitizeReplayHistory(
-      oversized?.history ?? [],
-      { enforceAssistantAndTool: true }
-    );
+    const history = oversized?.history ?? [];
+    const { messages, detections } = sanitizeReplayHistory(history, {
+      enforceAssistantAndTool: true,
+    });
     expect(detections).toEqual([]);
     expect(JSON.stringify(toModelMessages(messages))).toContain(
       REPLAY_LONG_DETAIL
     );
+    expect(
+      history.reduce((total, m) => total + estimateMessageTokens(m), 0)
+    ).toBeLessThan(AGENT_HISTORY_TOKEN_BUDGET);
   });
 });
 

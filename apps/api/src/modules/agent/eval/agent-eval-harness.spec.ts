@@ -185,7 +185,8 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
       }
     );
     expect(stats.providerErrors).toBe(0);
-    expect(stats.cases).toHaveLength(REPLAY_GUARD_CASES.length);
+    expect(REPLAY_GUARD_CASES).toHaveLength(5);
+    expect(stats.cases).toHaveLength(5);
     expect(stats.casesBelowThreshold.map((item) => item.key)).toEqual(
       REPLAY_KNOWN_FAILURES.map((id) => caseKeyOf({ id }))
     );
@@ -194,6 +195,6 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
         stats.cases.find((item) => item.key === caseKeyOf({ id }))?.passes
       ).toBe(0);
     }
-    expect(model.doStreamCalls).toHaveLength(REPLAY_GUARD_CASES.length * 3);
+    expect(model.doStreamCalls).toHaveLength(15);
   }, 30_000);
 });
