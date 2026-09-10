@@ -1,9 +1,9 @@
 import { useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Dialog as DialogPrimitive } from 'radix-ui';
 
 interface MobileSheetProps {
   isOpen: boolean;

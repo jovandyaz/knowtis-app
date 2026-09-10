@@ -197,4 +197,15 @@ export {
   TOUCH_TARGET_HEIGHT_CLASS,
 } from './constants/touch-target';
 
+export {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from './components/ui/collapsible';
+export {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from './components/ui/hover-card';
+
 export { cn } from './utils/cn';

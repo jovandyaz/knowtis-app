@@ -1,10 +1,12 @@
-import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ComponentPropsWithoutRef } from 'react';
+
+import { Switch as SwitchPrimitive } from 'radix-ui';
 
 import { cn } from '../utils/cn';
 
 export interface SwitchProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  'onChange'
+  ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>,
+  'checked' | 'onCheckedChange'
 > {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
@@ -12,50 +14,33 @@ export interface SwitchProps extends Omit<
 }
 
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
-  (
-    {
-      className,
-      checked,
-      onCheckedChange,
-      disabled,
-      size = 'default',
-      ...props
-    },
-    ref
-  ) => {
+  ({ className, size = 'default', ...props }, ref) => {
     const isSmall = size === 'sm';
     return (
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
+      <SwitchPrimitive.Root
         ref={ref}
-        onClick={() => onCheckedChange(!checked)}
         className={cn(
           'relative inline-flex shrink-0 cursor-pointer rounded-full border-2 border-transparent',
           'transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
           'focus:outline-none focus:ring-2 focus:ring-(--primary) focus:ring-offset-2',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          'data-[state=checked]:bg-(--primary) data-[state=unchecked]:bg-(--muted)',
           isSmall ? 'h-4 w-7' : 'h-6 w-11',
-          checked ? 'bg-(--primary)' : 'bg-(--muted)',
           className
         )}
         {...props}
       >
-        <span
+        <SwitchPrimitive.Thumb
           className={cn(
-            'pointer-events-none inline-block transform rounded-full bg-white shadow ring-0',
+            'pointer-events-none inline-block transform rounded-full bg-(--switch-thumb) shadow ring-0',
             'transition duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
-            isSmall ? 'h-3 w-3' : 'h-5 w-5',
-            checked
-              ? isSmall
-                ? 'translate-x-3'
-                : 'translate-x-5'
-              : 'translate-x-0'
+            'data-[state=unchecked]:translate-x-0',
+            isSmall
+              ? 'h-3 w-3 data-[state=checked]:translate-x-3'
+              : 'h-5 w-5 data-[state=checked]:translate-x-5'
           )}
         />
-      </button>
+      </SwitchPrimitive.Root>
     );
   }
 );

@@ -52,7 +52,9 @@ export interface AgentChatMessage {
  * server error instead of a client cancel of a healthy turn.
  */
 export const AGENT_STREAM_INACTIVITY_MS = 310_000;
-export const THINKING_TAIL_CHARS = 400;
+/** Well above the panel's visible height so it scrolls, capped so a verbose
+ * model cannot grow the store unbounded. */
+export const THINKING_TAIL_CHARS = 4_000;
 const CHUNK_FLUSH_MS = 50;
 
 /** Local failure only: whether the proposal itself expired is the server's to say. */

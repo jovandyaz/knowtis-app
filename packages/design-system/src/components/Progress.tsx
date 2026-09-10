@@ -1,7 +1,7 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react';
 
-import * as ProgressPrimitive from '@radix-ui/react-progress';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Progress as ProgressPrimitive } from 'radix-ui';
 
 import { cn } from '../utils/cn';
 import { clampProgress } from '../utils/progress';

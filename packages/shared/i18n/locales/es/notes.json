@@ -418,6 +418,7 @@
       "composerHint": "Enter envía · Shift+Enter salto de línea",
       "newConversation": "Nueva conversación",
       "thinking": "Pensando…",
+      "reasoning": "Razonamiento",
       "sources": "Fuentes",
       "webSources": "Fuentes web",
       "stop": "Detener",
@@ -472,7 +473,8 @@
         "discarded": "Propuesta descartada",
         "showMore": "Ver más",
         "showLess": "Ver menos"
-      }
+      },
+      "openSource": "Abrir nota"
     },
     "groups": {
       "ai": "IA",
