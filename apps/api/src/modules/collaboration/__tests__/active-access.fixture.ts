@@ -152,7 +152,7 @@ export class ActiveAccessServer {
               userId: lease.identity.userId,
               at: performance.now(),
               authorizedAt:
-                this.authorizedAt.get(connection) ?? performance.now(),
+                this.authorizedAt.get(connection) ?? Number.POSITIVE_INFINITY,
               expiresAt: lease.expiresAt,
               closed: lease.closed,
             });
@@ -168,6 +168,7 @@ export class ActiveAccessServer {
   private stampedGuardHooks(auth: HocuspocusAuthExtension) {
     const guards = auth.guardHooks();
     return {
+      ...guards,
       beforeHandleMessage: async (
         payload: beforeHandleMessagePayload<HocuspocusAuthContext>
       ) => {

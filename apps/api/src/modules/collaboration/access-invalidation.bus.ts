@@ -12,7 +12,7 @@ import { AccessRevalidationService } from './access-revalidation.service';
 
 export const ACCESS_INVALIDATION_CHANNEL =
   'knowtis-collab:access-invalidations:v1';
-/** Process-scoped so a Redis `CLIENT LIST` entry names exactly one API instance. */
+/** Process-scoped so a Redis `CLIENT LIST` entry attributes a subscriber to one API process. */
 export const ACCESS_INVALIDATION_SUBSCRIBER_CONNECTION_NAME = `knowtis-access-invalidations-sub:${process.pid}`;
 const FAILURE_LOG_INTERVAL_MS = 30000;
 const messageSchema = z

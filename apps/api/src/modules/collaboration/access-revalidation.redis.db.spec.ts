@@ -27,7 +27,10 @@ import {
 } from './access-invalidation.bus';
 
 const CUTOFF_OBJECTIVE_MS = 5000;
-const CUTOFF_GATE_MS = process.env['CI'] ? 15000 : 30000;
+const CUTOFF_GATE_MS = 10000;
+const APPLY_CLOCK_SLACK_MS = 250;
+const SUBSCRIBER_SETTLE_TIMEOUT_MS = 2000;
+const SUBSCRIBER_SETTLE_POLL_MS = 50;
 
 if (!process.env['DATABASE_URL'] || !process.env['REDIS_URL']) {
   throw new Error(
@@ -82,6 +85,18 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
       .map((line) => /id=(\d+)/.exec(line)?.[1])
       .filter(Boolean);
   }
+  async function settledAccessInvalidationSubscriberIds(expected: number) {
+    const startedAt = performance.now();
+    let ids = await listAccessInvalidationSubscriberIds();
+    while (
+      ids.length !== expected &&
+      performance.now() - startedAt < SUBSCRIBER_SETTLE_TIMEOUT_MS
+    ) {
+      await delay(SUBSCRIBER_SETTLE_POLL_MS);
+      ids = await listAccessInvalidationSubscriberIds();
+    }
+    return ids;
+  }
   async function revoke() {
     await f.db
       .delete(notePermissions)
@@ -135,6 +150,11 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     for (const instance of [a, b]) {
       expect(
         instance.applied.every((e) => e.authorizedAt < e.expiresAt && !e.closed)
+      ).toBe(true);
+      expect(
+        instance.applied.every(
+          (e) => e.at - e.authorizedAt < APPLY_CLOCK_SLACK_MS
+        )
       ).toBe(true);
       expect(
         instance.leases
@@ -193,7 +213,7 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
           await pair.a.bus.publish(f.ids.note);
         }
         if (mode === 'subscriber-reconnected') {
-          const ids = await listAccessInvalidationSubscriberIds();
+          const ids = await settledAccessInvalidationSubscriberIds(2);
           expect(ids).toHaveLength(2);
           await Promise.all(
             ids.map((id) => redis.client('KILL', 'ID', required(id)))
