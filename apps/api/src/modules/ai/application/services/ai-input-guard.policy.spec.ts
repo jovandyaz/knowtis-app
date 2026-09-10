@@ -78,6 +78,27 @@ describe('input guard policy', () => {
       );
     }
   );
+  it('reports a dropped coalesced user turn through the same aggregation', () => {
+    const logger = { warn: vi.fn() };
+    logInputDetections(
+      logger,
+      [],
+      { surface: 'history', userId: 'u1', conversationId: 'c1' },
+      { score: 0.9, contentLength: 64 }
+    );
+    expect(logger.warn.mock.calls).toEqual([
+      [
+        {
+          event: 'agent.history.user_turn_dropped',
+          surface: 'history',
+          userId: 'u1',
+          conversationId: 'c1',
+          score: 0.9,
+          contentLength: 64,
+        },
+      ],
+    ]);
+  });
   it('stays silent when a turn detected nothing', () => {
     const logger = { warn: vi.fn() };
     logInputDetections(logger, [], { surface: 'history', userId: 'u1' });

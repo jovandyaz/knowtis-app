@@ -25,6 +25,7 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import {
   logInputDetections,
   resolveInputEnforcement,
+  type DroppedUserTurn,
 } from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
@@ -50,6 +51,8 @@ import type { AgentMessage } from '../domain/agent-message';
 import {
   COALESCED_MESSAGE_SEPARATOR,
   coalesceMessages,
+  seamHead,
+  seamTail,
 } from '../domain/coalesce-messages';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
@@ -139,10 +142,9 @@ interface TurnLoopPolicy {
 }
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
-const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
+export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
-
 function messageTooLongError() {
   return AIErrors.invalidInput(
     `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
@@ -541,6 +543,11 @@ export class RunAgentTurnHandler {
     const sanitized = sanitizeReplayHistory(inputMessages, {
       enforceAssistantAndTool: enforced,
     });
+    const guarded = await this.guardReplayedUserTurn(
+      sanitized.messages,
+      freshUserMessage,
+      input.userId
+    );
     logInputDetections(
       this.logger,
       sanitized.detections.map(({ index, detection, disposition }) => ({
@@ -552,14 +559,10 @@ export class RunAgentTurnHandler {
         surface: 'history',
         userId: input.userId,
         ...(persistence ? { conversationId: persistence.conversationId } : {}),
-      }
+      },
+      guarded.dropped
     );
-    const history = await this.guardReplayedUserTurn(
-      sanitized.messages,
-      freshUserMessage,
-      input.userId,
-      persistence?.conversationId
-    );
+    const history = guarded.messages;
     const messages = this.trimHistory(
       coalesceMessages(
         freshUserMessage ? [...history, freshUserMessage] : history
@@ -985,33 +988,32 @@ export class RunAgentTurnHandler {
 
   // The provider is handed consecutive user rows merged into one, so a pair that
   // is individually under the injection threshold can cross it only once joined.
+  // Only the seam is re-scanned; both halves are already guarded on their own.
   private async guardReplayedUserTurn(
     history: AgentMessage[],
     fresh: AgentMessage | undefined,
-    userId: string,
-    conversationId: string | undefined
-  ): Promise<AgentMessage[]> {
+    userId: string
+  ): Promise<{ messages: AgentMessage[]; dropped?: DroppedUserTurn }> {
     const last = fresh
       ? history.length - 1
       : history.findLastIndex((m) => m.role === 'user');
     if (history[last]?.role !== 'user') {
-      return history;
+      return { messages: history };
     }
-    const text = fresh
+    const joined = fresh
       ? `${history[last].content}${COALESCED_MESSAGE_SEPARATOR}${fresh.content}`
       : history[last].content;
+    const text = fresh
+      ? `${seamTail(history[last].content)}${COALESCED_MESSAGE_SEPARATOR}${seamHead(fresh.content)}`
+      : joined;
     const verdict = await this.injectionGuard.guard(text, userId);
     if (verdict.safe) {
-      return history;
+      return { messages: history };
     }
-    this.logger.warn({
-      event: 'agent.history.user_turn_dropped',
-      userId,
-      ...(conversationId ? { conversationId } : {}),
-      score: verdict.score,
-      contentLength: text.length,
-    });
-    return history.filter((_, index) => index !== last);
+    return {
+      messages: history.filter((_, index) => index !== last),
+      dropped: { score: verdict.score, contentLength: joined.length },
+    };
   }
 
   private toolNameForKind(kind: MutationKind): string {
