@@ -9,11 +9,14 @@ import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
 import type { Hocuspocus } from '@hocuspocus/server';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost } from '@nestjs/core';
+import IORedis from 'ioredis';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { HocuspocusAuthExtension } from '../extensions/hocuspocus-auth.extension';
 import { HocuspocusPersistenceExtension } from '../extensions/hocuspocus-persistence.extension';
 import { HocuspocusService } from '../hocuspocus.service';
+
+const COLLAB_CHANNEL_PREFIX = 'knowtis-collab';
 
 /** Boots the real service against `redisUrl`, with the non-Redis extensions stubbed. */
 export function buildCollaborationService(redisUrl: string): HocuspocusService {
@@ -110,4 +113,28 @@ export async function createRedisOutage(upstreamUrl: string) {
   url.hostname = '127.0.0.1';
   url.port = String(localPort);
   return { url: url.toString(), start, stop };
+}
+
+/**
+ * A Redis subscriber outside the service, connected straight to `upstreamUrl`, so a
+ * spec can gate on an update having actually reached Redis instead of sleeping.
+ */
+export async function createCollabPublishObserver(upstreamUrl: string) {
+  const client = new IORedis(upstreamUrl);
+  const counts = new Map<string, number>();
+  client.on('message', (channel: string) => {
+    counts.set(channel, (counts.get(channel) ?? 0) + 1);
+  });
+
+  return {
+    watch: async (documentName: string) => {
+      await client.subscribe(`${COLLAB_CHANNEL_PREFIX}:${documentName}`);
+    },
+    publishCount: (documentName: string) =>
+      counts.get(`${COLLAB_CHANNEL_PREFIX}:${documentName}`) ?? 0,
+    stop: async () => {
+      await client.quit().catch(() => undefined);
+      client.disconnect();
+    },
+  };
 }
