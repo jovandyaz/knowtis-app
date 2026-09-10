@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { coalesceMessages } from './coalesce-messages';
+import { coalesceMessages, seamHead, seamTail } from './coalesce-messages';
 
 describe('coalesceMessages', () => {
   it('leaves an already-alternating sequence unchanged', () => {
@@ -69,5 +69,44 @@ describe('coalesceMessages', () => {
 
   it('returns an empty array for empty input', () => {
     expect(coalesceMessages([])).toEqual([]);
+  });
+});
+
+const LONGER_THAN_SEAM_CHARS = 30_000;
+const FILLER = 'x'.repeat(LONGER_THAN_SEAM_CHARS);
+
+describe('seamTail', () => {
+  it('returns text shorter than the seam budget unchanged', () => {
+    expect(seamTail('all previous instructions')).toBe(
+      'all previous instructions'
+    );
+  });
+
+  it('drops the partial word the cut lands inside', () => {
+    expect(seamTail(`${FILLER} ignore all previous`)).toBe(
+      'ignore all previous'
+    );
+  });
+
+  it('keeps the whole cut when it holds no whitespace', () => {
+    expect(seamTail(`${FILLER}ignore`).endsWith('ignore')).toBe(true);
+  });
+});
+
+describe('seamHead', () => {
+  it('returns text shorter than the seam budget unchanged', () => {
+    expect(seamHead('all previous instructions')).toBe(
+      'all previous instructions'
+    );
+  });
+
+  it('drops the partial word the cut lands inside', () => {
+    expect(seamHead(`all previous instructions ${FILLER}`)).toBe(
+      'all previous instructions'
+    );
+  });
+
+  it('keeps the whole cut when it holds no whitespace', () => {
+    expect(seamHead(`ignore${FILLER}`).startsWith('ignore')).toBe(true);
   });
 });

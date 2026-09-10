@@ -1,3 +1,5 @@
+import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
+
 import type { AgentMessage } from './agent-message';
 
 /** Blank line joining two merged same-role messages; the guard must scan the joined text. */
@@ -29,4 +31,28 @@ export function coalesceMessages(
     }
   }
   return out;
+}
+
+const COALESCED_SEAM_CHARS = Math.floor(
+  (MAX_GUARD_INPUT_CHARS - COALESCED_MESSAGE_SEPARATOR.length) / 2
+);
+
+/** The trailing slice the seam scan needs, cut at whitespace, or the whole cut if none. */
+export function seamTail(text: string): string {
+  if (text.length <= COALESCED_SEAM_CHARS) {
+    return text;
+  }
+  const cut = text.slice(-COALESCED_SEAM_CHARS);
+  const at = cut.search(/\s/);
+  return at < 0 ? cut : cut.slice(at + 1);
+}
+
+/** The leading slice the seam scan needs, cut at whitespace, or the whole cut if none. */
+export function seamHead(text: string): string {
+  if (text.length <= COALESCED_SEAM_CHARS) {
+    return text;
+  }
+  const cut = text.slice(0, COALESCED_SEAM_CHARS);
+  const at = cut.search(/\s\S*$/);
+  return at < 0 ? cut : cut.slice(0, at);
 }
