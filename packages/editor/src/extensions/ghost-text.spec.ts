@@ -189,6 +189,18 @@ describe('GhostText requests', () => {
     expect(provider.calls).toHaveLength(1);
   });
 
+  it('never requests when the change only toggles formatting', async () => {
+    const provider = createProvider();
+    mount(provider);
+    const end = editor.state.doc.content.size - 1;
+    editor.commands.setTextSelection({ from: end - 3, to: end });
+
+    editor.commands.toggleBold();
+    await settle();
+
+    expect(provider.calls).toHaveLength(0);
+  });
+
   it('never requests while the editor does not have focus', async () => {
     const provider = createProvider();
     mount(provider);

@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/core';
 import { isChangeOrigin } from '@tiptap/extension-collaboration';
 import type { Transaction } from '@tiptap/pm/state';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { ReplaceStep } from '@tiptap/pm/transform';
+import { AddMarkStep, RemoveMarkStep, ReplaceStep } from '@tiptap/pm/transform';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
 import './ghost-text.css';
@@ -163,6 +163,12 @@ function discardSuggestion(storage: GhostTextStorage, editor: Editor): void {
   }
 }
 
+function isFormattingOnly(transaction: Transaction): boolean {
+  return transaction.steps.every(
+    (step) => step instanceof AddMarkStep || step instanceof RemoveMarkStep
+  );
+}
+
 function textTypedAtCaret(
   transaction: Transaction,
   previousPos: number,
@@ -272,7 +278,12 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
     const typedByThisUser =
       !isChangeOrigin(transaction) && editor.view.hasFocus();
 
-    if (!storage.enabled || !provider || !typedByThisUser) {
+    if (
+      !storage.enabled ||
+      !provider ||
+      !typedByThisUser ||
+      isFormattingOnly(transaction)
+    ) {
       discardSuggestion(storage, editor);
       return;
     }
