@@ -64,7 +64,9 @@ export function useEditorExtensions(
         provider: ghostTextProvider,
         debounceMs: 750,
         minContentLength: 20,
-        enabled: true,
+        // Off until the stored preference arrives, so a user who opted out
+        // never gets a completion during the round trip.
+        enabled: false,
         isAIBusy: () => {
           const { aiEnabled, status } = useAIStore.getState();
           return !aiEnabled || status !== 'idle';

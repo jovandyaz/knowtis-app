@@ -21,6 +21,9 @@ vi.mock('@/auth', () => ({
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
 }));
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => ({ isAnonymous: false }),
+}));
 vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
   getCollaborationServerUrl: () => 'ws://test/collaboration',
   isWebSocketEnabled: () => true,
@@ -41,6 +44,8 @@ vi.mock('@/hooks', () => ({
   }),
   useActiveCollaborators: () => [],
   usePresenceBroadcast: () => undefined,
+  useAISettings: () => ({ data: undefined }),
+  useUpdateAISettings: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

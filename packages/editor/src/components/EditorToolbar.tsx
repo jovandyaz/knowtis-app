@@ -2,7 +2,13 @@ import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEditorState, type Editor } from '@tiptap/react';
-import { Ellipsis, Image as ImageIcon, Mic, Sparkles } from 'lucide-react';
+import {
+  Ellipsis,
+  Image as ImageIcon,
+  Mic,
+  Sparkles,
+  WandSparkles,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 
 import {
@@ -40,7 +46,14 @@ interface EditorToolbarProps {
   onVoiceNote?: (() => void) | undefined;
   onAskAI?: (() => void) | undefined;
   onAddImage?: (() => void) | undefined;
+  autocompleteEnabled?: boolean;
+  onToggleAutocomplete?: (() => void) | undefined;
 }
+
+const ASK_AI_CLASSES =
+  'text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary)';
+const AUTOCOMPLETE_ON_CLASSES =
+  'text-(--primary) bg-(--primary)/10 hover:bg-(--primary)/15 hover:text-(--primary)';
 
 function isTool(item: ToolbarItemConfig): item is ToolbarToolConfig {
   return !('type' in item);
@@ -128,6 +141,66 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
 
 function ToolbarSeparator() {
   return <div className="mx-1 h-4 w-px shrink-0 bg-border" />;
+}
+
+function AskAIButton({ onAskAI }: { onAskAI: () => void }) {
+  const { t: tNotes } = useTranslation('notes');
+  const label = tNotes('ai.menu.askAI');
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={toolbarButtonClasses(false, ASK_AI_CLASSES)}
+          onClick={onAskAI}
+          aria-label={label}
+        >
+          <Sparkles className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface AutocompleteToggleProps {
+  enabled: boolean;
+  onToggle: () => void;
+}
+
+function AutocompleteToggle({ enabled, onToggle }: AutocompleteToggleProps) {
+  const { t: tNotes } = useTranslation('notes');
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={toolbarButtonClasses(
+            false,
+            enabled ? AUTOCOMPLETE_ON_CLASSES : undefined
+          )}
+          onClick={onToggle}
+          aria-label={tNotes('editor.toolbar.autocomplete')}
+          aria-pressed={enabled}
+        >
+          <WandSparkles className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {tNotes(
+          enabled
+            ? 'editor.toolbar.autocompleteOn'
+            : 'editor.toolbar.autocompleteOff'
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 interface ToolbarOverflowMenuProps {
@@ -223,6 +296,8 @@ function ToolbarBody({
   onVoiceNote,
   onAskAI,
   onAddImage,
+  autocompleteEnabled = true,
+  onToggleAutocomplete,
 }: ToolbarBodyProps) {
   const { t: tNotes } = useTranslation('notes');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -254,23 +329,15 @@ function ToolbarBody({
           'max-md:max-w-[calc(100vw-2rem)] max-md:rounded-2xl'
         )}
       >
-        {onAskAI && (
+        {(onAskAI || onToggleAutocomplete) && (
           <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 shrink-0 rounded-full p-0 text-(--primary) transition-all hover:bg-(--primary)/10 hover:text-(--primary)"
-                  onClick={onAskAI}
-                  aria-label={tNotes('ai.menu.askAI')}
-                >
-                  <Sparkles className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{tNotes('ai.menu.askAI')}</TooltipContent>
-            </Tooltip>
+            {onAskAI && <AskAIButton onAskAI={onAskAI} />}
+            {onToggleAutocomplete && (
+              <AutocompleteToggle
+                enabled={autocompleteEnabled}
+                onToggle={onToggleAutocomplete}
+              />
+            )}
             <ToolbarSeparator />
           </>
         )}

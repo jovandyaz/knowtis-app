@@ -28,12 +28,13 @@ export type ToolbarFold = 'early' | 'late';
 /**
  * Container widths (px) below which each tier folds. `early` is the width of
  * the full row; `late` is the width of the row once the early tier has folded.
- * Measured in the browser: re-measure whenever `TOOLBAR_TOOLS` gains or loses
- * an entry, or the row overflows again in the gap between the two tiers.
+ * Measured in the browser with every host-supplied button present (Ask AI,
+ * autocomplete, image, voice note): re-measure whenever `TOOLBAR_TOOLS` or that
+ * set gains or loses an entry, or the row overflows between the two tiers.
  */
 export const TOOLBAR_FOLD_WIDTHS: Readonly<Record<ToolbarFold, number>> = {
-  early: 864,
-  late: 640,
+  early: 880,
+  late: 656,
 };
 
 export interface ToolbarToolConfig {

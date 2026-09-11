@@ -17,12 +17,15 @@ import {
 import { ROUTES } from '@/config';
 import {
   useActiveCollaborators,
+  useAISettings,
   useCollaborativeEditor,
   usePresenceBroadcast,
+  useUpdateAISettings,
 } from '@/hooks';
 import { queryClient } from '@/lib/query-client';
 import { useAIMenuStore } from '@/stores/ai-menu.store';
 import { useAIStore } from '@/stores/ai.store';
+import { useAuthUser } from '@jovandyaz/auth-react';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
 import { notesQueryKeys } from '@knowtis/data-access-notes';
@@ -114,6 +117,15 @@ function InternalEditor({
   const openAIMenu = useAIMenuStore((s) => s.open);
   const handleAskAI = useCallback(() => openAIMenu(), [openAIMenu]);
 
+  const isAnonymous = useAuthUser()?.isAnonymous ?? false;
+  const canTuneAI = aiEnabled && !isAnonymous;
+  const { data: aiPreferences } = useAISettings(canTuneAI);
+  const { mutate: updateAISettings } = useUpdateAISettings();
+  const autocompletePreference = canTuneAI
+    ? aiPreferences?.ghostTextEnabled
+    : true;
+  const autocompleteEnabled = autocompletePreference ?? true;
+
   const onUpdateRef = useRef(onUpdate);
   const isInitializingRef = useRef(false);
   const isSyncedRef = useRef(isSynced);
@@ -180,6 +192,18 @@ function InternalEditor({
     [editor]
   );
 
+  const handleToggleAutocomplete = useCallback(
+    () => updateAISettings({ ghostTextEnabled: !autocompleteEnabled }),
+    [updateAISettings, autocompleteEnabled]
+  );
+
+  useEffect(() => {
+    if (autocompletePreference === undefined) {
+      return;
+    }
+    editor?.commands.setGhostTextEnabled(autocompletePreference);
+  }, [editor, autocompletePreference]);
+
   useEffect(() => {
     if (!editor || !yXmlFragment || !initialContent) {
       return;
@@ -221,6 +245,8 @@ function InternalEditor({
         onVoiceNote={onVoiceNote}
         onAskAI={aiEnabled ? handleAskAI : undefined}
         onAddImage={editable ? handleAddImage : undefined}
+        autocompleteEnabled={autocompleteEnabled}
+        onToggleAutocomplete={canTuneAI ? handleToggleAutocomplete : undefined}
       />
       <div className={cn(EDITOR_CONTAINER_CLASSES, 'relative')}>
         {editor && aiEnabled && (

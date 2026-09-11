@@ -183,7 +183,10 @@
       "horizontalRule": "Horizontal rule",
       "undo": "Undo",
       "redo": "Redo",
-      "moreTools": "More tools"
+      "moreTools": "More tools",
+      "autocomplete": "Autocomplete",
+      "autocompleteOn": "Autocomplete on",
+      "autocompleteOff": "Autocomplete off"
     },
     "table": {
       "insert": "Insert table",

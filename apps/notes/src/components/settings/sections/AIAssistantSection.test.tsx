@@ -106,6 +106,7 @@ describe('AIAssistantSection', () => {
     prefsData.mockReturnValue({
       preferredModel: null,
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
   });
 
@@ -118,9 +119,10 @@ describe('AIAssistantSection', () => {
       'title',
       'aiAssistant.intent.fastHint'
     );
-    expect(
-      screen.getByRole('radio', { name: 'Balanced One' })
-    ).toHaveAttribute('title', 'aiAssistant.intent.balancedHint');
+    expect(screen.getByRole('radio', { name: 'Balanced One' })).toHaveAttribute(
+      'title',
+      'aiAssistant.intent.balancedHint'
+    );
     expect(screen.getByRole('radio', { name: 'Premium One' })).toHaveAttribute(
       'title',
       'aiAssistant.intent.powerfulHint'
@@ -274,6 +276,37 @@ describe('AIAssistantSection', () => {
     await userEvent.click(screen.getByText('Byok One'));
 
     expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
+  });
+
+  it('shows autocomplete as on while the account preference is on', () => {
+    render(<AIAssistantSection />);
+
+    expect(
+      screen.getByRole('switch', { name: 'aiAssistant.autocompleteLabel' })
+    ).toBeChecked();
+  });
+
+  it('reflects an account that turned autocomplete off', () => {
+    prefsData.mockReturnValue({
+      preferredModel: null,
+      preferredIntent: null,
+      ghostTextEnabled: false,
+    });
+    render(<AIAssistantSection />);
+
+    expect(
+      screen.getByRole('switch', { name: 'aiAssistant.autocompleteLabel' })
+    ).not.toBeChecked();
+  });
+
+  it('stores the new autocomplete preference when the switch is flipped', async () => {
+    render(<AIAssistantSection />);
+
+    await userEvent.click(
+      screen.getByRole('switch', { name: 'aiAssistant.autocompleteLabel' })
+    );
+
+    expect(update).toHaveBeenCalledWith({ ghostTextEnabled: false });
   });
 
   it('clears a stored model override when an intent chip is picked', async () => {
