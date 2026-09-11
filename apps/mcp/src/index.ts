@@ -1,3 +1,5 @@
+import { Server } from 'node:http';
+
 import { serve } from '@hono/node-server';
 
 import { AuthService } from './auth/auth-service.js';
@@ -5,6 +7,7 @@ import { OauthVerifier } from './auth/oauth-verifier.js';
 import { parseConfig } from './config.js';
 import { log, logOauthConfig } from './middleware/logger.js';
 import { createMcpServer } from './server.js';
+import { registerGracefulShutdown, SHUTDOWN_TIMEOUT_MS } from './shutdown.js';
 import { createApp } from './transport.js';
 
 const config = parseConfig(process.env as Record<string, string | undefined>);
@@ -23,7 +26,7 @@ const app = createApp(
   oauthVerifier
 );
 
-serve({ fetch: app.fetch, port: config.port }, (info) => {
+const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   log({
     level: 'info',
     event: 'server_start',
@@ -31,4 +34,13 @@ serve({ fetch: app.fetch, port: config.port }, (info) => {
     name: config.serverName,
     version: config.serverVersion,
   });
+});
+if (!(server instanceof Server)) {
+  throw new Error('Graceful shutdown requires an HTTP/1.1 server');
+}
+registerGracefulShutdown({
+  server,
+  signals: process,
+  timeoutMs: SHUTDOWN_TIMEOUT_MS,
+  exit: (code) => process.exit(code),
 });

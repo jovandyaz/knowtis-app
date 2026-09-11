@@ -505,6 +505,7 @@ apps/mcp/src/
 ├── server.ts                 # MCP server factory (instructions, tools, resources)
 ├── transport.ts              # Hono app: secureHeaders(), /health, CORS, PRM well-knowns, /mcp (Bearer check + Streamable HTTP)
 ├── config.ts                 # Zod-validated configuration, resolveApiUrl
+├── shutdown.ts               # SIGTERM/SIGINT drain of the HTTP server, bounded by SHUTDOWN_TIMEOUT_MS
 ├── auth/
 │   ├── auth-service.ts       # API key → JWT exchange, SHA-256-keyed cache, scope checks
 │   ├── credentials.ts        # Bearer classification (api-key vs oauth)
@@ -562,6 +563,12 @@ If `OAUTH_JWKS` is set but ineligible, the API now fails startup with `OAUTH_JWK
 **Rollback:** Before phase 6, restore `[old, new]` and deploy to make the old key the signer while both token generations remain verifiable. After removing the old key, restoring it requires another API deploy and does not repair tokens whose key was destroyed.
 
 Deploys are CI-driven via `railway up`, gated on the `mcp` project being affected on `main`. The service declares no `watchPatterns`: Railway would check them against the uploaded snapshot and **skip the build** when none matched — silently deploying nothing while the CI job reports success. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
+
+### Shutdown
+
+On `SIGTERM` or `SIGINT`, [shutdown.ts](../apps/mcp/src/shutdown.ts) stops accepting connections and lets in-flight requests finish, answering requests that arrive during the drain with `Connection: close` and closing each keep-alive socket as soon as its response completes. After `SHUTDOWN_TIMEOUT_MS` (8 s) it force-closes whatever is still open, long-lived `GET /mcp` SSE streams included, and exits 0. It logs `server_shutdown` when the signal arrives and `server_stopped` with `outcome` (`drained` or `forced`) and `durationMs` before exiting; further signals during the drain are ignored. `node` runs as PID 1 under an exec-form start command, and the kernel does not apply a signal's default action to PID 1, so without this handler `SIGTERM` is ignored and the process only ends at `SIGKILL`.
+
+Railway sends `SIGTERM` to the previous deployment once the new one is active, then `SIGKILL` after the service's draining time (`deploy.drainingSeconds` in [`.railway/railway.ts`](../.railway/railway.ts), default 0 s). The 8 s drain completes before the kill only when that draining time exceeds it. The timeout also stays under the 10 s that `docker stop` waits by default.
 
 ### DNS-rebinding protection
 
