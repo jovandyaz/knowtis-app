@@ -79,6 +79,10 @@ export class EmbeddingReconcileTask {
         this.logger.log(
           `Reconciled note embeddings: ${embedded} embedded, ${touched} unchanged`
         );
+      } else if (stale.length > 0) {
+        this.logger.error(
+          `Embedding reconcile embedded none of ${stale.length} stale notes; semantic search is falling behind`
+        );
       }
     } catch (error) {
       this.logger.error(

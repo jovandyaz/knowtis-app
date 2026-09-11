@@ -276,6 +276,30 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .limit(limit);
   }
 
+  async findAccessibleNotesUnindexed(
+    userId: UserId,
+    model: string,
+    withinSeconds: number,
+    limit: number
+  ): Promise<NoteSummary[]> {
+    return this.db
+      .select(noteSummaryColumns)
+      .from(notes)
+      .leftJoin(noteEmbeddings, eq(noteEmbeddings.noteId, notes.id))
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(
+        and(
+          this.accessCondition(userId),
+          sql`(${noteEmbeddings.noteId} IS NULL
+               OR ${notes.updatedAt} > ${noteEmbeddings.updatedAt}
+               OR ${noteEmbeddings.model} <> ${model})`,
+          sql`${notes.updatedAt} > now() - make_interval(secs => ${withinSeconds})`
+        )
+      )
+      .orderBy(desc(notes.updatedAt), desc(notes.id))
+      .limit(limit);
+  }
+
   async countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
     const result = await this.db
       .select({

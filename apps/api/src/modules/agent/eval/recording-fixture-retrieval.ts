@@ -43,6 +43,10 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
       .map(toHit);
   }
 
+  async listUnindexed(): Promise<NoteHit[]> {
+    return [];
+  }
+
   async getById(_userId: string, noteId: string): Promise<AgentNote | null> {
     this.calls.push({ name: 'getNote', args: { noteId } });
     return this.notes.find((n) => n.id === noteId) ?? null;

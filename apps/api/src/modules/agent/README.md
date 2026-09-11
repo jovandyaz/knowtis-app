@@ -70,7 +70,7 @@ Framework-free core: messages (`agent-message`, `coalesce-messages` for provider
 
 Tools are grouped, not flat. Each group implements `AgentToolGroup` (`readonly name` + a `tools(ctx)` factory) and is composed by `AgentToolRegistry`:
 
-- **`note-read`** — `searchNotes`, `getNote`, `listRecentNotes`, `getNotesOverview` (retrieval-backed).
+- **`note-read`** — `searchNotes`, `getNote`, `listRecentNotes`, `getNotesOverview` (retrieval-backed). `searchNotes` returns `{hits}`, plus `unindexed` when nothing matched — notes the vector leg has not caught up with; see [docs/AI.md](../../../../../docs/AI.md).
 - **`note-mutate`** — `proposeCreateNote`, `proposeUpdateNote`, `proposeShareNote` → emit a **proposal** (never auto-applied; gated by HITL).
 - **`web`** — `webSearch` / `webFetch` via the gateway's Tavily port (flag `agent_web_search`).
 

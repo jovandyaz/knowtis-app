@@ -35,6 +35,23 @@ export class FeatureFlaggedRetrievalAdapter implements RetrievalPort {
     return this.keyword.search(userId, query);
   }
 
+  async listUnindexed(userId: string, limit: number): Promise<NoteHit[]> {
+    try {
+      const enabled = await this.flags.isEnabled(
+        FEATURE_FLAG_KEYS.AGENT_HYBRID_RETRIEVAL
+      );
+      if (enabled) {
+        return await this.hybrid.listUnindexed(userId, limit);
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Unindexed lookup failed; reporting none',
+        error instanceof Error ? error.stack : String(error)
+      );
+    }
+    return [];
+  }
+
   getById(userId: string, noteId: string): Promise<AgentNote | null> {
     return this.keyword.getById(userId, noteId);
   }

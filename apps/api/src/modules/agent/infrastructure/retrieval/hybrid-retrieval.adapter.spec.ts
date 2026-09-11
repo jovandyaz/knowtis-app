@@ -23,12 +23,17 @@ function make(opts: {
   lexical: string[];
   vector: string[];
   embedThrows?: boolean;
+  unindexed?: string[];
+  voyageKey?: string;
 }) {
   const repo = {
     findAccessibleNotesByLexicalRank: vi.fn(async () =>
       opts.lexical.map(summary)
     ),
     findAccessibleNotesByEmbedding: vi.fn(async () => opts.vector.map(summary)),
+    findAccessibleNotesUnindexed: vi.fn(async () =>
+      (opts.unindexed ?? []).map(summary)
+    ),
   } as unknown as NoteReadRepository;
   const embed = {
     embedQuery: vi.fn(async () => {
@@ -46,7 +51,8 @@ function make(opts: {
     overview: vi.fn(),
   } as unknown as KeywordRetrievalAdapter;
   const config = {
-    get: () => 'voyage-4',
+    get: (key: string) =>
+      key === 'VOYAGE_API_KEY' ? (opts.voyageKey ?? 'vk-test') : 'voyage-4',
   } as unknown as ConfigService<Record<string, unknown>, true>;
   const rateLimit = {
     recordSideCost: vi.fn().mockResolvedValue(undefined),
@@ -103,5 +109,57 @@ describe('HybridRetrievalAdapter.search', () => {
     });
     await adapter.search('u1', 'q');
     expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
+  });
+});
+
+describe('HybridRetrievalAdapter.listUnindexed', () => {
+  it('asks the repository for notes the current embedding model cannot reach', async () => {
+    const { adapter, repo } = make({
+      lexical: [],
+      vector: [],
+      unindexed: ['fresh'],
+    });
+
+    const hits = await adapter.listUnindexed('u1', 5);
+
+    expect(hits.map((h) => h.id)).toEqual(['fresh']);
+    expect(repo.findAccessibleNotesUnindexed).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 'u1' }),
+      'voyage-4',
+      expect.any(Number),
+      5
+    );
+  });
+
+  it('bounds the claim to a window a healthy reconciler could cover', async () => {
+    const { adapter, repo } = make({ lexical: [], vector: [] });
+
+    await adapter.listUnindexed('u1', 5);
+
+    const [, , withinSeconds] = vi.mocked(repo.findAccessibleNotesUnindexed)
+      .mock.calls[0];
+    // Longer than one quiet period plus cycle (90 + 120 s), short enough that a
+    // note stuck for hours stops being reported as pending.
+    expect(withinSeconds).toBeGreaterThan(210);
+    expect(withinSeconds).toBeLessThanOrEqual(3600);
+  });
+
+  it('reports none when no Voyage key is configured, so nothing is ever indexed', async () => {
+    const { adapter, repo } = make({
+      lexical: [],
+      vector: [],
+      unindexed: ['fresh'],
+      voyageKey: '',
+    });
+
+    expect(await adapter.listUnindexed('u1', 5)).toEqual([]);
+    expect(repo.findAccessibleNotesUnindexed).not.toHaveBeenCalled();
+  });
+
+  it('reports none for an unusable user id', async () => {
+    const { adapter, repo } = make({ lexical: [], vector: [] });
+
+    expect(await adapter.listUnindexed('', 5)).toEqual([]);
+    expect(repo.findAccessibleNotesUnindexed).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import { MutationProposalBuilder } from './mutation-proposal.builder';
 function makeRetrieval(over: Partial<RetrievalPort> = {}): RetrievalPort {
   return {
     search: vi.fn(),
+    listUnindexed: vi.fn().mockResolvedValue([]),
     getById: vi.fn().mockResolvedValue({
       id: 'note-1',
       title: 'Old',

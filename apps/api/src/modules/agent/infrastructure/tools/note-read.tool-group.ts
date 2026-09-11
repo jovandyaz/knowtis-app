@@ -6,12 +6,15 @@ import {
   RETRIEVAL_PORT,
   type RetrievalPort,
 } from '../../domain/ports/retrieval.port';
+import type { SearchNotesResult } from '../../domain/retrieval';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
 import {
   TOOL_ERROR_CODES,
   ToolExecutionError,
   wrapUpstreamFailure,
 } from './tool-execution.error';
+
+const UNINDEXED_HINT_LIMIT = 5;
 
 function classifyNoteStoreFailure(error: unknown): ToolExecutionError {
   return new ToolExecutionError(
@@ -33,12 +36,27 @@ export class NoteReadToolGroup implements AgentToolGroup {
     return true;
   }
 
+  private async searchWithPendingFallback(
+    userId: string,
+    query: string
+  ): Promise<SearchNotesResult> {
+    const hits = await this.retrieval.search(userId, query);
+    if (hits.length > 0) {
+      return { hits };
+    }
+    const unindexed = await this.retrieval.listUnindexed(
+      userId,
+      UNINDEXED_HINT_LIMIT
+    );
+    return unindexed.length > 0 ? { hits, unindexed } : { hits };
+  }
+
   build(ctx: AgentToolContext): ToolSet {
     const { userId } = ctx;
     return {
       searchNotes: tool({
         description:
-          "Search the user's notes by keyword. Returns matching notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them.",
+          "Search the user's notes. Returns {hits} — notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them. When nothing matches, the result may also carry `unindexed`: recently created or edited notes whose current text is not searchable by meaning yet, only by the exact words it contains. Judge them by title — call getNote on any that could plausibly answer the question. This list is not matched against your query — it is simply what is pending — so most of the time none of it is relevant. If none fits, answer normally; only when the question was about the user's own notes, add that a very recent note may not be searchable by meaning yet, instead of stating flatly that no such note exists.",
         inputSchema: z.object({
           query: z
             .string()
@@ -47,7 +65,7 @@ export class NoteReadToolGroup implements AgentToolGroup {
         }),
         execute: async ({ query }) =>
           wrapUpstreamFailure(
-            () => this.retrieval.search(userId, query),
+            () => this.searchWithPendingFallback(userId, query),
             classifyNoteStoreFailure
           ),
       }),
