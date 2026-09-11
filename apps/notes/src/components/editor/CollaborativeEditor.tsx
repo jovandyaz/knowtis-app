@@ -119,11 +119,13 @@ function InternalEditor({
 
   const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const canTuneAI = aiEnabled && !isAnonymous;
-  const { data: aiPreferences } = useAISettings(canTuneAI);
+  const { data: aiPreferences, isError: preferencesFailed } =
+    useAISettings(canTuneAI);
   const { mutate: updateAISettings } = useUpdateAISettings();
-  const autocompletePreference = canTuneAI
-    ? aiPreferences?.ghostTextEnabled
-    : true;
+  const storedAutocomplete = preferencesFailed
+    ? false
+    : aiPreferences?.ghostTextEnabled;
+  const autocompletePreference = canTuneAI ? storedAutocomplete : true;
   const autocompleteEnabled = autocompletePreference ?? true;
 
   const onUpdateRef = useRef(onUpdate);

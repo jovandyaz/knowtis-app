@@ -14,6 +14,7 @@ const TOGGLE_LABEL = 'editor.toolbar.autocomplete';
 let aiEnabled = true;
 let isAnonymous = false;
 let preferences: { ghostTextEnabled: boolean } | undefined;
+let preferencesFailed: boolean;
 let preferencesQueryEnabled: unknown;
 let doc: Y.Doc;
 let editor: Editor | null = null;
@@ -54,7 +55,7 @@ vi.mock('@/hooks', () => ({
   usePresenceBroadcast: () => undefined,
   useAISettings: (enabled?: boolean) => {
     preferencesQueryEnabled = enabled;
-    return { data: preferences };
+    return { data: preferences, isError: preferencesFailed };
   },
   useUpdateAISettings: () => ({ mutate: updateAISettings }),
 }));
@@ -115,6 +116,7 @@ describe('CollaborativeEditor autocomplete toggle', () => {
     aiEnabled = true;
     isAnonymous = false;
     preferences = { ghostTextEnabled: true };
+    preferencesFailed = false;
     preferencesQueryEnabled = undefined;
   });
 
@@ -154,6 +156,14 @@ describe('CollaborativeEditor autocomplete toggle', () => {
     expect(toggle()).toBeInTheDocument();
   });
 
+  it('shows the toggle off when the stored preference cannot be loaded', async () => {
+    preferences = undefined;
+    preferencesFailed = true;
+    await mount();
+
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('stores the flipped preference when the toggle is pressed', async () => {
     await mount();
 
@@ -171,6 +181,7 @@ describe('CollaborativeEditor autocomplete extension', () => {
     aiEnabled = true;
     isAnonymous = false;
     preferences = { ghostTextEnabled: true };
+    preferencesFailed = false;
   });
 
   it('stays off while the stored preference is still loading', async () => {
