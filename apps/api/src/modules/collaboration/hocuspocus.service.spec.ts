@@ -2,7 +2,15 @@ import { EventEmitter } from 'node:events';
 
 import type { Document } from '@hocuspocus/server';
 import { Logger } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 import {
   buildCollaborationService,
@@ -17,6 +25,7 @@ const FAILURE_LOG_INTERVAL_MS = 30000;
 interface FakeRedisClient extends EventEmitter {
   options: Record<string, unknown>;
   status: string;
+  publishCommand: Mock;
 }
 
 const clients: FakeRedisClient[] = [];
@@ -35,10 +44,12 @@ function redisPair(): [FakeRedisClient, FakeRedisClient] {
 
 vi.mock('ioredis', () => ({
   default: vi.fn(function (_url: string, options: Record<string, unknown>) {
+    const publishCommand = vi.fn().mockResolvedValue(1);
     const client = Object.assign(new EventEmitter(), {
       options,
       status: 'connecting',
-      publish: vi.fn().mockResolvedValue(1),
+      publishCommand,
+      publish: publishCommand,
       subscribe: vi.fn(),
       unsubscribe: vi.fn(),
       pubsub: vi.fn().mockResolvedValue([]),
@@ -107,6 +118,39 @@ describe('collaboration redis clients', () => {
     for (const client of clients) {
       expect(client.listenerCount('error')).toBeGreaterThan(0);
     }
+  });
+
+  it('reports a publish nobody awaits instead of letting its rejection kill the process', async () => {
+    const failure = new Error(
+      'Reached the max retries per request limit (which is 20).'
+    );
+    redisPair()[0].publishCommand.mockRejectedValue(failure);
+
+    void redisExtensionOf(service).pub.publish(
+      'knowtis-collab#reply:peer',
+      'sync-step-2'
+    );
+
+    await vi.waitFor(() =>
+      expect(warnings).toHaveBeenCalledWith({
+        operation: 'collaboration_redis',
+        role: 'publisher',
+        reason: 'publish_failed',
+        message: failure.message,
+        channel: 'knowtis-collab#reply:peer',
+      })
+    );
+  });
+
+  it('still rejects a publish the caller awaits', async () => {
+    const failure = new Error(
+      'Reached the max retries per request limit (which is 20).'
+    );
+    redisPair()[0].publishCommand.mockRejectedValue(failure);
+
+    await expect(
+      redisExtensionOf(service).pub.publish('knowtis-collab:note', 'sync')
+    ).rejects.toBe(failure);
   });
 
   it('announces nothing until both clients are ready, so a lagging publisher cannot drop it', () => {

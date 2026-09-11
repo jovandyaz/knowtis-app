@@ -32,7 +32,10 @@ const COLLAB_REDIS_CONNECT_TIMEOUT_MS = 1000;
 const COLLAB_REDIS_FAILURE_LOG_INTERVAL_MS = 30000;
 const COLLAB_REDIS_ROLES = ['publisher', 'subscriber'] as const;
 type CollabRedisRole = (typeof COLLAB_REDIS_ROLES)[number];
-type CollabRedisFailureReason = 'connection_failed' | 'resync_failed';
+type CollabRedisFailureReason =
+  | 'connection_failed'
+  | 'resync_failed'
+  | 'publish_failed';
 const COLLAB_REDIS_MAX_RETRIES_PER_REQUEST: Record<
   CollabRedisRole,
   number | null
@@ -321,8 +324,25 @@ export class HocuspocusService
     });
     client.on('error', (error) => this.logRedisFailure(role, error));
     client.on('ready', () => this.resyncLoadedDocumentsOnRedisRecovery());
+    this.observePublishRejections(client, role);
     this.redisClients.set(role, client);
     return client as unknown as RedisInstance;
+  }
+
+  private observePublishRejections(
+    client: IORedis,
+    role: CollabRedisRole
+  ): void {
+    const publish = client.publish.bind(client);
+    client.publish = (...args) => {
+      const published = publish(...args);
+      published.catch((error: Error) =>
+        this.logRedisFailure(role, error, 'publish_failed', {
+          channel: String(args[0]),
+        })
+      );
+      return published;
+    };
   }
 
   private isRedisFullyReady(): boolean {
@@ -355,7 +375,8 @@ export class HocuspocusService
   private logRedisFailure(
     role: CollabRedisRole,
     error: Error,
-    reason: CollabRedisFailureReason = 'connection_failed'
+    reason: CollabRedisFailureReason = 'connection_failed',
+    detail: Record<string, string> = {}
   ): void {
     const now = performance.now();
     const throttleKey = `${role}:${reason}`;
@@ -370,6 +391,7 @@ export class HocuspocusService
       role,
       reason,
       message: error.message,
+      ...detail,
     });
   }
 }
