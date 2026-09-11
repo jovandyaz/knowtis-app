@@ -132,9 +132,9 @@ export class ModelPreferenceService {
   }
 
   async getUserPreferences(userId: string): Promise<AIPreferences> {
-    const { preferredModel, preferredIntent } =
+    const { preferredModel, preferredIntent, ghostTextEnabled } =
       await this.settings.getSettings(userId);
-    return { preferredModel, preferredIntent };
+    return { preferredModel, preferredIntent, ghostTextEnabled };
   }
 
   async getEffectiveDefault(

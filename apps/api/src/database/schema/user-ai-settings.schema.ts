@@ -1,4 +1,10 @@
-import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  pgTable,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
 
@@ -10,6 +16,7 @@ export const userAiSettings = pgTable('user_ai_settings', {
     .references(() => users.id, { onDelete: 'cascade' }),
   preferredModel: varchar('preferred_model', { length: MODEL_ID_MAX_LENGTH }),
   preferredIntent: varchar('preferred_intent', { length: 16 }),
+  ghostTextEnabled: boolean('ghost_text_enabled').notNull().default(true),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

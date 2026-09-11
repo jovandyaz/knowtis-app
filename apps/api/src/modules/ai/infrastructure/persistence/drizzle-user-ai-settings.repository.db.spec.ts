@@ -57,6 +57,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect(await repo.getSettings(USER_ID)).toEqual({
       preferredModel: null,
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
   });
 
@@ -104,6 +105,29 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect(await repo.getSettings(USER_ID)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'powerful',
+      ghostTextEnabled: true,
+    });
+  });
+
+  it('stores and reads the ghost text preference', async () => {
+    await repo.patchSettings(USER_ID, { ghostTextEnabled: false });
+    expect((await repo.getSettings(USER_ID)).ghostTextEnabled).toBe(false);
+    await repo.patchSettings(USER_ID, { ghostTextEnabled: true });
+    expect((await repo.getSettings(USER_ID)).ghostTextEnabled).toBe(true);
+  });
+
+  it('a model patch leaves the ghost text preference untouched', async () => {
+    await repo.patchSettings(USER_ID, {
+      preferredIntent: 'balanced',
+      ghostTextEnabled: false,
+    });
+    await repo.patchSettings(USER_ID, {
+      preferredModel: 'openai:gpt-4o-mini',
+    });
+    expect(await repo.getSettings(USER_ID)).toEqual({
+      preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: 'balanced',
+      ghostTextEnabled: false,
     });
   });
 });

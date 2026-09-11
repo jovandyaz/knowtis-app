@@ -13,6 +13,7 @@ function make() {
     getUserPreferences: vi.fn().mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
+      ghostTextEnabled: true,
     }),
     setUserPreferences: vi.fn().mockResolvedValue(undefined),
   } satisfies Partial<Record<keyof ModelPreferenceService, unknown>>;
@@ -32,6 +33,7 @@ describe('AiModelsController', () => {
     expect(await ctrl.getPreferences(user)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
+      ghostTextEnabled: true,
     });
   });
 
@@ -40,6 +42,7 @@ describe('AiModelsController', () => {
     pref.getUserPreferences.mockResolvedValueOnce({
       preferredModel: 'anthropic:claude-sonnet-5',
       preferredIntent: 'balanced',
+      ghostTextEnabled: true,
     });
     const res = await ctrl.updatePreferences(user, {
       preferredModel: 'anthropic:claude-sonnet-5',
@@ -50,6 +53,7 @@ describe('AiModelsController', () => {
     expect(res).toEqual({
       preferredModel: 'anthropic:claude-sonnet-5',
       preferredIntent: 'balanced',
+      ghostTextEnabled: true,
     });
   });
 
@@ -69,15 +73,25 @@ describe('AiModelsController', () => {
     });
   });
 
+  it('PUT /ai/preferences forwards a ghost text toggle', async () => {
+    const { ctrl, pref } = make();
+    await ctrl.updatePreferences(user, { ghostTextEnabled: false });
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(user, {
+      ghostTextEnabled: false,
+    });
+  });
+
   it('GET /ai/preferences returns nulls when nothing is set', async () => {
     const { ctrl, pref } = make();
     pref.getUserPreferences.mockResolvedValueOnce({
       preferredModel: null,
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
     expect(await ctrl.getPreferences(user)).toEqual({
       preferredModel: null,
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
   });
 

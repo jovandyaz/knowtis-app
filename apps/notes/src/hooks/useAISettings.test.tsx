@@ -36,6 +36,7 @@ describe('useAISettings', () => {
     vi.mocked(aiModelsApi.getPreferences).mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useAISettings(), { wrapper });
@@ -53,11 +54,13 @@ describe('useUpdateAISettings', () => {
     vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
       preferredModel: 'b',
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
     const { wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
       preferredModel: 'a',
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -65,7 +68,7 @@ describe('useUpdateAISettings', () => {
 
     await waitFor(() =>
       expect(queryClient.getQueryData(aiModelsQueryKeys.preferences())).toEqual(
-        { preferredModel: 'b', preferredIntent: null }
+        { preferredModel: 'b', preferredIntent: null, ghostTextEnabled: true }
       )
     );
   });
@@ -75,11 +78,13 @@ describe('useUpdateAISettings', () => {
     vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
       preferredModel: 'x',
       preferredIntent: 'balanced',
+      ghostTextEnabled: true,
     });
     const { wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
       preferredModel: 'x',
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -87,7 +92,7 @@ describe('useUpdateAISettings', () => {
 
     await waitFor(() =>
       expect(queryClient.getQueryData(aiModelsQueryKeys.preferences())).toEqual(
-        { preferredModel: 'x', preferredIntent: 'fast' }
+        { preferredModel: 'x', preferredIntent: 'fast', ghostTextEnabled: true }
       )
     );
   });
@@ -100,6 +105,7 @@ describe('useUpdateAISettings', () => {
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
       preferredModel: 'a',
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -109,6 +115,7 @@ describe('useUpdateAISettings', () => {
     expect(queryClient.getQueryData(aiModelsQueryKeys.preferences())).toEqual({
       preferredModel: 'a',
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
   });
 
