@@ -125,7 +125,6 @@ vi.mock('@/components/artifacts/StudyToolsTab', () => ({
 vi.mock('@knowtis/data-access-notes', () => ({
   useNoteByToken: () => noteQuery,
 }));
-
 const wrapper = ({ children }: { children: ReactNode }) => (
   <TooltipProvider>{children}</TooltipProvider>
 );
@@ -162,6 +161,30 @@ beforeEach(() => {
     error: null,
     refetch: vi.fn(),
   };
+});
+
+describe('SharedNotePage loading state', () => {
+  beforeEach(() => {
+    noteQuery = { ...noteQuery, data: undefined, isLoading: true };
+  });
+
+  it('shows the editor card skeleton while the shared note loads', () => {
+    renderPage();
+
+    expect(
+      screen.getByRole('status', { name: 'shared.loadingSharedNote' })
+    ).toBeInTheDocument();
+  });
+
+  it('skips the chrome the shared page never renders', () => {
+    renderPage();
+
+    const card = screen.getByRole('status', {
+      name: 'shared.loadingSharedNote',
+    }).parentElement;
+
+    expect(card?.parentElement?.children).toHaveLength(1);
+  });
 });
 
 describe('SharedNotePage sign-in call to action', () => {

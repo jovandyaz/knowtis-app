@@ -100,6 +100,8 @@ vi.mock('@/hooks', () => ({
   }),
   useActiveCollaborators: () => [],
   usePresenceBroadcast: () => undefined,
+  useAISettings: () => ({ data: undefined }),
+  useUpdateAISettings: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/stores/ai.store', () => {
   const useAIStore = (selector?: (s: object) => unknown) =>

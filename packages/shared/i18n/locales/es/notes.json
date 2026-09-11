@@ -1,6 +1,7 @@
 {
   "list": {
     "searchPlaceholder": "Buscar notas...",
+    "loadingNotes": "Cargando notas…",
     "errorLoading": "Error al cargar las notas",
     "noNotesFound": "No se encontraron notas",
     "startCollection": "Silencio creativo...",
@@ -182,7 +183,10 @@
       "horizontalRule": "Línea horizontal",
       "undo": "Deshacer",
       "redo": "Rehacer",
-      "moreTools": "Más herramientas"
+      "moreTools": "Más herramientas",
+      "autocomplete": "Autocompletar",
+      "autocompleteOn": "Autocompletado activado",
+      "autocompleteOff": "Autocompletado desactivado"
     },
     "table": {
       "insert": "Insertar tabla",

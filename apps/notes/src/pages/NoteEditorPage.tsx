@@ -7,6 +7,7 @@ import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
+import { NoteEditorSkeleton } from '@/components/editor/NoteEditorSkeleton';
 import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
@@ -37,12 +38,7 @@ import {
   useFeatureFlags,
 } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import {
-  Button,
-  ErrorState,
-  Input,
-  LoadingState,
-} from '@knowtis/design-system';
+import { Button, ErrorState, Input } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import {
   ACCESS,
@@ -422,7 +418,7 @@ export function NoteEditorPage() {
     TERMINAL_ACCESS_STATUSES.has(error.status);
 
   if (isLoading) {
-    return <LoadingState message={t('editor.loadingNote')} />;
+    return <NoteEditorSkeleton label={t('editor.loadingNote')} />;
   }
 
   if (isError && (!note || terminalError)) {

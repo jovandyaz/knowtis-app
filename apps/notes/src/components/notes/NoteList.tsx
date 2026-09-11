@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
@@ -43,11 +43,14 @@ const routeApi = getRouteApi('/_app/notes/');
 
 const INITIAL_SKELETONS = 6;
 const NEXT_PAGE_SKELETONS = 3;
+const NOTE_GRID_CLASSES =
+  'grid gap-6 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]';
 
 export function NoteList() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const loadingLabelId = useId();
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const voiceNotesEnabled = useAIStore((s) => s.voiceNotesEnabled);
   const showVoiceNote = aiEnabled && voiceNotesEnabled;
@@ -162,7 +165,14 @@ export function NoteList() {
   const renderNotes = () => {
     if (isLoading) {
       return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          role="status"
+          aria-labelledby={loadingLabelId}
+          className={NOTE_GRID_CLASSES}
+        >
+          <span id={loadingLabelId} className="sr-only">
+            {t('list.loadingNotes')}
+          </span>
           {Array.from({ length: INITIAL_SKELETONS }).map((_, i) => (
             <NoteCardSkeleton key={i} />
           ))}
@@ -184,7 +194,7 @@ export function NoteList() {
     }
 
     return (
-      <motion.div layout className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <motion.div layout className={NOTE_GRID_CLASSES}>
         <AnimatePresence mode="popLayout" initial={false}>
           {notes.length === 0 ? (
             <motion.div

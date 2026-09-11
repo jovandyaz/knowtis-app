@@ -183,6 +183,7 @@ export interface SelectableModel {
 export interface AIPreferences {
   preferredModel: string | null;
   preferredIntent: ModelIntent | null;
+  ghostTextEnabled: boolean;
 }
 
 export type UpdateAiPreferencesInput = Partial<AIPreferences>;

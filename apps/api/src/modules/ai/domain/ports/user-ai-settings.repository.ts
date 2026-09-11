@@ -3,6 +3,7 @@ import type { ModelIntent } from '@knowtis/shared-types';
 export interface UserAiSettings {
   preferredModel: string | null;
   preferredIntent: ModelIntent | null;
+  ghostTextEnabled: boolean;
 }
 
 export interface UserAiSettingsRepository {

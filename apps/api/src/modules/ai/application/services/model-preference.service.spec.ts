@@ -38,6 +38,7 @@ function make(
     getSettings: vi.fn().mockResolvedValue({
       preferredModel: pref,
       preferredIntent,
+      ghostTextEnabled: true,
     }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
   };
@@ -245,7 +246,28 @@ describe('ModelPreferenceService', () => {
     expect(await svc.getUserPreferences('u1')).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'powerful',
+      ghostTextEnabled: true,
     });
+  });
+
+  it('getUserPreferences returns the ghost text preference', async () => {
+    const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
+    repo.getSettings.mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+      ghostTextEnabled: false,
+    });
+    expect((await svc.getUserPreferences('u1')).ghostTextEnabled).toBe(false);
+  });
+
+  it('setUserPreferences stores a ghost text patch without validating a model', async () => {
+    const { svc, repo, selectableSvc } = make(null, [SYSTEM_DEFAULT]);
+    const isSelectable = vi.spyOn(selectableSvc, 'isSelectable');
+    await svc.setUserPreferences(USER, { ghostTextEnabled: false });
+    expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
+      ghostTextEnabled: false,
+    });
+    expect(isSelectable).not.toHaveBeenCalled();
   });
 
   it('reports tier gating as enabled when the flag is on', async () => {

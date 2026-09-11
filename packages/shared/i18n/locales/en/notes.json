@@ -1,6 +1,7 @@
 {
   "list": {
     "searchPlaceholder": "Search notes...",
+    "loadingNotes": "Loading notes…",
     "errorLoading": "Error loading notes",
     "noNotesFound": "No notes found",
     "startCollection": "Creative silence...",
@@ -182,7 +183,10 @@
       "horizontalRule": "Horizontal rule",
       "undo": "Undo",
       "redo": "Redo",
-      "moreTools": "More tools"
+      "moreTools": "More tools",
+      "autocomplete": "Autocomplete",
+      "autocompleteOn": "Autocomplete on",
+      "autocompleteOff": "Autocomplete off"
     },
     "table": {
       "insert": "Insert table",

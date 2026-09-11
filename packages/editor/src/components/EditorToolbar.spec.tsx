@@ -1,3 +1,5 @@
+import type { ComponentProps } from 'react';
+
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/core';
@@ -26,6 +28,7 @@ const KEY = {
   undo: 'editor.toolbar.undo',
   redo: 'editor.toolbar.redo',
   moreTools: 'editor.toolbar.moreTools',
+  autocomplete: 'editor.toolbar.autocomplete',
 } as const;
 
 const TOOLS = TOOLBAR_TOOLS.filter(
@@ -39,7 +42,9 @@ const startsWith = (prefix: string) => (name: string) =>
 
 let editor: Editor;
 
-function mount(width: number) {
+type ToolbarProps = ComponentProps<typeof EditorToolbar>;
+
+function mount(width: number, props: Omit<ToolbarProps, 'editor'> = {}) {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     width,
     height: 40,
@@ -57,7 +62,7 @@ function mount(width: number) {
   });
   render(
     <TooltipProvider>
-      <EditorToolbar editor={editor} />
+      <EditorToolbar editor={editor} {...props} />
     </TooltipProvider>
   );
 }
@@ -256,5 +261,51 @@ describe('EditorToolbar active state', () => {
     });
 
     expect(undo).toBeEnabled();
+  });
+});
+
+describe('EditorToolbar autocomplete toggle', () => {
+  it('stays out of the row when the host offers no toggle', () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+
+    expect(
+      screen.queryByRole('button', { name: KEY.autocomplete })
+    ).not.toBeInTheDocument();
+  });
+
+  it('reports the autocomplete state it was given', () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early, {
+      autocompleteEnabled: false,
+      onToggleAutocomplete: vi.fn(),
+    });
+
+    expect(
+      screen.getByRole('button', { name: KEY.autocomplete })
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('marks the button pressed while autocomplete is on', () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early, {
+      autocompleteEnabled: true,
+      onToggleAutocomplete: vi.fn(),
+    });
+
+    expect(
+      screen.getByRole('button', { name: KEY.autocomplete })
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('hands the toggle back to the host on click', async () => {
+    const onToggleAutocomplete = vi.fn();
+    mount(TOOLBAR_FOLD_WIDTHS.early, {
+      autocompleteEnabled: true,
+      onToggleAutocomplete,
+    });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: KEY.autocomplete })
+    );
+
+    expect(onToggleAutocomplete).toHaveBeenCalledTimes(1);
   });
 });

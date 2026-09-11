@@ -1,0 +1,1 @@
+ALTER TABLE "user_ai_settings" ADD COLUMN "ghost_text_enabled" boolean DEFAULT true NOT NULL;

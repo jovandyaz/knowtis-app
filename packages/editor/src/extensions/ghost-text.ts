@@ -1,6 +1,9 @@
 import { Extension } from '@tiptap/core';
 import type { Editor } from '@tiptap/core';
+import { isChangeOrigin } from '@tiptap/extension-collaboration';
+import type { Transaction } from '@tiptap/pm/state';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { AddMarkStep, RemoveMarkStep, ReplaceStep } from '@tiptap/pm/transform';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
 import './ghost-text.css';
@@ -28,7 +31,7 @@ export interface GhostTextOptions {
   debounceMs: number;
   /** Minimum content length (chars before the cursor) required to trigger. */
   minContentLength: number;
-  /** Master enable flag; when false, the extension does nothing. */
+  /** Initial state of the runtime toggle; flip it with `setGhostTextEnabled`. */
   enabled: boolean;
   /**
    * Optional gating callback. When it returns true, requests are skipped —
@@ -45,11 +48,29 @@ export interface GhostTextOptions {
 }
 
 interface GhostTextStorage {
-  suggestion: string;
+  completion: string;
+  consumed: number;
   debounceTimer: ReturnType<typeof setTimeout> | null;
   abortController: AbortController | null;
   lastCursorPos: number;
-  lastChangeWasTyping: boolean;
+  enabled: boolean;
+}
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    ghostText: {
+      setGhostTextEnabled: (enabled: boolean) => ReturnType;
+    };
+  }
+}
+
+function remainingSuggestion(storage: GhostTextStorage): string {
+  return storage.completion.slice(storage.consumed);
+}
+
+function resetSuggestion(storage: GhostTextStorage): void {
+  storage.completion = '';
+  storage.consumed = 0;
 }
 
 async function consumeStream(
@@ -68,7 +89,7 @@ async function consumeStream(
       }
 
       chunks += chunk.text;
-      storage.suggestion = chunks;
+      storage.completion = chunks;
       editor.view.dispatch(editor.state.tr);
     }
   } catch (error) {
@@ -77,7 +98,7 @@ async function consumeStream(
     }
 
     onError?.(error);
-    storage.suggestion = '';
+    resetSuggestion(storage);
     editor.view.dispatch(editor.state.tr);
   }
 }
@@ -92,6 +113,7 @@ function requestGhostSuggestion(
 ): void {
   const controller = new AbortController();
   storage.abortController = controller;
+  resetSuggestion(storage);
 
   void consumeStream(
     provider,
@@ -110,6 +132,65 @@ function requestGhostSuggestion(
   });
 }
 
+function clearDebounce(storage: GhostTextStorage): void {
+  if (storage.debounceTimer) {
+    clearTimeout(storage.debounceTimer);
+    storage.debounceTimer = null;
+  }
+}
+
+function cancelPending(storage: GhostTextStorage): void {
+  clearDebounce(storage);
+
+  if (storage.abortController) {
+    storage.abortController.abort();
+    storage.abortController = null;
+  }
+}
+
+function redraw(editor: Editor): void {
+  editor.view.dispatch(editor.state.tr);
+}
+
+function discardSuggestion(storage: GhostTextStorage, editor: Editor): void {
+  cancelPending(storage);
+
+  const wasVisible = remainingSuggestion(storage).length > 0;
+  resetSuggestion(storage);
+
+  if (wasVisible) {
+    redraw(editor);
+  }
+}
+
+function isFormattingOnly(transaction: Transaction): boolean {
+  return transaction.steps.every(
+    (step) => step instanceof AddMarkStep || step instanceof RemoveMarkStep
+  );
+}
+
+function textTypedAtCaret(
+  transaction: Transaction,
+  previousPos: number,
+  nextPos: number
+): string | null {
+  if (transaction.steps.length !== 1 || nextPos <= previousPos) {
+    return null;
+  }
+
+  const [step] = transaction.steps;
+  if (
+    !(step instanceof ReplaceStep) ||
+    step.from !== previousPos ||
+    step.to !== previousPos
+  ) {
+    return null;
+  }
+
+  const inserted = transaction.doc.textBetween(previousPos, nextPos, '\n');
+  return inserted.length === nextPos - previousPos ? inserted : null;
+}
+
 export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
   name: 'ghostText',
 
@@ -122,25 +203,40 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
     };
   },
 
-  addStorage() {
+  addStorage(): GhostTextStorage {
     return {
-      suggestion: '',
+      completion: '',
+      consumed: 0,
       debounceTimer: null,
       abortController: null,
       lastCursorPos: 0,
-      lastChangeWasTyping: false,
+      enabled: this.options.enabled,
+    };
+  },
+
+  addCommands() {
+    return {
+      setGhostTextEnabled: (enabled: boolean) => () => {
+        this.storage.enabled = enabled;
+        if (!enabled) {
+          cancelPending(this.storage);
+          resetSuggestion(this.storage);
+        }
+        return true;
+      },
     };
   },
 
   addKeyboardShortcuts() {
     return {
       Tab: ({ editor }) => {
-        const suggestion = this.storage.suggestion;
+        const suggestion = remainingSuggestion(this.storage);
         if (!suggestion) {
           return false;
         }
 
-        this.storage.suggestion = '';
+        cancelPending(this.storage);
+        resetSuggestion(this.storage);
         editor
           .chain()
           .focus()
@@ -153,67 +249,60 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
         return true;
       },
       Escape: () => {
-        if (!this.storage.suggestion) {
+        if (!remainingSuggestion(this.storage)) {
           return false;
         }
 
-        this.storage.abortController?.abort();
-        this.storage.suggestion = '';
-        this.editor.view.dispatch(this.editor.state.tr);
+        discardSuggestion(this.storage, this.editor);
         return true;
       },
     };
   },
 
-  onSelectionUpdate() {
-    const { from, to } = this.editor.state.selection;
-    const cursorPos = from;
+  onTransaction({ transaction }) {
+    const storage = this.storage;
+    const editor = this.editor;
+    const { selection, doc } = editor.state;
+    const cursorPos = selection.from;
+    const previousPos = storage.lastCursorPos;
+    storage.lastCursorPos = cursorPos;
 
-    if (cursorPos !== this.storage.lastCursorPos || from !== to) {
-      if (this.storage.suggestion) {
-        this.storage.suggestion = '';
-        this.editor.view.dispatch(this.editor.state.tr);
+    if (!transaction.docChanged) {
+      if (cursorPos !== previousPos || !selection.empty) {
+        discardSuggestion(storage, editor);
       }
-      if (this.storage.abortController) {
-        this.storage.abortController.abort();
-        this.storage.abortController = null;
-      }
-      if (this.storage.debounceTimer) {
-        clearTimeout(this.storage.debounceTimer);
-        this.storage.debounceTimer = null;
-      }
-    }
-
-    this.storage.lastCursorPos = cursorPos;
-    this.storage.lastChangeWasTyping = false;
-  },
-
-  onUpdate() {
-    if (!this.options.enabled) {
       return;
     }
 
     const provider = this.options.provider;
-    if (!provider) {
+    const typedByThisUser =
+      !isChangeOrigin(transaction) && editor.view.hasFocus();
+
+    if (
+      !storage.enabled ||
+      !provider ||
+      !typedByThisUser ||
+      isFormattingOnly(transaction)
+    ) {
+      discardSuggestion(storage, editor);
       return;
     }
 
-    this.storage.lastChangeWasTyping = true;
-    this.storage.lastCursorPos = this.editor.state.selection.from;
-    this.storage.suggestion = '';
+    const typed = selection.empty
+      ? textTypedAtCaret(transaction, previousPos, cursorPos)
+      : null;
 
-    if (this.storage.debounceTimer) {
-      clearTimeout(this.storage.debounceTimer);
-      this.storage.debounceTimer = null;
+    if (typed !== null && remainingSuggestion(storage).startsWith(typed)) {
+      clearDebounce(storage);
+      storage.consumed += typed.length;
+      redraw(editor);
+      if (remainingSuggestion(storage) || storage.abortController) {
+        return;
+      }
+    } else {
+      discardSuggestion(storage, editor);
     }
 
-    if (this.storage.abortController) {
-      this.storage.abortController.abort();
-      this.storage.abortController = null;
-    }
-
-    const cursorPos = this.editor.state.selection.from;
-    const doc = this.editor.state.doc;
     const contentBeforeCursor = doc.textBetween(0, cursorPos, '\n');
     if (contentBeforeCursor.length < this.options.minContentLength) {
       return;
@@ -229,20 +318,18 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
       return;
     }
 
-    this.storage.debounceTimer = setTimeout(() => {
-      if (this.options.isAIBusy?.()) {
-        return;
-      }
+    storage.debounceTimer = setTimeout(() => {
+      storage.debounceTimer = null;
 
-      if (!this.storage.lastChangeWasTyping) {
+      if (this.options.isAIBusy?.()) {
         return;
       }
 
       requestGhostSuggestion(
         contentBeforeCursor,
         contentAfterCursor,
-        this.storage,
-        this.editor,
+        storage,
+        editor,
         provider,
         this.options.onError
       );
@@ -250,15 +337,7 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
   },
 
   onDestroy() {
-    if (this.storage.debounceTimer) {
-      clearTimeout(this.storage.debounceTimer);
-      this.storage.debounceTimer = null;
-    }
-
-    if (this.storage.abortController) {
-      this.storage.abortController.abort();
-      this.storage.abortController = null;
-    }
+    cancelPending(this.storage);
   },
 
   addProseMirrorPlugins() {
@@ -269,7 +348,7 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
         key: GhostTextPluginKey,
         props: {
           decorations(state) {
-            const suggestion = extensionStorage.suggestion;
+            const suggestion = remainingSuggestion(extensionStorage);
             if (!suggestion) {
               return DecorationSet.empty;
             }
@@ -283,7 +362,7 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
                 span.textContent = suggestion;
                 return span;
               },
-              { side: 1 }
+              { side: 1, key: suggestion }
             );
 
             return DecorationSet.create(state.doc, [widget]);

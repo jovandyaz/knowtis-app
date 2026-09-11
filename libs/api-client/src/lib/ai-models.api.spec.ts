@@ -22,6 +22,7 @@ describe('aiModelsApi', () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       preferredModel: null,
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
     await aiModelsApi.getPreferences();
     expect(httpClient.get).toHaveBeenCalledWith('/ai/preferences');
@@ -31,6 +32,7 @@ describe('aiModelsApi', () => {
     vi.mocked(httpClient.put).mockResolvedValue({
       preferredModel: null,
       preferredIntent: null,
+      ghostTextEnabled: true,
     });
     await aiModelsApi.updatePreferences({
       preferredModel: null,
@@ -46,6 +48,7 @@ describe('aiModelsApi', () => {
     vi.mocked(httpClient.put).mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'fast',
+      ghostTextEnabled: false,
     });
     await aiModelsApi.updatePreferences({ preferredIntent: 'fast' });
     expect(httpClient.put).toHaveBeenCalledWith('/ai/preferences', {

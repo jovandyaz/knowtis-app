@@ -29,6 +29,10 @@ export { EmptyState, type EmptyStateProps } from './components/EmptyState';
 export { Switch, type SwitchProps } from './components/Switch';
 export { Skeleton } from './components/Skeleton';
 export {
+  DocumentSkeleton,
+  type DocumentSkeletonProps,
+} from './components/DocumentSkeleton';
+export {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,

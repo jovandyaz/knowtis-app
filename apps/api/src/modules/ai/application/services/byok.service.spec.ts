@@ -64,9 +64,11 @@ function makeService(overrides: MakeOverrides) {
   };
   const registry = { languageModel: vi.fn() };
   const settings = {
-    getSettings: vi
-      .fn()
-      .mockResolvedValue({ preferredModel: null, preferredIntent: null }),
+    getSettings: vi.fn().mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+      ghostTextEnabled: true,
+    }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
     ...overrides.settings,
   };
@@ -194,9 +196,11 @@ describe('ByokService', () => {
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
       {
-        getSettings: vi
-          .fn()
-          .mockResolvedValue({ preferredModel: null, preferredIntent: null }),
+        getSettings: vi.fn().mockResolvedValue({
+          preferredModel: null,
+          preferredIntent: null,
+          ghostTextEnabled: true,
+        }),
         patchSettings: vi.fn(),
       } as never
     );
@@ -229,9 +233,11 @@ describe('ByokService', () => {
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
       {
-        getSettings: vi
-          .fn()
-          .mockResolvedValue({ preferredModel: null, preferredIntent: null }),
+        getSettings: vi.fn().mockResolvedValue({
+          preferredModel: null,
+          preferredIntent: null,
+          ghostTextEnabled: true,
+        }),
         patchSettings: vi.fn(),
       } as never
     );
@@ -328,6 +334,7 @@ describe('ByokService', () => {
           getSettings: vi.fn().mockResolvedValue({
             preferredModel: 'openai:gpt-6',
             preferredIntent: 'fast',
+            ghostTextEnabled: true,
           }),
         },
       });
@@ -346,6 +353,7 @@ describe('ByokService', () => {
           getSettings: vi.fn().mockResolvedValue({
             preferredModel: 'anthropic:claude-sonnet-5',
             preferredIntent: null,
+            ghostTextEnabled: true,
           }),
         },
       });

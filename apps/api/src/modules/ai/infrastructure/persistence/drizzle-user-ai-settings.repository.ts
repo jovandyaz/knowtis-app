@@ -26,6 +26,7 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
       .select({
         preferredModel: userAiSettings.preferredModel,
         preferredIntent: userAiSettings.preferredIntent,
+        ghostTextEnabled: userAiSettings.ghostTextEnabled,
       })
       .from(userAiSettings)
       .where(eq(userAiSettings.userId, userId))
@@ -33,6 +34,7 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
     return {
       preferredModel: row?.preferredModel ?? null,
       preferredIntent: toIntent(row?.preferredIntent ?? null),
+      ghostTextEnabled: row?.ghostTextEnabled ?? true,
     };
   }
 

@@ -8,6 +8,7 @@ import {
 import { useSettingsStore } from '@/stores/settings.store';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { Switch } from '@knowtis/design-system';
 import { DEFAULT_MODEL_INTENT, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { advancedOverride } from '../../copilot/intent-picker-options';
@@ -43,11 +44,21 @@ export function AIAssistantSection() {
         />
       </section>
 
-      <section className="space-y-1 opacity-60">
+      <section className="space-y-3">
         <SectionHeader
           title={t('aiAssistant.editorTitle')}
-          description={t('aiAssistant.editorComingSoon')}
+          description={t('aiAssistant.autocompleteHint')}
         />
+        <div className="flex items-center justify-between rounded-lg border border-(--border) p-4">
+          <span className="text-sm text-(--foreground)">
+            {t('aiAssistant.autocompleteLabel')}
+          </span>
+          <Switch
+            checked={prefs?.ghostTextEnabled ?? true}
+            onCheckedChange={(checked) => update({ ghostTextEnabled: checked })}
+            aria-label={t('aiAssistant.autocompleteLabel')}
+          />
+        </div>
       </section>
 
       {byokEnabled ? (
