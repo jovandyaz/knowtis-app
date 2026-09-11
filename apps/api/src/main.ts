@@ -10,6 +10,7 @@ import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
 import { buildAllowedOrigins, buildCorsOptions } from './config/cors-origins';
+import { SHUTDOWN_OPTIONS } from './config/shutdown-options';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
 import { createOauthRateLimit } from './modules/oauth/oauth-rate-limit.middleware';
 import {
@@ -21,6 +22,7 @@ async function bootstrap() {
   // bodyParser off app-wide: oidc-provider reads the raw request stream, so
   // parsers are re-applied below for every non-oauth path instead.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    ...SHUTDOWN_OPTIONS,
     bodyParser: false,
   });
   // Railway terminates TLS at a proxy; without this, req.ip, the fallback
