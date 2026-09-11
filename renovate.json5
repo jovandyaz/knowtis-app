@@ -33,6 +33,7 @@
       ],
       depNameTemplate: 'ghcr.io/railwayapp/cli',
       packageNameTemplate: 'ghcr.io/railwayapp/cli',
+      currentValueTemplate: 'latest',
       datasourceTemplate: 'docker',
     },
   ],
@@ -94,6 +95,14 @@
     {
       description: 'The Node line is moved by hand: .nvmrc, engines and setup-node declare only the major on purpose (Railway and Vercel track it) and Renovate would pin them to a patch',
       matchDepNames: ['node'],
+      matchDatasources: ['!docker'],
+      enabled: false,
+    },
+    {
+      description: 'The Dockerfile base image follows the same hand-moved major; only its pinned digest is refreshed',
+      matchDepNames: ['node'],
+      matchDatasources: ['docker'],
+      matchUpdateTypes: ['major', 'minor', 'patch'],
       enabled: false,
     },
     {

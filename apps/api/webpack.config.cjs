@@ -15,7 +15,11 @@ module.exports = composePlugins(
     config.devtool = 'source-map';
 
     const path = require('path');
-    const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+    const ForkTsCheckerWebpackPlugin = require(
+      require.resolve('fork-ts-checker-webpack-plugin', {
+        paths: [path.dirname(require.resolve('@nx/webpack'))],
+      })
+    );
 
     config.plugins = config.plugins.filter(
       (p) => !(p instanceof ForkTsCheckerWebpackPlugin)
