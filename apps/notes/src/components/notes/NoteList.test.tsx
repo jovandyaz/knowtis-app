@@ -130,6 +130,9 @@ async function renderAt(path: string) {
 
 const lastFilters = () => useNotes.mock.calls.at(-1)?.[0];
 
+const loadingGrid = () =>
+  screen.getByRole('status', { name: 'list.loadingNotes' });
+
 describe('NoteList', () => {
   beforeEach(() => {
     useNotes.mockReset();
@@ -300,6 +303,33 @@ describe('NoteList', () => {
 
     expect(screen.getByText('First')).toBeInTheDocument();
     expect(screen.getByText('Second')).toBeInTheDocument();
+  });
+
+  it('lays the loaded cards out on an auto-fill grid sized by the container', async () => {
+    useNotes.mockReturnValue(loaded([note('note-1', 'First')]));
+
+    await renderAt('/notes');
+
+    const grid = screen.getByText('First').closest('.grid');
+    expect(grid).not.toBeNull();
+    expect(grid?.className).toContain('auto-fill');
+  });
+
+  it('lays the loading skeletons out on the same auto-fill grid', async () => {
+    useNotes.mockReturnValue(pending({ isLoading: true }));
+
+    await renderAt('/notes');
+
+    expect(loadingGrid().className).toContain('auto-fill');
+  });
+
+  it('announces the notes list to assistive technology while it loads', async () => {
+    useNotes.mockReturnValue(pending({ isLoading: true }));
+
+    await renderAt('/notes');
+
+    expect(loadingGrid()).toBeInTheDocument();
+    expect(screen.getByText('list.loadingNotes')).toHaveClass('sr-only');
   });
 
   it('counts every note the server reports, not just the loaded ones', async () => {

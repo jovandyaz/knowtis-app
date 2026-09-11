@@ -1,6 +1,7 @@
 {
   "list": {
     "searchPlaceholder": "Buscar notas...",
+    "loadingNotes": "Cargando notas…",
     "errorLoading": "Error al cargar las notas",
     "noNotesFound": "No se encontraron notas",
     "startCollection": "Silencio creativo...",
