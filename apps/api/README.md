@@ -210,7 +210,7 @@ Tests are co-located with the code they cover. Specs that hit the real Postgres 
 
 ## Deployment
 
-Production runs on Railway with the nixpacks builder (declared in `.railway/railway.ts`); there is no Dockerfile. Build with `pnpm build:api` (output `dist/apps/api/main.js`), start with `node dist/apps/api/main.js`; migrations run in Railway's `preDeployCommand`. See [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
+Production runs on Railway from the multi-stage [`Dockerfile`](Dockerfile) (builder declared in `.railway/railway.ts`). Build with `pnpm build:api` (output `dist/apps/api/main.js`), start with `node dist/apps/api/main.js`; migrations run in Railway's `preDeployCommand` through `apps/api/src/database/migrate.cjs`, the image's bundled copy of `migrate.ts`. See [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md#images).
 
 ---
 
