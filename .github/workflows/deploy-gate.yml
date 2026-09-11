@@ -6,9 +6,9 @@ name: Deploy Gate Tests
 on:
   push:
     branches: [main]
-    paths: ['.github/scripts/**']
+    paths: ['.github/scripts/**', '.github/workflows/deploy-gate.yml']
   pull_request:
-    paths: ['.github/scripts/**']
+    paths: ['.github/scripts/**', '.github/workflows/deploy-gate.yml']
 
 permissions:
   contents: read
