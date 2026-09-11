@@ -54,14 +54,17 @@ without its migration never reaches `main`.
 Railway runs a **pre-deploy command** (declared for `knowtis_app` in [`.railway/railway.ts`](../.railway/railway.ts)) between build and release:
 
 ```ts
-preDeployCommand: ['pnpm exec tsx apps/api/src/database/migrate.ts'],
+preDeployCommand: ['node apps/api/src/database/migrate.cjs'],
 ```
 
 This is the **single source of truth** for applying migrations. It runs
 `migrate()` against the service's own `DATABASE_URL` — the same connection the app
 uses, so there is no risk of a CI secret drifting from the real database — and a
 non-zero exit **aborts the deploy**, so the app never boots against an un-migrated
-schema. Run the exact same path locally with `pnpm db:migrate:run`.
+schema. `migrate.cjs` is `migrate.ts` bundled by esbuild into one self-contained
+file while [`apps/api/Dockerfile`](../apps/api/Dockerfile) builds the image, which
+ships it at its source path, `apps/api/src/database/`, alongside `apps/api/drizzle/`,
+so the `../../drizzle` lookup resolves unchanged. Run the same migrator locally with `pnpm db:migrate:run`.
 
 `apps/api/src/database/migrate.ts`:
 

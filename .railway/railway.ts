@@ -1,9 +1,5 @@
 import { defineRailway, preserve, project, service } from 'railway/iac';
 
-// Build-time devDependencies (nx, tsc, vite) must install, so the build runs
-// with NODE_ENV=development even though the service runs in production.
-const INSTALL = 'NODE_ENV=development pnpm install --frozen-lockfile';
-
 // No watchPatterns on either service: CI gates `railway up` on Nx affected,
 // and patterns made Railway record SKIPPED for snapshots CI had approved.
 // restartPolicyType is Railway's default (ON_FAILURE) and is left implicit:
@@ -13,14 +9,14 @@ const INSTALL = 'NODE_ENV=development pnpm install --frozen-lockfile';
 export default defineRailway(() => {
   const knowtisApp = service('knowtis_app', {
     build: {
-      builder: 'NIXPACKS',
-      buildCommand: `${INSTALL} && pnpm build:api`,
+      builder: 'DOCKERFILE',
+      dockerfilePath: 'apps/api/Dockerfile',
     },
     deploy: {
       startCommand: 'node dist/apps/api/main.js',
       // Nothing else migrates production: CI only migrates its own throwaway
       // database, so dropping this line would ship code against an old schema.
-      preDeployCommand: ['pnpm exec tsx apps/api/src/database/migrate.ts'],
+      preDeployCommand: ['node apps/api/src/database/migrate.cjs'],
       healthcheckPath: '/api/v1/health/ping',
       healthcheckTimeout: 120,
       restartPolicyMaxRetries: 3,
@@ -69,8 +65,8 @@ export default defineRailway(() => {
 
   const knowtisMcp = service('knowtis-mcp', {
     build: {
-      builder: 'NIXPACKS',
-      buildCommand: `${INSTALL} && pnpm nx build mcp`,
+      builder: 'DOCKERFILE',
+      dockerfilePath: 'apps/mcp/Dockerfile',
     },
     deploy: {
       startCommand: 'node dist/apps/mcp/index.js',

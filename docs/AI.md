@@ -1161,7 +1161,7 @@ Flags: `agent_hybrid_retrieval`. Env: `VOYAGE_API_KEY`, `AI_EMBEDDING_MODEL` —
 
 ### Schema migration
 
-The `note_embeddings` table ships as a Drizzle migration (`apps/api/drizzle/0009_last_pride.sql`) which prepends `CREATE EXTENSION IF NOT EXISTS vector;` before the `CREATE TABLE`. Like every schema change it is **applied automatically on deploy** by Railway's pre-deploy command (`pnpm exec tsx apps/api/src/database/migrate.ts`) — see [MIGRATIONS.md](MIGRATIONS.md). Apply it to your local dev DB with:
+The `note_embeddings` table ships as a Drizzle migration (`apps/api/drizzle/0009_last_pride.sql`) which prepends `CREATE EXTENSION IF NOT EXISTS vector;` before the `CREATE TABLE`. Like every schema change it is **applied automatically on deploy** by Railway's pre-deploy command (`node apps/api/src/database/migrate.cjs`) — see [MIGRATIONS.md](MIGRATIONS.md). Apply it to your local dev DB with:
 
 ```bash
 pnpm db:migrate:run
