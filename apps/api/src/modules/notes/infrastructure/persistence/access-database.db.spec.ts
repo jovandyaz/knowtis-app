@@ -29,7 +29,7 @@ describe('dedicated access authority database', () => {
     expect(pool.client.options.max).toBe(2);
     await expect(
       pool.client`select pg_terminate_backend(pg_backend_pid())`
-    ).rejects.toMatchObject({ code: '57P01' });
+    ).rejects.toMatchObject({ code: 'CONNECTION_CLOSED' });
     expect(
       (await pool.client`show statement_timeout`)[0]?.['statement_timeout']
     ).toBe('900ms');
