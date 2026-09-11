@@ -568,7 +568,7 @@ Deploys are CI-driven via `railway up`, gated on the `mcp` project being affecte
 
 On `SIGTERM` or `SIGINT`, [shutdown.ts](../apps/mcp/src/shutdown.ts) stops accepting connections and lets in-flight requests finish, answering requests that arrive during the drain with `Connection: close` and closing each keep-alive socket as soon as its response completes. After `SHUTDOWN_TIMEOUT_MS` (8 s) it force-closes whatever is still open, long-lived `GET /mcp` SSE streams included, and exits 0. It logs `server_shutdown` when the signal arrives and `server_stopped` with `outcome` (`drained` or `forced`) and `durationMs` before exiting; further signals during the drain are ignored. `node` runs as PID 1 under an exec-form start command, and the kernel does not apply a signal's default action to PID 1, so without this handler `SIGTERM` is ignored and the process only ends at `SIGKILL`.
 
-Railway sends `SIGTERM` to the previous deployment once the new one is active, then `SIGKILL` after the service's draining time (`deploy.drainingSeconds` in [`.railway/railway.ts`](../.railway/railway.ts), default 0 s). The 8 s drain completes before the kill only when that draining time exceeds it. The timeout also stays under the 10 s that `docker stop` waits by default.
+Railway sends `SIGTERM` to the previous deployment once the new one is active, then `SIGKILL` after the service's draining time, which [`.railway/railway.ts`](../.railway/railway.ts) sets to 10 s (`deploy.drainingSeconds`; Railway's default is 0 s) so the 8 s drain completes before the kill. The timeout also stays under the 10 s that `docker stop` waits by default.
 
 ### DNS-rebinding protection
 
