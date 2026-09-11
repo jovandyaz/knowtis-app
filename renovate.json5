@@ -33,6 +33,7 @@
       ],
       depNameTemplate: 'ghcr.io/railwayapp/cli',
       packageNameTemplate: 'ghcr.io/railwayapp/cli',
+      currentValueTemplate: 'latest',
       datasourceTemplate: 'docker',
     },
   ],
