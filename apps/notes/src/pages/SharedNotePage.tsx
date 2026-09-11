@@ -5,6 +5,7 @@ import { useParams } from '@tanstack/react-router';
 
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import { EditorCardSkeleton } from '@/components/editor/EditorCardSkeleton';
 import { SharedNoteAccessError } from '@/components/notes/shared-note/SharedNoteAccessError';
 import { SharedNoteHeader } from '@/components/notes/shared-note/SharedNoteHeader';
 import { WorkspaceTabBar } from '@/components/workspace/WorkspaceTabBar';
@@ -21,7 +22,7 @@ import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { ApiClientError } from '@knowtis/api-client';
 import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
 import { useNoteByToken } from '@knowtis/data-access-notes';
-import { Button, LoadingState } from '@knowtis/design-system';
+import { Button } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION, type Artifact } from '@knowtis/shared-types';
 
@@ -79,8 +80,10 @@ export function SharedNotePage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingState message={t('shared.loadingSharedNote')} />
+      <div className="min-h-screen p-4 md:p-8">
+        <div className="mx-auto max-w-4xl">
+          <EditorCardSkeleton label={t('shared.loadingSharedNote')} />
+        </div>
       </div>
     );
   }

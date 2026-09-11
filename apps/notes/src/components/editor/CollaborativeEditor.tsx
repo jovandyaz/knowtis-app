@@ -26,7 +26,7 @@ import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
 import { notesQueryKeys } from '@knowtis/data-access-notes';
-import { cn, ErrorState } from '@knowtis/design-system';
+import { cn, DocumentSkeleton, ErrorState } from '@knowtis/design-system';
 import {
   CollaborationIndicator,
   EditorErrorBoundary,
@@ -44,16 +44,14 @@ import type {
   CollaborativeEditorProps,
   InternalEditorProps,
 } from './CollaborativeEditor.types';
+import {
+  EDITOR_CONTAINER_CLASSES,
+  EDITOR_MIN_HEIGHT,
+  EDITOR_PADDING,
+} from './editor-container.styles';
+import { EditorCardSkeleton } from './EditorCardSkeleton';
 import { openImagePicker } from './image/imagePicker';
 import { useEditorExtensions } from './useEditorExtensions';
-
-const EDITOR_PADDING = 'p-4 md:p-6';
-
-const EDITOR_CONTAINER_CLASSES = cn(
-  'rounded-2xl border border-border bg-card/50 backdrop-blur-sm',
-  'transition-all duration-300',
-  'focus-within:border-primary/50 focus-within:shadow-lg focus-within:shadow-primary/5'
-);
 
 function TypewriterPlaceholder({ texts }: { texts: string[] }) {
   const text = useTypewriter({
@@ -76,6 +74,25 @@ function TypewriterPlaceholder({ texts }: { texts: string[] }) {
   );
 }
 
+const SYNC_SKELETON_LINES = 6;
+
+function SyncSkeleton({ label }: { label: string }) {
+  return (
+    <div
+      className={cn(
+        'absolute inset-x-0 top-0 pointer-events-none',
+        EDITOR_PADDING
+      )}
+    >
+      <DocumentSkeleton
+        showTitle={false}
+        lines={SYNC_SKELETON_LINES}
+        label={label}
+      />
+    </div>
+  );
+}
+
 function InternalEditor({
   noteId,
   yDoc,
@@ -92,6 +109,7 @@ function InternalEditor({
   onEditorReady,
   onVoiceNote,
 }: InternalEditorProps) {
+  const { t } = useTranslation('notes');
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const openAIMenu = useAIMenuStore((s) => s.open);
   const handleAskAI = useCallback(() => openAIMenu(), [openAIMenu]);
@@ -125,7 +143,7 @@ function InternalEditor({
       attributes: {
         class: cn(
           'prose prose-sm sm:prose-base max-w-none',
-          `min-h-[300px] ${EDITOR_PADDING}`,
+          `${EDITOR_MIN_HEIGHT} ${EDITOR_PADDING}`,
           'focus:outline-none',
           'prose-headings:text-foreground prose-headings:font-bold',
           'prose-p:text-foreground leading-relaxed',
@@ -212,11 +230,14 @@ function InternalEditor({
           </>
         )}
         {editor && editor.isEditable && <TableControls editor={editor} />}
-        {editorIsEmpty && <TypewriterPlaceholder texts={placeholder} />}
-        <EditorContent
-          editor={editor}
-          className="[&_.ProseMirror]:min-h-[300px]"
-        />
+        {/* isSynced flips back to false on every reconnect, so only an editor with nothing to show may be covered. */}
+        {editorIsEmpty &&
+          (isSynced ? (
+            <TypewriterPlaceholder texts={placeholder} />
+          ) : (
+            <SyncSkeleton label={t('editor.loadingEditor')} />
+          ))}
+        <EditorContent editor={editor} />
       </div>
 
       <div className="h-16 md:hidden" />
@@ -227,16 +248,7 @@ function InternalEditor({
 function EditorLoadingState() {
   const { t } = useTranslation('notes');
 
-  return (
-    <div
-      className={cn(
-        EDITOR_CONTAINER_CLASSES,
-        'min-h-[350px] flex items-center justify-center'
-      )}
-    >
-      <div className="text-muted-foreground">{t('editor.loadingEditor')}</div>
-    </div>
-  );
+  return <EditorCardSkeleton label={t('editor.loadingEditor')} />;
 }
 
 export function CollaborativeEditor({

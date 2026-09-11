@@ -191,6 +191,21 @@ describe('NoteEditorPage', () => {
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
   });
 
+  it('shows the note skeleton while the note loads', () => {
+    noteQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+    });
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(
+      screen.getByRole('status', { name: 'editor.loadingNote' })
+    ).toBeInTheDocument();
+  });
+
   it('offers the organization properties to a signed-up owner', () => {
     renderWithClient(<NoteEditorPage />);
     expect(screen.getByTestId('note-properties-row')).toBeInTheDocument();
