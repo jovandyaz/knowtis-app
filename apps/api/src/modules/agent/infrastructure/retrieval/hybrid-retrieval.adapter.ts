@@ -19,6 +19,9 @@ import { toNoteHit } from './note-hit.mapper';
 import { reciprocalRankFusion } from './rrf';
 
 const CANDIDATES_PER_LEG = 50;
+/** Past this, a note is not waiting its turn — the reconciler is failing on it,
+ * and reporting it as pending would promise indexing that will never arrive. */
+const PENDING_INDEX_WINDOW_SECONDS = 900;
 const MAX_HITS = 20;
 
 @Injectable()
@@ -90,6 +93,7 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     const rows = await this.notes.findAccessibleNotesUnindexed(
       branded.value,
       this.config.get('AI_EMBEDDING_MODEL'),
+      PENDING_INDEX_WINDOW_SECONDS,
       limit
     );
     return rows.map((r) => toNoteHit(r, userId));

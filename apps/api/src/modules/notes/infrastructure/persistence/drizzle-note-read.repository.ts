@@ -279,6 +279,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
   async findAccessibleNotesUnindexed(
     userId: UserId,
     model: string,
+    withinSeconds: number,
     limit: number
   ): Promise<NoteSummary[]> {
     return this.db
@@ -291,7 +292,8 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
           this.accessCondition(userId),
           sql`(${noteEmbeddings.noteId} IS NULL
                OR ${notes.updatedAt} > ${noteEmbeddings.updatedAt}
-               OR ${noteEmbeddings.model} <> ${model})`
+               OR ${noteEmbeddings.model} <> ${model})`,
+          sql`${notes.updatedAt} > now() - make_interval(secs => ${withinSeconds})`
         )
       )
       .orderBy(desc(notes.updatedAt), desc(notes.id))

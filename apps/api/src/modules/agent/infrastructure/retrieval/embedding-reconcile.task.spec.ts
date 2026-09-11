@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -179,5 +180,36 @@ describe('EmbeddingReconcileTask', () => {
     vi.mocked(repo.upsert).mockRejectedValueOnce(new Error('db write failed'));
     await expect(task.reconcile()).resolves.toBeUndefined();
     expect(repo.upsert).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('EmbeddingReconcileTask progress reporting', () => {
+  it('reports an error when a cycle had work and embedded none of it', async () => {
+    const { task, embed } = makeTask({
+      stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],
+    });
+    vi.mocked(embed.embedDocuments).mockRejectedValue(new Error('402'));
+    const logged = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    await task.reconcile();
+
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('embedded none of 1')
+    );
+    logged.mockRestore();
+  });
+
+  it('stays quiet when there is nothing stale to do', async () => {
+    const { task } = makeTask({ stale: [] });
+    const logged = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    await task.reconcile();
+
+    expect(logged).not.toHaveBeenCalled();
+    logged.mockRestore();
   });
 });

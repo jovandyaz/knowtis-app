@@ -26,6 +26,7 @@ const UP_TO_DATE = '00000000-0000-4000-8000-000000000196';
 const SOFT_DELETED = '00000000-0000-4000-8000-000000000197';
 const FOREIGN = '00000000-0000-4000-8000-000000000198';
 const SHARED = '00000000-0000-4000-8000-000000000199';
+const LONG_STALE = '00000000-0000-4000-8000-00000000019a';
 
 const MODEL = 'voyage-4';
 
@@ -42,10 +43,13 @@ describe.runIf(DB_AVAILABLE)(
     let db: Database;
     let repo: DrizzleNoteReadRepository;
 
-    const unindexedIds = async () => {
+    const WINDOW_SECONDS = 900;
+
+    const unindexedIds = async (withinSeconds = WINDOW_SECONDS) => {
       const rows = await repo.findAccessibleNotesUnindexed(
         UserId.create(MINE)._unsafeUnwrap(),
         MODEL,
+        withinSeconds,
         10
       );
       return rows.map((r) => r.id);
@@ -99,6 +103,7 @@ describe.runIf(DB_AVAILABLE)(
           },
           { id: FOREIGN, ownerId: OTHER, title: 'theirs', content: 'f' },
           { id: SHARED, ownerId: OTHER, title: 'lent', content: 'g' },
+          { id: LONG_STALE, ownerId: MINE, title: 'stuck', content: 'h' },
         ])
         .onConflictDoNothing();
 
@@ -106,6 +111,11 @@ describe.runIf(DB_AVAILABLE)(
         .insert(notePermissions)
         .values([{ noteId: SHARED, userId: MINE, permission: 'viewer' }])
         .onConflictDoNothing();
+
+      await db
+        .update(notes)
+        .set({ updatedAt: sql`now() - make_interval(hours => 3)` })
+        .where(eq(notes.id, LONG_STALE));
 
       // One insert stamps every row with the same transaction clock, which
       // would make any ordering assertion pass by accident.
@@ -202,9 +212,20 @@ describe.runIf(DB_AVAILABLE)(
       const rows = await repo.findAccessibleNotesUnindexed(
         UserId.create(MINE)._unsafeUnwrap(),
         MODEL,
+        WINDOW_SECONDS,
         1
       );
       expect(rows).toHaveLength(1);
+    });
+
+    // A note the reconciler will never manage to embed would otherwise be
+    // reported as "indexing" forever; the window is what bounds that claim.
+    it('omits a note stale for far longer than indexing could plausibly take', async () => {
+      expect(await unindexedIds()).not.toContain(LONG_STALE);
+    });
+
+    it('still reports it when the window is widened past its age', async () => {
+      expect(await unindexedIds(4 * 60 * 60)).toContain(LONG_STALE);
     });
   }
 );

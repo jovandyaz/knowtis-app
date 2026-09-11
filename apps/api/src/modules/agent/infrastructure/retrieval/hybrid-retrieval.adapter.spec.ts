@@ -126,8 +126,22 @@ describe('HybridRetrievalAdapter.listUnindexed', () => {
     expect(repo.findAccessibleNotesUnindexed).toHaveBeenCalledWith(
       expect.objectContaining({ value: 'u1' }),
       'voyage-4',
+      expect.any(Number),
       5
     );
+  });
+
+  it('bounds the claim to a window a healthy reconciler could cover', async () => {
+    const { adapter, repo } = make({ lexical: [], vector: [] });
+
+    await adapter.listUnindexed('u1', 5);
+
+    const [, , withinSeconds] = vi.mocked(repo.findAccessibleNotesUnindexed)
+      .mock.calls[0];
+    // Longer than one quiet period plus cycle (90 + 120 s), short enough that a
+    // note stuck for hours stops being reported as pending.
+    expect(withinSeconds).toBeGreaterThan(210);
+    expect(withinSeconds).toBeLessThanOrEqual(3600);
   });
 
   it('reports none when no Voyage key is configured, so nothing is ever indexed', async () => {

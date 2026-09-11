@@ -1199,7 +1199,11 @@ The reconcile cron debounces (`QUIET_SECONDS = 90`, every 120 s), so a note is n
 
 When `searchNotes` matches nothing at all, it therefore also returns `unindexed`: up to 5 accessible notes — newest first — with no embedding for the current model, or one older than the note. The agent judges them by title, opens promising ones with `getNote`, and otherwise tells the user a very recent note may not be searchable by meaning yet rather than claiming it does not exist. The list is empty whenever `VOYAGE_API_KEY` is unset or the flag is off, so the agent never implies indexing that is not running.
 
-It cannot, however, distinguish "waiting its turn" from "failing to embed": a note the embedding provider keeps rejecting is reported as pending forever. Watch the reconciler's `Failed to embed a batch` warnings.
+**The list only covers notes written in the last 15 minutes.** Nothing in the data distinguishes "queued" from "the provider keeps rejecting this note" — a bad key, a revoked quota or an unknown `AI_EMBEDDING_MODEL` all fail silently per batch — so without a bound the agent would promise indexing forever. The window caps that claim at the span where waiting is the normal state. The cost is that during a backfill deeper than ~7 cycles, notes older than the window are no longer hinted; that is the deliberate trade, since a stale hint is a lie and a missing one is only unhelpful.
+
+The list is also **not matched against the query** — semantic relevance is exactly what the missing embedding would have provided. The agent filters it by reading the titles, which is why the tool description tells it to judge them and stay quiet when none fit.
+
+For the operational signal, watch the reconciler: `Embedding reconcile embedded none of N stale notes` is logged at **error** level whenever a cycle has work and completes none of it.
 
 ### Retrieval-quality eval
 

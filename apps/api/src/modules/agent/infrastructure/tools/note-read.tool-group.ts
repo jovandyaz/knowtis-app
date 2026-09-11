@@ -56,7 +56,7 @@ export class NoteReadToolGroup implements AgentToolGroup {
     return {
       searchNotes: tool({
         description:
-          "Search the user's notes. Returns {hits} — notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them. When nothing matches, the result may also carry `unindexed`: recently created or edited notes whose current text is not searchable by meaning yet, only by the exact words it contains. Judge them by title — call getNote on any that could plausibly answer the question. If none fit, answer normally, but say a very recent note may not be searchable by meaning yet instead of stating flatly that no such note exists.",
+          "Search the user's notes. Returns {hits} — notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them. When nothing matches, the result may also carry `unindexed`: recently created or edited notes whose current text is not searchable by meaning yet, only by the exact words it contains. Judge them by title — call getNote on any that could plausibly answer the question. This list is not matched against your query — it is simply what is pending — so most of the time none of it is relevant. If none fits, answer normally; only when the question was about the user's own notes, add that a very recent note may not be searchable by meaning yet, instead of stating flatly that no such note exists.",
         inputSchema: z.object({
           query: z
             .string()
