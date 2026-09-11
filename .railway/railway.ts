@@ -6,6 +6,8 @@ import { defineRailway, preserve, project, service } from 'railway/iac';
 // `railway config plan` normalizes the default to null and would report a
 // permanent diff if it were declared.
 
+const DRAINING_SECONDS = 10;
+
 export default defineRailway(() => {
   const knowtisApp = service('knowtis_app', {
     build: {
@@ -20,6 +22,7 @@ export default defineRailway(() => {
       healthcheckPath: '/api/v1/health/ping',
       healthcheckTimeout: 120,
       restartPolicyMaxRetries: 3,
+      drainingSeconds: DRAINING_SECONDS,
     },
     replicas: { 'us-west2': 1 },
     domains: ['api.knowtis.app'],
@@ -73,6 +76,7 @@ export default defineRailway(() => {
       healthcheckPath: '/health',
       healthcheckTimeout: 60,
       restartPolicyMaxRetries: 3,
+      drainingSeconds: DRAINING_SECONDS,
     },
     replicas: { 'us-west2': 1 },
     domains: ['mcp.knowtis.app'],
