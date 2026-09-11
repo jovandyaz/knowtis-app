@@ -18,6 +18,10 @@ import { HocuspocusService } from '../hocuspocus.service';
 
 const COLLAB_CHANNEL_PREFIX = 'knowtis-collab';
 
+export function documentChannel(documentName: string): string {
+  return `${COLLAB_CHANNEL_PREFIX}:${documentName}`;
+}
+
 /** Boots the real service against `redisUrl`, with the non-Redis extensions stubbed. */
 export function buildCollaborationService(redisUrl: string): HocuspocusService {
   return new HocuspocusService(
@@ -71,6 +75,9 @@ export async function createRedisOutage(upstreamUrl: string) {
   let localPort = 0;
 
   const start = async (): Promise<void> => {
+    if (listener) {
+      return;
+    }
     const server = createServer((downstream) => {
       const forward = createConnection({ host, port });
       for (const socket of [downstream, forward]) {
@@ -128,10 +135,10 @@ export async function createCollabPublishObserver(upstreamUrl: string) {
 
   return {
     watch: async (documentName: string) => {
-      await client.subscribe(`${COLLAB_CHANNEL_PREFIX}:${documentName}`);
+      await client.subscribe(documentChannel(documentName));
     },
     publishCount: (documentName: string) =>
-      counts.get(`${COLLAB_CHANNEL_PREFIX}:${documentName}`) ?? 0,
+      counts.get(documentChannel(documentName)) ?? 0,
     stop: async () => {
       await client.quit().catch(() => undefined);
       client.disconnect();
