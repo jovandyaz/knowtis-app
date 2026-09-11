@@ -10,7 +10,12 @@
       "executor": "@nx/webpack:webpack",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
-      "inputs": ["default", "{workspaceRoot}/.github/workflows/ci.yml"],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.github/workflows/ci.yml",
+        "{workspaceRoot}/tools/prune-runtime-deps.mjs",
+        "{workspaceRoot}/.dockerignore"
+      ],
       "options": {
         "target": "node",
         "compiler": "tsc",

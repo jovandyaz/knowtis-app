@@ -14,7 +14,13 @@
         ],
         "parallel": true
       },
-      "outputs": ["{workspaceRoot}/dist/apps/mcp"]
+      "outputs": ["{workspaceRoot}/dist/apps/mcp"],
+      "inputs": [
+        "production",
+        "^production",
+        "{workspaceRoot}/tools/prune-runtime-deps.mjs",
+        "{workspaceRoot}/.dockerignore"
+      ]
     },
     "build-mcpb": {
       "executor": "nx:run-commands",

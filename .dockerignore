@@ -1,0 +1,17 @@
+.git
+**/node_modules
+**/dist
+**/tmp
+**/coverage
+.nx
+.claude
+.codegraph
+.superpowers
+.playwright-mcp
+.vercel
+.idea
+.vscode
+**/.env
+**/.env.*
+**/*.log
+**/.DS_Store

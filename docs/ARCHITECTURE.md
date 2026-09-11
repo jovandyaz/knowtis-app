@@ -621,6 +621,8 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected*
 
 **CI job** (single job, sequential steps): `pnpm skills:check` → `pnpm lint:config` → zizmor (workflow audit) → lint → typecheck → migration-drift check (`nx db:generate api` must produce no diff) → apply migrations (`nx db:migrate:run api` against the CI Postgres) → test (`--parallel=2`, hosted runners OOM beyond that) → production build → sharing E2E when `notes-e2e` is affected. The E2E target starts separate services, rebuilds with its own loopback URLs without Nx cache, and retains Playwright evidence for seven days. CI then exposes one `*_affected` output per app.
 
+**Image job** (pull requests only, after the CI job): `build-images` runs `docker build` for `apps/api/Dockerfile` and `apps/mcp/Dockerfile`, each when its app is affected, so an image-only break fails the PR instead of the Railway deploy.
+
 **Deploy jobs** (main push only, each gated on its app being affected):
 
 | Job                 | Target                                                                                                                                 |
