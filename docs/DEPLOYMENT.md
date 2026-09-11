@@ -28,12 +28,12 @@ How Knowtis is deployed to production: Railway (API + MCP) and Vercel (notes fro
 Deployments are triggered by the **CI pipeline**, not by Railway's GitHub integration.
 
 ```
-Push to main → CI: skills:check, lint, typecheck, apply migrations, test, drift check, build → deploy → wait for SUCCESS
+Push to main → CI: skills:check, lint, typecheck, drift check, apply migrations, test, build → deploy → wait for SUCCESS
 ```
 
 The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job runs `.github/scripts/railway-deploy.sh` in the Railway CLI container.
 
-That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; `SKIPPED` fails (the new deployment did not become live; see the `watchPatterns` note under [.railway/railway.ts](#railwayrailwayts)). `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 25-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
+That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; `SKIPPED` fails (the new deployment did not become live; see the `watchPatterns` note under [.railway/railway.ts](#railwayrailwayts)). `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 25-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/` or to `deploy-gate.yml` itself, which is where Renovate bumps the Railway CLI image digest.
 
 **Config files:**
 

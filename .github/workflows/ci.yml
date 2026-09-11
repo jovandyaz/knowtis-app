@@ -4,20 +4,6 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    # Filters the PR's base branch, so stacked PRs need their parent's prefix listed here.
-    branches:
-      - main
-      - develop
-      - feat/**
-      - fix/**
-      - docs/**
-      - chore/**
-      - refactor/**
-      - test/**
-      - build/**
-      - ci/**
-      - perf/**
-      - style/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,6 +15,8 @@ permissions:
 env:
   # renovate: datasource=npm depName=vercel
   VERCEL_CLI_VERSION: 59.15.1
+  # renovate: datasource=pypi depName=zizmor
+  ZIZMOR_VERSION: 1.30.1
 
 jobs:
   ci:
@@ -73,10 +61,10 @@ jobs:
       # need it here — there is no .env on a runner to supply it. 32 bytes base64.
       TOKEN_HASH_KEY: Y2ktdGhyb3dhd2F5LXRva2VuLWhhc2gta2V5LTMyYiE=
     outputs:
-      api_affected: ${{ steps.check-api.outputs.affected }}
-      notes_affected: ${{ steps.check-notes.outputs.affected }}
-      mcp_affected: ${{ steps.check-mcp.outputs.affected }}
-      backoffice_affected: ${{ steps.check-backoffice.outputs.affected }}
+      api_affected: ${{ steps.affected.outputs.api }}
+      notes_affected: ${{ steps.affected.outputs.notes }}
+      mcp_affected: ${{ steps.affected.outputs.mcp }}
+      backoffice_affected: ${{ steps.affected.outputs.backoffice }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -107,7 +95,7 @@ jobs:
       - name: Audit workflows with zizmor
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pipx run zizmor==1.30.1 .github/workflows/
+        run: pipx run "zizmor==$ZIZMOR_VERSION" .github/workflows/
 
       - name: Lint (affected)
         run: npx nx affected -t lint
@@ -138,27 +126,27 @@ jobs:
       - name: Build (affected)
         run: npx nx affected -t build --configuration=production
 
-      - name: Check if sharing acceptance is affected
-        id: check-sharing-e2e
+      - name: Detect affected deploy targets
+        id: affected
         run: |
-          if npx nx show projects --affected --withTarget=e2e | grep -qx notes-e2e; then
-            echo "affected=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "affected=false" >> "$GITHUB_OUTPUT"
-          fi
+          affected="$(npx nx show projects --affected)"
+          for project in api notes mcp backoffice notes-e2e; do
+            if printf '%s\n' "$affected" | grep -qx "$project"; then value=true; else value=false; fi
+            echo "${project//-/_}=$value" >> "$GITHUB_OUTPUT"
+          done
 
       - name: Install Chromium for sharing acceptance
-        if: steps.check-sharing-e2e.outputs.affected == 'true'
+        if: steps.affected.outputs.notes_e2e == 'true'
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Sharing acceptance against production builds
-        if: steps.check-sharing-e2e.outputs.affected == 'true'
+        if: steps.affected.outputs.notes_e2e == 'true'
         timeout-minutes: 15
         # Own Compose project and ports; setup strips inherited service credentials.
         run: npx nx e2e notes-e2e
 
       - name: Upload sharing acceptance evidence
-        if: always() && steps.check-sharing-e2e.outputs.affected == 'true'
+        if: always() && steps.affected.outputs.notes_e2e == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sharing-acceptance
@@ -168,42 +156,6 @@ jobs:
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: ignore
-
-      - name: Check if API is affected
-        id: check-api
-        run: |
-          if npx nx show projects --affected --type app | grep -q '^api$'; then
-            echo "affected=true" >> $GITHUB_OUTPUT
-          else
-            echo "affected=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check if Notes is affected
-        id: check-notes
-        run: |
-          if npx nx show projects --affected --type app | grep -q '^notes$'; then
-            echo "affected=true" >> $GITHUB_OUTPUT
-          else
-            echo "affected=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check if MCP is affected
-        id: check-mcp
-        run: |
-          if npx nx show projects --affected --type app | grep -q '^mcp$'; then
-            echo "affected=true" >> $GITHUB_OUTPUT
-          else
-            echo "affected=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check if Backoffice is affected
-        id: check-backoffice
-        run: |
-          if npx nx show projects --affected --type app | grep -q '^backoffice$'; then
-            echo "affected=true" >> $GITHUB_OUTPUT
-          else
-            echo "affected=false" >> $GITHUB_OUTPUT
-          fi
 
   deploy-frontend:
     name: Deploy Frontend to Vercel
@@ -228,15 +180,16 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
+          cache: 'pnpm'
 
       - name: Pull Vercel environment
-        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --token=$VERCEL_TOKEN
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build
-        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} build --prod --token=$VERCEL_TOKEN
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy
-        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --prod --token=$VERCEL_TOKEN
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
   deploy-backoffice:
     name: Deploy Backoffice to Vercel
@@ -261,15 +214,16 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
+          cache: 'pnpm'
 
       - name: Pull Vercel environment
-        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} pull --yes --environment=production --token=$VERCEL_TOKEN
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build
-        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} build --prod --local-config=apps/backoffice/vercel.json --token=$VERCEL_TOKEN
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --local-config=apps/backoffice/vercel.json --token="$VERCEL_TOKEN"
 
       - name: Deploy
-        run: pnpm dlx vercel@${{ env.VERCEL_CLI_VERSION }} deploy --prebuilt --prod --local-config=apps/backoffice/vercel.json --token=$VERCEL_TOKEN
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --local-config=apps/backoffice/vercel.json --token="$VERCEL_TOKEN"
 
   deploy:
     name: Deploy API to Railway
