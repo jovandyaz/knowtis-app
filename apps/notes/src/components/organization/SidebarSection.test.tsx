@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOUCH_TARGET_HEIGHT_CLASS } from '@knowtis/design-system';
+
 import { SidebarSection } from './SidebarSection';
 
 vi.mock('react-i18next', () => ({
@@ -63,6 +65,22 @@ describe('SidebarSection', () => {
 
     expect(header()).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('work')).not.toBeInTheDocument();
+  });
+
+  it('gives the header a touch-sized target on a phone', () => {
+    renderSection();
+
+    expect(header()).toHaveClass(...TOUCH_TARGET_HEIGHT_CLASS.split(' '));
+  });
+
+  it('names the region it controls for assistive tech', () => {
+    renderSection();
+
+    const region = header().getAttribute('aria-controls');
+    expect(region).toBeTruthy();
+    expect(document.getElementById(region as string)).toContainElement(
+      screen.getByText('work')
+    );
   });
 
   it('names the action the click performs', async () => {

@@ -3,10 +3,15 @@ import { useTranslation } from 'react-i18next';
 
 import { ChevronDown } from 'lucide-react';
 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  TOUCH_TARGET_HEIGHT_CLASS,
+} from '@knowtis/design-system';
 import { useCollapsible } from '@knowtis/shared-hooks';
 
-const HEADER_CLASSES =
-  'flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 transition-colors hover:text-muted-foreground';
+const HEADER_CLASSES = `flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 transition-colors hover:text-muted-foreground ${TOUCH_TARGET_HEIGHT_CLASS}`;
 
 interface SidebarSectionProps {
   title: string;
@@ -23,11 +28,12 @@ export function SidebarSection({
   const { isCollapsed, toggle } = useCollapsible(storageKey);
 
   return (
-    <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={!isCollapsed}
+    <Collapsible
+      open={!isCollapsed}
+      onOpenChange={toggle}
+      className="flex flex-col gap-1"
+    >
+      <CollapsibleTrigger
         title={isCollapsed ? t('labels.expand') : t('labels.collapse')}
         className={HEADER_CLASSES}
       >
@@ -38,9 +44,11 @@ export function SidebarSection({
             isCollapsed ? '-rotate-90' : ''
           }`}
         />
-      </button>
+      </CollapsibleTrigger>
 
-      {!isCollapsed && <div className="flex flex-col gap-0.5">{children}</div>}
-    </div>
+      <CollapsibleContent className="flex flex-col gap-0.5">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
