@@ -72,6 +72,9 @@ export function TagPicker({
         className={triggerClassName}
       >
         <Plus className="size-3" />
+        {selected.length === 0 && (
+          <span>{t('organization.tags.addLabel')}</span>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64 p-1">
         <Input
