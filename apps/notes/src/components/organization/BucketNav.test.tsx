@@ -70,6 +70,7 @@ const rowFor = (label: string) => screen.getByText(label).closest('a');
 
 describe('BucketNav', () => {
   beforeEach(() => {
+    localStorage.clear();
     noteCounts.mockReturnValue({
       inbox: 7,
       projects: 3,
@@ -158,6 +159,16 @@ describe('BucketNav', () => {
 
     expect(onNavigate).toHaveBeenCalledTimes(1);
   });
+  it('collapses the section, hiding the buckets but not its title', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await user.click(screen.getByRole('button', { name: 'Organización' }));
+
+    expect(screen.getByText('Organización')).toBeInTheDocument();
+    expect(screen.queryByText('Proyectos')).not.toBeInTheDocument();
+  });
+
   it('should sit on the rail every organization list shares', async () => {
     await renderAt('/notes');
 

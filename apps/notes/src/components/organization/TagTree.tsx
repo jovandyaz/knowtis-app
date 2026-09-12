@@ -8,7 +8,7 @@ import {
   useSearch,
 } from '@tanstack/react-router';
 
-import { ROUTES } from '@/config';
+import { ROUTES, STORAGE_KEYS } from '@/config';
 import { ChevronDown, ChevronRight, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,6 +28,7 @@ import {
   NAV_ROW_ACTIVE,
   NAV_ROW_IDLE,
 } from './nav-row.styles';
+import { SidebarSection } from './SidebarSection';
 import { tagSwatchClass, tagTextClass } from './tag-colors';
 import { buildTagTree, type TagTreeItem } from './tag-tree.utils';
 import { TagActionsMenu } from './TagActionsMenu';
@@ -203,13 +204,13 @@ export function TagTree({ onNavigate }: TagTreeProps) {
   };
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-        {t('organization.tagsTitle')}
-      </span>
-      <div className="flex flex-col gap-0.5">
+    <>
+      <SidebarSection
+        title={t('organization.tagsTitle')}
+        storageKey={STORAGE_KEYS.SIDEBAR_TAGS_COLLAPSED}
+      >
         {buildTagTree(tags).map(renderItem)}
-      </div>
+      </SidebarSection>
 
       {pendingDelete && (
         <DeleteTagDialog
@@ -223,6 +224,6 @@ export function TagTree({ onNavigate }: TagTreeProps) {
           }}
         />
       )}
-    </div>
+    </>
   );
 }

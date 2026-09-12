@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NoteSupertagCounts } from '@knowtis/shared-types';
@@ -61,6 +62,7 @@ const rowFor = (key: string) => screen.getByText(key).closest('a');
 
 describe('SupertagNav', () => {
   beforeEach(() => {
+    localStorage.clear();
     supertagCounts.mockReturnValue({ ...noCounts, person: 3, meeting: 1 });
   });
 
@@ -120,6 +122,20 @@ describe('SupertagNav', () => {
       '3'
     );
   });
+  it('collapses the section, hiding the types but not its title', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await user.click(
+      screen.getByRole('button', { name: 'organization.typesTitle' })
+    );
+
+    expect(screen.getByText('organization.typesTitle')).toBeInTheDocument();
+    expect(
+      screen.queryByText('organization.supertags.names.person')
+    ).not.toBeInTheDocument();
+  });
+
   it('should sit on the rail every organization list shares', async () => {
     await renderAt('/notes');
 
