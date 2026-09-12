@@ -29,11 +29,8 @@ const CHIP_CLASSES = `inline-flex items-center gap-1.5 rounded-full border borde
 
 const MENU_CHIP_CLASSES = `${CHIP_CLASSES} transition-colors hover:bg-muted/40`;
 
-// Dashed, so the control that adds a tag never reads as a tag the note carries.
 const ADD_CHIP_CLASSES = `${MENU_CHIP_CLASSES} cursor-pointer border-dashed`;
 
-// Tight inside a group, loose between groups: what belongs together stays
-// together when the row wraps.
 const GROUP_CLASSES = 'flex flex-wrap items-center gap-1.5';
 
 const ACTION_CLASSES = `inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:cursor-default disabled:opacity-60 sm:ml-auto ${TOUCH_TARGET_HEIGHT_CLASS}`;
