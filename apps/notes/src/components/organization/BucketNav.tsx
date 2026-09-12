@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Link, useLocation, useSearch } from '@tanstack/react-router';
 
-import { ROUTES } from '@/config';
+import { ROUTES, STORAGE_KEYS } from '@/config';
 
 import { useNoteCounts } from '@knowtis/data-access-notes';
 import { BucketDot } from '@knowtis/design-system';
@@ -17,6 +17,7 @@ import {
   NAV_ROW_ACTIVE,
   NAV_ROW_IDLE,
 } from './nav-row.styles';
+import { SidebarSection } from './SidebarSection';
 
 const NAV_ORDER = [
   INBOX_FILTER,
@@ -37,39 +38,37 @@ export function BucketNav({ onNavigate }: BucketNavProps) {
   const onNotesList = pathname === ROUTES.NOTES;
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-        {t('organization.title')}
-      </span>
-      <div className="flex flex-col gap-0.5">
-        {NAV_ORDER.map((bucket) => {
-          const count = counts?.[bucket] ?? 0;
-          const showsCount = bucket !== UNCOUNTED_BUCKET && count > 0;
-          const isActive = onNotesList && search.bucket === bucket;
+    <SidebarSection
+      title={t('organization.title')}
+      storageKey={STORAGE_KEYS.SIDEBAR_BUCKETS_COLLAPSED}
+    >
+      {NAV_ORDER.map((bucket) => {
+        const count = counts?.[bucket] ?? 0;
+        const showsCount = bucket !== UNCOUNTED_BUCKET && count > 0;
+        const isActive = onNotesList && search.bucket === bucket;
 
-          return (
-            <Link
-              key={bucket}
-              to={ROUTES.NOTES}
-              search={{ bucket, view: 'all' }}
-              onClick={onNavigate}
-              activeOptions={{ exact: true }}
-              activeProps={{}}
-              inactiveProps={{}}
-              aria-current={isActive ? 'page' : undefined}
-              className={`${NAV_ROW} ${isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE}`}
-            >
-              <span className={NAV_ICON_SLOT}>
-                <BucketDot bucket={bucket} />
-              </span>
-              <span className={NAV_LABEL}>
-                {t(`organization.buckets.${bucket}`)}
-              </span>
-              {showsCount && <span className={NAV_COUNT}>{count}</span>}
-            </Link>
-          );
-        })}
-      </div>
-    </div>
+        return (
+          <Link
+            key={bucket}
+            to={ROUTES.NOTES}
+            search={{ bucket, view: 'all' }}
+            onClick={onNavigate}
+            activeOptions={{ exact: true }}
+            activeProps={{}}
+            inactiveProps={{}}
+            aria-current={isActive ? 'page' : undefined}
+            className={`${NAV_ROW} ${isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE}`}
+          >
+            <span className={NAV_ICON_SLOT}>
+              <BucketDot bucket={bucket} />
+            </span>
+            <span className={NAV_LABEL}>
+              {t(`organization.buckets.${bucket}`)}
+            </span>
+            {showsCount && <span className={NAV_COUNT}>{count}</span>}
+          </Link>
+        );
+      })}
+    </SidebarSection>
   );
 }

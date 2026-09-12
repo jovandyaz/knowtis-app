@@ -113,6 +113,51 @@ describe('NotePropertiesRow', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  it('groups classification, then tags, then the suggest action', () => {
+    render(
+      <NotePropertiesRow
+        noteId="n1"
+        bucket="areas"
+        tags={['ia']}
+        supertag={null}
+        supertagFields={null}
+        isOwner
+        onSuggest={vi.fn()}
+      />
+    );
+
+    const controls = screen
+      .getAllByRole('button')
+      .map(
+        (element) => element.getAttribute('aria-label') ?? element.textContent
+      );
+
+    expect(controls).toEqual([
+      'Áreas',
+      'organization.supertags.label',
+      'organization.tags.remove',
+      'organization.tags.addLabel',
+      'organization.suggestion.ask',
+    ]);
+  });
+
+  it('names the add-tag control while the note carries no tags', () => {
+    render(
+      <NotePropertiesRow
+        noteId="n1"
+        bucket="areas"
+        tags={[]}
+        supertag={null}
+        supertagFields={null}
+        isOwner
+      />
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'organization.tags.addLabel' })
+    ).toHaveTextContent('organization.tags.addLabel');
+  });
+
   it('non-owner sees a static label, no menu', () => {
     render(
       <NotePropertiesRow

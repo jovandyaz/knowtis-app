@@ -13,6 +13,7 @@ import {
   NAV_ROW,
 } from '@/components/organization/nav-row.styles';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SidebarNotesSection } from './SidebarNotesSection';
@@ -110,12 +111,24 @@ describe('SidebarNotesSection', () => {
     );
   });
 
-  it('should keep the collapse toggle clickable above the row-wide My Notes link', async () => {
+  it('should fold the whole section away from its own header', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+    expect(screen.getByText('Roadmap')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'labels.notes' }));
+
+    expect(screen.queryByText('sidebar.myNotes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Roadmap')).not.toBeInTheDocument();
+  });
+
+  it('should keep the new-note button clickable above the row-wide My Notes link', async () => {
     await renderAt('/notes');
 
-    const toggle = screen.getByTitle('labels.collapse');
-
-    expect(toggle).toHaveClass('relative', 'z-10');
+    expect(screen.getByTitle('sidebar.newNote')).toHaveClass(
+      'relative',
+      'z-10'
+    );
     expect(rowFor('sidebar.myNotes')).toHaveClass(
       'after:absolute',
       'after:inset-0',

@@ -68,6 +68,7 @@ const rowFor = (label: string) => screen.getByText(label).closest('a');
 
 describe('TagTree', () => {
   beforeEach(() => {
+    localStorage.clear();
     updateTag.mockReset();
     deleteTag.mockReset();
     tagTree.mockReturnValue([

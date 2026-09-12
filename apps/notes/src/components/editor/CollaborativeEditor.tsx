@@ -190,7 +190,12 @@ function InternalEditor({
   });
 
   const handleAddImage = useCallback(
-    () => openImagePicker((file) => editor?.commands.uploadImageFile(file)),
+    () =>
+      openImagePicker((file) => {
+        if (editor && !editor.isDestroyed) {
+          editor.commands.uploadImageFile(file);
+        }
+      }),
     [editor]
   );
 
@@ -200,14 +205,14 @@ function InternalEditor({
   );
 
   useEffect(() => {
-    if (autocompletePreference === undefined) {
+    if (!editor || editor.isDestroyed || autocompletePreference === undefined) {
       return;
     }
-    editor?.commands.setGhostTextEnabled(autocompletePreference);
+    editor.commands.setGhostTextEnabled(autocompletePreference);
   }, [editor, autocompletePreference]);
 
   useEffect(() => {
-    if (!editor || !yXmlFragment || !initialContent) {
+    if (!editor || editor.isDestroyed || !yXmlFragment || !initialContent) {
       return;
     }
 
