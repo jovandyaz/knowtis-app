@@ -35,6 +35,7 @@ describe('SidebarSection', () => {
   it('hides its rows but keeps the title when collapsed', async () => {
     const user = userEvent.setup();
     renderSection();
+    expect(screen.getByText('work')).toBeInTheDocument();
 
     await user.click(header());
 

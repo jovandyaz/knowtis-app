@@ -162,6 +162,7 @@ describe('BucketNav', () => {
   it('collapses the section, hiding the buckets but not its title', async () => {
     const user = userEvent.setup();
     await renderAt('/notes');
+    expect(screen.getByText('Proyectos')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Organización' }));
 

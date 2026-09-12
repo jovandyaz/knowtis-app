@@ -125,6 +125,9 @@ describe('SupertagNav', () => {
   it('collapses the section, hiding the types but not its title', async () => {
     const user = userEvent.setup();
     await renderAt('/notes');
+    expect(
+      screen.getByText('organization.supertags.names.person')
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole('button', { name: 'organization.typesTitle' })
