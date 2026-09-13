@@ -1,5 +1,11 @@
 import { useRightDockStore } from '@/stores/right-dock.store';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { reviewDockWidth, RightDock } from './RightDock';
@@ -21,7 +27,10 @@ const agentState = vi.hoisted(() => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
-vi.mock('@knowtis/shared-hooks', () => ({ useMediaQuery: () => true }));
+const viewport = vi.hoisted(() => ({ isDesktop: true }));
+vi.mock('@knowtis/shared-hooks', () => ({
+  useMediaQuery: () => viewport.isDesktop,
+}));
 vi.mock('../copilot', () => ({
   AgentCopilotPanel: () => <div>copilot-panel</div>,
 }));
@@ -34,6 +43,7 @@ vi.mock('@/stores/agent.store', () => ({
 
 describe('RightDock', () => {
   beforeEach(() => {
+    viewport.isDesktop = true;
     agentState.pendingProposal = null;
     useRightDockStore.setState({ isOpen: true, reviewOpen: false });
   });
@@ -82,11 +92,32 @@ describe('RightDock', () => {
     useRightDockStore.setState({ isOpen: true, reviewOpen: true });
 
     render(<RightDock />);
-    const aside = screen
-      .getByText('copilot-panel')
-      .closest('aside') as HTMLElement;
 
-    expect(aside.style.width).toBe('500px');
+    expect(screen.getByRole('separator')).toHaveAttribute(
+      'aria-valuemax',
+      '500'
+    );
+  });
+
+  it('holds the mobile dock open when Escape discards the proposal', () => {
+    viewport.isDesktop = false;
+    agentState.pendingProposal = { kind: 'update', targetNoteId: 'n1' };
+    useRightDockStore.setState({ isOpen: true, reviewOpen: true });
+
+    render(<RightDock />);
+    fireEvent.keyDown(screen.getByText('copilot-panel'), { key: 'Escape' });
+
+    expect(useRightDockStore.getState().isOpen).toBe(true);
+  });
+
+  it('still closes the mobile dock on Escape outside a review', () => {
+    viewport.isDesktop = false;
+    useRightDockStore.setState({ isOpen: true, reviewOpen: false });
+
+    render(<RightDock />);
+    fireEvent.keyDown(screen.getByText('copilot-panel'), { key: 'Escape' });
+
+    expect(useRightDockStore.getState().isOpen).toBe(false);
   });
 
   it('keeps the standard width when the pending proposal is not an update', () => {

@@ -94,7 +94,7 @@ export function RightDock() {
   const hasUpdateProposal = useAgentStore(
     (s) => s.pendingProposal !== null && isUpdateProposal(s.pendingProposal)
   );
-  const reviewWide = reviewOpen && hasUpdateProposal;
+  const reviewingUpdate = reviewOpen && hasUpdateProposal;
   const reviewWidth = reviewDockWidth(useViewportWidth());
 
   if (isDesktop) {
@@ -104,9 +104,11 @@ export function RightDock() {
         defaultWidth={DOCK_DEFAULT_WIDTH}
         minWidth={DOCK_MIN_WIDTH}
         maxWidth={
-          reviewWide ? Math.max(DOCK_MAX_WIDTH, reviewWidth) : DOCK_MAX_WIDTH
+          reviewingUpdate
+            ? Math.max(DOCK_MAX_WIDTH, reviewWidth)
+            : DOCK_MAX_WIDTH
         }
-        targetWidth={reviewWide ? reviewWidth : undefined}
+        targetWidth={reviewingUpdate ? reviewWidth : undefined}
         collapseThreshold={DOCK_COLLAPSE_THRESHOLD}
         isOpen={isOpen}
         onCollapse={close}
@@ -127,6 +129,13 @@ export function RightDock() {
       <DialogContent
         className="flex h-[90vh] max-w-full flex-col gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)]"
         closeLabel={t('common:labels.closeDialog')}
+        // Escape discards the proposal under review; Radix reads Escape in a
+        // document capture handler, so only its own opt-out can hold the dock open.
+        onEscapeKeyDown={(event) => {
+          if (reviewingUpdate) {
+            event.preventDefault();
+          }
+        }}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{t('ai.copilot.tab')}</DialogTitle>
