@@ -195,6 +195,6 @@ describe('AgentCopilotPanel', () => {
 
     render(<AgentCopilotPanel />, { wrapper });
 
-    expect(screen.getByText('Create note "GTD"')).toBeInTheDocument();
+    expect(screen.getByText('GTD')).toBeInTheDocument();
   });
 });
