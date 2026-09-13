@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useMotionPreset } from '../motion/useMotionPreset';
+
 const SNAP_TRANSITION_MS = 300;
 
 export type PanelSide = 'left' | 'right';
@@ -90,6 +92,7 @@ export function useResizablePanel({
   targetWidth,
   side,
 }: ResizablePanelConfig): ResizablePanelState {
+  const { reduced } = useMotionPreset();
   const [width, setWidth] = useState(isOpen ? defaultWidth : 0);
   const [isDragging, setIsDragging] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -259,11 +262,10 @@ export function useResizablePanel({
     [isOpen, onCollapse]
   );
 
-  const transitionStyle = isDragging
-    ? 'none'
-    : isTransitioning
-      ? `width ${SNAP_TRANSITION_MS}ms ease`
-      : 'none';
+  const transitionStyle =
+    isDragging || !isTransitioning || reduced
+      ? 'none'
+      : `width ${SNAP_TRANSITION_MS}ms ease`;
 
   const isVisible = width > 0 || isTransitioning;
 
