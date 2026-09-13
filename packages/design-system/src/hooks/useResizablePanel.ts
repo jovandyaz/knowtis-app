@@ -145,12 +145,13 @@ export function useResizablePanel({
     if (targetWidth === targetWidthRef.current) {
       return;
     }
-    const previousTarget = targetWidthRef.current;
-    targetWidthRef.current = targetWidth;
 
     if (!isOpen || isDragging) {
       return;
     }
+
+    const previousTarget = targetWidthRef.current;
+    targetWidthRef.current = targetWidth;
 
     if (targetWidth !== undefined) {
       if (previousTarget === undefined) {
@@ -161,7 +162,7 @@ export function useResizablePanel({
         setWidth,
         setIsTransitioning,
         widthRef.current,
-        targetWidth
+        Math.min(targetWidth, maxWidth)
       );
       return;
     }
