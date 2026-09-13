@@ -10,8 +10,8 @@ export type ProposalBefore =
   | { status: 'ready'; title: string; contentHtml: string; isLive: boolean };
 
 /**
- * Snapshots the target note once per proposal so the diff holds steady while
- * the user types; staleness at commit is caught by the server's baseVersion check.
+ * Snapshots the target note once per proposal so the diff holds steady while the
+ * user types; the capture waits for a settled fetch so the baseline is never stale.
  */
 export function useProposalBefore(
   proposalId: string,
@@ -39,11 +39,12 @@ export function useProposalBefore(
     title: string;
     contentHtml: string;
   } | null>(null);
-  // Freezes the fallback like the live path: once resolved for this proposal,
-  // later cache invalidations of the same query must not move it.
+  // Freezes the fallback like the live path, but only on settled data: React Query
+  // serves a stale entry synchronously, and freezing that diffs the wrong baseline.
   if (
     !liveSnapshot &&
-    query.data &&
+    query.isSuccess &&
+    !query.isFetching &&
     frozenFallback?.proposalId !== proposalId
   ) {
     setFrozenFallback({

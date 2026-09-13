@@ -11,10 +11,21 @@ vi.mock('@knowtis/data-access-notes', () => ({ useNote: vi.fn() }));
 
 const mockedUseNote = vi.mocked(useNote);
 
-function queryResult(overrides: Record<string, unknown>) {
-  return { data: undefined, isError: false, ...overrides } as ReturnType<
-    typeof useNote
-  >;
+interface QueryOverrides {
+  data?: { id: string; title: string; content: string };
+  isError?: boolean;
+  isFetching?: boolean;
+  isSuccess?: boolean;
+}
+
+function queryResult({ data, ...rest }: QueryOverrides) {
+  return {
+    data,
+    isError: false,
+    isFetching: false,
+    isSuccess: data !== undefined,
+    ...rest,
+  } as unknown as ReturnType<typeof useNote>;
 }
 
 const liveEditor = {
@@ -116,6 +127,32 @@ describe('useProposalBefore', () => {
       isLive: false,
       title: 'Cached',
       contentHtml: '<p>cached</p>',
+    });
+  });
+
+  it('ignores a stale cache entry that is still refetching on mount', () => {
+    const stale = { id: 'n1', title: 'Stale', content: '<p>stale</p>' };
+    mockedUseNote.mockReturnValue(
+      queryResult({ data: stale, isFetching: true })
+    );
+
+    const { result, rerender } = renderHook(() =>
+      useProposalBefore('p1', 'n1')
+    );
+    expect(result.current).toEqual({ status: 'loading' });
+
+    mockedUseNote.mockReturnValue(
+      queryResult({
+        data: { id: 'n1', title: 'Fresh', content: '<p>fresh</p>' },
+      })
+    );
+    rerender();
+
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: false,
+      title: 'Fresh',
+      contentHtml: '<p>fresh</p>',
     });
   });
 
