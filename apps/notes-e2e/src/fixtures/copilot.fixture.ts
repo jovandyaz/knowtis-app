@@ -71,6 +71,16 @@ export async function scriptAgent(
     }
   }
 
+  /** A held drain() can still be in flight when the test tears down the page;
+   * fulfilling a route on a closed page throws and would otherwise crash the
+   * worker, forcing the next spec file to re-login and trip the auth throttle. */
+  async function safeFulfill(
+    route: Route,
+    options: Parameters<Route['fulfill']>[0]
+  ): Promise<void> {
+    await route.fulfill(options).catch(() => undefined);
+  }
+
   /** The frontend origin differs from the API's, and the client sets
    * withCredentials, so a fulfilled response needs the request's own Origin
    * echoed back (never `*`) plus Allow-Credentials, or Chromium drops it. */
@@ -91,7 +101,7 @@ export async function scriptAgent(
     // A NOOP never resets engine.io-client's ping watchdog; a real PING must
     // eventually go out or the socket self-closes after pingInterval+pingTimeout.
     const body = outbox.length > 0 ? outbox.splice(0).join(SEPARATOR) : '2';
-    await route.fulfill({
+    await safeFulfill(route, {
       status: 200,
       headers: corsHeaders(route.request()),
       body,
@@ -112,7 +122,7 @@ export async function scriptAgent(
           receive(packet);
         }
       }
-      await route.fulfill({
+      await safeFulfill(route, {
         status: 200,
         headers: corsHeaders(request),
         body: 'ok',
@@ -121,7 +131,7 @@ export async function scriptAgent(
     }
 
     if (!url.searchParams.get('sid')) {
-      await route.fulfill({
+      await safeFulfill(route, {
         status: 200,
         headers: corsHeaders(request),
         body: handshake(sid),
