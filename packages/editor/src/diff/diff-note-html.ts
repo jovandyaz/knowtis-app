@@ -32,11 +32,8 @@ function schemaFor(extensions: AnyExtension[]): Schema {
 }
 
 /**
- * Word-level diff between two note HTML documents parsed with the given
- * extensions. Both sides must use the same schema the note will be stored
- * with, or content the schema cannot represent disappears from the diff.
- * Browser-only: `generateJSON` from `@tiptap/core` needs a DOMParser (the
- * server converts with `@tiptap/html/server` instead).
+ * Word-level diff of two note HTML documents; both sides must parse with the note's
+ * stored schema, and `generateJSON` makes it browser-only (it needs a DOMParser).
  */
 export function diffNoteHtml(
   beforeHtml: string,

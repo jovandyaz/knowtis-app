@@ -60,6 +60,30 @@ describe('diffNoteHtml', () => {
     expect(diff.changes[0].fromB).toBeLessThan(diff.changes[1].fromB);
   });
 
+  it('reports no changes when both sides are empty', () => {
+    const diff = diffNoteHtml('', '', BASE);
+    expect(diff.count).toBe(0);
+    expect(diff.changes).toEqual([]);
+  });
+
+  it('diffs a brand-new empty note against its first proposal', () => {
+    const diff = diffNoteHtml('', '<p>Primer borrador</p>', BASE);
+    expect(diff.count).toBe(1);
+    const [change] = diff.changes;
+    expect(diff.after.textBetween(change.fromB, change.toB, ' ')).toContain(
+      'Primer borrador'
+    );
+  });
+
+  it('diffs a cleared note as a deletion', () => {
+    const diff = diffNoteHtml('<p>Todo fuera</p>', '', BASE);
+    expect(diff.count).toBe(1);
+    const [change] = diff.changes;
+    expect(diff.before.textBetween(change.fromA, change.toA, ' ')).toContain(
+      'Todo fuera'
+    );
+  });
+
   it('surfaces a dropped image only when the schema knows images', () => {
     const before =
       '<p>Intro</p><figure data-image><img src="https://cdn.test/a.png" alt="a"></figure>';

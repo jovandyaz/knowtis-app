@@ -21,9 +21,8 @@ export interface DiffPreviewProps {
 const NONE_EXPANDED: ReadonlySet<number> = new Set();
 
 /**
- * Renders the proposed (after) document read-only and paints the diff over it.
- * Deleted content lives only in decorations; the editor document is never the
- * live note, so nothing here can reach the collaborative Yjs doc.
+ * Renders the proposed document read-only; deletions live only in decorations,
+ * so nothing here can reach the collaborative Yjs doc.
  */
 export function DiffPreview({
   diff,

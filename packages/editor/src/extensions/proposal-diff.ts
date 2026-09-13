@@ -70,6 +70,28 @@ function countRemovedBlocks(slice: Slice): number {
   return Math.max(count, 1);
 }
 
+// Spec §4: the widget mirrors past content, so it must never be an edit target.
+function inert<T extends HTMLElement>(element: T): T {
+  element.setAttribute('contenteditable', 'false');
+  return element;
+}
+
+function chipElement(
+  index: number,
+  className: string,
+  label: string,
+  expanded: boolean
+): HTMLButtonElement {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = className;
+  chip.setAttribute(CHANGE_ATTR, String(index));
+  chip.setAttribute('data-diff-chip', '');
+  chip.setAttribute('aria-expanded', String(expanded));
+  chip.textContent = label;
+  return chip;
+}
+
 function deletedElement(
   view: ProposalDiffView,
   index: number,
@@ -78,32 +100,39 @@ function deletedElement(
   const slice = view.before.slice(change.fromA, change.toA);
   const isBlock = slice.content.firstChild?.isBlock ?? false;
   const current = view.currentIndex === index;
+  const label = isBlock
+    ? view.labels.deletedBlocks(countRemovedBlocks(slice))
+    : view.labels.deletedInline;
 
   if (!isExpanded(view, index)) {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = withCurrent('diff-del-chip', current);
-    chip.setAttribute(CHANGE_ATTR, String(index));
-    chip.setAttribute('data-diff-chip', '');
-    chip.setAttribute('aria-expanded', 'false');
-    chip.textContent = isBlock
-      ? view.labels.deletedBlocks(countRemovedBlocks(slice))
-      : view.labels.deletedInline;
-    return chip;
+    return inert(
+      chipElement(index, withCurrent('diff-del-chip', current), label, false)
+    );
   }
 
   const wrapper = document.createElement(isBlock ? 'div' : 'span');
-  wrapper.className = withCurrent(
+  wrapper.className = isBlock
+    ? 'diff-del-group diff-del-group-block'
+    : 'diff-del-group';
+  wrapper.setAttribute(CHANGE_ATTR, String(index));
+  // While the switch expands every deletion, a per-deletion toggle could not
+  // honour a collapse, so the honest control is no control at all.
+  if (!view.showDeleted) {
+    wrapper.appendChild(chipElement(index, 'diff-del-chip', label, true));
+  }
+
+  const content = document.createElement('del');
+  content.className = withCurrent(
     isBlock ? 'diff-del diff-del-block' : 'diff-del',
     current
   );
-  wrapper.setAttribute(CHANGE_ATTR, String(index));
-  wrapper.appendChild(
+  content.appendChild(
     DOMSerializer.fromSchema(view.before.type.schema).serializeFragment(
       slice.content
     )
   );
-  return wrapper;
+  wrapper.appendChild(content);
+  return inert(wrapper);
 }
 
 function buildDecorations(
@@ -118,6 +147,7 @@ function buildDecorations(
     if (change.fromB < change.toB) {
       decorations.push(
         Decoration.inline(change.fromB, change.toB, {
+          nodeName: 'ins',
           class: withCurrent('diff-ins', current),
           [CHANGE_ATTR]: String(index),
         })
@@ -139,7 +169,11 @@ function buildDecorations(
     }
 
     if (change.fromA < change.toA) {
-      const state = isExpanded(view, index) ? 'open' : 'chip';
+      const state = !isExpanded(view, index)
+        ? 'chip'
+        : view.showDeleted
+          ? 'open'
+          : 'open-toggle';
       decorations.push(
         Decoration.widget(
           change.fromB,

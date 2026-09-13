@@ -2,6 +2,7 @@
   background: color-mix(in oklab, var(--primary) 14%, transparent);
   box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--primary) 55%, transparent);
   border-radius: 2px;
+  text-decoration: none;
 }
 
 .diff-ins-block {
@@ -11,12 +12,18 @@
   border-radius: 0 3px 3px 0;
 }
 
+.diff-del-group-block {
+  display: block;
+}
+
+/* Spec §4: the deleted content is a preview of the past, never a live target. */
 .diff-del {
   background: color-mix(in oklab, var(--destructive) 12%, transparent);
   color: var(--destructive);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
   border-radius: 2px;
+  pointer-events: none;
 }
 
 .diff-del-block {

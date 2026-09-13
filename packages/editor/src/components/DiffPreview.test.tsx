@@ -55,12 +55,59 @@ describe('DiffPreview', () => {
     const { container } = renderDiff('<p>Uno</p><p>Dos</p>', '<p>Uno</p>');
     const chip = await screen.findByRole('button', { name: '1 deleted' });
     expect(container.querySelector('.diff-del')).toBeNull();
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(chip);
     await waitFor(() =>
       expect(container.querySelector('.diff-del-block')).toHaveTextContent(
         'Dos'
       )
     );
+  });
+
+  it('collapses an expanded deletion again and reports its state truthfully', async () => {
+    const { container } = renderDiff('<p>Uno</p><p>Dos</p>', '<p>Uno</p>');
+    fireEvent.click(await screen.findByRole('button', { name: '1 deleted' }));
+
+    const openChip = await waitFor(() => {
+      const button = screen.getByRole('button', { name: '1 deleted' });
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      return button;
+    });
+
+    fireEvent.click(openChip);
+    await waitFor(() =>
+      expect(container.querySelector('.diff-del-block')).toBeNull()
+    );
+    expect(screen.getByRole('button', { name: '1 deleted' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+  });
+
+  it('marks the widget content inert so it is never an edit target', async () => {
+    const { container } = renderDiff('<p>Uno</p><p>Dos</p>', '<p>Uno</p>');
+    const chip = await screen.findByRole('button', { name: '1 deleted' });
+    expect(chip).toHaveAttribute('contenteditable', 'false');
+    fireEvent.click(chip);
+    await waitFor(() =>
+      expect(
+        container.querySelector('.diff-del-group[contenteditable="false"]')
+      ).not.toBeNull()
+    );
+  });
+
+  it('renders insertions and deletions as ins and del elements', async () => {
+    const { container } = renderDiff(
+      '<p>Uno</p><p>Dos</p>',
+      '<p>Uno y medio</p>',
+      { showDeleted: true }
+    );
+    await waitFor(() =>
+      expect(container.querySelector('ins.diff-ins')).toHaveTextContent(
+        'y medio'
+      )
+    );
+    expect(container.querySelector('del.diff-del')).toHaveTextContent('Dos');
   });
 
   it('labels an inline deletion differently from removed blocks', async () => {
