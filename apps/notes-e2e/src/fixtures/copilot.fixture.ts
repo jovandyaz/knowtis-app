@@ -155,7 +155,13 @@ export async function scriptAgent(
   };
 }
 
-export const test = sharingTest.extend<object, { ai: true }>({
+/**
+ * Test-scoped, not worker-scoped: a worker-scoped fixture here would give this
+ * file its own worker "shape", forcing Playwright to spin up a second worker
+ * (and a second `sharing` login burst) instead of sharing the one running the
+ * plain sharing specs — tripping the 5-per-15-minute login throttle by IP.
+ */
+export const test = sharingTest.extend<{ ai: true }, object>({
   ai: [
     // Playwright parses this signature's text to resolve fixture deps, so the
     // empty destructure is required even though this fixture needs nothing.
@@ -174,7 +180,7 @@ export const test = sharingTest.extend<object, { ai: true }>({
         await db.end({ timeout: 5 });
       }
     },
-    { scope: 'worker', auto: true },
+    { auto: true },
   ],
 });
 
