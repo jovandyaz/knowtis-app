@@ -82,6 +82,25 @@ describe('DiffPreview', () => {
     expect(screen.queryByRole('button', { name: '1 deleted' })).toBeNull();
   });
 
+  it('does not count the torn boundary paragraph as a removed block', async () => {
+    const { container } = renderDiff(
+      '<p>Astro como base</p><p>Alternativa: Vercel</p>',
+      '<p>Astro como base del sitio</p>'
+    );
+    const chip = await screen.findByRole('button', { name: '1 deleted' });
+    fireEvent.click(chip);
+    await waitFor(() =>
+      expect(container.querySelector('.diff-del-block')).toHaveTextContent(
+        'Alternativa: Vercel'
+      )
+    );
+  });
+
+  it('still counts a genuinely deleted blank paragraph', async () => {
+    renderDiff('<p>Uno</p><p></p><p>Dos</p>', '<p>Uno</p>');
+    await screen.findByRole('button', { name: '2 deleted' });
+  });
+
   it('rings the current change', async () => {
     const { container } = renderDiff('<p>Astro</p>', '<p>Astro y Vite</p>', {
       currentIndex: 0,

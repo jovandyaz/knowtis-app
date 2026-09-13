@@ -1,5 +1,9 @@
 import { Extension } from '@tiptap/core';
-import { DOMSerializer, type Node as ProseMirrorNode } from '@tiptap/pm/model';
+import {
+  DOMSerializer,
+  type Node as ProseMirrorNode,
+  type Slice,
+} from '@tiptap/pm/model';
 import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
@@ -48,6 +52,24 @@ function isExpanded(view: ProposalDiffView, index: number): boolean {
   return view.showDeleted || view.expanded.has(index);
 }
 
+// A slice torn mid-node has an empty boundary child at its open edge(s);
+// drop it by position (openStart/openEnd), not emptiness, so a real empty paragraph still counts.
+function countRemovedBlocks(slice: Slice): number {
+  const { content, openStart, openEnd } = slice;
+  let count = content.childCount;
+  const first = content.firstChild;
+  if (openStart > 0 && first && first.content.size === 0) {
+    count -= 1;
+  }
+  if (content.childCount > 1) {
+    const last = content.lastChild;
+    if (openEnd > 0 && last && last.content.size === 0) {
+      count -= 1;
+    }
+  }
+  return Math.max(count, 1);
+}
+
 function deletedElement(
   view: ProposalDiffView,
   index: number,
@@ -65,7 +87,7 @@ function deletedElement(
     chip.setAttribute('data-diff-chip', '');
     chip.setAttribute('aria-expanded', 'false');
     chip.textContent = isBlock
-      ? view.labels.deletedBlocks(slice.content.childCount)
+      ? view.labels.deletedBlocks(countRemovedBlocks(slice))
       : view.labels.deletedInline;
     return chip;
   }
