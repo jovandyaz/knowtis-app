@@ -28,12 +28,17 @@ const REVIEW_TITLE_RE = /review changes|revisar cambios/i;
 const REASON_TEXTBOX_RE = /why\?|por qué/i;
 const COMPOSER_RE = /copilot|pregunta|ask/i;
 
-/** The toggle button opens the dock; checking the composer itself (rather than
- * the ambiguous `complementary` landmark, shared with the left nav) avoids
- * accidentally closing an already-open dock. */
+/** The dock's open state persists across notes in the same worker, so right
+ * after navigation the composer may just not have hydrated yet — an
+ * `isVisible()` snapshot can't tell that from "closed" and toggling a dock
+ * that is actually open closes it. Waiting bounds the hydration race instead. */
 async function openCopilotDock(page: Page) {
   const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
-  if (!(await composer.isVisible().catch(() => false))) {
+  const alreadyOpen = await composer
+    .waitFor({ state: 'visible', timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!alreadyOpen) {
     await page
       .getByRole('button', { name: /copilot/i })
       .first()
