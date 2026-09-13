@@ -16,13 +16,17 @@
   display: block;
 }
 
-/* Spec §4: the deleted content is a preview of the past, never a live target. */
 .diff-del {
   background: color-mix(in oklab, var(--destructive) 12%, transparent);
   color: var(--destructive);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
   border-radius: 2px;
+}
+
+/* Spec §4: widget content is a preview of the past, never a live target. Scoped
+   to the widget: `.diff-del` is also used outside the editor, in the title row. */
+.diff-del-group .diff-del {
   pointer-events: none;
 }
 
