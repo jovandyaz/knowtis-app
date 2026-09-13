@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/stores/agent.store';
@@ -21,6 +22,32 @@ const DOCK_MIN_WIDTH = 300;
 const DOCK_MAX_WIDTH = 500;
 const DOCK_DEFAULT_WIDTH = DOCK_MAX_WIDTH;
 const DOCK_COLLAPSE_THRESHOLD = 240;
+
+const REVIEW_MIN_WIDTH = 640;
+const REVIEW_MAX_WIDTH = 960;
+const REVIEW_VIEWPORT_RATIO = 0.6;
+
+export function reviewDockWidth(viewportWidth: number): number {
+  return Math.round(
+    Math.min(
+      REVIEW_MAX_WIDTH,
+      Math.max(REVIEW_MIN_WIDTH, viewportWidth * REVIEW_VIEWPORT_RATIO)
+    )
+  );
+}
+
+function subscribeToResize(onChange: () => void) {
+  window.addEventListener('resize', onChange);
+  return () => window.removeEventListener('resize', onChange);
+}
+
+function useViewportWidth(): number {
+  return useSyncExternalStore(
+    subscribeToResize,
+    () => window.innerWidth,
+    () => 0
+  );
+}
 
 function DockHeader() {
   const { t } = useTranslation('notes');
@@ -63,6 +90,12 @@ export function RightDock() {
   const isOpen = useRightDockStore((s) => s.isOpen);
   const close = useRightDockStore((s) => s.close);
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const reviewOpen = useRightDockStore((s) => s.reviewOpen);
+  const hasUpdateProposal = useAgentStore(
+    (s) => s.pendingProposal?.kind === 'update'
+  );
+  const reviewWide = reviewOpen && hasUpdateProposal;
+  const reviewWidth = reviewDockWidth(useViewportWidth());
 
   if (isDesktop) {
     return (
@@ -70,7 +103,10 @@ export function RightDock() {
         side={DIALOG_SIDE.RIGHT}
         defaultWidth={DOCK_DEFAULT_WIDTH}
         minWidth={DOCK_MIN_WIDTH}
-        maxWidth={DOCK_MAX_WIDTH}
+        maxWidth={
+          reviewWide ? Math.max(DOCK_MAX_WIDTH, reviewWidth) : DOCK_MAX_WIDTH
+        }
+        targetWidth={reviewWide ? reviewWidth : undefined}
         collapseThreshold={DOCK_COLLAPSE_THRESHOLD}
         isOpen={isOpen}
         onCollapse={close}

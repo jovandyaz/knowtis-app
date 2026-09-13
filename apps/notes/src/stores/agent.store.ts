@@ -34,6 +34,15 @@ export interface PendingProposal {
   payload: Record<string, unknown>;
 }
 
+export interface UpdateProposal extends PendingProposal {
+  kind: 'update';
+  targetNoteId: string;
+}
+
+export function isUpdateProposal(p: PendingProposal): p is UpdateProposal {
+  return p.kind === 'update' && p.targetNoteId !== null;
+}
+
 export interface AgentChatMessage {
   id: string;
   role: 'user' | 'assistant';
