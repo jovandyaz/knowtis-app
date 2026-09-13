@@ -19,6 +19,9 @@ export interface ResizablePanelConfig {
   onCollapse: () => void;
   /** Called whenever the width changes — use to sync external state */
   onWidthChange?: (width: number) => void;
+  /** When set, the panel animates to this width and holds it; clearing it
+   *  animates back to the width the user had before. */
+  targetWidth?: number | undefined;
   /** Which side the panel sits on — determines drag direction */
   side: PanelSide;
 }
@@ -84,6 +87,7 @@ export function useResizablePanel({
   isOpen,
   onCollapse,
   onWidthChange,
+  targetWidth,
   side,
 }: ResizablePanelConfig): ResizablePanelState {
   const [width, setWidth] = useState(isOpen ? defaultWidth : 0);
@@ -96,6 +100,8 @@ export function useResizablePanel({
   const snapTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const prevIsOpenRef = useRef(isOpen);
   const lastUserWidthRef = useRef(defaultWidth);
+  const targetWidthRef = useRef<number | undefined>(undefined);
+  const restoreWidthRef = useRef<number | null>(null);
 
   useEffect(() => {
     widthRef.current = width;
@@ -122,7 +128,7 @@ export function useResizablePanel({
         setWidth,
         setIsTransitioning,
         0,
-        lastUserWidthRef.current
+        targetWidthRef.current ?? lastUserWidthRef.current
       );
     } else {
       animateWidth(
@@ -134,6 +140,45 @@ export function useResizablePanel({
       );
     }
   }, [isOpen, isDragging]);
+
+  useEffect(() => {
+    if (targetWidth === targetWidthRef.current) {
+      return;
+    }
+    const previousTarget = targetWidthRef.current;
+    targetWidthRef.current = targetWidth;
+
+    if (!isOpen || isDragging) {
+      return;
+    }
+
+    if (targetWidth !== undefined) {
+      if (previousTarget === undefined) {
+        restoreWidthRef.current = widthRef.current;
+      }
+      animateWidth(
+        snapTimeoutRef,
+        setWidth,
+        setIsTransitioning,
+        widthRef.current,
+        targetWidth
+      );
+      return;
+    }
+
+    const restore = Math.min(
+      restoreWidthRef.current ?? lastUserWidthRef.current,
+      maxWidth
+    );
+    restoreWidthRef.current = null;
+    animateWidth(
+      snapTimeoutRef,
+      setWidth,
+      setIsTransitioning,
+      widthRef.current,
+      restore
+    );
+  }, [targetWidth, isOpen, isDragging, maxWidth]);
 
   useEffect(() => {
     const ref = snapTimeoutRef;
