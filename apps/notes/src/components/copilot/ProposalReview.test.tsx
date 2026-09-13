@@ -123,10 +123,27 @@ describe('ProposalReview', () => {
     );
   });
 
+  it('scrolls the title row into view when navigating back to it', async () => {
+    const scrolledInto: Element[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolledInto.push(this);
+    });
+    renderReview();
+    await screen.findByText('ai.copilot.review.changeOf:1/2');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.copilot.review.next' })
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.copilot.review.prev' })
+    );
+    const titleRow = screen.getByTestId('review-title');
+    await waitFor(() => expect(scrolledInto.at(-1)).toBe(titleRow));
+  });
+
   it('expands deletions with the show-deleted switch', async () => {
     const { container } = renderReview();
     await screen.findByRole('button', {
-      name: 'ai.copilot.review.deletedBlocks:2',
+      name: 'ai.copilot.review.deletedBlocks:1',
     });
     await userEvent.click(screen.getByRole('switch'));
     await waitFor(() =>

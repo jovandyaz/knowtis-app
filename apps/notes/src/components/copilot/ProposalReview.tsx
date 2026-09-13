@@ -119,12 +119,14 @@ export function ProposalReview({
     currentItem?.kind === 'change' ? currentItem.index : null;
 
   useEffect(() => {
-    if (currentChangeIndex === null) {
+    if (!currentItem) {
       return;
     }
-    const target = bodyRef.current?.querySelector<HTMLElement>(
-      `[data-change="${currentChangeIndex}"]`
-    );
+    const selector =
+      currentItem.kind === 'title'
+        ? '[data-testid="review-title"]'
+        : `[data-change="${currentItem.index}"]`;
+    const target = bodyRef.current?.querySelector<HTMLElement>(selector);
     const reduce = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
     ).matches;
@@ -132,7 +134,7 @@ export function ProposalReview({
       block: 'center',
       behavior: reduce ? 'auto' : 'smooth',
     });
-  }, [currentChangeIndex]);
+  }, [currentItem]);
 
   const step = (delta: number) =>
     setCurrent((c) => (total === 0 ? 0 : (c + delta + total) % total));
