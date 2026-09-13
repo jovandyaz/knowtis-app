@@ -36,6 +36,8 @@ export function useProposalDecision(
       }
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      // Inside the mobile dock dialog, Radix would also dismiss the layer.
+      event.stopPropagation();
       if (rejecting) {
         cancelReject();
       } else {

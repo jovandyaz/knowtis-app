@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/stores/agent.store';
+import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { RotateCcw } from 'lucide-react';
 
@@ -92,7 +92,7 @@ export function RightDock() {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const reviewOpen = useRightDockStore((s) => s.reviewOpen);
   const hasUpdateProposal = useAgentStore(
-    (s) => s.pendingProposal?.kind === 'update'
+    (s) => s.pendingProposal !== null && isUpdateProposal(s.pendingProposal)
   );
   const reviewWide = reviewOpen && hasUpdateProposal;
   const reviewWidth = reviewDockWidth(useViewportWidth());

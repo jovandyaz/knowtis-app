@@ -46,6 +46,8 @@ export function AgentCopilotPanel() {
       : null;
   const updateProposalId = updateProposal?.id ?? null;
 
+  // No unmount cleanup on purpose: `reviewOpen` can outlive this panel, and both
+  // RightDock and the `updateProposal` guard below re-check the pending proposal.
   useEffect(() => {
     if (updateProposalId) {
       openReview();

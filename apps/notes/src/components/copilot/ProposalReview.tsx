@@ -77,6 +77,13 @@ export function ProposalReview({
   const [showDeleted, setShowDeleted] = useState(false);
   const [current, setCurrent] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // The shortcuts live on this container and the chat subtree it replaces is gone,
+  // so without taking focus once on mount they would never receive a key event.
+  useEffect(() => {
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
 
   const [trackedProposalId, setTrackedProposalId] = useState(proposal.id);
   if (proposal.id !== trackedProposalId) {
@@ -85,6 +92,8 @@ export function ProposalReview({
     setShowDeleted(false);
   }
 
+  // The review is honest only because AI_HTML_FORBID_TAGS and the server's semantic
+  // schema drop the same tags today — a coincidence, not an invariant.
   const afterHtml = useMemo(
     () => sanitizeAiHtml(payload.contentHtml ?? ''),
     [payload.contentHtml]
@@ -167,10 +176,12 @@ export function ProposalReview({
     // Keyboard shortcuts (approve/reject/navigate) are scoped to this panel, not to one control.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
+      ref={rootRef}
       role="group"
+      tabIndex={-1}
       aria-label={t('ai.copilot.review.title')}
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 flex-col"
+      className="flex h-full min-h-0 flex-col outline-none"
     >
       <header className="flex items-start gap-2 border-b border-border px-3 py-2">
         <Button
@@ -271,12 +282,12 @@ export function ProposalReview({
               {t('ai.copilot.review.titleLabel')}
             </p>
             {showDeleted && before.status === 'ready' && (
-              <p className="text-sm text-destructive line-through">
-                {before.title}
+              <p className="text-sm text-destructive">
+                <del className="diff-del">{before.title}</del>
               </p>
             )}
             <p className="text-sm font-semibold">
-              <span className="diff-ins">{payload.title}</span>
+              <ins className="diff-ins">{payload.title}</ins>
             </p>
           </div>
         )}

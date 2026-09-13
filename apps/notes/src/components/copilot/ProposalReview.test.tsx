@@ -177,6 +177,22 @@ describe('ProposalReview', () => {
     expect(onReject).toHaveBeenCalledWith('keep Vercel');
   });
 
+  it('takes focus on mount so the shortcuts work without a click', () => {
+    renderReview();
+    expect(screen.getByRole('group')).toHaveFocus();
+  });
+
+  it('reports an empty diff and still allows applying it', async () => {
+    renderReview({ payload: { contentHtml: BEFORE_HTML } });
+    expect(
+      await screen.findByText('ai.copilot.review.noChanges')
+    ).toBeInTheDocument();
+    expect(screen.getByText('ai.copilot.review.changes:0')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.proposal.approveUpdate' })
+    ).toBeEnabled();
+  });
+
   it('discards on Escape and goes back without deciding', async () => {
     const { onReject, onBack } = renderReview();
     fireEvent.keyDown(screen.getByRole('group'), { key: 'Escape' });

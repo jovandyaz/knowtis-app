@@ -4,10 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { reviewDockWidth, RightDock } from './RightDock';
 
+interface TestProposal {
+  kind: 'create' | 'update' | 'share';
+  targetNoteId: string | null;
+}
+
 const agentState = vi.hoisted(() => ({
   newConversation: vi.fn(),
   messages: [{ id: 'm1', role: 'user', content: 'hi' }],
-  pendingProposal: null as { kind: 'create' | 'update' | 'share' } | null,
+  pendingProposal: null as {
+    kind: 'create' | 'update' | 'share';
+    targetNoteId: string | null;
+  } | null,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -20,6 +28,8 @@ vi.mock('../copilot', () => ({
 vi.mock('@/stores/agent.store', () => ({
   useAgentStore: (selector: (state: typeof agentState) => unknown) =>
     selector(agentState),
+  isUpdateProposal: (p: TestProposal) =>
+    p.kind === 'update' && p.targetNoteId !== null,
 }));
 
 describe('RightDock', () => {
@@ -49,7 +59,7 @@ describe('RightDock', () => {
 
   it('animates to the review width while an update proposal is under review and restores after', async () => {
     window.innerWidth = 1400;
-    agentState.pendingProposal = { kind: 'update' };
+    agentState.pendingProposal = { kind: 'update', targetNoteId: 'n1' };
     useRightDockStore.setState({ isOpen: true, reviewOpen: true });
 
     render(<RightDock />);
@@ -67,8 +77,20 @@ describe('RightDock', () => {
     await waitFor(() => expect(aside.style.width).toBe('500px'));
   });
 
+  it('keeps the standard width for an update proposal with no target note', () => {
+    agentState.pendingProposal = { kind: 'update', targetNoteId: null };
+    useRightDockStore.setState({ isOpen: true, reviewOpen: true });
+
+    render(<RightDock />);
+    const aside = screen
+      .getByText('copilot-panel')
+      .closest('aside') as HTMLElement;
+
+    expect(aside.style.width).toBe('500px');
+  });
+
   it('keeps the standard width when the pending proposal is not an update', () => {
-    agentState.pendingProposal = { kind: 'create' };
+    agentState.pendingProposal = { kind: 'create', targetNoteId: null };
     useRightDockStore.setState({ isOpen: true, reviewOpen: true });
 
     render(<RightDock />);
