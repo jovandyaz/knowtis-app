@@ -478,6 +478,30 @@
         "showMore": "Ver más",
         "showLess": "Ver menos"
       },
+      "review": {
+        "title": "Revisar cambios",
+        "back": "Volver al chat",
+        "changes_one": "{{count}} cambio",
+        "changes_other": "{{count}} cambios",
+        "changeOf": "Cambio {{current}} de {{total}}",
+        "prev": "Cambio anterior",
+        "next": "Cambio siguiente",
+        "showDeleted": "Mostrar lo eliminado",
+        "deletedBlocks_one": "{{count}} bloque eliminado",
+        "deletedBlocks_other": "{{count}} bloques eliminados",
+        "deletedInline": "Texto eliminado",
+        "titleLabel": "Título",
+        "noChanges": "La propuesta no cambia el contenido de la nota.",
+        "beforeUnavailable": "No se pudo cargar la versión actual; se muestra solo la propuesta.",
+        "openNote": "Abrir nota",
+        "pendingRow": "Propuesta pendiente",
+        "pendingReview": "Revisar",
+        "summary": {
+          "titleAndContent": "Título y contenido",
+          "contentOnly": "Contenido",
+          "titleOnly": "Solo el título"
+        }
+      },
       "openSource": "Abrir nota"
     },
     "groups": {
