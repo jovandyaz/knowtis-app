@@ -146,12 +146,16 @@ export function useResizablePanel({
       return;
     }
 
-    if (!isOpen || isDragging) {
+    if (isDragging) {
       return;
     }
 
     const previousTarget = targetWidthRef.current;
     targetWidthRef.current = targetWidth;
+
+    if (!isOpen) {
+      return;
+    }
 
     if (targetWidth !== undefined) {
       if (previousTarget === undefined) {
@@ -226,7 +230,9 @@ export function useResizablePanel({
         }
 
         const snappedWidth = Math.max(currentWidth, minWidth);
-        lastUserWidthRef.current = snappedWidth;
+        if (targetWidthRef.current === undefined) {
+          lastUserWidthRef.current = snappedWidth;
+        }
 
         if (snappedWidth !== currentWidth) {
           setWidth(snappedWidth);
