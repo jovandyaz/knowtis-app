@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
-import { expect, type Page, type Route } from '@playwright/test';
+import { expect, type Page, type Request, type Route } from '@playwright/test';
 import postgres from 'postgres';
 
 import { E2E } from '../../support/environment';
 import { test as sharingTest } from './sharing.fixture';
 
 const SEPARATOR = '\x1e';
-const HOLD_MS = 20_000;
+const HOLD_MS = 3_000;
 const POLL_MS = 25;
+const CONNECT_RE = /^40(\/[^,]*)?,?/;
 
 export interface AgentScript {
   /** Emitted in order once the client sends `agent:message`. */
@@ -70,15 +71,29 @@ export async function scriptAgent(
     }
   }
 
+  /** The frontend origin differs from the API's, and the client sets
+   * withCredentials, so a fulfilled response needs the request's own Origin
+   * echoed back (never `*`) plus Allow-Credentials, or Chromium drops it. */
+  function corsHeaders(request: Request): Record<string, string> {
+    const origin = request.headers()['origin'] ?? E2E.frontend;
+    return {
+      'content-type': 'text/plain; charset=UTF-8',
+      'access-control-allow-origin': origin,
+      'access-control-allow-credentials': 'true',
+    };
+  }
+
   async function drain(route: Route): Promise<void> {
     const deadline = Date.now() + HOLD_MS;
     while (outbox.length === 0 && Date.now() < deadline) {
       await new Promise((done) => setTimeout(done, POLL_MS));
     }
-    const body = outbox.length > 0 ? outbox.splice(0).join(SEPARATOR) : '6';
+    // A NOOP never resets engine.io-client's ping watchdog; a real PING must
+    // eventually go out or the socket self-closes after pingInterval+pingTimeout.
+    const body = outbox.length > 0 ? outbox.splice(0).join(SEPARATOR) : '2';
     await route.fulfill({
       status: 200,
-      contentType: 'text/plain; charset=UTF-8',
+      headers: corsHeaders(route.request()),
       body,
     });
   }
@@ -89,15 +104,17 @@ export async function scriptAgent(
 
     if (request.method() === 'POST') {
       for (const packet of (request.postData() ?? '').split(SEPARATOR)) {
-        if (packet.startsWith('40/agent')) {
-          outbox.push(`40/agent,${JSON.stringify({ sid })}`);
+        const connectMatch = packet.match(CONNECT_RE);
+        if (connectMatch) {
+          const namespace = connectMatch[1] ?? '';
+          outbox.push(`40${namespace},${JSON.stringify({ sid })}`);
         } else {
           receive(packet);
         }
       }
       await route.fulfill({
         status: 200,
-        contentType: 'text/plain; charset=UTF-8',
+        headers: corsHeaders(request),
         body: 'ok',
       });
       return;
@@ -106,7 +123,7 @@ export async function scriptAgent(
     if (!url.searchParams.get('sid')) {
       await route.fulfill({
         status: 200,
-        contentType: 'text/plain; charset=UTF-8',
+        headers: corsHeaders(request),
         body: handshake(sid),
       });
       return;

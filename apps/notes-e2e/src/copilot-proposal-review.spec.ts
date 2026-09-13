@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import { scriptAgent, test } from './fixtures/copilot.fixture';
 
@@ -26,6 +26,21 @@ const PROPOSAL_ID = '11111111-2222-3333-4444-555555555555';
 
 const REVIEW_TITLE_RE = /review changes|revisar cambios/i;
 const REASON_TEXTBOX_RE = /why\?|por qué/i;
+const COMPOSER_RE = /copilot|pregunta|ask/i;
+
+/** The toggle button opens the dock; checking the composer itself (rather than
+ * the ambiguous `complementary` landmark, shared with the left nav) avoids
+ * accidentally closing an already-open dock. */
+async function openCopilotDock(page: Page) {
+  const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
+  if (!(await composer.isVisible().catch(() => false))) {
+    await page
+      .getByRole('button', { name: /copilot/i })
+      .first()
+      .click();
+  }
+  return composer;
+}
 
 test('reviews a proposed note update before applying it', async ({
   sharing,
@@ -36,7 +51,7 @@ test('reviews a proposed note update before applying it', async ({
 
   const agent = await scriptAgent(owner.page, {
     onMessage: [
-      ['agent:token', { content: 'Propongo una reescritura.' }],
+      ['agent:chunk', { text: 'Propongo una reescritura.' }],
       [
         'agent:proposal',
         {
@@ -73,17 +88,8 @@ test('reviews a proposed note update before applying it', async ({
     owner.page.getByText('Astro + Vite como base', { exact: false }).first()
   ).toBeVisible();
 
-  const dock = owner.page.getByRole('complementary');
-  if (!(await dock.isVisible().catch(() => false))) {
-    await owner.page
-      .getByRole('button', { name: /copilot/i })
-      .first()
-      .click();
-  }
-  await owner.page
-    .getByRole('textbox', { name: /copilot|pregunta|ask/i })
-    .first()
-    .fill('Reescribe esta nota como especificacion tecnica');
+  const composer = await openCopilotDock(owner.page);
+  await composer.fill('Reescribe esta nota como especificacion tecnica');
   await owner.page.keyboard.press('Enter');
   await agent.waitForSent('agent:message');
 
@@ -98,10 +104,18 @@ test('reviews a proposed note update before applying it', async ({
     'Especificacion tecnica'
   );
 
-  await expect(review.locator('.diff-ins').first()).toBeVisible();
+  await expect(review.locator('.diff-ins[data-change]').first()).toBeVisible();
   const chip = review.locator('.diff-del-chip').first();
   await expect(chip).toBeVisible();
   await expect(review.locator('.diff-del-block')).toHaveCount(0);
+
+  // The decorations live only in the review's own diff, never in the note
+  // editor underneath — so the soon-to-be-deleted line is still there.
+  await expect(
+    owner.page.getByRole('main').getByText('Alternativa: Vercel', {
+      exact: false,
+    })
+  ).toBeVisible();
 
   await review.getByRole('switch').click();
   await expect(review.locator('.diff-del-block').first()).toContainText(
@@ -121,11 +135,7 @@ test('reviews a proposed note update before applying it', async ({
   await review.getByRole('button', { name: /apply|aplicar/i }).click();
   await agent.waitForSent('agent:approve');
 
-  // Reviewing must never mutate the live note; only approving should.
   await expect(review).toHaveCount(0);
-  await expect(
-    owner.page.getByText('Alternativa: Vercel', { exact: false }).first()
-  ).toBeVisible();
 });
 
 test('discards a proposed update with a reason', async ({ sharing }) => {
@@ -148,23 +158,14 @@ test('discards a proposed update with a reason', async ({ sharing }) => {
       ],
     ],
     onReject: [
-      ['agent:token', { content: 'Entendido.' }],
+      ['agent:chunk', { text: 'Entendido.' }],
       ['agent:done', {}],
     ],
   });
 
   await owner.page.goto(`/notes/${note.id}`);
-  const dock = owner.page.getByRole('complementary');
-  if (!(await dock.isVisible().catch(() => false))) {
-    await owner.page
-      .getByRole('button', { name: /copilot/i })
-      .first()
-      .click();
-  }
-  await owner.page
-    .getByRole('textbox', { name: /copilot|pregunta|ask/i })
-    .first()
-    .fill('Reescribe la nota');
+  const composer = await openCopilotDock(owner.page);
+  await composer.fill('Reescribe la nota');
   await owner.page.keyboard.press('Enter');
 
   const review = owner.page.getByRole('group', { name: REVIEW_TITLE_RE });
