@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +10,7 @@ const proposal = {
   targetNoteId: null,
   summary: 'Create note "GTD"',
   previewHtml: '<p>do</p>',
-  payload: { title: 'GTD' },
+  payload: { title: 'GTD', contentHtml: '<p>do</p>' },
 };
 
 describe('AgentProposalCard', () => {
@@ -23,7 +23,10 @@ describe('AgentProposalCard', () => {
         onReject={vi.fn()}
       />
     );
-    expect(screen.getByText('Create note "GTD"')).toBeInTheDocument();
+    expect(screen.queryByText('Create note "GTD"')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/create note|crear nota|createTitle/i)
+    ).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole('button', {
         name: /create|apply|approve|crear|aplicar|approveCreate/i,
@@ -46,7 +49,9 @@ describe('AgentProposalCard', () => {
         name: /dismiss|reject|descartar|rechazar|proposal\.reject$/i,
       })
     );
-    const reason = screen.getByRole('textbox');
+    const reason = screen.getByRole('textbox', {
+      name: /why|por qué|reasonPlaceholder/i,
+    });
     await userEvent.type(reason, 'too long');
     await userEvent.click(
       screen.getByRole('button', { name: /send|confirm|enviar|rejectConfirm/i })
@@ -68,7 +73,9 @@ describe('AgentProposalCard', () => {
         name: /dismiss|reject|descartar|rechazar|proposal\.reject$/i,
       })
     );
-    const reason = screen.getByRole('textbox');
+    const reason = screen.getByRole('textbox', {
+      name: /why|por qué|reasonPlaceholder/i,
+    });
     await userEvent.type(reason, '   ');
     await userEvent.click(
       screen.getByRole('button', { name: /send|confirm|enviar|rejectConfirm/i })
@@ -85,7 +92,7 @@ describe('AgentProposalCard', () => {
           targetNoteId: 'n1',
           summary: 's',
           previewHtml: '<p>long content</p>',
-          payload: {},
+          payload: { contentHtml: '<p>long content</p>' },
         }}
         onApprove={vi.fn()}
         onReject={vi.fn()}
@@ -107,7 +114,7 @@ describe('AgentProposalCard', () => {
           targetNoteId: 'n1',
           summary: 's',
           previewHtml: '<p>x</p>',
-          payload: {},
+          payload: { contentHtml: '<p>x</p>' },
         }}
         onApprove={onApprove}
         onReject={onReject}
@@ -118,5 +125,19 @@ describe('AgentProposalCard', () => {
     expect(onApprove).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(card, { key: 'Escape' });
     expect(onReject).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the create preview through the read-only editor', async () => {
+    render(
+      <AgentProposalCard
+        proposal={proposal}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    const region = screen.getByTestId('proposal-preview');
+    await waitFor(() =>
+      expect(region.querySelector('.ProseMirror')).toHaveTextContent('do')
+    );
   });
 });
