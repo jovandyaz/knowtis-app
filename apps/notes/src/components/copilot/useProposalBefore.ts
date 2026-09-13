@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useNoteEditorStore } from '@/stores/note-editor.store';
 
@@ -10,8 +10,8 @@ export type ProposalBefore =
   | { status: 'ready'; title: string; contentHtml: string; isLive: boolean };
 
 /**
- * Snapshots the target note once per proposal so the review diff stays put
- * while the user keeps typing; falls back to the cached note otherwise.
+ * Snapshots the target note once per proposal so the diff holds steady while
+ * the user types; staleness at commit is caught by the server's baseVersion check.
  */
 export function useProposalBefore(
   proposalId: string,
@@ -34,15 +34,34 @@ export function useProposalBefore(
   );
   const query = useNote(liveSnapshot ? undefined : targetNoteId);
 
+  const [frozenFallback, setFrozenFallback] = useState<{
+    proposalId: string;
+    title: string;
+    contentHtml: string;
+  } | null>(null);
+  // Freezes the fallback like the live path: once resolved for this proposal,
+  // later cache invalidations of the same query must not move it.
+  if (
+    !liveSnapshot &&
+    query.data &&
+    frozenFallback?.proposalId !== proposalId
+  ) {
+    setFrozenFallback({
+      proposalId,
+      title: query.data.title,
+      contentHtml: query.data.content,
+    });
+  }
+
   if (liveSnapshot) {
     return { status: 'ready', isLive: true, ...liveSnapshot };
   }
-  if (query.data) {
+  if (frozenFallback && frozenFallback.proposalId === proposalId) {
     return {
       status: 'ready',
       isLive: false,
-      title: query.data.title,
-      contentHtml: query.data.content,
+      title: frozenFallback.title,
+      contentHtml: frozenFallback.contentHtml,
     };
   }
   if (query.isError) {

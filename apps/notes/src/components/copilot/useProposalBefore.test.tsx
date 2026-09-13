@@ -54,6 +54,20 @@ describe('useProposalBefore', () => {
     expect(result.current).toMatchObject({ title: 'Live title' });
   });
 
+  it('recaptures the live snapshot when a new proposal arrives for the same note', () => {
+    useNoteEditorStore.getState().attach('n1', liveEditor, 'Live title');
+    const { result, rerender } = renderHook(
+      ({ proposalId }) => useProposalBefore(proposalId, 'n1'),
+      { initialProps: { proposalId: 'p1' } }
+    );
+    expect(result.current).toMatchObject({ title: 'Live title' });
+
+    act(() => useNoteEditorStore.getState().setTitle('n1', 'Updated title'));
+    rerender({ proposalId: 'p2' });
+
+    expect(result.current).toMatchObject({ title: 'Updated title' });
+  });
+
   it('falls back to the note query when another note is open', () => {
     useNoteEditorStore.getState().attach('other', liveEditor, 'Other');
     mockedUseNote.mockReturnValue(
@@ -65,6 +79,38 @@ describe('useProposalBefore', () => {
     const { result } = renderHook(() => useProposalBefore('p1', 'n1'));
 
     expect(mockedUseNote).toHaveBeenLastCalledWith('n1');
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: false,
+      title: 'Cached',
+      contentHtml: '<p>cached</p>',
+    });
+  });
+
+  it('freezes the fallback snapshot once resolved and ignores later cache updates for the same proposal', () => {
+    mockedUseNote.mockReturnValue(
+      queryResult({
+        data: { id: 'n1', title: 'Cached', content: '<p>cached</p>' },
+      })
+    );
+
+    const { result, rerender } = renderHook(() =>
+      useProposalBefore('p1', 'n1')
+    );
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: false,
+      title: 'Cached',
+      contentHtml: '<p>cached</p>',
+    });
+
+    mockedUseNote.mockReturnValue(
+      queryResult({
+        data: { id: 'n1', title: 'Changed', content: '<p>changed</p>' },
+      })
+    );
+    rerender();
+
     expect(result.current).toEqual({
       status: 'ready',
       isLive: false,
