@@ -46,3 +46,6 @@ export {
 export { TableControls } from './components/TableControls';
 
 export { shouldPropagateUpdate } from './shouldPropagateUpdate';
+
+export { diffNoteHtml } from './diff/diff-note-html';
+export type { DocChange, DocDiff } from './diff/diff-note-html';
