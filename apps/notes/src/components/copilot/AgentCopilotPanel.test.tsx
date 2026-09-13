@@ -1,6 +1,8 @@
 import { useAgentStore } from '@/stores/agent.store';
+import { useRightDockStore } from '@/stores/right-dock.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
@@ -27,6 +29,15 @@ vi.mock('./CopilotModelPicker', () => ({
 vi.mock('./AgentEmptyState', () => ({
   AgentEmptyState: () => <div data-testid="empty" />,
 }));
+vi.mock('./ProposalReview', () => ({
+  ProposalReview: ({ onBack }: { onBack: () => void }) => (
+    <div data-testid="review">
+      <button type="button" onClick={onBack}>
+        back
+      </button>
+    </div>
+  ),
+}));
 
 const wrapper = createAuthWrapper(createAuthApiMock(), {
   user: HARNESS_PROFILE,
@@ -48,11 +59,13 @@ function failWith(code: string) {
 describe('AgentCopilotPanel', () => {
   beforeEach(() => {
     useVerifyEmailStore.setState({ isOpen: false });
+    useRightDockStore.setState({ reviewOpen: false });
     useAgentStore.setState({
       status: 'idle',
       error: null,
       answeredError: null,
       messages: [],
+      pendingProposal: null,
     });
   });
 
@@ -196,5 +209,84 @@ describe('AgentCopilotPanel', () => {
     render(<AgentCopilotPanel />, { wrapper });
 
     expect(screen.getByText('GTD')).toBeInTheDocument();
+  });
+});
+
+const updateProposal = {
+  id: 'p1',
+  kind: 'update' as const,
+  targetNoteId: 'n1',
+  summary: 's',
+  previewHtml: null,
+  payload: { contentHtml: '<p>x</p>' },
+};
+
+const createProposal = {
+  id: 'p2',
+  kind: 'create' as const,
+  targetNoteId: null,
+  summary: 's',
+  previewHtml: null,
+  payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+};
+
+describe('AgentCopilotPanel proposal routing', () => {
+  it('shows the review instead of the chat for an update proposal', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: updateProposal,
+      });
+    });
+    expect(screen.getByTestId('review')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer')).not.toBeInTheDocument();
+    expect(useRightDockStore.getState().reviewOpen).toBe(true);
+  });
+
+  it('returns to the chat with a pending row and reopens the review from it', async () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: updateProposal,
+      });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'back' }));
+    expect(screen.getByTestId('composer')).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.copilot.review.pendingReview' })
+    );
+    expect(screen.getByTestId('review')).toBeInTheDocument();
+  });
+
+  it('keeps the card for create proposals', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: createProposal,
+      });
+    });
+    expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'ai.copilot.proposal.createTitle' })
+    ).toBeInTheDocument();
+    expect(useRightDockStore.getState().reviewOpen).toBe(false);
+  });
+
+  it('closes the review flag when the proposal resolves', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: updateProposal,
+      });
+    });
+    act(() => {
+      useAgentStore.setState({ status: 'streaming', pendingProposal: null });
+    });
+    expect(useRightDockStore.getState().reviewOpen).toBe(false);
+    expect(screen.getByTestId('composer')).toBeInTheDocument();
   });
 });
