@@ -130,7 +130,10 @@ export async function scriptAgent(
 
 export const test = sharingTest.extend<object, { ai: true }>({
   ai: [
-    async (_fixtures, use) => {
+    // Playwright parses this signature's text to resolve fixture deps, so the
+    // empty destructure is required even though this fixture needs nothing.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
       const db = postgres(E2E.database, { max: 1 });
       try {
         const updated =
