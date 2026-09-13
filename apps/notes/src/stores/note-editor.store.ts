@@ -11,9 +11,8 @@ interface NoteEditorState {
 }
 
 /**
- * The live editor of the note open in the workspace, for readers outside the
- * editor tree (the copilot's before/after review). Read-only by convention:
- * writing through it would bypass the page's save and collaboration flow.
+ * Read-only by convention: writing through it would bypass the page's
+ * save and collaboration flow.
  */
 export const useNoteEditorStore = create<NoteEditorState>((set, get) => ({
   noteId: null,
