@@ -122,6 +122,23 @@ describe('RightDock', () => {
     expect(useRightDockStore.getState().isOpen).toBe(false);
   });
 
+  it('tracks viewport resizes only while an update proposal is under review', () => {
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+    const resizeCalls = () =>
+      addEventListener.mock.calls.filter(([type]) => type === 'resize');
+
+    const { unmount } = render(<RightDock />);
+    expect(resizeCalls()).toHaveLength(0);
+    unmount();
+
+    agentState.pendingProposal = { kind: 'update', targetNoteId: 'n1' };
+    useRightDockStore.setState({ isOpen: true, reviewOpen: true });
+    render(<RightDock />);
+
+    expect(resizeCalls()).toHaveLength(1);
+    addEventListener.mockRestore();
+  });
+
   it('keeps the standard width when the pending proposal is not an update', () => {
     agentState.pendingProposal = { kind: 'create', targetNoteId: null };
     useRightDockStore.setState({ isOpen: true, reviewOpen: true });

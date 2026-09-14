@@ -1,14 +1,33 @@
 import { useSyncExternalStore } from 'react';
 
-function subscribeToResize(onChange: () => void) {
-  window.addEventListener('resize', onChange);
-  return () => window.removeEventListener('resize', onChange);
+export const VIEWPORT_RESIZE_DEBOUNCE_MS = 100;
+
+function readViewportWidth(): number {
+  return window.innerWidth;
 }
 
-export function useViewportWidth(): number {
+function subscribeToNothing() {
+  return () => undefined;
+}
+
+function subscribeToDebouncedResize(onChange: () => void) {
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  const onResize = () => {
+    clearTimeout(pending);
+    pending = setTimeout(onChange, VIEWPORT_RESIZE_DEBOUNCE_MS);
+  };
+
+  window.addEventListener('resize', onResize);
+  return () => {
+    clearTimeout(pending);
+    window.removeEventListener('resize', onResize);
+  };
+}
+
+export function useViewportWidth(enabled: boolean): number {
   return useSyncExternalStore(
-    subscribeToResize,
-    () => window.innerWidth,
+    enabled ? subscribeToDebouncedResize : subscribeToNothing,
+    readViewportWidth,
     () => 0
   );
 }

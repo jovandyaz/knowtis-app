@@ -225,6 +225,17 @@ const createProposal = {
 };
 
 describe('AgentCopilotPanel proposal routing', () => {
+  beforeEach(() => {
+    useRightDockStore.setState({ reviewOpen: false });
+    useAgentStore.setState({
+      status: 'idle',
+      error: null,
+      answeredError: null,
+      messages: [],
+      pendingProposal: null,
+    });
+  });
+
   it('shows the review instead of the chat for an update proposal', () => {
     render(<AgentCopilotPanel />, { wrapper });
     act(() => {
@@ -267,6 +278,37 @@ describe('AgentCopilotPanel proposal routing', () => {
       screen.getByRole('group', { name: 'ai.copilot.proposal.createTitle' })
     ).toBeInTheDocument();
     expect(useRightDockStore.getState().reviewOpen).toBe(false);
+  });
+
+  it('closes the review when the panel unmounts', () => {
+    const { unmount } = render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: updateProposal,
+      });
+    });
+    expect(useRightDockStore.getState().reviewOpen).toBe(true);
+
+    unmount();
+
+    expect(useRightDockStore.getState().reviewOpen).toBe(false);
+  });
+
+  it('reopens the review when the panel remounts with the proposal still pending', () => {
+    const { unmount } = render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: updateProposal,
+      });
+    });
+    unmount();
+
+    render(<AgentCopilotPanel />, { wrapper });
+
+    expect(useRightDockStore.getState().reviewOpen).toBe(true);
+    expect(screen.getByTestId('review')).toBeInTheDocument();
   });
 
   it('closes the review flag when the proposal resolves', () => {
