@@ -148,6 +148,36 @@ describe('DiffPreview', () => {
     await screen.findByRole('button', { name: '2 deleted' });
   });
 
+  it('places a removed paragraph between the paragraphs that survive it', async () => {
+    renderDiff('<p>Uno</p><p>Dos</p><p>Tres</p>', '<p>Uno</p><p>Tres</p>');
+    const chip = await screen.findByRole('button', { name: '1 deleted' });
+    expect(chip.previousElementSibling).toHaveTextContent('Uno');
+    expect(chip.nextElementSibling).toHaveTextContent('Tres');
+  });
+
+  it('labels a merged paragraph break as removed text, not a removed block', async () => {
+    renderDiff(
+      '<ul><li><p>alfa</p></li><li><p>beta</p></li></ul>',
+      '<ul><li><p>alfa beta</p></li></ul>'
+    );
+    expect(
+      await screen.findByRole('button', { name: 'deleted text' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /\d+ deleted/ })).toBeNull();
+  });
+
+  it('keeps a merged paragraph break as a chip even with Show deleted on', async () => {
+    const { container } = renderDiff(
+      '<ul><li><p>alfa</p></li><li><p>beta</p></li></ul>',
+      '<ul><li><p>alfa beta</p></li></ul>',
+      { showDeleted: true }
+    );
+    expect(
+      await screen.findByRole('button', { name: 'deleted text' })
+    ).toBeInTheDocument();
+    expect(container.querySelector('del')).toBeNull();
+  });
+
   it('rings the current change', async () => {
     const { container } = renderDiff('<p>Astro</p>', '<p>Astro y Vite</p>', {
       currentIndex: 0,

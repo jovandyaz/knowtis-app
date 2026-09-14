@@ -54,6 +54,8 @@ export type { DocChange, DocDiff } from './diff/diff-note-html';
 export {
   CHANGE_ATTR,
   CHIP_ATTR,
+  DIFF_DEL_CLASS,
+  DIFF_INS_CLASS,
   ProposalDiff,
 } from './extensions/proposal-diff';
 export type {
