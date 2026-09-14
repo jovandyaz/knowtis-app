@@ -4,7 +4,6 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBase64,
-  IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
@@ -41,6 +40,7 @@ import {
 } from '@knowtis/shared-types';
 
 import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
+import { IsOptionalStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
 import { YJS_STATE_MAX_BYTES } from '../infrastructure/yjs-state-update';
 
 const BASE64_BYTES_PER_GROUP = 3;
@@ -135,8 +135,7 @@ export class UpdateNoteDto {
     description: 'Whether editors are allowed to share the note',
     example: false,
   })
-  @IsBoolean()
-  @IsOptional()
+  @IsOptionalStrictBoolean()
   editorsCanShare?: boolean;
 
   @ApiPropertyOptional({

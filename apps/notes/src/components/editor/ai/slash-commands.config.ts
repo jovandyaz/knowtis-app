@@ -195,7 +195,11 @@ const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
     keywords: ['image', 'photo', 'picture', 'imagen', 'foto'],
     action: (editor, range) => {
       editor.chain().focus().deleteRange(range).run();
-      openImagePicker((file) => editor.commands.uploadImageFile(file));
+      openImagePicker((file) => {
+        if (!editor.isDestroyed) {
+          editor.commands.uploadImageFile(file);
+        }
+      });
     },
   },
 ];

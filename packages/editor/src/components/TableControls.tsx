@@ -148,7 +148,7 @@ export function TableControls({ editor }: TableControlsProps) {
   const activeTable = useEditorState({
     editor,
     selector: ({ editor: e }) => {
-      if (!e.isEditable || !e.isActive('table')) {
+      if (e.isDestroyed || !e.isEditable || !e.isActive('table')) {
         return null;
       }
       return findActiveTable(e);

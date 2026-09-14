@@ -47,6 +47,19 @@ function createMockEditor(): Editor {
   } as unknown as Editor;
 }
 
+function createTornDownEditor(): Editor {
+  return {
+    isDestroyed: true,
+    get view(): never {
+      throw new Error(
+        "[tiptap error]: The editor view is not available. Cannot access view['dom']."
+      );
+    },
+    state: { selection: { to: 0 } },
+    commands: { focus: vi.fn() },
+  } as unknown as Editor;
+}
+
 function pressEscape() {
   act(() => {
     fireEvent.keyDown(document.body, { key: 'Escape' });
@@ -74,6 +87,16 @@ describe('AIResultPanel', () => {
     act(() => {
       useAIStore.getState().reset();
     });
+  });
+
+  it('renders nothing once the editor behind it has been torn down', () => {
+    useAIStore.setState({ status: 'error' });
+
+    const { container } = render(
+      <AIResultPanel editor={createTornDownEditor()} />
+    );
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('discards the panel on Escape when it is the only layer', () => {
