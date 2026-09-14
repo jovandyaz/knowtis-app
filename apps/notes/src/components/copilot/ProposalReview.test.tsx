@@ -229,4 +229,16 @@ describe('ProposalReview', () => {
       screen.getByRole('button', { name: 'ai.copilot.proposal.approveUpdate' })
     ).toBeEnabled();
   });
+
+  it('still shows a title-only proposal when the before version failed', () => {
+    mockedBefore.mockReturnValue({ status: 'error' });
+    renderReview({ payload: { title: 'Landing' } });
+
+    const titleRow = screen.getByTestId('review-title');
+    expect(titleRow).toHaveTextContent('Landing');
+    expect(titleRow.querySelector('del')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.proposal.approveUpdate' })
+    ).toBeEnabled();
+  });
 });

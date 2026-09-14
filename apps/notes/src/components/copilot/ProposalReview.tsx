@@ -112,6 +112,8 @@ export function ProposalReview({
     payload.title !== undefined &&
     before.status === 'ready' &&
     payload.title !== before.title;
+  const showProposedTitle =
+    before.status === 'error' && payload.title !== undefined;
 
   const items = useMemo<ReviewItem[]>(
     () => [
@@ -270,7 +272,7 @@ export function ProposalReview({
       </div>
 
       <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {titleChanged && (
+        {(titleChanged || showProposedTitle) && (
           <div
             data-testid="review-title"
             className={cn(
