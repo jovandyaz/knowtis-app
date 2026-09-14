@@ -1,3 +1,5 @@
+import type { QueryKey } from '@tanstack/react-query';
+
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +12,7 @@ import type {
   AgentStreamHandle,
   AgentThinkingPayload,
 } from '@knowtis/api-client';
-import { notesQueryKeys } from '@knowtis/data-access-notes';
+import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
@@ -45,6 +47,26 @@ interface Cbs {
   onProposal?: (p: AgentProposalPayload) => void;
   onCommitted?: (p: AgentCommittedPayload) => void;
   onThinking?: (p: AgentThinkingPayload) => void;
+}
+
+const SIDEBAR_RECENT_LIMIT = 20;
+
+function seedNoteCaches(noteId: string): QueryKey[] {
+  const keys = [
+    notesQueryKeys.list(),
+    notesQueryKeys.recent(SIDEBAR_RECENT_LIMIT),
+    notesQueryKeys.counts(),
+    tagsQueryKeys.tree(),
+    notesQueryKeys.detail(noteId),
+  ];
+  for (const key of keys) {
+    queryClient.setQueryData(key, {});
+  }
+  return keys;
+}
+
+function invalidationOf(keys: QueryKey[]) {
+  return keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);
 }
 
 function capture(): {
@@ -426,25 +448,24 @@ describe('agent.store server-authoritative wire', () => {
     );
   });
 
-  it('invalidates the notes cache when a proposal is committed', () => {
-    const spy = vi.spyOn(queryClient, 'invalidateQueries');
-    const { get } = capture();
-    useAgentStore.getState().sendMessage('create a note');
-    get().onProposal?.(PROPOSAL);
-    useAgentStore.getState().approveProposal();
-    get().onCommitted?.({
-      proposalId: 'p1',
-      result: { noteId: 'n1', title: 'My Note', kind: 'create' },
-    });
+  it.each(['create', 'update', 'share'] as const)(
+    'invalidates the notes caches when a %s proposal is committed',
+    (kind) => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('change a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      const keys = seedNoteCaches('n1');
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind },
+      });
 
-    expect(spy).toHaveBeenCalledWith({ queryKey: notesQueryKeys.lists() });
-    expect(spy).toHaveBeenCalledWith({
-      queryKey: notesQueryKeys.detail('n1'),
-    });
-  });
+      expect(invalidationOf(keys)).toEqual([true, true, true, true, true]);
+    }
+  );
 
   it('still invalidates the notes cache when the stream was superseded', () => {
-    const spy = vi.spyOn(queryClient, 'invalidateQueries');
     const { get } = capture();
     useAgentStore.getState().sendMessage('create a note');
     get().onProposal?.(PROPOSAL);
@@ -452,16 +473,13 @@ describe('agent.store server-authoritative wire', () => {
     const committed = get().onCommitted;
 
     useAgentStore.getState().newConversation();
-    spy.mockClear();
+    const keys = seedNoteCaches('n1');
     committed?.({
       proposalId: 'p1',
       result: { noteId: 'n1', title: 'My Note', kind: 'create' },
     });
 
-    expect(spy).toHaveBeenCalledWith({ queryKey: notesQueryKeys.lists() });
-    expect(spy).toHaveBeenCalledWith({
-      queryKey: notesQueryKeys.detail('n1'),
-    });
+    expect(invalidationOf(keys)).toEqual([true, true, true, true, true]);
     expect(
       useAgentStore.getState().messages.find((m) => m.committed)
     ).toBeUndefined();

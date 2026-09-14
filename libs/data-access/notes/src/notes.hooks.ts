@@ -19,7 +19,8 @@ import {
   mapLoadedNotes,
   type NoteListPages,
 } from './note-cache';
-import { notesQueryKeys, tagsQueryKeys } from './query-keys';
+import { invalidateNoteCollections } from './note-invalidation';
+import { notesQueryKeys } from './query-keys';
 
 const LIST_STALE_TIME_MS = 1000 * 60;
 const COUNTS_STALE_TIME_MS = 1000 * 30;
@@ -91,10 +92,7 @@ export function useCreateNote() {
       queryClient.invalidateQueries({
         queryKey: notesQueryKeys.detail(newNote.id),
       });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
-      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
+      invalidateNoteCollections(queryClient);
     },
   });
 }
@@ -161,10 +159,7 @@ export function useUpdateNote() {
     },
     onSettled: (_data, _error, { id }) => {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
-      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
+      invalidateNoteCollections(queryClient);
     },
   });
 }
@@ -196,10 +191,7 @@ export function useDeleteNote() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
-      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
+      invalidateNoteCollections(queryClient);
     },
   });
 }
@@ -210,11 +202,8 @@ export function useRestoreNote() {
   return useMutation({
     mutationFn: (id: string) => notesApi.restore(id),
     onSettled: (_data, _error, id) => {
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
-      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
+      invalidateNoteCollections(queryClient);
     },
   });
 }
