@@ -1,25 +1,16 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { PendingProposal } from '@/stores/agent.store';
-import {
-  ArrowUp,
-  FilePlus2,
-  PencilLine,
-  UserPlus,
-  type LucideIcon,
-} from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { FilePlus2, PencilLine, UserPlus, type LucideIcon } from 'lucide-react';
 
-import { Badge, Button, cn, Textarea } from '@knowtis/design-system';
+import { Badge, Button, cn } from '@knowtis/design-system';
+import { ReadOnlyEditor } from '@knowtis/editor';
 
 import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
-import {
-  Confirmation,
-  ConfirmationAction,
-  ConfirmationActions,
-  ConfirmationFooter,
-} from '../ai-elements/confirmation';
+import { Confirmation, ConfirmationFooter } from '../ai-elements/confirmation';
+import { ProposalActions } from './ProposalActions';
+import { useProposalDecision } from './useProposalDecision';
 
 interface ProposalPayloadView {
   readonly title?: string;
@@ -61,44 +52,22 @@ export function AgentProposalCard({
   onReject,
 }: AgentProposalCardProps) {
   const { t } = useTranslation('notes');
-  const [rejecting, setRejecting] = useState(false);
-  const [reason, setReason] = useState('');
+  const decision = useProposalDecision(onApprove, onReject);
   const [expanded, setExpanded] = useState(false);
 
   const meta = KIND_META[proposal.kind];
   const Icon = meta.icon;
   const payload = proposal.payload as ProposalPayloadView;
-
-  const approve = () => onApprove();
-  const confirmReject = () => onReject(reason.trim() || undefined);
-  const cancelReject = () => {
-    setRejecting(false);
-    setReason('');
-  };
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      if (rejecting) {
-        confirmReject();
-      } else {
-        approve();
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      if (rejecting) {
-        cancelReject();
-      } else {
-        onReject();
-      }
-    }
-  };
+  const previewHtml =
+    proposal.kind !== 'share' && payload.contentHtml
+      ? sanitizeAiHtml(payload.contentHtml)
+      : null;
 
   return (
     <Confirmation
       role="group"
       aria-label={t(meta.titleKey)}
-      onKeyDown={onKeyDown}
+      onKeyDown={decision.onKeyDown}
     >
       <div className="flex max-h-[min(60vh,28rem)] flex-col">
         <div className="flex flex-col gap-3 overflow-y-auto p-3">
@@ -110,9 +79,11 @@ export function AgentProposalCard({
               <p className="text-sm font-medium text-foreground">
                 {t(meta.titleKey)}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {proposal.summary}
-              </p>
+              {payload.title && (
+                <p className="truncate text-xs text-muted-foreground">
+                  {payload.title}
+                </p>
+              )}
             </div>
           </div>
 
@@ -131,23 +102,17 @@ export function AgentProposalCard({
               </Badge>
             </div>
           ) : (
-            proposal.previewHtml && (
+            previewHtml && (
               <div className="flex flex-col gap-1">
                 <div
                   id="proposal-preview"
                   data-testid="proposal-preview"
                   className={cn(
-                    'overflow-y-auto rounded-md border border-border/70 bg-muted/20 px-3 py-2 transition-[max-height] duration-200 motion-reduce:transition-none',
+                    'prose prose-sm dark:prose-invert max-w-none overflow-y-auto rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs transition-[max-height] duration-200 motion-reduce:transition-none',
                     expanded ? 'max-h-[min(40vh,20rem)]' : 'max-h-40'
                   )}
                 >
-                  <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                    // previewHtml is LLM-generated; re-sanitize client-side as defense-in-depth.
-                    dangerouslySetInnerHTML={{
-                      __html: sanitizeAiHtml(proposal.previewHtml),
-                    }}
-                  />
+                  <ReadOnlyEditor content={previewHtml} />
                 </div>
                 <Button
                   type="button"
@@ -168,52 +133,10 @@ export function AgentProposalCard({
         </div>
 
         <ConfirmationFooter>
-          <AnimatePresence mode="wait" initial={false}>
-            {rejecting ? (
-              <motion.div
-                key="reason"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.16, ease: 'easeOut' }}
-                className="flex w-full flex-col gap-2 overflow-hidden"
-              >
-                <Textarea
-                  autoFocus
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder={t('ai.copilot.proposal.reasonPlaceholder')}
-                  aria-label={t('ai.copilot.proposal.reasonPlaceholder')}
-                  rows={2}
-                  className="min-h-14 resize-none text-xs"
-                />
-                <ConfirmationActions>
-                  <ConfirmationAction variant="ghost" onClick={cancelReject}>
-                    {t('ai.copilot.proposal.rejectCancel')}
-                  </ConfirmationAction>
-                  <ConfirmationAction
-                    variant="secondary"
-                    onClick={confirmReject}
-                  >
-                    {t('ai.copilot.proposal.rejectConfirm')}
-                    <ArrowUp className="ml-1 size-3.5" />
-                  </ConfirmationAction>
-                </ConfirmationActions>
-              </motion.div>
-            ) : (
-              <ConfirmationActions key="actions" className="w-full">
-                <ConfirmationAction
-                  variant="ghost"
-                  onClick={() => setRejecting(true)}
-                >
-                  {t('ai.copilot.proposal.reject')}
-                </ConfirmationAction>
-                <ConfirmationAction className="min-w-20" onClick={approve}>
-                  {t(meta.approveKey)}
-                </ConfirmationAction>
-              </ConfirmationActions>
-            )}
-          </AnimatePresence>
+          <ProposalActions
+            decision={decision}
+            approveLabel={t(meta.approveKey)}
+          />
         </ConfirmationFooter>
       </div>
     </Confirmation>

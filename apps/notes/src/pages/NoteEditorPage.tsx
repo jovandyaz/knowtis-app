@@ -25,6 +25,7 @@ import { captureProductEvent } from '@/lib/analytics/product-events';
 import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
@@ -39,7 +40,7 @@ import {
 } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { Button, ErrorState, Input } from '@knowtis/design-system';
-import { useDebouncedMerge } from '@knowtis/shared-hooks';
+import { useDebouncedMerge, useLatestRef } from '@knowtis/shared-hooks';
 import {
   ACCESS,
   FEATURE_FLAG_KEYS,
@@ -189,6 +190,17 @@ function NoteEditor({
     onAutoTitleChange: (newTitle) => debouncedUpdateNote({ title: newTitle }),
   });
 
+  const attachLiveEditor = useNoteEditorStore((s) => s.attach);
+  const setLiveTitle = useNoteEditorStore((s) => s.setTitle);
+  const detachLiveEditor = useNoteEditorStore((s) => s.detach);
+  const titleRef = useLatestRef(title);
+
+  useEffect(() => {
+    setLiveTitle(noteId, title);
+  }, [noteId, title, setLiveTitle]);
+
+  useEffect(() => () => detachLiveEditor(noteId), [noteId, detachLiveEditor]);
+
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
   const { data: noteArtifacts } = useArtifacts(aiEnabled ? noteId : undefined);
   const { isPending: flagsPending } = useFeatureFlags();
@@ -265,9 +277,13 @@ function NoteEditor({
     ]
   );
 
-  const handleEditorReady = useCallback((editor: Editor) => {
-    editorRef.current = editor;
-  }, []);
+  const handleEditorReady = useCallback(
+    (editor: Editor) => {
+      editorRef.current = editor;
+      attachLiveEditor(noteId, editor, titleRef.current);
+    },
+    [attachLiveEditor, noteId, titleRef]
+  );
 
   const handleVoiceInsert = useCallback(
     (htmlContent: string) => {

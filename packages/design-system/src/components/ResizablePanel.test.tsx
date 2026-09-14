@@ -1,6 +1,6 @@
 import { createRef } from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ResizablePanel } from './ResizablePanel';
@@ -26,5 +26,180 @@ describe('ResizablePanel', () => {
       </ResizablePanel>
     );
     expect(ref.current).toBe(screen.getByText('Panel body').closest('aside'));
+  });
+
+  it('animates to targetWidth and back to the previous width', async () => {
+    const base = {
+      defaultWidth: PANEL_DEFAULT_WIDTH,
+      collapseThreshold: PANEL_COLLAPSE_THRESHOLD,
+      isOpen: true,
+      onCollapse: vi.fn(),
+      side: 'right' as const,
+    };
+    const { rerender } = render(
+      <ResizablePanel {...base} maxWidth={PANEL_MAX_WIDTH}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    const aside = screen.getByText('Body').closest('aside') as HTMLElement;
+    expect(aside.style.width).toBe(`${PANEL_DEFAULT_WIDTH}px`);
+
+    rerender(
+      <ResizablePanel {...base} maxWidth={900} targetWidth={700}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    await waitFor(() => expect(aside.style.width).toBe('700px'));
+    expect(screen.getByRole('separator')).toHaveAttribute(
+      'aria-valuemax',
+      '900'
+    );
+
+    rerender(
+      <ResizablePanel {...base} maxWidth={PANEL_MAX_WIDTH}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    await waitFor(() =>
+      expect(aside.style.width).toBe(`${PANEL_DEFAULT_WIDTH}px`)
+    );
+  });
+
+  it('caps targetWidth at maxWidth', async () => {
+    const base = {
+      defaultWidth: PANEL_DEFAULT_WIDTH,
+      collapseThreshold: PANEL_COLLAPSE_THRESHOLD,
+      isOpen: true,
+      onCollapse: vi.fn(),
+      side: 'right' as const,
+    };
+    render(
+      <ResizablePanel {...base} maxWidth={600} targetWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    const aside = screen.getByText('Body').closest('aside') as HTMLElement;
+
+    await waitFor(() => expect(aside.style.width).toBe('600px'));
+  });
+
+  it('restores the pre-target width when a target-clear happens during a drag', async () => {
+    const base = {
+      defaultWidth: PANEL_DEFAULT_WIDTH,
+      collapseThreshold: PANEL_COLLAPSE_THRESHOLD,
+      isOpen: true,
+      onCollapse: vi.fn(),
+      side: 'right' as const,
+    };
+    const { rerender } = render(
+      <ResizablePanel {...base} maxWidth={900} targetWidth={700}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    const aside = screen.getByText('Body').closest('aside') as HTMLElement;
+    await waitFor(() => expect(aside.style.width).toBe('700px'));
+
+    const separator = screen.getByRole('separator');
+    fireEvent.mouseDown(separator, { clientX: 0 });
+
+    rerender(
+      <ResizablePanel {...base} maxWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+
+    fireEvent.mouseMove(document, { clientX: 10 });
+    fireEvent.mouseUp(document);
+
+    await waitFor(() =>
+      expect(aside.style.width).toBe(`${PANEL_DEFAULT_WIDTH}px`)
+    );
+  });
+
+  it('does not let a drag that ends while a target is active corrupt the user width', async () => {
+    const base = {
+      defaultWidth: PANEL_DEFAULT_WIDTH,
+      collapseThreshold: PANEL_COLLAPSE_THRESHOLD,
+      onCollapse: vi.fn(),
+      side: 'right' as const,
+    };
+    const { rerender } = render(
+      <ResizablePanel {...base} isOpen maxWidth={900} targetWidth={700}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    const aside = screen.getByText('Body').closest('aside') as HTMLElement;
+    await waitFor(() => expect(aside.style.width).toBe('700px'));
+
+    const separator = screen.getByRole('separator');
+    fireEvent.mouseDown(separator, { clientX: 0 });
+
+    rerender(
+      <ResizablePanel {...base} isOpen maxWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+
+    fireEvent.mouseMove(document, { clientX: 10 });
+    fireEvent.mouseUp(document);
+    await waitFor(() =>
+      expect(aside.style.width).toBe(`${PANEL_DEFAULT_WIDTH}px`)
+    );
+
+    rerender(
+      <ResizablePanel {...base} isOpen={false} maxWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    await waitFor(() => expect(aside.style.width).toBe('0px'));
+
+    rerender(
+      <ResizablePanel {...base} isOpen maxWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    await waitFor(() =>
+      expect(aside.style.width).toBe(`${PANEL_DEFAULT_WIDTH}px`)
+    );
+  });
+
+  it('restores to a sane width, not 0, when a target set while closed is later cleared', async () => {
+    const base = {
+      defaultWidth: PANEL_DEFAULT_WIDTH,
+      collapseThreshold: PANEL_COLLAPSE_THRESHOLD,
+      onCollapse: vi.fn(),
+      side: 'right' as const,
+    };
+    const { rerender } = render(
+      <ResizablePanel {...base} isOpen={false} maxWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    expect(screen.queryByText('Body')).not.toBeInTheDocument();
+
+    rerender(
+      <ResizablePanel {...base} isOpen={false} maxWidth={900} targetWidth={700}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+
+    rerender(
+      <ResizablePanel {...base} isOpen maxWidth={900} targetWidth={700}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    const aside = (await screen.findByText('Body')).closest(
+      'aside'
+    ) as HTMLElement;
+    await waitFor(() => expect(aside.style.width).toBe('700px'));
+
+    rerender(
+      <ResizablePanel {...base} isOpen maxWidth={900}>
+        <p>Body</p>
+      </ResizablePanel>
+    );
+    await waitFor(() =>
+      expect(aside.style.width).toBe(`${PANEL_DEFAULT_WIDTH}px`)
+    );
   });
 });

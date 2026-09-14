@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useMotionPreset } from '../motion/useMotionPreset';
+
 const SNAP_TRANSITION_MS = 300;
 
 export type PanelSide = 'left' | 'right';
@@ -19,6 +21,9 @@ export interface ResizablePanelConfig {
   onCollapse: () => void;
   /** Called whenever the width changes — use to sync external state */
   onWidthChange?: (width: number) => void;
+  /** When set, the panel animates to this width and holds it; clearing it
+   *  animates back to the width the user had before. */
+  targetWidth?: number | undefined;
   /** Which side the panel sits on — determines drag direction */
   side: PanelSide;
 }
@@ -84,8 +89,10 @@ export function useResizablePanel({
   isOpen,
   onCollapse,
   onWidthChange,
+  targetWidth,
   side,
 }: ResizablePanelConfig): ResizablePanelState {
+  const { reduced } = useMotionPreset();
   const [width, setWidth] = useState(isOpen ? defaultWidth : 0);
   const [isDragging, setIsDragging] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -96,6 +103,8 @@ export function useResizablePanel({
   const snapTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const prevIsOpenRef = useRef(isOpen);
   const lastUserWidthRef = useRef(defaultWidth);
+  const targetWidthRef = useRef<number | undefined>(undefined);
+  const restoreWidthRef = useRef<number | null>(null);
 
   useEffect(() => {
     widthRef.current = width;
@@ -105,7 +114,6 @@ export function useResizablePanel({
     onWidthChange?.(width);
   }, [width, onWidthChange]);
 
-  // React to external open/close (e.g. toggle button)
   useEffect(() => {
     if (isOpen === prevIsOpenRef.current) {
       return;
@@ -122,7 +130,7 @@ export function useResizablePanel({
         setWidth,
         setIsTransitioning,
         0,
-        lastUserWidthRef.current
+        targetWidthRef.current ?? lastUserWidthRef.current
       );
     } else {
       animateWidth(
@@ -134,6 +142,51 @@ export function useResizablePanel({
       );
     }
   }, [isOpen, isDragging]);
+
+  useEffect(() => {
+    if (targetWidth === targetWidthRef.current) {
+      return;
+    }
+
+    if (isDragging) {
+      return;
+    }
+
+    const previousTarget = targetWidthRef.current;
+    targetWidthRef.current = targetWidth;
+
+    if (!isOpen) {
+      return;
+    }
+
+    if (targetWidth !== undefined) {
+      if (previousTarget === undefined) {
+        restoreWidthRef.current =
+          widthRef.current > 0 ? widthRef.current : lastUserWidthRef.current;
+      }
+      animateWidth(
+        snapTimeoutRef,
+        setWidth,
+        setIsTransitioning,
+        widthRef.current,
+        Math.min(targetWidth, maxWidth)
+      );
+      return;
+    }
+
+    const restore = Math.min(
+      restoreWidthRef.current ?? lastUserWidthRef.current,
+      maxWidth
+    );
+    restoreWidthRef.current = null;
+    animateWidth(
+      snapTimeoutRef,
+      setWidth,
+      setIsTransitioning,
+      widthRef.current,
+      restore
+    );
+  }, [targetWidth, isOpen, isDragging, maxWidth]);
 
   useEffect(() => {
     const ref = snapTimeoutRef;
@@ -180,7 +233,9 @@ export function useResizablePanel({
         }
 
         const snappedWidth = Math.max(currentWidth, minWidth);
-        lastUserWidthRef.current = snappedWidth;
+        if (targetWidthRef.current === undefined) {
+          lastUserWidthRef.current = snappedWidth;
+        }
 
         if (snappedWidth !== currentWidth) {
           setWidth(snappedWidth);
@@ -207,11 +262,10 @@ export function useResizablePanel({
     [isOpen, onCollapse]
   );
 
-  const transitionStyle = isDragging
-    ? 'none'
-    : isTransitioning
-      ? `width ${SNAP_TRANSITION_MS}ms ease`
-      : 'none';
+  const transitionStyle =
+    isDragging || !isTransitioning || reduced
+      ? 'none'
+      : `width ${SNAP_TRANSITION_MS}ms ease`;
 
   const isVisible = width > 0 || isTransitioning;
 

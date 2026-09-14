@@ -36,7 +36,7 @@ describe('agent.store resolution markers', () => {
           id: 'm2',
           role: 'assistant',
           content: 'sure',
-          proposal: { kind: 'update', summary: 's' },
+          proposal: { kind: 'update' },
         },
       ],
       {
@@ -44,8 +44,6 @@ describe('agent.store resolution markers', () => {
           id: 'p1',
           kind: 'update',
           targetNoteId: 'n1',
-          summary: 's',
-          previewHtml: '<p>x</p>',
           payload: {},
         },
         status: 'pendingProposal',
