@@ -9,7 +9,10 @@ import {
   type AgentStreamHandle,
   type WebSource,
 } from '@knowtis/api-client';
-import { notesQueryKeys } from '@knowtis/data-access-notes';
+import {
+  invalidateNoteCollections,
+  notesQueryKeys,
+} from '@knowtis/data-access-notes';
 import type { AgentStopReason, ReasoningEffort } from '@knowtis/shared-types';
 
 import { createChunkBuffer } from './chunk-buffer';
@@ -230,11 +233,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
         },
         onCommitted: ({ result }) => {
           // Invalidate before the stale-stream guard: the mutation is committed
-          // server-side, so the list must refresh even if a newer turn
+          // server-side, so the caches must refresh even if a newer turn
           // superseded this stream (only the chat update below is version-gated).
-          void queryClient.invalidateQueries({
-            queryKey: notesQueryKeys.lists(),
-          });
+          invalidateNoteCollections(queryClient);
           void queryClient.invalidateQueries({
             queryKey: notesQueryKeys.detail(result.noteId),
           });
