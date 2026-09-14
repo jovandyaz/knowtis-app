@@ -1,18 +1,10 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsIn,
-  IsOptional,
-  IsString,
-  MaxLength,
-  ValidateIf,
-} from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 import { MODEL_ID_MAX_LENGTH, MODEL_INTENTS } from '@knowtis/shared-types';
 import type { ModelIntent } from '@knowtis/shared-types';
 
-const isProvided = (_: unknown, value: unknown) => value !== undefined;
+import { IsOptionalStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
 
 export class UpdateAiPreferencesDto {
   @ApiPropertyOptional({
@@ -38,10 +30,6 @@ export class UpdateAiPreferencesDto {
   @ApiPropertyOptional({
     description: 'Inline AI autocomplete (ghost text) in the editor',
   })
-  // The pipe's enableImplicitConversion coerces anything to a boolean, and
-  // @IsOptional() would skip null onto a NOT NULL column.
-  @ValidateIf(isProvided)
-  @Transform(({ obj, key }) => obj[key])
-  @IsBoolean()
+  @IsOptionalStrictBoolean()
   ghostTextEnabled?: boolean;
 }

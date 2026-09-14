@@ -19,7 +19,7 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
   const tippyRef = useRef<TippyInstance | null>(null);
   const [portalTarget] = useState(() => document.createElement('div'));
 
-  const isActive = status !== 'idle';
+  const isActive = status !== 'idle' && !editor.isDestroyed;
   const editorWidth = isActive
     ? editor.view.dom.getBoundingClientRect().width
     : 0;
