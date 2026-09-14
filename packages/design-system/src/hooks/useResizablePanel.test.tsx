@@ -8,20 +8,28 @@ vi.mock('motion/react', async () => {
   return mockMotionReact();
 });
 
-function renderPanel() {
+interface PanelProps {
+  isOpen?: boolean;
+  targetWidth?: number;
+  onCollapse?: () => void;
+}
+
+const noop = () => undefined;
+
+function renderPanel(initialProps: PanelProps = {}) {
   return renderHook(
-    ({ targetWidth }: { targetWidth?: number }) =>
+    ({ isOpen = true, targetWidth, onCollapse = noop }: PanelProps) =>
       useResizablePanel({
         defaultWidth: 500,
         minWidth: 300,
         maxWidth: 960,
         collapseThreshold: 240,
-        isOpen: true,
-        onCollapse: () => undefined,
+        isOpen,
+        onCollapse,
         targetWidth,
         side: 'right',
       }),
-    { initialProps: {} as { targetWidth?: number } }
+    { initialProps }
   );
 }
 
@@ -58,5 +66,21 @@ describe('useResizablePanel', () => {
 
     expect(result.current.width).toBe(960);
     expect(result.current.transitionStyle).toBe('none');
+  });
+
+  it('restores a usable width when the panel opens and targets in one commit', async () => {
+    const onCollapse = vi.fn();
+    const { result, rerender } = renderPanel({ isOpen: false, onCollapse });
+    expect(result.current.width).toBe(0);
+
+    rerender({ isOpen: true, targetWidth: 700, onCollapse });
+    await flushFrames();
+    expect(result.current.width).toBe(700);
+
+    rerender({ isOpen: true, onCollapse });
+    await flushFrames();
+
+    expect(result.current.width).toBe(500);
+    expect(onCollapse).not.toHaveBeenCalled();
   });
 });
