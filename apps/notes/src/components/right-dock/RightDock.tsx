@@ -81,7 +81,7 @@ export function RightDock() {
     (s) => s.pendingProposal !== null && isUpdateProposal(s.pendingProposal)
   );
   const reviewingUpdate = reviewOpen && hasUpdateProposal;
-  const reviewWidth = reviewDockWidth(useViewportWidth());
+  const reviewWidth = reviewDockWidth(useViewportWidth(reviewingUpdate));
 
   if (isDesktop) {
     return (

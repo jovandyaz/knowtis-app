@@ -19,6 +19,11 @@ export interface DocDiff {
   readonly count: number;
 }
 
+interface BlockMatch {
+  readonly before: number;
+  readonly after: number;
+}
+
 const schemaCache = new WeakMap<AnyExtension[], Schema>();
 
 function schemaFor(extensions: AnyExtension[]): Schema {
@@ -31,9 +36,118 @@ function schemaFor(extensions: AnyExtension[]): Schema {
   return schema;
 }
 
+const MAX_LCS_CELLS = 1_000_000;
+
+function matchEqualBlocksLcs(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode
+): BlockMatch[] {
+  const rows = before.childCount;
+  const cols = after.childCount;
+  const width = cols + 1;
+  const lengths = new Uint32Array((rows + 1) * width);
+  for (let i = rows - 1; i >= 0; i -= 1) {
+    for (let j = cols - 1; j >= 0; j -= 1) {
+      lengths[i * width + j] = before.child(i).eq(after.child(j))
+        ? lengths[(i + 1) * width + (j + 1)] + 1
+        : Math.max(lengths[(i + 1) * width + j], lengths[i * width + (j + 1)]);
+    }
+  }
+
+  const matches: BlockMatch[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < rows && j < cols) {
+    if (before.child(i).eq(after.child(j))) {
+      matches.push({ before: i, after: j });
+      i += 1;
+      j += 1;
+    } else if (lengths[(i + 1) * width + j] >= lengths[i * width + (j + 1)]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  return matches;
+}
+
+function matchEqualBlocksPositional(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode
+): BlockMatch[] {
+  const matches: BlockMatch[] = [];
+  const count = Math.min(before.childCount, after.childCount);
+  for (let k = 0; k < count; k += 1) {
+    if (before.child(k).eq(after.child(k))) {
+      matches.push({ before: k, after: k });
+    }
+  }
+  return matches;
+}
+
+function matchEqualBlocks(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode
+): BlockMatch[] {
+  const cells = (before.childCount + 1) * (after.childCount + 1);
+  return cells > MAX_LCS_CELLS
+    ? matchEqualBlocksPositional(before, after)
+    : matchEqualBlocksLcs(before, after);
+}
+
+function blockSpan(doc: ProseMirrorNode, from: number, to: number): number {
+  let size = 0;
+  for (let i = from; i < to; i += 1) {
+    size += doc.child(i).nodeSize;
+  }
+  return size;
+}
+
+function rewriteChanges(
+  before: ProseMirrorNode,
+  beforeBlock: ProseMirrorNode,
+  afterBlock: ProseMirrorNode,
+  posA: number,
+  posB: number
+): DocChange[] {
+  const tr = new Transform(before).replaceWith(
+    posA,
+    posA + beforeBlock.nodeSize,
+    afterBlock
+  );
+  const changeSet = ChangeSet.create(before).addSteps(
+    tr.doc,
+    tr.mapping.maps,
+    null
+  );
+  const shift = posB - posA;
+  const changes = simplifyChanges(changeSet.changes, tr.doc).map(
+    ({ fromA, toA, fromB, toB }) => ({
+      fromA,
+      toA,
+      fromB: fromB + shift,
+      toB: toB + shift,
+    })
+  );
+  if (changes.length > 0) {
+    return changes;
+  }
+  // Markup-only rewrites (a heading level, say) tokenise identically on both
+  // sides, so the word diff sees nothing; report the whole block instead.
+  return [
+    {
+      fromA: posA,
+      toA: posA + beforeBlock.nodeSize,
+      fromB: posB,
+      toB: posB + afterBlock.nodeSize,
+    },
+  ];
+}
+
 /**
- * Word-level diff of two note HTML documents; both sides must parse with the note's
- * stored schema, and `generateJSON` makes it browser-only (it needs a DOMParser).
+ * Block-aligned diff of two note HTML documents; both sides must parse with the
+ * note's stored schema, and `generateJSON` makes it browser-only (it needs a
+ * DOMParser).
  */
 export function diffNoteHtml(
   beforeHtml: string,
@@ -42,19 +156,57 @@ export function diffNoteHtml(
 ): DocDiff {
   const schema = schemaFor(extensions);
   const before = schema.nodeFromJSON(generateJSON(beforeHtml, extensions));
-  const proposed = schema.nodeFromJSON(generateJSON(afterHtml, extensions));
-  const tr = new Transform(before).replaceWith(
-    0,
-    before.content.size,
-    proposed.content
-  );
-  const changeSet = ChangeSet.create(before).addSteps(
-    tr.doc,
-    tr.mapping.maps,
-    null
-  );
-  const changes = simplifyChanges(changeSet.changes, tr.doc).map(
-    ({ fromA, toA, fromB, toB }) => ({ fromA, toA, fromB, toB })
-  );
-  return { before, after: tr.doc, changes, count: changes.length };
+  const after = schema.nodeFromJSON(generateJSON(afterHtml, extensions));
+
+  const changes: DocChange[] = [];
+  let posA = 0;
+  let posB = 0;
+
+  const diffRun = (
+    fromI: number,
+    toI: number,
+    fromJ: number,
+    toJ: number
+  ): void => {
+    const paired = Math.min(toI - fromI, toJ - fromJ);
+    for (let k = 0; k < paired; k += 1) {
+      const beforeBlock = before.child(fromI + k);
+      const afterBlock = after.child(fromJ + k);
+      changes.push(
+        ...rewriteChanges(before, beforeBlock, afterBlock, posA, posB)
+      );
+      posA += beforeBlock.nodeSize;
+      posB += afterBlock.nodeSize;
+    }
+
+    const removed = blockSpan(before, fromI + paired, toI);
+    if (removed > 0) {
+      changes.push({
+        fromA: posA,
+        toA: posA + removed,
+        fromB: posB,
+        toB: posB,
+      });
+      posA += removed;
+    }
+
+    const added = blockSpan(after, fromJ + paired, toJ);
+    if (added > 0) {
+      changes.push({ fromA: posA, toA: posA, fromB: posB, toB: posB + added });
+      posB += added;
+    }
+  };
+
+  let nextI = 0;
+  let nextJ = 0;
+  for (const match of matchEqualBlocks(before, after)) {
+    diffRun(nextI, match.before, nextJ, match.after);
+    posA += before.child(match.before).nodeSize;
+    posB += after.child(match.after).nodeSize;
+    nextI = match.before + 1;
+    nextJ = match.after + 1;
+  }
+  diffRun(nextI, before.childCount, nextJ, after.childCount);
+
+  return { before, after, changes, count: changes.length };
 }

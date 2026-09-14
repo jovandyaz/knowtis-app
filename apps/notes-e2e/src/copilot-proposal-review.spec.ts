@@ -24,7 +24,14 @@ const PROPOSED_HTML = [
 
 const PROPOSAL_ID = '11111111-2222-3333-4444-555555555555';
 
+const INSERTED_PARAGRAPH = 'Objetivo: convertir visitantes en prospectos.';
+const REMOVED_PARAGRAPH =
+  'Alternativa: Vercel si se prioriza el despliegue simple.';
+const SURVIVING_PARAGRAPH =
+  'Cloudflare Pages: recomendado por su rendimiento global.';
+
 const REVIEW_TITLE_RE = /review changes|revisar cambios/i;
+const REMOVED_BLOCK_RE = /1 block removed|1 bloque eliminado/i;
 const REASON_TEXTBOX_RE = /why\?|por qué/i;
 const COMPOSER_RE = /copilot|pregunta|ask/i;
 
@@ -109,10 +116,13 @@ test('reviews a proposed note update before applying it', async ({
     'Especificacion tecnica'
   );
 
-  await expect(review.locator('.diff-ins[data-change]').first()).toBeVisible();
-  const chip = review.locator('.diff-del-chip').first();
-  await expect(chip).toBeVisible();
-  await expect(review.locator('.diff-del-block')).toHaveCount(0);
+  await expect(
+    review.locator('ins[data-change]', { hasText: INSERTED_PARAGRAPH })
+  ).toBeVisible();
+  await expect(
+    review.getByRole('button', { name: REMOVED_BLOCK_RE })
+  ).toBeVisible();
+  await expect(review.getByText(REMOVED_PARAGRAPH)).toHaveCount(0);
 
   // The decorations live only in the review's own diff, never in the note
   // editor underneath — so the soon-to-be-deleted line is still there.
@@ -123,9 +133,13 @@ test('reviews a proposed note update before applying it', async ({
   ).toBeVisible();
 
   await review.getByRole('switch').click();
-  await expect(review.locator('.diff-del-block').first()).toContainText(
-    'Alternativa: Vercel'
-  );
+  await expect(
+    review.locator('[data-change] del', { hasText: REMOVED_PARAGRAPH }).first()
+  ).toBeVisible();
+
+  const surviving = review.locator('p', { hasText: SURVIVING_PARAGRAPH });
+  await expect(surviving).toHaveText(SURVIVING_PARAGRAPH);
+  await expect(surviving.locator('[data-change]')).toHaveCount(0);
 
   // The review dock widens so the diff has room; a regression here would
   // silently shrink it back to chat width.

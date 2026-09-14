@@ -22,6 +22,8 @@ import {
 } from '@knowtis/design-system';
 import {
   CHANGE_ATTR,
+  DIFF_DEL_CLASS,
+  DIFF_INS_CLASS,
   diffNoteHtml,
   DiffPreview,
   ReadOnlyEditor,
@@ -31,15 +33,14 @@ import { logger } from '@knowtis/shared-util';
 
 import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 import { ConfirmationFooter } from '../ai-elements/confirmation';
+import {
+  readProposalPayload,
+  type ProposalPayloadView,
+} from './proposal-payload';
 import { REVIEW_EXTENSIONS } from './proposal-review-extensions';
 import { ProposalActions } from './ProposalActions';
 import { useProposalBefore } from './useProposalBefore';
 import { useProposalDecision } from './useProposalDecision';
-
-interface UpdatePayloadView {
-  readonly title?: string;
-  readonly contentHtml?: string;
-}
 
 interface ProposalReviewProps {
   proposal: UpdateProposal;
@@ -52,6 +53,20 @@ type ReviewItem = { kind: 'title' } | { kind: 'change'; index: number };
 
 const PROSE_CLASSES = 'prose prose-sm dark:prose-invert max-w-none';
 
+const ROOT_CLASSES =
+  'flex h-full min-h-0 flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
+
+export const DIFF_MAX_HTML_CHARS = 200_000;
+
+function isEditingLiveNote(root: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  return (
+    active instanceof HTMLElement &&
+    active.closest('[contenteditable="true"], input, textarea') !== null &&
+    !root?.contains(active)
+  );
+}
+
 function computeDiff(beforeHtml: string, afterHtml: string): DocDiff | null {
   try {
     return diffNoteHtml(beforeHtml, afterHtml, REVIEW_EXTENSIONS);
@@ -61,7 +76,7 @@ function computeDiff(beforeHtml: string, afterHtml: string): DocDiff | null {
   }
 }
 
-function summaryKey(payload: UpdatePayloadView) {
+function summaryKey(payload: ProposalPayloadView) {
   if (payload.title !== undefined && payload.contentHtml !== undefined) {
     return 'ai.copilot.review.summary.titleAndContent' as const;
   }
@@ -78,7 +93,7 @@ export function ProposalReview({
 }: ProposalReviewProps) {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
-  const payload = proposal.payload as UpdatePayloadView;
+  const payload = readProposalPayload(proposal.payload);
   const before = useProposalBefore(proposal.id, proposal.targetNoteId);
   const { reduced } = useMotionPreset();
   const decision = useProposalDecision(onApprove, onReject);
@@ -90,6 +105,9 @@ export function ProposalReview({
   // The shortcuts live on this container and the chat subtree it replaces is gone,
   // so without taking focus once on mount they would never receive a key event.
   useEffect(() => {
+    if (isEditingLiveNote(rootRef.current)) {
+      return;
+    }
     rootRef.current?.focus({ preventScroll: true });
   }, []);
 
@@ -108,12 +126,15 @@ export function ProposalReview({
   );
   const beforeHtml = before.status === 'ready' ? before.contentHtml : null;
   const hasContentChange = payload.contentHtml !== undefined;
+  const tooLargeForDiff =
+    beforeHtml !== null &&
+    beforeHtml.length + afterHtml.length > DIFF_MAX_HTML_CHARS;
   const diff = useMemo(
     () =>
-      beforeHtml === null
+      beforeHtml === null || tooLargeForDiff
         ? null
         : computeDiff(beforeHtml, hasContentChange ? afterHtml : beforeHtml),
-    [beforeHtml, afterHtml, hasContentChange]
+    [beforeHtml, afterHtml, hasContentChange, tooLargeForDiff]
   );
 
   const titleChanged =
@@ -188,7 +209,7 @@ export function ProposalReview({
       tabIndex={-1}
       aria-label={t('ai.copilot.review.title')}
       onKeyDown={onKeyDown}
-      className="flex h-full min-h-0 flex-col outline-none"
+      className={ROOT_CLASSES}
     >
       <header className="flex items-start gap-2 border-b border-border px-3 py-2">
         <Button
@@ -238,43 +259,48 @@ export function ProposalReview({
         </div>
       </header>
 
-      <div className="flex items-center gap-1 border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
-        <span aria-live="polite" className="mr-1">
-          {total > 0
-            ? t('ai.copilot.review.changeOf', { current: current + 1, total })
-            : t('ai.copilot.review.changes', { count: 0 })}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0"
-          aria-label={t('ai.copilot.review.prev')}
-          disabled={total < 2}
-          onClick={() => step(-1)}
-        >
-          <ArrowUp className="size-3.5" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0"
-          aria-label={t('ai.copilot.review.next')}
-          disabled={total < 2}
-          onClick={() => step(1)}
-        >
-          <ArrowDown className="size-3.5" />
-        </Button>
-        <label className="ml-auto flex items-center gap-2">
-          <span>{t('ai.copilot.review.showDeleted')}</span>
-          <Switch
+      {!tooLargeForDiff && (
+        <div className="flex items-center gap-1 border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
+          <span aria-live="polite" className="mr-1">
+            {total > 0
+              ? t('ai.copilot.review.changeOf', {
+                  current: current + 1,
+                  total,
+                })
+              : t('ai.copilot.review.changes', { count: 0 })}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
             size="sm"
-            checked={showDeleted}
-            onCheckedChange={setShowDeleted}
-          />
-        </label>
-      </div>
+            className="h-6 w-6 p-0"
+            aria-label={t('ai.copilot.review.prev')}
+            disabled={total < 2}
+            onClick={() => step(-1)}
+          >
+            <ArrowUp className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            aria-label={t('ai.copilot.review.next')}
+            disabled={total < 2}
+            onClick={() => step(1)}
+          >
+            <ArrowDown className="size-3.5" />
+          </Button>
+          <label className="ml-auto flex items-center gap-2">
+            <span>{t('ai.copilot.review.showDeleted')}</span>
+            <Switch
+              size="sm"
+              checked={showDeleted}
+              onCheckedChange={setShowDeleted}
+            />
+          </label>
+        </div>
+      )}
 
       <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {(titleChanged || showProposedTitle) && (
@@ -290,11 +316,11 @@ export function ProposalReview({
             </p>
             {showDeleted && before.status === 'ready' && (
               <p className="text-sm text-destructive">
-                <del className="diff-del">{before.title}</del>
+                <del className={DIFF_DEL_CLASS}>{before.title}</del>
               </p>
             )}
             <p className="text-sm font-semibold">
-              <ins className="diff-ins">{payload.title}</ins>
+              <ins className={DIFF_INS_CLASS}>{payload.title}</ins>
             </p>
           </div>
         )}
@@ -315,7 +341,11 @@ export function ProposalReview({
         {showFallback && (
           <>
             <p role="status" className="mb-3 text-xs text-muted-foreground">
-              {t('ai.copilot.review.beforeUnavailable')}
+              {t(
+                tooLargeForDiff
+                  ? 'ai.copilot.review.tooLargeForDiff'
+                  : 'ai.copilot.review.beforeUnavailable'
+              )}
             </p>
             <div className={PROSE_CLASSES}>
               <ReadOnlyEditor content={afterHtml} />

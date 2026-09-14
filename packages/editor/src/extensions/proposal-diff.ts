@@ -44,6 +44,8 @@ export const proposalDiffPluginKey = new PluginKey<ProposalDiffPluginState>(
 
 export const CHANGE_ATTR = 'data-change';
 export const CHIP_ATTR = 'data-diff-chip';
+export const DIFF_INS_CLASS = 'diff-ins';
+export const DIFF_DEL_CLASS = 'diff-del';
 
 function withCurrent(base: string, current: boolean): string {
   return current ? `${base} diff-current` : base;
@@ -53,22 +55,33 @@ function isExpanded(view: ProposalDiffView, index: number): boolean {
   return view.showDeleted || view.expanded.has(index);
 }
 
-// A slice torn mid-node has an empty boundary child at its open edge(s);
-// drop it by position (openStart/openEnd), not emptiness, so a real empty paragraph still counts.
+function isTornBoundary(node: ProseMirrorNode, depth: number): boolean {
+  if (depth <= 1) {
+    return node.content.size === 0;
+  }
+  const child = node.firstChild;
+  return (
+    node.childCount === 1 && child !== null && isTornBoundary(child, depth - 1)
+  );
+}
+
+// A slice torn mid-node carries a boundary child that is empty down to the open
+// depth; drop it by position (openStart/openEnd), not emptiness, so a genuinely
+// empty paragraph still counts.
 function countRemovedBlocks(slice: Slice): number {
   const { content, openStart, openEnd } = slice;
   let count = content.childCount;
   const first = content.firstChild;
-  if (openStart > 0 && first && first.content.size === 0) {
+  if (openStart > 0 && first && isTornBoundary(first, openStart)) {
     count -= 1;
   }
   if (content.childCount > 1) {
     const last = content.lastChild;
-    if (openEnd > 0 && last && last.content.size === 0) {
+    if (openEnd > 0 && last && isTornBoundary(last, openEnd)) {
       count -= 1;
     }
   }
-  return Math.max(count, 1);
+  return count;
 }
 
 // The widget mirrors past content, so it must never be an edit target.
@@ -99,19 +112,26 @@ function deletedElement(
   change: DocChange
 ): HTMLElement {
   const slice = view.before.slice(change.fromA, change.toA);
-  const isBlock = slice.content.firstChild?.isBlock ?? false;
+  const removedBlocks = slice.content.firstChild?.isBlock
+    ? countRemovedBlocks(slice)
+    : 0;
+  const asBlock = removedBlocks > 0;
   const current = view.currentIndex === index;
-  const label = isBlock
-    ? view.labels.deletedBlocks(countRemovedBlocks(slice))
+  const label = asBlock
+    ? view.labels.deletedBlocks(removedBlocks)
     : view.labels.deletedInline;
+  const isBoundaryOnly =
+    removedBlocks === 0 &&
+    slice.content.firstChild?.isBlock === true &&
+    view.before.textBetween(change.fromA, change.toA) === '';
 
-  if (!isExpanded(view, index)) {
+  if (!isExpanded(view, index) || isBoundaryOnly) {
     return inert(
       chipElement(index, withCurrent('diff-del-chip', current), label, false)
     );
   }
 
-  const wrapper = document.createElement(isBlock ? 'div' : 'span');
+  const wrapper = document.createElement(asBlock ? 'div' : 'span');
   wrapper.className = 'diff-del-group';
   wrapper.setAttribute(CHANGE_ATTR, String(index));
   // While the switch expands every deletion, a per-deletion toggle could not
@@ -122,7 +142,7 @@ function deletedElement(
 
   const content = document.createElement('del');
   content.className = withCurrent(
-    isBlock ? 'diff-del diff-del-block' : 'diff-del',
+    asBlock ? `${DIFF_DEL_CLASS} diff-del-block` : DIFF_DEL_CLASS,
     current
   );
   content.appendChild(
@@ -147,7 +167,7 @@ function buildDecorations(
       decorations.push(
         Decoration.inline(change.fromB, change.toB, {
           nodeName: 'ins',
-          class: withCurrent('diff-ins', current),
+          class: withCurrent(DIFF_INS_CLASS, current),
           [CHANGE_ATTR]: String(index),
         })
       );
