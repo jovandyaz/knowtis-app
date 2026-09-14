@@ -1,8 +1,9 @@
 import { IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
-import { IsOptionalStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
-
-const isProvided = (_: unknown, value: unknown) => value !== undefined;
+import {
+  IsOptionalStrictBoolean,
+  isProvided,
+} from '../../../core/validation/is-strict-boolean.decorator';
 
 export class SetSystemProviderDto {
   // @IsOptional() would also skip null, letting `{ apiKey: null }` reach the service.

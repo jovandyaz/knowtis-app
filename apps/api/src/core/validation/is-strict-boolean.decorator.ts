@@ -2,10 +2,11 @@ import { applyDecorators } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import { IsBoolean, ValidateIf } from 'class-validator';
 
-const isProvided = (_: unknown, value: unknown) => value !== undefined;
+export const isProvided = (_: unknown, value: unknown) => value !== undefined;
 
 const readRawValue = Transform(
-  ({ obj, key }: { obj: Record<string, unknown>; key: string }) => obj[key]
+  ({ obj, key }: { obj: Record<string, unknown>; key: string }) => obj[key],
+  { toClassOnly: true }
 );
 
 /**
