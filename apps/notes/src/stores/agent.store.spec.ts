@@ -1,3 +1,5 @@
+import type { QueryKey } from '@tanstack/react-query';
+
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,19 +49,24 @@ interface Cbs {
   onThinking?: (p: AgentThinkingPayload) => void;
 }
 
-function expectNoteCachesInvalidated(
-  spy: { mock: { calls: unknown[][] } },
-  noteId: string
-) {
-  expect(spy.mock.calls.map(([filters]) => filters)).toEqual(
-    expect.arrayContaining([
-      { queryKey: notesQueryKeys.lists() },
-      { queryKey: notesQueryKeys.recents() },
-      { queryKey: notesQueryKeys.counts() },
-      { queryKey: tagsQueryKeys.all },
-      { queryKey: notesQueryKeys.detail(noteId) },
-    ])
-  );
+const SIDEBAR_RECENT_LIMIT = 20;
+
+function seedNoteCaches(noteId: string): QueryKey[] {
+  const keys = [
+    notesQueryKeys.list(),
+    notesQueryKeys.recent(SIDEBAR_RECENT_LIMIT),
+    notesQueryKeys.counts(),
+    tagsQueryKeys.tree(),
+    notesQueryKeys.detail(noteId),
+  ];
+  for (const key of keys) {
+    queryClient.setQueryData(key, {});
+  }
+  return keys;
+}
+
+function invalidationOf(keys: QueryKey[]) {
+  return keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);
 }
 
 function capture(): {
@@ -444,22 +451,21 @@ describe('agent.store server-authoritative wire', () => {
   it.each(['create', 'update', 'share'] as const)(
     'invalidates the notes caches when a %s proposal is committed',
     (kind) => {
-      const spy = vi.spyOn(queryClient, 'invalidateQueries');
       const { get } = capture();
       useAgentStore.getState().sendMessage('change a note');
       get().onProposal?.(PROPOSAL);
       useAgentStore.getState().approveProposal();
+      const keys = seedNoteCaches('n1');
       get().onCommitted?.({
         proposalId: 'p1',
         result: { noteId: 'n1', title: 'My Note', kind },
       });
 
-      expectNoteCachesInvalidated(spy, 'n1');
+      expect(invalidationOf(keys)).toEqual([true, true, true, true, true]);
     }
   );
 
   it('still invalidates the notes cache when the stream was superseded', () => {
-    const spy = vi.spyOn(queryClient, 'invalidateQueries');
     const { get } = capture();
     useAgentStore.getState().sendMessage('create a note');
     get().onProposal?.(PROPOSAL);
@@ -467,13 +473,13 @@ describe('agent.store server-authoritative wire', () => {
     const committed = get().onCommitted;
 
     useAgentStore.getState().newConversation();
-    spy.mockClear();
+    const keys = seedNoteCaches('n1');
     committed?.({
       proposalId: 'p1',
       result: { noteId: 'n1', title: 'My Note', kind: 'create' },
     });
 
-    expectNoteCachesInvalidated(spy, 'n1');
+    expect(invalidationOf(keys)).toEqual([true, true, true, true, true]);
     expect(
       useAgentStore.getState().messages.find((m) => m.committed)
     ).toBeUndefined();
