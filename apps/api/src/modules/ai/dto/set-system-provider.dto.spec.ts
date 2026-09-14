@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { describe, expect, it } from 'vitest';
@@ -5,7 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { SetSystemProviderDto } from './set-system-provider.dto';
 
 function errorsFor(payload: object) {
-  return validate(plainToInstance(SetSystemProviderDto, payload));
+  return validate(
+    plainToInstance(SetSystemProviderDto, payload, {
+      enableImplicitConversion: true,
+    })
+  );
 }
 
 describe('SetSystemProviderDto', () => {
@@ -33,4 +39,23 @@ describe('SetSystemProviderDto', () => {
   it('should reject a key shorter than the minimum', async () => {
     expect(await errorsFor({ apiKey: 'short' })).toHaveLength(1);
   });
+
+  it('should keep the enablement the caller asked for', async () => {
+    const dto = plainToInstance(
+      SetSystemProviderDto,
+      { enabled: false },
+      { enableImplicitConversion: true }
+    );
+
+    expect(dto.enabled).toBe(false);
+  });
+
+  it.each(['no', 'false', 0, 1, []])(
+    'should reject the non-boolean enablement %p rather than coerce it',
+    async (enabled) => {
+      const errors = await errorsFor({ enabled });
+
+      expect(errors.map((e) => e.property)).toEqual(['enabled']);
+    }
+  );
 });

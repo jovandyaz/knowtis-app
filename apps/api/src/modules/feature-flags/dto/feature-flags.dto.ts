@@ -1,12 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+
+import { IsStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
 
 export class UpsertFeatureFlagDto {
   @ApiProperty({
     description: 'Whether the feature flag is enabled',
     example: true,
   })
-  @IsBoolean()
+  @IsStrictBoolean()
   enabled!: boolean;
 
   @ApiPropertyOptional({

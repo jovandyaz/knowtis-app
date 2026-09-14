@@ -1,10 +1,6 @@
-import {
-  IsBoolean,
-  IsString,
-  MaxLength,
-  MinLength,
-  ValidateIf,
-} from 'class-validator';
+import { IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
+
+import { IsOptionalStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
 
 const isProvided = (_: unknown, value: unknown) => value !== undefined;
 
@@ -16,7 +12,6 @@ export class SetSystemProviderDto {
   @MaxLength(300)
   apiKey?: string;
 
-  @ValidateIf(isProvided)
-  @IsBoolean()
+  @IsOptionalStrictBoolean()
   enabled?: boolean;
 }
