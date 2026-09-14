@@ -1,3 +1,4 @@
+import type { PendingProposal } from '@/stores/agent.store';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,23 @@ const proposal = {
 };
 
 describe('AgentProposalCard', () => {
+  it('never renders the summary or preview the wire object still carries', () => {
+    const wire = {
+      ...proposal,
+      summary: 'Create note "GTD"',
+      previewHtml: '<p>server preview</p>',
+    } as unknown as PendingProposal;
+    render(
+      <AgentProposalCard
+        proposal={wire}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('Create note "GTD"')).not.toBeInTheDocument();
+    expect(screen.queryByText('server preview')).not.toBeInTheDocument();
+  });
+
   it('renders the proposal kind and fires approve', async () => {
     const onApprove = vi.fn();
     render(
