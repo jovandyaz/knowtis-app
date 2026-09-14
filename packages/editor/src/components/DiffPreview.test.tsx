@@ -166,6 +166,15 @@ describe('DiffPreview', () => {
     expect(screen.queryByRole('button', { name: /\d+ deleted/ })).toBeNull();
   });
 
+  it('renders a deleted inline node instead of hiding it as a boundary chip', async () => {
+    const { container } = renderDiff('<p>a<br>b</p>', '<p>ab</p>', {
+      showDeleted: true,
+    });
+    await waitFor(() =>
+      expect(container.querySelector('del br')).not.toBeNull()
+    );
+  });
+
   it('keeps a merged paragraph break as a chip even with Show deleted on', async () => {
     const { container } = renderDiff(
       '<ul><li><p>alfa</p></li><li><p>beta</p></li></ul>',

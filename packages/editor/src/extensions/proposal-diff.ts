@@ -122,6 +122,7 @@ function deletedElement(
     : view.labels.deletedInline;
   const isBoundaryOnly =
     removedBlocks === 0 &&
+    slice.content.firstChild?.isBlock === true &&
     view.before.textBetween(change.fromA, change.toA) === '';
 
   if (!isExpanded(view, index) || isBoundaryOnly) {

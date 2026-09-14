@@ -36,20 +36,21 @@ function schemaFor(extensions: AnyExtension[]): Schema {
   return schema;
 }
 
-function matchEqualBlocks(
+const MAX_LCS_CELLS = 1_000_000;
+
+function matchEqualBlocksLcs(
   before: ProseMirrorNode,
   after: ProseMirrorNode
 ): BlockMatch[] {
   const rows = before.childCount;
   const cols = after.childCount;
-  const lengths = Array.from({ length: rows + 1 }, () =>
-    new Array<number>(cols + 1).fill(0)
-  );
+  const width = cols + 1;
+  const lengths = new Uint32Array((rows + 1) * width);
   for (let i = rows - 1; i >= 0; i -= 1) {
     for (let j = cols - 1; j >= 0; j -= 1) {
-      lengths[i][j] = before.child(i).eq(after.child(j))
-        ? lengths[i + 1][j + 1] + 1
-        : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+      lengths[i * width + j] = before.child(i).eq(after.child(j))
+        ? lengths[(i + 1) * width + (j + 1)] + 1
+        : Math.max(lengths[(i + 1) * width + j], lengths[i * width + (j + 1)]);
     }
   }
 
@@ -61,13 +62,37 @@ function matchEqualBlocks(
       matches.push({ before: i, after: j });
       i += 1;
       j += 1;
-    } else if (lengths[i + 1][j] >= lengths[i][j + 1]) {
+    } else if (lengths[(i + 1) * width + j] >= lengths[i * width + (j + 1)]) {
       i += 1;
     } else {
       j += 1;
     }
   }
   return matches;
+}
+
+function matchEqualBlocksPositional(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode
+): BlockMatch[] {
+  const matches: BlockMatch[] = [];
+  const count = Math.min(before.childCount, after.childCount);
+  for (let k = 0; k < count; k += 1) {
+    if (before.child(k).eq(after.child(k))) {
+      matches.push({ before: k, after: k });
+    }
+  }
+  return matches;
+}
+
+function matchEqualBlocks(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode
+): BlockMatch[] {
+  const cells = (before.childCount + 1) * (after.childCount + 1);
+  return cells > MAX_LCS_CELLS
+    ? matchEqualBlocksPositional(before, after)
+    : matchEqualBlocksLcs(before, after);
 }
 
 function blockSpan(doc: ProseMirrorNode, from: number, to: number): number {

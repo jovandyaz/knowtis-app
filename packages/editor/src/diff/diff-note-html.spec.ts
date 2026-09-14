@@ -245,4 +245,48 @@ describe('diffNoteHtml', () => {
     expect(textB(diff, 0)).toBe('Stack');
     expect(diff.before.resolve(change.fromA).parent.type.name).toBe('doc');
   });
+
+  it('still uses full LCS alignment under the block-count cap', () => {
+    const before = ['a', 'b', 'c', 'd', 'e']
+      .map((letter) => `<p>${letter}</p>`)
+      .join('');
+    const after = ['new', 'a', 'b', 'c', 'd', 'e']
+      .map((word) => `<p>${word}</p>`)
+      .join('');
+    const diff = diffNoteHtml(before, after, BASE);
+    expect(diff.count).toBe(1);
+    const [change] = diff.changes;
+    expect(change.fromA).toBe(change.toA);
+    expect(textB(diff, 0)).toBe('new');
+  });
+
+  it('bounds block alignment above the LCS cap and still produces a valid diff', () => {
+    const BLOCK_COUNT = 1200;
+    const before = Array.from({ length: BLOCK_COUNT }, () => '<p></p>').join(
+      ''
+    );
+    const after = Array.from({ length: BLOCK_COUNT + 1 }, () => '<p></p>').join(
+      ''
+    );
+
+    const start = performance.now();
+    const diff = diffNoteHtml(before, after, BASE);
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(2000);
+    expect(diff.changes.length).toBeGreaterThan(0);
+
+    let previousToA = 0;
+    let previousToB = 0;
+    diff.changes.forEach((change) => {
+      expect(change.fromA).toBeGreaterThanOrEqual(previousToA);
+      expect(change.toA).toBeGreaterThanOrEqual(change.fromA);
+      expect(change.toA).toBeLessThanOrEqual(diff.before.content.size);
+      expect(change.fromB).toBeGreaterThanOrEqual(previousToB);
+      expect(change.toB).toBeGreaterThanOrEqual(change.fromB);
+      expect(change.toB).toBeLessThanOrEqual(diff.after.content.size);
+      previousToA = change.toA;
+      previousToB = change.toB;
+    });
+  });
 });
