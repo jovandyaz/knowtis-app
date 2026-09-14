@@ -39,6 +39,8 @@ export { CollaborativeCursors } from './components/CollaborativeCursors';
 export { EditorErrorBoundary } from './components/EditorErrorBoundary';
 export { EditorToolbar } from './components/EditorToolbar';
 export { ReadOnlyEditor } from './components/ReadOnlyEditor';
+export { DiffPreview } from './components/DiffPreview';
+export type { DiffPreviewProps } from './components/DiffPreview';
 export {
   SaveStatusIndicator,
   type SaveStatus,
@@ -46,3 +48,15 @@ export {
 export { TableControls } from './components/TableControls';
 
 export { shouldPropagateUpdate } from './shouldPropagateUpdate';
+
+export { diffNoteHtml } from './diff/diff-note-html';
+export type { DocChange, DocDiff } from './diff/diff-note-html';
+export {
+  CHANGE_ATTR,
+  CHIP_ATTR,
+  ProposalDiff,
+} from './extensions/proposal-diff';
+export type {
+  ProposalDiffLabels,
+  ProposalDiffView,
+} from './extensions/proposal-diff';

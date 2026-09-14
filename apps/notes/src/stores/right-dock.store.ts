@@ -8,6 +8,10 @@ interface RightDockStore {
   close: () => void;
   toggle: () => void;
   autoOpenOnce: () => void;
+  /** The copilot is showing a proposal review instead of the chat. Session-only. */
+  reviewOpen: boolean;
+  openReview: () => void;
+  closeReview: () => void;
 }
 
 export const useRightDockStore = create<RightDockStore>()(
@@ -23,6 +27,9 @@ export const useRightDockStore = create<RightDockStore>()(
           set({ isOpen: true, hasAutoOpened: true });
         }
       },
+      reviewOpen: false,
+      openReview: () => set({ reviewOpen: true }),
+      closeReview: () => set({ reviewOpen: false }),
     }),
     {
       name: 'right-dock',

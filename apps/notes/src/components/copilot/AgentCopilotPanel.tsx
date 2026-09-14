@@ -2,8 +2,9 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
-import { useAgentStore } from '@/stores/agent.store';
+import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useRightDockStore } from '@/stores/right-dock.store';
 
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
@@ -16,6 +17,8 @@ import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
 import { CopilotModelPicker } from './CopilotModelPicker';
+import { ProposalPendingRow } from './ProposalPendingRow';
+import { ProposalReview } from './ProposalReview';
 import { RetryBanner } from './RetryBanner';
 
 export function AgentCopilotPanel() {
@@ -34,6 +37,24 @@ export function AgentCopilotPanel() {
   const rejectProposal = useAgentStore((s) => s.rejectProposal);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
   const { canVerify, prompt: promptVerification } = useVerifyEmailGate();
+  const reviewOpen = useRightDockStore((s) => s.reviewOpen);
+  const openReview = useRightDockStore((s) => s.openReview);
+  const closeReview = useRightDockStore((s) => s.closeReview);
+  const updateProposal =
+    pendingProposal && isUpdateProposal(pendingProposal)
+      ? pendingProposal
+      : null;
+  const updateProposalId = updateProposal?.id ?? null;
+
+  // No unmount cleanup on purpose: `reviewOpen` can outlive this panel, and both
+  // RightDock and the `updateProposal` guard below re-check the pending proposal.
+  useEffect(() => {
+    if (updateProposalId) {
+      openReview();
+    } else {
+      closeReview();
+    }
+  }, [updateProposalId, openReview, closeReview]);
 
   const send = (text: string) => {
     sendMessage(text, activeNoteId ?? undefined);
@@ -63,6 +84,17 @@ export function AgentCopilotPanel() {
     promptVerification,
   ]);
 
+  if (updateProposal && reviewOpen) {
+    return (
+      <ProposalReview
+        proposal={updateProposal}
+        onApprove={approveProposal}
+        onReject={rejectProposal}
+        onBack={closeReview}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full flex-col min-h-0">
       {messages.length === 0 ? (
@@ -86,7 +118,9 @@ export function AgentCopilotPanel() {
         <RetryBanner message={t('ai.errors.timeout')} onRetry={retryLast} />
       )}
 
-      {pendingProposal && (
+      {updateProposal && <ProposalPendingRow onOpen={openReview} />}
+
+      {pendingProposal && !updateProposal && (
         <div className="px-3 pb-2">
           <AgentProposalCard
             proposal={pendingProposal}

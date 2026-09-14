@@ -478,6 +478,30 @@
         "showMore": "Show more",
         "showLess": "Show less"
       },
+      "review": {
+        "title": "Review changes",
+        "back": "Back to chat",
+        "changes_one": "{{count}} change",
+        "changes_other": "{{count}} changes",
+        "changeOf": "Change {{current}} of {{total}}",
+        "prev": "Previous change",
+        "next": "Next change",
+        "showDeleted": "Show deleted",
+        "deletedBlocks_one": "{{count}} block removed",
+        "deletedBlocks_other": "{{count}} blocks removed",
+        "deletedInline": "Removed text",
+        "titleLabel": "Title",
+        "noChanges": "This proposal does not change the note's content.",
+        "beforeUnavailable": "The current version could not be loaded; showing the proposal only.",
+        "openNote": "Open note",
+        "pendingRow": "Pending proposal",
+        "pendingReview": "Review",
+        "summary": {
+          "titleAndContent": "Title and content",
+          "contentOnly": "Content",
+          "titleOnly": "Title only"
+        }
+      },
       "openSource": "Open note"
     },
     "groups": {

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,16 +68,19 @@ vi.mock('@knowtis/data-access-feature-flags', () => ({
 const editorRenders: { count: number } = { count: 0 };
 let capturedOnUpdate: ((html: string) => void) | undefined;
 let capturedOnVoiceNote: (() => void) | undefined;
+let capturedOnEditorReady: ((editor: unknown) => void) | undefined;
 const updateNoteMutate = vi.fn();
 
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
   CollaborativeEditor: (props: {
     onUpdate: (html: string) => void;
     onVoiceNote?: () => void;
+    onEditorReady?: (editor: unknown) => void;
   }) => {
     editorRenders.count += 1;
     capturedOnUpdate = props.onUpdate;
     capturedOnVoiceNote = props.onVoiceNote;
+    capturedOnEditorReady = props.onEditorReady;
     return <div data-testid="collaborative-editor" />;
   },
 }));
@@ -135,6 +139,7 @@ describe('NoteEditorPage', () => {
     editorRenders.count = 0;
     capturedOnUpdate = undefined;
     capturedOnVoiceNote = undefined;
+    capturedOnEditorReady = undefined;
     updateNoteMutate.mockClear();
     captureProductEvent.mockClear();
     propertiesRowProps.mockClear();
@@ -189,6 +194,16 @@ describe('NoteEditorPage', () => {
   it('renders the editor', () => {
     renderWithClient(<NoteEditorPage />);
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
+  });
+
+  it('exposes the live editor to the note-editor store and detaches on unmount', () => {
+    const { unmount } = renderWithClient(<NoteEditorPage />);
+    const fakeEditor = { isDestroyed: false, getHTML: () => '<p>x</p>' };
+    act(() => capturedOnEditorReady?.(fakeEditor));
+    expect(useNoteEditorStore.getState().editor).toBe(fakeEditor);
+    expect(useNoteEditorStore.getState().noteId).toBe('note-1');
+    unmount();
+    expect(useNoteEditorStore.getState().editor).toBeNull();
   });
 
   it('shows the note skeleton while the note loads', () => {

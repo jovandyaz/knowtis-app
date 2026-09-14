@@ -493,10 +493,7 @@ describe('agent.store server-authoritative wire', () => {
     const proposedMsg = useAgentStore
       .getState()
       .messages.find((m) => m.proposal);
-    expect(proposedMsg?.proposal).toEqual({
-      kind: 'create',
-      summary: 'Create "My Note"',
-    });
+    expect(proposedMsg?.proposal).toEqual({ kind: 'create' });
   });
 
   it('attaches sources to the displayed message for rendering', () => {
@@ -553,8 +550,6 @@ describe('agent.store proposals', () => {
         id: 'p1',
         kind: 'create',
         targetNoteId: null,
-        summary: 's',
-        previewHtml: null,
         payload: {},
       },
       status: 'pendingProposal',
@@ -571,8 +566,6 @@ describe('agent.store proposals', () => {
         id: 'p1',
         kind: 'update',
         targetNoteId: 'n1',
-        summary: 's',
-        previewHtml: null,
         payload: {},
       },
       status: 'pendingProposal',
@@ -591,8 +584,6 @@ describe('agent.store proposals', () => {
         id: 'p1',
         kind: 'create',
         targetNoteId: null,
-        summary: 's',
-        previewHtml: null,
         payload: {},
       },
       status: 'pendingProposal',
@@ -611,8 +602,6 @@ describe('agent.store proposals', () => {
         id: 'p1',
         kind: 'update',
         targetNoteId: 'n1',
-        summary: 's',
-        previewHtml: null,
         payload: {},
       },
       status: 'pendingProposal',
