@@ -14,7 +14,7 @@ describe('useNotesListRefresh', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('debounces rapid calls into a single notes-list invalidation', () => {
+  it('debounces rapid calls into one refresh of the list and the recents', () => {
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, 'invalidateQueries')
@@ -34,9 +34,9 @@ describe('useNotesListRefresh', () => {
 
     act(() => vi.advanceTimersByTime(DEBOUNCE_DELAYS.AUTO_SAVE));
 
-    expect(invalidate).toHaveBeenCalledTimes(1);
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: notesQueryKeys.lists(),
-    });
+    expect(invalidate.mock.calls).toEqual([
+      [{ queryKey: notesQueryKeys.lists() }],
+      [{ queryKey: notesQueryKeys.recents() }],
+    ]);
   });
 });

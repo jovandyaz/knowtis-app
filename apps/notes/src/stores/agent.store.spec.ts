@@ -10,7 +10,7 @@ import type {
   AgentStreamHandle,
   AgentThinkingPayload,
 } from '@knowtis/api-client';
-import { notesQueryKeys } from '@knowtis/data-access-notes';
+import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
@@ -45,6 +45,21 @@ interface Cbs {
   onProposal?: (p: AgentProposalPayload) => void;
   onCommitted?: (p: AgentCommittedPayload) => void;
   onThinking?: (p: AgentThinkingPayload) => void;
+}
+
+function expectNoteCachesInvalidated(
+  spy: { mock: { calls: unknown[][] } },
+  noteId: string
+) {
+  expect(spy.mock.calls.map(([filters]) => filters)).toEqual(
+    expect.arrayContaining([
+      { queryKey: notesQueryKeys.lists() },
+      { queryKey: notesQueryKeys.recents() },
+      { queryKey: notesQueryKeys.counts() },
+      { queryKey: tagsQueryKeys.all },
+      { queryKey: notesQueryKeys.detail(noteId) },
+    ])
+  );
 }
 
 function capture(): {
@@ -426,22 +441,22 @@ describe('agent.store server-authoritative wire', () => {
     );
   });
 
-  it('invalidates the notes cache when a proposal is committed', () => {
-    const spy = vi.spyOn(queryClient, 'invalidateQueries');
-    const { get } = capture();
-    useAgentStore.getState().sendMessage('create a note');
-    get().onProposal?.(PROPOSAL);
-    useAgentStore.getState().approveProposal();
-    get().onCommitted?.({
-      proposalId: 'p1',
-      result: { noteId: 'n1', title: 'My Note', kind: 'create' },
-    });
+  it.each(['create', 'update', 'share'] as const)(
+    'invalidates the notes caches when a %s proposal is committed',
+    (kind) => {
+      const spy = vi.spyOn(queryClient, 'invalidateQueries');
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('change a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind },
+      });
 
-    expect(spy).toHaveBeenCalledWith({ queryKey: notesQueryKeys.lists() });
-    expect(spy).toHaveBeenCalledWith({
-      queryKey: notesQueryKeys.detail('n1'),
-    });
-  });
+      expectNoteCachesInvalidated(spy, 'n1');
+    }
+  );
 
   it('still invalidates the notes cache when the stream was superseded', () => {
     const spy = vi.spyOn(queryClient, 'invalidateQueries');
@@ -458,10 +473,7 @@ describe('agent.store server-authoritative wire', () => {
       result: { noteId: 'n1', title: 'My Note', kind: 'create' },
     });
 
-    expect(spy).toHaveBeenCalledWith({ queryKey: notesQueryKeys.lists() });
-    expect(spy).toHaveBeenCalledWith({
-      queryKey: notesQueryKeys.detail('n1'),
-    });
+    expectNoteCachesInvalidated(spy, 'n1');
     expect(
       useAgentStore.getState().messages.find((m) => m.committed)
     ).toBeUndefined();

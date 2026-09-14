@@ -5,10 +5,11 @@ import { DEBOUNCE_DELAYS } from '@/lib';
 import { notesQueryKeys } from '@knowtis/data-access-notes';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
 
-/** Returns a debounced callback that marks the notes-list query stale. */
+/** Returns a debounced callback that marks the notes lists and recents stale. */
 export function useNotesListRefresh(): () => void {
   const queryClient = useQueryClient();
   return useDebouncedCallback(() => {
     void queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+    void queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
   }, DEBOUNCE_DELAYS.AUTO_SAVE);
 }
