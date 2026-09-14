@@ -114,7 +114,6 @@ export function useResizablePanel({
     onWidthChange?.(width);
   }, [width, onWidthChange]);
 
-  // React to external open/close (e.g. toggle button)
   useEffect(() => {
     if (isOpen === prevIsOpenRef.current) {
       return;
