@@ -9,15 +9,9 @@ import { ReadOnlyEditor } from '@knowtis/editor';
 
 import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 import { Confirmation, ConfirmationFooter } from '../ai-elements/confirmation';
+import { readProposalPayload } from './proposal-payload';
 import { ProposalActions } from './ProposalActions';
 import { useProposalDecision } from './useProposalDecision';
-
-interface ProposalPayloadView {
-  readonly title?: string;
-  readonly contentHtml?: string;
-  readonly targetEmail?: string;
-  readonly permission?: 'viewer' | 'editor';
-}
 
 const KIND_META = {
   create: {
@@ -57,7 +51,7 @@ export function AgentProposalCard({
 
   const meta = KIND_META[proposal.kind];
   const Icon = meta.icon;
-  const payload = proposal.payload as ProposalPayloadView;
+  const payload = readProposalPayload(proposal.payload);
   const previewHtml =
     proposal.kind !== 'share' && payload.contentHtml
       ? sanitizeAiHtml(payload.contentHtml)

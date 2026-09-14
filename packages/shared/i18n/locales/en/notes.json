@@ -493,6 +493,7 @@
         "titleLabel": "Title",
         "noChanges": "This proposal does not change the note's content.",
         "beforeUnavailable": "The current version could not be loaded; showing the proposal only.",
+        "tooLargeForDiff": "This note is too large to compare; showing the proposal only.",
         "openNote": "Open note",
         "pendingRow": "Pending proposal",
         "pendingReview": "Review",

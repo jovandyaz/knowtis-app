@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ProposalReview } from './ProposalReview';
+import { DIFF_MAX_HTML_CHARS, ProposalReview } from './ProposalReview';
 import { useProposalBefore, type ProposalBefore } from './useProposalBefore';
 
 const navigate = vi.fn();
@@ -92,7 +92,7 @@ describe('ProposalReview', () => {
     ).toBeDisabled();
   });
 
-  it('shows the title change, the summary line and the total count', async () => {
+  it('shows the title change, the summary line and the change counter', async () => {
     renderReview();
     expect(screen.getByTestId('review-title')).toHaveTextContent('Landing');
     expect(
@@ -100,9 +100,12 @@ describe('ProposalReview', () => {
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.getByText('ai.copilot.review.changeOf:1/2')
+        screen.getByText('ai.copilot.review.changeOf:1/3')
       ).toBeInTheDocument()
     );
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.review.next' })
+    ).toBeEnabled();
   });
 
   it('does not show a title row when the title is unchanged', () => {
@@ -115,12 +118,12 @@ describe('ProposalReview', () => {
 
   it('steps through changes and rings the current one', async () => {
     const { container } = renderReview();
-    await screen.findByText('ai.copilot.review.changeOf:1/2');
+    await screen.findByText('ai.copilot.review.changeOf:1/3');
     await userEvent.click(
       screen.getByRole('button', { name: 'ai.copilot.review.next' })
     );
     expect(
-      screen.getByText('ai.copilot.review.changeOf:2/2')
+      screen.getByText('ai.copilot.review.changeOf:2/3')
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(container.querySelector('.diff-current')).toBeInTheDocument()
@@ -133,7 +136,7 @@ describe('ProposalReview', () => {
       scrolledInto.push(this);
     });
     renderReview();
-    await screen.findByText('ai.copilot.review.changeOf:1/2');
+    await screen.findByText('ai.copilot.review.changeOf:1/3');
     await userEvent.click(
       screen.getByRole('button', { name: 'ai.copilot.review.next' })
     );
@@ -184,6 +187,86 @@ describe('ProposalReview', () => {
   it('takes focus on mount so the shortcuts work without a click', () => {
     renderReview();
     expect(screen.getByRole('group')).toHaveFocus();
+  });
+
+  it('leaves the caret alone when the user is typing in the live note', () => {
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    editable.tabIndex = 0;
+    document.body.append(editable);
+    editable.focus();
+
+    try {
+      renderReview();
+
+      expect(editable).toHaveFocus();
+      expect(screen.getByRole('group')).not.toHaveFocus();
+    } finally {
+      editable.remove();
+    }
+  });
+
+  it('leaves the caret alone when the user is typing in the note title', () => {
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+
+    try {
+      renderReview();
+
+      expect(input).toHaveFocus();
+      expect(screen.getByRole('group')).not.toHaveFocus();
+    } finally {
+      input.remove();
+    }
+  });
+
+  it('shows a focus ring when the review container takes focus', () => {
+    renderReview();
+    expect(screen.getByRole('group')).toHaveClass(
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-inset',
+      'focus-visible:ring-ring'
+    );
+  });
+
+  it('skips the diff and says why when the note is too big to compare', async () => {
+    ready({ contentHtml: `<p>${'a'.repeat(DIFF_MAX_HTML_CHARS)}</p>` });
+    const { container } = renderReview();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.copilot.review.tooLargeForDiff'
+    );
+    expect(
+      screen.queryByText('ai.copilot.review.beforeUnavailable')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/ai\.copilot\.review\.changeOf/)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'ai.copilot.review.next' })
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(container.querySelector('.ProseMirror')).toHaveTextContent(
+        'del sitio'
+      )
+    );
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.proposal.approveUpdate' })
+    ).toBeEnabled();
+  });
+
+  it('still compares a note that fits under the diff cap', async () => {
+    ready();
+    renderReview();
+    expect(
+      await screen.findByText('ai.copilot.review.changeOf:1/3')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.copilot.review.tooLargeForDiff')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('reports an empty diff and still allows applying it', async () => {

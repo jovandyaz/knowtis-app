@@ -493,6 +493,7 @@
         "titleLabel": "Título",
         "noChanges": "La propuesta no cambia el contenido de la nota.",
         "beforeUnavailable": "No se pudo cargar la versión actual; se muestra solo la propuesta.",
+        "tooLargeForDiff": "Esta nota es demasiado grande para comparar; se muestra solo la propuesta.",
         "openNote": "Abrir nota",
         "pendingRow": "Propuesta pendiente",
         "pendingReview": "Revisar",
