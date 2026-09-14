@@ -62,7 +62,9 @@ describe('RightDock', () => {
   });
 
   it('computes the review width inside its bounds', () => {
-    expect(reviewDockWidth(1000)).toBe(640);
+    expect(reviewDockWidth(768)).toBe(500);
+    expect(reviewDockWidth(1000)).toBe(600);
+    expect(reviewDockWidth(1280)).toBe(768);
     expect(reviewDockWidth(1400)).toBe(840);
     expect(reviewDockWidth(2000)).toBe(960);
   });

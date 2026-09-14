@@ -23,7 +23,6 @@ const DOCK_MAX_WIDTH = 500;
 const DOCK_DEFAULT_WIDTH = DOCK_MAX_WIDTH;
 const DOCK_COLLAPSE_THRESHOLD = 240;
 
-const REVIEW_MIN_WIDTH = 640;
 const REVIEW_MAX_WIDTH = 960;
 const REVIEW_VIEWPORT_RATIO = 0.6;
 
@@ -31,7 +30,7 @@ export function reviewDockWidth(viewportWidth: number): number {
   return Math.round(
     Math.min(
       REVIEW_MAX_WIDTH,
-      Math.max(REVIEW_MIN_WIDTH, viewportWidth * REVIEW_VIEWPORT_RATIO)
+      Math.max(DOCK_MAX_WIDTH, viewportWidth * REVIEW_VIEWPORT_RATIO)
     )
   );
 }
@@ -103,11 +102,7 @@ export function RightDock() {
         side={DIALOG_SIDE.RIGHT}
         defaultWidth={DOCK_DEFAULT_WIDTH}
         minWidth={DOCK_MIN_WIDTH}
-        maxWidth={
-          reviewingUpdate
-            ? Math.max(DOCK_MAX_WIDTH, reviewWidth)
-            : DOCK_MAX_WIDTH
-        }
+        maxWidth={reviewingUpdate ? reviewWidth : DOCK_MAX_WIDTH}
         targetWidth={reviewingUpdate ? reviewWidth : undefined}
         collapseThreshold={DOCK_COLLAPSE_THRESHOLD}
         isOpen={isOpen}
