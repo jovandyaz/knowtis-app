@@ -162,9 +162,6 @@ export function useResizablePanel({
 
     if (targetWidth !== undefined) {
       if (previousTarget === undefined) {
-        // The open animation runs over two frames, so a panel that opens and
-        // targets in the same commit is still 0 wide here — restoring that
-        // would silently unmount the panel instead of shrinking it back.
         restoreWidthRef.current =
           widthRef.current > 0 ? widthRef.current : lastUserWidthRef.current;
       }

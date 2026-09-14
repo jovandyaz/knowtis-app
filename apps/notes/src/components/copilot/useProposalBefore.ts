@@ -16,8 +16,6 @@ interface Baseline {
   contentHtml: string;
 }
 
-// An editor attaches ~100ms after mount, before Hocuspocus has synced, so its
-// document is briefly empty; that emptiness is not the note's "before" version.
 function liveBaseline(editor: Editor | null, title: string): Baseline | null {
   if (
     !editor ||
