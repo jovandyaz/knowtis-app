@@ -1,5 +1,6 @@
 import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { act, renderHook } from '@testing-library/react';
+import { DOMParser as ProseMirrorDOMParser, Schema } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,10 +29,31 @@ function queryResult({ data, ...rest }: QueryOverrides) {
   } as unknown as ReturnType<typeof useNote>;
 }
 
-const liveEditor = {
-  isDestroyed: false,
-  getHTML: () => '<p>live</p>',
-} as unknown as Editor;
+const schema = new Schema({
+  nodes: {
+    doc: { content: 'block+' },
+    paragraph: {
+      group: 'block',
+      content: 'inline*',
+      parseDOM: [{ tag: 'p' }],
+      toDOM: () => ['p', 0],
+    },
+    text: { group: 'inline' },
+  },
+});
+
+function editorWith(html: string): Editor {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  return {
+    isDestroyed: false,
+    state: { doc: ProseMirrorDOMParser.fromSchema(schema).parse(container) },
+    getHTML: () => html,
+  } as unknown as Editor;
+}
+
+const liveEditor = editorWith('<p>live</p>');
+const unsyncedEditor = editorWith('<p></p>');
 
 describe('useProposalBefore', () => {
   beforeEach(() => {
@@ -89,7 +111,7 @@ describe('useProposalBefore', () => {
 
     const { result } = renderHook(() => useProposalBefore('p1', 'n1'));
 
-    expect(mockedUseNote).toHaveBeenLastCalledWith('n1');
+    expect(mockedUseNote).toHaveBeenCalledWith('n1');
     expect(result.current).toEqual({
       status: 'ready',
       isLive: false,
@@ -128,6 +150,7 @@ describe('useProposalBefore', () => {
       title: 'Cached',
       contentHtml: '<p>cached</p>',
     });
+    expect(mockedUseNote).toHaveBeenLastCalledWith(undefined);
   });
 
   it('ignores a stale cache entry that is still refetching on mount', () => {
@@ -153,6 +176,84 @@ describe('useProposalBefore', () => {
       isLive: false,
       title: 'Fresh',
       contentHtml: '<p>fresh</p>',
+    });
+  });
+
+  it('keeps the frozen fallback when the target note is opened mid-review', () => {
+    mockedUseNote.mockReturnValue(
+      queryResult({
+        data: { id: 'n1', title: 'Cached', content: '<p>cached</p>' },
+      })
+    );
+    const { result, rerender } = renderHook(() =>
+      useProposalBefore('p1', 'n1')
+    );
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: false,
+      title: 'Cached',
+      contentHtml: '<p>cached</p>',
+    });
+
+    act(() =>
+      useNoteEditorStore.getState().attach('n1', liveEditor, 'Live title')
+    );
+    rerender();
+
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: true,
+      title: 'Cached',
+      contentHtml: '<p>cached</p>',
+    });
+  });
+
+  it('ignores a live editor whose document has not synced yet', () => {
+    useNoteEditorStore.getState().attach('n1', unsyncedEditor, 'Live title');
+    mockedUseNote.mockReturnValue(
+      queryResult({
+        data: { id: 'n1', title: 'Cached', content: '<p>cached</p>' },
+      })
+    );
+
+    const { result } = renderHook(() => useProposalBefore('p1', 'n1'));
+
+    expect(mockedUseNote).toHaveBeenCalledWith('n1');
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: true,
+      title: 'Cached',
+      contentHtml: '<p>cached</p>',
+    });
+  });
+
+  it('recaptures from the live editor when a new proposal arrives after a fallback', () => {
+    mockedUseNote.mockReturnValue(
+      queryResult({
+        data: { id: 'n1', title: 'Cached', content: '<p>cached</p>' },
+      })
+    );
+    const { result, rerender } = renderHook(
+      ({ proposalId }) => useProposalBefore(proposalId, 'n1'),
+      { initialProps: { proposalId: 'p1' } }
+    );
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: false,
+      title: 'Cached',
+      contentHtml: '<p>cached</p>',
+    });
+
+    act(() =>
+      useNoteEditorStore.getState().attach('n1', liveEditor, 'Live title')
+    );
+    rerender({ proposalId: 'p2' });
+
+    expect(result.current).toEqual({
+      status: 'ready',
+      isLive: true,
+      title: 'Live title',
+      contentHtml: '<p>live</p>',
     });
   });
 
