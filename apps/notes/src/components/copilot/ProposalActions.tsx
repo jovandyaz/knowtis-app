@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUp } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { Textarea } from '@knowtis/design-system';
+import { Textarea, useMotionPreset } from '@knowtis/design-system';
 
 import {
   ConfirmationAction,
@@ -23,6 +23,7 @@ export function ProposalActions({
   disabled = false,
 }: ProposalActionsProps) {
   const { t } = useTranslation('notes');
+  const { fade } = useMotionPreset();
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -32,7 +33,7 @@ export function ProposalActions({
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.16, ease: 'easeOut' }}
+          transition={fade}
           className="flex w-full flex-col gap-2 overflow-hidden"
         >
           <Textarea

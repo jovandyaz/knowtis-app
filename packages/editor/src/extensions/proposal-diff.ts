@@ -42,7 +42,8 @@ export const proposalDiffPluginKey = new PluginKey<ProposalDiffPluginState>(
   'proposalDiff'
 );
 
-const CHANGE_ATTR = 'data-change';
+export const CHANGE_ATTR = 'data-change';
+export const CHIP_ATTR = 'data-diff-chip';
 
 function withCurrent(base: string, current: boolean): string {
   return current ? `${base} diff-current` : base;
@@ -70,7 +71,7 @@ function countRemovedBlocks(slice: Slice): number {
   return Math.max(count, 1);
 }
 
-// Spec §4: the widget mirrors past content, so it must never be an edit target.
+// The widget mirrors past content, so it must never be an edit target.
 function inert<T extends HTMLElement>(element: T): T {
   element.setAttribute('contenteditable', 'false');
   return element;
@@ -86,7 +87,7 @@ function chipElement(
   chip.type = 'button';
   chip.className = className;
   chip.setAttribute(CHANGE_ATTR, String(index));
-  chip.setAttribute('data-diff-chip', '');
+  chip.setAttribute(CHIP_ATTR, '');
   chip.setAttribute('aria-expanded', String(expanded));
   chip.textContent = label;
   return chip;
@@ -111,9 +112,7 @@ function deletedElement(
   }
 
   const wrapper = document.createElement(isBlock ? 'div' : 'span');
-  wrapper.className = isBlock
-    ? 'diff-del-group diff-del-group-block'
-    : 'diff-del-group';
+  wrapper.className = 'diff-del-group';
   wrapper.setAttribute(CHANGE_ATTR, String(index));
   // While the switch expands every deletion, a per-deletion toggle could not
   // honour a collapse, so the honest control is no control at all.

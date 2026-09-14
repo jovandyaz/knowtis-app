@@ -51,7 +51,11 @@ export { shouldPropagateUpdate } from './shouldPropagateUpdate';
 
 export { diffNoteHtml } from './diff/diff-note-html';
 export type { DocChange, DocDiff } from './diff/diff-note-html';
-export { ProposalDiff } from './extensions/proposal-diff';
+export {
+  CHANGE_ATTR,
+  CHIP_ATTR,
+  ProposalDiff,
+} from './extensions/proposal-diff';
 export type {
   ProposalDiffLabels,
   ProposalDiffView,

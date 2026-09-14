@@ -200,8 +200,6 @@ describe('AgentCopilotPanel', () => {
         id: 'p1',
         kind: 'create',
         targetNoteId: null,
-        summary: 'Create note "GTD"',
-        previewHtml: null,
         payload: { title: 'GTD' },
       },
     });
@@ -216,8 +214,6 @@ const updateProposal = {
   id: 'p1',
   kind: 'update' as const,
   targetNoteId: 'n1',
-  summary: 's',
-  previewHtml: null,
   payload: { contentHtml: '<p>x</p>' },
 };
 
@@ -225,8 +221,6 @@ const createProposal = {
   id: 'p2',
   kind: 'create' as const,
   targetNoteId: null,
-  summary: 's',
-  previewHtml: null,
   payload: { title: 'GTD', contentHtml: '<p>x</p>' },
 };
 

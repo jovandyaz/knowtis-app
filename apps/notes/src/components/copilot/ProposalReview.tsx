@@ -13,8 +13,15 @@ import { ROUTES } from '@/config';
 import type { UpdateProposal } from '@/stores/agent.store';
 import { ArrowDown, ArrowLeft, ArrowUp, PencilLine } from 'lucide-react';
 
-import { Button, cn, DocumentSkeleton, Switch } from '@knowtis/design-system';
 import {
+  Button,
+  cn,
+  DocumentSkeleton,
+  Switch,
+  useMotionPreset,
+} from '@knowtis/design-system';
+import {
+  CHANGE_ATTR,
   diffNoteHtml,
   DiffPreview,
   ReadOnlyEditor,
@@ -73,6 +80,7 @@ export function ProposalReview({
   const navigate = useNavigate();
   const payload = proposal.payload as UpdatePayloadView;
   const before = useProposalBefore(proposal.id, proposal.targetNoteId);
+  const { reduced } = useMotionPreset();
   const decision = useProposalDecision(onApprove, onReject);
   const [showDeleted, setShowDeleted] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -136,16 +144,13 @@ export function ProposalReview({
     const selector =
       currentItem.kind === 'title'
         ? '[data-testid="review-title"]'
-        : `[data-change="${currentItem.index}"]`;
+        : `[${CHANGE_ATTR}="${currentItem.index}"]`;
     const target = bodyRef.current?.querySelector<HTMLElement>(selector);
-    const reduce = window.matchMedia(
-      '(prefers-reduced-motion: reduce)'
-    ).matches;
     target?.scrollIntoView({
       block: 'center',
-      behavior: reduce ? 'auto' : 'smooth',
+      behavior: reduced ? 'auto' : 'smooth',
     });
-  }, [currentItem]);
+  }, [currentItem, reduced]);
 
   const step = (delta: number) =>
     setCurrent((c) => (total === 0 ? 0 : (c + delta + total) % total));

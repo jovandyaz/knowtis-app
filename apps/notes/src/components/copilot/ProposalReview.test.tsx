@@ -35,8 +35,6 @@ const proposal: UpdateProposal = {
   id: 'p1',
   kind: 'update',
   targetNoteId: 'n1',
-  summary: 'Update "Stack": title → "Landing", content updated',
-  previewHtml: null,
   payload: { title: 'Landing', contentHtml: AFTER_HTML },
 };
 
@@ -81,11 +79,6 @@ describe('ProposalReview', () => {
     expect(
       screen.getByRole('button', { name: 'ai.copilot.proposal.approveUpdate' })
     ).toBeDisabled();
-  });
-
-  it('never renders the server summary', () => {
-    renderReview();
-    expect(screen.queryByText(proposal.summary)).not.toBeInTheDocument();
   });
 
   it('shows the title change, the summary line and the total count', async () => {

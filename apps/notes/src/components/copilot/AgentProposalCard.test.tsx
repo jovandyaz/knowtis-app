@@ -8,13 +8,11 @@ const proposal = {
   id: 'p1',
   kind: 'create' as const,
   targetNoteId: null,
-  summary: 'Create note "GTD"',
-  previewHtml: '<p>do</p>',
   payload: { title: 'GTD', contentHtml: '<p>do</p>' },
 };
 
 describe('AgentProposalCard', () => {
-  it('renders the summary and fires approve', async () => {
+  it('renders the proposal kind and fires approve', async () => {
     const onApprove = vi.fn();
     render(
       <AgentProposalCard
@@ -23,7 +21,6 @@ describe('AgentProposalCard', () => {
         onReject={vi.fn()}
       />
     );
-    expect(screen.queryByText('Create note "GTD"')).not.toBeInTheDocument();
     expect(
       screen.getByText(/create note|crear nota|createTitle/i)
     ).toBeInTheDocument();
@@ -90,8 +87,6 @@ describe('AgentProposalCard', () => {
           id: 'p1',
           kind: 'update' as const,
           targetNoteId: 'n1',
-          summary: 's',
-          previewHtml: '<p>long content</p>',
           payload: { contentHtml: '<p>long content</p>' },
         }}
         onApprove={vi.fn()}
@@ -112,8 +107,6 @@ describe('AgentProposalCard', () => {
           id: 'p1',
           kind: 'update' as const,
           targetNoteId: 'n1',
-          summary: 's',
-          previewHtml: '<p>x</p>',
           payload: { contentHtml: '<p>x</p>' },
         }}
         onApprove={onApprove}

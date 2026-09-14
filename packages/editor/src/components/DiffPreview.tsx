@@ -5,6 +5,8 @@ import { EditorContent, useEditor } from '@tiptap/react';
 
 import type { DocDiff } from '../diff/diff-note-html';
 import {
+  CHANGE_ATTR,
+  CHIP_ATTR,
   ProposalDiff,
   type ProposalDiffLabels,
 } from '../extensions/proposal-diff';
@@ -74,12 +76,12 @@ export function DiffPreview({
     }
     const onClick = (event: Event) => {
       const chip = (event.target as HTMLElement).closest<HTMLElement>(
-        '[data-diff-chip]'
+        `[${CHIP_ATTR}]`
       );
       if (!chip) {
         return;
       }
-      const index = Number(chip.getAttribute('data-change'));
+      const index = Number(chip.getAttribute(CHANGE_ATTR));
       setExpanded((prev) => {
         const next = new Set(prev);
         if (next.has(index)) {

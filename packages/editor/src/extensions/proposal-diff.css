@@ -12,10 +12,6 @@
   border-radius: 0 3px 3px 0;
 }
 
-.diff-del-group-block {
-  display: block;
-}
-
 .diff-del {
   background: color-mix(in oklab, var(--destructive) 12%, transparent);
   color: var(--destructive);
@@ -24,7 +20,7 @@
   border-radius: 2px;
 }
 
-/* Spec §4: widget content is a preview of the past, never a live target. Scoped
+/* Widget content is a preview of the past, never a live target. Scoped
    to the widget: `.diff-del` is also used outside the editor, in the title row. */
 .diff-del-group .diff-del {
   pointer-events: none;

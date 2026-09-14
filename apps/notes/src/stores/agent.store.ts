@@ -29,8 +29,6 @@ export interface PendingProposal {
   id: string;
   kind: 'create' | 'update' | 'share';
   targetNoteId: string | null;
-  summary: string;
-  previewHtml: string | null;
   payload: Record<string, unknown>;
 }
 
@@ -50,7 +48,7 @@ export interface AgentChatMessage {
   stopReason?: AgentStopReason;
   sources?: AgentSource[];
   webSources?: WebSource[];
-  proposal?: { kind: PendingProposal['kind']; summary: string };
+  proposal?: { kind: PendingProposal['kind'] };
   committed?: { kind: PendingProposal['kind']; title: string };
   discarded?: boolean;
 }
@@ -226,15 +224,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
             pendingProposal: proposal,
             thinkingText: '',
             messages: s.messages.map((m) =>
-              m.id === id
-                ? {
-                    ...m,
-                    proposal: {
-                      kind: proposal.kind,
-                      summary: proposal.summary,
-                    },
-                  }
-                : m
+              m.id === id ? { ...m, proposal: { kind: proposal.kind } } : m
             ),
           }));
         },

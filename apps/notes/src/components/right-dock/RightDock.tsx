@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useViewportWidth } from '@/hooks/useViewportWidth';
 import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { RotateCcw } from 'lucide-react';
@@ -32,19 +32,6 @@ export function reviewDockWidth(viewportWidth: number): number {
       REVIEW_MAX_WIDTH,
       Math.max(DOCK_MAX_WIDTH, viewportWidth * REVIEW_VIEWPORT_RATIO)
     )
-  );
-}
-
-function subscribeToResize(onChange: () => void) {
-  window.addEventListener('resize', onChange);
-  return () => window.removeEventListener('resize', onChange);
-}
-
-function useViewportWidth(): number {
-  return useSyncExternalStore(
-    subscribeToResize,
-    () => window.innerWidth,
-    () => 0
   );
 }
 
