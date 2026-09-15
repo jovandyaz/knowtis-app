@@ -25,26 +25,26 @@ function renderButton(
 }
 
 describe('PracticeAgainButton', () => {
-  it('gives the plain button a 44px touch target and restarts every card', async () => {
+  it('gives the plain button a 48px target and restarts every card', async () => {
     const props = renderButton();
 
     const button = screen.getByRole('button', {
       name: 'ai.artifacts.flashcards.summary.practiceAgain',
     });
-    expect(button).toHaveClass('pointer-coarse:min-h-11');
+    expect(button).toHaveClass('min-h-12');
 
     await userEvent.click(button);
 
     expect(props.onRestart).toHaveBeenCalledWith('all');
   });
 
-  it('gives the trigger button a 44px touch target when filters are available', () => {
+  it('gives the trigger button a 48px target when filters are available', () => {
     renderButton({ hasMissedCards: true });
 
     expect(
       screen.getByRole('button', {
         name: 'ai.artifacts.flashcards.summary.practiceAgain',
       })
-    ).toHaveClass('pointer-coarse:min-h-11');
+    ).toHaveClass('min-h-12');
   });
 });

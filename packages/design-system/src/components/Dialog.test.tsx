@@ -97,6 +97,16 @@ function InvalidNestedOpener({ mode }: { mode: InvalidOpenerMode }) {
 }
 
 describe('Dialog accessibility', () => {
+  it('lets the fullscreen grid column shrink below its content width', () => {
+    render(
+      <Dialog open>
+        <DialogContent side="full" closeLabel="Close">
+          <DialogTitle>Long study title</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+    expect(screen.getByRole('dialog')).toHaveClass('grid-cols-[minmax(0,1fr)]');
+  });
   it('labels the dialog with the DialogTitle id', () => {
     renderDialog();
 

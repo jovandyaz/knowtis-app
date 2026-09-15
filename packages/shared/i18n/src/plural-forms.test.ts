@@ -32,6 +32,47 @@ async function translatorFor(locale: keyof typeof BUNDLES) {
 }
 
 describe('plural forms', () => {
+  it.each([
+    {
+      locale: 'en',
+      count: 1,
+      rated: 'Recorded: Recalled. 1 of 1 completed.',
+      skipped: 'Card skipped. 1 of 1 completed.',
+    },
+    {
+      locale: 'en',
+      count: 2,
+      rated: 'Recorded: Recalled. 1 of 2 completed.',
+      skipped: 'Card skipped. 1 of 2 completed.',
+    },
+    {
+      locale: 'es',
+      count: 1,
+      rated: 'Registrado: Lo recordé. 1 de 1 completada.',
+      skipped: 'Tarjeta omitida. 1 de 1 completada.',
+    },
+    {
+      locale: 'es',
+      count: 2,
+      rated: 'Registrado: Lo recordé. 1 de 2 completadas.',
+      skipped: 'Tarjeta omitida. 1 de 2 completadas.',
+    },
+  ] as const)(
+    'announces flashcard progress in $locale with count $count',
+    async ({ locale, count, rated, skipped }) => {
+      const i18n = await translatorFor(locale);
+      expect(
+        i18n.t('ai.artifacts.flashcards.announce.rated', {
+          rating: i18n.t('ai.artifacts.flashcards.quality.good'),
+          done: 1,
+          count,
+        })
+      ).toBe(rated);
+      expect(
+        i18n.t('ai.artifacts.flashcards.announce.skipped', { done: 1, count })
+      ).toBe(skipped);
+    }
+  );
   it.each(REVIEWED_OF_CASES)(
     'counts reviewed cards with the right plural in $locale',
     async ({ locale, singular, plural }) => {

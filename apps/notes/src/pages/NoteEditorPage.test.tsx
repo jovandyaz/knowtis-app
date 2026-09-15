@@ -29,6 +29,13 @@ vi.mock('@tanstack/react-router', () => ({
   useParams: () => ({ noteId: 'note-1' }),
 }));
 
+vi.mock('@/hooks/useStudyArtifactParam', () => ({
+  useStudyArtifactParam: () => ({
+    selectedArtifactId: null,
+    selectArtifact: vi.fn(),
+  }),
+}));
+
 vi.mock('@knowtis/crdt', () => ({
   useYjs: () => ({ getYDoc: () => ({}) }),
   docStateToBase64: () => 'AAA=',

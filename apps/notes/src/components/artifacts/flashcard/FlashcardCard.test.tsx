@@ -63,4 +63,25 @@ describe('FlashcardCard', () => {
     expect(badge).toHaveClass('text-learn-difficulty-medium-text');
     expect(badge).toHaveClass('bg-learn-difficulty-medium/10');
   });
+
+  it('sets the question and the answer at the same reading size', () => {
+    renderCard();
+
+    expect(screen.getByText('What is a CRDT?')).toHaveClass(
+      'text-xl',
+      'lg:text-2xl',
+      'font-semibold'
+    );
+    expect(
+      screen.getByText('A conflict-free replicated data type.')
+    ).toHaveClass('text-xl', 'lg:text-2xl');
+  });
+
+  it('draws no caption inside the faces, leaving the hint to the card itself', () => {
+    renderCard();
+
+    expect(
+      screen.getByRole('button', { name: /What is a CRDT\?/ }).textContent
+    ).toBe('What is a CRDT?A conflict-free replicated data type.');
+  });
 });

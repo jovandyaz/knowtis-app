@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
+import { isStudyFocusOpen } from '@/components/artifacts/focus/study-focus-marker';
 import { BucketNav } from '@/components/organization/BucketNav';
 import { SupertagNav } from '@/components/organization/SupertagNav';
 import { TagTree } from '@/components/organization/TagTree';
@@ -44,10 +45,15 @@ export function Sidebar() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        void openSearch();
+      if (!(isMac ? e.metaKey : e.ctrlKey) || e.key !== 'k') {
+        return;
       }
+      if (isStudyFocusOpen()) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      void openSearch();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);

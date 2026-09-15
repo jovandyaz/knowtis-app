@@ -20,8 +20,11 @@ function renderNav(
     wrongCount: 2,
     correctCount: 5,
     canGoPrev: false,
+    canGoNext: true,
+    canSkip: true,
     onNavigatePrev: vi.fn(),
     onNavigateNext: vi.fn(),
+    onSkip: vi.fn(),
     ...overrides,
   };
   render(
@@ -31,6 +34,10 @@ function renderNav(
   );
   return props;
 }
+
+const PREV = { name: 'ai.artifacts.flashcards.prev' };
+const NEXT = { name: 'ai.artifacts.flashcards.next' };
+const SKIP = { name: 'ai.artifacts.flashcards.skipCard' };
 
 describe('FlashcardNav', () => {
   it('names each counter, so a screen reader hears more than a bare number', () => {
@@ -55,33 +62,46 @@ describe('FlashcardNav', () => {
   it('locks the previous arrow on the first card', () => {
     renderNav();
 
-    expect(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.prev' })
-    ).toBeDisabled();
+    expect(screen.getByRole('button', PREV)).toBeDisabled();
+  });
+
+  it('locks the next arrow on the last card instead of finishing the deck', () => {
+    renderNav({ canGoNext: false });
+
+    expect(screen.getByRole('button', NEXT)).toBeDisabled();
   });
 
   it('walks the deck with the arrows', async () => {
     const props = renderNav({ canGoPrev: true });
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.prev' })
-    );
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.next' })
-    );
+    await userEvent.click(screen.getByRole('button', PREV));
+    await userEvent.click(screen.getByRole('button', NEXT));
 
     expect(props.onNavigatePrev).toHaveBeenCalledTimes(1);
     expect(props.onNavigateNext).toHaveBeenCalledTimes(1);
+    expect(props.onSkip).not.toHaveBeenCalled();
   });
 
-  it('gives both arrows a 44px touch target', () => {
+  it('skips the current card only through its own button', async () => {
+    const props = renderNav();
+
+    await userEvent.click(screen.getByRole('button', SKIP));
+
+    expect(props.onSkip).toHaveBeenCalledTimes(1);
+    expect(props.onNavigateNext).not.toHaveBeenCalled();
+  });
+
+  it('locks skipping on a card that is already recorded', () => {
+    renderNav({ canSkip: false });
+
+    expect(screen.getByRole('button', SKIP)).toBeDisabled();
+  });
+
+  it('gives every control a 48px touch target', () => {
     renderNav({ canGoPrev: true });
 
-    expect(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.prev' })
-    ).toHaveClass('h-11', 'w-11');
-    expect(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.next' })
-    ).toHaveClass('h-11', 'w-11');
+    expect(screen.getByRole('button', PREV)).toHaveClass('h-12', 'w-12');
+    expect(screen.getByRole('button', NEXT)).toHaveClass('h-12', 'w-12');
+    expect(screen.getByRole('button', SKIP)).toHaveClass('min-h-12');
   });
 });

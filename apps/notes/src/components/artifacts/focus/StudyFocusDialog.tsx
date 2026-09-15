@@ -1,10 +1,19 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useBlocker } from '@tanstack/react-router';
 
 import { motion } from 'motion/react';
 
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -46,13 +55,13 @@ export interface StudyFocusDialogProps {
   onClose: () => void;
   menu?: ReactNode;
   hints?: ReactNode;
+  actions?: ReactNode;
   children: ReactNode;
 }
 
 /**
- * Fullscreen study surface. Leaving (close button, Escape, caller-driven exits)
- * asks for confirmation while `inProgress`; `onClose` fires only when the user
- * really leaves. Initial focus lands on the stage, not on a header control.
+ * Fullscreen study surface. The close button and Escape ask for confirmation
+ * while `inProgress`. Initial focus lands on the stage, not on a header control.
  */
 export function StudyFocusDialog({
   tool,
@@ -62,12 +71,48 @@ export function StudyFocusDialog({
   onClose,
   menu,
   hints,
+  actions,
   children,
 }: StudyFocusDialogProps) {
   const { t } = useTranslation(['notes', 'common']);
   const preset = useMotionPreset();
   const stageRef = useRef<HTMLDivElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmedExitRef = useRef(false);
+  const shouldBlockFn = useCallback(
+    () => inProgress && !confirmedExitRef.current,
+    [inProgress]
+  );
+  const blocker = useBlocker({
+    shouldBlockFn,
+    disabled: !inProgress,
+    withResolver: true,
+  });
+  const latestBlockerRef = useRef(blocker);
+  useEffect(() => {
+    latestBlockerRef.current = blocker;
+  }, [blocker]);
+  useEffect(() => {
+    // History still awaits an answer if the artifact disappears during confirmation.
+    return () => {
+      if (latestBlockerRef.current.status === 'blocked') {
+        latestBlockerRef.current.proceed?.();
+      }
+    };
+  }, []);
+  const cancelExit = () => {
+    setConfirmOpen(false);
+    blocker.reset?.();
+  };
+
+  useEffect(() => {
+    if (!inProgress) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Session completion must dismiss the independently opened confirmation.
+      setConfirmOpen(false);
+      // Completion honors the pending request to leave without another confirmation.
+      blocker.proceed?.();
+    }
+  }, [inProgress, blocker]);
 
   const requestClose = useCallback(() => {
     if (inProgress) {
@@ -89,15 +134,19 @@ export function StudyFocusDialog({
         side="full"
         closeLabel={t('ai.artifacts.focus.exitStudy')}
         aria-label={dialogTitle}
+        // Radix sets aria-labelledby before contentProps, so explicit undefined lets aria-label win.
         aria-labelledby={undefined}
         {...{ [STUDY_FOCUS_ATTRIBUTE]: '' }}
-        className="bg-(--background)"
+        className={cn(
+          'bg-(--background)',
+          (hints || actions) && 'grid-rows-[auto_minmax(0,1fr)_auto]'
+        )}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           stageRef.current?.focus();
         }}
       >
-        <header className="flex min-h-16 items-center gap-3 border-b border-(--border) px-4 py-3 pr-16 lg:px-8 lg:pr-20">
+        <header className="flex min-h-16 min-w-0 items-center gap-3 border-b border-(--border) px-4 py-3 pr-16 lg:px-8 lg:pr-20">
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-base lg:text-lg">
               <span className="text-(--muted-foreground)">{toolLabel}: </span>
@@ -105,19 +154,23 @@ export function StudyFocusDialog({
             </DialogTitle>
           </div>
           <div className="flex items-center gap-3">
-            <ProgressRing
-              value={progress.value}
-              max={progress.max}
-              label={progress.label}
-            >
-              {progress.value}
-            </ProgressRing>
-            <span
-              className="hidden text-sm text-(--muted-foreground) sm:inline"
-              aria-hidden="true"
-            >
-              {progress.label}
-            </span>
+            {progress.max > 0 && (
+              <>
+                <ProgressRing
+                  value={progress.value}
+                  max={progress.max}
+                  label={progress.label}
+                >
+                  {progress.value}
+                </ProgressRing>
+                <span
+                  className="hidden text-sm text-(--muted-foreground) sm:inline"
+                  aria-hidden="true"
+                >
+                  {progress.label}
+                </span>
+              </>
+            )}
             {menu}
           </div>
         </header>
@@ -135,10 +188,22 @@ export function StudyFocusDialog({
           >
             {children}
           </motion.div>
-          {hints ? <div className="px-4 pb-4 lg:px-8">{hints}</div> : null}
         </div>
+        {hints || actions ? (
+          <footer className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:px-8">
+            {actions}
+            {hints}
+          </footer>
+        ) : null}
 
-        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <Dialog
+          open={confirmOpen || (inProgress && blocker.status === 'blocked')}
+          onOpenChange={(open) => {
+            if (!open) {
+              cancelExit();
+            }
+          }}
+        >
           <DialogContent
             side="center"
             closeLabel={t('common:labels.closeDialog')}
@@ -146,14 +211,21 @@ export function StudyFocusDialog({
             <DialogTitle>{t('ai.artifacts.focus.exit.title')}</DialogTitle>
             <DialogDescription>{t(EXIT_BODY_KEY[tool])}</DialogDescription>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setConfirmOpen(false)}
-                autoFocus
-              >
+              <Button variant="outline" onClick={cancelExit} autoFocus>
                 {t('ai.artifacts.focus.exit.keep')}
               </Button>
-              <Button variant="destructive" onClick={onClose}>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  if (blocker.status === 'blocked') {
+                    blocker.proceed();
+                  } else {
+                    confirmedExitRef.current = true;
+                    onClose();
+                  }
+                }}
+              >
                 {t('ai.artifacts.focus.exit.leave')}
               </Button>
             </DialogFooter>

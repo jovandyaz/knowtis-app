@@ -31,6 +31,74 @@ function reverse<T>(items: T[]): T[] {
 }
 
 describe('useFlashcardSession', () => {
+  it.each(['simple', 'advanced'])(
+    'returns false for a stale %s rating after shuffle changes the current card',
+    async (mode) => {
+      const cards = [makeCard(0), makeCard(1)];
+      const { result } = renderHook(() => useFlashcardSession(cards, reverse));
+      const saved = Promise.withResolvers<undefined>();
+      const rate = result.current.rate;
+      const rateAdvanced = result.current.rateAdvanced;
+      const pending = saved.promise.then(() =>
+        mode === 'simple'
+          ? rate('correct', 'artifact-0:0')
+          : rateAdvanced(SM2_QUALITY.GOOD, 'artifact-0:0')
+      );
+      act(() => result.current.shuffle());
+      await act(async () => {
+        saved.resolve(undefined);
+        expect(await pending).toBe(false);
+      });
+      expect(result.current.currentCard).toEqual(cards[1]);
+      expect(result.current.cardStatuses).toEqual(['pending', 'pending']);
+      expect(result.current.ratings).toEqual([null, null]);
+    }
+  );
+
+  it.each(['simple', 'advanced'])(
+    'returns true when a %s rating is applied to the current card',
+    (mode) => {
+      const { result } = renderHook(() =>
+        useFlashcardSession([makeCard(0), makeCard(1)])
+      );
+      act(() => {
+        const applied =
+          mode === 'simple'
+            ? result.current.rate('correct')
+            : result.current.rateAdvanced(SM2_QUALITY.GOOD);
+        expect(applied).toBe(true);
+      });
+      expect(result.current.counts.correct).toBe(1);
+      expect(result.current.currentCard?.cardIndex).toBe(1);
+    }
+  );
+
+  it('returns a revisited skipped card to pending so it can be graded', () => {
+    const { result } = renderHook(() =>
+      useFlashcardSession([makeCard(0), makeCard(1)])
+    );
+    act(() => result.current.skip());
+    act(() => result.current.navigate(0));
+    act(() => result.current.flip());
+    act(() => result.current.reviewSkipped());
+    expect(result.current.cardStatuses).toEqual(['pending', 'pending']);
+    expect(result.current.counts.skipped).toBe(0);
+    expect(result.current.ratings[0]).toBeNull();
+    expect(result.current.flipped).toBe(true);
+    act(() => result.current.rate('correct'));
+    expect(result.current.counts.correct).toBe(1);
+  });
+
+  it('does not reopen a rated card through Review skipped', () => {
+    const { result } = renderHook(() =>
+      useFlashcardSession([makeCard(0), makeCard(1)])
+    );
+    act(() => result.current.rate('correct'));
+    act(() => result.current.navigate(0));
+    act(() => result.current.reviewSkipped());
+    expect(result.current.cardStatuses[0]).toBe('correct');
+    expect(result.current.ratings[0]).toBe(SM2_QUALITY.GOOD);
+  });
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -68,19 +136,78 @@ describe('useFlashcardSession', () => {
     expect(result.current.currentCard?.cardIndex).toBe(cards[2].cardIndex);
   });
 
-  it('marks the remaining cards skipped when the session is finished early', () => {
+  it('completes once every card is rated or skipped, without an explicit finish', () => {
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    act(() => result.current.rate('correct'));
+    act(() => result.current.skip());
+
+    expect(result.current.isComplete).toBe(true);
+    expect(result.current.cardStatuses).toEqual(['correct', 'skipped']);
+    expect(result.current).not.toHaveProperty('finish');
+  });
+
+  it("keeps a rated card's status and rating when browsed back to", () => {
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    act(() => result.current.rateAdvanced(SM2_QUALITY.HARD));
+    act(() => result.current.navigate(0));
+
+    expect(result.current.currentIndex).toBe(0);
+    expect(result.current.cardStatuses[0]).toBe('wrong');
+    expect(result.current.ratings[0]).toBe(SM2_QUALITY.HARD);
+  });
+
+  it('records a simple rating as the SM-2 quality it submits', () => {
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    act(() => result.current.rate('wrong'));
+    act(() => result.current.rate('correct'));
+
+    expect(result.current.ratings).toEqual([
+      SM2_QUALITY.AGAIN,
+      SM2_QUALITY.GOOD,
+    ]);
+  });
+
+  it('keeps each rating with its own card through a shuffle', () => {
+    const cards = [makeCard(0), makeCard(1), makeCard(2)];
+    const { result } = renderHook(() => useFlashcardSession(cards, reverse));
+
+    act(() => result.current.rateAdvanced(SM2_QUALITY.EASY));
+    act(() => result.current.shuffle());
+
+    expect(result.current.ratings).toEqual([null, null, SM2_QUALITY.EASY]);
+  });
+
+  it('clears the ratings when the session restarts', () => {
+    const cards = [makeCard(0), makeCard(1)];
+    const { result } = renderHook(() => useFlashcardSession(cards));
+
+    act(() => result.current.rate('wrong'));
+    act(() => result.current.rate('correct'));
+    act(() => result.current.restart('missed'));
+
+    expect(result.current.ratings).toEqual([null]);
+  });
+
+  it('leaves every status untouched when browsing', () => {
     const cards = [makeCard(0), makeCard(1), makeCard(2)];
     const { result } = renderHook(() => useFlashcardSession(cards));
 
     act(() => result.current.rate('correct'));
-    act(() => result.current.finish());
+    act(() => result.current.navigate(2));
+    act(() => result.current.navigate(0));
 
-    expect(result.current.isComplete).toBe(true);
     expect(result.current.cardStatuses).toEqual([
       'correct',
-      'skipped',
-      'skipped',
+      'pending',
+      'pending',
     ]);
+    expect(result.current.flipped).toBe(false);
   });
 
   it('restarts with only the missed cards', () => {
@@ -188,7 +315,7 @@ describe('useFlashcardSession', () => {
     expect(result.current.sessionResult.durationMs).toBe(5_000);
 
     vi.setSystemTime(SESSION_EPOCH_MS + 60_000);
-    act(() => result.current.finish());
+    act(() => result.current.skip());
     expect(result.current.sessionResult.durationMs).toBe(5_000);
 
     act(() => result.current.rate('correct'));

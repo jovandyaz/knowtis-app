@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, SkipForward, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import {
@@ -15,9 +15,14 @@ interface FlashcardNavProps {
   wrongCount: number;
   correctCount: number;
   canGoPrev: boolean;
+  canGoNext: boolean;
+  canSkip: boolean;
   onNavigatePrev: () => void;
   onNavigateNext: () => void;
+  onSkip: () => void;
 }
+
+const ARROW_BUTTON_CLASS = 'h-12 w-12 rounded-full';
 
 function AnimatedCounter({ count }: { count: number }) {
   const preset = useMotionPreset();
@@ -41,19 +46,22 @@ export function FlashcardNav({
   wrongCount,
   correctCount,
   canGoPrev,
+  canGoNext,
+  canSkip,
   onNavigatePrev,
   onNavigateNext,
+  onSkip,
 }: FlashcardNavProps) {
   const { t } = useTranslation('notes');
 
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
-            className="h-11 w-11 rounded-full"
+            className={ARROW_BUTTON_CLASS}
             onClick={onNavigatePrev}
             disabled={!canGoPrev}
             aria-label={t('ai.artifacts.flashcards.prev')}
@@ -70,6 +78,16 @@ export function FlashcardNav({
         <AnimatedCounter count={wrongCount} />
       </div>
 
+      <Button
+        variant="outline"
+        className="min-h-12 rounded-full px-5"
+        onClick={onSkip}
+        disabled={!canSkip}
+      >
+        <SkipForward aria-hidden="true" className="h-4 w-4" />
+        {t('ai.artifacts.flashcards.skipCard')}
+      </Button>
+
       <div className="flex items-center gap-1.5 rounded-full bg-learn-correct/15 px-3 py-1.5 text-learn-correct-text">
         <span className="sr-only">{t('ai.artifacts.flashcards.correct')}</span>
         <AnimatedCounter count={correctCount} />
@@ -81,8 +99,9 @@ export function FlashcardNav({
           <Button
             variant="ghost"
             size="icon"
-            className="h-11 w-11 rounded-full"
+            className={ARROW_BUTTON_CLASS}
             onClick={onNavigateNext}
+            disabled={!canGoNext}
             aria-label={t('ai.artifacts.flashcards.next')}
           >
             <ChevronRight className="h-5 w-5" />

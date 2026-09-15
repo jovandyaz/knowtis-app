@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
@@ -48,6 +48,7 @@ export function SharedNotePage() {
     handleUpdate,
   } = useSharedNoteEditing();
   const { copied, copy: copyLink } = useCopyLink();
+  const [studyArtifactId, setStudyArtifactId] = useState<string | null>(null);
   const sharedArtifacts = artifacts ?? NO_ARTIFACTS;
   const hasArtifacts = sharedArtifacts.length > 0;
   const sharedPath = sharedNotePath(token);
@@ -171,9 +172,12 @@ export function SharedNotePage() {
             {hasArtifacts && (
               <WorkspaceTabPanel tab="study" tabbed>
                 <StudyToolsTab
+                  key={token}
                   noteId={data.id}
                   artifacts={sharedArtifacts}
                   readOnly
+                  selectedArtifactId={studyArtifactId}
+                  onSelectArtifact={setStudyArtifactId}
                 />
               </WorkspaceTabPanel>
             )}

@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useReducer } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react';
 
 import type {
   CardResult,
@@ -11,11 +17,33 @@ import type {
 import { CARD_STATUS, SM2_QUALITY } from '@knowtis/shared-types';
 
 const NO_ELAPSED_TIME = 0;
+const NOT_FOUND = -1;
+
+const SESSION_ACTION = {
+  FLIP: 'FLIP',
+  RATE: 'RATE',
+  SKIP: 'SKIP',
+  REVIEW_SKIPPED: 'REVIEW_SKIPPED',
+  NAVIGATE: 'NAVIGATE',
+  TOGGLE_ADVANCED: 'TOGGLE_ADVANCED',
+  RESTART: 'RESTART',
+  SHUFFLE: 'SHUFFLE',
+} as const;
+
+const RESTART_SUBSET_STATUS: Partial<Record<RestartFilter, CardSessionStatus>> =
+  {
+    missed: CARD_STATUS.WRONG,
+    skipped: CARD_STATUS.SKIPPED,
+  };
+
+type RatedStatus = typeof CARD_STATUS.CORRECT | typeof CARD_STATUS.WRONG;
+type CardRating = SM2Quality | null;
 
 interface SessionState {
   currentIndex: number;
   flipped: boolean;
   cardStatuses: CardSessionStatus[];
+  ratings: CardRating[];
   isAdvancedMode: boolean;
   isComplete: boolean;
   startTime: number;
@@ -25,14 +53,19 @@ interface SessionState {
 }
 
 type SessionAction =
-  | { type: 'FLIP' }
-  | { type: 'RATE'; status: 'correct' | 'wrong' }
-  | { type: 'SKIP' }
-  | { type: 'NAVIGATE'; index: number }
-  | { type: 'TOGGLE_ADVANCED' }
-  | { type: 'RESTART'; filter: RestartFilter }
-  | { type: 'FINISH' }
-  | { type: 'SHUFFLE'; cards: StudyCard[] };
+  | { type: typeof SESSION_ACTION.FLIP }
+  | {
+      type: typeof SESSION_ACTION.RATE;
+      status: RatedStatus;
+      quality: SM2Quality;
+      cardIdentity: string;
+    }
+  | { type: typeof SESSION_ACTION.SKIP }
+  | { type: typeof SESSION_ACTION.REVIEW_SKIPPED }
+  | { type: typeof SESSION_ACTION.NAVIGATE; index: number }
+  | { type: typeof SESSION_ACTION.TOGGLE_ADVANCED }
+  | { type: typeof SESSION_ACTION.RESTART; filter: RestartFilter }
+  | { type: typeof SESSION_ACTION.SHUFFLE; cards: StudyCard[] };
 
 function fisherYatesShuffle<T>(items: T[]): T[] {
   const shuffled = [...items];
@@ -47,7 +80,8 @@ function cardIdentityKey(card: StudyCard): string {
   return `${card.artifactId}:${card.cardIndex}`;
 }
 
-function findNextPendingIndex(
+/** Index of the first pending card after `fromIndex`, wrapping around the deck; -1 when none is pending. */
+export function findNextPendingIndex(
   statuses: CardSessionStatus[],
   fromIndex: number
 ): number {
@@ -57,14 +91,14 @@ function findNextPendingIndex(
       return index;
     }
   }
-  return -1;
+  return NOT_FOUND;
 }
 
 function checkComplete(statuses: CardSessionStatus[]): boolean {
   return statuses.every((s) => s !== CARD_STATUS.PENDING);
 }
 
-function durationOnFinish(state: SessionState): number {
+function durationOnComplete(state: SessionState): number {
   return state.isComplete ? state.durationMs : Date.now() - state.startTime;
 }
 
@@ -80,12 +114,25 @@ function advanceAfterAction(
   return {
     flipped: false,
     isComplete: complete,
-    durationMs: complete ? durationOnFinish(state) : NO_ELAPSED_TIME,
+    durationMs: complete ? durationOnComplete(state) : NO_ELAPSED_TIME,
     currentIndex: complete
       ? state.currentIndex
-      : nextIndex !== -1
+      : nextIndex !== NOT_FOUND
         ? nextIndex
         : state.currentIndex,
+  };
+}
+
+function freshSession(cards: StudyCard[]): Partial<SessionState> {
+  return {
+    currentIndex: 0,
+    flipped: false,
+    cardStatuses: Array(cards.length).fill(CARD_STATUS.PENDING),
+    ratings: Array(cards.length).fill(null),
+    isComplete: false,
+    startTime: Date.now(),
+    durationMs: NO_ELAPSED_TIME,
+    activeCards: cards,
   };
 }
 
@@ -94,20 +141,27 @@ function sessionReducer(
   action: SessionAction
 ): SessionState {
   switch (action.type) {
-    case 'FLIP':
+    case SESSION_ACTION.FLIP:
       return { ...state, flipped: !state.flipped };
 
-    case 'RATE': {
+    case SESSION_ACTION.RATE: {
+      const card = state.activeCards[state.currentIndex];
+      if (!card || cardIdentityKey(card) !== action.cardIdentity) {
+        return state;
+      }
       const newStatuses = [...state.cardStatuses];
       newStatuses[state.currentIndex] = action.status;
+      const newRatings = [...state.ratings];
+      newRatings[state.currentIndex] = action.quality;
       return {
         ...state,
         cardStatuses: newStatuses,
+        ratings: newRatings,
         ...advanceAfterAction(state, newStatuses),
       };
     }
 
-    case 'SKIP': {
+    case SESSION_ACTION.SKIP: {
       const newStatuses = [...state.cardStatuses];
       newStatuses[state.currentIndex] = CARD_STATUS.SKIPPED;
       return {
@@ -117,79 +171,62 @@ function sessionReducer(
       };
     }
 
-    case 'NAVIGATE':
-      return { ...state, currentIndex: action.index, flipped: false };
-
-    case 'FINISH': {
-      const finishedStatuses = state.cardStatuses.map((s) =>
-        s === CARD_STATUS.PENDING ? CARD_STATUS.SKIPPED : s
-      ) as CardSessionStatus[];
+    case SESSION_ACTION.REVIEW_SKIPPED: {
+      if (state.cardStatuses[state.currentIndex] !== CARD_STATUS.SKIPPED) {
+        return state;
+      }
+      const cardStatuses = [...state.cardStatuses];
+      const ratings = [...state.ratings];
+      cardStatuses[state.currentIndex] = CARD_STATUS.PENDING;
+      ratings[state.currentIndex] = null;
       return {
         ...state,
-        cardStatuses: finishedStatuses,
-        isComplete: true,
-        durationMs: durationOnFinish(state),
-        flipped: false,
+        cardStatuses,
+        ratings,
+        isComplete: false,
+        durationMs: NO_ELAPSED_TIME,
       };
     }
 
-    case 'TOGGLE_ADVANCED':
+    case SESSION_ACTION.NAVIGATE:
+      return { ...state, currentIndex: action.index, flipped: false };
+
+    case SESSION_ACTION.TOGGLE_ADVANCED:
       return { ...state, isAdvancedMode: !state.isAdvancedMode };
 
-    case 'SHUFFLE': {
-      const statusByIdentity = new Map(
+    case SESSION_ACTION.SHUFFLE: {
+      const byIdentity = new Map(
         state.activeCards.map((card, i) => [
           cardIdentityKey(card),
-          state.cardStatuses[i],
+          { status: state.cardStatuses[i], rating: state.ratings[i] },
         ])
       );
-      const shuffledStatuses = action.cards.map(
-        (card) =>
-          statusByIdentity.get(cardIdentityKey(card)) ?? CARD_STATUS.PENDING
+      const remapped = action.cards.map((card) =>
+        byIdentity.get(cardIdentityKey(card))
       );
       return {
         ...state,
         currentIndex: 0,
         flipped: false,
-        cardStatuses: shuffledStatuses,
+        cardStatuses: remapped.map(
+          (entry) => entry?.status ?? CARD_STATUS.PENDING
+        ),
+        ratings: remapped.map((entry) => entry?.rating ?? null),
         isComplete: false,
         durationMs: NO_ELAPSED_TIME,
         activeCards: action.cards,
       };
     }
 
-    case 'RESTART': {
-      if (action.filter === 'missed' || action.filter === 'skipped') {
-        const targetStatus =
-          action.filter === 'missed' ? CARD_STATUS.WRONG : CARD_STATUS.SKIPPED;
-        const filteredCards = state.activeCards.filter(
-          (_, i) => state.cardStatuses[i] === targetStatus
-        );
-        if (filteredCards.length > 0) {
-          return {
-            ...state,
-            currentIndex: 0,
-            flipped: false,
-            cardStatuses: Array(filteredCards.length).fill(CARD_STATUS.PENDING),
-            isComplete: false,
-            startTime: Date.now(),
-            durationMs: NO_ELAPSED_TIME,
-            activeCards: filteredCards,
-          };
-        }
-      }
-      return {
-        ...state,
-        currentIndex: 0,
-        flipped: false,
-        cardStatuses: Array(state.originalCards.length).fill(
-          CARD_STATUS.PENDING
-        ),
-        isComplete: false,
-        startTime: Date.now(),
-        durationMs: NO_ELAPSED_TIME,
-        activeCards: state.originalCards,
-      };
+    case SESSION_ACTION.RESTART: {
+      const subsetStatus = RESTART_SUBSET_STATUS[action.filter];
+      const subset = subsetStatus
+        ? state.activeCards.filter(
+            (_, i) => state.cardStatuses[i] === subsetStatus
+          )
+        : [];
+      const cards = subset.length > 0 ? subset : state.originalCards;
+      return { ...state, ...freshSession(cards) };
     }
 
     default:
@@ -202,6 +239,7 @@ function createInitialState(cards: StudyCard[]): SessionState {
     currentIndex: 0,
     flipped: false,
     cardStatuses: Array(cards.length).fill(CARD_STATUS.PENDING),
+    ratings: Array(cards.length).fill(null),
     isAdvancedMode: false,
     isComplete: false,
     startTime: Date.now(),
@@ -235,42 +273,62 @@ export function useFlashcardSession(
   }, [state.cardStatuses]);
 
   const currentCard = state.activeCards[state.currentIndex];
+  const currentCardIdentity = currentCard ? cardIdentityKey(currentCard) : '';
+  const currentCardIdentityRef = useRef(currentCardIdentity);
+  useLayoutEffect(() => {
+    currentCardIdentityRef.current = currentCardIdentity;
+  }, [currentCardIdentity]);
 
-  const flip = useCallback(() => dispatch({ type: 'FLIP' }), []);
+  const flip = useCallback(() => dispatch({ type: SESSION_ACTION.FLIP }), []);
 
-  const rate = useCallback((status: 'correct' | 'wrong') => {
-    dispatch({ type: 'RATE', status });
-  }, []);
+  const rateAdvanced = useCallback(
+    (quality: SM2Quality, cardIdentity = currentCardIdentity): boolean => {
+      // A saved review can retain this callback from before a shuffle or navigation.
+      if (!cardIdentity || cardIdentity !== currentCardIdentityRef.current) {
+        return false;
+      }
+      const status: RatedStatus =
+        quality >= SM2_QUALITY.GOOD ? CARD_STATUS.CORRECT : CARD_STATUS.WRONG;
+      dispatch({ type: SESSION_ACTION.RATE, status, quality, cardIdentity });
+      return true;
+    },
+    [currentCardIdentity]
+  );
 
-  const rateAdvanced = useCallback((quality: SM2Quality) => {
-    const status: 'correct' | 'wrong' =
-      quality >= SM2_QUALITY.GOOD ? CARD_STATUS.CORRECT : CARD_STATUS.WRONG;
-    dispatch({ type: 'RATE', status });
-  }, []);
+  const rate = useCallback(
+    (status: RatedStatus, cardIdentity?: string): boolean =>
+      rateAdvanced(
+        status === CARD_STATUS.CORRECT ? SM2_QUALITY.GOOD : SM2_QUALITY.AGAIN,
+        cardIdentity
+      ),
+    [rateAdvanced]
+  );
 
   const skip = useCallback(() => {
-    dispatch({ type: 'SKIP' });
+    dispatch({ type: SESSION_ACTION.SKIP });
+  }, []);
+  const reviewSkipped = useCallback(() => {
+    dispatch({ type: SESSION_ACTION.REVIEW_SKIPPED });
   }, []);
 
   const navigate = useCallback((index: number) => {
-    dispatch({ type: 'NAVIGATE', index });
+    dispatch({ type: SESSION_ACTION.NAVIGATE, index });
   }, []);
 
   const toggleAdvanced = useCallback(
-    () => dispatch({ type: 'TOGGLE_ADVANCED' }),
+    () => dispatch({ type: SESSION_ACTION.TOGGLE_ADVANCED }),
     []
   );
 
-  const finish = useCallback(() => {
-    dispatch({ type: 'FINISH' });
-  }, []);
-
   const restart = useCallback((filter: RestartFilter = 'all') => {
-    dispatch({ type: 'RESTART', filter });
+    dispatch({ type: SESSION_ACTION.RESTART, filter });
   }, []);
 
   const shuffle = useCallback(() => {
-    dispatch({ type: 'SHUFFLE', cards: shuffleFn(state.activeCards) });
+    dispatch({
+      type: SESSION_ACTION.SHUFFLE,
+      cards: shuffleFn(state.activeCards),
+    });
   }, [shuffleFn, state.activeCards]);
 
   const sessionResult = useMemo((): StudySessionResult => {
@@ -299,6 +357,7 @@ export function useFlashcardSession(
     currentCard,
     totalCards: state.activeCards.length,
     cardStatuses: state.cardStatuses,
+    ratings: state.ratings,
     counts,
     sessionResult,
 
@@ -306,7 +365,7 @@ export function useFlashcardSession(
     rate,
     rateAdvanced,
     skip,
-    finish,
+    reviewSkipped,
     navigate,
     toggleAdvanced,
     restart,

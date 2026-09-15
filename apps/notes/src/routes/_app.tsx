@@ -7,6 +7,7 @@ import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import { ArtifactGeneratorDialog } from '@/components/artifacts/ArtifactGenerator';
+import { isStudyFocusOpen } from '@/components/artifacts/focus/study-focus-marker';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
 import { VerifyEmailDialog } from '@/components/auth/VerifyEmailDialog';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -87,10 +88,15 @@ function AppLayout() {
   useEffect(() => {
     const isMac = /Mac/i.test(navigator.userAgent);
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'j') {
-        e.preventDefault();
-        toggleDock();
+      if (!(isMac ? e.metaKey : e.ctrlKey) || e.key.toLowerCase() !== 'j') {
+        return;
       }
+      if (isStudyFocusOpen()) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      toggleDock();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);

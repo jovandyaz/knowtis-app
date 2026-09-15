@@ -1,9 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Check, SkipForward, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import {
+  Button,
   DonutChart,
   StatTile,
   useMotionPreset,
@@ -11,12 +13,15 @@ import {
 } from '@knowtis/design-system';
 import type { RestartFilter, StudySessionResult } from '@knowtis/shared-types';
 
+import { SessionCelebration } from '../focus/SessionCelebration';
 import { MissedCardsList } from './MissedCardsList';
 import { PracticeAgainButton } from './PracticeAgainButton';
 
 interface FlashcardSummaryProps {
   result: StudySessionResult;
   onRestart: (filter: RestartFilter) => void;
+  /** Renders a way back to the note; omitted where the summary has no note to return to. */
+  onBackToNote?: (() => void) | undefined;
 }
 
 const MS_PER_SECOND = 1000;
@@ -39,9 +44,19 @@ function formatDuration(ms: number): { minutes: number; seconds: number } {
   };
 }
 
-export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
+export function FlashcardSummary({
+  result,
+  onRestart,
+  onBackToNote,
+}: FlashcardSummaryProps) {
   const { t } = useTranslation('notes');
   const preset = useMotionPreset();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // Arrival moves focus to the result once; later re-renders must not pull it back.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   const percentage =
     result.total > 0
@@ -51,6 +66,10 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
     'ai.artifacts.flashcards.summary.timeSpent',
     formatDuration(result.durationMs)
   );
+  const motivationalKey = (
+    MOTIVATIONAL_THRESHOLDS.find((th) => percentage >= th.min) ??
+    MOTIVATIONAL_THRESHOLDS[MOTIVATIONAL_THRESHOLDS.length - 1]
+  ).key;
 
   const segments: DonutSegment[] = [
     { value: result.correct, tone: 'correct' },
@@ -78,19 +97,25 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
 
   return (
     <div className="flex min-w-0 flex-col items-center gap-6 py-4">
-      <motion.h2
-        className="text-center text-xl font-semibold"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={preset.fade}
-      >
-        {t(
-          (
-            MOTIVATIONAL_THRESHOLDS.find((th) => percentage >= th.min) ??
-            MOTIVATIONAL_THRESHOLDS[MOTIVATIONAL_THRESHOLDS.length - 1]
-          ).key
-        )}
-      </motion.h2>
+      <SessionCelebration />
+
+      <div className="flex flex-col items-center gap-2 text-center">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-2xl font-semibold outline-none"
+        >
+          {t('ai.artifacts.flashcards.summary.sessionComplete')}
+        </h2>
+        <motion.p
+          className="text-base text-(--muted-foreground)"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={preset.fade}
+        >
+          {t(motivationalKey)}
+        </motion.p>
+      </div>
 
       <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-8">
         <DonutChart
@@ -128,15 +153,26 @@ export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
         </div>
       </div>
 
+      <p className="text-sm text-(--muted-foreground)">
+        {t('ai.artifacts.flashcards.summary.selfAssessment')}
+      </p>
+
       <div className="w-full">
         <MissedCardsList cards={result.cardResults} />
       </div>
 
-      <PracticeAgainButton
-        hasMissedCards={result.wrong > 0}
-        hasSkippedCards={result.skipped > 0}
-        onRestart={onRestart}
-      />
+      <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:justify-center">
+        {onBackToNote ? (
+          <Button variant="outline" className="min-h-12" onClick={onBackToNote}>
+            {t('ai.artifacts.focus.backToNote')}
+          </Button>
+        ) : null}
+        <PracticeAgainButton
+          hasMissedCards={result.wrong > 0}
+          hasSkippedCards={result.skipped > 0}
+          onRestart={onRestart}
+        />
+      </div>
     </div>
   );
 }

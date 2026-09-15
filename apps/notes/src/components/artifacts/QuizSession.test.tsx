@@ -1,8 +1,14 @@
 import { StrictMode } from 'react';
 
-import { MOBILE_FAB_RAIL_CLEARANCE_CLASS } from '@/components/layout/MobileFabRail';
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QuizArtifact } from '@knowtis/shared-types';
@@ -10,20 +16,30 @@ import type { QuizArtifact } from '@knowtis/shared-types';
 import { QuizSession } from './QuizSession';
 
 const mutateAsync = vi.fn().mockResolvedValue({ score: 1 });
+const onClose = vi.fn();
+vi.mock('@tanstack/react-router', () => ({
+  useBlocker: () => ({ status: 'idle' }),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (k: string, opts?: Record<string, unknown>) =>
-      opts ? `${k} ${JSON.stringify(opts)}` : k,
+    t: (key: string, options?: Record<string, unknown>) =>
+      options ? `${key} ${JSON.stringify(options)}` : key,
   }),
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
   useSubmitQuiz: () => ({ mutateAsync, isPending: false }),
 }));
 
-const artifact = {
+const artifact: QuizArtifact = {
   id: 'quiz-1',
+  userId: 'user-1',
+  sourceNoteId: 'note-1',
+  title: 'Geography',
+  type: 'quiz',
+  createdAt: '2026-09-14',
+  updatedAt: '2026-09-14',
   content: {
     questions: [
       {
@@ -34,41 +50,114 @@ const artifact = {
       },
     ],
   },
-} as unknown as QuizArtifact;
-
-const twoQuestionArtifact = {
+};
+const twoQuestionArtifact: QuizArtifact = {
+  ...artifact,
   id: 'quiz-2',
   content: {
     questions: [
-      { question: '¿Uno?', options: ['Uno', 'Dos'], correctIndex: 0 },
-      { question: '¿Dos?', options: ['Tres', 'Cuatro'], correctIndex: 1 },
+      {
+        question: '¿Uno?',
+        options: ['Uno', 'Dos'],
+        correctIndex: 0,
+        explanation: '',
+      },
+      {
+        question: '¿Dos?',
+        options: ['Tres', 'Cuatro'],
+        correctIndex: 1,
+        explanation: 'Dos más dos son cuatro.',
+      },
     ],
   },
-} as unknown as QuizArtifact;
+};
+
+async function checkOption(index: number) {
+  await userEvent.click(screen.getAllByRole('radio')[index]);
+  await userEvent.click(
+    screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+  );
+}
+async function advance() {
+  await userEvent.click(
+    screen.getByRole('button', { name: /^ai\.artifacts\.quiz\.(next|finish)$/ })
+  );
+}
+async function finishMixedRun() {
+  await checkOption(0);
+  await advance();
+  await checkOption(0);
+  await advance();
+}
 
 describe('QuizSession', () => {
+  it('keeps Check and Next outside the scrolling stage', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    const stage = document.activeElement;
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toContainElement(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+    );
+    await checkOption(0);
+    expect(footer).toContainElement(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    );
+    expect(stage).not.toContainElement(footer);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    mutateAsync.mockResolvedValue({ score: 1 });
   });
 
-  it('exposes the answers as a radio group named by the question', () => {
-    render(<QuizSession artifact={artifact} />);
-
+  it('explains an empty quiz and returns directly to the note', async () => {
+    render(
+      <QuizSession
+        artifact={{ ...artifact, content: { questions: [] } }}
+        onClose={onClose}
+      />
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', {
+          name: 'ai.artifacts.focus.emptyQuiz',
+        })
+      ).toBeVisible()
+    );
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.focus.backToNote',
+      })
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByRole('radiogroup', { name: '¿Capital de Francia?' })
-    ).toBeInTheDocument();
+      screen.queryByText('ai.artifacts.focus.exit.title')
+    ).not.toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('names the radio group by its question and starts with one option tab stop', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('radiogroup', { name: '¿Capital de Francia?' })
+      ).toBeVisible()
+    );
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(3);
-    for (const radio of radios) {
-      expect(radio).toHaveAttribute('aria-checked', 'false');
-    }
+    expect(radios[0]).toHaveAttribute('tabindex', '0');
+    expect(radios[1]).toHaveAttribute('tabindex', '-1');
+    expect(radios[2]).toHaveAttribute('tabindex', '-1');
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+    ).toBeDisabled();
   });
 
-  it('marks the picked answer as checked once answered', async () => {
-    render(<QuizSession artifact={artifact} />);
-
+  it('lets selection change without feedback or progress until Check', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await userEvent.click(screen.getByRole('radio', { name: /Madrid/ }));
     await userEvent.click(screen.getByRole('radio', { name: /París/ }));
-
     expect(screen.getByRole('radio', { name: /París/ })).toHaveAttribute(
       'aria-checked',
       'true'
@@ -77,293 +166,484 @@ describe('QuizSession', () => {
       'aria-checked',
       'false'
     );
-  });
-
-  it('tracks the answers given on a progress bar, not the question reached', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    const bar = screen.getByRole('progressbar');
-    expect(bar).toHaveAccessibleName(
-      'ai.artifacts.quiz.answeredOf {"answered":0,"total":2}'
-    );
-    expect(bar).toHaveAttribute('aria-valuenow', '0');
-    expect(bar).toHaveAttribute('aria-valuemax', '2');
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-
-    expect(bar).toHaveAttribute('aria-valuenow', '1');
-  });
-
-  it('keeps the question position as the visible caption', () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    expect(
-      screen.getByText('ai.artifacts.quiz.questionOf {"current":1,"total":2}')
-    ).toBeInTheDocument();
-  });
-
-  it('parks the roving tabindex on the first option before any movement', () => {
-    render(<QuizSession artifact={artifact} />);
-
-    const [first, second, third] = screen.getAllByRole('radio');
-    expect(first).toHaveAttribute('tabindex', '0');
-    expect(second).toHaveAttribute('tabindex', '-1');
-    expect(third).toHaveAttribute('tabindex', '-1');
-  });
-
-  it('moves focus to the next option on ArrowDown without picking it', async () => {
-    render(<QuizSession artifact={artifact} />);
-
-    screen.getByRole('radio', { name: /^A\.\s*Madrid$/ }).focus();
-    await userEvent.keyboard('{ArrowDown}');
-
-    const second = screen.getByRole('radio', { name: /^B\.\s*París$/ });
-    expect(second).toHaveFocus();
-    expect(second).toHaveAttribute('tabindex', '0');
-    for (const radio of screen.getAllByRole('radio')) {
-      expect(radio).toHaveAttribute('aria-checked', 'false');
-    }
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    expect(screen.queryByText('París es la capital.')).not.toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it('wraps focus to the last option on ArrowUp from the first', async () => {
-    render(<QuizSession artifact={artifact} />);
-
-    screen.getByRole('radio', { name: /^A\.\s*Madrid$/ }).focus();
-    await userEvent.keyboard('{ArrowUp}');
-
-    const third = screen.getByRole('radio', { name: /^C\.\s*Roma$/ });
-    expect(third).toHaveFocus();
-    expect(third).toHaveAttribute('aria-checked', 'false');
-  });
-
-  it('answers the focused option on Enter', async () => {
-    render(<QuizSession artifact={artifact} />);
-
-    screen.getByRole('radio', { name: /^A\.\s*Madrid$/ }).focus();
-    await userEvent.keyboard('{ArrowDown}{Enter}');
-
+  it('checks and locks a wrong answer, revealing the correct answer without selecting it', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(0);
+    expect(screen.getByRole('radio', { name: /Madrid/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.getByRole('radio', { name: /Madrid/ })).toHaveAttribute(
+      'data-state',
+      'incorrect'
+    );
+    expect(screen.getByRole('radio', { name: /París/ })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
+    expect(screen.getByRole('radio', { name: /París/ })).toHaveAttribute(
+      'data-state',
+      'correct'
+    );
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio).toBeDisabled();
+    }
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.artifacts.quiz.outcomeIncorrect {"letter":"B","answer":"París"}'
+    );
+    expect(screen.getByText('París es la capital.')).toBeVisible();
     expect(
-      screen.getByRole('radio', { name: /^B\.\s*París$/ })
-    ).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('moves focus to the advance button once an answer is picked', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-
-    expect(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
     ).toHaveFocus();
   });
 
-  it('leaves focus alone on mount, even under StrictMode double effects', () => {
-    const outside = document.body.appendChild(document.createElement('button'));
-    outside.focus();
-
-    render(
-      <StrictMode>
-        <QuizSession artifact={artifact} />
-      </StrictMode>
+  it('shows only the shell progressbar and counts checked answers rather than position', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+    const bar = screen.getByRole('progressbar');
+    expect(bar).toHaveAccessibleName(
+      'ai.artifacts.focus.answeredOf {"done":0,"count":2}'
     );
-
-    expect(outside).toHaveFocus();
-    outside.remove();
+    expect(bar).toHaveAttribute('aria-valuemax', '2');
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'ai.artifacts.focus.questionOf {"current":1,"total":2}'
+        )
+      ).toBeVisible()
+    );
+    await checkOption(0);
+    expect(bar).toHaveAttribute('aria-valuenow', '1');
+    await advance();
+    expect(bar).toHaveAttribute('aria-valuenow', '1');
+    expect(screen.getAllByRole('radio')[0]).toHaveFocus();
   });
 
-  it('moves focus back to the first option after advancing', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
-    );
-
-    const [first] = screen.getAllByRole('radio');
-    expect(first).toHaveFocus();
-    expect(first).toHaveAttribute('tabindex', '0');
-  });
-
-  it('moves focus to the results heading once the quiz is finished', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
-    );
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Tres$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
-    );
-
-    const heading = screen.getByRole('heading', {
-      name: 'ai.artifacts.quiz.completed',
+  it('uses digits to select, Enter to check a focused radio, and native Enter to advance once', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    act(() => {
+      screen.getAllByRole('radio')[0].focus();
     });
-    expect(heading).toHaveFocus();
-    expect(heading).toHaveAttribute('tabindex', '-1');
-  });
-
-  it('returns focus to the first option after restarting a one-question quiz', async () => {
-    const oneQuestionArtifact = {
-      ...twoQuestionArtifact,
-      content: {
-        ...twoQuestionArtifact.content,
-        questions: [twoQuestionArtifact.content.questions[0]],
-      },
-    } as unknown as QuizArtifact;
-    render(<QuizSession artifact={oneQuestionArtifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
+    await userEvent.keyboard('2');
+    expect(screen.getAllByRole('radio')[1]).toHaveAttribute(
+      'aria-checked',
+      'true'
     );
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.artifacts.quiz.outcomeIncorrect'
     );
-
-    const [first] = screen.getAllByRole('radio');
-    expect(first).toHaveFocus();
-    expect(first).toHaveAttribute('tabindex', '0');
-  });
-
-  it('keeps the advance button mounted and disabled until an answer is picked', () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+    ).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('radiogroup', { name: '¿Dos?' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+    ).toBeDisabled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps native Check button activation and advances Enter from the stage after feedback', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    await userEvent.keyboard('1');
+    act(() => {
+      screen
+        .getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+        .focus();
+    });
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.artifacts.quiz.outcomeCorrect'
+    );
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Enter' });
+    expect(screen.getByRole('radiogroup', { name: '¿Dos?' })).toBeVisible();
+  });
+
+  it('selects with arrow keys and wraps without checking', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    act(() => {
+      screen.getAllByRole('radio')[0].focus();
+    });
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getAllByRole('radio')[2]).toHaveFocus();
+    expect(screen.getAllByRole('radio')[2]).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getAllByRole('radio')[0]).toHaveFocus();
+    expect(screen.getAllByRole('radio')[0]).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('keeps radio focus aligned with digit selection before arrow navigation', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    act(() => screen.getAllByRole('radio')[0].focus());
+    await userEvent.keyboard('3');
+    expect(screen.getAllByRole('radio')[2]).toHaveFocus();
+    expect(screen.getAllByRole('radio')[2]).toHaveAttribute('tabindex', '0');
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(screen.getAllByRole('radio')[1]).toHaveFocus();
+    expect(screen.getAllByRole('radio')[1]).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('lets Space select a focused option without grading', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    act(() => {
+      screen.getAllByRole('radio')[1].focus();
+    });
+    await userEvent.keyboard(' ');
+    expect(screen.getAllByRole('radio')[1]).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('supports a fifth option and ignores nonexistent digits', async () => {
+    const fiveOptions: QuizArtifact = {
+      ...artifact,
+      content: {
+        questions: [
+          {
+            ...artifact.content.questions[0],
+            options: ['A', 'B', 'C', 'D', 'E'],
+          },
+        ],
+      },
+    };
+    render(<QuizSession artifact={fiveOptions} onClose={onClose} />);
+    await userEvent.keyboard('5');
+    expect(screen.getAllByRole('radio')[4]).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    await userEvent.keyboard('6');
+    expect(screen.getAllByRole('radio')[4]).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+  });
+
+  it('ignores missing options, modified keys and repeated keys', () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    const stage = screen.getByRole('dialog');
+    fireEvent.keyDown(stage, { key: '5' });
+    fireEvent.keyDown(stage, { key: '2', ctrlKey: true });
+    fireEvent.keyDown(stage, { key: '2', repeat: true });
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
     ).toBeDisabled();
   });
 
-  it('announces the outcome and the correct answer once answered', async () => {
-    render(<QuizSession artifact={artifact} />);
-
-    const status = screen.getByRole('status');
-    expect(status).not.toHaveAttribute('aria-live');
-    expect(status).toBeEmptyDOMElement();
-
-    await userEvent.click(
-      screen.getByRole('radio', { name: /^A\.\s*Madrid$/ })
-    );
-
-    expect(status.textContent).toContain('ai.artifacts.quiz.outcomeIncorrect');
-    expect(status.textContent).toContain('"letter":"B"');
-    expect(status.textContent).toContain('"answer":"París"');
-  });
-
-  it('reveals the right answer without checking a second radio', async () => {
-    render(<QuizSession artifact={artifact} />);
-
-    await userEvent.click(
-      screen.getByRole('radio', { name: /^A\.\s*Madrid$/ })
-    );
-
-    const revealed = screen.getByRole('radio', { name: /^B\.\s*París$/ });
-    expect(revealed).toHaveAttribute('data-state', 'correct');
-    expect(revealed).toHaveAttribute('aria-checked', 'false');
+  it('suspends quiz keys while the exit confirmation owns focus', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    await checkOption(0);
+    await advance();
+    await userEvent.keyboard('{Escape}');
+    const keep = screen.getByRole('button', {
+      name: 'ai.artifacts.focus.exit.keep',
+    });
+    fireEvent.keyDown(keep, { key: '2' });
+    await userEvent.click(keep);
     expect(
-      screen.getByRole('radio', { name: /^A\.\s*Madrid$/ })
-    ).toHaveAttribute('aria-checked', 'true');
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+    ).toBeDisabled();
   });
 
-  it('announces a correct pick with its letter', async () => {
-    render(<QuizSession artifact={artifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^B\.\s*París$/ }));
-
-    const status = screen.getByRole('status');
-    expect(status.textContent).toContain('ai.artifacts.quiz.outcomeCorrect');
-    expect(status.textContent).toContain('"letter":"B"');
+  it('keeps initial focus on the stage even under StrictMode', () => {
+    render(
+      <StrictMode>
+        <QuizSession artifact={artifact} onClose={onClose} />
+      </StrictMode>
+    );
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(
+      true
+    );
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio).not.toHaveFocus();
+    }
   });
 
-  it('submits one answer per question when the quiz is finished', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
+  it('closes directly when a selection has not been checked', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await userEvent.click(screen.getAllByRole('radio')[0]);
     await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+      screen.getByRole('button', { name: 'ai.artifacts.focus.exitStudy' })
     );
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Tres$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
-    );
-
-    await waitFor(() =>
-      expect(mutateAsync).toHaveBeenCalledWith({
-        answers: [
-          { questionIndex: 0, selectedIndex: 0 },
-          { questionIndex: 1, selectedIndex: 0 },
-        ],
-      })
-    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText('ai.artifacts.focus.exit.title')
+    ).not.toBeInTheDocument();
   });
 
-  it('scores the finished quiz on a progress bar', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+  it('focuses results, reviews each question, and submits a full run exactly once', async () => {
+    const view = render(
+      <StrictMode>
+        <QuizSession artifact={twoQuestionArtifact} onClose={onClose} />
+      </StrictMode>
     );
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Tres$/ }));
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
+    await finishMixedRun();
+    expect(
+      screen.getByRole('heading', { name: 'ai.artifacts.quiz.completed' })
+    ).toHaveFocus();
+    const rows = screen.getAllByRole('button', {
+      name: /ai.artifacts.quiz.reviewRow/,
+    });
+    expect(rows).toHaveLength(2);
+    await userEvent.click(rows[1]);
+    await waitFor(() => expect(screen.getByText('A. Tres')).toBeVisible());
+    expect(screen.getByText('B. Cuatro')).toBeVisible();
+    expect(screen.getByText('Dos más dos son cuatro.')).toBeVisible();
+    expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+    expect(mutateAsync).toHaveBeenCalledExactlyOnceWith({
+      answers: [
+        { questionIndex: 0, selectedIndex: 0 },
+        { questionIndex: 1, selectedIndex: 0 },
+      ],
+      scope: 'full',
+    });
+    view.rerender(
+      <StrictMode>
+        <QuizSession artifact={twoQuestionArtifact} onClose={onClose} />
+      </StrictMode>
     );
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
 
-    const bar = await screen.findByRole('progressbar');
-    expect(bar).toHaveAttribute('aria-valuenow', '50');
-    expect(bar).toHaveAttribute('aria-valuemax', '100');
-    expect(bar.firstElementChild).toHaveClass('bg-(--primary)');
+  it('retries only missed questions, submits original indexes with missed scope, and can restart fully', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    await finishMixedRun();
+    await userEvent.click(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    );
+    expect(screen.getByRole('radiogroup', { name: '¿Dos?' })).toBeVisible();
+    expect(screen.getAllByRole('radio')[0]).toHaveFocus();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuemax',
+      '1'
+    );
+    await checkOption(1);
+    await advance();
+    expect(mutateAsync).toHaveBeenCalledTimes(2);
+    expect(mutateAsync).toHaveBeenLastCalledWith({
+      answers: [{ questionIndex: 1, selectedIndex: 1 }],
+      scope: 'missed',
+    });
+    expect(screen.getByText('ai.artifacts.quiz.missedPractice')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    );
+    expect(screen.getByRole('radiogroup', { name: '¿Uno?' })).toBeVisible();
+    expect(screen.getAllByRole('radio')[0]).toHaveFocus();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuemax',
+      '2'
+    );
+    await finishMixedRun();
+    expect(mutateAsync).toHaveBeenCalledTimes(3);
+    expect(mutateAsync).toHaveBeenLastCalledWith({
+      answers: [
+        { questionIndex: 0, selectedIndex: 0 },
+        { questionIndex: 1, selectedIndex: 0 },
+      ],
+      scope: 'full',
+    });
+  });
+
+  it('hides retry on a perfect run and returns to the note without confirmation', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(1);
+    await advance();
+    expect(screen.getByText('ai.artifacts.quiz.allCorrect')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.focus.backToNote' })
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers note return and restart without chaining another missed-practice run', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    await finishMixedRun();
+    await userEvent.click(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    );
+    await checkOption(0);
+    await advance();
+    expect(mutateAsync).toHaveBeenLastCalledWith({
+      answers: [{ questionIndex: 1, selectedIndex: 0 }],
+      scope: 'missed',
+    });
+    expect(
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.artifacts.quiz.allCorrect')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.focus.backToNote' })
+    ).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
-    ).toHaveClass('pointer-coarse:min-h-11');
+    ).toBeVisible();
   });
 
-  it('keeps the advance button clear of the mobile floating action rail', () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
-    const actionRow = screen.getByRole('button', {
-      name: 'ai.artifacts.quiz.next',
-    }).parentElement;
-
-    expect(actionRow).toHaveClass(
-      ...MOBILE_FAB_RAIL_CLEARANCE_CLASS.split(' ')
-    );
-  });
-
-  it('gives the advance button a 44px touch target', () => {
-    render(<QuizSession artifact={twoQuestionArtifact} />);
-
+  it('offers retry only after the full run finishes saving', async () => {
+    const submission = Promise.withResolvers<{ score: number }>();
+    mutateAsync.mockReturnValueOnce(submission.promise);
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(0);
+    await advance();
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
-    ).toHaveClass('pointer-coarse:min-h-11');
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+    await act(async () => submission.resolve({ score: 0 }));
+    expect(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).toBeVisible();
   });
 
-  it('lets a read-only viewer practise the whole quiz without submitting it', async () => {
-    render(<QuizSession artifact={twoQuestionArtifact} readOnly />);
-
-    const [first] = screen.getAllByRole('radio');
-    expect(first).toBeEnabled();
-
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Uno$/ }));
-    expect(screen.getByRole('status').textContent).toContain(
-      'ai.artifacts.quiz.outcomeCorrect'
-    );
-
+  it('does not reuse a previous full run save after restarting', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(0);
+    await advance();
+    expect(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).toBeVisible();
     await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.next' })
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
     );
-    await userEvent.click(screen.getByRole('radio', { name: /^A\.\s*Tres$/ }));
-    const finish = screen.getByRole('button', {
-      name: 'ai.artifacts.quiz.finish',
-    });
-    expect(finish).toBeEnabled();
-
-    await userEvent.click(finish);
-
+    mutateAsync.mockRejectedValueOnce(new Error('Offline'));
+    await checkOption(0);
+    await advance();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('ai.artifacts.quiz.submitError')
+    );
     expect(
-      await screen.findByText('ai.artifacts.quiz.completed')
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('ignores an earlier run save that finishes after restarting', async () => {
+    const submission = Promise.withResolvers<{ score: number }>();
+    mutateAsync.mockReturnValueOnce(submission.promise);
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(0);
+    await advance();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    );
+    mutateAsync.mockRejectedValueOnce(new Error('Offline'));
+    await checkOption(0);
+    await advance();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('ai.artifacts.quiz.submitError')
+    );
+    await act(async () => submission.resolve({ score: 0 }));
+    expect(
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not surface an earlier run failure after restarting', async () => {
+    const submission = Promise.withResolvers<{ score: number }>();
+    mutateAsync.mockReturnValueOnce(submission.promise);
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(0);
+    await advance();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    );
+    await act(async () => submission.reject(new Error('Offline')));
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('radiogroup', { name: '¿Capital de Francia?' })
+    ).toBeVisible();
+  });
+
+  it('starts another one-question run with focus on its first option', async () => {
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(1);
+    await advance();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+    );
+    expect(screen.getAllByRole('radio')[0]).toHaveFocus();
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+    ).toBeDisabled();
+  });
+
+  it('lets read-only viewers retry a full run with misses without submitting', async () => {
+    render(
+      <QuizSession artifact={twoQuestionArtifact} onClose={onClose} readOnly />
+    );
+    await finishMixedRun();
+    expect(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).toBeVisible();
+    await userEvent.click(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    );
+    await checkOption(0);
+    await advance();
+    expect(
+      screen.getByRole('heading', { name: 'ai.artifacts.quiz.completed' })
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.artifacts.quiz.allCorrect')
+    ).not.toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps results and the existing toast when saving fails without resubmitting on review', async () => {
+    mutateAsync.mockRejectedValueOnce(new Error('Offline'));
+    render(<QuizSession artifact={artifact} onClose={onClose} />);
+    await checkOption(0);
+    await advance();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('ai.artifacts.quiz.submitError')
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.reviewRow/ })
+    );
+    expect(
+      screen.getByRole('heading', { name: 'ai.artifacts.quiz.completed' })
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.artifacts.quiz.allCorrect')
+    ).not.toBeInTheDocument();
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
   });
 });

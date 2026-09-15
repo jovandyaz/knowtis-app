@@ -31,7 +31,7 @@ const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
   easy: 1,
 };
 
-const RATE_BUTTON_LAYOUT = 'rounded-full px-6 py-2.5';
+const RATE_BUTTON_LAYOUT = 'min-h-12 rounded-full px-6 py-2.5';
 
 const SIMPLE_MODE_KEYS = { wrong: '1', correct: '2' } as const;
 

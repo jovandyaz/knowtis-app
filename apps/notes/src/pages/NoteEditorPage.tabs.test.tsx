@@ -12,24 +12,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
 
-const { aiState, artifactsState, flagsState, useArtifacts } = vi.hoisted(() => {
-  const artifactsState = { data: [] as { id: string }[] };
-  return {
-    aiState: { aiEnabled: false },
-    flagsState: { isPending: false },
-    artifactsState,
-    useArtifacts: vi.fn<(noteId?: string) => { data: { id: string }[] }>(
-      () => ({
-        data: artifactsState.data,
-      })
-    ),
-  };
-});
+const { aiState, artifactsState, flagsState, studySelection, useArtifacts } =
+  vi.hoisted(() => {
+    const artifactsState = { data: [] as { id: string }[] };
+    const studySelection: { selectedArtifactId: string | null } = {
+      selectedArtifactId: null,
+    };
+    return {
+      aiState: { aiEnabled: false },
+      flagsState: { isPending: false },
+      studySelection,
+      artifactsState,
+      useArtifacts: vi.fn<(noteId?: string) => { data: { id: string }[] }>(
+        () => ({
+          data: artifactsState.data,
+        })
+      ),
+    };
+  });
 
-const renderWithClient = (ui: ReactElement) =>
-  render(
-    <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
-  );
+const renderWithClient = (ui: ReactElement) => {
+  const client = new QueryClient();
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+};
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -38,6 +47,13 @@ vi.mock('react-i18next', () => ({
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   useParams: () => ({ noteId: 'note-1' }),
+}));
+
+vi.mock('@/hooks/useStudyArtifactParam', () => ({
+  useStudyArtifactParam: () => ({
+    selectedArtifactId: studySelection.selectedArtifactId,
+    selectArtifact: vi.fn(),
+  }),
 }));
 
 vi.mock('@knowtis/crdt', () => ({
@@ -118,6 +134,7 @@ describe('NoteEditorPage workspace tabs', () => {
     aiState.aiEnabled = false;
     flagsState.isPending = false;
     artifactsState.data = [];
+    studySelection.selectedArtifactId = null;
     useArtifacts.mockClear();
   });
 
@@ -166,6 +183,57 @@ describe('NoteEditorPage workspace tabs', () => {
   describe('when AI is enabled', () => {
     beforeEach(() => {
       aiState.aiEnabled = true;
+    });
+
+    it.each(['summary-id', 'mind-map-id'])(
+      'opens the study panel for the linked artifact %s',
+      (artifactId) => {
+        studySelection.selectedArtifactId = artifactId;
+        artifactsState.data = [{ id: artifactId }];
+
+        renderWithClient(<NoteEditorPage />);
+
+        expect(
+          screen.getByRole('tab', { name: /workspace.tabs.study/ })
+        ).toHaveAttribute('aria-selected', 'true');
+        expect(
+          document.getElementById(workspacePanelId('study'))
+        ).not.toHaveClass('hidden');
+        expect(document.getElementById(workspacePanelId('note'))).toHaveClass(
+          'hidden'
+        );
+      }
+    );
+
+    it('keeps the study panel selected when the linked artifact closes', () => {
+      studySelection.selectedArtifactId = 'summary-id';
+      const { rerender } = renderWithClient(<NoteEditorPage />);
+      expect(useWorkspaceStore.getState().activeTab).toBe('study');
+
+      studySelection.selectedArtifactId = null;
+      rerender(<NoteEditorPage />);
+
+      expect(
+        screen.getByRole('tab', { name: /workspace.tabs.study/ })
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(
+        document.getElementById(workspacePanelId('study'))
+      ).not.toHaveClass('hidden');
+    });
+
+    it('opens the study panel when the selected artifact changes after loading', () => {
+      const { rerender } = renderWithClient(<NoteEditorPage />);
+      expect(useWorkspaceStore.getState().activeTab).toBe('note');
+
+      studySelection.selectedArtifactId = 'mind-map-id';
+      rerender(<NoteEditorPage />);
+
+      expect(
+        screen.getByRole('tab', { name: /workspace.tabs.study/ })
+      ).toHaveAttribute('aria-selected', 'true');
+      expect(
+        document.getElementById(workspacePanelId('study'))
+      ).not.toHaveClass('hidden');
     });
 
     it('renders the tab bar and both focusable tabpanels', () => {

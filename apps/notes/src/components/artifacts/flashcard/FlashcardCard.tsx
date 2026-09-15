@@ -1,9 +1,11 @@
+import type { Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Badge, FlipCard } from '@knowtis/design-system';
 import type { FlashcardDifficulty } from '@knowtis/shared-types';
 
 interface FlashcardCardProps {
+  ref?: Ref<HTMLButtonElement>;
   front: string;
   back: string;
   difficulty: FlashcardDifficulty;
@@ -27,6 +29,7 @@ const DIFFICULTY_KEYS = {
 } as const;
 
 export function FlashcardCard({
+  ref,
   front,
   back,
   difficulty,
@@ -43,6 +46,7 @@ export function FlashcardCard({
       </Badge>
 
       <FlipCard
+        ref={ref}
         className="min-h-72 w-full"
         flipped={flipped}
         onFlip={onFlip}
@@ -50,20 +54,14 @@ export function FlashcardCard({
         frontHint={t('ai.artifacts.flashcards.showBack')}
         backHint={t('ai.artifacts.flashcards.showFront')}
         front={
-          <span className="flex flex-col items-center gap-4">
-            <span className="text-center text-xl leading-relaxed font-semibold">
-              {front}
-            </span>
-            <span
-              aria-hidden="true"
-              className="text-sm text-(--muted-foreground)"
-            >
-              {t('ai.artifacts.flashcards.showAnswer')}
-            </span>
+          <span className="text-center text-xl leading-relaxed font-semibold lg:text-2xl">
+            {front}
           </span>
         }
         back={
-          <span className="text-center text-sm leading-relaxed">{back}</span>
+          <span className="text-center text-xl leading-relaxed lg:text-2xl">
+            {back}
+          </span>
         }
       />
     </div>

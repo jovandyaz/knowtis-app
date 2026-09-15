@@ -45,16 +45,14 @@ describe('FlashcardRating', () => {
     expect(props.onRateAdvanced).not.toHaveBeenCalled();
   });
 
-  it('gives each simple rating button a 44px touch target', () => {
+  it('gives each simple rating button a 48px target', () => {
     renderRating();
 
     for (const name of [
       'ai.artifacts.flashcards.wrong',
       'ai.artifacts.flashcards.correct',
     ]) {
-      expect(screen.getByRole('button', { name })).toHaveClass(
-        'pointer-coarse:min-h-11'
-      );
+      expect(screen.getByRole('button', { name })).toHaveClass('min-h-12');
     }
   });
 

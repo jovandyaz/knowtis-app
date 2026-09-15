@@ -350,7 +350,7 @@ function DialogContent({
             'max-md:animate-sheet-rise max-md:motion-reduce:animate-none',
           ],
           side === DIALOG_SIDE.FULL && [
-            'inset-0 h-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-none border-0 p-0',
+            'inset-0 h-full max-w-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 rounded-none border-0 p-0',
             'animate-overlay-fade',
           ],
           side === DIALOG_SIDE.RIGHT && [
