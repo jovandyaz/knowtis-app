@@ -13,9 +13,14 @@ export interface MotionPreset {
   grow: Transition;
   /** Per-item delay, in seconds, for a staggered entrance. */
   stagger: number;
+  stamp: Transition;
+  sortExit: Transition;
+  sortEnter: Transition;
+  currentPulse: Transition;
 }
 
 const INSTANT: Transition = Object.freeze({ duration: 0 });
+const CURRENT_PULSE_SLOW_UNITS = 5;
 
 /**
  * Transitions for the study primitives. Under the OS reduced-motion setting
@@ -33,6 +38,10 @@ export function useMotionPreset(): MotionPreset {
         flip: INSTANT,
         grow: INSTANT,
         stagger: 0,
+        stamp: INSTANT,
+        sortExit: INSTANT,
+        sortEnter: INSTANT,
+        currentPulse: INSTANT,
       };
     }
     return {
@@ -42,6 +51,23 @@ export function useMotionPreset(): MotionPreset {
       flip: { ...SPRING.flip },
       grow: { duration: MOTION_DURATION_S.slow, ease: MOTION_EASING.enter },
       stagger: MOTION_DURATION_S.fast,
+      stamp: {
+        duration: MOTION_DURATION_S.fast,
+        ease: MOTION_EASING.enter,
+      },
+      sortExit: {
+        duration: MOTION_DURATION_S.base,
+        ease: MOTION_EASING.exit,
+      },
+      sortEnter: {
+        duration: MOTION_DURATION_S.fast,
+        ease: MOTION_EASING.enter,
+      },
+      currentPulse: {
+        duration: CURRENT_PULSE_SLOW_UNITS * MOTION_DURATION_S.slow,
+        ease: MOTION_EASING.standard,
+        repeat: Infinity,
+      },
     };
   }, [reduced]);
 }

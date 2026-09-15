@@ -48,4 +48,18 @@ describe('learning colour tokens', () => {
     expectDeclaration(`--${token}: var(--color-semantic-light-${token});`);
     expectDeclaration(`--${token}: var(--color-semantic-dark-${token});`);
   });
+
+  it.each([
+    ['light', 'learn-skipped', '500'],
+    ['light', 'learn-skipped-text', '700'],
+    ['dark', 'learn-skipped', '400'],
+    ['dark', 'learn-skipped-text', '300'],
+  ])('defines %s %s with neutral %s', (theme, token, shade) => {
+    expect(learn.color.semantic[theme][token]).toEqual({
+      value: `{color.primitive.neutral.${shade}}`,
+      type: 'color',
+    });
+    expectDeclaration(`--color-${token}: var(--${token});`);
+    expectDeclaration(`--${token}: var(--color-semantic-${theme}-${token});`);
+  });
 });

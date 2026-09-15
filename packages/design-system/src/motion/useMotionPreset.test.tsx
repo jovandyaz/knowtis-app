@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MOTION_DURATION_S } from './tokens';
+import { MOTION_DURATION_S, MOTION_EASING } from './tokens';
 import { useMotionPreset } from './useMotionPreset';
 
 const reducedMotion = vi.hoisted(() => ({ value: false as boolean | null }));
@@ -44,6 +44,41 @@ describe('useMotionPreset', () => {
       expect(result.current[key]).toEqual({ duration: 0 });
     }
     expect(result.current.stagger).toBe(0);
+  });
+
+  it('supplies bounded study transitions without changing the general slide spring', () => {
+    reducedMotion.value = false;
+    const { result } = renderHook(() => useMotionPreset());
+    expect(result.current.stamp).toEqual({
+      duration: MOTION_DURATION_S.fast,
+      ease: MOTION_EASING.enter,
+    });
+    expect(result.current.sortExit).toEqual({
+      duration: MOTION_DURATION_S.base,
+      ease: MOTION_EASING.exit,
+    });
+    expect(result.current.sortEnter).toEqual({
+      duration: MOTION_DURATION_S.fast,
+      ease: MOTION_EASING.enter,
+    });
+    expect(result.current.currentPulse).toEqual({
+      duration: 5 * MOTION_DURATION_S.slow,
+      ease: MOTION_EASING.standard,
+      repeat: Infinity,
+    });
+  });
+
+  it('makes every study transition instant without an infinite repeat', () => {
+    reducedMotion.value = true;
+    const { result } = renderHook(() => useMotionPreset());
+    for (const key of [
+      'stamp',
+      'sortExit',
+      'sortEnter',
+      'currentPulse',
+    ] as const) {
+      expect(result.current[key]).toEqual({ duration: 0 });
+    }
   });
 
   it('treats an unknown OS preference as motion allowed', () => {
