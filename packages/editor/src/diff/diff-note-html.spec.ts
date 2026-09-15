@@ -130,6 +130,30 @@ describe('diffNoteHtml', () => {
     ).toBe('image');
   });
 
+  it('reports an image whose source changed as that image replaced', () => {
+    const figure = (src: string) =>
+      `<p>Intro</p><figure data-image><img src="${src}" alt="a"></figure>`;
+    const diff = diffNoteHtml(
+      figure('https://cdn.test/a.png'),
+      figure('https://cdn.test/b.png'),
+      WITH_IMAGE
+    );
+    expect(diff.count).toBe(1);
+    const [change] = diff.changes;
+    expect(diff.before.nodeAt(change.fromA)?.attrs['src']).toBe(
+      'https://cdn.test/a.png'
+    );
+    expect(diff.after.nodeAt(change.fromB)?.attrs['src']).toBe(
+      'https://cdn.test/b.png'
+    );
+    expect(
+      diff.before.slice(change.fromA, change.toA).content.firstChild?.type.name
+    ).toBe('image');
+    expect(
+      diff.after.slice(change.fromB, change.toB).content.firstChild?.type.name
+    ).toBe('image');
+  });
+
   it('keeps a removed paragraph in its own block-aligned deletion', () => {
     const diff = diffNoteHtml(NOTE_HTML, PROPOSED_HTML, BASE);
     expect(diff.count).toBe(3);
