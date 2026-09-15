@@ -1,6 +1,10 @@
 import { generateJSON, getSchema, type AnyExtension } from '@tiptap/core';
-import { ChangeSet, simplifyChanges } from '@tiptap/pm/changeset';
-import type { Node as ProseMirrorNode, Schema } from '@tiptap/pm/model';
+import {
+  ChangeSet,
+  simplifyChanges,
+  type TokenEncoder,
+} from '@tiptap/pm/changeset';
+import type { Mark, Node as ProseMirrorNode, Schema } from '@tiptap/pm/model';
 import { Transform } from '@tiptap/pm/transform';
 
 export interface DocChange {
@@ -37,6 +41,29 @@ function schemaFor(extensions: AnyExtension[]): Schema {
 }
 
 const MAX_LCS_CELLS = 1_000_000;
+
+const markKeys = new WeakMap<readonly Mark[], string>();
+
+function marksKey(marks: readonly Mark[]): string {
+  const cached = markKeys.get(marks);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const key = marks
+    .map((mark) => `${mark.type.name}${JSON.stringify(mark.attrs)}`)
+    .join();
+  markKeys.set(marks, key);
+  return key;
+}
+
+const NOTE_TOKEN_ENCODER: TokenEncoder<number | string> = {
+  encodeCharacter: (char, marks) =>
+    marks.length === 0 ? char : `${char}:${marksKey(marks)}`,
+  encodeNodeStart: (node) =>
+    `${node.type.name}${JSON.stringify(node.attrs)}${marksKey(node.marks)}`,
+  encodeNodeEnd: (node) => `/${node.type.name}`,
+  compareTokens: (a, b) => a === b,
+};
 
 function matchEqualBlocksLcs(
   before: ProseMirrorNode,
@@ -103,6 +130,51 @@ function blockSpan(doc: ProseMirrorNode, from: number, to: number): number {
   return size;
 }
 
+function widenMarkupChange(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode,
+  change: DocChange
+): DocChange {
+  const { fromA, toA, fromB, toB } = change;
+  if (
+    fromA === toA ||
+    fromB === toB ||
+    before.textBetween(fromA, toA) !== '' ||
+    after.textBetween(fromB, toB) !== ''
+  ) {
+    return change;
+  }
+  const nodeA = before.nodeAt(fromA);
+  const nodeB = after.nodeAt(fromB);
+  if (!nodeA || !nodeB || nodeA.isText || nodeB.isText) {
+    return change;
+  }
+  return {
+    fromA,
+    toA: Math.max(toA, fromA + nodeA.nodeSize),
+    fromB,
+    toB: Math.max(toB, fromB + nodeB.nodeSize),
+  };
+}
+
+function mergeOverlapping(changes: readonly DocChange[]): DocChange[] {
+  const merged: DocChange[] = [];
+  for (const change of changes) {
+    const last = merged.at(-1);
+    if (last && (change.fromA < last.toA || change.fromB < last.toB)) {
+      merged[merged.length - 1] = {
+        fromA: last.fromA,
+        toA: Math.max(last.toA, change.toA),
+        fromB: last.fromB,
+        toB: Math.max(last.toB, change.toB),
+      };
+    } else {
+      merged.push(change);
+    }
+  }
+  return merged;
+}
+
 function rewriteChanges(
   before: ProseMirrorNode,
   beforeBlock: ProseMirrorNode,
@@ -110,38 +182,28 @@ function rewriteChanges(
   posA: number,
   posB: number
 ): DocChange[] {
-  const tr = new Transform(before).replaceWith(
-    posA,
-    posA + beforeBlock.nodeSize,
+  // prosemirror-changeset gives up on word diffs past absolute position 2500,
+  // so each pair is diffed inside a doc holding only that block.
+  const blockDoc = before.type.create(null, beforeBlock);
+  const tr = new Transform(blockDoc).replaceWith(
+    0,
+    beforeBlock.nodeSize,
     afterBlock
   );
-  const changeSet = ChangeSet.create(before).addSteps(
-    tr.doc,
-    tr.mapping.maps,
-    null
+  const changeSet = ChangeSet.create(
+    blockDoc,
+    undefined,
+    NOTE_TOKEN_ENCODER
+  ).addSteps(tr.doc, tr.mapping.maps, null);
+  const widened = simplifyChanges(changeSet.changes, tr.doc).map((change) =>
+    widenMarkupChange(blockDoc, tr.doc, change)
   );
-  const shift = posB - posA;
-  const changes = simplifyChanges(changeSet.changes, tr.doc).map(
-    ({ fromA, toA, fromB, toB }) => ({
-      fromA,
-      toA,
-      fromB: fromB + shift,
-      toB: toB + shift,
-    })
-  );
-  if (changes.length > 0) {
-    return changes;
-  }
-  // Markup-only rewrites (a heading level, say) tokenise identically on both
-  // sides, so the word diff sees nothing; report the whole block instead.
-  return [
-    {
-      fromA: posA,
-      toA: posA + beforeBlock.nodeSize,
-      fromB: posB,
-      toB: posB + afterBlock.nodeSize,
-    },
-  ];
+  return mergeOverlapping(widened).map(({ fromA, toA, fromB, toB }) => ({
+    fromA: fromA + posA,
+    toA: toA + posA,
+    fromB: fromB + posB,
+    toB: toB + posB,
+  }));
 }
 
 /**
