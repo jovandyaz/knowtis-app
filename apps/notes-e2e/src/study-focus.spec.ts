@@ -197,11 +197,15 @@ test('answers a quiz, reviews the result and retries the missed question', async
   await page.keyboard.press('Enter');
 
   await expect(
-    dialog.getByRole('heading', { name: 'Quiz results', exact: true })
+    dialog.getByRole('heading', { name: '1 / 2 correct', exact: true })
   ).toBeVisible();
-  await expect(
-    dialog.getByText('Accuracy: 50%', { exact: true })
-  ).toBeVisible();
+  const hero = dialog.getByRole('progressbar', {
+    name: '1 / 2 correct',
+    exact: true,
+  });
+  await expect(hero).toHaveAccessibleName('1 / 2 correct');
+  await expect(hero).toHaveAttribute('aria-valuenow', '2');
+  await expect(hero).toHaveAttribute('aria-valuemax', '2');
   const missedRow = dialog.getByRole('button', {
     name: 'Question 1: Incorrect',
     exact: true,
@@ -209,7 +213,7 @@ test('answers a quiz, reviews the result and retries the missed question', async
   await expect(missedRow).toBeVisible();
   await expect(
     dialog.getByRole('button', { name: 'Question 2: Correct', exact: true })
-  ).toBeVisible();
+  ).toHaveCount(0);
   await missedRow.click();
   await expect(missedRow).toHaveAttribute('aria-expanded', 'true');
   const review = dialog.getByRole('region', {
@@ -245,13 +249,13 @@ test('answers a quiz, reviews the result and retries the missed question', async
   await page.keyboard.press('Enter');
 
   await expect(
-    dialog.getByRole('heading', { name: 'Quiz results', exact: true })
+    dialog.getByRole('heading', { name: '1 / 1 correct', exact: true })
   ).toBeVisible();
   await expect(
     dialog.getByText('Missed-question practice', { exact: true })
   ).toBeVisible();
   await expect(
-    dialog.getByText('Accuracy: 100%', { exact: true })
+    dialog.getByRole('button', { name: 'Practice again', exact: true })
   ).toBeVisible();
   await expect(
     dialog.getByRole('button', { name: 'Retry missed (1)', exact: true })
@@ -265,3 +269,284 @@ test('answers a quiz, reviews the result and retries the missed question', async
       url.pathname === `/notes/${note.id}` && !url.searchParams.has('study')
   );
 });
+
+for (const width of [1440, 390]) {
+  for (const theme of ['light', 'dark'] as const) {
+    for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+      for (const locale of ['en', 'es'] as const) {
+        test(`study design ${width} ${theme} ${reducedMotion} ${locale}`, async ({
+          sharing,
+          study,
+        }, testInfo) => {
+          const { owner } = sharing;
+          const { page } = owner;
+          const copy =
+            locale === 'en'
+              ? {
+                  skip: 'Skip card',
+                  prev: 'Previous',
+                  correct: 'Recalled',
+                  wrong: 'Not recalled',
+                  back: 'Back to note',
+                  options: 'Practice options',
+                  all: 'All cards',
+                  quizCheck: 'Check answer',
+                  quizNext: 'Next question',
+                  quizFinish: 'View results',
+                }
+              : {
+                  skip: 'Omitir tarjeta',
+                  prev: 'Anterior',
+                  correct: 'Lo recordé',
+                  wrong: 'No lo recordé',
+                  back: 'Volver a la nota',
+                  options: 'Opciones de práctica',
+                  all: 'Todas las tarjetas',
+                  quizCheck: 'Comprobar respuesta',
+                  quizNext: 'Siguiente pregunta',
+                  quizFinish: 'Ver resultados',
+                };
+          const errors: string[] = [];
+          page.on('pageerror', (error) => errors.push(error.message));
+          await owner.setLocale(locale);
+          await page.setViewportSize({ width, height: 900 });
+          await page.emulateMedia({ colorScheme: theme, reducedMotion });
+          const note = await owner.createNote('Photosynthesis layout');
+          const deckId = await study.seedDeck(note.id, owner.id, [
+            {
+              front: 'Where does photosynthesis occur?',
+              back: 'In chloroplasts.',
+              difficulty: 'easy',
+            },
+            {
+              front: 'Where do light-dependent reactions occur?',
+              back: 'In the thylakoid membranes.',
+              difficulty: 'medium',
+            },
+            {
+              front: 'What pigment captures light?',
+              back: 'Chlorophyll.',
+              difficulty: 'hard',
+            },
+          ]);
+          await page.goto(`/notes/${note.id}?study=${deckId}`);
+          await page.evaluate((value) => {
+            document.documentElement.classList.toggle('dark', value === 'dark');
+          }, theme);
+          const dialog = page.getByRole('dialog', {
+            name: 'Flashcards: Fotosíntesis',
+            exact: true,
+          });
+          await expect(dialog).toBeVisible();
+          const shot = async (state: string, surface = dialog) => {
+            await surface.evaluate(async (node) => {
+              await document.fonts.ready;
+              await new Promise<void>((resolve) =>
+                requestAnimationFrame(() => resolve())
+              );
+              await Promise.allSettled(
+                node
+                  .getAnimations({ subtree: true })
+                  .filter(
+                    (animation) =>
+                      animation.effect?.getTiming().iterations !== Infinity
+                  )
+                  .map((animation) => animation.finished)
+              );
+            });
+            await expect(surface).toHaveJSProperty(
+              'scrollWidth',
+              await surface.evaluate((node) => node.clientWidth)
+            );
+            await testInfo.attach(`${state}-accessibility`, {
+              body: await surface.ariaSnapshot(),
+              contentType: 'text/plain',
+            });
+            await page.screenshot({
+              path: testInfo.outputPath(`${state}.png`),
+              fullPage: true,
+            });
+          };
+          await shot('card-front');
+          await dialog
+            .getByRole('button', {
+              name: 'Where does photosynthesis occur?',
+              exact: true,
+            })
+            .click();
+          await shot('card-back');
+          await dialog
+            .getByRole('button', { name: copy.correct, exact: true })
+            .click();
+          await expect(
+            dialog.getByRole('button', {
+              name: 'Where do light-dependent reactions occur?',
+              exact: true,
+            })
+          ).toBeFocused();
+          await dialog
+            .getByRole('button', { name: copy.prev, exact: true })
+            .click();
+          await dialog
+            .getByRole('button', {
+              name: 'Where does photosynthesis occur?',
+              exact: true,
+            })
+            .click();
+          await shot('card-revisited');
+          const continueLabel =
+            locale === 'en' ? 'Continue studying' : 'Continuar estudiando';
+          await dialog
+            .getByRole('button', { name: continueLabel, exact: true })
+            .click();
+          await dialog
+            .getByRole('button', {
+              name: 'Where do light-dependent reactions occur?',
+              exact: true,
+            })
+            .click();
+          await dialog
+            .getByRole('button', { name: copy.wrong, exact: true })
+            .click();
+          await expect(
+            dialog.getByRole('button', {
+              name: 'What pigment captures light?',
+              exact: true,
+            })
+          ).toBeFocused();
+          const footer = dialog.locator('footer');
+          const controls = footer.getByRole('button');
+          await expect(controls).toHaveCount(3);
+          const boxes = await controls.evaluateAll((nodes) =>
+            nodes.map((node) => {
+              const box = node.getBoundingClientRect();
+              return { y: box.y, width: box.width, height: box.height };
+            })
+          );
+          expect(
+            Math.max(...boxes.map((box) => box.y)) -
+              Math.min(...boxes.map((box) => box.y))
+          ).toBeLessThanOrEqual(1);
+          expect(
+            boxes.every((box) => box.width >= 44 && box.height >= 44)
+          ).toBe(true);
+          await dialog
+            .getByRole('button', { name: copy.skip, exact: true })
+            .click();
+          const mixedHeadline =
+            locale === 'en' ? '1 / 3 recalled' : '1 / 3 recordadas';
+          await expect(
+            dialog.getByRole('heading', { name: mixedHeadline, exact: true })
+          ).toBeFocused();
+          await shot('summary-misses');
+          await dialog
+            .getByRole('button', { name: copy.options, exact: true })
+            .click();
+          await page
+            .getByRole('menuitem', { name: copy.all, exact: true })
+            .click();
+          for (const prompt of [
+            'Where does photosynthesis occur?',
+            'Where do light-dependent reactions occur?',
+            'What pigment captures light?',
+          ]) {
+            const card = dialog.getByRole('button', {
+              name: prompt,
+              exact: true,
+            });
+            await expect(card).toBeVisible();
+            await card.click();
+            await dialog
+              .getByRole('button', { name: copy.correct, exact: true })
+              .click();
+            await expect(card).toHaveCount(0);
+          }
+          const perfectHeadline =
+            locale === 'en' ? '3 / 3 recalled' : '3 / 3 recordadas';
+          await expect(
+            dialog.getByRole('heading', { name: perfectHeadline, exact: true })
+          ).toBeFocused();
+          await shot('summary-perfect');
+          await dialog
+            .getByRole('button', { name: copy.back, exact: true })
+            .click();
+          const quizId = await study.seedQuiz(note.id, owner.id, [
+            {
+              question: 'Which pigment captures light?',
+              options: ['Chlorophyll', 'Haemoglobin'],
+              correctIndex: 0,
+              explanation: 'Chlorophyll absorbs light.',
+            },
+            {
+              question: 'Which organelle contains thylakoids?',
+              options: ['Chloroplast', 'Nucleus'],
+              correctIndex: 0,
+              explanation: '',
+            },
+          ]);
+          await page.goto(`/notes/${note.id}?study=${quizId}`);
+          await page.evaluate(
+            (value) =>
+              document.documentElement.classList.toggle(
+                'dark',
+                value === 'dark'
+              ),
+            theme
+          );
+          const quizDialog = page.getByRole('dialog', {
+            name: 'Quiz: Quiz de fotosíntesis',
+            exact: true,
+          });
+          await expect(quizDialog).toBeVisible();
+          await shot('quiz-question', quizDialog);
+          await quizDialog.getByRole('radio', { name: /Haemoglobin/ }).click();
+          await quizDialog
+            .getByRole('button', { name: copy.quizCheck, exact: true })
+            .click();
+          await expect(
+            quizDialog.getByRole('radio', { name: /Haemoglobin/ })
+          ).toHaveAttribute('data-state', 'incorrect');
+          await shot('quiz-checked', quizDialog);
+          await quizDialog
+            .getByRole('button', { name: copy.quizNext, exact: true })
+            .click();
+          await quizDialog.getByRole('radio', { name: /Chloroplast/ }).click();
+          await quizDialog
+            .getByRole('button', { name: copy.quizCheck, exact: true })
+            .click();
+          await quizDialog
+            .getByRole('button', { name: copy.quizFinish, exact: true })
+            .click();
+          const quizHeadline =
+            locale === 'en' ? '1 / 2 correct' : '1 / 2 correctas';
+          await expect(
+            quizDialog.getByRole('heading', { name: quizHeadline, exact: true })
+          ).toBeFocused();
+          await expect(quizDialog).toHaveJSProperty(
+            'scrollWidth',
+            await quizDialog.evaluate((node) => node.clientWidth)
+          );
+          await shot('quiz-results', quizDialog);
+          await quizDialog
+            .getByRole('button', { name: copy.options, exact: true })
+            .click();
+          await page
+            .getByRole('menuitem', {
+              name: locale === 'en' ? 'Practice again' : 'Practicar de nuevo',
+              exact: true,
+            })
+            .click();
+          await expect(
+            quizDialog.getByRole('radiogroup', {
+              name: 'Which pigment captures light?',
+              exact: true,
+            })
+          ).toBeVisible();
+          await page.keyboard.press('Escape');
+          await expect(quizDialog).toHaveCount(0);
+          expect(errors).toEqual([]);
+        });
+      }
+    }
+  }
+}

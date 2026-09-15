@@ -175,6 +175,64 @@ describe('QuizSession', () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
+  it('uses the adaptive reading scale without revealing grading on selection', async () => {
+    const question = 'L'.repeat(201);
+    render(
+      <QuizSession
+        artifact={{
+          ...artifact,
+          content: {
+            questions: [
+              {
+                question,
+                options: ['Correct choice', 'Wrong choice'],
+                correctIndex: 0,
+                explanation: '',
+              },
+            ],
+          },
+        }}
+        onClose={onClose}
+      />
+    );
+    expect(screen.getByText(question)).toHaveClass(
+      'font-serif',
+      'text-lg',
+      'lg:text-xl',
+      'text-left'
+    );
+    await userEvent.click(screen.getByRole('radio', { name: /Wrong choice/ }));
+    expect(screen.getByRole('radio', { name: /Wrong choice/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(screen.getByRole('radio', { name: /Wrong choice/ })).toHaveAttribute(
+      'data-state',
+      'selected'
+    );
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.checkAnswer' })
+    );
+    expect(screen.getByRole('radio', { name: /Wrong choice/ })).toHaveAttribute(
+      'data-state',
+      'incorrect'
+    );
+    expect(
+      screen.getByRole('radio', { name: /Correct choice/ })
+    ).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '1'
+    );
+    expect(
+      screen.getByRole('button', { name: 'ai.artifacts.quiz.finish' })
+    ).toHaveFocus();
+  });
+
   it('checks and locks a wrong answer, revealing the correct answer without selecting it', async () => {
     render(<QuizSession artifact={artifact} onClose={onClose} />);
     await checkOption(0);
@@ -403,17 +461,19 @@ describe('QuizSession', () => {
     );
     await finishMixedRun();
     expect(
-      screen.getByRole('heading', { name: 'ai.artifacts.quiz.completed' })
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.quiz.results.headline {"score":1,"total":2}',
+      })
     ).toHaveFocus();
     const rows = screen.getAllByRole('button', {
       name: /ai.artifacts.quiz.reviewRow/,
     });
-    expect(rows).toHaveLength(2);
-    await userEvent.click(rows[1]);
+    expect(rows).toHaveLength(1);
+    await userEvent.click(rows[0]);
     await waitFor(() => expect(screen.getByText('A. Tres')).toBeVisible());
     expect(screen.getByText('B. Cuatro')).toBeVisible();
     expect(screen.getByText('Dos más dos son cuatro.')).toBeVisible();
-    expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+    expect(screen.getAllByRole('progressbar')).toHaveLength(2);
     expect(mutateAsync).toHaveBeenCalledExactlyOnceWith({
       answers: [
         { questionIndex: 0, selectedIndex: 0 },
@@ -476,7 +536,16 @@ describe('QuizSession', () => {
     render(<QuizSession artifact={artifact} onClose={onClose} />);
     await checkOption(1);
     await advance();
-    expect(screen.getByText('ai.artifacts.quiz.allCorrect')).toBeVisible();
+    expect(
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.quiz.results.headline {"score":1,"total":1}',
+      })
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('heading', {
+        name: 'ai.artifacts.flashcards.summary.toRevisit',
+      })
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
     ).not.toBeInTheDocument();
@@ -502,8 +571,10 @@ describe('QuizSession', () => {
       screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText('ai.artifacts.quiz.allCorrect')
-    ).not.toBeInTheDocument();
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.flashcards.summary.toRevisit',
+      })
+    ).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.focus.backToNote' })
     ).toBeVisible();
@@ -536,7 +607,14 @@ describe('QuizSession', () => {
       screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
     ).toBeVisible();
     await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceOptions',
+      })
+    );
+    await userEvent.click(
+      await screen.findByRole('menuitem', {
+        name: 'ai.artifacts.quiz.tryAgain',
+      })
     );
     mutateAsync.mockRejectedValueOnce(new Error('Offline'));
     await checkOption(0);
@@ -613,14 +691,18 @@ describe('QuizSession', () => {
     await checkOption(0);
     await advance();
     expect(
-      screen.getByRole('heading', { name: 'ai.artifacts.quiz.completed' })
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.quiz.results.headline {"score":0,"total":1}',
+      })
     ).toBeVisible();
     expect(
       screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText('ai.artifacts.quiz.allCorrect')
-    ).not.toBeInTheDocument();
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.flashcards.summary.toRevisit',
+      })
+    ).toBeVisible();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
@@ -636,14 +718,18 @@ describe('QuizSession', () => {
       screen.getByRole('button', { name: /ai.artifacts.quiz.reviewRow/ })
     );
     expect(
-      screen.getByRole('heading', { name: 'ai.artifacts.quiz.completed' })
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.quiz.results.headline {"score":0,"total":1}',
+      })
     ).toBeVisible();
     expect(
       screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText('ai.artifacts.quiz.allCorrect')
-    ).not.toBeInTheDocument();
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.flashcards.summary.toRevisit',
+      })
+    ).toBeVisible();
     expect(mutateAsync).toHaveBeenCalledTimes(1);
   });
 

@@ -19,10 +19,11 @@ import {
   EmptyState,
   Kbd,
   type AnswerOutcome,
-  type SegmentState,
 } from '@knowtis/design-system';
 import type { QuizArtifact } from '@knowtis/shared-types';
 
+import { getCardTextClass } from './flashcard/card-text-class';
+import { toQuizSegments } from './focus/study-segments';
 import { STUDY_TOOL, StudyFocusDialog } from './focus/StudyFocusDialog';
 import { StudyKeyHints, type StudyKeyHint } from './focus/StudyKeyHints';
 import { QuizResults } from './quiz/QuizResults';
@@ -74,16 +75,10 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
   const focusOptionsRef = useRef(false);
   const hasSubmittedRef = useRef(false);
   const runIdRef = useRef(0);
-  const segments: SegmentState[] = quiz.activeIndexes.map(
-    (questionIndex, position) => {
-      const answer = quiz.answers.find(
-        (item) => item.questionIndex === questionIndex
-      );
-      if (answer) {
-        return answer.correct ? 'correct' : 'wrong';
-      }
-      return !completed && position === quiz.position ? 'current' : 'pending';
-    }
+  const segments = toQuizSegments(
+    quiz.questionStatuses,
+    quiz.position,
+    completed
   );
 
   useEffect(() => {
@@ -299,15 +294,17 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
       : null;
 
     return (
-      <div className="flex min-w-0 flex-1 flex-col gap-6">
-        <p className="text-sm text-(--muted-foreground)">
+      <div className="my-auto flex min-w-0 flex-col gap-4 wrap-anywhere">
+        <p className="font-mono text-2xs leading-4 font-medium tracking-wide text-(--muted-foreground) uppercase tabular-nums sm:text-xs">
           {t('ai.artifacts.focus.questionOf', {
             current: quiz.position + 1,
             total: quiz.total,
           })}
         </p>
-        <div className="rounded-lg border border-(--border) bg-(--card) p-4 shadow-sm lg:p-6">
-          <p className="text-xl font-semibold leading-relaxed lg:text-2xl">
+        <div className="rounded-lg border border-(--border) bg-(--card) p-6">
+          <p
+            className={`${getCardTextClass(currentQuestion.question)} font-normal whitespace-pre-wrap wrap-anywhere`}
+          >
             {currentQuestion.question}
           </p>
         </div>
@@ -327,7 +324,11 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
               outcome={outcomeFor(index)}
               disabled={checked}
               tabIndex={index === focusedIndex ? 0 : -1}
-              className="min-h-12 text-lg leading-relaxed"
+              className={`min-h-12 text-base leading-relaxed font-normal lg:text-lg ${
+                selectedOption === index && !checked
+                  ? 'border-(--foreground)/50 bg-(--muted)'
+                  : ''
+              }`}
               onFocus={() => setFocusedIndex(index)}
               onKeyDown={handleArrowKey}
               onSelect={() => {
@@ -335,7 +336,7 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
                 select(index);
               }}
             >
-              <span className="flex items-start gap-3">
+              <span className="flex min-w-0 items-start gap-3">
                 {!checked && (
                   <Kbd
                     aria-hidden="true"
@@ -344,7 +345,7 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
                     {index + 1}
                   </Kbd>
                 )}
-                <span className="min-w-0 break-words">{option}</span>
+                <span className="min-w-0 wrap-anywhere">{option}</span>
               </span>
               {!checked && selectedOption === index && (
                 <span
@@ -402,7 +403,7 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
             {checked ? (
               <Button
                 size="lg"
-                className="min-h-12 w-full sm:w-auto"
+                className="min-h-12 w-full bg-(--foreground) text-(--background) hover:bg-(--foreground)/90 hover:text-(--background) sm:w-auto"
                 ref={advanceRef}
                 onClick={handleNext}
               >
@@ -415,7 +416,7 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
             ) : (
               <Button
                 size="lg"
-                className="min-h-12 w-full sm:w-auto"
+                className="min-h-12 w-full bg-(--foreground) text-(--background) hover:bg-(--foreground)/90 hover:text-(--background) sm:w-auto"
                 disabled={selectedOption === null}
                 onClick={check}
               >

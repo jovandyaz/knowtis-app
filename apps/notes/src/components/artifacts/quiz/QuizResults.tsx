@@ -1,14 +1,13 @@
-import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { motion } from 'motion/react';
+import { ChevronDown } from 'lucide-react';
 
 import {
   Button,
-  cn,
-  DonutChart,
-  StatTile,
-  useMotionPreset,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@knowtis/design-system';
 import {
   QUIZ_ATTEMPT_SCOPE,
@@ -16,18 +15,10 @@ import {
   type QuizContent,
 } from '@knowtis/shared-types';
 
-import { SessionCelebration } from '../focus/SessionCelebration';
-import { scoreTone } from './quiz-score';
+import { toQuizSegments } from '../focus/study-segments';
+import { StudySummary } from '../focus/StudySummary';
 import { QuizReviewList } from './QuizReviewList';
 import type { QuizAnswerRecord } from './use-quiz-session';
-
-const PERCENT = 100;
-const SCORE_CLASS = {
-  primary: 'text-(--foreground)',
-  correct: 'text-learn-correct-text',
-  incorrect: 'text-learn-incorrect-text',
-  danger: 'text-(--destructive)',
-} as const;
 
 interface QuizResultsProps {
   score: number;
@@ -55,107 +46,98 @@ export function QuizResults({
   onBackToNote,
 }: QuizResultsProps) {
   const { t } = useTranslation('notes');
-  const preset = useMotionPreset();
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const missed = total - score;
+  const missedAnswers = answers.filter((answer) => !answer.correct);
+  const missed = missedAnswers.length;
   const canRetryMissed =
     missed > 0 &&
     scope === QUIZ_ATTEMPT_SCOPE.FULL &&
     (readOnly || submissionSucceeded);
-  const percentage = total > 0 ? Math.round((score / total) * PERCENT) : 0;
-
-  // Each mount is a finished run; expanding review rows must not move focus.
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
+  const segments = toQuizSegments(
+    answers.map((answer) => (answer.correct ? 'correct' : 'incorrect')),
+    -1,
+    true
+  );
+  const celebrate =
+    total > 0 &&
+    score === total &&
+    answers.length === total &&
+    answers.every((answer) => answer.correct);
+  const headline = t('ai.artifacts.quiz.results.headline', { score, total });
 
   return (
-    <div className="relative flex flex-col gap-6">
-      <SessionCelebration />
-      <h2
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-center text-2xl font-semibold outline-none"
-      >
-        {t('ai.artifacts.quiz.completed')}
-      </h2>
+    <div className="my-auto flex min-w-0 flex-col gap-3">
       {scope === QUIZ_ATTEMPT_SCOPE.MISSED && (
-        <p className="self-center rounded-full bg-(--muted) px-3 py-1 text-sm">
+        <p className="text-center font-mono text-xs leading-5 text-(--muted-foreground)">
           {t('ai.artifacts.quiz.missedPractice')}
         </p>
       )}
-      <div className="flex flex-col items-center justify-center gap-6 sm:flex-row">
-        <DonutChart
-          segments={[
-            { value: score, tone: 'correct' },
-            { value: missed, tone: 'incorrect' },
-          ]}
-          description={t('ai.artifacts.quiz.resultsDescription', {
-            correct: score,
-            total,
-            incorrect: missed,
-            percentage,
-          })}
-          centerLabel={`${score}/${total}`}
-          centerSublabel={`${percentage}%`}
-        />
-        <div className="grid w-full grid-cols-2 gap-3 sm:w-auto">
-          {[
-            { value: score, label: t('ai.artifacts.quiz.correctCount') },
-            { value: missed, label: t('ai.artifacts.quiz.incorrectCount') },
-          ].map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              initial={preset.reduced ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ ...preset.fade, delay: index * preset.stagger }}
+      <StudySummary
+        headline={headline}
+        segments={segments}
+        legend={[
+          {
+            state: 'correct',
+            label: t('ai.artifacts.quiz.correctCount'),
+            count: score,
+          },
+          {
+            state: 'wrong',
+            label: t('ai.artifacts.quiz.incorrectCount'),
+            count: missed,
+          },
+        ]}
+        celebrate={celebrate}
+        revisit={
+          missed > 0 ? (
+            <QuizReviewList answers={missedAnswers} questions={questions} />
+          ) : undefined
+        }
+        primaryAction={
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <Button
+              size="lg"
+              className={`h-auto min-h-12 min-w-0 whitespace-normal py-3 text-center ${
+                canRetryMissed ? '' : 'col-span-2'
+              }`}
+              onClick={canRetryMissed ? onRetryMissed : onRestart}
             >
-              <StatTile value={stat.value} label={stat.label} />
-            </motion.div>
-          ))}
-        </div>
-      </div>
-      <p
-        className={cn(
-          'text-center text-lg',
-          SCORE_CLASS[scoreTone(percentage)]
-        )}
-      >
-        {t('ai.artifacts.quiz.accuracy', { percentage })}
-      </p>
-      <QuizReviewList answers={answers} questions={questions} />
-      {missed === 0 && (
-        <p className="text-center text-base text-learn-correct-text">
-          {t('ai.artifacts.quiz.allCorrect')}
-        </p>
-      )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-        <Button
-          size="lg"
-          variant="outline"
-          className="h-auto min-h-12 whitespace-normal"
-          onClick={onBackToNote}
-        >
-          {t('ai.artifacts.focus.backToNote')}
-        </Button>
-        {canRetryMissed && (
+              {canRetryMissed
+                ? t('ai.artifacts.quiz.retryMissed', { count: missed })
+                : t('ai.artifacts.quiz.tryAgain')}
+            </Button>
+            {canRetryMissed ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-12 min-h-12 w-12 min-w-12 p-0"
+                    aria-label={t(
+                      'ai.artifacts.flashcards.summary.practiceOptions'
+                    )}
+                  >
+                    <ChevronDown aria-hidden="true" className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={onRestart}>
+                    {t('ai.artifacts.quiz.tryAgain')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        }
+        secondaryAction={
           <Button
             size="lg"
+            variant="ghost"
             className="h-auto min-h-12 whitespace-normal"
-            onClick={onRetryMissed}
+            onClick={onBackToNote}
           >
-            {t('ai.artifacts.quiz.retryMissed', { count: missed })}
+            {t('ai.artifacts.focus.backToNote')}
           </Button>
-        )}
-        <Button
-          size="lg"
-          variant="outline"
-          className="h-auto min-h-12 whitespace-normal"
-          onClick={onRestart}
-        >
-          {t('ai.artifacts.quiz.tryAgain')}
-        </Button>
-      </div>
+        }
+      />
     </div>
   );
 }

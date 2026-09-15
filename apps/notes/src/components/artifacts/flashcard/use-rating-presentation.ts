@@ -15,7 +15,7 @@ import {
 } from '@knowtis/design-system';
 import { CARD_STATUS, type SM2Quality } from '@knowtis/shared-types';
 
-import { toCardSegments } from './card-segments';
+import { toCardSegments } from '../focus/study-segments';
 import {
   findNextPendingIndex,
   type useFlashcardSession,

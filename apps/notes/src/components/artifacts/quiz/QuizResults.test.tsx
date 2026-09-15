@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +12,9 @@ vi.mock('react-i18next', () => ({
     t: (key: string, options?: Record<string, unknown>) =>
       options ? `${key} ${JSON.stringify(options)}` : key,
   }),
+}));
+vi.mock('../focus/SessionCelebration', () => ({
+  SessionCelebration: () => <div data-testid="celebration" />,
 }));
 
 const questions: QuizContent['questions'] = [
@@ -38,10 +41,10 @@ const actions = {
   onRestart: vi.fn(),
 };
 
-function renderResults(score = 1) {
+function renderResults() {
   return render(
     <QuizResults
-      score={score}
+      score={1}
       total={2}
       scope="full"
       submissionSucceeded
@@ -55,42 +58,80 @@ function renderResults(score = 1) {
 describe('QuizResults', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('focuses the results heading and describes every chart segment', () => {
+  it('focuses the score headline and preserves ordered outcomes in the hero', () => {
+    renderResults();
+    const heading = screen.getByRole('heading', { level: 2 });
+    expect(heading).toHaveAccessibleName(
+      'ai.artifacts.quiz.results.headline {"score":1,"total":2}'
+    );
+    expect(heading).toHaveFocus();
+    const hero = screen.getByRole('progressbar');
+    expect(hero).toHaveClass('h-3');
+    expect(
+      [...hero.querySelectorAll('[data-state]')].map((node) =>
+        node.getAttribute('data-state')
+      )
+    ).toEqual(['correct', 'wrong']);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText(/quiz\.accuracy/)).not.toBeInTheDocument();
+  });
+
+  it('reviews only misses and keeps their original question identity', async () => {
     renderResults();
     expect(
       screen.getByRole('heading', {
-        level: 2,
-        name: 'ai.artifacts.quiz.completed',
+        name: 'ai.artifacts.flashcards.summary.toRevisit',
       })
-    ).toHaveFocus();
-    expect(screen.getByRole('img')).toHaveAccessibleName(
-      'ai.artifacts.quiz.resultsDescription {"correct":1,"total":2,"incorrect":1,"percentage":50}'
-    );
-    expect(
-      screen.getByRole('group', { name: 'ai.artifacts.quiz.correctCount' })
-    ).toHaveTextContent('1');
-    expect(
-      screen.getByRole('group', { name: 'ai.artifacts.quiz.incorrectCount' })
-    ).toHaveTextContent('1');
+    ).toBeInTheDocument();
+    const row = screen.getByRole('button', {
+      name: /ai.artifacts.quiz.reviewRow/,
+    });
+    expect(row).toHaveTextContent('"n":2');
+    await userEvent.click(row);
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    const region = screen.getByRole('region', {
+      name: row.textContent ?? '',
+    });
+    expect(await within(region).findByText('Two plus two?')).toBeVisible();
+    expect(within(region).getByText('A. Three')).toBeVisible();
+    expect(within(region).getByText('B. Four')).toBeVisible();
+    expect(screen.queryByText('Capital of France?')).not.toBeInTheDocument();
   });
 
-  it('offers note return, retry-missed and full restart as separate actions', async () => {
-    renderResults();
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.focus.backToNote' })
-    );
-    await userEvent.click(
-      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
-    );
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
-    );
-    expect(actions.onBackToNote).toHaveBeenCalledTimes(1);
-    expect(actions.onRetryMissed).toHaveBeenCalledTimes(1);
-    expect(actions.onRestart).toHaveBeenCalledTimes(1);
-  });
+  it.each([
+    { scope: 'full' as const, readOnly: false, saved: false, retry: false },
+    { scope: 'full' as const, readOnly: false, saved: true, retry: true },
+    { scope: 'full' as const, readOnly: true, saved: false, retry: true },
+    { scope: 'missed' as const, readOnly: false, saved: true, retry: false },
+  ])(
+    'retains retry eligibility for $scope/readOnly=$readOnly/saved=$saved',
+    ({ scope, readOnly, saved, retry }) => {
+      render(
+        <QuizResults
+          score={1}
+          total={2}
+          scope={scope}
+          readOnly={readOnly}
+          submissionSucceeded={saved}
+          answers={answers}
+          questions={questions}
+          {...actions}
+        />
+      );
+      expect(
+        screen.queryByRole('button', {
+          name: /ai.artifacts.quiz.retryMissed/,
+        }) !== null
+      ).toBe(retry);
+      if (!retry) {
+        expect(
+          screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
+        ).toBeInTheDocument();
+      }
+    }
+  );
 
-  it('shows all-correct instead of retry when the run has no misses', () => {
+  it('celebrates only a nonempty perfect quiz and omits the revisit list', () => {
     render(
       <QuizResults
         score={1}
@@ -102,51 +143,58 @@ describe('QuizResults', () => {
         {...actions}
       />
     );
+    expect(screen.getByTestId('celebration')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+      screen.queryByRole('button', { name: /quiz.retryMissed/ })
     ).not.toBeInTheDocument();
-    expect(screen.getByText('ai.artifacts.quiz.allCorrect')).toBeVisible();
   });
 
-  it('reviews every answer in original order and expands one explanation at a time', async () => {
+  it('does not celebrate a mixed run or show an invented duration', () => {
     renderResults();
-    const rows = screen.getAllByRole('button', {
+    expect(screen.queryByTestId('celebration')).not.toBeInTheDocument();
+    expect(screen.queryByText(/summary\.inTime/)).not.toBeInTheDocument();
+  });
+
+  it('keeps full restart in the practice menu when retry is primary', async () => {
+    renderResults();
+    await userEvent.click(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    );
+    expect(actions.onRetryMissed).toHaveBeenCalledTimes(1);
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceOptions',
+      })
+    );
+    await userEvent.click(
+      await screen.findByRole('menuitem', {
+        name: 'ai.artifacts.quiz.tryAgain',
+      })
+    );
+    expect(actions.onRestart).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes the explanation for an incorrect answer without refocusing the headline', async () => {
+    render(
+      <QuizResults
+        score={0}
+        total={1}
+        scope="full"
+        submissionSucceeded
+        answers={[{ questionIndex: 0, selectedIndex: 0, correct: false }]}
+        questions={questions}
+        {...actions}
+      />
+    );
+    const row = screen.getByRole('button', {
       name: /ai.artifacts.quiz.reviewRow/,
     });
-    expect(rows.map((row) => row.textContent)).toEqual([
-      'ai.artifacts.quiz.reviewRow {"n":1,"outcome":"ai.artifacts.quiz.outcomeRowCorrect"}',
-      'ai.artifacts.quiz.reviewRow {"n":2,"outcome":"ai.artifacts.quiz.outcomeRowIncorrect"}',
-    ]);
-    expect(rows[0]).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(rows[0]);
-    expect(rows[0]).toHaveAttribute('aria-expanded', 'true');
-    await waitFor(() =>
-      expect(screen.getByText('Capital of France?')).toBeVisible()
-    );
-    expect(screen.getByText('Paris is the capital.')).toBeVisible();
-    await userEvent.click(rows[1]);
-    expect(rows[0]).toHaveAttribute('aria-expanded', 'false');
-    expect(rows[1]).toHaveAttribute('aria-expanded', 'true');
-    const region = screen.getByRole('region', {
-      name: rows[1].textContent ?? '',
-    });
-    await waitFor(() =>
-      expect(within(region).getByText('A. Three')).toBeVisible()
-    );
-    expect(within(region).getByText('B. Four')).toBeVisible();
-    expect(
-      within(region).getByText('ai.artifacts.quiz.yourAnswer')
-    ).toBeVisible();
-    expect(
-      within(region).getByText('ai.artifacts.quiz.correctAnswer')
-    ).toBeVisible();
-    expect(
-      within(region).queryByText('ai.artifacts.quiz.explanation')
-    ).not.toBeInTheDocument();
-    await userEvent.click(rows[1]);
-    await waitFor(() =>
-      expect(screen.queryByText('Two plus two?')).not.toBeInTheDocument()
-    );
+    await userEvent.click(row);
+    expect(await screen.findByText('Paris is the capital.')).toBeVisible();
+    expect(screen.getByText('A. Madrid')).toBeVisible();
+    expect(screen.getByText('B. Paris')).toBeVisible();
+    expect(row).toHaveFocus();
   });
 
   it('labels a missed run and keeps its original question number', () => {
@@ -166,10 +214,9 @@ describe('QuizResults', () => {
       screen.getByRole('button', { name: /ai.artifacts.quiz.reviewRow/ })
     ).toHaveTextContent('"n":2');
     expect(
-      screen.queryByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('ai.artifacts.quiz.allCorrect')
+      screen.queryByRole('button', {
+        name: /ai.artifacts.quiz.retryMissed/,
+      })
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.focus.backToNote' })
@@ -177,5 +224,34 @@ describe('QuizResults', () => {
     expect(
       screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' })
     ).toBeVisible();
+  });
+
+  it('keeps focus on the primary action when saving unlocks retry', () => {
+    const view = render(
+      <QuizResults
+        score={1}
+        total={2}
+        scope="full"
+        submissionSucceeded={false}
+        answers={answers}
+        questions={questions}
+        {...actions}
+      />
+    );
+    screen.getByRole('button', { name: 'ai.artifacts.quiz.tryAgain' }).focus();
+    view.rerender(
+      <QuizResults
+        score={1}
+        total={2}
+        scope="full"
+        submissionSucceeded
+        answers={answers}
+        questions={questions}
+        {...actions}
+      />
+    );
+    expect(
+      screen.getByRole('button', { name: /ai.artifacts.quiz.retryMissed/ })
+    ).toHaveFocus();
   });
 });

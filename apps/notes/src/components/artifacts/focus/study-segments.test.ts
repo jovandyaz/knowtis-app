@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { CardSessionStatus } from '@knowtis/shared-types';
 
-import { toCardSegments } from './card-segments';
+import { toCardSegments, toQuizSegments } from './study-segments';
 
 describe('toCardSegments', () => {
   it('marks only the current pending card and preserves outcome order', () => {
@@ -44,5 +44,44 @@ describe('toCardSegments', () => {
     ]);
     expect(toCardSegments([], 0, false)).toEqual([]);
     expect(toCardSegments(['pending'], -1, false)).toEqual(['pending']);
+  });
+});
+
+describe('toQuizSegments', () => {
+  it('maps graded history and the current unanswered position without mutating input', () => {
+    const statuses = [
+      'correct',
+      'incorrect',
+      'unanswered',
+      'unanswered',
+    ] as const;
+    expect(toQuizSegments(statuses, 2, false)).toEqual([
+      'correct',
+      'wrong',
+      'current',
+      'pending',
+    ]);
+    expect(statuses).toEqual([
+      'correct',
+      'incorrect',
+      'unanswered',
+      'unanswered',
+    ]);
+  });
+
+  it('leaves a checked current question graded before Next is pressed', () => {
+    expect(toQuizSegments(['incorrect', 'unanswered'], 0, false)).toEqual([
+      'wrong',
+      'pending',
+    ]);
+  });
+
+  it('has no active pulse when complete, and no invented segment for an empty quiz', () => {
+    expect(toQuizSegments(['correct', 'incorrect'], 1, true)).toEqual([
+      'correct',
+      'wrong',
+    ]);
+    expect(toQuizSegments(['unanswered'], 0, true)).toEqual(['pending']);
+    expect(toQuizSegments([], 0, false)).toEqual([]);
   });
 });

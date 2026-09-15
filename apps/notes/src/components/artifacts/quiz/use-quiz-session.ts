@@ -139,6 +139,14 @@ export function useQuizSession(questions: QuizContent['questions']) {
   const restart = useCallback(() => dispatch({ type: 'RESTART' }), []);
   const retryMissed = useCallback(() => dispatch({ type: 'RETRY_MISSED' }), []);
   const currentQuestionIndex = state.activeIndexes[state.position];
+  const questionStatuses: ReadonlyArray<
+    'correct' | 'incorrect' | 'unanswered'
+  > = state.activeIndexes.map((questionIndex) => {
+    const answer = state.answers.find(
+      (item) => item.questionIndex === questionIndex
+    );
+    return answer ? (answer.correct ? 'correct' : 'incorrect') : 'unanswered';
+  });
 
   return {
     scope: state.scope,
@@ -149,6 +157,7 @@ export function useQuizSession(questions: QuizContent['questions']) {
     selectedOption: state.selectedOption,
     checked: state.checked,
     answers: state.answers,
+    questionStatuses,
     completed: state.completed,
     score: state.answers.filter((answer) => answer.correct).length,
     total: state.activeIndexes.length,

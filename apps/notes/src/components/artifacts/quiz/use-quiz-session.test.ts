@@ -135,6 +135,62 @@ describe('useQuizSession', () => {
     expect(result.current.completed).toBe(false);
   });
 
+  it('indexes questionStatuses by the current run position, including noncontiguous retries', () => {
+    const prompts = [0, 1, 2].map((index) => ({
+      question: `Question ${index}`,
+      options: ['Right', 'Wrong'],
+      correctIndex: 0,
+      explanation: '',
+    }));
+    const { result } = renderHook(() => useQuizSession(prompts));
+    expect(result.current.questionStatuses).toEqual([
+      'unanswered',
+      'unanswered',
+      'unanswered',
+    ]);
+    act(() => result.current.select(1));
+    expect(result.current.questionStatuses).toEqual([
+      'unanswered',
+      'unanswered',
+      'unanswered',
+    ]);
+    act(() => result.current.check());
+    expect(result.current.questionStatuses).toEqual([
+      'incorrect',
+      'unanswered',
+      'unanswered',
+    ]);
+    act(() => result.current.next());
+    act(() => result.current.select(0));
+    act(() => result.current.check());
+    act(() => result.current.next());
+    act(() => result.current.select(1));
+    act(() => result.current.check());
+    act(() => result.current.next());
+    expect(result.current.questionStatuses).toEqual([
+      'incorrect',
+      'correct',
+      'incorrect',
+    ]);
+    act(() => result.current.retryMissed());
+    expect(result.current.activeIndexes).toEqual([0, 2]);
+    expect(result.current.questionStatuses).toEqual([
+      'unanswered',
+      'unanswered',
+    ]);
+    act(() => result.current.select(0));
+    act(() => result.current.check());
+    act(() => result.current.next());
+    expect(result.current.currentQuestionIndex).toBe(2);
+    expect(result.current.questionStatuses).toEqual(['correct', 'unanswered']);
+    act(() => result.current.restart());
+    expect(result.current.questionStatuses).toEqual([
+      'unanswered',
+      'unanswered',
+      'unanswered',
+    ]);
+  });
+
   it('leaves a perfect result intact when there are no misses to retry', () => {
     const { result } = renderHook(() => useQuizSession(questions.slice(0, 1)));
     act(() => result.current.select(0));

@@ -21,9 +21,9 @@ export function QuizReviewList({ answers, questions }: QuizReviewListProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   return (
-    <section className="rounded-lg border border-(--border) bg-(--card) p-4 lg:p-6">
-      <h3 className="text-base font-semibold lg:text-lg">
-        {t('ai.artifacts.quiz.reviewAnswers')}
+    <section className="min-w-0 wrap-anywhere">
+      <h3 className="text-base leading-6 font-medium">
+        {t('ai.artifacts.flashcards.summary.toRevisit')}
       </h3>
       <div className="mt-4 space-y-3">
         {answers.map(({ questionIndex, selectedIndex, correct }) => {

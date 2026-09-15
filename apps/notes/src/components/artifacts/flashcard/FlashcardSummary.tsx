@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@knowtis/design-system';
 import type { RestartFilter, StudySessionResult } from '@knowtis/shared-types';
 
+import { toCardSegments } from '../focus/study-segments';
 import { StudySummary } from '../focus/StudySummary';
-import { toCardSegments } from './card-segments';
 import { MissedCardsList } from './MissedCardsList';
 import { PracticeAgainButton } from './PracticeAgainButton';
 
