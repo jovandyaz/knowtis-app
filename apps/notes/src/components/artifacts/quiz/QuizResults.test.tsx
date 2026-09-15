@@ -84,9 +84,11 @@ describe('QuizResults', () => {
       })
     ).toBeInTheDocument();
     const row = screen.getByRole('button', {
-      name: /ai.artifacts.quiz.reviewRow/,
+      name: /Two plus two\?/,
     });
     expect(row).toHaveTextContent('"n":2');
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(within(row).getByText('Two plus two?')).toBeVisible();
     await userEvent.click(row);
     expect(row).toHaveAttribute('aria-expanded', 'true');
     const region = screen.getByRole('region', {
@@ -188,7 +190,7 @@ describe('QuizResults', () => {
       />
     );
     const row = screen.getByRole('button', {
-      name: /ai.artifacts.quiz.reviewRow/,
+      name: /Capital of France\?/,
     });
     await userEvent.click(row);
     expect(await screen.findByText('Paris is the capital.')).toBeVisible();
@@ -211,7 +213,7 @@ describe('QuizResults', () => {
     );
     expect(screen.getByText('ai.artifacts.quiz.missedPractice')).toBeVisible();
     expect(
-      screen.getByRole('button', { name: /ai.artifacts.quiz.reviewRow/ })
+      screen.getByRole('button', { name: /Two plus two\?/ })
     ).toHaveTextContent('"n":2');
     expect(
       screen.queryByRole('button', {

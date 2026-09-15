@@ -132,7 +132,7 @@ export function StudyFocusDialog({
         aria-labelledby={undefined}
         {...{ [STUDY_FOCUS_ATTRIBUTE]: '' }}
         className={cn(
-          'bg-(--background)',
+          'bg-(--background) outline-none',
           (hints || actions) && 'grid-rows-[auto_minmax(0,1fr)_auto]'
         )}
         onOpenAutoFocus={(event) => {

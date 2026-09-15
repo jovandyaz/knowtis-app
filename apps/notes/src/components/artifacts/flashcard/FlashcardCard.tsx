@@ -98,7 +98,7 @@ export function FlashcardCard({
           <span
             data-card-pile
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 translate-x-1 translate-y-1 rounded-lg border border-(--border) bg-(--card) opacity-40"
+            className="pointer-events-none absolute inset-0 -z-10 translate-x-1 translate-y-1 rounded-lg border border-(--border) bg-(--muted) opacity-70 dark:bg-(--card) dark:opacity-40"
           />
         )}
         <FlipCard

@@ -466,7 +466,7 @@ describe('QuizSession', () => {
       })
     ).toHaveFocus();
     const rows = screen.getAllByRole('button', {
-      name: /ai.artifacts.quiz.reviewRow/,
+      name: /¿Dos\?/,
     });
     expect(rows).toHaveLength(1);
     await userEvent.click(rows[0]);
@@ -715,7 +715,7 @@ describe('QuizSession', () => {
       expect(toast.error).toHaveBeenCalledWith('ai.artifacts.quiz.submitError')
     );
     await userEvent.click(
-      screen.getByRole('button', { name: /ai.artifacts.quiz.reviewRow/ })
+      screen.getByRole('button', { name: /¿Capital de Francia\?/ })
     );
     expect(
       screen.getByRole('heading', {

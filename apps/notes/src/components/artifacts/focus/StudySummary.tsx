@@ -54,7 +54,7 @@ export function StudySummary({
         <h2
           ref={headingRef}
           tabIndex={-1}
-          className="rounded-sm font-sans text-3xl leading-tight font-semibold tracking-tight tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-offset-2"
+          className="rounded-sm font-sans text-3xl leading-tight font-semibold tracking-tight tabular-nums outline-none"
         >
           {headline}
         </h2>

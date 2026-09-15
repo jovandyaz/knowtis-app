@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { STUDY_FOCUS_ATTRIBUTE } from '../artifacts/focus/study-focus-marker';
 import { reviewDockWidth, RightDock } from './RightDock';
 
 interface TestProposal {
@@ -120,6 +121,35 @@ describe('RightDock', () => {
     fireEvent.keyDown(screen.getByText('copilot-panel'), { key: 'Escape' });
 
     expect(useRightDockStore.getState().isOpen).toBe(false);
+  });
+
+  it('closes the dock on a mobile resize during study without taking focus', async () => {
+    const content = () => (
+      <>
+        <div {...{ [STUDY_FOCUS_ATTRIBUTE]: '' }}>
+          <button type="button">Study card</button>
+        </div>
+        <RightDock />
+      </>
+    );
+    const view = render(content());
+    const card = screen.getByRole('button', { name: 'Study card' });
+    card.focus();
+
+    viewport.isDesktop = false;
+    view.rerender(content());
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+    expect(useRightDockStore.getState().isOpen).toBe(false);
+    expect(card).toHaveFocus();
+
+    view.rerender(<RightDock />);
+    act(() => useRightDockStore.getState().open());
+    expect(
+      await screen.findByRole('dialog', { name: 'ai.copilot.tab' })
+    ).toBeVisible();
   });
 
   it('tracks viewport resizes only while an update proposal is under review', () => {

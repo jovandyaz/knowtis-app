@@ -26,7 +26,7 @@ export function QuizReviewList({ answers, questions }: QuizReviewListProps) {
         {t('ai.artifacts.flashcards.summary.toRevisit')}
       </h3>
       <div className="mt-4 space-y-3">
-        {answers.map(({ questionIndex, selectedIndex, correct }) => {
+        {answers.map(({ questionIndex, selectedIndex }) => {
           const question = questions[questionIndex];
           const expanded = expandedIndex === questionIndex;
           const rowId = `${id}-question-${questionIndex}`;
@@ -43,15 +43,15 @@ export function QuizReviewList({ answers, questions }: QuizReviewListProps) {
                   setExpandedIndex(expanded ? null : questionIndex)
                 }
               >
-                <span>
-                  {t('ai.artifacts.quiz.reviewRow', {
-                    n: questionIndex + 1,
-                    outcome: t(
-                      correct
-                        ? 'ai.artifacts.quiz.outcomeRowCorrect'
-                        : 'ai.artifacts.quiz.outcomeRowIncorrect'
-                    ),
-                  })}
+                <span className="flex min-w-0 flex-1 items-baseline gap-3">
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-(--muted-foreground)">
+                    {t('ai.artifacts.quiz.reviewQuestion', {
+                      n: questionIndex + 1,
+                    })}
+                  </span>
+                  <span className="min-w-0 wrap-anywhere">
+                    {question.question}
+                  </span>
                 </span>
                 <ChevronDown
                   aria-hidden="true"
