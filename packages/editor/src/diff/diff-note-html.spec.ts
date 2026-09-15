@@ -246,6 +246,66 @@ describe('diffNoteHtml', () => {
     expect(diff.before.resolve(change.fromA).parent.type.name).toBe('doc');
   });
 
+  it('reports a mark-only edit as the marked word, not the whole block', () => {
+    const diff = diffNoteHtml(
+      '<p>Astro como base del sitio</p>',
+      '<p>Astro como <strong>base</strong> del sitio</p>',
+      BASE
+    );
+    expect(diff.count).toBe(1);
+    expect(textA(diff, 0)).toBe('base');
+    expect(textB(diff, 0)).toBe('base');
+    expect(diff.before.resolve(diff.changes[0].fromA).parent.type.name).toBe(
+      'paragraph'
+    );
+  });
+
+  it('reports a changed link target as the linked text', () => {
+    const diff = diffNoteHtml(
+      '<p>ver <a href="https://a.test">docs</a> hoy</p>',
+      '<p>ver <a href="https://b.test">docs</a> hoy</p>',
+      BASE
+    );
+    expect(diff.count).toBe(1);
+    expect(textA(diff, 0)).toBe('docs');
+    expect(textB(diff, 0)).toBe('docs');
+  });
+
+  it('reports a heading whose level and text change as one block replacement', () => {
+    const diff = diffNoteHtml(
+      '<h2>Stack tecnico</h2>',
+      '<h3>Stack moderno</h3>',
+      BASE
+    );
+    expect(diff.count).toBe(1);
+    expect(textA(diff, 0)).toBe('Stack tecnico');
+    expect(textB(diff, 0)).toBe('Stack moderno');
+    expect(diff.after.nodeAt(diff.changes[0].fromB)?.attrs['level']).toBe(3);
+  });
+
+  it('reports a paragraph turned heading with the same text as one change', () => {
+    const diff = diffNoteHtml('<p>Stack</p>', '<h2>Stack</h2>', BASE);
+    expect(diff.count).toBe(1);
+    expect(textA(diff, 0)).toBe('Stack');
+    expect(textB(diff, 0)).toBe('Stack');
+  });
+
+  it('widens a checked task to its own item, not the whole list', () => {
+    const item = (checked: boolean, text: string) =>
+      `<li data-type="taskItem" data-checked="${checked}"><p>${text}</p></li>`;
+    const diff = diffNoteHtml(
+      `<ul data-type="taskList">${item(false, 'hacer')}${item(false, 'probar')}</ul>`,
+      `<ul data-type="taskList">${item(true, 'hacer')}${item(false, 'probar')}</ul>`,
+      BASE
+    );
+    expect(diff.count).toBe(1);
+    expect(diff.before.nodeAt(diff.changes[0].fromA)?.type.name).toBe(
+      'taskItem'
+    );
+    expect(textA(diff, 0)).toBe('hacer');
+    expect(textB(diff, 0)).toBe('hacer');
+  });
+
   it('still uses full LCS alignment under the block-count cap', () => {
     const before = ['a', 'b', 'c', 'd', 'e']
       .map((letter) => `<p>${letter}</p>`)

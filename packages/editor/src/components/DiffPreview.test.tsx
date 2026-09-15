@@ -110,6 +110,23 @@ describe('DiffPreview', () => {
     expect(container.querySelector('del.diff-del')).toHaveTextContent('Dos');
   });
 
+  it('shows a bolded word as an inline change, not a removed block', async () => {
+    const { container } = renderDiff(
+      '<p>Astro como base del sitio</p>',
+      '<p>Astro como <strong>base</strong> del sitio</p>'
+    );
+    await waitFor(() =>
+      expect(container.querySelector('ins.diff-ins')).toHaveTextContent(
+        /^base$/
+      )
+    );
+    expect(container.querySelector('strong > ins.diff-ins')).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'deleted text' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '1 deleted' })).toBeNull();
+  });
+
   it('labels an inline deletion differently from removed blocks', async () => {
     renderDiff('<p>Uno y dos</p>', '<p>Uno</p>');
     expect(
