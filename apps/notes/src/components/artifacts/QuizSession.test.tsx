@@ -211,7 +211,7 @@ describe('QuizSession', () => {
     expect(screen.getAllByRole('progressbar')).toHaveLength(1);
     const bar = screen.getByRole('progressbar');
     expect(bar).toHaveAccessibleName(
-      'ai.artifacts.focus.answeredOf {"done":0,"count":2}'
+      'ai.artifacts.focus.trackLabel {"done":0,"count":2}'
     );
     expect(bar).toHaveAttribute('aria-valuemax', '2');
     await waitFor(() =>
@@ -645,5 +645,35 @@ describe('QuizSession', () => {
       screen.queryByText('ai.artifacts.quiz.allCorrect')
     ).not.toBeInTheDocument();
     expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles the track on Check while remaining on the checked question', async () => {
+    render(<QuizSession artifact={twoQuestionArtifact} onClose={onClose} />);
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    expect(
+      screen.getByRole('progressbar').querySelector('[data-state="current"]')
+    ).toBeInTheDocument();
+    await checkOption(0);
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '1'
+    );
+    expect(
+      screen.getByRole('progressbar').querySelector('[data-state="correct"]')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('radiogroup', { name: '¿Uno?' })
+    ).toBeInTheDocument();
+    await advance();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '1'
+    );
+    expect(
+      screen.getByRole('radiogroup', { name: '¿Dos?' })
+    ).toBeInTheDocument();
   });
 });

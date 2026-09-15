@@ -589,9 +589,9 @@
         "intervalDays_one": "{{count}} day",
         "intervalDays_other": "{{count}} days",
         "difficulty": {
-          "easy": "Level: Basic",
-          "medium": "Level: Intermediate",
-          "hard": "Level: Advanced"
+          "easy": "Level · Basic",
+          "medium": "Level · Intermediate",
+          "hard": "Level · Advanced"
         },
         "quality": {
           "again": "Not recalled",
@@ -605,22 +605,19 @@
         "rateCard": "How much did you recall?",
         "summary": {
           "description": "{{percentage}}% correct: {{correct}} got it, {{wrong}} missed, {{skipped}} skipped, in {{duration}}.",
-          "excellentMastery": "Excellent mastery!",
-          "greatJob": "Great job, keep it up!",
-          "goodProgress": "Good progress!",
-          "keepPracticing": "Keep practicing!",
-          "nextTimeBetter": "You'll get it next time!",
-          "gotIt": "Recalled",
-          "missedIt": "Needs practice",
-          "skipped": "Skipped",
-          "missedCards": "Cards to practice",
+          "gotIt": "recalled",
+          "missedIt": "needs practice",
+          "skipped": "skipped",
           "practiceAgain": "Practice again",
           "allCards": "All cards",
           "onlyMissed": "Cards needing practice",
           "onlySkipped": "Skipped cards",
           "timeSpent": "{{minutes}}m {{seconds}}s",
-          "sessionComplete": "Session complete",
-          "selfAssessment": "Self-assessment"
+          "headline": "{{correct}} / {{total}} recalled",
+          "inTime": "in {{duration}}",
+          "toRevisit": "To revisit",
+          "practiceMissed": "Practice missed ({{count}})",
+          "practiceOptions": "Practice options"
         },
         "skipCard": "Skip card",
         "recorded": "Recorded: {{rating}}",
@@ -657,7 +654,10 @@
         "retryMissed": "Retry missed ({{count}})",
         "allCorrect": "All correct",
         "missedPractice": "Missed-question practice",
-        "resultsDescription": "{{correct}} of {{total}} correct, {{incorrect}} incorrect. Accuracy: {{percentage}}%."
+        "resultsDescription": "{{correct}} of {{total}} correct, {{incorrect}} incorrect. Accuracy: {{percentage}}%.",
+        "results": {
+          "headline": "{{score}} / {{total}} correct"
+        }
       },
       "summary": {
         "keyPointsTitle": "Key Points",
@@ -697,7 +697,13 @@
           "quizBody": "This quiz is unfinished. Your answers in this attempt will be lost.",
           "keep": "Keep studying",
           "leave": "Leave study"
-        }
+        },
+        "side": {
+          "question": "Question",
+          "answer": "Answer"
+        },
+        "cardMeta": "Card {{current}}/{{total}}",
+        "trackLabel": "{{done}} of {{count}} answered"
       }
     },
     "aiBlock": {

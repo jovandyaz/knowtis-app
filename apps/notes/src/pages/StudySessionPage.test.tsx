@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as MotionReact from 'motion/react';
 import { toast } from 'sonner';
@@ -165,9 +165,12 @@ const practiseAgain = () =>
   screen.getByRole('button', {
     name: 'ai.artifacts.flashcards.summary.practiceAgain',
   });
+const practiceOptions = () =>
+  screen.getByRole('button', {
+    name: 'ai.artifacts.flashcards.summary.practiceOptions',
+  });
 const correctButton = () =>
   screen.getByRole('button', { name: 'ai.artifacts.flashcards.correct' });
-const summaryTile = (name: string) => screen.getByRole('group', { name });
 
 async function rateCurrentCorrect(text: RegExp) {
   await userEvent.click(front(text));
@@ -299,7 +302,9 @@ describe('StudySessionPage', () => {
       await screen.findByRole('button', { name: 'Dorso uno' })
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('ai.artifacts.flashcards.summary.gotIt')
+      screen.queryByRole('heading', {
+        name: /ai\.artifacts\.flashcards\.summary\.headline/,
+      })
     ).toBeNull();
     expect(screen.getByRole('progressbar')).toHaveAttribute(
       'aria-valuenow',
@@ -320,11 +325,7 @@ describe('StudySessionPage', () => {
     await userEvent.click(correctButton());
 
     expect(
-      within(
-        await screen.findByRole('group', {
-          name: 'ai.artifacts.flashcards.summary.gotIt',
-        })
-      ).getByText('1')
+      await screen.findByText('1 ai.artifacts.flashcards.summary.gotIt')
     ).toBeInTheDocument();
     expect(reviewCard).toHaveBeenCalledTimes(2);
   });
@@ -338,7 +339,7 @@ describe('StudySessionPage', () => {
       screen.getByRole('button', { name: 'ai.artifacts.flashcards.wrong' })
     );
 
-    await userEvent.click(practiseAgain());
+    await userEvent.click(practiceOptions());
     await userEvent.click(
       screen.getByRole('menuitem', {
         name: 'ai.artifacts.flashcards.summary.onlyMissed',
@@ -378,13 +379,13 @@ describe('StudySessionPage', () => {
     await rateCurrentCorrect(/Frente uno/);
 
     expect(
-      screen.getByText('ai.artifacts.flashcards.summary.gotIt')
+      screen.getByText('1 ai.artifacts.flashcards.summary.gotIt')
     ).toBeInTheDocument();
     expect(
-      screen.getByText('ai.artifacts.flashcards.summary.missedIt')
+      screen.getByText('0 ai.artifacts.flashcards.summary.missedIt')
     ).toBeInTheDocument();
     expect(
-      screen.getByText('ai.artifacts.flashcards.summary.skipped')
+      screen.getByText('0 ai.artifacts.flashcards.summary.skipped')
     ).toBeInTheDocument();
     expect(screen.getByText(/study\.summary\.streak/)).toHaveTextContent(
       '"count":7'
@@ -492,9 +493,7 @@ describe('StudySessionPage', () => {
       'study.summary.restartFailed'
     );
     expect(
-      within(summaryTile('ai.artifacts.flashcards.summary.gotIt')).getByText(
-        '1'
-      )
+      screen.getByText('1 ai.artifacts.flashcards.summary.gotIt')
     ).toBeInTheDocument();
     expect(screen.getByText(/study\.summary\.streak/)).toHaveTextContent(
       '"count":7'
@@ -638,7 +637,7 @@ describe('StudySessionPage', () => {
       screen.getByRole('button', { name: /quality\.again/ })
     );
 
-    await userEvent.click(practiseAgain());
+    await userEvent.click(practiceOptions());
     await userEvent.click(
       screen.getByRole('menuitem', {
         name: 'ai.artifacts.flashcards.summary.onlyMissed',

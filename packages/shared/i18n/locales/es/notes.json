@@ -589,9 +589,9 @@
         "intervalDays_one": "{{count}} día",
         "intervalDays_other": "{{count}} días",
         "difficulty": {
-          "easy": "Nivel: Básico",
-          "medium": "Nivel: Intermedio",
-          "hard": "Nivel: Avanzado"
+          "easy": "Nivel · Básico",
+          "medium": "Nivel · Intermedio",
+          "hard": "Nivel · Avanzado"
         },
         "quality": {
           "again": "No lo recordé",
@@ -605,22 +605,19 @@
         "rateCard": "¿Cuánto recordaste?",
         "summary": {
           "description": "{{percentage}}% correctas: {{correct}} acertadas, {{wrong}} falladas, {{skipped}} saltadas, en {{duration}}.",
-          "excellentMastery": "¡Excelente dominio!",
-          "greatJob": "¡Muy bien, sigue así!",
-          "goodProgress": "¡Buen progreso!",
-          "keepPracticing": "¡Sigue practicando!",
-          "nextTimeBetter": "¡La próxima será mejor!",
-          "gotIt": "Recordadas",
-          "missedIt": "Por practicar",
-          "skipped": "Saltadas",
-          "missedCards": "Tarjetas por practicar",
+          "gotIt": "recordadas",
+          "missedIt": "por practicar",
+          "skipped": "omitidas",
           "practiceAgain": "Practicar de nuevo",
           "allCards": "Todas las tarjetas",
           "onlyMissed": "Tarjetas por practicar",
           "onlySkipped": "Tarjetas omitidas",
           "timeSpent": "{{minutes}}m {{seconds}}s",
-          "sessionComplete": "Sesión completada",
-          "selfAssessment": "Autoevaluación"
+          "headline": "{{correct}} / {{total}} recordadas",
+          "inTime": "en {{duration}}",
+          "toRevisit": "Por repasar",
+          "practiceMissed": "Practicar falladas ({{count}})",
+          "practiceOptions": "Opciones de práctica"
         },
         "skipCard": "Omitir tarjeta",
         "recorded": "Registrado: {{rating}}",
@@ -657,7 +654,10 @@
         "retryMissed": "Reintentar falladas ({{count}})",
         "allCorrect": "Todas correctas",
         "missedPractice": "Práctica de preguntas falladas",
-        "resultsDescription": "{{correct}} de {{total}} correctas, {{incorrect}} incorrectas. Precisión: {{percentage}}%."
+        "resultsDescription": "{{correct}} de {{total}} correctas, {{incorrect}} incorrectas. Precisión: {{percentage}}%.",
+        "results": {
+          "headline": "{{score}} / {{total}} correctas"
+        }
       },
       "summary": {
         "keyPointsTitle": "Puntos clave",
@@ -697,7 +697,13 @@
           "quizBody": "Este quiz está sin terminar. Se perderán las respuestas de este intento.",
           "keep": "Seguir estudiando",
           "leave": "Salir del estudio"
-        }
+        },
+        "side": {
+          "question": "Pregunta",
+          "answer": "Respuesta"
+        },
+        "cardMeta": "Tarjeta {{current}}/{{total}}",
+        "trackLabel": "{{done}} de {{count}} respondidas"
       }
     },
     "aiBlock": {

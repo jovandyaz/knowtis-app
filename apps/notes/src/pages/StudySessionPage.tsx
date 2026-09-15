@@ -340,6 +340,9 @@ function StudyQueueSession({
       </div>
 
       <FlashcardCard
+        index={session.currentIndex}
+        total={session.totalCards}
+        showPile={session.currentIndex < session.totalCards - 1}
         front={card.front}
         back={card.back}
         difficulty={card.difficulty}

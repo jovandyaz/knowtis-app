@@ -19,6 +19,7 @@ import {
   EmptyState,
   Kbd,
   type AnswerOutcome,
+  type SegmentState,
 } from '@knowtis/design-system';
 import type { QuizArtifact } from '@knowtis/shared-types';
 
@@ -73,6 +74,17 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
   const focusOptionsRef = useRef(false);
   const hasSubmittedRef = useRef(false);
   const runIdRef = useRef(0);
+  const segments: SegmentState[] = quiz.activeIndexes.map(
+    (questionIndex, position) => {
+      const answer = quiz.answers.find(
+        (item) => item.questionIndex === questionIndex
+      );
+      if (answer) {
+        return answer.correct ? 'correct' : 'wrong';
+      }
+      return !completed && position === quiz.position ? 'current' : 'pending';
+    }
+  );
 
   useEffect(() => {
     if (!completed || readOnly || hasSubmittedRef.current) {
@@ -376,9 +388,8 @@ export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
       tool={STUDY_TOOL.QUIZ}
       title={artifact.title}
       progress={{
-        value: quiz.answers.length,
-        max: quiz.total,
-        label: t('ai.artifacts.focus.answeredOf', {
+        segments,
+        label: t('ai.artifacts.focus.trackLabel', {
           done: quiz.answers.length,
           count: quiz.total,
         }),

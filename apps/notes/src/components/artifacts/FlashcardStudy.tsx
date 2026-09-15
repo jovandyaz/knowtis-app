@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,7 +23,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  useMotionPreset,
+  type SegmentState,
 } from '@knowtis/design-system';
 import {
   CARD_STATUS,
@@ -41,14 +40,11 @@ import { FlashcardMenu } from './flashcard/FlashcardMenu';
 import { FlashcardNav } from './flashcard/FlashcardNav';
 import { FlashcardRating } from './flashcard/FlashcardRating';
 import { FlashcardSummary } from './flashcard/FlashcardSummary';
-import {
-  findNextPendingIndex,
-  useFlashcardSession,
-} from './flashcard/use-flashcard-session';
+import { useFlashcardSession } from './flashcard/use-flashcard-session';
+import { useRatingPresentation } from './flashcard/use-rating-presentation';
 import { STUDY_TOOL, StudyFocusDialog } from './focus/StudyFocusDialog';
 import { StudyKeyHints, type StudyKeyHint } from './focus/StudyKeyHints';
 
-const CARD_ENTER_X = 60;
 const STUDY_CARD_SHORTCUTS = 'Space Enter ArrowLeft ArrowRight';
 
 const KEYCAP = {
@@ -95,8 +91,9 @@ export function FlashcardStudy({
         tool={STUDY_TOOL.FLASHCARDS}
         title={artifact.title}
         progress={{
-          value: 0,
-          max: artifact.content.cards.length,
+          segments: Array<SegmentState>(artifact.content.cards.length).fill(
+            'pending'
+          ),
           label: t(
             isLoading
               ? 'ai.artifacts.loadingStudy'
@@ -150,30 +147,10 @@ function FlashcardDeckSession({
     [artifact, progress]
   );
   const session = useFlashcardSession(cards);
-  const preset = useMotionPreset();
-  const [isSaving, setIsSaving] = useState(false);
   const [announcement, setAnnouncement] = useState({ text: '', sequence: 0 });
   const announce = useCallback((text: string) => {
     setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
   }, []);
-  const focusNextCardRef = useRef<number | null>(null);
-  const mountedCardRef = useRef<{
-    node: HTMLButtonElement;
-    index: number;
-  } | null>(null);
-  const focusCard = useCallback(
-    (node: HTMLButtonElement | null) => {
-      mountedCardRef.current = node
-        ? { node, index: session.currentIndex }
-        : null;
-      if (node && focusNextCardRef.current === session.currentIndex) {
-        focusNextCardRef.current = null;
-        node.focus();
-      }
-    },
-    [session.currentIndex]
-  );
-
   const currentStatus = session.cardStatuses[session.currentIndex];
   const isCurrentCardPending = currentStatus === CARD_STATUS.PENDING;
   const isCurrentCardRated =
@@ -182,22 +159,6 @@ function FlashcardDeckSession({
   const recordedQuality = session.ratings[session.currentIndex] ?? null;
   const completedCount =
     session.counts.correct + session.counts.wrong + session.counts.skipped;
-  const ratedCount = session.counts.correct + session.counts.wrong;
-  const previousRatedCountRef = useRef(ratedCount);
-  useLayoutEffect(() => {
-    const advanced = ratedCount > previousRatedCountRef.current;
-    previousRatedCountRef.current = ratedCount;
-    focusNextCardRef.current = null;
-    if (!advanced || session.isComplete) {
-      return;
-    }
-    // The entering card may mount later, after AnimatePresence finishes exiting.
-    focusNextCardRef.current = session.currentIndex;
-    if (mountedCardRef.current?.index === session.currentIndex) {
-      mountedCardRef.current.node.focus();
-      focusNextCardRef.current = null;
-    }
-  }, [ratedCount, session.isComplete, session.currentIndex]);
 
   const hasStartedRef = useRef(false);
   useEffect(() => {
@@ -228,41 +189,31 @@ function FlashcardDeckSession({
     });
   }, [session.isComplete, session.sessionResult]);
 
-  const isReviewInFlightRef = useRef(false);
-
-  const submitReview = useCallback(
-    async (quality: SM2Quality) => {
-      if (isReviewInFlightRef.current || !session.currentCard) {
-        return null;
-      }
-      const { artifactId, cardIndex } = session.currentCard;
-      const identity = `${artifactId}:${cardIndex}`;
-      if (readOnly) {
-        return identity;
-      }
-      isReviewInFlightRef.current = true;
-      setIsSaving(true);
-      try {
-        await reviewCard({ artifactId, cardIndex, quality });
-        return identity;
-      } catch {
-        toast.error(t('ai.artifacts.flashcards.reviewError'));
-        return null;
-      } finally {
-        isReviewInFlightRef.current = false;
-        setIsSaving(false);
-      }
-    },
-    [session.currentCard, reviewCard, t, readOnly]
-  );
-
-  const handleRate = useCallback(
-    async (quality: SM2Quality) => {
-      if (!isCurrentCardPending) {
-        return;
-      }
-      const identity = await submitReview(quality);
-      if (identity && session.rateAdvanced(quality, identity)) {
+  const {
+    presentation,
+    runKey,
+    isLocked,
+    begin,
+    reset,
+    actions,
+    cardRef,
+    onCardAnimationComplete,
+    card: cardPresentation,
+    segments,
+  } = useRatingPresentation({
+    artifactId: artifact.id,
+    session,
+    readOnly,
+    reviewCard,
+    onCommitted: (quality) => {
+      if (quality === null) {
+        announce(
+          t('ai.artifacts.flashcards.announce.skipped', {
+            done: completedCount + 1,
+            count: session.totalCards,
+          })
+        );
+      } else {
         announce(
           t('ai.artifacts.flashcards.announce.rated', {
             rating: t(RATING_LABEL_KEY[quality]),
@@ -272,42 +223,30 @@ function FlashcardDeckSession({
         );
       }
     },
-    [isCurrentCardPending, submitReview, session, completedCount, t, announce]
+    onError: () => toast.error(t('ai.artifacts.flashcards.reviewError')),
+  });
+
+  const handleRate = useCallback(
+    (quality: SM2Quality) =>
+      begin(
+        quality,
+        quality >= SM2_QUALITY.GOOD ? CARD_STATUS.CORRECT : CARD_STATUS.WRONG
+      ),
+    [begin]
   );
 
-  const handleSkip = () => {
-    session.skip();
-    announce(
-      t('ai.artifacts.flashcards.announce.skipped', {
-        done: completedCount + 1,
-        count: session.totalCards,
-      })
-    );
-  };
+  const handleSkip = useCallback(
+    () => begin(null, CARD_STATUS.SKIPPED),
+    [begin]
+  );
+
   const handleShuffle = () => {
+    if (!reset()) {
+      return;
+    }
     session.shuffle();
     announce(t('ai.artifacts.flashcards.announce.shuffled'));
   };
-
-  const handleNavigate = useCallback(
-    (direction: -1 | 1) => {
-      const nextIndex = session.currentIndex + direction;
-      if (nextIndex >= 0 && nextIndex < session.totalCards) {
-        session.navigate(nextIndex);
-      }
-    },
-    [session]
-  );
-
-  const handleContinue = useCallback(() => {
-    const nextIndex = findNextPendingIndex(
-      session.cardStatuses,
-      session.currentIndex
-    );
-    if (nextIndex >= 0) {
-      session.navigate(nextIndex);
-    }
-  }, [session]);
 
   const isAdvancedRating = session.isAdvancedMode && !readOnly;
 
@@ -316,9 +255,9 @@ function FlashcardDeckSession({
     insideFocusDialog: true,
     isAdvancedMode: isAdvancedRating,
     flipped: session.flipped,
-    isBusy: () => isReviewInFlightRef.current,
-    onFlip: session.flip,
-    onNavigate: handleNavigate,
+    isBusy: isLocked,
+    onFlip: actions.flip,
+    onNavigate: actions.navigate,
     onRate: (quality) => void handleRate(quality),
   });
 
@@ -362,7 +301,7 @@ function FlashcardDeckSession({
       return (
         <FlashcardSummary
           result={session.sessionResult}
-          onRestart={session.restart}
+          onRestart={actions.restart}
           onBackToNote={onClose}
         />
       );
@@ -373,46 +312,92 @@ function FlashcardDeckSession({
     }
 
     return (
-      <div className="flex min-w-0 flex-col gap-6 overflow-x-hidden">
-        <p className="text-center text-sm text-(--muted-foreground)">
-          {t('ai.artifacts.focus.cardOf', {
-            current: session.currentIndex + 1,
-            total: session.totalCards,
-          })}
-        </p>
+      <div
+        className="my-auto flex min-w-0 flex-col gap-4"
+        aria-busy={presentation ? 'true' : undefined}
+      >
+        <div className="relative -mx-1 overflow-x-hidden px-1 py-1">
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.div
+              key={`${runKey}:${cardPresentation.identity}`}
+              {...cardPresentation.motion}
+              onAnimationComplete={onCardAnimationComplete}
+            >
+              <FlashcardCard
+                ref={cardRef}
+                front={session.currentCard.front}
+                back={session.currentCard.back}
+                difficulty={session.currentCard.difficulty}
+                flipped={session.flipped}
+                onFlip={actions.flip}
+                keyShortcuts={STUDY_CARD_SHORTCUTS}
+                {...(cardPresentation.verdict
+                  ? { verdict: cardPresentation.verdict }
+                  : {})}
+                showPile={session.currentIndex < session.totalCards - 1}
+                index={session.currentIndex}
+                total={session.totalCards}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={session.currentIndex}
-            initial={{ opacity: 0, x: preset.reduced ? 0 : CARD_ENTER_X }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: preset.reduced ? 0 : -CARD_ENTER_X }}
-            transition={preset.slide}
-          >
-            <FlashcardCard
-              ref={focusCard}
-              front={session.currentCard.front}
-              back={session.currentCard.back}
-              difficulty={session.currentCard.difficulty}
-              flipped={session.flipped}
-              onFlip={session.flip}
-              keyShortcuts={STUDY_CARD_SHORTCUTS}
+        <div className="flex min-h-16 flex-col items-center justify-center gap-3">
+          {session.flipped && isCurrentCardPending ? (
+            <FlashcardRating
+              isAdvancedMode={session.isAdvancedMode}
+              readOnly={readOnly}
+              disabled={Boolean(presentation)}
+              showKeys
+              onWrong={() => void handleRate(SM2_QUALITY.AGAIN)}
+              onCorrect={() => void handleRate(SM2_QUALITY.GOOD)}
+              onRateAdvanced={(quality) => void handleRate(quality)}
             />
-          </motion.div>
-        </AnimatePresence>
+          ) : null}
+          {session.flipped && currentStatus === CARD_STATUS.SKIPPED ? (
+            <Button
+              variant="outline"
+              className="min-h-12"
+              disabled={Boolean(presentation)}
+              onClick={actions.reviewSkipped}
+            >
+              {t('ai.artifacts.flashcards.reviewCard')}
+            </Button>
+          ) : null}
+          {session.flipped && isCurrentCardRated && recordedQuality !== null ? (
+            <>
+              <p className="text-sm text-(--muted-foreground)">
+                {t('ai.artifacts.flashcards.recorded', {
+                  rating: t(RATING_LABEL_KEY[recordedQuality]),
+                })}
+              </p>
+              <Button
+                variant="outline"
+                className="min-h-12"
+                disabled={Boolean(presentation)}
+                onClick={actions.continue}
+              >
+                {t('ai.artifacts.flashcards.continueStudying')}
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
     );
   };
+
+  const settledSegmentCount = segments.filter(
+    (segment) => segment !== 'pending' && segment !== 'current'
+  ).length;
 
   return (
     <StudyFocusDialog
       tool={STUDY_TOOL.FLASHCARDS}
       title={artifact.title}
       progress={{
-        value: completedCount,
-        max: session.totalCards,
-        label: t('ai.artifacts.focus.completedOf', {
-          done: completedCount,
+        segments,
+        label: t('ai.artifacts.focus.trackLabel', {
+          done: settledSegmentCount,
           count: session.totalCards,
         }),
       }}
@@ -422,9 +407,9 @@ function FlashcardDeckSession({
         session.isComplete || session.totalCards === 0 ? undefined : (
           <FlashcardMenu
             isAdvancedMode={session.isAdvancedMode}
-            disabled={isSaving}
+            disabled={Boolean(presentation)}
             onToggleAdvanced={session.toggleAdvanced}
-            onRestart={() => session.restart()}
+            onRestart={() => actions.restart()}
             onShuffle={handleShuffle}
             readOnly={readOnly}
           />
@@ -432,61 +417,16 @@ function FlashcardDeckSession({
       }
       actions={
         !session.isComplete && session.currentCard ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex min-h-16 flex-col items-center justify-center gap-3">
-              {session.flipped && isCurrentCardPending ? (
-                <FlashcardRating
-                  isAdvancedMode={session.isAdvancedMode}
-                  readOnly={readOnly}
-                  disabled={isSaving}
-                  showKeys
-                  onWrong={() => void handleRate(SM2_QUALITY.AGAIN)}
-                  onCorrect={() => void handleRate(SM2_QUALITY.GOOD)}
-                  onRateAdvanced={(quality) => void handleRate(quality)}
-                />
-              ) : null}
-              {session.flipped && currentStatus === CARD_STATUS.SKIPPED ? (
-                <Button
-                  variant="outline"
-                  className="min-h-12"
-                  onClick={session.reviewSkipped}
-                >
-                  {t('ai.artifacts.flashcards.reviewCard')}
-                </Button>
-              ) : null}
-              {session.flipped &&
-              isCurrentCardRated &&
-              recordedQuality !== null ? (
-                <>
-                  <p className="text-sm text-(--muted-foreground)">
-                    {t('ai.artifacts.flashcards.recorded', {
-                      rating: t(RATING_LABEL_KEY[recordedQuality]),
-                    })}
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="min-h-12"
-                    onClick={handleContinue}
-                  >
-                    {t('ai.artifacts.flashcards.continueStudying')}
-                  </Button>
-                </>
-              ) : null}
-            </div>
-
-            <FlashcardNav
-              wrongCount={session.counts.wrong}
-              correctCount={session.counts.correct}
-              canGoPrev={!isSaving && session.currentIndex > 0}
-              canGoNext={
-                !isSaving && session.currentIndex < session.totalCards - 1
-              }
-              canSkip={!isSaving && isCurrentCardPending}
-              onNavigatePrev={() => handleNavigate(-1)}
-              onNavigateNext={() => handleNavigate(1)}
-              onSkip={handleSkip}
-            />
-          </div>
+          <FlashcardNav
+            canGoPrev={!presentation && session.currentIndex > 0}
+            canGoNext={
+              !presentation && session.currentIndex < session.totalCards - 1
+            }
+            canSkip={!presentation && isCurrentCardPending}
+            onNavigatePrev={() => actions.navigate(-1)}
+            onNavigateNext={() => actions.navigate(1)}
+            onSkip={() => void handleSkip()}
+          />
         ) : undefined
       }
       hints={

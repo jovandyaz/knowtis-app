@@ -57,7 +57,7 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
   ).toBeVisible();
   await page.keyboard.press('2');
   await expect(
-    dialog.getByRole('progressbar', { name: '1 of 2 completed', exact: true })
+    dialog.getByRole('progressbar', { name: '1 of 2 answered', exact: true })
   ).toBeVisible();
   await expect(
     dialog.getByRole('button', { name: '¿Dónde ocurre?', exact: true })
@@ -94,7 +94,7 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
   ).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('1');
   await expect(
-    dialog.getByRole('heading', { name: 'Session complete', exact: true })
+    dialog.getByRole('heading', { name: '1 / 2 recalled', exact: true })
   ).toBeVisible();
   await dialog
     .getByRole('button', { name: 'Back to note', exact: true })

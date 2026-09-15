@@ -114,3 +114,19 @@ describe('FlashcardRating', () => {
     ).toHaveTextContent('ai.artifacts.flashcards.intervalDays {"count":4}');
   });
 });
+
+it('fits the simple ratings into equal columns with wrapping labels', () => {
+  renderRating();
+  const wrong = screen.getByRole('button', {
+    name: 'ai.artifacts.flashcards.wrong',
+  });
+  expect(wrong.parentElement).toHaveClass('grid', 'grid-cols-2', 'gap-2');
+  for (const button of screen.getAllByRole('button')) {
+    expect(button).toHaveClass(
+      'min-h-12',
+      'px-3',
+      'sm:px-6',
+      'whitespace-normal'
+    );
+  }
+});

@@ -17,8 +17,6 @@ function renderNav(
   overrides: Partial<Parameters<typeof FlashcardNav>[0]> = {}
 ) {
   const props = {
-    wrongCount: 2,
-    correctCount: 5,
     canGoPrev: false,
     canGoNext: true,
     canSkip: true,
@@ -40,25 +38,6 @@ const NEXT = { name: 'ai.artifacts.flashcards.next' };
 const SKIP = { name: 'ai.artifacts.flashcards.skipCard' };
 
 describe('FlashcardNav', () => {
-  it('names each counter, so a screen reader hears more than a bare number', () => {
-    renderNav();
-
-    expect(
-      screen.getByText('ai.artifacts.flashcards.wrong').parentElement
-    ).toHaveTextContent('ai.artifacts.flashcards.wrong2');
-    expect(
-      screen.getByText('ai.artifacts.flashcards.correct').parentElement
-    ).toHaveTextContent('ai.artifacts.flashcards.correct5');
-  });
-
-  it('keeps the counter labels out of sight', () => {
-    renderNav();
-
-    expect(screen.getByText('ai.artifacts.flashcards.wrong')).toHaveClass(
-      'sr-only'
-    );
-  });
-
   it('locks the previous arrow on the first card', () => {
     renderNav();
 
@@ -103,5 +82,28 @@ describe('FlashcardNav', () => {
     expect(screen.getByRole('button', PREV)).toHaveClass('h-12', 'w-12');
     expect(screen.getByRole('button', NEXT)).toHaveClass('h-12', 'w-12');
     expect(screen.getByRole('button', SKIP)).toHaveClass('min-h-12');
+  });
+  it('lays out only previous, skip and next in three fixed columns', () => {
+    renderNav();
+    const buttons = screen.getAllByRole('button');
+    expect(
+      buttons.map(
+        (button) => button.getAttribute('aria-label') ?? button.textContent
+      )
+    ).toEqual([
+      'ai.artifacts.flashcards.prev',
+      'ai.artifacts.flashcards.skipCard',
+      'ai.artifacts.flashcards.next',
+    ]);
+    expect(buttons[0].parentElement).toHaveClass(
+      'grid',
+      'grid-cols-[auto_1fr_auto]'
+    );
+    expect(
+      screen.queryByText('ai.artifacts.flashcards.wrong')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('ai.artifacts.flashcards.correct')
+    ).not.toBeInTheDocument();
   });
 });

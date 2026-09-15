@@ -9,8 +9,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useBlocker } from '@tanstack/react-router';
 
-import { motion } from 'motion/react';
-
 import {
   Button,
   cn,
@@ -19,8 +17,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTitle,
-  ProgressRing,
-  useMotionPreset,
+  SegmentedProgress,
+  type SegmentState,
 } from '@knowtis/design-system';
 
 import { STUDY_FOCUS_ATTRIBUTE } from './study-focus-marker';
@@ -39,11 +37,8 @@ const EXIT_BODY_KEY = {
   quiz: 'ai.artifacts.focus.exit.quizBody',
 } as const satisfies Record<StudyTool, string>;
 
-const STAGE_RISE_Y = 12;
-
 export interface StudyFocusProgress {
-  value: number;
-  max: number;
+  segments: readonly SegmentState[];
   label: string;
 }
 
@@ -75,7 +70,6 @@ export function StudyFocusDialog({
   children,
 }: StudyFocusDialogProps) {
   const { t } = useTranslation(['notes', 'common']);
-  const preset = useMotionPreset();
   const stageRef = useRef<HTMLDivElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const confirmedExitRef = useRef(false);
@@ -146,48 +140,33 @@ export function StudyFocusDialog({
           stageRef.current?.focus();
         }}
       >
-        <header className="flex min-h-16 min-w-0 items-center gap-3 border-b border-(--border) px-4 py-3 pr-16 lg:px-8 lg:pr-20">
-          <div className="min-w-0 flex-1">
-            <DialogTitle className="truncate text-base lg:text-lg">
-              <span className="text-(--muted-foreground)">{toolLabel}: </span>
-              {title}
-            </DialogTitle>
-          </div>
-          <div className="flex items-center gap-3">
-            {progress.max > 0 && (
-              <>
-                <ProgressRing
-                  value={progress.value}
-                  max={progress.max}
-                  label={progress.label}
-                >
-                  {progress.value}
-                </ProgressRing>
-                <span
-                  className="hidden text-sm text-(--muted-foreground) sm:inline"
-                  aria-hidden="true"
-                >
-                  {progress.label}
-                </span>
-              </>
-            )}
-            {menu}
-          </div>
-        </header>
+        <div className="min-w-0">
+          <header className="flex min-h-16 min-w-0 items-center gap-3 border-b border-(--border) px-4 py-3 pr-16 lg:px-8 lg:pr-20">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-base lg:text-lg">
+                <span className="text-(--muted-foreground)">{toolLabel}: </span>
+                {title}
+              </DialogTitle>
+            </div>
+            <div className="flex items-center gap-3">{menu}</div>
+          </header>
+          {progress.segments.length > 0 && (
+            <SegmentedProgress
+              segments={progress.segments}
+              label={progress.label}
+              size="track"
+            />
+          )}
+        </div>
 
         <div
           ref={stageRef}
           tabIndex={-1}
           className="flex min-h-0 flex-col overflow-y-auto outline-none"
         >
-          <motion.div
-            className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:px-8"
-            initial={{ opacity: 0, y: preset.reduced ? 0 : STAGE_RISE_Y }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={preset.fade}
-          >
+          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] lg:px-8">
             {children}
-          </motion.div>
+          </div>
         </div>
         {hints || actions ? (
           <footer className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:px-8">

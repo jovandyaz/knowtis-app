@@ -29,7 +29,16 @@ function renderDialog(inProgress: boolean) {
       <StudyFocusDialog
         tool={STUDY_TOOL.FLASHCARDS}
         title="Photosynthesis"
-        progress={{ value: 3, max: 12, label: '3 of 12 completed' }}
+        progress={{
+          segments: [
+            'correct',
+            'wrong',
+            'skipped',
+            'current',
+            ...Array<'pending'>(8).fill('pending'),
+          ],
+          label: '3 of 12 answered',
+        }}
         inProgress={inProgress}
         onClose={onClose}
       >
@@ -90,7 +99,10 @@ describe('StudyFocusDialog', () => {
         <StudyFocusDialog
           tool={STUDY_TOOL.FLASHCARDS}
           title="Photosynthesis"
-          progress={{ value: 12, max: 12, label: '12 of 12 completed' }}
+          progress={{
+            segments: Array<'correct'>(12).fill('correct'),
+            label: '12 of 12 answered',
+          }}
           inProgress={false}
           onClose={onClose}
         >
@@ -120,7 +132,16 @@ describe('StudyFocusDialog', () => {
         <StudyFocusDialog
           tool={STUDY_TOOL.FLASHCARDS}
           title="Photosynthesis"
-          progress={{ value: 3, max: 12, label: '3 of 12 completed' }}
+          progress={{
+            segments: [
+              'correct',
+              'wrong',
+              'skipped',
+              'current',
+              ...Array<'pending'>(8).fill('pending'),
+            ],
+            label: '3 of 12 answered',
+          }}
           inProgress
           onClose={onClose}
         >
@@ -166,7 +187,7 @@ describe('StudyFocusDialog', () => {
       <StudyFocusDialog
         tool={STUDY_TOOL.QUIZ}
         title="Quiz"
-        progress={{ value: 0, max: 2, label: '0 of 2' }}
+        progress={{ segments: ['current', 'pending'], label: '0 of 2' }}
         inProgress={false}
         onClose={onClose}
         actions={<button>Check</button>}
@@ -187,7 +208,10 @@ describe('StudyFocusDialog', () => {
       name: 'ai.artifacts.focus.dialogTitle {"tool":"ai.artifacts.types.flashcards","title":"Photosynthesis"}',
     });
     expect(dialog).toHaveAttribute(STUDY_FOCUS_ATTRIBUTE);
-    expect(screen.getByText('3 of 12 completed')).toBeInTheDocument();
+    expect(
+      screen.getByRole('progressbar', { name: '3 of 12 answered' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('3 of 12 answered')).not.toBeInTheDocument();
   });
 
   it('closes directly when nothing is in progress', async () => {
@@ -269,7 +293,10 @@ describe('StudyFocusDialog', () => {
         <StudyFocusDialog
           tool={STUDY_TOOL.FLASHCARDS}
           title="Photosynthesis"
-          progress={{ value: 12, max: 12, label: '12 of 12 completed' }}
+          progress={{
+            segments: Array<'correct'>(12).fill('correct'),
+            label: '12 of 12 answered',
+          }}
           inProgress={false}
           onClose={onClose}
         >
@@ -292,7 +319,16 @@ describe('StudyFocusDialog', () => {
         <StudyFocusDialog
           tool={STUDY_TOOL.FLASHCARDS}
           title="Photosynthesis"
-          progress={{ value: 3, max: 12, label: '3 of 12 completed' }}
+          progress={{
+            segments: [
+              'correct',
+              'wrong',
+              'skipped',
+              'current',
+              ...Array<'pending'>(8).fill('pending'),
+            ],
+            label: '3 of 12 answered',
+          }}
           inProgress={false}
           onClose={onClose}
           hints={
@@ -309,5 +345,29 @@ describe('StudyFocusDialog', () => {
     expect(footer.parentElement).toBe(screen.getByRole('dialog'));
     expect(document.activeElement).toContainElement(screen.getByText('stage'));
     expect(document.activeElement).not.toContainElement(footer);
+  });
+
+  it('keeps the title header clear and places the segmented history immediately below it', () => {
+    render(
+      <StudyFocusDialog
+        tool={STUDY_TOOL.FLASHCARDS}
+        title="Photosynthesis"
+        progress={{
+          segments: ['correct', 'wrong', 'current'],
+          label: '2 of 3 answered',
+        }}
+        inProgress
+        onClose={onClose}
+      >
+        <p>stage</p>
+      </StudyFocusDialog>
+    );
+    const header = screen.getByRole('banner');
+    const track = screen.getByRole('progressbar', { name: '2 of 3 answered' });
+    expect(header).not.toContainElement(track);
+    expect(header.nextElementSibling).toBe(track);
+    expect(track).toHaveAttribute('aria-valuenow', '2');
+    expect(track).toHaveAttribute('aria-valuemax', '3');
+    expect(header).not.toHaveTextContent('2 of 3 answered');
   });
 });
