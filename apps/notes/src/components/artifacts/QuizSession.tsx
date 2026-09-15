@@ -1,15 +1,14 @@
 import {
   useCallback,
   useEffect,
-  useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MOBILE_FAB_RAIL_CLEARANCE_CLASS } from '@/components/layout/MobileFabRail';
-import { RotateCcw, Trophy } from 'lucide-react';
+import { isStudyKeyEventIgnored } from '@/hooks/study-key-guard';
 import { toast } from 'sonner';
 
 import { useSubmitQuiz } from '@knowtis/data-access-artifacts';
@@ -17,36 +16,26 @@ import {
   answerLetter,
   AnswerOption,
   Button,
-  cn,
-  Progress,
+  EmptyState,
+  Kbd,
   type AnswerOutcome,
 } from '@knowtis/design-system';
 import type { QuizArtifact } from '@knowtis/shared-types';
 
-import { scoreTone } from './quiz-score';
+import { getCardTextClass } from './flashcard/card-text-class';
+import { toQuizSegments } from './focus/study-segments';
+import { STUDY_TOOL, StudyFocusDialog } from './focus/StudyFocusDialog';
+import { StudyKeyHints, type StudyKeyHint } from './focus/StudyKeyHints';
+import { QuizResults } from './quiz/QuizResults';
+import { useQuizSession } from './quiz/use-quiz-session';
 
-const PERCENT = 100;
 const FIRST_OPTION = 0;
-
-const ANSWER_OUTCOME = {
-  CORRECT: 'correct',
-  INCORRECT: 'incorrect',
-} as const satisfies Record<string, AnswerOutcome>;
-
 const ARROW_KEY_STEP: Partial<Record<string, number>> = {
   ArrowDown: 1,
   ArrowRight: 1,
   ArrowUp: -1,
   ArrowLeft: -1,
 };
-
-const FOCUS_INTENT = {
-  OPTION: 'option',
-  RESULTS: 'results',
-} as const;
-
-type FocusIntent = (typeof FOCUS_INTENT)[keyof typeof FOCUS_INTENT];
-
 const OUTCOME_FEEDBACK = {
   correct: {
     key: 'ai.artifacts.quiz.outcomeCorrect',
@@ -61,58 +50,112 @@ const OUTCOME_FEEDBACK = {
 interface QuizSessionProps {
   artifact: QuizArtifact;
   readOnly?: boolean | undefined;
+  onClose: () => void;
 }
 
-interface QuizAnswer {
-  questionIndex: number;
-  selectedIndex: number;
-}
-
-export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
+export function QuizSession({ artifact, readOnly, onClose }: QuizSessionProps) {
   const { t } = useTranslation('notes');
-  const content = artifact.content;
-  const submitQuiz = useSubmitQuiz(artifact.id);
-
-  const scoreCaptionId = useId();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [answered, setAnswered] = useState(false);
+  const { mutateAsync: submitQuiz } = useSubmitQuiz(artifact.id);
+  const quiz = useQuizSession(artifact.content.questions);
+  const {
+    currentQuestion,
+    selectedOption,
+    checked,
+    completed,
+    select,
+    check,
+    next,
+    restart,
+    retryMissed,
+  } = quiz;
   const [focusedIndex, setFocusedIndex] = useState(FIRST_OPTION);
-  const [answers, setAnswers] = useState<QuizAnswer[]>([]);
-  const [completed, setCompleted] = useState(false);
-  const [score, setScore] = useState(0);
-  const [focusIntent, setFocusIntent] = useState<FocusIntent | null>(null);
+  const [submissionSucceeded, setSubmissionSucceeded] = useState(false);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const advanceRef = useRef<HTMLButtonElement>(null);
-  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
-
-  const totalQuestions = content.questions.length;
-  const currentQuestion = content.questions[currentIndex];
-
-  const handleSelect = useCallback(
-    (optionIndex: number) => {
-      if (answered) {
-        return;
-      }
-      setSelectedOption(optionIndex);
-      setAnswered(true);
-
-      const isCorrect = optionIndex === currentQuestion.correctIndex;
-      if (isCorrect) {
-        setScore((prev) => prev + 1);
-      }
-
-      setAnswers((prev) => [
-        ...prev,
-        { questionIndex: currentIndex, selectedIndex: optionIndex },
-      ]);
-    },
-    [answered, currentIndex, currentQuestion]
+  const focusOptionsRef = useRef(false);
+  const hasSubmittedRef = useRef(false);
+  const runIdRef = useRef(0);
+  const segments = toQuizSegments(
+    quiz.questionStatuses,
+    quiz.position,
+    completed
   );
 
-  const handleKeyDown = useCallback(
+  useEffect(() => {
+    if (!completed || readOnly || hasSubmittedRef.current) {
+      return;
+    }
+    hasSubmittedRef.current = true;
+    const submittedRunId = runIdRef.current;
+    void submitQuiz({
+      answers: quiz.answers.map(({ questionIndex, selectedIndex }) => ({
+        questionIndex,
+        selectedIndex,
+      })),
+      scope: quiz.scope,
+    })
+      .then(() => {
+        if (runIdRef.current === submittedRunId) {
+          setSubmissionSucceeded(true);
+        }
+      })
+      .catch(() => {
+        if (runIdRef.current === submittedRunId) {
+          toast.error(t('ai.artifacts.quiz.submitError'));
+        }
+      });
+  }, [completed, readOnly, quiz.answers, quiz.scope, submitQuiz, t]);
+
+  useEffect(() => {
+    if (checked && !completed) {
+      advanceRef.current?.focus();
+    }
+  }, [checked, completed]);
+
+  useEffect(() => {
+    if (focusOptionsRef.current && !completed) {
+      focusOptionsRef.current = false;
+      optionRefs.current[FIRST_OPTION]?.focus();
+    }
+  }, [quiz.position, quiz.scope, completed]);
+
+  const handleNext = useCallback(() => {
+    if (!checked || completed) {
+      return;
+    }
+    focusOptionsRef.current = true;
+    setFocusedIndex(FIRST_OPTION);
+    next();
+  }, [checked, completed, next]);
+
+  const handleRestart = useCallback(() => {
+    runIdRef.current += 1;
+    setSubmissionSucceeded(false);
+    hasSubmittedRef.current = false;
+    focusOptionsRef.current = true;
+    setFocusedIndex(FIRST_OPTION);
+    restart();
+  }, [restart]);
+
+  const handleRetryMissed = useCallback(() => {
+    if (quiz.missedIndexes.length === 0) {
+      return;
+    }
+    runIdRef.current += 1;
+    setSubmissionSucceeded(false);
+    hasSubmittedRef.current = false;
+    focusOptionsRef.current = true;
+    setFocusedIndex(FIRST_OPTION);
+    retryMissed();
+  }, [quiz.missedIndexes.length, retryMissed]);
+
+  const handleArrowKey = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>) => {
-      if (answered || !currentQuestion) {
+      if (
+        checked ||
+        !currentQuestion ||
+        isStudyKeyEventIgnored(event.nativeEvent, true)
+      ) {
         return;
       }
       const step = ARROW_KEY_STEP[event.key];
@@ -120,148 +163,157 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         return;
       }
       event.preventDefault();
-
       const optionCount = currentQuestion.options.length;
       const nextIndex = (focusedIndex + step + optionCount) % optionCount;
       setFocusedIndex(nextIndex);
+      select(nextIndex);
       optionRefs.current[nextIndex]?.focus();
     },
-    [answered, currentQuestion, focusedIndex]
+    [checked, currentQuestion, focusedIndex, select]
   );
 
-  useEffect(() => {
-    if (answered) {
-      advanceRef.current?.focus();
-    }
-  }, [answered]);
-
-  useEffect(() => {
-    if (focusIntent === null) {
-      return;
-    }
-    if (focusIntent === FOCUS_INTENT.RESULTS) {
-      resultsHeadingRef.current?.focus();
-    } else {
-      optionRefs.current[FIRST_OPTION]?.focus();
-    }
-  }, [focusIntent, currentIndex, completed]);
-
-  const handleNext = useCallback(() => {
-    if (currentIndex < totalQuestions - 1) {
-      setCurrentIndex((prev) => prev + 1);
-      setSelectedOption(null);
-      setAnswered(false);
-      setFocusedIndex(FIRST_OPTION);
-      setFocusIntent(FOCUS_INTENT.OPTION);
-    } else {
-      setCompleted(true);
-      setFocusIntent(FOCUS_INTENT.RESULTS);
-      if (!readOnly) {
-        void submitQuiz.mutateAsync({ answers: [...answers] }).catch(() => {
-          toast.error(t('ai.artifacts.quiz.submitError'));
-        });
+  useLayoutEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (
+        completed ||
+        !currentQuestion ||
+        event.defaultPrevented ||
+        isStudyKeyEventIgnored(event, true)
+      ) {
+        return;
       }
+      if (!checked && /^[1-5]$/.test(event.key)) {
+        const option = Number(event.key) - 1;
+        if (option < currentQuestion.options.length) {
+          event.preventDefault();
+          select(option);
+          setFocusedIndex(option);
+          optionRefs.current[option]?.focus();
+        }
+        return;
+      }
+      if (event.key !== 'Enter') {
+        return;
+      }
+      const button =
+        event.target instanceof HTMLElement
+          ? event.target.closest('button')
+          : null;
+      if (
+        !checked &&
+        selectedOption !== null &&
+        (!button || button.getAttribute('role') === 'radio')
+      ) {
+        event.preventDefault();
+        check();
+      } else if (checked && !button) {
+        event.preventDefault();
+        handleNext();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    checked,
+    completed,
+    currentQuestion,
+    selectedOption,
+    select,
+    check,
+    handleNext,
+  ]);
+
+  const hints: StudyKeyHint[] = [];
+  if (!completed && currentQuestion) {
+    if (!checked) {
+      hints.push({
+        keys: [`1–${currentQuestion.options.length}`],
+        label: t('ai.artifacts.focus.hints.chooseAnswer'),
+      });
+      hints.push({
+        keys: ['Enter'],
+        label: t('ai.artifacts.focus.hints.checkAnswer'),
+      });
+    } else {
+      hints.push({
+        keys: ['Enter'],
+        label: t(
+          quiz.isLast
+            ? 'ai.artifacts.focus.hints.viewResults'
+            : 'ai.artifacts.focus.hints.nextQuestion'
+        ),
+      });
     }
-  }, [currentIndex, totalQuestions, answers, submitQuiz, t, readOnly]);
+  }
+  hints.push({ keys: ['Esc'], label: t('ai.artifacts.focus.hints.exit') });
 
-  const handleRestart = useCallback(() => {
-    setCurrentIndex(0);
-    setSelectedOption(null);
-    setAnswered(false);
-    setFocusedIndex(FIRST_OPTION);
-    setAnswers([]);
-    setCompleted(false);
-    setScore(0);
-    setFocusIntent(FOCUS_INTENT.OPTION);
-  }, []);
-
-  if (completed) {
-    const percentage =
-      totalQuestions > 0 ? Math.round((score / totalQuestions) * PERCENT) : 0;
-    const scoreLabel = t('ai.artifacts.quiz.scoreText', {
-      score,
-      total: totalQuestions,
-      percentage,
-    });
+  const renderStage = () => {
+    if (quiz.total === 0) {
+      return (
+        <EmptyState title={t('ai.artifacts.focus.emptyQuiz')} description="">
+          <Button size="lg" className="min-h-12" onClick={onClose}>
+            {t('ai.artifacts.focus.backToNote')}
+          </Button>
+        </EmptyState>
+      );
+    }
+    if (completed) {
+      return (
+        <QuizResults
+          score={quiz.score}
+          total={quiz.total}
+          scope={quiz.scope}
+          readOnly={readOnly}
+          submissionSucceeded={submissionSucceeded}
+          answers={quiz.answers}
+          questions={artifact.content.questions}
+          onRetryMissed={handleRetryMissed}
+          onRestart={handleRestart}
+          onBackToNote={onClose}
+        />
+      );
+    }
+    if (!currentQuestion) {
+      return null;
+    }
+    const outcomeFor = (index: number): AnswerOutcome | undefined => {
+      if (!checked) {
+        return undefined;
+      }
+      if (index === currentQuestion.correctIndex) {
+        return 'correct';
+      }
+      return selectedOption === index ? 'incorrect' : undefined;
+    };
+    const feedback = checked
+      ? OUTCOME_FEEDBACK[
+          selectedOption === currentQuestion.correctIndex
+            ? 'correct'
+            : 'incorrect'
+        ]
+      : null;
 
     return (
-      <div className="flex flex-col items-center space-y-6 py-8">
-        <Trophy className="h-16 w-16 text-(--primary)" />
-        <h3
-          ref={resultsHeadingRef}
-          tabIndex={-1}
-          className="text-2xl font-bold outline-none"
-        >
-          {t('ai.artifacts.quiz.completed')}
-        </h3>
-        <p id={scoreCaptionId} className="text-lg text-(--muted-foreground)">
-          {scoreLabel}
+      <div className="my-auto flex min-w-0 flex-col gap-4 wrap-anywhere">
+        <p className="font-mono text-2xs leading-4 font-medium tracking-wide text-(--muted-foreground) uppercase tabular-nums sm:text-xs">
+          {t('ai.artifacts.focus.questionOf', {
+            current: quiz.position + 1,
+            total: quiz.total,
+          })}
         </p>
-        <Progress
-          className="h-4 w-48"
-          value={percentage}
-          max={PERCENT}
-          labelledBy={scoreCaptionId}
-          tone={scoreTone(percentage)}
-        />
-        <Button variant="outline" onClick={handleRestart}>
-          <RotateCcw className="mr-2 h-4 w-4" />
-          {t('ai.artifacts.quiz.tryAgain')}
-        </Button>
-      </div>
-    );
-  }
-
-  if (!currentQuestion) {
-    return null;
-  }
-
-  const { correctIndex } = currentQuestion;
-  const positionLabel = t('ai.artifacts.quiz.questionOf', {
-    current: currentIndex + 1,
-    total: totalQuestions,
-  });
-  const answeredCount = currentIndex + (answered ? 1 : 0);
-  const answeredLabel = t('ai.artifacts.quiz.answeredOf', {
-    answered: answeredCount,
-    total: totalQuestions,
-  });
-  const outcomeFor = (index: number): AnswerOutcome | undefined => {
-    if (!answered) {
-      return undefined;
-    }
-    if (index === correctIndex) {
-      return ANSWER_OUTCOME.CORRECT;
-    }
-    return selectedOption === index ? ANSWER_OUTCOME.INCORRECT : undefined;
-  };
-
-  const pickedOutcome =
-    selectedOption === null ? undefined : outcomeFor(selectedOption);
-  const feedback = pickedOutcome ? OUTCOME_FEEDBACK[pickedOutcome] : null;
-
-  return (
-    <div className="space-y-6">
-      <p className="text-sm text-(--muted-foreground)">{positionLabel}</p>
-
-      <Progress
-        value={answeredCount}
-        max={totalQuestions}
-        label={answeredLabel}
-      />
-
-      <div className="rounded-lg border border-(--border) bg-(--card) p-6">
-        <p className="text-base font-medium">{currentQuestion.question}</p>
-      </div>
-
-      <div
-        role="radiogroup"
-        aria-label={currentQuestion.question}
-        className="space-y-3"
-      >
-        {currentQuestion.options.map((option, index) => {
-          const optionOutcome = outcomeFor(index);
-          return (
+        <div className="rounded-lg border border-(--border) bg-(--card) p-6">
+          <p
+            className={`${getCardTextClass(currentQuestion.question)} font-normal whitespace-pre-wrap wrap-anywhere`}
+          >
+            {currentQuestion.question}
+          </p>
+        </div>
+        <div
+          role="radiogroup"
+          aria-label={currentQuestion.question}
+          className="space-y-3"
+        >
+          {currentQuestion.options.map((option, index) => (
             <AnswerOption
               key={index}
               ref={(node) => {
@@ -269,48 +321,114 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
               }}
               index={index}
               selected={selectedOption === index}
-              outcome={optionOutcome}
-              disabled={answered}
+              outcome={outcomeFor(index)}
+              disabled={checked}
               tabIndex={index === focusedIndex ? 0 : -1}
+              className={`min-h-12 text-base leading-relaxed font-normal lg:text-lg ${
+                selectedOption === index && !checked
+                  ? 'border-(--foreground)/50 bg-(--muted)'
+                  : ''
+              }`}
               onFocus={() => setFocusedIndex(index)}
-              onKeyDown={handleKeyDown}
-              onSelect={() => handleSelect(index)}
+              onKeyDown={handleArrowKey}
+              onSelect={() => {
+                setFocusedIndex(index);
+                select(index);
+              }}
             >
-              {option}
+              <span className="flex min-w-0 items-start gap-3">
+                {!checked && (
+                  <Kbd
+                    aria-hidden="true"
+                    className="mt-1 hidden shrink-0 md:inline-flex"
+                  >
+                    {index + 1}
+                  </Kbd>
+                )}
+                <span className="min-w-0 wrap-anywhere">{option}</span>
+              </span>
+              {!checked && selectedOption === index && (
+                <span
+                  aria-hidden="true"
+                  className="block text-sm text-(--muted-foreground)"
+                >
+                  {t('ai.artifacts.quiz.selected')}
+                </span>
+              )}
             </AnswerOption>
-          );
-        })}
-      </div>
-
-      <div role="status">
-        {feedback && (
-          <p className={`text-sm font-medium ${feedback.className}`}>
-            {t(feedback.key, {
-              letter: answerLetter(correctIndex),
-              answer: currentQuestion.options[correctIndex],
-            })}
-          </p>
+          ))}
+        </div>
+        <div role="status">
+          {feedback && (
+            <p
+              className={`text-lg font-medium leading-relaxed ${feedback.className}`}
+            >
+              {t(feedback.key, {
+                letter: answerLetter(currentQuestion.correctIndex),
+                answer: currentQuestion.options[currentQuestion.correctIndex],
+              })}
+            </p>
+          )}
+        </div>
+        {checked && currentQuestion.explanation && (
+          <div className="rounded-lg border border-(--border) bg-(--muted)/50 p-4">
+            <p className="text-base font-medium">
+              {t('ai.artifacts.quiz.explanation')}
+            </p>
+            <p className="mt-2 text-base leading-relaxed text-(--muted-foreground)">
+              {currentQuestion.explanation}
+            </p>
+          </div>
         )}
       </div>
+    );
+  };
 
-      {answered && currentQuestion.explanation && (
-        <div className="rounded-lg border border-(--border) bg-(--muted)/50 p-4">
-          <p className="text-sm font-medium">
-            {t('ai.artifacts.quiz.explanation')}
-          </p>
-          <p className="mt-1 text-sm text-(--muted-foreground)">
-            {currentQuestion.explanation}
-          </p>
-        </div>
-      )}
-
-      <div className={cn('flex justify-end', MOBILE_FAB_RAIL_CLEARANCE_CLASS)}>
-        <Button ref={advanceRef} onClick={handleNext} disabled={!answered}>
-          {currentIndex < totalQuestions - 1
-            ? t('ai.artifacts.quiz.next')
-            : t('ai.artifacts.quiz.finish')}
-        </Button>
-      </div>
-    </div>
+  return (
+    <StudyFocusDialog
+      tool={STUDY_TOOL.QUIZ}
+      title={artifact.title}
+      progress={{
+        segments,
+        label: t('ai.artifacts.focus.trackLabel', {
+          done: quiz.answers.length,
+          count: quiz.total,
+        }),
+      }}
+      inProgress={quiz.answers.length > 0 && !completed}
+      onClose={onClose}
+      actions={
+        !completed && currentQuestion ? (
+          <div className="flex justify-end">
+            {checked ? (
+              <Button
+                size="lg"
+                className="min-h-12 w-full bg-(--foreground) text-(--background) hover:bg-(--foreground)/90 hover:text-(--background) sm:w-auto"
+                ref={advanceRef}
+                onClick={handleNext}
+              >
+                {t(
+                  quiz.isLast
+                    ? 'ai.artifacts.quiz.finish'
+                    : 'ai.artifacts.quiz.next'
+                )}
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="min-h-12 w-full bg-(--foreground) text-(--background) hover:bg-(--foreground)/90 hover:text-(--background) sm:w-auto"
+                disabled={selectedOption === null}
+                onClick={check}
+              >
+                {t('ai.artifacts.quiz.checkAnswer')}
+              </Button>
+            )}
+          </div>
+        ) : undefined
+      }
+      hints={<StudyKeyHints hints={hints} />}
+    >
+      {renderStage()}
+    </StudyFocusDialog>
   );
 }

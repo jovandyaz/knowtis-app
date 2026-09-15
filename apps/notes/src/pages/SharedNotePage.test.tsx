@@ -433,6 +433,8 @@ describe('SharedNotePage study tab', () => {
       noteId: 'note-1',
       artifacts: artifactFixtures,
       readOnly: true,
+      selectedArtifactId: null,
+      onSelectArtifact: expect.any(Function),
     });
     expect(notePanel()).toHaveClass('hidden');
     expect(screen.getByTestId('read-only-editor')).toBeInTheDocument();

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Artifact } from '@knowtis/shared-types';
 
+import { ARTIFACT_ROW_ID_ATTRIBUTE } from './artifact-row';
 import { ArtifactList } from './ArtifactList';
 
 const { deleteArtifact } = vi.hoisted(() => ({
@@ -66,6 +67,10 @@ describe('ArtifactList', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     for (const artifact of ARTIFACTS) {
       expect(openButton(artifact.title)).toBeInTheDocument();
+      expect(openButton(artifact.title)).toHaveAttribute(
+        ARTIFACT_ROW_ID_ATTRIBUTE,
+        artifact.id
+      );
     }
   });
 

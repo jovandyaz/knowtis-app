@@ -45,16 +45,14 @@ describe('FlashcardRating', () => {
     expect(props.onRateAdvanced).not.toHaveBeenCalled();
   });
 
-  it('gives each simple rating button a 44px touch target', () => {
+  it('gives each simple rating button a 48px target', () => {
     renderRating();
 
     for (const name of [
       'ai.artifacts.flashcards.wrong',
       'ai.artifacts.flashcards.correct',
     ]) {
-      expect(screen.getByRole('button', { name })).toHaveClass(
-        'pointer-coarse:min-h-11'
-      );
+      expect(screen.getByRole('button', { name })).toHaveClass('min-h-12');
     }
   });
 
@@ -115,4 +113,20 @@ describe('FlashcardRating', () => {
       screen.getByRole('button', { name: /quality\.good/ })
     ).toHaveTextContent('ai.artifacts.flashcards.intervalDays {"count":4}');
   });
+});
+
+it('fits the simple ratings into equal columns with wrapping labels', () => {
+  renderRating();
+  const wrong = screen.getByRole('button', {
+    name: 'ai.artifacts.flashcards.wrong',
+  });
+  expect(wrong.parentElement).toHaveClass('grid', 'grid-cols-2', 'gap-2');
+  for (const button of screen.getAllByRole('button')) {
+    expect(button).toHaveClass(
+      'min-h-12',
+      'px-3',
+      'sm:px-6',
+      'whitespace-normal'
+    );
+  }
 });

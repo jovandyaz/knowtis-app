@@ -5,7 +5,7 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 
 export default defineConfig({
   root: __dirname,
@@ -34,6 +34,9 @@ export default defineConfig({
   server: {
     port: 4400,
     host: 'localhost',
+    fs: {
+      allow: [searchForWorkspaceRoot(__dirname)],
+    },
   },
   preview: {
     port: 4401,

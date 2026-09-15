@@ -1,15 +1,8 @@
 import { useTranslation } from 'react-i18next';
 
 import { Check, X } from 'lucide-react';
-import { motion } from 'motion/react';
 
-import {
-  Button,
-  cn,
-  learnToneButton,
-  RatingBar,
-  useMotionPreset,
-} from '@knowtis/design-system';
+import { Button, cn, learnToneButton, RatingBar } from '@knowtis/design-system';
 import type { PredictedIntervals, SM2Quality } from '@knowtis/shared-types';
 
 interface FlashcardRatingProps {
@@ -31,7 +24,8 @@ const FIRST_REVIEW_INTERVALS: PredictedIntervals = {
   easy: 1,
 };
 
-const RATE_BUTTON_LAYOUT = 'rounded-full px-6 py-2.5';
+const RATE_BUTTON_LAYOUT =
+  'min-h-12 min-w-0 rounded-full px-3 py-2.5 whitespace-normal sm:px-6';
 
 const SIMPLE_MODE_KEYS = { wrong: '1', correct: '2' } as const;
 
@@ -46,42 +40,30 @@ export function FlashcardRating({
   onRateAdvanced,
 }: FlashcardRatingProps) {
   const { t } = useTranslation('notes');
-  const preset = useMotionPreset();
 
   if (isAdvancedMode && !readOnly) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={preset.fade}
-      >
-        <RatingBar
-          label={t('ai.artifacts.flashcards.rateCard')}
-          intervals={intervals ?? FIRST_REVIEW_INTERVALS}
-          labels={{
-            again: t('ai.artifacts.flashcards.quality.again'),
-            hard: t('ai.artifacts.flashcards.quality.hard'),
-            good: t('ai.artifacts.flashcards.quality.good'),
-            easy: t('ai.artifacts.flashcards.quality.easy'),
-          }}
-          formatInterval={(days) =>
-            t('ai.artifacts.flashcards.intervalDays', { count: days })
-          }
-          onRate={onRateAdvanced}
-          disabled={disabled}
-          showKeys={showKeys}
-        />
-      </motion.div>
+      <RatingBar
+        label={t('ai.artifacts.flashcards.rateCard')}
+        intervals={intervals ?? FIRST_REVIEW_INTERVALS}
+        labels={{
+          again: t('ai.artifacts.flashcards.quality.again'),
+          hard: t('ai.artifacts.flashcards.quality.hard'),
+          good: t('ai.artifacts.flashcards.quality.good'),
+          easy: t('ai.artifacts.flashcards.quality.easy'),
+        }}
+        formatInterval={(days) =>
+          t('ai.artifacts.flashcards.intervalDays', { count: days })
+        }
+        onRate={onRateAdvanced}
+        disabled={disabled}
+        showKeys={showKeys}
+      />
     );
   }
 
   return (
-    <motion.div
-      className="flex items-center justify-center gap-4 pb-1"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={preset.fade}
-    >
+    <div className="grid w-full grid-cols-2 gap-2 sm:gap-4">
       <Button
         variant="ghost"
         className={cn(
@@ -92,7 +74,7 @@ export function FlashcardRating({
         disabled={disabled}
         aria-keyshortcuts={showKeys ? SIMPLE_MODE_KEYS.wrong : undefined}
       >
-        <X className="h-4 w-4" />
+        <X aria-hidden="true" className="h-4 w-4 shrink-0" />
         {t('ai.artifacts.flashcards.wrong')}
       </Button>
 
@@ -103,9 +85,9 @@ export function FlashcardRating({
         disabled={disabled}
         aria-keyshortcuts={showKeys ? SIMPLE_MODE_KEYS.correct : undefined}
       >
-        <Check className="h-4 w-4" />
+        <Check aria-hidden="true" className="h-4 w-4 shrink-0" />
         {t('ai.artifacts.flashcards.correct')}
       </Button>
-    </motion.div>
+    </div>
   );
 }

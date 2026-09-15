@@ -1,142 +1,87 @@
 import { useTranslation } from 'react-i18next';
 
-import { Check, SkipForward, X } from 'lucide-react';
-import { motion } from 'motion/react';
-
-import {
-  DonutChart,
-  StatTile,
-  useMotionPreset,
-  type DonutSegment,
-} from '@knowtis/design-system';
+import { Button } from '@knowtis/design-system';
 import type { RestartFilter, StudySessionResult } from '@knowtis/shared-types';
 
+import { toCardSegments } from '../focus/study-segments';
+import { StudySummary } from '../focus/StudySummary';
 import { MissedCardsList } from './MissedCardsList';
 import { PracticeAgainButton } from './PracticeAgainButton';
 
 interface FlashcardSummaryProps {
   result: StudySessionResult;
   onRestart: (filter: RestartFilter) => void;
+  onBackToNote?: (() => void) | undefined;
 }
 
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
-const PERCENT = 100;
 
-const MOTIVATIONAL_THRESHOLDS = [
-  { min: 90, key: 'ai.artifacts.flashcards.summary.excellentMastery' },
-  { min: 70, key: 'ai.artifacts.flashcards.summary.greatJob' },
-  { min: 50, key: 'ai.artifacts.flashcards.summary.goodProgress' },
-  { min: 30, key: 'ai.artifacts.flashcards.summary.keepPracticing' },
-  { min: 0, key: 'ai.artifacts.flashcards.summary.nextTimeBetter' },
-] as const;
-
-function formatDuration(ms: number): { minutes: number; seconds: number } {
-  const totalSeconds = Math.floor(ms / MS_PER_SECOND);
-  return {
-    minutes: Math.floor(totalSeconds / SECONDS_PER_MINUTE),
-    seconds: totalSeconds % SECONDS_PER_MINUTE,
-  };
-}
-
-export function FlashcardSummary({ result, onRestart }: FlashcardSummaryProps) {
+export function FlashcardSummary({
+  result,
+  onRestart,
+  onBackToNote,
+}: FlashcardSummaryProps) {
   const { t } = useTranslation('notes');
-  const preset = useMotionPreset();
-
-  const percentage =
-    result.total > 0
-      ? Math.round((result.correct / result.total) * PERCENT)
-      : 0;
-  const timeSpent = t(
-    'ai.artifacts.flashcards.summary.timeSpent',
-    formatDuration(result.durationMs)
+  const seconds = Math.floor(result.durationMs / MS_PER_SECOND);
+  const duration = t('ai.artifacts.flashcards.summary.timeSpent', {
+    minutes: Math.floor(seconds / SECONDS_PER_MINUTE),
+    seconds: String(seconds % SECONDS_PER_MINUTE).padStart(2, '0'),
+  });
+  const segments = toCardSegments(
+    result.cardResults.map((card) => card.status),
+    -1,
+    true
   );
-
-  const segments: DonutSegment[] = [
-    { value: result.correct, tone: 'correct' },
-    { value: result.wrong, tone: 'incorrect' },
-    { value: result.skipped, tone: 'muted' },
-  ];
-
-  const stats = [
-    {
-      label: t('ai.artifacts.flashcards.summary.gotIt'),
-      value: result.correct,
-      icon: <Check className="h-4 w-4 text-learn-correct-text" />,
-    },
-    {
-      label: t('ai.artifacts.flashcards.summary.missedIt'),
-      value: result.wrong,
-      icon: <X className="h-4 w-4 text-learn-incorrect-text" />,
-    },
-    {
-      label: t('ai.artifacts.flashcards.summary.skipped'),
-      value: result.skipped,
-      icon: <SkipForward className="h-4 w-4" />,
-    },
-  ];
+  const celebrate =
+    result.total > 0 && result.correct === result.total && result.skipped === 0;
 
   return (
-    <div className="flex min-w-0 flex-col items-center gap-6 py-4">
-      <motion.h2
-        className="text-center text-xl font-semibold"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={preset.fade}
-      >
-        {t(
-          (
-            MOTIVATIONAL_THRESHOLDS.find((th) => percentage >= th.min) ??
-            MOTIVATIONAL_THRESHOLDS[MOTIVATIONAL_THRESHOLDS.length - 1]
-          ).key
-        )}
-      </motion.h2>
-
-      <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-8">
-        <DonutChart
-          segments={segments}
-          description={t('ai.artifacts.flashcards.summary.description', {
-            percentage,
-            correct: result.correct,
-            wrong: result.wrong,
-            skipped: result.skipped,
-            duration: timeSpent,
-          })}
-          centerLabel={`${result.correct}/${result.total}`}
-          centerSublabel={`${percentage}%`}
-        >
-          {timeSpent}
-        </DonutChart>
-
-        <div className="@container w-full max-w-sm">
-          <div className="grid grid-cols-1 gap-3 @sm:grid-cols-3">
-            {stats.map((stat, index) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ ...preset.fade, delay: index * preset.stagger }}
-              >
-                <StatTile
-                  label={stat.label}
-                  value={stat.value}
-                  icon={stat.icon}
-                />
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full">
-        <MissedCardsList cards={result.cardResults} />
-      </div>
-
-      <PracticeAgainButton
-        hasMissedCards={result.wrong > 0}
-        hasSkippedCards={result.skipped > 0}
-        onRestart={onRestart}
-      />
-    </div>
+    <StudySummary
+      headline={t('ai.artifacts.flashcards.summary.headline', {
+        correct: result.correct,
+        total: result.total,
+      })}
+      duration={duration}
+      segments={segments}
+      legend={[
+        {
+          state: 'correct',
+          label: t('ai.artifacts.flashcards.summary.gotIt'),
+          count: result.correct,
+        },
+        {
+          state: 'wrong',
+          label: t('ai.artifacts.flashcards.summary.missedIt'),
+          count: result.wrong,
+        },
+        {
+          state: 'skipped',
+          label: t('ai.artifacts.flashcards.summary.skipped'),
+          count: result.skipped,
+        },
+      ]}
+      celebrate={celebrate}
+      revisit={
+        result.wrong > 0 ? (
+          <MissedCardsList cards={result.cardResults} />
+        ) : undefined
+      }
+      primaryAction={
+        <PracticeAgainButton
+          hasMissedCards={result.wrong > 0}
+          hasSkippedCards={result.skipped > 0}
+          missedCount={result.wrong}
+          onRestart={onRestart}
+        />
+      }
+      secondaryAction={
+        onBackToNote ? (
+          <Button variant="ghost" className="min-h-12" onClick={onBackToNote}>
+            {t('ai.artifacts.focus.backToNote')}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }

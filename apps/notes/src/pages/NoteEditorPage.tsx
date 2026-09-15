@@ -18,6 +18,7 @@ import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
+import { useStudyArtifactParam } from '@/hooks/useStudyArtifactParam';
 import { useWorkspaceTabReset } from '@/hooks/useWorkspaceTabReset';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
@@ -27,6 +28,7 @@ import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
@@ -206,6 +208,15 @@ function NoteEditor({
   const { isPending: flagsPending } = useFeatureFlags();
 
   useWorkspaceTabReset(noteId);
+  const { selectedArtifactId, selectArtifact } = useStudyArtifactParam();
+  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
+
+  // Run after useWorkspaceTabReset so its mount reset cannot override the study tab.
+  useEffect(() => {
+    if (selectedArtifactId !== null) {
+      setWorkspaceTab('study');
+    }
+  }, [selectedArtifactId, setWorkspaceTab]);
 
   useEffect(() => {
     setActiveNoteId(noteId);
@@ -409,7 +420,11 @@ function NoteEditor({
 
       {aiEnabled && (
         <WorkspaceTabPanel tab="study" tabbed>
-          <StudyToolsTab noteId={noteId} />
+          <StudyToolsTab
+            noteId={noteId}
+            selectedArtifactId={selectedArtifactId}
+            onSelectArtifact={selectArtifact}
+          />
         </WorkspaceTabPanel>
       )}
     </div>

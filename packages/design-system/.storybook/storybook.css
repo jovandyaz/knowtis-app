@@ -1,0 +1,4 @@
+@import '../src/styles.css';
+
+@source "../src/**/*.stories.tsx";
+@source inline("max-w-2xl font-serif min-h-11 my-8 pr-12 space-y-6 leading-relaxed flex-wrap");

@@ -16,6 +16,7 @@ import {
 import type { Artifact } from '@knowtis/shared-types';
 
 import { ARTIFACT_DISPLAY } from './artifact-display.config';
+import { ARTIFACT_ROW_ID_ATTRIBUTE } from './artifact-row';
 
 const ROW_CLASSES =
   'group flex items-center gap-3 rounded-lg border border-border/50 bg-card/50 p-3 transition-all hover:border-primary/30 hover:bg-muted/50';
@@ -83,6 +84,7 @@ export function ArtifactList({
           <li key={artifact.id} className={ROW_CLASSES}>
             <button
               type="button"
+              {...{ [ARTIFACT_ROW_ID_ATTRIBUTE]: artifact.id }}
               className={ROW_ACTION_CLASSES}
               onClick={() => onSelect(artifact)}
             >

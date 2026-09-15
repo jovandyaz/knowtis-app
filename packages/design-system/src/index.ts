@@ -142,6 +142,17 @@ export {
 } from './components/Progress';
 export { FlipCard, type FlipCardProps } from './components/FlipCard';
 export {
+  SegmentedProgress,
+  SEGMENT_STATES,
+  type SegmentState,
+  type SegmentedProgressProps,
+} from './components/SegmentedProgress';
+export {
+  OutcomeStamp,
+  type OutcomeStampVerdict,
+  type OutcomeStampProps,
+} from './components/OutcomeStamp';
+export {
   ProgressRing,
   type ProgressRingProps,
   RING_SIZE_DEFAULT,

@@ -1,3 +1,6 @@
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/literata/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
 @import 'tailwindcss';
 
 @source "./**/*.{ts,tsx}";
@@ -10,7 +13,10 @@
 
 @theme {
   --font-sans:
-    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
+  --font-serif: 'Literata Variable', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono Variable', 'Fira Code', Consolas, monospace;
 
   --text-2xs: 11px;
   --text-2xs--line-height: 1rem;
@@ -115,8 +121,10 @@
 
   --color-learn-correct: var(--learn-correct);
   --color-learn-incorrect: var(--learn-incorrect);
+  --color-learn-skipped: var(--learn-skipped);
   --color-learn-correct-text: var(--learn-correct-text);
   --color-learn-incorrect-text: var(--learn-incorrect-text);
+  --color-learn-skipped-text: var(--learn-skipped-text);
   --color-learn-new: var(--learn-new);
   --color-learn-difficulty-easy: var(--learn-difficulty-easy);
   --color-learn-difficulty-medium: var(--learn-difficulty-medium);
@@ -152,8 +160,10 @@
   --warning: var(--color-semantic-light-warning);
   --learn-correct: var(--color-semantic-light-learn-correct);
   --learn-incorrect: var(--color-semantic-light-learn-incorrect);
+  --learn-skipped: var(--color-semantic-light-learn-skipped);
   --learn-correct-text: var(--color-semantic-light-learn-correct-text);
   --learn-incorrect-text: var(--color-semantic-light-learn-incorrect-text);
+  --learn-skipped-text: var(--color-semantic-light-learn-skipped-text);
   --learn-new: var(--color-semantic-light-learn-new);
   --learn-difficulty-easy: var(--color-semantic-light-learn-difficulty-easy);
   --learn-difficulty-medium: var(
@@ -211,8 +221,10 @@
   --warning: var(--color-semantic-dark-warning);
   --learn-correct: var(--color-semantic-dark-learn-correct);
   --learn-incorrect: var(--color-semantic-dark-learn-incorrect);
+  --learn-skipped: var(--color-semantic-dark-learn-skipped);
   --learn-correct-text: var(--color-semantic-dark-learn-correct-text);
   --learn-incorrect-text: var(--color-semantic-dark-learn-incorrect-text);
+  --learn-skipped-text: var(--color-semantic-dark-learn-skipped-text);
   --learn-new: var(--color-semantic-dark-learn-new);
   --learn-difficulty-easy: var(--color-semantic-dark-learn-difficulty-easy);
   --learn-difficulty-medium: var(--color-semantic-dark-learn-difficulty-medium);

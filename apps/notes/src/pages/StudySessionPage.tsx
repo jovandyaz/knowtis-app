@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, Navigate } from '@tanstack/react-router';
@@ -16,6 +9,7 @@ import { FlashcardSummary } from '@/components/artifacts/flashcard/FlashcardSumm
 import { useFlashcardSession } from '@/components/artifacts/flashcard/use-flashcard-session';
 import { ROUTES } from '@/config';
 import { useStudyFocusMode } from '@/hooks/useStudyFocusMode';
+import { useStudyKeyboard } from '@/hooks/useStudyKeyboard';
 import { useStudyQueueAccess } from '@/hooks/useStudyQueueAccess';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { BROWSER_TIME_ZONE } from '@/lib/browser-time-zone';
@@ -44,10 +38,6 @@ import {
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { studyDurationBucket } from './study-duration-bucket';
-import {
-  resolveStudyKeyAction,
-  STUDY_KEY_ACTION_TYPES,
-} from './study-key-action';
 
 const PAGE_LAYOUT =
   'mx-auto flex w-full min-w-0 max-w-xl flex-col gap-6 px-4 py-6';
@@ -60,9 +50,6 @@ const RATING_BAR_CLASS =
   'fixed inset-x-0 bottom-0 z-30 border-t border-(--border) bg-(--background)/95 px-4 py-3 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:static md:border-0 md:bg-transparent md:px-0 md:py-0 md:pb-0 md:backdrop-blur-none';
 
 const STUDY_CARD_SHORTCUTS = 'Space Enter ArrowLeft ArrowRight';
-
-const DIALOG_OR_MENU_SELECTOR =
-  '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]';
 
 export function StudySessionPage() {
   const access = useStudyQueueAccess();
@@ -269,78 +256,24 @@ function StudyQueueSession({
     [session]
   );
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (isReviewInFlightRef.current) {
-        return;
-      }
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      if (
-        target instanceof HTMLElement &&
-        target.closest(DIALOG_OR_MENU_SELECTOR)
-      ) {
-        return;
-      }
-      if (
-        event.repeat ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey
-      ) {
-        return;
-      }
-      const action = resolveStudyKeyAction(event.key, session.isAdvancedMode);
-      if (!action) {
-        return;
-      }
-      // A focused button already flips on Space/Enter natively; acting again would double-toggle.
-      if (
-        action.type === STUDY_KEY_ACTION_TYPES.FLIP &&
-        target instanceof HTMLButtonElement
-      ) {
-        return;
-      }
-      if (action.type === STUDY_KEY_ACTION_TYPES.RATE && !session.flipped) {
-        return;
-      }
-      event.preventDefault();
-      switch (action.type) {
-        case STUDY_KEY_ACTION_TYPES.FLIP:
-          session.flip();
-          break;
-        case STUDY_KEY_ACTION_TYPES.NAVIGATE:
-          handleNavigate(action.direction);
-          break;
-        case STUDY_KEY_ACTION_TYPES.RATE:
-          if (session.isAdvancedMode) {
-            void handleRateAdvanced(action.quality);
-          } else if (action.quality === SM2_QUALITY.AGAIN) {
-            void handleWrong();
-          } else {
-            void handleCorrect();
-          }
-          break;
+  useStudyKeyboard({
+    enabled: !session.isComplete,
+    insideFocusDialog: false,
+    isAdvancedMode: session.isAdvancedMode,
+    flipped: session.flipped,
+    isBusy: () => isReviewInFlightRef.current,
+    onFlip: session.flip,
+    onNavigate: handleNavigate,
+    onRate: (quality) => {
+      if (session.isAdvancedMode) {
+        void handleRateAdvanced(quality);
+      } else if (quality === SM2_QUALITY.AGAIN) {
+        void handleWrong();
+      } else {
+        void handleCorrect();
       }
     },
-    [session, handleNavigate, handleRateAdvanced, handleWrong, handleCorrect]
-  );
-
-  useLayoutEffect(() => {
-    if (session.isComplete) {
-      return;
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown, session.isComplete]);
+  });
 
   if (session.isComplete) {
     return (
@@ -407,6 +340,9 @@ function StudyQueueSession({
       </div>
 
       <FlashcardCard
+        index={session.currentIndex}
+        total={session.totalCards}
+        showPile={session.currentIndex < session.totalCards - 1}
         front={card.front}
         back={card.back}
         difficulty={card.difficulty}

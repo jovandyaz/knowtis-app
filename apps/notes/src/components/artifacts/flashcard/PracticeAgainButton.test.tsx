@@ -17,6 +17,7 @@ function renderButton(
   const props = {
     hasMissedCards: false,
     hasSkippedCards: false,
+    missedCount: 0,
     onRestart: vi.fn(),
     ...overrides,
   };
@@ -25,26 +26,82 @@ function renderButton(
 }
 
 describe('PracticeAgainButton', () => {
-  it('gives the plain button a 44px touch target and restarts every card', async () => {
+  it('gives the plain button a 48px target and restarts every card', async () => {
     const props = renderButton();
 
     const button = screen.getByRole('button', {
       name: 'ai.artifacts.flashcards.summary.practiceAgain',
     });
-    expect(button).toHaveClass('pointer-coarse:min-h-11');
+    expect(button).toHaveClass('min-h-12');
 
     await userEvent.click(button);
 
     expect(props.onRestart).toHaveBeenCalledWith('all');
   });
 
-  it('gives the trigger button a 44px touch target when filters are available', () => {
-    renderButton({ hasMissedCards: true });
+  it('gives the trigger button a 48px target when filters are available', () => {
+    renderButton({ hasMissedCards: true, missedCount: 2 });
 
     expect(
       screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceOptions',
+      })
+    ).toHaveClass('min-h-12');
+  });
+
+  it('directly practices the missed count while its menu retains all three filters', async () => {
+    const props = renderButton({
+      hasMissedCards: true,
+      hasSkippedCards: true,
+      missedCount: 2,
+    });
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceMissed {"count":2}',
+      })
+    );
+    expect(props.onRestart).toHaveBeenLastCalledWith('missed');
+    for (const [key, filter] of [
+      ['allCards', 'all'],
+      ['onlyMissed', 'missed'],
+      ['onlySkipped', 'skipped'],
+    ] as const) {
+      await userEvent.click(
+        screen.getByRole('button', {
+          name: 'ai.artifacts.flashcards.summary.practiceOptions',
+        })
+      );
+      await userEvent.click(
+        await screen.findByRole('menuitem', {
+          name: `ai.artifacts.flashcards.summary.${key}`,
+        })
+      );
+      expect(props.onRestart).toHaveBeenLastCalledWith(filter);
+    }
+  });
+
+  it('keeps all-card practice as primary when the only unsettled recall outcome is skipped', async () => {
+    const props = renderButton({ hasSkippedCards: true });
+    await userEvent.click(
+      screen.getByRole('button', {
         name: 'ai.artifacts.flashcards.summary.practiceAgain',
       })
-    ).toHaveClass('pointer-coarse:min-h-11');
+    );
+    expect(props.onRestart).toHaveBeenCalledWith('all');
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceOptions',
+      })
+    );
+    expect(
+      screen.queryByRole('menuitem', {
+        name: 'ai.artifacts.flashcards.summary.onlyMissed',
+      })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', {
+        name: 'ai.artifacts.flashcards.summary.onlySkipped',
+      })
+    ).toBeInTheDocument();
   });
 });

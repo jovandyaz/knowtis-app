@@ -1,13 +1,14 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as MotionReact from 'motion/react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@knowtis/design-system';
-import type {
-  FlashcardArtifact,
-  FlashcardProgress,
+import {
+  SM2_QUALITY,
+  type FlashcardArtifact,
+  type FlashcardProgress,
 } from '@knowtis/shared-types';
 
 import { useFlashcardSession } from './flashcard/use-flashcard-session';
@@ -15,18 +16,24 @@ import type * as UseFlashcardSessionModule from './flashcard/use-flashcard-sessi
 import { FlashcardStudy } from './FlashcardStudy';
 
 const reviewCard = vi.fn();
-const { useFlashcardProgressMock, refetchProgress } = vi.hoisted(() => {
-  const refetchProgress = vi.fn();
-  return {
-    refetchProgress,
-    useFlashcardProgressMock: vi.fn(() => ({
-      data: undefined as FlashcardProgress[] | undefined,
-      isLoading: false,
-      isError: false,
-      refetch: refetchProgress,
-    })),
-  };
-});
+vi.mock('@tanstack/react-router', () => ({
+  useBlocker: () => ({ status: 'idle' }),
+}));
+const onClose = vi.fn();
+const { useFlashcardProgressMock, refetchProgress, captureProductEvent } =
+  vi.hoisted(() => {
+    const refetchProgress = vi.fn();
+    return {
+      refetchProgress,
+      captureProductEvent: vi.fn(),
+      useFlashcardProgressMock: vi.fn(() => ({
+        data: undefined as FlashcardProgress[] | undefined,
+        isLoading: false,
+        isError: false,
+        refetch: refetchProgress,
+      })),
+    };
+  });
 
 type ProgressResult = ReturnType<typeof useFlashcardProgressMock>;
 
@@ -52,6 +59,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
   useReviewCard: () => ({ mutateAsync: reviewCard, isPending: false }),
   useFlashcardProgress: useFlashcardProgressMock,
@@ -76,19 +84,33 @@ const artifact = {
 } as unknown as FlashcardArtifact;
 
 function renderStudy(readOnly = false) {
-  render(
+  return render(
     <TooltipProvider>
-      <FlashcardStudy artifact={artifact} readOnly={readOnly} />
+      <FlashcardStudy
+        artifact={artifact}
+        readOnly={readOnly}
+        onClose={onClose}
+      />
     </TooltipProvider>
   );
 }
 
 const CORRECT_BUTTON = { name: 'ai.artifacts.flashcards.correct' };
+const PREV_BUTTON = { name: 'ai.artifacts.flashcards.prev' };
 const NEXT_BUTTON = { name: 'ai.artifacts.flashcards.next' };
+const SKIP_BUTTON = { name: 'ai.artifacts.flashcards.skipCard' };
+const BACK_TO_NOTE_BUTTON = { name: 'ai.artifacts.focus.backToNote' };
+const FRONT_ONE = { name: /Front one/ };
+const FRONT_TWO = { name: /Front two/ };
 
 async function rateCorrect(front: RegExp) {
   await userEvent.click(await screen.findByRole('button', { name: front }));
   await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
+}
+
+async function rateWholeDeck() {
+  await rateCorrect(FRONT_ONE.name);
+  await rateCorrect(FRONT_TWO.name);
 }
 
 function deferReview() {
@@ -102,7 +124,24 @@ function deferReview() {
   return () => release?.();
 }
 
+const completedProgress = () =>
+  screen.getByRole('progressbar', { name: /ai\.artifacts\.focus\.trackLabel/ });
+
 describe('FlashcardStudy', () => {
+  it('keeps rating beside the card and navigation in the footer', async () => {
+    renderStudy();
+    const stage = document.activeElement;
+    expect(
+      screen.queryByRole('button', CORRECT_BUTTON)
+    ).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', FRONT_ONE));
+    const footer = screen.getByRole('contentinfo');
+    expect(stage).toContainElement(screen.getByRole('button', CORRECT_BUTTON));
+    expect(footer).not.toContainElement(
+      screen.getByRole('button', CORRECT_BUTTON)
+    );
+    expect(footer).toContainElement(screen.getByRole('button', NEXT_BUTTON));
+  });
   let randomSpy: ReturnType<typeof vi.spyOn> | undefined;
 
   beforeEach(() => {
@@ -136,7 +175,17 @@ describe('FlashcardStudy', () => {
 
     renderStudy();
 
-    expect(screen.getByText('ai.artifacts.loadingStudy')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAccessibleName(
+      'ai.artifacts.loadingStudy'
+    );
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '0'
+    );
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuemax',
+      '2'
+    );
     expect(useFlashcardSession).not.toHaveBeenCalled();
   });
 
@@ -146,8 +195,13 @@ describe('FlashcardStudy', () => {
     renderStudy();
 
     expect(
-      screen.getByText('ai.artifacts.flashcards.progressError')
+      screen.getByRole('heading', {
+        name: 'ai.artifacts.flashcards.progressError',
+      })
     ).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAccessibleName(
+      'ai.artifacts.flashcards.progressError'
+    );
     expect(useFlashcardSession).not.toHaveBeenCalled();
 
     await userEvent.click(
@@ -155,6 +209,29 @@ describe('FlashcardStudy', () => {
     );
 
     expect(refetchProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains an empty deck and returns directly to the note', async () => {
+    render(
+      <FlashcardStudy
+        artifact={{ ...artifact, content: { cards: [] } }}
+        onClose={onClose}
+      />
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', {
+          name: 'ai.artifacts.focus.emptyDeck',
+        })
+      ).toBeVisible()
+    );
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', BACK_TO_NOTE_BUTTON));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText('ai.artifacts.focus.exit.title')
+    ).not.toBeInTheDocument();
+    expect(reviewCard).not.toHaveBeenCalled();
   });
 
   it("mounts the session with a card's kind once its progress has loaded", async () => {
@@ -174,59 +251,128 @@ describe('FlashcardStudy', () => {
 
     renderStudy();
 
-    await screen.findByRole('button', { name: /Front one/ });
+    await screen.findByRole('button', FRONT_ONE);
     const cards = vi.mocked(useFlashcardSession).mock.calls.at(-1)?.[0];
     expect(cards?.[0].kind).toBe('due');
+  });
+
+  it('shows the padded card position in the card meta', async () => {
+    renderStudy();
+
+    await userEvent.click(screen.getByRole('button', NEXT_BUTTON));
+
+    expect(
+      screen.getByText(
+        'ai.artifacts.focus.cardMeta {"current":"02","total":"02"}'
+      )
+    ).toBeInTheDocument();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
+  });
+
+  it('shows the chosen stamp while saving but settles history only on acceptance', async () => {
+    const release = deferReview();
+    renderStudy();
+
+    await rateCorrect(FRONT_ONE.name);
+
+    expect(screen.getByText('✓')).toBeInTheDocument();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
+    expect(
+      screen.getByRole('button', { name: /Back one/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', NEXT_BUTTON)).toBeDisabled();
+
+    await act(async () => release());
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus()
+    );
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '1');
+    expect(reviewCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('erases provisional verdict feedback when the save fails', async () => {
+    let rejectReview: (reason?: unknown) => void = () => undefined;
+    reviewCard.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectReview = reject;
+        })
+    );
+    renderStudy();
+
+    await rateCorrect(FRONT_ONE.name);
+
+    expect(screen.getByText('✓')).toBeInTheDocument();
+    await act(async () => rejectReview(new Error('offline')));
+    await waitFor(() =>
+      expect(screen.queryByText('✓')).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole('button', { name: /Back one/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByRole('button', CORRECT_BUTTON)).toBeEnabled();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
+    expect(toast.error).toHaveBeenCalledWith(
+      'ai.artifacts.flashcards.reviewError'
+    );
   });
 
   it('advances a read-only session without recording the review', async () => {
     renderStudy(true);
 
-    await rateCorrect(/Front one/);
+    await rateCorrect(FRONT_ONE.name);
 
     expect(reviewCard).not.toHaveBeenCalled();
-    expect(
-      await screen.findByRole('button', { name: /Front two/ })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
   });
 
   it('records the review when the viewer owns the deck', async () => {
     renderStudy();
 
-    await rateCorrect(/Front one/);
+    await rateCorrect(FRONT_ONE.name);
 
     expect(reviewCard).toHaveBeenCalledTimes(1);
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '1');
   });
 
-  it('records no second review when the viewer goes back and rates a card again', async () => {
+  it('shows the recorded rating on a revisited card and continues to the next pending one', async () => {
     renderStudy();
 
-    await rateCorrect(/Front one/);
-    await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.prev' })
-    );
-    await rateCorrect(/Front one/);
+    await rateCorrect(FRONT_ONE.name);
+    await userEvent.click(screen.getByRole('button', PREV_BUTTON));
+    await userEvent.click(await screen.findByRole('button', FRONT_ONE));
 
-    expect(reviewCard).toHaveBeenCalledTimes(1);
     expect(
-      vi.mocked(useFlashcardSession).mock.results.at(-1)?.value.counts
-    ).toEqual({ correct: 1, wrong: 0, skipped: 0 });
+      screen.getByText(
+        'ai.artifacts.flashcards.recorded {"rating":"ai.artifacts.flashcards.quality.good"}'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', CORRECT_BUTTON)).toBeNull();
+    expect(screen.getByRole('button', SKIP_BUTTON)).toBeDisabled();
+
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'ai.artifacts.flashcards.continueStudying',
+      })
+    );
+
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
+    expect(reviewCard).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the card unrated when the server refuses the review', async () => {
     reviewCard.mockRejectedValueOnce(new Error('refused'));
     renderStudy();
 
-    await rateCorrect(/Front one/);
+    await rateCorrect(FRONT_ONE.name);
 
     expect(
       await screen.findByRole('button', { name: 'Back one' })
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Front two/ })).toBeNull();
-    expect(screen.getByRole('progressbar')).toHaveAttribute(
-      'aria-valuenow',
-      '0'
-    );
+    expect(screen.queryByRole('button', FRONT_TWO)).toBeNull();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
     expect(toast.error).toHaveBeenCalledWith(
       'ai.artifacts.flashcards.reviewError'
     );
@@ -236,12 +382,10 @@ describe('FlashcardStudy', () => {
     reviewCard.mockRejectedValueOnce(new Error('refused'));
     renderStudy();
 
-    await rateCorrect(/Front one/);
-    await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
+    await rateCorrect(FRONT_ONE.name);
+    await userEvent.click(await screen.findByRole('button', CORRECT_BUTTON));
 
-    expect(
-      await screen.findByRole('button', { name: /Front two/ })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
     expect(reviewCard).toHaveBeenCalledTimes(2);
   });
 
@@ -249,53 +393,267 @@ describe('FlashcardStudy', () => {
     const releaseReview = deferReview();
     renderStudy();
 
-    await rateCorrect(/Front one/);
+    await rateCorrect(FRONT_ONE.name);
     await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
 
     expect(reviewCard).toHaveBeenCalledTimes(1);
 
     releaseReview();
 
-    expect(
-      await screen.findByRole('button', { name: /Front two/ })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
     expect(reviewCard).toHaveBeenCalledTimes(1);
   });
 
-  it('counts a card skipped when the next arrow leaves it unflipped', async () => {
+  it('locks browsing and skipping while a rating is being saved', async () => {
+    const releaseReview = deferReview();
+    renderStudy();
+
+    await rateCorrect(FRONT_ONE.name);
+
+    expect(screen.getByRole('button', NEXT_BUTTON)).toBeDisabled();
+    expect(screen.getByRole('button', SKIP_BUTTON)).toBeDisabled();
+    const menu = screen.getByRole('button', {
+      name: 'ai.artifacts.focus.options',
+    });
+    expect(menu).toBeDisabled();
+    await userEvent.click(menu);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    releaseReview();
+
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
+    expect(menu).toBeEnabled();
+  });
+
+  it('focuses the next card prompt after a saved rating', async () => {
+    let opacityAtFocus: string | undefined;
+    const recordOpacityAtFocus = (event: FocusEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLButtonElement &&
+        target.getAttribute('aria-label') === 'Front two'
+      ) {
+        opacityAtFocus =
+          target.parentElement?.parentElement?.parentElement?.parentElement
+            ?.style.opacity;
+      }
+    };
+    document.addEventListener('focusin', recordOpacityAtFocus);
+    try {
+      renderStudy();
+      await rateCorrect(FRONT_ONE.name);
+      await waitFor(() => {
+        expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus();
+      });
+    } finally {
+      document.removeEventListener('focusin', recordOpacityAtFocus);
+    }
+    expect(opacityAtFocus).toBe('1');
+  });
+
+  it('does not carry a completed rating focus request into Practice again', async () => {
+    renderStudy();
+    await rateWholeDeck();
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'ai.artifacts.flashcards.summary.practiceAgain',
+      })
+    );
+    expect(await screen.findByRole('button', FRONT_ONE)).not.toHaveFocus();
+  });
+
+  it('ignores a stale rating without announcing it or carrying focus into later browsing', async () => {
+    randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const releaseReview = deferReview();
+    renderStudy();
+    await rateCorrect(FRONT_ONE.name);
+    const session = vi.mocked(useFlashcardSession).mock.results.at(-1)?.value;
+    if (!session) {
+      throw new Error('Expected the real flashcard session to be mounted');
+    }
+    act(() => session.shuffle());
+    await screen.findByRole('button', FRONT_TWO);
+    await act(async () => releaseReview());
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
+    await userEvent.click(screen.getByRole('button', NEXT_BUTTON));
+    expect(await screen.findByRole('button', FRONT_ONE)).not.toHaveFocus();
+  });
+
+  it('announces a recorded rating and completion count in one polite status', async () => {
+    renderStudy();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    await rateCorrect(FRONT_ONE.name);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.artifacts.flashcards.announce.rated {"rating":"ai.artifacts.flashcards.quality.good","done":1,"count":2}'
+    );
+  });
+
+  it('announces skipping and shuffling', async () => {
+    renderStudy();
+    await userEvent.click(screen.getByRole('button', SKIP_BUTTON));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.artifacts.flashcards.announce.skipped {"done":1,"count":2}'
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.focus.options' })
+    );
+    await userEvent.click(
+      screen.getByRole('menuitem', { name: 'ai.artifacts.flashcards.shuffle' })
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.artifacts.flashcards.announce.shuffled'
+    );
+  });
+
+  it('replaces live-region content so consecutive shuffles are announced again', async () => {
+    renderStudy();
+    const shuffle = async () => {
+      await userEvent.click(
+        screen.getByRole('button', { name: 'ai.artifacts.focus.options' })
+      );
+      await userEvent.click(
+        screen.getByRole('menuitem', {
+          name: 'ai.artifacts.flashcards.shuffle',
+        })
+      );
+    };
+    await shuffle();
+    const status = screen.getByRole('status');
+    const firstAnnouncement = status.firstChild;
+    expect(status).toHaveTextContent(
+      'ai.artifacts.flashcards.announce.shuffled'
+    );
+    await shuffle();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent(
+      'ai.artifacts.flashcards.announce.shuffled'
+    );
+    expect(status.firstChild).not.toBe(firstAnnouncement);
+  });
+
+  it('lets a skipped card be reviewed and graded when revisited', async () => {
+    renderStudy();
+    await userEvent.click(screen.getByRole('button', SKIP_BUTTON));
+    await userEvent.click(screen.getByRole('button', PREV_BUTTON));
+    await userEvent.click(await screen.findByRole('button', FRONT_ONE));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.flashcards.reviewCard' })
+    );
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
+    await userEvent.click(screen.getByRole('button', CORRECT_BUTTON));
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '1');
+    expect(reviewCard).toHaveBeenCalledWith(
+      expect.objectContaining({ cardIndex: 0, quality: SM2_QUALITY.GOOD })
+    );
+  });
+
+  it('moves to the next card without counting the one it leaves', async () => {
     renderStudy();
 
     await userEvent.click(screen.getByRole('button', NEXT_BUTTON));
-    await rateCorrect(/Front two/);
 
-    const skipped = await screen.findByRole('group', {
-      name: 'ai.artifacts.flashcards.summary.skipped',
-    });
-    expect(within(skipped).getByText('1')).toBeInTheDocument();
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
+    expect(screen.getByRole('button', NEXT_BUTTON)).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', PREV_BUTTON));
+
+    expect(await screen.findByRole('button', FRONT_ONE)).toBeInTheDocument();
   });
 
-  it('restarts the deck at the first card with the counters cleared', async () => {
+  it('counts a card skipped only through the skip button', async () => {
     renderStudy();
 
-    await rateCorrect(/Front one/);
-    await rateCorrect(/Front two/);
+    await userEvent.click(screen.getByRole('button', SKIP_BUTTON));
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '1');
+    await rateCorrect(FRONT_TWO.name);
 
+    expect(
+      await screen.findByText('1 ai.artifacts.flashcards.summary.skipped')
+    ).toBeInTheDocument();
+  });
+
+  it('flips the card with Space from the study stage', async () => {
+    renderStudy();
+
+    await screen.findByRole('button', FRONT_ONE);
+    await userEvent.keyboard(' ');
+
+    expect(
+      await screen.findByRole('button', { name: 'Back one' })
+    ).toBeInTheDocument();
+  });
+
+  it('rates a flipped card as recalled with the 2 key', async () => {
+    renderStudy();
+
+    await screen.findByRole('button', FRONT_ONE);
+    await userEvent.keyboard('2');
+    expect(reviewCard).not.toHaveBeenCalled();
+
+    await userEvent.keyboard(' ');
+    await userEvent.keyboard('2');
+
+    expect(reviewCard).toHaveBeenCalledWith(
+      expect.objectContaining({ cardIndex: 0, quality: SM2_QUALITY.GOOD })
+    );
+    expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
+  });
+
+  it('updates key hints from showing the answer to showing the question and rating', async () => {
+    renderStudy();
+
+    expect(
+      screen.getByText('ai.artifacts.focus.hints.showAnswer')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('ai.artifacts.focus.hints.browse')
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', FRONT_ONE));
+
+    expect(
+      screen.getByText('ai.artifacts.focus.hints.showQuestion')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('ai.artifacts.flashcards.rateCard')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('ai.artifacts.focus.hints.exit')
+    ).toBeInTheDocument();
+  });
+
+  it('restarts the deck at the first card with the outcome track cleared', async () => {
+    renderStudy();
+
+    await rateWholeDeck();
     await userEvent.click(
       await screen.findByRole('button', {
         name: 'ai.artifacts.flashcards.summary.practiceAgain',
       })
     );
 
+    expect(await screen.findByRole('button', FRONT_ONE)).toBeInTheDocument();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '0');
     expect(
-      await screen.findByRole('button', { name: /Front one/ })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute(
-      'aria-valuenow',
-      '0'
+      [...completedProgress().querySelectorAll('[data-state]')].map((segment) =>
+        segment.getAttribute('data-state')
+      )
+    ).toEqual(['current', 'pending']);
+  });
+
+  it('returns to the note from the summary', async () => {
+    renderStudy();
+
+    await rateWholeDeck();
+    await userEvent.click(
+      await screen.findByRole('button', BACK_TO_NOTE_BUTTON)
     );
-    expect(
-      screen.getByText('ai.artifacts.flashcards.correct').parentElement
-    ).toHaveTextContent('ai.artifacts.flashcards.correct0');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('rates the shuffled card by its own identity, not by position', async () => {
@@ -303,35 +661,115 @@ describe('FlashcardStudy', () => {
 
     renderStudy();
     await userEvent.click(
-      screen.getByRole('button', { name: 'ai.artifacts.flashcards.shuffle' })
+      screen.getByRole('button', { name: 'ai.artifacts.focus.options' })
     );
-    await rateCorrect(/Front two/);
+    await userEvent.click(
+      await screen.findByRole('menuitem', {
+        name: 'ai.artifacts.flashcards.shuffle',
+      })
+    );
+    await rateCorrect(FRONT_TWO.name);
 
     expect(reviewCard).toHaveBeenCalledWith(
       expect.objectContaining({ artifactId: 'deck-1', cardIndex: 1 })
     );
   });
 
-  it('crossfades the two faces instead of flipping under reduced motion', () => {
-    const { container } = render(
-      <TooltipProvider>
-        <FlashcardStudy artifact={artifact} />
-      </TooltipProvider>
+  it('reports the deck session start once, sourced from the note', async () => {
+    renderStudy();
+
+    await screen.findByRole('button', FRONT_ONE);
+
+    expect(captureProductEvent).toHaveBeenCalledTimes(1);
+    expect(captureProductEvent).toHaveBeenCalledWith('study session started', {
+      source: 'note',
+      due_count: 0,
+      new_count: 2,
+    });
+  });
+
+  it('reports the deck session completion with its counts and duration bucket', async () => {
+    renderStudy();
+
+    await rateWholeDeck();
+    await screen.findByRole('button', BACK_TO_NOTE_BUTTON);
+
+    expect(captureProductEvent).toHaveBeenCalledWith(
+      'study session completed',
+      {
+        source: 'note',
+        reviewed_count: 2,
+        correct_count: 2,
+        duration_bucket: '<2m',
+      }
+    );
+  });
+
+  it('closes through the exit button when nothing has been answered', async () => {
+    renderStudy();
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'ai.artifacts.focus.exitStudy',
+      })
     );
 
-    expect(container.querySelectorAll('[data-face="stack"]')).toHaveLength(2);
-    expect(container.querySelector('[data-face="flip"]')).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('crossfades the two faces instead of flipping under reduced motion', () => {
+    const { baseElement } = renderStudy();
+
+    expect(baseElement.querySelectorAll('[data-face="stack"]')).toHaveLength(2);
+    expect(baseElement.querySelector('[data-face="flip"]')).toBeNull();
   });
 
   it('flips the card in three dimensions when motion is allowed', () => {
     reducedMotion.value = false;
-    const { container } = render(
-      <TooltipProvider>
-        <FlashcardStudy artifact={artifact} />
-      </TooltipProvider>
-    );
+    const { baseElement } = renderStudy();
 
-    expect(container.querySelector('[data-face="flip"]')).not.toBeNull();
-    expect(container.querySelector('[data-face="stack"]')).toBeNull();
+    expect(baseElement.querySelector('[data-face="flip"]')).not.toBeNull();
+    expect(baseElement.querySelector('[data-face="stack"]')).toBeNull();
+  });
+
+  it('keeps the accepted answer mounted until its sort exit completes', async () => {
+    reducedMotion.value = false;
+    const release = deferReview();
+    renderStudy();
+
+    await rateCorrect(FRONT_ONE.name);
+    await act(async () => release());
+
+    expect(
+      screen.getByRole('button', { name: 'Back one' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', FRONT_TWO)).not.toBeInTheDocument();
+    expect(completedProgress()).toHaveAttribute('aria-valuenow', '1');
+    expect(completedProgress()).toHaveAccessibleName(
+      'ai.artifacts.focus.trackLabel {"done":1,"count":2}'
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus()
+    );
+  });
+
+  it('finishes the last sort before showing the summary and permits no duplicate rating', async () => {
+    reducedMotion.value = false;
+    renderStudy(true);
+
+    await rateCorrect(FRONT_ONE.name);
+    await waitFor(() =>
+      expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus()
+    );
+    await rateCorrect(FRONT_TWO.name);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', {
+          name: 'ai.artifacts.flashcards.summary.headline {"correct":2,"total":2}',
+        })
+      ).toHaveFocus()
+    );
+    expect(reviewCard).not.toHaveBeenCalled();
   });
 });

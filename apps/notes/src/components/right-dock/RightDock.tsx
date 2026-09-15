@@ -16,6 +16,7 @@ import {
 } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 
+import { isStudyFocusOpen } from '../artifacts/focus/study-focus-marker';
 import { AgentCopilotPanel } from '../copilot';
 
 const DOCK_MIN_WIDTH = 300;
@@ -111,6 +112,12 @@ export function RightDock() {
       <DialogContent
         className="flex h-[90vh] max-w-full flex-col gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)]"
         closeLabel={t('common:labels.closeDialog')}
+        onOpenAutoFocus={(event) => {
+          if (isStudyFocusOpen()) {
+            event.preventDefault();
+            close();
+          }
+        }}
         // Escape discards the proposal under review; Radix reads Escape in a
         // document capture handler, so only its own opt-out can hold the dock open.
         onEscapeKeyDown={(event) => {
