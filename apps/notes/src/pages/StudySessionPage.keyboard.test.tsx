@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { resolveStudyKeyAction } from '@/hooks/study-key-action';
 import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,7 +10,6 @@ import {
   type StudySession,
 } from '@knowtis/shared-types';
 
-import { resolveStudyKeyAction } from './study-key-action';
 import { StudySessionPage } from './StudySessionPage';
 
 const { reviewCard } = vi.hoisted(() => ({
