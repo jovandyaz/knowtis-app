@@ -520,7 +520,7 @@ describe('FlashcardStudy', () => {
     expect(await screen.findByRole('button', FRONT_TWO)).toBeInTheDocument();
   });
 
-  it('hints the keys the face on show answers', async () => {
+  it('updates key hints from showing the answer to showing the question and rating', async () => {
     renderStudy();
 
     expect(

@@ -211,6 +211,7 @@ function NoteEditor({
   const { selectedArtifactId, selectArtifact } = useStudyArtifactParam();
   const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
 
+  // Run after useWorkspaceTabReset so its mount reset cannot override the study tab.
   useEffect(() => {
     if (selectedArtifactId !== null) {
       setWorkspaceTab('study');

@@ -34,6 +34,7 @@ describe.each([
   { platform: 'Windows', modifier: { ctrlKey: true }, shortcut: 'Ctrl+J' },
 ])('AppLayout $shortcut', ({ platform, modifier }) => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform);
     useRightDockStore.setState({ isOpen: false });
   });

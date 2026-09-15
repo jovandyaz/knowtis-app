@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FlashcardMenu } from './FlashcardMenu';
 
@@ -29,6 +29,7 @@ const trigger = () =>
   screen.getByRole('button', { name: 'ai.artifacts.focus.options' });
 
 describe('FlashcardMenu', () => {
+  beforeEach(() => vi.clearAllMocks());
   it('locks restart and shuffle behind a disabled trigger while saving', async () => {
     const props = renderMenu({ disabled: true });
     expect(trigger()).toBeDisabled();

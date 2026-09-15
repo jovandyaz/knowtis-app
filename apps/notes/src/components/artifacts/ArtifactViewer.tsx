@@ -8,14 +8,15 @@ interface ArtifactViewerProps {
 }
 
 export function ArtifactViewer({ artifact }: ArtifactViewerProps) {
-  switch (artifact.type) {
+  const { type, id } = artifact;
+  switch (type) {
     case 'summary':
       return <SummaryViewer artifact={artifact} />;
     case 'mind_map':
       return <MindMapViewer artifact={artifact} />;
     default: {
-      const unhandled: never = artifact;
-      throw new Error(`Unhandled artifact: ${JSON.stringify(unhandled)}`);
+      const unhandled: never = type;
+      throw new Error(`Unhandled artifact: ${unhandled} (${id})`);
     }
   }
 }

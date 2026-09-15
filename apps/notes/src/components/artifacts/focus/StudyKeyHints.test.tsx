@@ -15,6 +15,7 @@ describe('StudyKeyHints', () => {
     );
 
     const hints = within(screen.getByRole('list'));
+    expect(screen.getByRole('list')).toHaveAttribute('role', 'list');
     expect(hints.getAllByRole('listitem')).toHaveLength(2);
     expect(hints.getByText('Flip card')).toBeInTheDocument();
     expect(hints.getByText('Space', { selector: 'kbd' })).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import type * as MotionReact from 'motion/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionCelebration } from './SessionCelebration';
 
@@ -11,6 +11,7 @@ vi.mock('motion/react', async () => {
 });
 
 describe('SessionCelebration', () => {
+  beforeEach(() => vi.clearAllMocks());
   it('renders a hidden burst of pieces', () => {
     reducedMotion.value = false;
     const { container } = render(<SessionCelebration />);

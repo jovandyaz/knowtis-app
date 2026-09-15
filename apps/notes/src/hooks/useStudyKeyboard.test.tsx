@@ -72,7 +72,7 @@ describe('useStudyKeyboard', () => {
     expect(hidden.onRate).toHaveBeenCalledWith(SM2_QUALITY.GOOD);
   });
 
-  it('maps 1-4 in advanced mode and 1/2 in simple mode', () => {
+  it('maps 3 and 4 to good and easy in advanced mode', () => {
     const opts = options({ flipped: true, isAdvancedMode: true });
     renderHook(() => useStudyKeyboard(opts));
     press('3');

@@ -47,6 +47,7 @@ export function useStudyKeyboard(options: StudyKeyboardOptions): void {
       if (!action) {
         return;
       }
+      // A focused button flips natively; handling FLIP here would toggle it twice.
       if (
         action.type === STUDY_KEY_ACTION_TYPES.FLIP &&
         event.target instanceof HTMLButtonElement

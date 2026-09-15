@@ -11,7 +11,11 @@ interface StudyKeyHintsProps {
 
 export function StudyKeyHints({ hints }: StudyKeyHintsProps) {
   return (
-    <ul className="hidden flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-(--muted-foreground) md:flex">
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Safari needs explicit list semantics when list styling is removed.
+    <ul
+      role="list"
+      className="hidden flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-(--muted-foreground) md:flex"
+    >
       {hints.map((hint) => (
         <li key={hint.label} className="flex items-center gap-1.5">
           {hint.keys.map((key) => (
