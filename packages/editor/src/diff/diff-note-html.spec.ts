@@ -306,6 +306,42 @@ describe('diffNoteHtml', () => {
     expect(textB(diff, 0)).toBe('hacer');
   });
 
+  it('reports a line break that loses its mark instead of no changes', () => {
+    const diff = diffNoteHtml(
+      '<p><strong>a<br></strong>b</p>',
+      '<p><strong>a</strong><br>b</p>',
+      BASE
+    );
+    expect(diff.count).toBe(1);
+  });
+
+  it('keeps a word-level diff for a block far down a long note', () => {
+    const filler = `<p>${'relleno '.repeat(400)}</p>`;
+    const diff = diffNoteHtml(
+      `${filler}<p>uno dos tres</p>`,
+      `${filler}<p>uno cuatro tres</p>`,
+      BASE
+    );
+    expect(diff.changes[0].fromA).toBeGreaterThan(2500);
+    expect(diff.count).toBe(1);
+    expect(textA(diff, 0)).toBe('dos');
+    expect(textB(diff, 0)).toBe('cuatro');
+  });
+
+  it('widens a checked parent task over its nested sub-task edits', () => {
+    const tasks = (checked: boolean, child: string) =>
+      `<ul data-type="taskList"><li data-type="taskItem" data-checked="${checked}"><p>padre</p>` +
+      `<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>${child}</p></li></ul></li></ul>`;
+    const diff = diffNoteHtml(
+      tasks(false, 'hijo viejo'),
+      tasks(true, 'hijo nuevo'),
+      BASE
+    );
+    expect(diff.count).toBe(1);
+    expect(textA(diff, 0)).toBe('padre hijo viejo');
+    expect(textB(diff, 0)).toBe('padre hijo nuevo');
+  });
+
   it('still uses full LCS alignment under the block-count cap', () => {
     const before = ['a', 'b', 'c', 'd', 'e']
       .map((letter) => `<p>${letter}</p>`)

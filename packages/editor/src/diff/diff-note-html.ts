@@ -59,7 +59,8 @@ function marksKey(marks: readonly Mark[]): string {
 const NOTE_TOKEN_ENCODER: TokenEncoder<number | string> = {
   encodeCharacter: (char, marks) =>
     marks.length === 0 ? char : `${char}:${marksKey(marks)}`,
-  encodeNodeStart: (node) => `${node.type.name}${JSON.stringify(node.attrs)}`,
+  encodeNodeStart: (node) =>
+    `${node.type.name}${JSON.stringify(node.attrs)}${marksKey(node.marks)}`,
   encodeNodeEnd: (node) => `/${node.type.name}`,
   compareTokens: (a, b) => a === b,
 };
@@ -181,25 +182,27 @@ function rewriteChanges(
   posA: number,
   posB: number
 ): DocChange[] {
-  const tr = new Transform(before).replaceWith(
-    posA,
-    posA + beforeBlock.nodeSize,
+  // prosemirror-changeset gives up on word diffs past absolute position 2500,
+  // so each pair is diffed inside a doc holding only that block.
+  const blockDoc = before.type.create(null, beforeBlock);
+  const tr = new Transform(blockDoc).replaceWith(
+    0,
+    beforeBlock.nodeSize,
     afterBlock
   );
   const changeSet = ChangeSet.create(
-    before,
+    blockDoc,
     undefined,
     NOTE_TOKEN_ENCODER
   ).addSteps(tr.doc, tr.mapping.maps, null);
-  const shift = posB - posA;
   const widened = simplifyChanges(changeSet.changes, tr.doc).map((change) =>
-    widenMarkupChange(before, tr.doc, change)
+    widenMarkupChange(blockDoc, tr.doc, change)
   );
   return mergeOverlapping(widened).map(({ fromA, toA, fromB, toB }) => ({
-    fromA,
-    toA,
-    fromB: fromB + shift,
-    toB: toB + shift,
+    fromA: fromA + posA,
+    toA: toA + posA,
+    fromB: fromB + posB,
+    toB: toB + posB,
   }));
 }
 
