@@ -22,6 +22,8 @@ export interface ScriptedAgent {
   /** Every client→server socket.io event seen so far, in order. */
   readonly sent: readonly { event: string; payload: unknown }[];
   waitForSent(event: string): Promise<unknown>;
+  /** Pushes one server→client event, for turns the static script cannot end on its own. */
+  emit(event: string, payload: unknown): void;
 }
 
 function handshake(sid: string): string {
@@ -149,6 +151,9 @@ export async function scriptAgent(
         })
         .toBe(true);
       return sent.findLast((item) => item.event === name)?.payload;
+    },
+    emit(name, payload) {
+      outbox.push(event(name, payload));
     },
   };
 }
