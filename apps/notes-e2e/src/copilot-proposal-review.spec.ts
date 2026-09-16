@@ -130,7 +130,7 @@ test('reviews a proposed note update before applying it', async ({
         (node.closest('aside') as HTMLElement)?.getBoundingClientRect().width ??
         0
     )) as number;
-  expect(await width()).toBeGreaterThan(560);
+  await expect.poll(width).toBeGreaterThan(560);
 
   await review.getByRole('button', { name: /apply|aplicar/i }).click();
   await agent.waitForSent('agent:approve');
