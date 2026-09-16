@@ -3,9 +3,9 @@ import { expect, type Page } from '@playwright/test';
 import {
   openCopilotDock,
   scriptAgent,
+  test,
   type ScriptedAgent,
 } from './fixtures/copilot.fixture';
-import { test } from './fixtures/sharing.fixture';
 
 const QUEUED_RE = /queued|en cola/i;
 const SEND_NOW_RE = /send now|enviar ahora/i;
