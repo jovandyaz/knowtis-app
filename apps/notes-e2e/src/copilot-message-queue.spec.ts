@@ -1,12 +1,12 @@
 import { expect, type Page } from '@playwright/test';
 
 import {
+  openCopilotDock,
   scriptAgent,
-  test,
   type ScriptedAgent,
 } from './fixtures/copilot.fixture';
+import { test } from './fixtures/sharing.fixture';
 
-const COMPOSER_RE = /copilot|pregunta|ask/i;
 const QUEUED_RE = /queued|en cola/i;
 const SEND_NOW_RE = /send now|enviar ahora/i;
 const STOP_RE = /^(stop|detener)$/i;
@@ -44,22 +44,6 @@ function cancelCount(agent: ScriptedAgent): number {
   return agent.sent.filter((item) => item.event === 'agent:cancel').length;
 }
 
-/** Same hydration race as copilot-proposal-review.spec.ts: wait before toggling. */
-async function openCopilotDock(page: Page) {
-  const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
-  const alreadyOpen = await composer
-    .waitFor({ state: 'visible', timeout: 1_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!alreadyOpen) {
-    await page
-      .getByRole('button', { name: /copilot/i })
-      .first()
-      .click();
-  }
-  return composer;
-}
-
 /** The script streams a chunk and never ends the turn; each test ends it. */
 function startAnsweringTurn(page: Page) {
   return scriptAgent(page, {
@@ -80,7 +64,7 @@ test('queues two messages while the copilot answers and drains them in order', a
   sharing,
 }) => {
   const { owner } = sharing;
-  const note = await owner.createNote('Cola del copiloto');
+  const note = await owner.createNote('Cola de mensajes');
   const agent = await startAnsweringTurn(owner.page);
 
   await owner.page.goto(`/notes/${note.id}`);

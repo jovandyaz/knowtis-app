@@ -8,6 +8,9 @@ const SEPARATOR = '\x1e';
 const HOLD_MS = 3_000;
 const POLL_MS = 25;
 const CONNECT_RE = /^40(\/[^,]*)?,?/;
+const COMPOSER_RE = /copilot|pregunta|ask/i;
+const DOCK_TOGGLE_RE = /^copilot$/i;
+const DOCK_HYDRATION_TIMEOUT_MS = 1_000;
 
 export interface AgentScript {
   /** Emitted in order once the client sends `agent:message`. */
@@ -156,4 +159,20 @@ export async function scriptAgent(
       outbox.push(event(name, payload));
     },
   };
+}
+
+/** The dock's open state persists across notes in the same worker, so right
+ * after navigation the composer may just not have hydrated yet — an
+ * `isVisible()` snapshot can't tell that from "closed" and toggling a dock
+ * that is actually open closes it. Waiting bounds the hydration race instead. */
+export async function openCopilotDock(page: Page) {
+  const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
+  const alreadyOpen = await composer
+    .waitFor({ state: 'visible', timeout: DOCK_HYDRATION_TIMEOUT_MS })
+    .then(() => true)
+    .catch(() => false);
+  if (!alreadyOpen) {
+    await page.getByRole('button', { name: DOCK_TOGGLE_RE }).first().click();
+  }
+  return composer;
 }

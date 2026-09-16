@@ -1,6 +1,6 @@
-import { expect, type Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 
-import { scriptAgent } from './fixtures/copilot.fixture';
+import { openCopilotDock, scriptAgent } from './fixtures/copilot.fixture';
 import { test } from './fixtures/sharing.fixture';
 
 const NOTE_HTML = [
@@ -34,26 +34,6 @@ const SURVIVING_PARAGRAPH =
 const REVIEW_TITLE_RE = /review changes|revisar cambios/i;
 const REMOVED_BLOCK_RE = /1 block removed|1 bloque eliminado/i;
 const REASON_TEXTBOX_RE = /why\?|por qué/i;
-const COMPOSER_RE = /copilot|pregunta|ask/i;
-
-/** The dock's open state persists across notes in the same worker, so right
- * after navigation the composer may just not have hydrated yet — an
- * `isVisible()` snapshot can't tell that from "closed" and toggling a dock
- * that is actually open closes it. Waiting bounds the hydration race instead. */
-async function openCopilotDock(page: Page) {
-  const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
-  const alreadyOpen = await composer
-    .waitFor({ state: 'visible', timeout: 1_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!alreadyOpen) {
-    await page
-      .getByRole('button', { name: /copilot/i })
-      .first()
-      .click();
-  }
-  return composer;
-}
 
 test('reviews a proposed note update before applying it', async ({
   sharing,
