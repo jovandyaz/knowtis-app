@@ -14,14 +14,14 @@ import { useAuthUser } from '@jovandyaz/auth-react';
 import { Search } from 'lucide-react';
 
 import { ResizablePanel } from '@knowtis/design-system';
+import { isMacPlatform } from '@knowtis/shared-util';
 
 import { NavigationLinks } from './NavigationLinks';
 import { SidebarBrand } from './SidebarBrand';
 import { SidebarNotesSection } from './SidebarNotesSection';
 import { SidebarUserMenu } from './SidebarUserMenu';
 
-const isMac =
-  typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent);
+const isMac = isMacPlatform();
 
 const SIDEBAR_WIDTH = 224;
 const COLLAPSE_THRESHOLD = 80;
