@@ -15,7 +15,7 @@ describe('isMacPlatform', () => {
     expect(isMacPlatform(WINDOWS_UA)).toBe(false);
   });
 
-  it('is false when no navigator and no user agent are available', () => {
+  it('is false for an empty user agent', () => {
     expect(isMacPlatform('')).toBe(false);
   });
 });

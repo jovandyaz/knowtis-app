@@ -1311,7 +1311,7 @@ releases items with "Send now", removes them, takes the newest back into the
 composer with `↑`, or sends a new message, which goes first and re-arms
 draining. `⌘/Ctrl+Enter` (or "Send now" while a turn is alive) is the only
 send that cancels a live turn. A queued item stores text and the note that was
-open when it was typed; model and effort resolve when it is sent. The client
+open when it was queued; model and effort resolve when it is sent. The client
 never runs two turns of one conversation at once — the server-authoritative
 transcript requires it — so `AI_MAX_CONCURRENT_STREAMS` remains a guard, not a
 feature.

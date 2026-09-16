@@ -257,7 +257,7 @@ describe('AgentCopilotPanel', () => {
     expect(composer).toHaveAttribute('data-queue', '1');
   });
 
-  it('queues a composer send while streaming and interrupts on send-now', async () => {
+  it('queues a composer send, interrupts on send-now, and releases the queued row', async () => {
     const user = userEvent.setup();
     act(() => {
       useAgentStore.setState({
@@ -281,6 +281,12 @@ describe('AgentCopilotPanel', () => {
     expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
       'later',
     ]);
+
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.queueSendNow' })
+    );
+    expect(useAgentStore.getState().messages.at(-2)?.content).toBe('later');
+    expect(useAgentStore.getState().queue).toEqual([]);
   });
 });
 
@@ -307,6 +313,8 @@ describe('AgentCopilotPanel proposal routing', () => {
       answeredError: null,
       messages: [],
       pendingProposal: null,
+      queue: [],
+      draft: '',
     });
   });
 

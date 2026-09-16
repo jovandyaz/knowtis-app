@@ -7,7 +7,6 @@ export { logger } from './logger';
 export { pickDefined } from './pick-defined';
 export {
   isMacPlatform,
-  MODIFIER_KEY_LABELS,
   modifierKeyLabel,
   type ModifierKeyLabel,
 } from './platform';

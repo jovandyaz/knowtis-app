@@ -1,6 +1,6 @@
-const MAC_USER_AGENT = /Mac/i;
+const MAC_USER_AGENT_PATTERN = /Mac/i;
 
-export const MODIFIER_KEY_LABELS = { mac: '⌘', other: 'Ctrl' } as const;
+const MODIFIER_KEY_LABELS = { mac: '⌘', other: 'Ctrl' } as const;
 export type ModifierKeyLabel =
   (typeof MODIFIER_KEY_LABELS)[keyof typeof MODIFIER_KEY_LABELS];
 
@@ -8,7 +8,7 @@ export type ModifierKeyLabel =
 export function isMacPlatform(userAgent?: string): boolean {
   const agent =
     userAgent ?? (typeof navigator === 'undefined' ? '' : navigator.userAgent);
-  return MAC_USER_AGENT.test(agent);
+  return MAC_USER_AGENT_PATTERN.test(agent);
 }
 
 export function modifierKeyLabel(userAgent?: string): ModifierKeyLabel {

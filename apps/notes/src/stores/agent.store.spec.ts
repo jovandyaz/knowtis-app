@@ -489,6 +489,34 @@ describe('useAgentStore', () => {
       );
     });
 
+    it('ignores the superseded turn once a drained one takes over', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      const superseded = get();
+      useAgentStore.getState().sendMessage('second');
+      superseded.onThinking?.({ text: 'razonando' });
+      vi.advanceTimersByTime(50);
+      expect(useAgentStore.getState().thinkingText).toBe('razonando');
+
+      superseded.onDone(DONE);
+
+      expect(useAgentStore.getState().thinkingText).toBe('');
+      expect(useAgentStore.getState().queue).toEqual([]);
+
+      superseded.onChunk({ text: 'tarde' });
+      superseded.onDone(DONE);
+      vi.advanceTimersByTime(50);
+
+      expect(useAgentStore.getState().status).toBe('streaming');
+      expect(useAgentStore.getState().messages.map((m) => m.content)).toEqual([
+        'first',
+        '',
+        'second',
+        '',
+      ]);
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(2);
+    });
+
     it('keeps the queue and sends nothing on Stop', () => {
       capture();
       useAgentStore.getState().sendMessage('first');

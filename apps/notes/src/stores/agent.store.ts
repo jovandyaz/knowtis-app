@@ -67,7 +67,10 @@ export interface SendMessageOptions {
   interrupt?: boolean;
 }
 
-const TURN_ALIVE_STATUSES = ['streaming', 'pendingProposal'] as const;
+const TURN_ALIVE_STATUSES = [
+  'streaming',
+  'pendingProposal',
+] as const satisfies readonly AgentStatus[];
 
 /** A turn is alive while the server may still stream for it: a send must queue, not replace. */
 export function isTurnAlive(status: AgentStatus): boolean {
@@ -370,7 +373,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         const queued: QueuedMessage = {
           id: nextId(),
           text: trimmed,
-          ...(noteId ? { noteId } : {}),
+          ...(noteId !== undefined ? { noteId } : {}),
         };
         set((s) => ({ queue: [...s.queue, queued] }));
         captureProductEvent('ai message queued', {
@@ -392,7 +395,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       if (!item) {
         return;
       }
-      set((s) => ({ queue: s.queue.filter((q) => q.id !== id) }));
+      get().removeQueued(id);
       startTurn(item.text, item.noteId);
     },
 
