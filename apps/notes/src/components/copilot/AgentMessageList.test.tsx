@@ -1,4 +1,8 @@
-import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
+import type {
+  AgentChatMessage,
+  AgentStatus,
+  QueuedMessage,
+} from '@/stores/agent.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,9 +24,10 @@ interface ListOptions {
   content: string;
   status?: AgentStatus;
   detail?: string;
+  queue?: QueuedMessage[];
 }
 
-const list = ({ content, status, detail }: ListOptions) => (
+const list = ({ content, status, detail, queue }: ListOptions) => (
   <AgentMessageList
     messages={[
       { id: 'u1', role: 'user', content: 'hola' },
@@ -30,6 +35,9 @@ const list = ({ content, status, detail }: ListOptions) => (
     ]}
     status={status ?? 'streaming'}
     {...(detail === undefined ? {} : { thinkingDetail: detail })}
+    queue={queue ?? []}
+    onSendQueuedNow={vi.fn()}
+    onRemoveQueued={vi.fn()}
   />
 );
 
@@ -102,6 +110,9 @@ describe('AgentMessageList', () => {
         messages={[{ id: 'u1', role: 'user', content: 'hola' }]}
         status="streaming"
         thinkingDetail={DETAIL}
+        queue={[]}
+        onSendQueuedNow={vi.fn()}
+        onRemoveQueued={vi.fn()}
       />
     );
 
@@ -114,9 +125,39 @@ describe('AgentMessageList', () => {
         messages={[]}
         status="streaming"
         thinkingDetail={DETAIL}
+        queue={[]}
+        onSendQueuedNow={vi.fn()}
+        onRemoveQueued={vi.fn()}
       />
     );
 
     expect(screen.queryByText(DETAIL)).toBeNull();
+  });
+
+  it('renders queued messages after the status indicator', () => {
+    render(
+      list({
+        content: 'La respuesta',
+        detail: DETAIL,
+        queue: [{ id: 'q1', text: 'luego' }],
+      })
+    );
+    const indicator = screen.getByText('ai.copilot.reasoning');
+    const queued = screen.getByText('luego');
+    expect(
+      indicator.compareDocumentPosition(queued) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('keeps queued messages visible once the turn is paused', () => {
+    render(
+      list({
+        content: 'La respuesta',
+        status: 'idle',
+        queue: [{ id: 'q1', text: 'luego' }],
+      })
+    );
+    expect(screen.getByText('luego')).toBeInTheDocument();
   });
 });
