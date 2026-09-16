@@ -35,6 +35,12 @@ export function AgentCopilotPanel() {
   const pendingProposal = useAgentStore((s) => s.pendingProposal);
   const approveProposal = useAgentStore((s) => s.approveProposal);
   const rejectProposal = useAgentStore((s) => s.rejectProposal);
+  const queue = useAgentStore((s) => s.queue);
+  const draft = useAgentStore((s) => s.draft);
+  const setDraft = useAgentStore((s) => s.setDraft);
+  const removeQueued = useAgentStore((s) => s.removeQueued);
+  const sendQueuedNow = useAgentStore((s) => s.sendQueuedNow);
+  const takeBackQueued = useAgentStore((s) => s.takeBackQueued);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
   const { canVerify, prompt: promptVerification } = useVerifyEmailGate();
   const reviewOpen = useRightDockStore((s) => s.reviewOpen);
@@ -57,6 +63,9 @@ export function AgentCopilotPanel() {
 
   const send = (text: string) => {
     sendMessage(text, activeNoteId ?? undefined);
+  };
+  const sendNow = (text: string) => {
+    sendMessage(text, activeNoteId ?? undefined, { interrupt: true });
   };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
@@ -106,6 +115,9 @@ export function AgentCopilotPanel() {
             messages={messages}
             status={status}
             thinkingDetail={thinkingText}
+            queue={queue}
+            onSendQueuedNow={sendQueuedNow}
+            onRemoveQueued={removeQueued}
           />
         </div>
       )}
@@ -130,8 +142,13 @@ export function AgentCopilotPanel() {
       )}
 
       <AgentComposer
+        draft={draft}
+        onDraftChange={setDraft}
         onSend={send}
+        onSendNow={sendNow}
         onStop={cancel}
+        onTakeBack={takeBackQueued}
+        queueLength={queue.length}
         status={status}
         modelPicker={<CopilotModelPicker />}
       />

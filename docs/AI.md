@@ -1303,6 +1303,19 @@ shows a polite status message for `max_steps`, `token_budget`, `length`, and
 notice. This state belongs to the live in-memory conversation and is not
 hydrated from persisted conversation history.
 
+The Notes client also owns a **message queue** (`useAgentStore.queue`): a send
+issued while a turn is alive (`streaming` or `pendingProposal`) is queued
+instead of cancelling the turn, and the queue drains FIFO only when a turn
+ends in `done`. Stop, error and the inactivity timeout pause it; the user then
+releases items with "Send now", removes them, takes the newest back into the
+composer with `↑`, or sends a new message, which goes first and re-arms
+draining. `⌘/Ctrl+Enter` (or "Send now" while a turn is alive) is the only
+send that cancels a live turn. A queued item stores text and the note that was
+open when it was typed; model and effort resolve when it is sent. The client
+never runs two turns of one conversation at once — the server-authoritative
+transcript requires it — so `AI_MAX_CONCURRENT_STREAMS` remains a guard, not a
+feature.
+
 ### Agent error codes
 
 `AgentErrors` (`agent/domain/agent-errors.ts`) is emitted over `agent:error` alongside the [AI error codes](#error-codes):
