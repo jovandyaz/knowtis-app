@@ -16,6 +16,7 @@ import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
+  isTurnAlive,
   THINKING_TAIL_CHARS,
   useAgentStore,
 } from './agent.store';
@@ -108,6 +109,17 @@ describe('useAgentStore', () => {
   it('waits longer than the server agent cap before declaring inactivity, so the server error surfaces first', () => {
     const SERVER_AGENT_MAX_MS = 300000;
     expect(AGENT_STREAM_INACTIVITY_MS).toBeGreaterThan(SERVER_AGENT_MAX_MS);
+  });
+
+  it.each([
+    ['streaming', true],
+    ['pendingProposal', true],
+    ['idle', false],
+    ['done', false],
+    ['error', false],
+    ['timeout', false],
+  ] as const)('isTurnAlive(%s) is %s', (status, alive) => {
+    expect(isTurnAlive(status)).toBe(alive);
   });
 
   it('appends a user message and an empty assistant placeholder on send', () => {
@@ -212,7 +224,9 @@ describe('useAgentStore', () => {
     const staleDone = first.get().onDone;
 
     capture();
-    useAgentStore.getState().sendMessage('second');
+    useAgentStore.getState().sendMessage('second', undefined, {
+      interrupt: true,
+    });
     staleDone({
       usage: USAGE,
       sources: [],
@@ -316,7 +330,9 @@ describe('useAgentStore', () => {
     const staleDone = first.get().onDone;
 
     capture();
-    useAgentStore.getState().sendMessage('second');
+    useAgentStore.getState().sendMessage('second', undefined, {
+      interrupt: true,
+    });
     staleDone({
       usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
       sources: [],
@@ -387,6 +403,314 @@ describe('useAgentStore', () => {
     expect(messages[0].content).toBe('hello');
     const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
     expect(sent).toBe('hello');
+  });
+
+  describe('queue', () => {
+    const DONE = {
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed' as const,
+    };
+
+    it('queues a message sent while streaming instead of cancelling the turn', () => {
+      const { cancel } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second', 'note-2');
+
+      const { queue, messages, status } = useAgentStore.getState();
+      expect(status).toBe('streaming');
+      expect(cancel).not.toHaveBeenCalled();
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+      expect(messages.map((m) => m.content)).toEqual(['first', '']);
+      expect(queue).toEqual([
+        { id: expect.any(String), text: 'second', noteId: 'note-2' },
+      ]);
+    });
+
+    it('queues a message sent while a proposal is pending', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      });
+      useAgentStore.getState().sendMessage('second');
+      expect(useAgentStore.getState().status).toBe('pendingProposal');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'second',
+      ]);
+    });
+
+    it('drains the queue in order on done, with the note captured at enqueue time', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first', 'note-1');
+      useAgentStore.getState().sendMessage('second', 'note-2');
+      useAgentStore.getState().sendMessage('third', 'note-3');
+
+      get().onDone(DONE);
+
+      expect(useAgentStore.getState().status).toBe('streaming');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'third',
+      ]);
+      const calls = vi.mocked(agentClient.sendMessage).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[1]?.[0]).toBe('second');
+      expect(calls[1]?.[2]).toBe('note-2');
+      expect(useAgentStore.getState().messages.map((m) => m.content)).toEqual([
+        'first',
+        '',
+        'second',
+        '',
+      ]);
+
+      get().onDone(DONE);
+      expect(useAgentStore.getState().queue).toEqual([]);
+      expect(calls).toHaveLength(3);
+      expect(calls[2]?.[0]).toBe('third');
+    });
+
+    it('a drained turn carries the effort selected at drain time, not at enqueue time', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().setReasoningEffort('high');
+      get().onDone(DONE);
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual(
+        {
+          effort: 'high',
+        }
+      );
+    });
+
+    it('keeps the queue and sends nothing on Stop', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().cancel();
+      expect(useAgentStore.getState().status).toBe('idle');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'second',
+      ]);
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the queue and sends nothing on error', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      get().onError({ code: 'X', message: 'boom' });
+      expect(useAgentStore.getState().status).toBe('error');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'second',
+      ]);
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the queue and sends nothing on the inactivity timeout', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+      expect(useAgentStore.getState().status).toBe('timeout');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'second',
+      ]);
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+    });
+
+    it('a message sent while paused goes first and re-arms draining', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('queued');
+      useAgentStore.getState().cancel();
+
+      useAgentStore.getState().sendMessage('fresh');
+      const calls = vi.mocked(agentClient.sendMessage).mock.calls;
+      expect(calls.at(-1)?.[0]).toBe('fresh');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'queued',
+      ]);
+
+      get().onDone(DONE);
+      expect(calls.at(-1)?.[0]).toBe('queued');
+      expect(useAgentStore.getState().queue).toEqual([]);
+    });
+
+    it('retry after an error resumes draining once the retried turn completes', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      get().onError({ code: 'X', message: 'boom' });
+      useAgentStore.getState().retryLast();
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+        'first'
+      );
+      get().onDone(DONE);
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+        'second'
+      );
+    });
+
+    it('drains after a proposal decision completes the resumed turn', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      });
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().approveProposal();
+      expect(useAgentStore.getState().status).toBe('streaming');
+      get().onDone(DONE);
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+        'second'
+      );
+    });
+
+    it('interrupt cancels the live turn and sends immediately', () => {
+      const { cancel } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore
+        .getState()
+        .sendMessage('now', undefined, { interrupt: true });
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+        'now'
+      );
+      expect(useAgentStore.getState().queue).toEqual([]);
+    });
+
+    it('interrupt during a pending proposal drops the proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      });
+      useAgentStore
+        .getState()
+        .sendMessage('now', undefined, { interrupt: true });
+      expect(useAgentStore.getState().pendingProposal).toBeNull();
+      expect(useAgentStore.getState().status).toBe('streaming');
+    });
+
+    it('a new conversation clears the queue', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().newConversation();
+      expect(useAgentStore.getState().queue).toEqual([]);
+    });
+
+    it('reports the queue length when a message is queued', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      expect(captureProductEvent).toHaveBeenLastCalledWith(
+        'ai message queued',
+        {
+          source: 'copilot',
+          queue_length: 2,
+        }
+      );
+    });
+
+    it('removeQueued drops one item and leaves the rest in order', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('a');
+      useAgentStore.getState().sendMessage('b');
+      useAgentStore.getState().sendMessage('c');
+      const target = useAgentStore.getState().queue[1].id;
+      useAgentStore.getState().removeQueued(target);
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+        'a',
+        'c',
+      ]);
+    });
+
+    it('sendQueuedNow while paused sends that item immediately and keeps the others', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('a', 'note-a');
+      useAgentStore.getState().sendMessage('b');
+      useAgentStore.getState().cancel();
+
+      const target = useAgentStore.getState().queue[1].id;
+      useAgentStore.getState().sendQueuedNow(target);
+
+      const call = vi.mocked(agentClient.sendMessage).mock.calls.at(-1);
+      expect(call?.[0]).toBe('b');
+      expect(useAgentStore.getState().status).toBe('streaming');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual(['a']);
+    });
+
+    it('sendQueuedNow while a turn is alive interrupts it', () => {
+      const { cancel } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('a', 'note-a');
+      const target = useAgentStore.getState().queue[0].id;
+      useAgentStore.getState().sendQueuedNow(target);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      const call = vi.mocked(agentClient.sendMessage).mock.calls.at(-1);
+      expect(call?.[0]).toBe('a');
+      expect(call?.[2]).toBe('note-a');
+      expect(useAgentStore.getState().queue).toEqual([]);
+    });
+
+    it('sendQueuedNow ignores an unknown id', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendQueuedNow('nope');
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+    });
+
+    it('takeBackQueued moves the newest item into the draft', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('a');
+      useAgentStore.getState().sendMessage('b');
+      useAgentStore.getState().takeBackQueued();
+      expect(useAgentStore.getState().draft).toBe('b');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual(['a']);
+    });
+
+    it('takeBackQueued is a no-op while the draft has text', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('a');
+      useAgentStore.getState().setDraft('typing');
+      useAgentStore.getState().takeBackQueued();
+      expect(useAgentStore.getState().draft).toBe('typing');
+      expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual(['a']);
+    });
+
+    it('takeBackQueued is a no-op on an empty queue', () => {
+      useAgentStore.getState().takeBackQueued();
+      expect(useAgentStore.getState().draft).toBe('');
+    });
+
+    it('a new conversation clears the draft', () => {
+      useAgentStore.getState().setDraft('typing');
+      useAgentStore.getState().newConversation();
+      expect(useAgentStore.getState().draft).toBe('');
+    });
   });
 });
 
@@ -782,7 +1106,9 @@ describe('agent.store thinking tail', () => {
     get().onThinking?.({ text: 'previous turn reasoning' });
     vi.advanceTimersByTime(50);
 
-    useAgentStore.getState().sendMessage('otra vez');
+    useAgentStore.getState().sendMessage('otra vez', undefined, {
+      interrupt: true,
+    });
     expect(useAgentStore.getState().thinkingText).toBe('');
   });
 

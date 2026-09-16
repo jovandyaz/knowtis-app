@@ -56,6 +56,24 @@ export interface AgentChatMessage {
   discarded?: boolean;
 }
 
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  noteId?: string;
+}
+
+export interface SendMessageOptions {
+  /** Cancel the live turn and send now instead of queueing behind it. */
+  interrupt?: boolean;
+}
+
+const TURN_ALIVE_STATUSES = ['streaming', 'pendingProposal'] as const;
+
+/** A turn is alive while the server may still stream for it: a send must queue, not replace. */
+export function isTurnAlive(status: AgentStatus): boolean {
+  return (TURN_ALIVE_STATUSES as readonly AgentStatus[]).includes(status);
+}
+
 /**
  * Client-side backstop for a server that has gone silent entirely. Must stay
  * above the server's `AI_AGENT_MAX_MS` ceiling so a real failure surfaces as a
@@ -75,6 +93,10 @@ const RESUME_UNAVAILABLE_ERROR: AgentErrorPayload = {
 
 interface AgentState {
   messages: AgentChatMessage[];
+  /** Messages waiting for the live turn to end; drained FIFO on `done` only. */
+  queue: QueuedMessage[];
+  /** Composer text; kept here so closing the dock (the mobile Dialog unmounts) does not lose it. */
+  draft: string;
   status: AgentStatus;
   error: AgentErrorPayload | null;
   /** The failure the UI has already answered with an offer, if any. */
@@ -87,7 +109,17 @@ interface AgentState {
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
   markErrorAnswered: () => void;
-  sendMessage: (text: string, noteId?: string) => void;
+  sendMessage: (
+    text: string,
+    noteId?: string,
+    options?: SendMessageOptions
+  ) => void;
+  setDraft: (text: string) => void;
+  removeQueued: (id: string) => void;
+  /** Sends the item now: immediately when idle, interrupting when a turn is alive. */
+  sendQueuedNow: (id: string) => void;
+  /** Moves the newest queued item back into `draft`; no-op when the queue is empty or the draft has text. */
+  takeBackQueued: () => void;
   newConversation: () => void;
   cancel: () => void;
   retryLast: () => void;
@@ -199,6 +231,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
             source: 'copilot',
             assistant_type: 'agent',
           });
+          drainQueue();
         },
         onError: (error) => {
           if (version !== streamVersion) {
@@ -267,8 +300,53 @@ export const useAgentStore = create<AgentState>((set, get) => {
     set({ _streamHandle: handle });
   };
 
+  const startTurn = (text: string, noteId?: string) => {
+    const current = get();
+    if (current.status === 'streaming' && current._streamHandle) {
+      current._streamHandle.cancel();
+    }
+    streamVersion++;
+    lastNoteId = noteId;
+    buffer.clearInactivityTimer();
+    buffer.discard();
+    thinkingBuffer.discard();
+
+    const userMessage: AgentChatMessage = {
+      id: nextId(),
+      role: 'user',
+      content: text,
+    };
+    const assistantMessage: AgentChatMessage = {
+      id: nextId(),
+      role: 'assistant',
+      content: '',
+    };
+
+    set({
+      messages: [...current.messages, userMessage, assistantMessage],
+      status: 'streaming',
+      error: null,
+      pendingProposal: null,
+      thinkingText: '',
+      _streamHandle: null,
+    });
+
+    run(text, assistantMessage.id, noteId);
+  };
+
+  const drainQueue = () => {
+    const [next, ...rest] = get().queue;
+    if (!next) {
+      return;
+    }
+    set({ queue: rest });
+    startTurn(next.text, next.noteId);
+  };
+
   return {
     messages: [],
+    queue: [],
+    draft: '',
     status: 'idle',
     error: null,
     answeredError: null,
@@ -283,41 +361,48 @@ export const useAgentStore = create<AgentState>((set, get) => {
     // any of the store's error transitions having to remember to clear this.
     markErrorAnswered: () => set({ answeredError: get().error }),
 
-    sendMessage: (text, noteId) => {
+    sendMessage: (text, noteId, options) => {
       const trimmed = text.trim();
       if (!trimmed) {
         return;
       }
-      const current = get();
-      if (current.status === 'streaming' && current._streamHandle) {
-        current._streamHandle.cancel();
+      if (isTurnAlive(get().status) && !options?.interrupt) {
+        const queued: QueuedMessage = {
+          id: nextId(),
+          text: trimmed,
+          ...(noteId ? { noteId } : {}),
+        };
+        set((s) => ({ queue: [...s.queue, queued] }));
+        captureProductEvent('ai message queued', {
+          source: 'copilot',
+          queue_length: get().queue.length,
+        });
+        return;
       }
-      streamVersion++;
-      lastNoteId = noteId;
-      buffer.clearInactivityTimer();
-      buffer.discard();
-      thinkingBuffer.discard();
+      startTurn(trimmed, noteId);
+    },
 
-      const userMessage: AgentChatMessage = {
-        id: nextId(),
-        role: 'user',
-        content: trimmed,
-      };
-      const assistantMessage: AgentChatMessage = {
-        id: nextId(),
-        role: 'assistant',
-        content: '',
-      };
+    setDraft: (text) => set({ draft: text }),
 
-      set({
-        messages: [...current.messages, userMessage, assistantMessage],
-        status: 'streaming',
-        error: null,
-        thinkingText: '',
-        _streamHandle: null,
-      });
+    removeQueued: (id) =>
+      set((s) => ({ queue: s.queue.filter((q) => q.id !== id) })),
 
-      run(trimmed, assistantMessage.id, noteId);
+    sendQueuedNow: (id) => {
+      const item = get().queue.find((q) => q.id === id);
+      if (!item) {
+        return;
+      }
+      set((s) => ({ queue: s.queue.filter((q) => q.id !== id) }));
+      startTurn(item.text, item.noteId);
+    },
+
+    takeBackQueued: () => {
+      const { queue, draft } = get();
+      const last = queue.at(-1);
+      if (!last || draft.trim().length > 0) {
+        return;
+      }
+      set({ queue: queue.slice(0, -1), draft: last.text });
     },
 
     newConversation: () => {
@@ -330,6 +415,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
       activeAssistantId = null;
       set({
         messages: [],
+        queue: [],
+        draft: '',
         status: 'idle',
         error: null,
         pendingProposal: null,
