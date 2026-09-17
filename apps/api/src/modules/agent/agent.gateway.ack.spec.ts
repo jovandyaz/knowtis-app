@@ -71,6 +71,21 @@ describe('AgentGateway acknowledgements over socket.io', () => {
     expect(execute.mock.settledResults[0]?.type).toBe('incomplete');
   });
 
+  it('acknowledges a malformed agent:message before it is refused', async () => {
+    const refusal = new Promise<{ code: string }>((resolve) =>
+      client.once('agent:error', resolve)
+    );
+
+    await client
+      .timeout(ACK_TIMEOUT_MS)
+      .emitWithAck('agent:message', { message: {} });
+
+    await expect(refusal).resolves.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('acknowledges agent:cancel', async () => {
     await expect(
       client.timeout(ACK_TIMEOUT_MS).emitWithAck('agent:cancel')
