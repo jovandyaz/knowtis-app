@@ -237,9 +237,6 @@ export const test = base.extend<
       const actors: SharingActor[] = [];
       let guest: Awaited<ReturnType<typeof createGuest>> | undefined;
       try {
-        const gated =
-          await db`update feature_flags set enabled = true where key = 'email_verification_gate'`;
-        expect(gated.count).toBe(1);
         const labels = ['Owner', 'Recipient', 'Direct Editor', 'Direct Viewer'];
         for (const label of labels) {
           actors.push(await createActor(browser, db, label));

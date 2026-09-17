@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
-import { scriptAgent, test } from './fixtures/copilot.fixture';
+import { scriptAgent } from './fixtures/copilot.fixture';
+import { test } from './fixtures/sharing.fixture';
 
 const NOTE_HTML = [
   '<h1>Landing de agencia</h1>',
