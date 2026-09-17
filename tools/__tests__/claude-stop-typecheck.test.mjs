@@ -203,6 +203,13 @@ test('a session inside the tree is covered, one beside it is not', () => {
   for (const cwd of ['/repo', '/repo/main-wt', '/repo/other', '/']) {
     assert.equal(insideWorkspace(cwd, root), false, `for ${cwd}`);
   }
+  for (const cwd of [7, {}, [], true, null, undefined]) {
+    assert.equal(
+      insideWorkspace(cwd, root),
+      false,
+      `for ${JSON.stringify(cwd)}`
+    );
+  }
 });
 
 test('end to end: a session in another tree is skipped, not typechecked', () => {
@@ -216,6 +223,20 @@ test('end to end: a session in another tree is skipped, not typechecked', () => 
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /skipped/);
+});
+
+test('end to end: a non-string cwd is refused, not crashed on', () => {
+  const result = spawnSync(process.execPath, [SCRIPT], {
+    input: '{"session_id":"e2e-badcwd","cwd":7}',
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fakePnpm('exit 0')}${delimiter}${process.env.PATH}`,
+    },
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /skipped/);
+  assert.doesNotMatch(result.stderr, /TypeError/);
 });
 
 test('end to end: a green typecheck exits 0 and says nothing', () => {

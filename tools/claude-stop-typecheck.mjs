@@ -85,6 +85,7 @@ export function unusableRun(result) {
 }
 
 export function insideWorkspace(cwd, root = WORKSPACE_ROOT) {
+  if (typeof cwd !== 'string') return false;
   const resolved = resolve(cwd);
   return resolved === root || resolved.startsWith(root + sep);
 }
