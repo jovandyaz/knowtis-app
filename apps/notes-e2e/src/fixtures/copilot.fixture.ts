@@ -9,6 +9,8 @@ const SEPARATOR = '\x1e';
 const HOLD_MS = 3_000;
 const POLL_MS = 25;
 const CONNECT_RE = /^40(\/[^,]*)?,?/;
+/** `42/agent,<ackId>["event",payload]` — the ack id is present when the client waits for a receipt. */
+const AGENT_EVENT_RE = /^42\/agent,(\d+)?(\[[\s\S]*\])$/;
 const POLLING_ROUTE_RE = /\/socket\.io\/\?.*EIO=4/;
 const COMPOSER_RE = /copilot|pregunta|ask/i;
 const DOCK_TOGGLE_RE = /^copilot$/i;
@@ -76,14 +78,16 @@ export async function scriptAgent(
   };
 
   function receive(packet: string): void {
-    if (!packet.startsWith('42/agent,')) {
+    const match = packet.match(AGENT_EVENT_RE);
+    if (!match) {
       return;
     }
-    const [name, payload] = JSON.parse(packet.slice('42/agent,'.length)) as [
-      string,
-      unknown,
-    ];
+    const [, ackId, body] = match;
+    const [name, payload] = JSON.parse(body) as [string, unknown];
     sent.push({ event: name, payload });
+    if (ackId !== undefined) {
+      outbox.push(`43/agent,${ackId}[]`);
+    }
     for (const [replyName, replyPayload] of replies[name] ?? []) {
       outbox.push(event(replyName, replyPayload));
     }

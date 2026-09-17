@@ -1,5 +1,7 @@
 import { ConfigService } from '@nestjs/config';
+import { MetadataScanner } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { GatewayMetadataExplorer } from '@nestjs/websockets/gateway-metadata-explorer';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -152,7 +154,9 @@ describe('AgentGateway', () => {
     const gateway = makeGateway();
     const client = makeClient('u1');
 
-    await gateway.handleMessage(client as never, { message: { content: '' } });
+    await gateway.handleMessage(client as never, {
+      message: { content: '' },
+    });
 
     expect(client.emit).toHaveBeenCalledWith(
       'agent:error',
@@ -767,5 +771,84 @@ describe('AgentGateway', () => {
       expect.objectContaining({ code: 'VALIDATION_ERROR' })
     );
     expect(rejectExecute).not.toHaveBeenCalled();
+  });
+  describe('delivery acknowledgements', () => {
+    it('acknowledges agent:message on receipt, before the turn ends', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const execute = vi.fn(async () => {
+        await gate;
+      });
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+      });
+      const client = makeClient('user-1');
+      const ack = vi.fn();
+
+      const turn = gateway.handleMessage(
+        client as never,
+        { message: { content: 'hi' } },
+        ack
+      );
+      await flushAsync();
+
+      expect(ack).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledTimes(1);
+
+      release();
+      await turn;
+      expect(ack).toHaveBeenCalledTimes(1);
+    });
+
+    it('acknowledges a refused agent:message too, so the client does not fail it as undelivered', async () => {
+      const gateway = makeGateway();
+      const client = makeClient();
+      const ack = vi.fn();
+
+      await gateway.handleMessage(
+        client as never,
+        { message: { content: 'hi' } },
+        ack
+      );
+
+      expect(ack).toHaveBeenCalledTimes(1);
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:error',
+        expect.objectContaining({ code: 'AUTH_REQUIRED' })
+      );
+    });
+
+    it('hands every handler the ack callback, so Nest never acknowledges with a return value', () => {
+      const handlers = new GatewayMetadataExplorer(
+        new MetadataScanner()
+      ).explore(makeGateway());
+
+      const acked = handlers
+        .map((handler) => [handler.message, handler.isAckHandledManually])
+        .sort();
+
+      expect(acked).toEqual([
+        ['agent:approve', true],
+        ['agent:cancel', true],
+        ['agent:message', true],
+        ['agent:reject', true],
+      ]);
+    });
+
+    it('acknowledges agent:cancel, agent:approve and agent:reject on receipt', async () => {
+      const gateway = makeGateway();
+      const client = makeClient('user-1');
+      const acks = [vi.fn(), vi.fn(), vi.fn()];
+
+      gateway.handleCancel(client as never, acks[0]);
+      await gateway.handleApprove(client as never, {}, acks[1]);
+      await gateway.handleReject(client as never, {}, acks[2]);
+
+      for (const ack of acks) {
+        expect(ack).toHaveBeenCalledTimes(1);
+      }
+    });
   });
 });

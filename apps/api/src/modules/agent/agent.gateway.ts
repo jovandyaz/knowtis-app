@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
+  Ack,
   ConnectedSocket,
   MessageBody,
   SubscribeMessage,
@@ -34,6 +35,12 @@ import {
   RunAgentTurnHandler,
   type RunAgentTurnCallbacks,
 } from './application/run-agent-turn.handler';
+
+/** Delivery receipt: socket.io delivers at most once, so the client fails a
+ * request whose receipt never arrives instead of resending it. Every handler
+ * acknowledges on receipt, before validation; outcomes still travel as
+ * `agent:error`. */
+type DeliveryAck = () => void;
 
 const agentTurnSchema = z.object({
   conversationId: z.string().uuid().optional(),
@@ -125,8 +132,10 @@ export class AgentGateway
   @SubscribeMessage('agent:message')
   async handleMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: unknown
+    @MessageBody() payload: unknown,
+    @Ack() ack?: DeliveryAck
   ): Promise<void> {
+    ack?.();
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('agent:error', AIErrors.authRequired());
@@ -178,7 +187,11 @@ export class AgentGateway
   }
 
   @SubscribeMessage('agent:cancel')
-  handleCancel(@ConnectedSocket() client: AuthenticatedSocket): void {
+  handleCancel(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @Ack() ack?: DeliveryAck
+  ): void {
+    ack?.();
     this.turns.abortAllForClient(client.id);
     this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
   }
@@ -186,8 +199,10 @@ export class AgentGateway
   @SubscribeMessage('agent:approve')
   async handleApprove(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: unknown
+    @MessageBody() payload: unknown,
+    @Ack() ack?: DeliveryAck
   ): Promise<void> {
+    ack?.();
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('agent:error', AIErrors.authRequired());
@@ -238,8 +253,10 @@ export class AgentGateway
   @SubscribeMessage('agent:reject')
   async handleReject(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: unknown
+    @MessageBody() payload: unknown,
+    @Ack() ack?: DeliveryAck
   ): Promise<void> {
+    ack?.();
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('agent:error', AIErrors.authRequired());
