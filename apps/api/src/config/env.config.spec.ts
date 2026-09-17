@@ -502,3 +502,40 @@ describe('env.config blank assignments', () => {
     ).toBe(100000);
   });
 });
+
+describe('env.config RATE_LIMITING_ENABLED', () => {
+  it('defaults to enabled', () => {
+    expect(validateEnv(validEnv).RATE_LIMITING_ENABLED).toBe(true);
+  });
+
+  it('reads the literal strings and refuses anything else', () => {
+    expect(
+      validateEnv({ ...validEnv, RATE_LIMITING_ENABLED: 'false' })
+        .RATE_LIMITING_ENABLED
+    ).toBe(false);
+    expect(() =>
+      validateEnv({ ...validEnv, RATE_LIMITING_ENABLED: 'no' })
+    ).toThrow(/RATE_LIMITING_ENABLED/);
+  });
+
+  it('refuses a production boot with rate limiting disabled', () => {
+    expect(() =>
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+        RATE_LIMITING_ENABLED: 'false',
+      })
+    ).toThrow(/RATE_LIMITING_ENABLED=false is refused in production/);
+  });
+
+  it('lets a test boot disable rate limiting', () => {
+    expect(
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'test',
+        RATE_LIMITING_ENABLED: 'false',
+      }).RATE_LIMITING_ENABLED
+    ).toBe(false);
+  });
+});
