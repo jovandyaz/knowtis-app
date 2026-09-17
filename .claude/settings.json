@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm nx affected -t typecheck --base=HEAD",
+            "command": "node tools/claude-stop-typecheck.mjs",
             "timeout": 180,
             "statusMessage": "Typechecking affected projects..."
           }
