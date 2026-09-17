@@ -23,6 +23,8 @@ Per-turn reasoning **effort** is plumbed here but resolved elsewhere: a turn car
 | server → client | `agent:done`                     | Turn finished: `{ usage, sources, knownNotes, webSources, stopReason, conversationId? }`             |
 | server → client | `agent:error`                    | Auth / feature-flag / runtime error (`{ code, message }`; AI or `AGENT_*` codes, see below)          |
 
+Every client → server event is acknowledged on receipt, before validation (`@Ack()`): socket.io delivers at most once, so the client (`libs/api-client/src/lib/agent.client.ts`) waits for that receipt (`ackTimeout: 10000`) and, when it never arrives, drops the socket and fails the request with `CONNECTION_FAILED` instead of waiting on a turn the server never saw. Nothing is resent automatically, because starting a turn is not idempotent and a copy replayed after a reconnect would run twice; the retry banner is the user's resend. A request without a receipt yet is never cancelled either: its socket is dropped and the next send opens a fresh one. Outcomes still travel as `agent:error`; the receipt only says the event was delivered.
+
 Connection-time checks mirror the `/ai` gateway: JWT from `auth.token` or the `Authorization: Bearer` header, `ai_enabled` flag, and a timer at the token's expiry that emits `agent:error` `AUTH_REQUIRED` and disconnects. Turns (fresh or resumed) run inside a `ConcurrencySlotTracker` slot capped at `AI_MAX_CONCURRENT_STREAMS` per user; an acquire past the cap emits `agent:error` `AI_RATE_LIMIT_EXCEEDED`.
 
 The Notes client attaches `agent:done.stopReason` only to the active assistant

@@ -88,9 +88,13 @@ describe('AgentClient', () => {
       onDone: vi.fn(),
       onError: vi.fn(),
     });
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      message: { content: 'hi' },
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'hi' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('remembers conversationId from agent:done and sends it on the next message', () => {
@@ -112,10 +116,14 @@ describe('AgentClient', () => {
       onDone: vi.fn(),
       onError: vi.fn(),
     });
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      conversationId: 'c1',
-      message: { content: 'again' },
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        conversationId: 'c1',
+        message: { content: 'again' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('adopts the conversation id announced mid-turn and sends it on the next message', () => {
@@ -131,7 +139,8 @@ describe('AgentClient', () => {
     client.sendMessage('again', callbacks);
     expect(emit).toHaveBeenLastCalledWith(
       'agent:message',
-      expect.objectContaining({ conversationId: 'conv-1' })
+      expect.objectContaining({ conversationId: 'conv-1' }),
+      expect.any(Function)
     );
   });
 
@@ -144,7 +153,8 @@ describe('AgentClient', () => {
     client.sendMessage('again', callbacks);
     expect(emit).toHaveBeenLastCalledWith(
       'agent:message',
-      expect.objectContaining({ conversationId: 'conv-1' })
+      expect.objectContaining({ conversationId: 'conv-1' }),
+      expect.any(Function)
     );
   });
 
@@ -157,7 +167,8 @@ describe('AgentClient', () => {
     client.sendMessage('again', callbacks);
     expect(emit).toHaveBeenLastCalledWith(
       'agent:message',
-      expect.not.objectContaining({ conversationId: expect.anything() })
+      expect.not.objectContaining({ conversationId: expect.anything() }),
+      expect.any(Function)
     );
   });
 
@@ -181,9 +192,13 @@ describe('AgentClient', () => {
       onDone: vi.fn(),
       onError: vi.fn(),
     });
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      message: { content: 'fresh' },
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'fresh' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('lets onDone start the next turn without cancelling it or losing its chunks', () => {
@@ -206,9 +221,13 @@ describe('AgentClient', () => {
     });
 
     expect(emit).not.toHaveBeenCalledWith('agent:cancel');
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      message: { content: 'second' },
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'second' },
+      }),
+      expect.any(Function)
+    );
     handlers.get('agent:chunk')?.({ text: 'hi' });
     expect(next.onChunk).toHaveBeenCalledWith({ text: 'hi' });
   });
@@ -236,13 +255,15 @@ describe('AgentClient', () => {
     );
   });
 
-  it('emits agent:cancel when the handle is cancelled', () => {
+  it('emits agent:cancel when the handle of an acknowledged turn is cancelled', () => {
     const client = makeClient();
     const handle = client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
     });
+    const receipt = emit.mock.calls.at(-1)?.at(-1) as (err: null) => void;
+    receipt(null);
     handle.cancel();
     expect(emit).toHaveBeenCalledWith('agent:cancel');
   });
@@ -254,10 +275,14 @@ describe('AgentClient', () => {
       { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
       'note-123'
     );
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      message: { content: 'hi' },
-      noteId: 'note-123',
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'hi' },
+        noteId: 'note-123',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('includes the effort in agent:message when provided', () => {
@@ -268,10 +293,14 @@ describe('AgentClient', () => {
       undefined,
       { effort: 'high' }
     );
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      message: { content: 'hola' },
-      effort: 'high',
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'hola' },
+        effort: 'high',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('does not leak a previous effort into the next send', () => {
@@ -293,9 +322,13 @@ describe('AgentClient', () => {
       onDone: vi.fn(),
       onError: vi.fn(),
     });
-    expect(emit).toHaveBeenCalledWith('agent:message', {
-      message: { content: 'plain' },
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'plain' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('approve emits while the turn is still open', () => {
@@ -307,9 +340,13 @@ describe('AgentClient', () => {
     });
     expect(client.canResume()).toBe(true);
     client.approve('p1');
-    expect(emit).toHaveBeenCalledWith('agent:approve', {
-      proposalId: 'p1',
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'agent:approve',
+      expect.objectContaining({
+        proposalId: 'p1',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('approve does not emit once the request completed', () => {
@@ -405,9 +442,13 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(fake.socket.emit).toHaveBeenCalledTimes(2);
-    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
-      message: { content: 'hi' },
-    });
+    expect(fake.socket.emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'hi' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('invokes session-expired handler and calls onError when auth refresh exhausted', async () => {
@@ -567,9 +608,13 @@ describe('AgentClient – auth/transport failure paths', () => {
     await flush();
 
     expect(io).toHaveBeenCalledTimes(2);
-    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
-      message: { content: 'second' },
-    });
+    expect(fake.socket.emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'second' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('fails the in-flight turn when the server closes the connection', async () => {
@@ -650,9 +695,13 @@ describe('AgentClient – auth/transport failure paths', () => {
     await flush();
 
     expect(callbacks.onError).not.toHaveBeenCalled();
-    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
-      message: { content: 'second' },
-    });
+    expect(fake.socket.emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'second' },
+      }),
+      expect.any(Function)
+    );
   });
 
   it('keeps a turn suspended on a proposal alive when the server closes the connection', async () => {
@@ -704,9 +753,13 @@ describe('AgentClient – auth/transport failure paths', () => {
     await flush();
 
     expect(io).toHaveBeenCalledTimes(2);
-    expect(fake.socket.emit).toHaveBeenCalledWith('agent:approve', {
-      proposalId: 'p1',
-    });
+    expect(fake.socket.emit).toHaveBeenCalledWith(
+      'agent:approve',
+      expect.objectContaining({
+        proposalId: 'p1',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('rejects over a fresh socket after the server closed the previous one', async () => {
@@ -733,11 +786,15 @@ describe('AgentClient – auth/transport failure paths', () => {
     client.reject('p1', 'too long');
     await flush();
 
-    expect(fake.socket.emit).toHaveBeenCalledWith('agent:reject', {
-      proposalId: 'p1',
-      noteId: 'note-9',
-      reason: 'too long',
-    });
+    expect(fake.socket.emit).toHaveBeenCalledWith(
+      'agent:reject',
+      expect.objectContaining({
+        proposalId: 'p1',
+        noteId: 'note-9',
+        reason: 'too long',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('omits reason from agent:reject when the caller gives none', async () => {
@@ -760,9 +817,13 @@ describe('AgentClient – auth/transport failure paths', () => {
     client.reject('p1');
     await flush();
 
-    expect(fake.socket.emit).toHaveBeenCalledWith('agent:reject', {
-      proposalId: 'p1',
-    });
+    expect(fake.socket.emit).toHaveBeenCalledWith(
+      'agent:reject',
+      expect.objectContaining({
+        proposalId: 'p1',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('replays the decision, not the original message, after auth recovery', async () => {
@@ -799,9 +860,13 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(fake.socket.emit).toHaveBeenCalledTimes(1);
-    expect(fake.socket.emit).toHaveBeenCalledWith('agent:approve', {
-      proposalId: 'p1',
-    });
+    expect(fake.socket.emit).toHaveBeenCalledWith(
+      'agent:approve',
+      expect.objectContaining({
+        proposalId: 'p1',
+      }),
+      expect.any(Function)
+    );
   });
 
   it('reports the turn as unresumable once it completed', async () => {
@@ -886,8 +951,203 @@ describe('AgentClient – auth/transport failure paths', () => {
     await flush();
 
     expect(callbacks.onError).not.toHaveBeenCalled();
-    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
-      message: { content: 'hi' },
+    expect(fake.socket.emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.objectContaining({
+        message: { content: 'hi' },
+      }),
+      expect.any(Function)
+    );
+  });
+});
+
+describe('AgentClient – delivery receipts', () => {
+  let fake: ReturnType<typeof createFakeSocket>;
+  let client: AgentClient;
+
+  const callbacksOf = () => ({
+    onChunk: vi.fn(),
+    onDone: vi.fn(),
+    onError: vi.fn(),
+  });
+  const receiptOf = (call: unknown[] | undefined) =>
+    call?.at(-1) as (err: Error | null) => void;
+  const lastEmit = () => fake.socket.emit.mock.calls.at(-1) as unknown[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client = new AgentClient('http://test.local/agent');
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
     });
+  });
+
+  it('gives every emit a receipt deadline and never lets socket.io resend on its own', () => {
+    client.sendMessage('hi', callbacksOf());
+
+    expect(io).toHaveBeenCalledWith(
+      'http://test.local/agent',
+      expect.objectContaining({ ackTimeout: 10_000 })
+    );
+    expect(vi.mocked(io).mock.calls[0]?.[1]).not.toHaveProperty('retries');
+  });
+
+  it('keeps the turn open once the server acknowledges the message', () => {
+    const callbacks = callbacksOf();
+    client.sendMessage('hi', callbacks);
+
+    receiptOf(lastEmit())(null);
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+    expect(fake.socket.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('fails the turn and drops the socket when the server never acknowledges the message', () => {
+    const callbacks = callbacksOf();
+    client.sendMessage('hi', callbacks);
+
+    receiptOf(lastEmit())(new Error('operation has timed out'));
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(client.canResume()).toBe(false);
+    expect(fake.socket.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a late delivery failure of a superseded message', () => {
+    const first = callbacksOf();
+    const second = callbacksOf();
+    client.sendMessage('one', first);
+    const firstReceipt = receiptOf(lastEmit());
+    client.sendMessage('two', second);
+
+    firstReceipt(new Error('operation has timed out'));
+
+    expect(first.onError).not.toHaveBeenCalled();
+    expect(second.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+    expect(fake.socket.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails a proposal decision the server never acknowledges', () => {
+    const callbacks = callbacksOf();
+    client.sendMessage('hi', callbacks);
+    fake.trigger('agent:proposal', PROPOSAL);
+    client.approve('p1');
+    expect(lastEmit()[0]).toBe('agent:approve');
+
+    receiptOf(lastEmit())(new Error('operation has timed out'));
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(client.canResume()).toBe(false);
+  });
+});
+
+describe('AgentClient – abandoning an unacknowledged request', () => {
+  let fake: ReturnType<typeof createFakeSocket>;
+  let client: AgentClient;
+
+  const callbacksOf = () => ({
+    onChunk: vi.fn(),
+    onDone: vi.fn(),
+    onError: vi.fn(),
+  });
+  const receiptOf = (call: unknown[] | undefined) =>
+    call?.at(-1) as (err: Error | null) => void;
+  const lastEmit = () => fake.socket.emit.mock.calls.at(-1) as unknown[];
+  const eventsEmitted = () =>
+    (fake.socket.emit.mock.calls as unknown[][]).map((call) => call[0]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client = new AgentClient('http://test.local/agent');
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
+    });
+  });
+
+  it('cancels an acknowledged turn with agent:cancel and keeps its socket', () => {
+    const handle = client.sendMessage('one', callbacksOf());
+    receiptOf(lastEmit())(null);
+
+    handle.cancel();
+
+    expect(eventsEmitted()).toEqual(['agent:message', 'agent:cancel']);
+    expect(fake.socket.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('drops the socket instead of cancelling when the message was never acknowledged', () => {
+    const first = callbacksOf();
+    client.sendMessage('one', first);
+    const second = createFakeSocket();
+    vi.mocked(io).mockReturnValue(second.socket as never);
+
+    client.sendMessage('two', callbacksOf());
+
+    expect(eventsEmitted()).toEqual(['agent:message']);
+    expect(fake.socket.disconnect).toHaveBeenCalledTimes(1);
+    expect(second.socket.emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({ message: { content: 'two' } }),
+      expect.any(Function)
+    );
+    expect(first.onError).not.toHaveBeenCalled();
+  });
+
+  it('Stop on an unacknowledged message drops the socket without a cancel', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('one', callbacks);
+
+    handle.cancel();
+
+    expect(eventsEmitted()).toEqual(['agent:message']);
+    expect(fake.socket.disconnect).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(false);
+  });
+
+  it('replays the request on a fresh socket when the refresh tears down one with an unacknowledged packet', async () => {
+    const callbacks = callbacksOf();
+    let token: string | null = 'stale';
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(async () => {
+      token = 'fresh';
+      return 'refreshed';
+    });
+    const fresh = createFakeSocket();
+    vi.mocked(io)
+      .mockReturnValueOnce(fake.socket as never)
+      .mockReturnValue(fresh.socket as never);
+    fake.socket.disconnect.mockImplementation(() => {
+      receiptOf(lastEmit())(new Error('socket has been disconnected'));
+      return fake.socket;
+    });
+
+    client.sendMessage('hi', callbacks);
+    await flush();
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+    expect(fake.socket.disconnect).toHaveBeenCalledTimes(1);
+    expect(fresh.socket.emit).toHaveBeenCalledWith(
+      'agent:message',
+      expect.objectContaining({ message: { content: 'hi' } }),
+      expect.any(Function)
+    );
   });
 });

@@ -1246,6 +1246,8 @@ The copilot is **server-authoritative**: the client never sends its own message 
 
 `effort` resolution is documented under [Reasoning effort](#reasoning-effort).
 
+The client sends every `agent:*` request with a socket.io acknowledgement (`ackTimeout: 10000`) and the gateway acknowledges on receipt, before validation. socket.io's default delivery is at most once: an event written to a transport that has already died is lost and never replayed after the reconnect, which used to leave the copilot in "Thinking…" until the 310 s inactivity backstop. A request that is never acknowledged now ends with `CONNECTION_FAILED` and the retry banner; the client never resends on its own, since a turn start is not idempotent and a copy replayed after a reconnect would run twice. The receipt only means "delivered"; the outcome still arrives as `agent:error` / `agent:done`.
+
 The legacy `{ messages[] }` payload (where the client shipped its own history) was removed — the server is the single source of truth for the thread.
 
 ### Persistence

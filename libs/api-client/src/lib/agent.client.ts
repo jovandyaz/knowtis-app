@@ -117,11 +117,22 @@ const CONNECTION_ERROR: AgentErrorPayload = {
   code: 'CONNECTION_FAILED',
   message: 'Failed to connect to agent server',
 };
+/**
+ * socket.io delivers at most once: an event written to a transport that has
+ * already died is lost, and nothing replays it after the reconnect. Every
+ * request therefore waits for the server's receipt, and one that never comes
+ * ends the request instead of leaving the turn open forever. It is not resent
+ * on its own: starting a turn is not idempotent, and a copy reaching the
+ * server after a reconnect would run twice. The deadline runs from the emit,
+ * so it also caps how long a request may wait for the socket to connect.
+ */
+const AGENT_ACK_TIMEOUT_MS = 10_000;
 
 export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
   private pending: PendingRequest | null = null;
+  private awaitingReceipt: PendingRequest | null = null;
   private awaitingDecision = false;
   private pendingNoteId: string | undefined;
   private pendingEffort: ReasoningEffort | undefined;
@@ -170,8 +181,7 @@ export class AgentClient {
     options?: AgentSendOptions
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
-      this.socket?.emit('agent:cancel');
-      this.clearPending();
+      this.abandonPending();
     }
 
     this.activeCallbacks = callbacks;
@@ -183,8 +193,7 @@ export class AgentClient {
     return {
       cancel: () => {
         if (this.activeCallbacks === callbacks) {
-          this.socket?.emit('agent:cancel');
-          this.clearPending();
+          this.abandonPending();
         }
       },
     };
@@ -264,34 +273,46 @@ export class AgentClient {
     callbacks: AgentStreamCallbacks
   ): void {
     this.ensureSocket();
-    if (!this.socket) {
+    const socket = this.socket;
+    if (!socket) {
       this.failRequest(callbacks, CONNECTION_ERROR);
       return;
     }
     const noteId = this.pendingNoteId ? { noteId: this.pendingNoteId } : {};
+    this.awaitingReceipt = request;
+    const receipt = this.deliveryReceipt(socket, request, callbacks);
     switch (request.kind) {
       case 'message':
-        this.socket.emit('agent:message', {
-          ...(this.conversationId
-            ? { conversationId: this.conversationId }
-            : {}),
-          message: { content: request.content },
-          ...noteId,
-          ...(this.pendingEffort ? { effort: this.pendingEffort } : {}),
-        });
+        socket.emit(
+          'agent:message',
+          {
+            ...(this.conversationId
+              ? { conversationId: this.conversationId }
+              : {}),
+            message: { content: request.content },
+            ...noteId,
+            ...(this.pendingEffort ? { effort: this.pendingEffort } : {}),
+          },
+          receipt
+        );
         return;
       case 'approve':
-        this.socket.emit('agent:approve', {
-          proposalId: request.proposalId,
-          ...noteId,
-        });
+        socket.emit(
+          'agent:approve',
+          { proposalId: request.proposalId, ...noteId },
+          receipt
+        );
         return;
       case 'reject':
-        this.socket.emit('agent:reject', {
-          proposalId: request.proposalId,
-          ...noteId,
-          ...(request.reason ? { reason: request.reason } : {}),
-        });
+        socket.emit(
+          'agent:reject',
+          {
+            proposalId: request.proposalId,
+            ...noteId,
+            ...(request.reason ? { reason: request.reason } : {}),
+          },
+          receipt
+        );
         return;
       default: {
         const exhaustive: never = request;
@@ -300,9 +321,44 @@ export class AgentClient {
     }
   }
 
+  private deliveryReceipt(
+    socket: Socket,
+    request: PendingRequest,
+    callbacks: AgentStreamCallbacks
+  ): (error: Error | null) => void {
+    return (error) => {
+      if (
+        this.socket !== socket ||
+        this.pending !== request ||
+        this.activeCallbacks !== callbacks
+      ) {
+        return;
+      }
+      if (!error) {
+        this.awaitingReceipt = null;
+        return;
+      }
+      this.teardownSocket();
+      this.failRequest(callbacks, CONNECTION_ERROR);
+    };
+  }
+
+  /** A request the server never acknowledged has nothing to cancel: the socket
+   * that swallowed it is dropped instead, so the next send opens a fresh one. */
+  private abandonPending(): void {
+    if (this.pending && this.pending === this.awaitingReceipt) {
+      this.clearPending();
+      this.teardownSocket();
+      return;
+    }
+    this.socket?.emit('agent:cancel');
+    this.clearPending();
+  }
+
   private clearPending(): void {
     this.activeCallbacks = null;
     this.pending = null;
+    this.awaitingReceipt = null;
     this.awaitingDecision = false;
   }
 
@@ -341,6 +397,7 @@ export class AgentClient {
       autoConnect: true,
       withCredentials: true,
       auth: (cb) => cb({ token: this.tokenProvider.getAccessToken() ?? '' }),
+      ackTimeout: AGENT_ACK_TIMEOUT_MS,
     });
 
     this.setupEventListeners();
