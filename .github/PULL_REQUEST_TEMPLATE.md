@@ -1,28 +1,31 @@
-## Summary
+## Why
 
-<!-- Briefly describe what this PR does and why. -->
+<!-- The problem this solves or the thing it unlocks. If an issue tracks it,
+     write "Closes #123" here — GitHub links it from anywhere in the body. -->
 
-## Type of Change
+## What changed
 
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality)
-- [ ] Refactor (no functional changes)
-- [ ] Documentation update
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+<!-- The shape of the change. Detailed context lives here, not in commit bodies. -->
+
+## Verification
+
+<!-- The commands you ran and what they printed. Evidence, not adjectives.
+     CI proves lint, typecheck and tests; use this for everything it cannot:
+     what you exercised by hand, and what the output was. -->
 
 ## Screenshots / Recordings
 
-<!-- If this PR includes UI changes, add before/after screenshots or recordings -->
+<!-- Before/after for any UI change. Delete this section when there is none. -->
 
-## Related Issues
+## Risks and limits
 
-<!-- Link related issues: Closes #123, Fixes #456 -->
+<!-- What you deliberately left undone, migrations, rollback, anything that
+     could bite later. Write "None" when there genuinely is nothing. -->
 
 ## Checklist
 
-- [ ] I have read [CONTRIBUTING.md](CONTRIBUTING.md)
-- [ ] I have run `pnpm lint` and it passes
-- [ ] I have run `pnpm typecheck` and it passes
-- [ ] I have run `pnpm test:run` and all tests pass
-- [ ] I have added tests that cover my changes (if applicable)
-- [ ] I have tested my changes manually
+- [ ] I exercised this by hand, not only through tests
+- [ ] Migration and rollback considered, or not applicable
+- [ ] Flagged above if this changes existing behaviour
+
+<!-- No boxes for lint, typecheck or tests: CI proves those, a tick does not. -->
