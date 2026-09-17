@@ -15,9 +15,11 @@ const PAUSED_HINT_RE = /resumes the queue|reanuda la cola/i;
 
 const FIRST_QUESTION = 'Resume esta nota';
 const FIRST_ANSWER = 'Primera respuesta en curso.';
+const CONVERSATION_ID = 'queue-conversation';
 const PHONE_VIEWPORT = { width: 390, height: 844 };
 
 const DONE = {
+  conversationId: CONVERSATION_ID,
   usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
   sources: [],
   knownNotes: [],
@@ -28,6 +30,7 @@ const DONE = {
 interface SentMessage {
   message: { content: string };
   noteId?: string;
+  conversationId?: string;
 }
 
 function messagesSent(agent: ScriptedAgent): SentMessage[] {
@@ -97,6 +100,11 @@ test('queues two messages while the copilot answers and drains them in order', a
   await expect
     .poll(() => sentTexts(agent))
     .toEqual([FIRST_QUESTION, ...queuedTexts]);
+  expect(messagesSent(agent).map((item) => item.conversationId)).toEqual([
+    undefined,
+    CONVERSATION_ID,
+    CONVERSATION_ID,
+  ]);
   await expect(queued).toHaveCount(0);
   expect(cancelCount(agent)).toBe(0);
 });
