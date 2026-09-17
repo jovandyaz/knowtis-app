@@ -24,7 +24,7 @@ CI-driven, not Vercel Git auto-deploy: `vercel.json` sets `"git": { "deploymentE
 
 ### Railway (Backend)
 
-Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status; `SKIPPED` and a 1500s timeout both fail the job), conditional on `api` (or `mcp`) being affected. Service configuration lives in `.railway/railway.ts` (Railway IaC) and is planned on PRs / applied on merge by `.github/workflows/railway-config.yml`; neither service declares `watchPatterns`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status; `SKIPPED` and a 1500s timeout both fail the job), conditional on `api` (or `mcp`) being affected. Service configuration lives in `.railway/railway.ts` (Railway IaC) and is planned on PRs / applied on merge by `.github/workflows/railway-config.yml`; neither service declares `watchPatterns`. See [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
 
 ### Testing affected locally
 
