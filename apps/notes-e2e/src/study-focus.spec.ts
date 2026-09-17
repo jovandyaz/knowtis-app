@@ -133,7 +133,8 @@ test('answers a quiz, reviews the result and retries the missed question', async
     },
   ]);
 
-  await page.goto('/notes');
+  await page.goto(`/notes/${note.id}`);
+  await page.getByRole('link', { name: 'My Notes', exact: true }).click();
   await page.getByRole('searchbox').fill('Quiz');
   await page
     .getByRole('main')
