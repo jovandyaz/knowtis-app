@@ -1,22 +1,15 @@
 import { useTranslation } from 'react-i18next';
 
-import type { QueuedMessage } from '@/stores/agent.store';
+import { useAgentStore } from '@/stores/agent.store';
 import { X } from 'lucide-react';
 
 import { Button } from '@knowtis/design-system';
 
-interface AgentQueuedMessagesProps {
-  queue: QueuedMessage[];
-  onSendNow: (id: string) => void;
-  onRemove: (id: string) => void;
-}
-
-export function AgentQueuedMessages({
-  queue,
-  onSendNow,
-  onRemove,
-}: AgentQueuedMessagesProps) {
+export function AgentQueuedMessages() {
   const { t } = useTranslation('notes');
+  const queue = useAgentStore((s) => s.queue);
+  const sendQueuedNow = useAgentStore((s) => s.sendQueuedNow);
+  const removeQueued = useAgentStore((s) => s.removeQueued);
   if (queue.length === 0) {
     return null;
   }
@@ -36,7 +29,7 @@ export function AgentQueuedMessages({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onSendNow(item.id)}
+              onClick={() => sendQueuedNow(item.id)}
               className="h-6 px-1.5 text-[10px]"
             >
               {t('ai.copilot.queueSendNow')}
@@ -45,7 +38,7 @@ export function AgentQueuedMessages({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onRemove(item.id)}
+              onClick={() => removeQueued(item.id)}
               aria-label={t('ai.copilot.queueRemove')}
               className="h-6 w-6 p-0"
             >

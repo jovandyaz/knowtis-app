@@ -1,6 +1,7 @@
+import { useAgentStore, type QueuedMessage } from '@/stores/agent.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentQueuedMessages } from './AgentQueuedMessages';
 
@@ -8,27 +9,39 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const QUEUE = [
+const QUEUE: QueuedMessage[] = [
   { id: 'q1', text: 'primero' },
   { id: 'q2', text: 'segundo', noteId: 'n2' },
 ];
 
+const sendQueuedNow = vi.fn();
+const removeQueued = vi.fn();
+const storeActions = {
+  sendQueuedNow: useAgentStore.getState().sendQueuedNow,
+  removeQueued: useAgentStore.getState().removeQueued,
+};
+
 describe('AgentQueuedMessages', () => {
+  beforeEach(() => {
+    sendQueuedNow.mockClear();
+    removeQueued.mockClear();
+    useAgentStore.setState({ queue: [], sendQueuedNow, removeQueued });
+  });
+
+  afterEach(() => {
+    useAgentStore.setState(storeActions);
+  });
+
   it('renders nothing for an empty queue', () => {
-    const { container } = render(
-      <AgentQueuedMessages queue={[]} onSendNow={vi.fn()} onRemove={vi.fn()} />
-    );
+    const { container } = render(<AgentQueuedMessages />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('lists every queued message in order with its caption', () => {
-    render(
-      <AgentQueuedMessages
-        queue={QUEUE}
-        onSendNow={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    );
+    useAgentStore.setState({ queue: QUEUE });
+
+    render(<AgentQueuedMessages />);
+
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('primero');
@@ -37,25 +50,19 @@ describe('AgentQueuedMessages', () => {
   });
 
   it('wires Send now and Remove to the right item', async () => {
-    const onSendNow = vi.fn();
-    const onRemove = vi.fn();
     const user = userEvent.setup();
-    render(
-      <AgentQueuedMessages
-        queue={QUEUE}
-        onSendNow={onSendNow}
-        onRemove={onRemove}
-      />
-    );
+    useAgentStore.setState({ queue: QUEUE });
+    render(<AgentQueuedMessages />);
     const second = screen.getAllByRole('listitem')[1];
+
     await user.click(
       screen.getAllByRole('button', { name: 'ai.copilot.queueSendNow' })[1]
     );
-    expect(onSendNow).toHaveBeenCalledWith('q2');
+    expect(sendQueuedNow).toHaveBeenCalledWith('q2');
     await user.click(
       screen.getAllByRole('button', { name: 'ai.copilot.queueRemove' })[1]
     );
-    expect(onRemove).toHaveBeenCalledWith('q2');
+    expect(removeQueued).toHaveBeenCalledWith('q2');
     expect(second).toBeInTheDocument();
   });
 });

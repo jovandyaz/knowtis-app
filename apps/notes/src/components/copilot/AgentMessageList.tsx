@@ -1,8 +1,4 @@
-import type {
-  AgentChatMessage,
-  AgentStatus,
-  QueuedMessage,
-} from '@/stores/agent.store';
+import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
 
 import {
   Conversation,
@@ -17,18 +13,12 @@ interface AgentMessageListProps {
   messages: AgentChatMessage[];
   status: AgentStatus;
   thinkingDetail?: string;
-  queue: QueuedMessage[];
-  onSendQueuedNow: (id: string) => void;
-  onRemoveQueued: (id: string) => void;
 }
 
 export function AgentMessageList({
   messages,
   status,
   thinkingDetail,
-  queue,
-  onSendQueuedNow,
-  onRemoveQueued,
 }: AgentMessageListProps) {
   const lastAssistant = messages.at(-1);
   const isAssistantTurn =
@@ -50,11 +40,7 @@ export function AgentMessageList({
         {isAssistantTurn && (
           <AgentStatusIndicator detail={thinkingDetail} answering={answering} />
         )}
-        <AgentQueuedMessages
-          queue={queue}
-          onSendNow={onSendQueuedNow}
-          onRemove={onRemoveQueued}
-        />
+        <AgentQueuedMessages />
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

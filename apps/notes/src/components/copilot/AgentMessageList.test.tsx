@@ -1,11 +1,11 @@
-import type {
-  AgentChatMessage,
-  AgentStatus,
-  QueuedMessage,
+import {
+  useAgentStore,
+  type AgentChatMessage,
+  type AgentStatus,
 } from '@/stores/agent.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentMessageList } from './AgentMessageList';
 
@@ -24,10 +24,9 @@ interface ListOptions {
   content: string;
   status?: AgentStatus;
   detail?: string;
-  queue?: QueuedMessage[];
 }
 
-const list = ({ content, status, detail, queue }: ListOptions) => (
+const list = ({ content, status, detail }: ListOptions) => (
   <AgentMessageList
     messages={[
       { id: 'u1', role: 'user', content: 'hola' },
@@ -35,9 +34,6 @@ const list = ({ content, status, detail, queue }: ListOptions) => (
     ]}
     status={status ?? 'streaming'}
     {...(detail === undefined ? {} : { thinkingDetail: detail })}
-    queue={queue ?? []}
-    onSendQueuedNow={vi.fn()}
-    onRemoveQueued={vi.fn()}
   />
 );
 
@@ -45,6 +41,10 @@ const shimmerLines = (container: HTMLElement) =>
   container.querySelectorAll('[data-testid="shimmer-line"]').length;
 
 describe('AgentMessageList', () => {
+  beforeEach(() => {
+    useAgentStore.setState({ queue: [] });
+  });
+
   it('shows the reasoning while the answer has not started', () => {
     const { container } = render(list({ content: '', detail: DETAIL }));
 
@@ -110,9 +110,6 @@ describe('AgentMessageList', () => {
         messages={[{ id: 'u1', role: 'user', content: 'hola' }]}
         status="streaming"
         thinkingDetail={DETAIL}
-        queue={[]}
-        onSendQueuedNow={vi.fn()}
-        onRemoveQueued={vi.fn()}
       />
     );
 
@@ -125,9 +122,6 @@ describe('AgentMessageList', () => {
         messages={[]}
         status="streaming"
         thinkingDetail={DETAIL}
-        queue={[]}
-        onSendQueuedNow={vi.fn()}
-        onRemoveQueued={vi.fn()}
       />
     );
 
@@ -135,13 +129,9 @@ describe('AgentMessageList', () => {
   });
 
   it('renders queued messages after the status indicator', () => {
-    render(
-      list({
-        content: 'La respuesta',
-        detail: DETAIL,
-        queue: [{ id: 'q1', text: 'luego' }],
-      })
-    );
+    useAgentStore.setState({ queue: [{ id: 'q1', text: 'luego' }] });
+
+    render(list({ content: 'La respuesta', detail: DETAIL }));
     const indicator = screen.getByText('ai.copilot.reasoning');
     const queued = screen.getByText('luego');
     expect(
@@ -151,13 +141,9 @@ describe('AgentMessageList', () => {
   });
 
   it('keeps queued messages visible once the turn is paused', () => {
-    render(
-      list({
-        content: 'La respuesta',
-        status: 'idle',
-        queue: [{ id: 'q1', text: 'luego' }],
-      })
-    );
+    useAgentStore.setState({ queue: [{ id: 'q1', text: 'luego' }] });
+
+    render(list({ content: 'La respuesta', status: 'idle' }));
     expect(screen.getByText('luego')).toBeInTheDocument();
   });
 });
