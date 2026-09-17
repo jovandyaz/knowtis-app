@@ -186,6 +186,33 @@ describe('AgentClient', () => {
     });
   });
 
+  it('lets onDone start the next turn without cancelling it or losing its chunks', () => {
+    const client = makeClient();
+    const next = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    client.sendMessage('first', {
+      onChunk: vi.fn(),
+      onError: vi.fn(),
+      onDone: () => {
+        expect(client.canResume()).toBe(false);
+        client.sendMessage('second', next);
+      },
+    });
+    emit.mockClear();
+
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      stopReason: 'completed',
+    });
+
+    expect(emit).not.toHaveBeenCalledWith('agent:cancel');
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      message: { content: 'second' },
+    });
+    handlers.get('agent:chunk')?.({ text: 'hi' });
+    expect(next.onChunk).toHaveBeenCalledWith({ text: 'hi' });
+  });
+
   it('routes sources and the stop reason to onDone', () => {
     const client = makeClient();
     const onDone = vi.fn();

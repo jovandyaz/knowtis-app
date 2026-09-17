@@ -251,6 +251,35 @@ describe('AIClient', () => {
     expect(callbacks.onDone).toHaveBeenCalledWith({ usage });
   });
 
+  it('lets onDone start the next request without cancelling it or losing its chunks', async () => {
+    const next = createCallbacks();
+    const callbacks = {
+      onChunk: vi.fn(),
+      onError: vi.fn(),
+      onDone: vi.fn(() => {
+        client.stream(PAYLOAD, next);
+      }),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
+    });
+
+    client.stream(PAYLOAD, callbacks);
+    await flush();
+    fake.socket.emit.mockClear();
+
+    fake.trigger('ai:done', {
+      usage: { inputTokens: 1, outputTokens: 2, model: 'm', costUsd: 0 },
+    });
+    await flush();
+
+    expect(fake.socket.emit).not.toHaveBeenCalledWith('ai:cancel');
+    expect(fake.socket.emit).toHaveBeenCalledWith('ai:complete', PAYLOAD);
+    fake.trigger('ai:chunk', { text: 'partial' });
+    expect(next.onChunk).toHaveBeenCalledWith({ text: 'partial' });
+  });
+
   it('tears down the socket after exhausting reconnect attempts', async () => {
     const callbacks = createCallbacks();
     client.setTokenProvider({

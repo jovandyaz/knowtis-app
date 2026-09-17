@@ -31,6 +31,10 @@ export interface BrowserProductEventMap {
     assistant_type: 'selection' | 'agent' | 'ghost_text';
     action?: AIAction;
   };
+  'ai message queued': {
+    source: 'copilot';
+    queue_length: number;
+  };
   'study session started': {
     source: StudySessionSource;
     due_count: number;
@@ -51,6 +55,7 @@ const PRODUCT_EVENT_PROPERTY_KEYS = {
   'note activated': ['source'],
   'shared note viewed': ['source', 'permission', 'actor_type'],
   'ai response completed': ['source', 'assistant_type', 'action'],
+  'ai message queued': ['source', 'queue_length'],
   'study session started': ['source', 'due_count', 'new_count'],
   'study session completed': [
     'source',

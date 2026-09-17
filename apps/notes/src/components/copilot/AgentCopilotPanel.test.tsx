@@ -5,6 +5,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ApiClient from '@knowtis/api-client';
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
 import {
@@ -21,7 +22,25 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
 }));
 vi.mock('./AgentComposer', () => ({
-  AgentComposer: () => <div data-testid="composer" />,
+  AgentComposer: (props: {
+    draft: string;
+    queueLength: number;
+    onSend: (text: string) => void;
+    onSendNow: (text: string) => void;
+  }) => (
+    <div
+      data-testid="composer"
+      data-draft={props.draft}
+      data-queue={props.queueLength}
+    >
+      <button type="button" onClick={() => props.onSend('later')}>
+        send
+      </button>
+      <button type="button" onClick={() => props.onSendNow('now')}>
+        send-now
+      </button>
+    </div>
+  ),
 }));
 vi.mock('./CopilotModelPicker', () => ({
   CopilotModelPicker: () => null,
@@ -37,6 +56,19 @@ vi.mock('./ProposalReview', () => ({
       </button>
     </div>
   ),
+}));
+vi.mock('@knowtis/api-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiClient>()),
+  agentClient: {
+    sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
+    canResume: vi.fn(() => true),
+    approve: vi.fn(),
+    reject: vi.fn(),
+    resetConversation: vi.fn(),
+    setTokenProvider: vi.fn(),
+    setAuthRefreshHandler: vi.fn(),
+    setSessionExpiredHandler: vi.fn(),
+  },
 }));
 
 const wrapper = createAuthWrapper(createAuthApiMock(), {
@@ -66,6 +98,8 @@ describe('AgentCopilotPanel', () => {
       answeredError: null,
       messages: [],
       pendingProposal: null,
+      queue: [],
+      draft: '',
     });
   });
 
@@ -208,6 +242,52 @@ describe('AgentCopilotPanel', () => {
 
     expect(screen.getByText('GTD')).toBeInTheDocument();
   });
+
+  it('passes the store draft and queue length to the composer', () => {
+    act(() => {
+      useAgentStore.setState({
+        draft: 'typing',
+        queue: [{ id: 'q1', text: 'later' }],
+        messages: [{ id: 'u1', role: 'user', content: 'hola' }],
+      });
+    });
+    render(<AgentCopilotPanel />, { wrapper });
+    const composer = screen.getByTestId('composer');
+    expect(composer).toHaveAttribute('data-draft', 'typing');
+    expect(composer).toHaveAttribute('data-queue', '1');
+  });
+
+  it('queues a composer send, interrupts on send-now, and releases the queued row', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useAgentStore.setState({
+        status: 'streaming',
+        messages: [
+          { id: 'u1', role: 'user', content: 'hola' },
+          { id: 'a1', role: 'assistant', content: '' },
+        ],
+      });
+    });
+    render(<AgentCopilotPanel />, { wrapper });
+
+    await user.click(screen.getByRole('button', { name: 'send' }));
+    expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+      'later',
+    ]);
+    expect(screen.getByText('later')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'send-now' }));
+    expect(useAgentStore.getState().messages.at(-2)?.content).toBe('now');
+    expect(useAgentStore.getState().queue.map((q) => q.text)).toEqual([
+      'later',
+    ]);
+
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.queueSendNow' })
+    );
+    expect(useAgentStore.getState().messages.at(-2)?.content).toBe('later');
+    expect(useAgentStore.getState().queue).toEqual([]);
+  });
 });
 
 const updateProposal = {
@@ -233,6 +313,8 @@ describe('AgentCopilotPanel proposal routing', () => {
       answeredError: null,
       messages: [],
       pendingProposal: null,
+      queue: [],
+      draft: '',
     });
   });
 

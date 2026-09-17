@@ -291,9 +291,10 @@ export class AIClient {
     });
 
     socket.on('ai:done', (payload: AIDonePayload) => {
-      this.activeCallbacks?.onDone(payload);
+      const callbacks = this.activeCallbacks;
       this.activeCallbacks = null;
       this.pendingPayload = null;
+      callbacks?.onDone(payload);
     });
 
     socket.on('ai:error', (payload: AIErrorPayload) => {

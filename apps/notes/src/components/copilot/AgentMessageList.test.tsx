@@ -1,7 +1,11 @@
-import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
+import {
+  useAgentStore,
+  type AgentChatMessage,
+  type AgentStatus,
+} from '@/stores/agent.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentMessageList } from './AgentMessageList';
 
@@ -37,6 +41,10 @@ const shimmerLines = (container: HTMLElement) =>
   container.querySelectorAll('[data-testid="shimmer-line"]').length;
 
 describe('AgentMessageList', () => {
+  beforeEach(() => {
+    useAgentStore.setState({ queue: [] });
+  });
+
   it('shows the reasoning while the answer has not started', () => {
     const { container } = render(list({ content: '', detail: DETAIL }));
 
@@ -118,5 +126,24 @@ describe('AgentMessageList', () => {
     );
 
     expect(screen.queryByText(DETAIL)).toBeNull();
+  });
+
+  it('renders queued messages after the status indicator', () => {
+    useAgentStore.setState({ queue: [{ id: 'q1', text: 'luego' }] });
+
+    render(list({ content: 'La respuesta', detail: DETAIL }));
+    const indicator = screen.getByText('ai.copilot.reasoning');
+    const queued = screen.getByText('luego');
+    expect(
+      indicator.compareDocumentPosition(queued) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('keeps queued messages visible once the turn is paused', () => {
+    useAgentStore.setState({ queue: [{ id: 'q1', text: 'luego' }] });
+
+    render(list({ content: 'La respuesta', status: 'idle' }));
+    expect(screen.getByText('luego')).toBeInTheDocument();
   });
 });

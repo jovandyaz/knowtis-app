@@ -33,6 +33,7 @@ import { motion } from 'motion/react';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import { isMacPlatform } from '@knowtis/shared-util';
 
 function RightDockLayout() {
   return <RightDock />;
@@ -86,7 +87,7 @@ function AppLayout() {
   const toggleDock = useRightDockStore((s) => s.toggle);
 
   useEffect(() => {
-    const isMac = /Mac/i.test(navigator.userAgent);
+    const isMac = isMacPlatform();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(isMac ? e.metaKey : e.ctrlKey) || e.key.toLowerCase() !== 'j') {
         return;

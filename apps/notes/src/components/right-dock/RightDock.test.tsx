@@ -23,6 +23,7 @@ const agentState = vi.hoisted(() => ({
     kind: 'create' | 'update' | 'share';
     targetNoteId: string | null;
   } | null,
+  status: 'idle' as 'idle' | 'streaming',
 }));
 
 vi.mock('react-i18next', () => ({
@@ -46,6 +47,7 @@ describe('RightDock', () => {
   beforeEach(() => {
     viewport.isDesktop = true;
     agentState.pendingProposal = null;
+    agentState.status = 'idle';
     useRightDockStore.setState({ isOpen: true, reviewOpen: false });
   });
 
@@ -115,6 +117,28 @@ describe('RightDock', () => {
 
   it('still closes the mobile dock on Escape outside a review', () => {
     viewport.isDesktop = false;
+    useRightDockStore.setState({ isOpen: true, reviewOpen: false });
+
+    render(<RightDock />);
+    fireEvent.keyDown(screen.getByText('copilot-panel'), { key: 'Escape' });
+
+    expect(useRightDockStore.getState().isOpen).toBe(false);
+  });
+
+  it('holds the mobile dock open when Escape fires while a turn is streaming', () => {
+    viewport.isDesktop = false;
+    agentState.status = 'streaming';
+    useRightDockStore.setState({ isOpen: true, reviewOpen: false });
+
+    render(<RightDock />);
+    fireEvent.keyDown(screen.getByText('copilot-panel'), { key: 'Escape' });
+
+    expect(useRightDockStore.getState().isOpen).toBe(true);
+  });
+
+  it('closes the mobile dock on Escape while idle', () => {
+    viewport.isDesktop = false;
+    agentState.status = 'idle';
     useRightDockStore.setState({ isOpen: true, reviewOpen: false });
 
     render(<RightDock />);

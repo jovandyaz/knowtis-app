@@ -6,6 +6,7 @@ import {
   ConversationScrollButton,
 } from '../ai-elements/conversation';
 import { AgentMessage } from './AgentMessage';
+import { AgentQueuedMessages } from './AgentQueuedMessages';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
 
 interface AgentMessageListProps {
@@ -39,6 +40,7 @@ export function AgentMessageList({
         {isAssistantTurn && (
           <AgentStatusIndicator detail={thinkingDetail} answering={answering} />
         )}
+        <AgentQueuedMessages />
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

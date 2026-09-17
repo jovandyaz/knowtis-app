@@ -81,6 +81,7 @@ export function RightDock() {
   const hasUpdateProposal = useAgentStore(
     (s) => s.pendingProposal !== null && isUpdateProposal(s.pendingProposal)
   );
+  const isStreaming = useAgentStore((s) => s.status === 'streaming');
   const reviewingUpdate = reviewOpen && hasUpdateProposal;
   const reviewWidth = reviewDockWidth(useViewportWidth(reviewingUpdate));
 
@@ -118,10 +119,12 @@ export function RightDock() {
             close();
           }
         }}
-        // Escape discards the proposal under review; Radix reads Escape in a
-        // document capture handler, so only its own opt-out can hold the dock open.
+        // Escape discards the proposal under review, or would cancel a live
+        // turn; Radix reads Escape in a document capture handler, so only its
+        // own opt-out can hold the dock open. pendingProposal stays out of
+        // this: there Escape must still reach the dialog.
         onEscapeKeyDown={(event) => {
-          if (reviewingUpdate) {
+          if (reviewingUpdate || isStreaming) {
             event.preventDefault();
           }
         }}

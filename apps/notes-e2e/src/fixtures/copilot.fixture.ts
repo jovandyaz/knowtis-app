@@ -3,11 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { expect, type Page, type Request, type Route } from '@playwright/test';
 
 import { E2E } from '../../support/environment';
+import { test as sharingTest } from './sharing.fixture';
 
 const SEPARATOR = '\x1e';
 const HOLD_MS = 3_000;
 const POLL_MS = 25;
 const CONNECT_RE = /^40(\/[^,]*)?,?/;
+const POLLING_ROUTE_RE = /\/socket\.io\/\?.*EIO=4/;
+const COMPOSER_RE = /copilot|pregunta|ask/i;
+const DOCK_TOGGLE_RE = /^copilot$/i;
+const DOCK_HYDRATION_TIMEOUT_MS = 1_000;
 
 export interface AgentScript {
   /** Emitted in order once the client sends `agent:message`. */
@@ -22,6 +27,8 @@ export interface ScriptedAgent {
   /** Every client→server socket.io event seen so far, in order. */
   readonly sent: readonly { event: string; payload: unknown }[];
   waitForSent(event: string): Promise<unknown>;
+  /** Pushes one server→client event, for turns the static script cannot end on its own. */
+  emit(event: string, payload: unknown): void;
 }
 
 function handshake(sid: string): string {
@@ -39,6 +46,16 @@ function event(name: string, payload: unknown): string {
   return `42/agent,${JSON.stringify([name, payload])}`;
 }
 
+/** Interception must not outlive the test that installed it: the `sharing` pages
+ * are worker-scoped, so a handler left behind keeps answering every later socket
+ * the page opens — including the editor's own — instead of the real server. */
+const scriptedAgentReleases: (() => Promise<void>)[] = [];
+
+async function releaseScriptedAgents(): Promise<void> {
+  const releases = scriptedAgentReleases.splice(0);
+  await Promise.allSettled(releases.map((release) => release()));
+}
+
 /** socket.io opens on HTTP polling; answering the handshake with `upgrades: []` keeps
  * it there, since polling is the only transport `page.route` can intercept. */
 export async function scriptAgent(
@@ -48,6 +65,9 @@ export async function scriptAgent(
   const sid = randomUUID().replaceAll('-', '').slice(0, 20);
   const outbox: string[] = [];
   const sent: { event: string; payload: unknown }[] = [];
+  const sleepers = new Set<() => void>();
+  const heldPolls = new Set<Promise<void>>();
+  let released = false;
 
   const replies: Record<string, readonly [string, unknown][] | undefined> = {
     'agent:message': script.onMessage,
@@ -91,10 +111,24 @@ export async function scriptAgent(
     };
   }
 
+  /** Release has to wake a sleeping poll instead of waiting it out, or teardown
+   * would block on an idle long-poll for the rest of its HOLD_MS. */
+  function hold(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const wake = () => {
+        clearTimeout(timer);
+        sleepers.delete(wake);
+        resolve();
+      };
+      const timer = setTimeout(wake, ms);
+      sleepers.add(wake);
+    });
+  }
+
   async function drain(route: Route): Promise<void> {
     const deadline = Date.now() + HOLD_MS;
-    while (outbox.length === 0 && Date.now() < deadline) {
-      await new Promise((done) => setTimeout(done, POLL_MS));
+    while (!released && outbox.length === 0 && Date.now() < deadline) {
+      await hold(POLL_MS);
     }
     // A NOOP never resets engine.io-client's ping watchdog; a real PING must
     // eventually go out or the socket self-closes after pingInterval+pingTimeout.
@@ -106,7 +140,7 @@ export async function scriptAgent(
     });
   }
 
-  await page.route(/\/socket\.io\/\?.*EIO=4/, async (route) => {
+  async function intercept(route: Route): Promise<void> {
     const request = route.request();
     const url = new URL(request.url());
 
@@ -137,7 +171,24 @@ export async function scriptAgent(
       return;
     }
 
-    await drain(route);
+    const poll = drain(route);
+    heldPolls.add(poll);
+    try {
+      await poll;
+    } finally {
+      heldPolls.delete(poll);
+    }
+  }
+
+  await page.route(POLLING_ROUTE_RE, intercept);
+
+  scriptedAgentReleases.push(async () => {
+    released = true;
+    for (const wake of [...sleepers]) {
+      wake();
+    }
+    await Promise.allSettled([...heldPolls]);
+    await page.unroute(POLLING_ROUTE_RE, intercept).catch(() => undefined);
   });
 
   return {
@@ -150,5 +201,44 @@ export async function scriptAgent(
         .toBe(true);
       return sent.findLast((item) => item.event === name)?.payload;
     },
+    emit(name, payload) {
+      outbox.push(event(name, payload));
+    },
   };
+}
+
+/**
+ * Test-scoped, not worker-scoped: a worker-scoped fixture here would give this
+ * file its own worker "shape", so Playwright would restart the worker and
+ * rebuild the whole `sharing` cast just for these specs.
+ */
+export const test = sharingTest.extend<{ scriptedAgents: true }, object>({
+  scriptedAgents: [
+    // Playwright parses this signature's text to resolve fixture deps, so the
+    // empty destructure is required even though this fixture needs nothing.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      try {
+        await use(true);
+      } finally {
+        await releaseScriptedAgents();
+      }
+    },
+    { auto: true },
+  ],
+});
+/** The dock's open state persists across notes in the same worker, so right
+ * after navigation the composer may just not have hydrated yet — an
+ * `isVisible()` snapshot can't tell that from "closed" and toggling a dock
+ * that is actually open closes it. Waiting bounds the hydration race instead. */
+export async function openCopilotDock(page: Page) {
+  const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
+  const alreadyOpen = await composer
+    .waitFor({ state: 'visible', timeout: DOCK_HYDRATION_TIMEOUT_MS })
+    .then(() => true)
+    .catch(() => false);
+  if (!alreadyOpen) {
+    await page.getByRole('button', { name: DOCK_TOGGLE_RE }).first().click();
+  }
+  return composer;
 }
