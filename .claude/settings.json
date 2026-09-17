@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm nx affected -t typecheck --uncommitted",
+            "command": "pnpm nx affected -t typecheck --base=HEAD",
             "timeout": 180,
             "statusMessage": "Typechecking affected projects..."
           }
