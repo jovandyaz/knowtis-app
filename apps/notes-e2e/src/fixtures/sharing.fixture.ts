@@ -12,12 +12,7 @@ import { z } from 'zod';
 
 import { I18N_STORAGE_KEY } from '@knowtis/shared-util';
 
-import {
-  BCRYPT_ROUNDS,
-  E2E,
-  E2E_PORT,
-  LOGIN_THROTTLE_LIMIT,
-} from '../../support/environment';
+import { BCRYPT_ROUNDS, E2E, E2E_PORT } from '../../support/environment';
 
 const accountSchema = z.object({
   id: z.uuid(),
@@ -242,15 +237,7 @@ export const test = base.extend<
       const actors: SharingActor[] = [];
       let guest: Awaited<ReturnType<typeof createGuest>> | undefined;
       try {
-        const gated =
-          await db`update feature_flags set enabled = true where key = 'email_verification_gate'`;
-        expect(gated.count).toBe(1);
         const labels = ['Owner', 'Recipient', 'Direct Editor', 'Direct Viewer'];
-        if (labels.length >= LOGIN_THROTTLE_LIMIT) {
-          throw new Error(
-            `Sharing actors must stay under the ${LOGIN_THROTTLE_LIMIT} logins the auth throttle allows per window`
-          );
-        }
         for (const label of labels) {
           actors.push(await createActor(browser, db, label));
         }

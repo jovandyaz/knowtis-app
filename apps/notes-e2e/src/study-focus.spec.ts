@@ -133,12 +133,8 @@ test('answers a quiz, reviews the result and retries the missed question', async
     },
   ]);
 
-  // Reuse the actor's SPA session instead of spending another IP-scoped refresh request.
-  if (page.url() === 'about:blank') {
-    await page.goto('/notes');
-  } else {
-    await page.getByRole('link', { name: 'My Notes', exact: true }).click();
-  }
+  await page.goto(`/notes/${note.id}`);
+  await page.getByRole('link', { name: 'My Notes', exact: true }).click();
   await page.getByRole('searchbox').fill('Quiz');
   await page
     .getByRole('main')
@@ -338,16 +334,7 @@ for (const locale of ['en', 'es'] as const) {
           explanation: '',
         },
       ]);
-      if (locale === 'en' && page.url() !== 'about:blank') {
-        await page.getByRole('link', { name: 'My Notes', exact: true }).click();
-        await page.getByRole('searchbox').fill('Photosynthesis layout');
-        await page
-          .getByRole('main')
-          .getByRole('link', { name: /^Photosynthesis layout\b/ })
-          .click();
-      } else {
-        await page.goto(`/notes/${note.id}`);
-      }
+      await page.goto(`/notes/${note.id}`);
 
       const copilotToggle = page.getByRole('button', {
         name: 'Copilot',

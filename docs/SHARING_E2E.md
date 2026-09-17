@@ -3,7 +3,12 @@
 `notes-e2e` exercises the sharing API and production Notes bundle with Chromium,
 two independent API processes, PostgreSQL 16 and Redis 7. It uses the real login,
 anonymous-session, cookie, JWT, authorization and Hocuspocus paths. Test accounts
-are verified in the disposable database; verification and throttling stay enabled.
+are verified in the disposable database and verification stays enabled. Rate
+limiting is switched off for the two API processes with
+`RATE_LIMITING_ENABLED=false`: one automated client on one IP would otherwise
+spend the ten-per-minute refresh budget in a few page loads. The guard itself is
+pinned by `throttling.module.spec.ts` and the production login budget by the
+post-deploy check in DEPLOYMENT.md.
 
 ## Run locally
 
@@ -18,16 +23,17 @@ An installed Chrome can be selected with `SHARING_E2E_BROWSER_CHANNEL=chrome`.
 The target does not accept cached success or an empty test selection. It stops
 after the first failure and does not retry failed tests or sharing mutations.
 One worker shares four HTTP-authenticated test accounts and one real anonymous
-session, avoiding repeated logins that would exceed the normal rate limit.
-Every scenario creates a separate note. Browser routes used for an intentional
-failure are removed in `finally` blocks.
+session. Every scenario creates a separate note. Browser routes used for an
+intentional failure are removed in `finally` blocks.
 
 Setup checks that ports 3373, 3374, 4273, 5573 and 6573 are free before doing work.
 It rejects local dotenv files in the workspace root and API, Notes and E2E
 project directories, and disables Nx dotenv loading for child tasks. Example
 files are allowed; local files are never renamed, removed or read by the guard.
 It creates a uniquely named Compose project, generates disposable authentication
-secrets, migrates its own database, builds API and Notes in production mode
+secrets, migrates its own database, seeds the `ai_enabled` and
+`email_verification_gate` flags before the API boots (the API caches each flag
+for 30 s, so a flag flipped later is invisible to the first tests), builds API and Notes in production mode
 without reading the Nx cache, and serves the built frontend with Vite preview.
 The Notes build target hashes the `VITE_*` variables Vite inlines, so the
 loopback bundle this harness builds occupies its own cache entry and can neither

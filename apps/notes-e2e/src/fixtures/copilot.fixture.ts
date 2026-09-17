@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { expect, type Page, type Request, type Route } from '@playwright/test';
-import postgres from 'postgres';
 
 import { E2E } from '../../support/environment';
-import { test as sharingTest } from './sharing.fixture';
 
 const SEPARATOR = '\x1e';
 const HOLD_MS = 3_000;
@@ -73,7 +71,7 @@ export async function scriptAgent(
 
   /** A held drain() can still be in flight when the test tears down the page;
    * fulfilling a route on a closed page throws and would otherwise crash the
-   * worker, forcing the next spec file to re-login and trip the auth throttle. */
+   * worker. */
   async function safeFulfill(
     route: Route,
     options: Parameters<Route['fulfill']>[0]
@@ -154,34 +152,3 @@ export async function scriptAgent(
     },
   };
 }
-
-/**
- * Test-scoped, not worker-scoped: a worker-scoped fixture here would give this
- * file its own worker "shape", forcing Playwright to spin up a second worker
- * (and a second `sharing` login burst) instead of sharing the one running the
- * plain sharing specs — tripping the 5-per-15-minute login throttle by IP.
- */
-export const test = sharingTest.extend<{ ai: true }, object>({
-  ai: [
-    // Playwright parses this signature's text to resolve fixture deps, so the
-    // empty destructure is required even though this fixture needs nothing.
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
-      const db = postgres(E2E.database, { max: 1 });
-      try {
-        const updated =
-          await db`update feature_flags set enabled = true where key = 'ai_enabled'`;
-        if (updated.count === 0) {
-          await db`insert into feature_flags (key, enabled) values ('ai_enabled', true)
-            on conflict (key) do update set enabled = true`;
-        }
-        await use(true);
-      } finally {
-        await db.end({ timeout: 5 });
-      }
-    },
-    { auto: true },
-  ],
-});
-
-export { expect } from '@playwright/test';

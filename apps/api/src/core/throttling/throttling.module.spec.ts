@@ -98,18 +98,28 @@ describe('ThrottlingModule', () => {
     );
   });
 
-  beforeEach(async () => {
+  async function boot(env: Record<string, unknown> = {}): Promise<void> {
     const moduleRef = await Test.createTestingModule({
       imports: [ProbeModule],
     })
       .overrideProvider(TOKEN_SERVICE)
       .useValue({})
+      .overrideProvider(ConfigService)
+      .useValue(
+        new ConfigService({
+          JWT_SECRET: ACCESS_TOKEN_SECRET,
+          RATE_LIMITING_ENABLED: true,
+          ...env,
+        })
+      )
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     app.set('trust proxy', 1);
     await app.listen(0);
     baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1');
-  });
+  }
+
+  beforeEach(() => boot());
 
   afterEach(async () => {
     await app.close();
@@ -168,5 +178,15 @@ describe('ThrottlingModule', () => {
     expect(await probeAs({ 'x-real-ip': '203.0.113.7' })).toBe(200);
 
     expect(await probeAs({ 'x-real-ip': '203.0.113.8' })).toBe(200);
+  });
+
+  it('spends no budget at all when RATE_LIMITING_ENABLED is false', async () => {
+    await app.close();
+    await boot({ RATE_LIMITING_ENABLED: false });
+
+    expect(await probe(tokenA)).toBe(200);
+    expect(await probe(tokenA)).toBe(200);
+    expect(await probe()).toBe(200);
+    expect(await probe()).toBe(200);
   });
 });

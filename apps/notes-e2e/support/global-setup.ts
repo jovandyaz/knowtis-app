@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { workspaceRoot } from '@nx/devkit';
+import postgres from 'postgres';
 
 import { BCRYPT_ROUNDS, E2E, E2E_PORT } from './environment';
 
@@ -18,6 +19,23 @@ async function requireFreePort(port: number): Promise<void> {
     );
     server.listen(port, '127.0.0.1', () => server.close(() => done()));
   });
+}
+
+const ENABLED_FEATURE_FLAGS = ['ai_enabled', 'email_verification_gate'];
+
+/** The API caches each flag for 30 s per process, so a flag flipped after boot
+ * can stay invisible to the first tests; seeding before boot makes the first
+ * read see it. */
+async function seedFeatureFlags(): Promise<void> {
+  const db = postgres(E2E.database, { max: 1 });
+  try {
+    for (const key of ENABLED_FEATURE_FLAGS) {
+      await db`insert into feature_flags (key, enabled) values (${key}, true)
+        on conflict (key) do update set enabled = true`;
+    }
+  } finally {
+    await db.end({ timeout: 5 });
+  }
 }
 
 export default async function globalSetup() {
@@ -59,6 +77,7 @@ export default async function globalSetup() {
     BACKOFFICE_URL: 'http://127.0.0.1:4473',
     EMAIL_PROVIDER: 'console',
     BCRYPT_ROUNDS: String(BCRYPT_ROUNDS),
+    RATE_LIMITING_ENABLED: 'false',
     NX_DAEMON: 'false',
     NX_LOAD_DOT_ENV_FILES: 'false',
     NX_ISOLATE_PLUGINS: 'false',
@@ -186,6 +205,7 @@ export default async function globalSetup() {
     composeStarted = true;
     await run('compose-up', 'docker', [...composeArgs, 'up', '-d', '--wait']);
     await run('migrations', 'pnpm', ['nx', 'db:migrate:run', 'api']);
+    await seedFeatureFlags();
     await run(
       'build',
       'pnpm',

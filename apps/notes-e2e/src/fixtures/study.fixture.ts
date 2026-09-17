@@ -1,7 +1,7 @@
 import postgres from 'postgres';
 
 import { E2E } from '../../support/environment';
-import { test as aiTest } from './copilot.fixture';
+import { test as sharingTest } from './sharing.fixture';
 
 interface SeedCard {
   front: string;
@@ -25,7 +25,7 @@ interface StudyFixture {
   ): Promise<string>;
 }
 
-export const test = aiTest.extend<{ study: StudyFixture }>({
+export const test = sharingTest.extend<{ study: StudyFixture }>({
   // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixture dependency list.
   study: async ({}, use) => {
     const db = postgres(E2E.database, { max: 1 });

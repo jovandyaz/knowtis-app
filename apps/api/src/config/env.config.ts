@@ -18,6 +18,10 @@ const envSchemaBase = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
+  RATE_LIMITING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   // Optional here only so the refinement below can name what is missing; shape
   // stays TokenHasher's to enforce, since it rejects a malformed key while
   // AuthModule is still being built, before this schema ever runs.
@@ -196,6 +200,16 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
         'BACKOFFICE_URL is required in production — without it the backoffice and the notes app resolve to the same refresh cookie and hand each other their sessions',
       path: ['BACKOFFICE_URL'],
       input: data.BACKOFFICE_URL,
+    });
+  }
+
+  if (data.NODE_ENV === 'production' && !data.RATE_LIMITING_ENABLED) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'RATE_LIMITING_ENABLED=false is refused in production — the flag exists for disposable test environments, where a single-IP automated client would otherwise spend the login and refresh budgets in a few page loads',
+      path: ['RATE_LIMITING_ENABLED'],
+      input: data.RATE_LIMITING_ENABLED,
     });
   }
 
