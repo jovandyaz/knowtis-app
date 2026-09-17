@@ -73,7 +73,7 @@ export async function scriptAgent(
 
   /** A held drain() can still be in flight when the test tears down the page;
    * fulfilling a route on a closed page throws and would otherwise crash the
-   * worker, forcing the next spec file to re-login and trip the auth throttle. */
+   * worker. */
   async function safeFulfill(
     route: Route,
     options: Parameters<Route['fulfill']>[0]
@@ -157,9 +157,8 @@ export async function scriptAgent(
 
 /**
  * Test-scoped, not worker-scoped: a worker-scoped fixture here would give this
- * file its own worker "shape", forcing Playwright to spin up a second worker
- * (and a second `sharing` login burst) instead of sharing the one running the
- * plain sharing specs — tripping the 5-per-15-minute login throttle by IP.
+ * file its own worker "shape", so Playwright would restart the worker and
+ * rebuild the whole `sharing` cast just for these specs.
  */
 export const test = sharingTest.extend<{ ai: true }, object>({
   ai: [

@@ -525,4 +525,5 @@ Design notes: CASL is encapsulated in `permissions-core` (only `can`/`cannot` le
 The [sharing E2E suite](SHARING_E2E.md) verifies People changes, old-link rejection,
 direct/link permission precedence, live-session cutoffs and recovery through the
 real HTTP and Hocuspocus boundaries. Its isolated runtime keeps the normal
-authorization, verification and throttling policies active.
+authorization and verification policies active and runs the API with rate
+limiting off.

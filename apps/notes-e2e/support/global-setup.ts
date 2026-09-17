@@ -59,6 +59,7 @@ export default async function globalSetup() {
     BACKOFFICE_URL: 'http://127.0.0.1:4473',
     EMAIL_PROVIDER: 'console',
     BCRYPT_ROUNDS: String(BCRYPT_ROUNDS),
+    RATE_LIMITING_ENABLED: 'false',
     NX_DAEMON: 'false',
     NX_LOAD_DOT_ENV_FILES: 'false',
     NX_ISOLATE_PLUGINS: 'false',

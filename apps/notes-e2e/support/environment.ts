@@ -29,4 +29,3 @@ export const REDIS_OUTAGE_BEYOND_RETRY_BUDGET_MS = 15000;
 export const QUIESCENCE_WINDOW_MS = 350;
 export const TRAFFIC_INTERVAL_MS = 20;
 export const BCRYPT_ROUNDS = 10;
-export const LOGIN_THROTTLE_LIMIT = 5;
