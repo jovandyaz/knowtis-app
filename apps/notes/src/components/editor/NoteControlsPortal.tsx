@@ -72,7 +72,7 @@ export function NoteControlsPortal({
   return createPortal(
     <>
       {showBadge && (
-        <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+        <Badge variant={badgeConfig.variant}>{t(badgeConfig.labelKey)}</Badge>
       )}
 
       <DocumentConnectionStatus state={connectionState} />
