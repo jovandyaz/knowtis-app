@@ -526,12 +526,11 @@ apps/mcp/src/
 │   ├── sharing.tools.ts      # get-collaborators, share-note
 │   ├── wrap-tool-handler.ts  # Auth + scope + logging + dual-result wrapper
 │   └── format-error.ts       # Tool error formatting
-├── types/                    # Ambient .d.ts for markdown-it plugins and turndown-plugin-gfm
 └── utils/
-    ├── html-to-markdown.ts   # Editor HTML → Markdown for reads (turndown)
-    ├── markdown-to-html.ts   # Markdown → editor HTML for create/update
     └── note-cursor.ts        # Opaque base64url recency cursor + pagination
 ```
+
+Markdown ⇄ editor-HTML conversion lives in `@knowtis/note-markdown` (`packages/note-markdown`), shared with the API's copilot proposals.
 
 Tests sit in `__tests__/` directories next to the code they cover (`src/__tests__/`, `src/resources/__tests__/`, `src/utils/__tests__/`).
 

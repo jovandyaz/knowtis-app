@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { markdownToHtml } from '../utils/markdown-to-html.js';
+import { markdownToHtml } from './markdown-to-html';
 
 describe('markdownToHtml', () => {
   it('should convert headings', () => {

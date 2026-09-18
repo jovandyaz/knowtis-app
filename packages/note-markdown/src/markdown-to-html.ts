@@ -1,3 +1,4 @@
+/// <reference path="./types/markdown-it-plugins.d.ts" />
 import MarkdownIt from 'markdown-it';
 import markdownItMark from 'markdown-it-mark';
 import markdownItSub from 'markdown-it-sub';
