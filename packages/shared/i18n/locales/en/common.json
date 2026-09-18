@@ -65,7 +65,8 @@
     "signedOutSuccess": "Signed out successfully",
     "createAccount": "Create account",
     "signIn": "Sign in",
-    "account": "Account"
+    "account": "Account",
+    "accountLabel": "Account: {{name}}"
   },
   "welcome": {
     "goodMorning": "Good morning",

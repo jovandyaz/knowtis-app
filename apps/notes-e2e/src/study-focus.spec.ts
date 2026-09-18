@@ -344,7 +344,7 @@ for (const locale of ['en', 'es'] as const) {
         name: 'Copilot',
         exact: true,
       });
-      if ((await copilotToggle.getAttribute('aria-pressed')) === 'true') {
+      if ((await copilotToggle.getAttribute('aria-expanded')) === 'true') {
         await copilotToggle.click();
       }
 

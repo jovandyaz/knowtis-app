@@ -5,6 +5,8 @@ import { PanelLeft, Sparkles } from 'lucide-react';
 
 import { Button, cn } from '@knowtis/design-system';
 
+import { PANEL_ID, TOGGLE_ID } from './RightDock';
+
 export function RightDockToggle() {
   const { t } = useTranslation('common');
   const isOpen = useRightDockStore((s) => s.isOpen);
@@ -12,15 +14,16 @@ export function RightDockToggle() {
 
   return (
     <Button
-      id="right-dock-toggle"
+      id={TOGGLE_ID}
       type="button"
       variant="ghost"
       size="icon"
       onClick={toggle}
-      aria-pressed={isOpen}
+      aria-expanded={isOpen}
+      aria-controls={PANEL_ID}
       aria-label={t('labels.copilot', 'Copilot')}
       className={cn(
-        'text-muted-foreground hover:text-foreground',
+        'shrink-0 text-muted-foreground hover:text-foreground',
         isOpen && 'bg-muted text-foreground'
       )}
     >

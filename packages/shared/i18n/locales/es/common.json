@@ -65,7 +65,8 @@
     "signedOutSuccess": "Sesión cerrada exitosamente",
     "createAccount": "Crear cuenta",
     "signIn": "Iniciar sesión",
-    "account": "Cuenta"
+    "account": "Cuenta",
+    "accountLabel": "Cuenta: {{name}}"
   },
   "welcome": {
     "goodMorning": "Buenos días",

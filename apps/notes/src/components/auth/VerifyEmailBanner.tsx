@@ -57,7 +57,7 @@ function UnverifiedEmailBanner() {
   return (
     <div
       role="status"
-      className="mx-4 mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-(--border) bg-(--primary)/5 p-2 pl-3 sm:items-center sm:p-3 md:mx-8"
+      className="flex min-h-12 shrink-0 items-start gap-2 bg-(--primary)/5 px-4 py-2 sm:items-center"
     >
       <MailWarning className="mt-2 h-4 w-4 shrink-0 text-(--primary) sm:mt-0" />
       <p className="min-w-0 flex-1 py-1.5 text-sm leading-snug text-(--foreground) sm:py-0">
