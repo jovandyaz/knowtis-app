@@ -1,5 +1,6 @@
 {
   "list": {
+    "title": "Notas",
     "searchPlaceholder": "Buscar notas...",
     "loadingNotes": "Cargando notas…",
     "errorLoading": "Error al cargar las notas",
@@ -341,7 +342,7 @@
     "byAuthor": "Por {{name}}"
   },
   "sidebar": {
-    "myNotes": "Mis notas",
+    "allNotes": "Todas las notas",
     "newNote": "Nueva nota",
     "noNotesYet": "Aún no hay notas",
     "untitled": "Sin título",
