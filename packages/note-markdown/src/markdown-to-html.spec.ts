@@ -90,6 +90,79 @@ describe('markdownToHtml', () => {
     expect(result).not.toContain('<p></p>');
   });
 
+  it('keeps every checkbox of a loose task list', () => {
+    const result = markdownToHtml('- [ ] buy milk\n\n- [x] call mom');
+
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="false"><p>buy milk</p>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>call mom</p>'
+    );
+    expect(result).not.toContain('task-list-item');
+    expect(result).not.toContain('</label>');
+    expect(result).not.toContain('<input');
+    expect(result).not.toContain('<p></p>');
+  });
+
+  it('keeps the siblings ticked when one continuation paragraph loosens the list', () => {
+    const result = markdownToHtml(
+      '- [x] passport\n- [ ] visa\n\n  needs photo\n- [x] tickets'
+    );
+
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>passport</p>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="false"><p>visa</p>'
+    );
+    expect(result).toContain('<p>needs photo</p>');
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>tickets</p>'
+    );
+    expect(result).not.toContain('task-list-item');
+    expect(result).not.toContain('</label>');
+  });
+
+  it('keeps a plain sublist under a task item, tight or loose', () => {
+    const tight = markdownToHtml(
+      '- [x] groceries\n  - milk\n  - eggs\n- [ ] laundry'
+    );
+    const loose = markdownToHtml(
+      '- [x] groceries\n\n  - milk\n  - eggs\n- [ ] laundry'
+    );
+
+    for (const result of [tight, loose]) {
+      expect(result).toContain(
+        '<li data-type="taskItem" data-checked="true"><p>groceries</p>'
+      );
+      expect(result).toContain('<li>milk</li>');
+      expect(result).toContain(
+        '<li data-type="taskItem" data-checked="false"><p>laundry</p>'
+      );
+      expect(result).not.toContain('task-list-item');
+      expect(result).not.toContain('</label>');
+      expect(result).not.toContain('<p></p>');
+    }
+  });
+
+  it('keeps a nested task list under a loose parent item', () => {
+    const result = markdownToHtml('- [ ] parent\n\n  - [x] child\n- [x] other');
+
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="false"><p>parent</p>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>child</p></li>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>other</p>'
+    );
+    expect(result).not.toContain('task-list-item');
+    expect(result).not.toContain('</label>');
+    expect(result).not.toContain('<p></p>');
+  });
+
   it('should convert highlight marks', () => {
     expect(markdownToHtml('text ==highlight== more')).toContain(
       '<mark>highlight</mark>'

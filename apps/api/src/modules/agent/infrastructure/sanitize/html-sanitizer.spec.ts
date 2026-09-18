@@ -39,6 +39,14 @@ const EDITOR_VOCABULARY_MARKDOWN = [
   '```',
 ].join('\n');
 
+const LOOSE_TASK_LIST_MARKDOWN = [
+  '- [x] passport',
+  '- [ ] visa',
+  '',
+  '  needs photo',
+  '- [x] tickets',
+].join('\n');
+
 function persistedDocument(html: string): PMJson {
   const doc = new Y.Doc();
   Y.applyUpdate(doc, htmlToYjsState(html));
@@ -170,6 +178,21 @@ describe('markdownToNoteHtml', () => {
       collectNodes(json, 'taskItem').map((item) => item.attrs?.['checked'])
     ).toEqual([true, false, true]);
     expect(collectNodes(json, 'taskList')).toHaveLength(2);
+  });
+
+  it('keeps the ticks of a task list a continuation paragraph made loose', () => {
+    const json = persistedDocument(
+      markdownToNoteHtml(LOOSE_TASK_LIST_MARKDOWN)
+    );
+
+    const types = [...collectTypes(json)];
+    expect(types).toContain('taskList');
+    expect(types).toContain('taskItem');
+    expect(types).not.toContain('bulletList');
+    expect(
+      collectNodes(json, 'taskItem').map((item) => item.attrs?.['checked'])
+    ).toEqual([true, false, true]);
+    expect(JSON.stringify(json)).toContain('needs photo');
   });
 
   it('keeps a bare url as a link the scheme allowlist accepts', () => {

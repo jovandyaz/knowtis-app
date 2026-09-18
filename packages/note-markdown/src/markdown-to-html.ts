@@ -20,22 +20,19 @@ interface RenderEnv {
 }
 
 const TASK_LIST_UL_PATTERN = /<ul class="contains-task-list">/g;
+const LOOSE_TASK_ITEM_PATTERN =
+  /(<li class="task-list-item[^"]*">)\s*<p>(<label><input class="task-list-item-checkbox"[^>]*>[\s\S]*?<\/label>)<\/p>/g;
 const TASK_LIST_ITEM_PATTERN =
   /<li class="task-list-item[^"]*"><label><input class="task-list-item-checkbox"( checked="")?[^>]*>\s*([\s\S]*?)<\/label>/g;
 
-/**
- * Rewrites markdown-it-task-lists output to the format Tiptap's TaskList/TaskItem expects.
- *
- * markdown-it emits: `<ul class="contains-task-list"><li class="task-list-item"><label><input [checked]>...</label></li></ul>`
- * Tiptap expects:    `<ul data-type="taskList"><li data-type="taskItem" data-checked="true|false"><p>...</p></li></ul>`
- *
- * A nested sublist sits between `</label>` and `</li>`, so the rewrite stops at
- * `</label>` and leaves the item's own `</li>` in place; consuming it would make
- * the parent swallow its children.
- */
+// markdown-it wraps a loose item's checkbox in its own <p>, so that wrapper is
+// dropped first and one rewrite then covers both shapes. The rewrite stops at
+// </label> and leaves the item's own </li>: consuming it would make the item
+// swallow the sublist that follows.
 function rewriteTaskListFormat(html: string): string {
   return html
     .replace(TASK_LIST_UL_PATTERN, '<ul data-type="taskList">')
+    .replace(LOOSE_TASK_ITEM_PATTERN, '$1$2')
     .replace(TASK_LIST_ITEM_PATTERN, (_match, checkedAttr, content) => {
       const checked = checkedAttr ? 'true' : 'false';
       return `<li data-type="taskItem" data-checked="${checked}"><p>${content.trim()}</p>`;
