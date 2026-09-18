@@ -1,5 +1,6 @@
 {
   "list": {
+    "title": "Notas",
     "searchPlaceholder": "Buscar notas...",
     "loadingNotes": "Cargando notas…",
     "errorLoading": "Error al cargar las notas",
@@ -155,8 +156,13 @@
     "accessLost": "El acceso a esta nota terminó",
     "accessLostDesc": "El dueño pudo haber revocado tu acceso, o la nota fue eliminada. Tu cuenta y sesión no se ven afectadas.",
     "loadingEditor": "Cargando editor...",
-    "connected": "Conectado al servidor",
-    "connecting": "Conectando...",
+    "connection": {
+      "connecting": "Conectando…",
+      "syncing": "Sincronizando…",
+      "connected": "Conectado",
+      "disconnected": "Sin conexión",
+      "accessDenied": "Acceso perdido"
+    },
     "editorError": "Error del Editor",
     "editorErrorDesc": "Algo salió mal con el editor colaborativo. Esto puede deberse a un problema de sincronización o un problema temporal.",
     "errorDetails": "Detalles del Error",
@@ -341,7 +347,7 @@
     "byAuthor": "Por {{name}}"
   },
   "sidebar": {
-    "myNotes": "Mis notas",
+    "allNotes": "Todas las notas",
     "newNote": "Nueva nota",
     "noNotesYet": "Aún no hay notas",
     "untitled": "Sin título",

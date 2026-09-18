@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useViewportWidth } from '@/hooks/useViewportWidth';
@@ -23,6 +24,7 @@ const DOCK_MIN_WIDTH = 300;
 const DOCK_MAX_WIDTH = 500;
 const DOCK_DEFAULT_WIDTH = DOCK_MAX_WIDTH;
 const DOCK_COLLAPSE_THRESHOLD = 240;
+const TOGGLE_ID = 'right-dock-toggle';
 
 const REVIEW_MAX_WIDTH = 960;
 const REVIEW_VIEWPORT_RATIO = 0.6;
@@ -42,20 +44,20 @@ function DockHeader() {
   const messages = useAgentStore((s) => s.messages);
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border p-2">
-      <span className="px-1 text-sm font-medium text-foreground">
+    <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+      <span className="text-sm font-medium text-foreground">
         {t('ai.copilot.title')}
       </span>
       <Button
         type="button"
         variant="ghost"
-        size="sm"
+        size="icon"
         onClick={newConversation}
         disabled={messages.length === 0}
         aria-label={t('ai.copilot.newConversation')}
-        className="h-7 w-7 shrink-0 p-0"
+        className="shrink-0"
       >
-        <RotateCcw className="h-3.5 w-3.5" />
+        <RotateCcw className="h-4 w-4" />
       </Button>
     </div>
   );
@@ -84,10 +86,20 @@ export function RightDock() {
   const isStreaming = useAgentStore((s) => s.status === 'streaming');
   const reviewingUpdate = reviewOpen && hasUpdateProposal;
   const reviewWidth = reviewDockWidth(useViewportWidth(reviewingUpdate));
+  const panelRef = useRef<HTMLElement>(null);
+
+  const handleCollapse = useCallback(() => {
+    // The handle unmounts with the panel, so focus would fall to <body>.
+    if (panelRef.current?.contains(document.activeElement)) {
+      document.getElementById(TOGGLE_ID)?.focus({ preventScroll: true });
+    }
+    close();
+  }, [close]);
 
   if (isDesktop) {
     return (
       <ResizablePanel
+        ref={panelRef}
         side={DIALOG_SIDE.RIGHT}
         defaultWidth={DOCK_DEFAULT_WIDTH}
         minWidth={DOCK_MIN_WIDTH}
@@ -95,9 +107,9 @@ export function RightDock() {
         targetWidth={reviewingUpdate ? reviewWidth : undefined}
         collapseThreshold={DOCK_COLLAPSE_THRESHOLD}
         isOpen={isOpen}
-        onCollapse={close}
+        onCollapse={handleCollapse}
         handleAriaLabel={t('ai.artifacts.sidebar.resizePanel', 'Resize panel')}
-        className="border-l border-border bg-background"
+        className="bg-background"
       >
         <DockBody />
       </ResizablePanel>

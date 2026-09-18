@@ -1,3 +1,5 @@
+import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
+import { DocumentConnectionStatus } from '@/components/editor/DocumentConnectionStatus';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { format } from 'date-fns';
 
@@ -10,12 +12,14 @@ import { SharedNoteBadge } from './SharedNoteBadge';
 interface SharedNoteHeaderProps extends SharedNoteActionsProps {
   ownerName: string;
   updatedAt: Date;
+  connectionState: DocumentConnectionState | null;
 }
 
 export function SharedNoteHeader({
   canEdit,
   ownerName,
   updatedAt,
+  connectionState,
   ...actions
 }: SharedNoteHeaderProps) {
   return (
@@ -30,7 +34,10 @@ export function SharedNoteHeader({
             <span>{format(updatedAt, 'MMM d, yyyy')}</span>
           </span>
         </div>
-        <SharedNoteActions canEdit={canEdit} {...actions} />
+        <div className="flex items-center gap-2">
+          <DocumentConnectionStatus state={connectionState} compactLabel />
+          <SharedNoteActions canEdit={canEdit} {...actions} />
+        </div>
       </div>
     </header>
   );

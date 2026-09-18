@@ -5,6 +5,8 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
+import { DocumentConnectionStatus } from '@/components/editor/DocumentConnectionStatus';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
 import { NoteEditorSkeleton } from '@/components/editor/NoteEditorSkeleton';
@@ -131,6 +133,8 @@ function NoteEditor({
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [connectionState, setConnectionState] =
+    useState<DocumentConnectionState | null>(null);
   const pendingUpdateRef = useRef(false);
   const contentRef = useRef(initialContent);
   const [initiallyEmpty] = useState(() => !hasMeaningfulText(initialContent));
@@ -341,6 +345,12 @@ function NoteEditor({
         onBack={() => navigate({ to: ROUTES.DASHBOARD })}
       />
 
+      {connectionState !== null && (
+        <div className="mb-3 flex justify-end md:hidden">
+          <DocumentConnectionStatus state={connectionState} />
+        </div>
+      )}
+
       <NoteControlsPortal
         note={{
           id: noteId,
@@ -351,6 +361,7 @@ function NoteEditor({
           generalAccessPermission,
           shareToken,
         }}
+        connectionState={connectionState}
         isSaving={isSaving}
         hasSaved={!!lastSaved}
         shareDialogOpen={isShareDialogOpen}
@@ -405,6 +416,7 @@ function NoteEditor({
           onEditorReady={handleEditorReady}
           onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}
           onLiveCollaborationChange={handleLiveCollaborationChange}
+          onConnectionStateChange={setConnectionState}
         />
 
         {showVoiceNote && (

@@ -1,3 +1,4 @@
+import type { CollaborationStatus } from '@/collaboration/useHocuspocusCollaboration';
 import { act, render, screen, type RenderResult } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
@@ -7,10 +8,16 @@ import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import type * as SharedHooks from '@knowtis/shared-hooks';
 
 import { CollaborativeEditor } from './CollaborativeEditor';
+import type { DocumentConnectionState } from './CollaborativeEditor.types';
 
 let isSynced = false;
 let isReady = true;
+let status: CollaborationStatus = 'connected';
+let wsEnabled = true;
 let doc: Y.Doc;
+
+const onConnectionStateChange =
+  vi.fn<(state: DocumentConnectionState | null) => void>();
 
 vi.mock('@/auth', () => ({
   authStore: { getState: () => ({}) },
@@ -26,10 +33,10 @@ vi.mock('@jovandyaz/auth-react', () => ({
 }));
 vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
   getCollaborationServerUrl: () => 'ws://test/collaboration',
-  isWebSocketEnabled: () => true,
+  isWebSocketEnabled: () => wsEnabled,
   useHocuspocusCollaboration: () => ({
-    status: 'connected',
-    isConnected: true,
+    status,
+    isConnected: status === 'connected',
     isSynced,
     readOnly: false,
   }),
@@ -73,6 +80,7 @@ function editorElement() {
         initialContent=""
         onUpdate={vi.fn()}
         placeholder={PLACEHOLDER}
+        onConnectionStateChange={onConnectionStateChange}
       />
     </TooltipProvider>
   );
@@ -108,13 +116,17 @@ const loadingSkeleton = () =>
 
 const typewriterPlaceholder = () => screen.queryByText(PLACEHOLDER);
 
+function resetCollaboration() {
+  vi.clearAllMocks();
+  isSynced = false;
+  isReady = true;
+  status = 'connected';
+  wsEnabled = true;
+  doc = new Y.Doc();
+}
+
 describe('CollaborativeEditor loading affordances', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    isSynced = false;
-    isReady = true;
-    doc = new Y.Doc();
-  });
+  beforeEach(resetCollaboration);
 
   it('shows the skeleton instead of a visible loading message while the provider boots', async () => {
     isReady = false;
@@ -150,5 +162,71 @@ describe('CollaborativeEditor loading affordances', () => {
 
     expect(loadingSkeleton()).toBeNull();
     expect(screen.getByText(NOTE_BODY)).toBeInTheDocument();
+  });
+});
+
+describe('CollaborativeEditor connection reporting', () => {
+  beforeEach(resetCollaboration);
+
+  it('reports a connected document once the socket syncs', async () => {
+    isSynced = true;
+    await mount();
+
+    expect(onConnectionStateChange).toHaveBeenLastCalledWith('connected');
+  });
+
+  it('reports syncing while a connected socket still hydrates', async () => {
+    await mount();
+
+    expect(onConnectionStateChange).toHaveBeenLastCalledWith('syncing');
+  });
+
+  it('reports a dropped socket', async () => {
+    status = 'disconnected';
+    await mount();
+
+    expect(onConnectionStateChange).toHaveBeenLastCalledWith('disconnected');
+  });
+
+  it('reports a revoked document', async () => {
+    status = 'accessDenied';
+    await mount();
+
+    expect(onConnectionStateChange).toHaveBeenLastCalledWith('accessDenied');
+  });
+
+  it('reports connecting while credentials are being recovered', async () => {
+    status = 'authenticationFailed';
+    await mount();
+
+    expect(onConnectionStateChange).toHaveBeenLastCalledWith('connecting');
+  });
+
+  it('reports no state at all when websockets are disabled', async () => {
+    wsEnabled = false;
+    isSynced = true;
+    await mount();
+
+    expect(onConnectionStateChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('reports once per change, not once per render', async () => {
+    const view = await mount();
+    await rerender(view);
+
+    isSynced = true;
+    await rerender(view);
+
+    expect(onConnectionStateChange.mock.calls).toEqual([
+      ['syncing'],
+      ['connected'],
+    ]);
+  });
+
+  it('no longer floats a dot under the sticky toolbar', async () => {
+    isSynced = true;
+    const { container } = await mount();
+
+    expect(container.querySelector('.absolute.top-2.right-2')).toBeNull();
   });
 });
