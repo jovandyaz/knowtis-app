@@ -169,6 +169,7 @@
     "usersEditing_one": "{{count}} user editing",
     "usersEditing_other": "{{count}} users editing",
     "toolbar": {
+      "label": "Text formatting",
       "heading": "Heading",
       "paragraph": "Paragraph",
       "heading1": "Heading 1",

@@ -169,6 +169,7 @@
     "usersEditing_one": "{{count}} usuario editando",
     "usersEditing_other": "{{count}} usuarios editando",
     "toolbar": {
+      "label": "Formato de texto",
       "heading": "Encabezado",
       "paragraph": "Párrafo",
       "heading1": "Encabezado 1",

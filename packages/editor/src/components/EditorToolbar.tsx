@@ -24,6 +24,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
+import { formatShortcut } from '@knowtis/shared-util';
 
 import {
   TOOLBAR_FOLD_WIDTHS,
@@ -34,6 +35,10 @@ import {
 } from '../editor.config';
 import { useElementWidth } from '../hooks/useElementWidth';
 import { useMenuFocusReturn } from '../hooks/useMenuFocusReturn';
+import {
+  useRovingToolbar,
+  type ToolbarItemProps,
+} from '../hooks/useRovingToolbar';
 import { HeadingDropdown } from './HeadingDropdown';
 import { HighlightPicker } from './HighlightPicker';
 import { LinkPopover } from './LinkPopover';
@@ -105,23 +110,26 @@ function splitToolbar(width: number | null) {
   return { row, menu };
 }
 
-interface ToolbarButtonProps {
+interface ToolbarButtonProps extends ToolbarItemProps {
   editor: Editor;
   tool: ToolbarToolConfig;
 }
 
-function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
+function ToolbarButton({ editor, tool, ...itemProps }: ToolbarButtonProps) {
   const { t: tNotes } = useTranslation('notes');
   const Icon = tool.icon;
   const label = tNotes(tool.labelKey);
   const isToggle = tool.isActive !== undefined;
   const isActive = tool.isActive?.(editor) ?? false;
-  const tooltipLabel = tool.shortcut ? `${label} (${tool.shortcut})` : label;
+  const tooltipLabel = tool.shortcut
+    ? `${label} (${formatShortcut(tool.shortcut)})`
+    : label;
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          {...itemProps}
           type="button"
           variant="ghost"
           size="sm"
@@ -143,7 +151,11 @@ function ToolbarSeparator() {
   return <div className="mx-1 h-4 w-px shrink-0 bg-border" />;
 }
 
-function AskAIButton({ onAskAI }: { onAskAI: () => void }) {
+interface AskAIButtonProps extends ToolbarItemProps {
+  onAskAI: () => void;
+}
+
+function AskAIButton({ onAskAI, ...itemProps }: AskAIButtonProps) {
   const { t: tNotes } = useTranslation('notes');
   const label = tNotes('ai.menu.askAI');
 
@@ -151,6 +163,7 @@ function AskAIButton({ onAskAI }: { onAskAI: () => void }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          {...itemProps}
           type="button"
           variant="ghost"
           size="sm"
@@ -166,18 +179,23 @@ function AskAIButton({ onAskAI }: { onAskAI: () => void }) {
   );
 }
 
-interface AutocompleteToggleProps {
+interface AutocompleteToggleProps extends ToolbarItemProps {
   enabled: boolean;
   onToggle: () => void;
 }
 
-function AutocompleteToggle({ enabled, onToggle }: AutocompleteToggleProps) {
+function AutocompleteToggle({
+  enabled,
+  onToggle,
+  ...itemProps
+}: AutocompleteToggleProps) {
   const { t: tNotes } = useTranslation('notes');
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          {...itemProps}
           type="button"
           variant="ghost"
           size="sm"
@@ -203,12 +221,16 @@ function AutocompleteToggle({ enabled, onToggle }: AutocompleteToggleProps) {
   );
 }
 
-interface ToolbarOverflowMenuProps {
+interface ToolbarOverflowMenuProps extends ToolbarItemProps {
   editor: Editor;
   items: readonly MenuItem[];
 }
 
-function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
+function ToolbarOverflowMenu({
+  editor,
+  items,
+  ...itemProps
+}: ToolbarOverflowMenuProps) {
   const { t: tNotes } = useTranslation('notes');
   const { markSelected, onCloseAutoFocus } = useMenuFocusReturn();
   const label = tNotes('editor.toolbar.moreTools');
@@ -222,6 +244,7 @@ function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
+              {...itemProps}
               type="button"
               variant="ghost"
               size="sm"
@@ -251,7 +274,7 @@ function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
               <span>{tNotes(item.labelKey)}</span>
               {item.shortcut && (
                 <span className="ml-auto pl-4 text-xs text-muted-foreground">
-                  {item.shortcut}
+                  {formatShortcut(item.shortcut)}
                 </span>
               )}
             </>
@@ -301,8 +324,10 @@ function ToolbarBody({
 }: ToolbarBodyProps) {
   const { t: tNotes } = useTranslation('notes');
   const containerRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(containerRef);
   const { row, menu } = splitToolbar(width);
+  const roving = useRovingToolbar(rowRef);
 
   // Tiptap v3 no longer re-renders `useEditor` consumers per transaction, and
   // every button below reads `isActive`/`can()` during render, so the toolbar
@@ -324,18 +349,27 @@ function ToolbarBody({
       )}
     >
       <div
+        ref={rowRef}
+        role="toolbar"
+        aria-label={tNotes('editor.toolbar.label')}
+        aria-orientation="horizontal"
+        onFocus={roving.onFocus}
+        onKeyDown={roving.onKeyDown}
         className={cn(
-          'pointer-events-auto mx-auto flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md scrollbar-none dark:bg-muted/30',
+          'pointer-events-auto mx-auto flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-border bg-background p-1 shadow-sm scrollbar-none',
           'max-md:max-w-[calc(100vw-2rem)] max-md:rounded-2xl'
         )}
       >
         {(onAskAI || onToggleAutocomplete) && (
           <>
-            {onAskAI && <AskAIButton onAskAI={onAskAI} />}
+            {onAskAI && (
+              <AskAIButton onAskAI={onAskAI} {...roving.itemProps('ask-ai')} />
+            )}
             {onToggleAutocomplete && (
               <AutocompleteToggle
                 enabled={autocompleteEnabled}
                 onToggle={onToggleAutocomplete}
+                {...roving.itemProps('autocomplete')}
               />
             )}
             <ToolbarSeparator />
@@ -344,29 +378,47 @@ function ToolbarBody({
         {row.map((item, index) => {
           if (isTool(item)) {
             return (
-              <ToolbarButton key={item.labelKey} editor={editor} tool={item} />
+              <ToolbarButton
+                key={item.labelKey}
+                editor={editor}
+                tool={item}
+                {...roving.itemProps(item.labelKey)}
+              />
             );
           }
           switch (item.type) {
             case 'separator':
               return <ToolbarSeparator key={`sep-${index}`} />;
             case 'heading-dropdown':
-              return <HeadingDropdown key="heading" editor={editor} />;
+              return (
+                <HeadingDropdown
+                  key="heading"
+                  editor={editor}
+                  {...roving.itemProps(item.type)}
+                />
+              );
             case 'link-popover':
               return (
                 <LinkPopover
                   key="link"
                   editor={editor}
-                  shortcut={item.shortcut}
+                  {...roving.itemProps(item.type)}
                 />
               );
             case 'highlight-picker':
-              return <HighlightPicker key="highlight" editor={editor} />;
+              return (
+                <HighlightPicker
+                  key="highlight"
+                  editor={editor}
+                  {...roving.itemProps(item.type)}
+                />
+              );
             case 'image-button':
               return onAddImage ? (
                 <Tooltip key="image">
                   <TooltipTrigger asChild>
                     <Button
+                      {...roving.itemProps(item.type)}
                       type="button"
                       variant="ghost"
                       size="sm"
@@ -391,11 +443,16 @@ function ToolbarBody({
         {menu.length > 0 && (
           <>
             <ToolbarSeparator />
-            <ToolbarOverflowMenu editor={editor} items={menu} />
+            <ToolbarOverflowMenu
+              editor={editor}
+              items={menu}
+              {...roving.itemProps('more-tools')}
+            />
           </>
         )}
         {onVoiceNote && (
           <Button
+            {...roving.itemProps('voice-note')}
             type="button"
             variant="ghost"
             size="sm"
