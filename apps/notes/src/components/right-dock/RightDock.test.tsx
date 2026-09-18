@@ -99,6 +99,9 @@ describe('RightDock', () => {
 
   const dockHeader = () => resetAction().parentElement as HTMLElement;
 
+  const conversationColumn = () =>
+    document.getElementById(PANEL_ID)?.parentElement as HTMLElement;
+
   const settleCloseAutoFocus = () =>
     act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -146,19 +149,21 @@ describe('RightDock', () => {
     expect(dockHeader()).not.toHaveTextContent('ai.copilot.title');
   });
 
-  it('keeps the header and disables the action while the conversation is empty', () => {
+  it('reserves the header row while the conversation is empty', () => {
     agentState.messages = [];
 
     render(<RightDock />);
 
-    expect(resetAction()).toBeDisabled();
-    expect(dockHeader()).toHaveClass('h-12');
+    expect(
+      screen.queryByRole('button', { name: /ai.copilot.newConversation/ })
+    ).not.toBeInTheDocument();
+    expect(conversationColumn().querySelector('.h-12')).toBeInTheDocument();
   });
 
   it('holds the conversation to a readable measure inside a wide dock', () => {
     render(<RightDock />);
 
-    expect(dockHeader().parentElement).toHaveClass('max-w-xl');
+    expect(conversationColumn()).toHaveClass('max-w-xl');
   });
 
   it('gives a review under way the whole dock', async () => {
@@ -169,7 +174,7 @@ describe('RightDock', () => {
     render(<RightDock />);
     await waitFor(() => expect(dockAside().style.width).toBe('840px'));
 
-    expect(dockHeader().parentElement).not.toHaveClass('max-w-xl');
+    expect(conversationColumn()).not.toHaveClass('max-w-xl');
   });
 
   it('names the dock for screen readers while the conversation is empty', () => {
@@ -268,11 +273,15 @@ describe('RightDock', () => {
   });
 
   it('computes the review width inside its bounds', () => {
-    expect(reviewDockWidth(768)).toBe(720);
-    expect(reviewDockWidth(1000)).toBe(720);
+    expect(reviewDockWidth(768)).toBe(500);
+    expect(reviewDockWidth(1000)).toBe(600);
     expect(reviewDockWidth(1280)).toBe(768);
     expect(reviewDockWidth(1400)).toBe(840);
     expect(reviewDockWidth(2000)).toBe(960);
+  });
+
+  it('sizes a review from the viewport, not from how wide the dock may be dragged', () => {
+    expect(reviewDockWidth(900)).toBe(540);
   });
 
   it('opens at a width that leaves the document its reserve', () => {
@@ -631,10 +640,10 @@ describe('RightDock', () => {
 
     render(<RightDock />);
 
-    await waitFor(() => expect(dockAside().style.width).toBe('720px'));
+    await waitFor(() => expect(dockAside().style.width).toBe('670px'));
     expect(screen.getByRole('separator')).toHaveAttribute(
       'aria-valuemax',
-      '720'
+      '670'
     );
   });
 
