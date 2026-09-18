@@ -1,2 +1,6 @@
 export { htmlToMarkdown } from './html-to-markdown';
-export { markdownToHtml } from './markdown-to-html';
+export {
+  markdownToHtml,
+  type MarkdownToHtmlOptions,
+  type MermaidRendering,
+} from './markdown-to-html';

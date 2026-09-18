@@ -7,6 +7,18 @@ import markdownItTaskLists from 'markdown-it-task-lists';
 
 const MERMAID_LANGUAGE = 'mermaid';
 
+/** How a ```mermaid fence renders: the editor's diagram block, or a plain code
+ *  block for a surface that cannot draw one (the copilot's chat card). */
+export type MermaidRendering = 'block' | 'fence';
+
+export interface MarkdownToHtmlOptions {
+  readonly mermaid?: MermaidRendering;
+}
+
+interface RenderEnv {
+  readonly mermaid: MermaidRendering;
+}
+
 const TASK_LIST_UL_PATTERN = /<ul class="contains-task-list">/g;
 const TASK_LIST_ITEM_PATTERN =
   /<li class="task-list-item[^"]*"><label><input class="task-list-item-checkbox"( checked="")?[^>]*>\s*([\s\S]*?)<\/label><\/li>/g;
@@ -26,14 +38,6 @@ function rewriteTaskListFormat(html: string): string {
     });
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 const md = new MarkdownIt({
   html: false,
   linkify: true,
@@ -47,12 +51,11 @@ md.use(markdownItSub);
 
 const defaultFence = md.renderer.rules.fence;
 
-md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+md.renderer.rules.fence = (tokens, idx, options, env: RenderEnv, self) => {
   const token = tokens[idx];
-  const language = token.info.trim();
 
-  if (language === MERMAID_LANGUAGE) {
-    const code = escapeHtml(token.content);
+  if (env.mermaid === 'block' && token.info.trim() === MERMAID_LANGUAGE) {
+    const code = md.utils.escapeHtml(token.content);
     return `<div data-mermaid-block data-code="${code}"></div>`;
   }
 
@@ -69,8 +72,13 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
  * - Highlight: `==text==` → `<mark>text</mark>`
  * - Superscript: `^text^` → `<sup>text</sup>`
  * - Subscript: `~text~` → `<sub>text</sub>`
- * - Mermaid diagrams: ```` ```mermaid ... ``` ```` → `<div data-mermaid-block data-code="...">`
+ * - Mermaid diagrams: ```` ```mermaid ... ``` ```` → `<div data-mermaid-block data-code="...">`,
+ *   or a plain fenced code block with `{ mermaid: 'fence' }`
  */
-export function markdownToHtml(markdown: string): string {
-  return rewriteTaskListFormat(md.render(markdown));
+export function markdownToHtml(
+  markdown: string,
+  options: MarkdownToHtmlOptions = {}
+): string {
+  const env: RenderEnv = { mermaid: options.mermaid ?? 'block' };
+  return rewriteTaskListFormat(md.render(markdown, env));
 }
