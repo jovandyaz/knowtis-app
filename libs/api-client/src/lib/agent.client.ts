@@ -476,6 +476,8 @@ export class AgentClient {
     });
 
     socket.on('agent:proposal', (payload: AgentProposalPayload) => {
+      this.pending = null;
+      this.awaitingReceipt = null;
       this.awaitingDecision = true;
       this.activeCallbacks?.onProposal?.(payload);
     });
@@ -485,6 +487,9 @@ export class AgentClient {
     });
 
     socket.on('agent:error', (payload: AgentErrorPayload) => {
+      if (this.awaitingDecision && this.canRecoverFromAuthError(payload)) {
+        return;
+      }
       if (
         this.pending &&
         this.activeCallbacks &&

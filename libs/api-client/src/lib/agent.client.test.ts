@@ -959,6 +959,52 @@ describe('AgentClient – auth/transport failure paths', () => {
       expect.any(Function)
     );
   });
+  it('leaves a proposal awaiting its decision untouched when the token expires', async () => {
+    let token = 'stale-token';
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+    fake.socket.emit.mockClear();
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+    await flush();
+
+    expect(fake.socket.emit).not.toHaveBeenCalledWith(
+      'agent:message',
+      expect.anything(),
+      expect.any(Function)
+    );
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+
+    client.approve('p1');
+    await flush();
+
+    expect(fake.socket.emit).toHaveBeenLastCalledWith(
+      'agent:approve',
+      expect.objectContaining({ proposalId: 'p1' }),
+      expect.any(Function)
+    );
+  });
 });
 
 describe('AgentClient – delivery receipts', () => {
