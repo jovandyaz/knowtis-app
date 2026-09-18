@@ -11,6 +11,9 @@ import type {
   AgentToolPhase,
 } from './agent-tool';
 
+const CONTENT_MARKDOWN_DESCRIPTION =
+  'The note body in Markdown: headings, bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x]), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, and ```mermaid fenced diagrams. Images and raw HTML are not supported.';
+
 function captureProposal(
   collector: ProposalCollector,
   proposal: ProposedMutation
@@ -40,9 +43,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
           contentMarkdown: z
             .string()
             .max(20000)
-            .describe(
-              'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes, and ```mermaid fenced diagrams). Tables, images and raw HTML are not supported.'
-            ),
+            .describe(CONTENT_MARKDOWN_DESCRIPTION),
         }),
         execute: async ({ title, contentMarkdown }) => {
           const r = await this.proposalBuilder.buildCreate(
@@ -65,9 +66,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             contentMarkdown: z
               .string()
               .max(20000)
-              .describe(
-                'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes, and ```mermaid fenced diagrams). Tables, images and raw HTML are not supported.'
-              )
+              .describe(CONTENT_MARKDOWN_DESCRIPTION)
               .optional(),
           })
           .refine(
