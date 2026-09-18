@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 
+import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
 import {
   workspacePanelId,
   workspaceTabId,
 } from '@/components/workspace/workspace-tab-ids';
 import { useWorkspaceStore } from '@/stores/workspace.store';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -61,6 +62,9 @@ const {
 const authUser = vi.fn<() => { isAnonymous?: boolean } | null>();
 const authLoading = vi.fn<() => boolean>();
 let denyEdit: (() => void) | undefined;
+let reportConnectionState:
+  | ((state: DocumentConnectionState | null) => void)
+  | undefined;
 let token = 'tok';
 let noteQuery: {
   data:
@@ -100,8 +104,15 @@ vi.mock('sonner', () => ({
   toast: { error: (...a: unknown[]) => toastError(...a), success: vi.fn() },
 }));
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
-  CollaborativeEditor: ({ onEditDenied }: { onEditDenied?: () => void }) => {
+  CollaborativeEditor: ({
+    onEditDenied,
+    onConnectionStateChange,
+  }: {
+    onEditDenied?: () => void;
+    onConnectionStateChange?: (state: DocumentConnectionState | null) => void;
+  }) => {
     denyEdit = onEditDenied;
+    reportConnectionState = onConnectionStateChange;
     return <div data-testid="collaborative-editor" />;
   },
 }));
@@ -140,6 +151,7 @@ const signInLinks = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   denyEdit = undefined;
+  reportConnectionState = undefined;
   token = 'tok';
   sharedArtifacts.data = [];
   sharedArtifacts.isPending = false;
@@ -369,6 +381,57 @@ describe('SharedNotePage editing as a visitor', () => {
 
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
     expect(toastError).toHaveBeenCalledWith('shared.editDenied');
+  });
+});
+
+describe('SharedNotePage connection status', () => {
+  const connectionStatus = () =>
+    within(screen.getByRole('banner')).queryByRole('status');
+
+  const startEditing = async () => {
+    await clickEdit();
+    await waitFor(() =>
+      expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument()
+    );
+  };
+
+  const openEditor = async () => {
+    ensureGuestSession.mockResolvedValue(true);
+    renderPage();
+    await startEditing();
+  };
+
+  it('shows the live connection state in the header while editing', async () => {
+    await openEditor();
+
+    expect(connectionStatus()).toBeNull();
+    act(() => reportConnectionState?.('connected'));
+
+    expect(connectionStatus()).toHaveTextContent('editor.connection.connected');
+  });
+
+  it('drops the connection state from the header once editing stops', async () => {
+    await openEditor();
+    act(() => reportConnectionState?.('connected'));
+    expect(connectionStatus()).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'shared.viewButton' })
+    );
+
+    expect(connectionStatus()).toBeNull();
+  });
+
+  it('keeps the header quiet when editing restarts until the editor reports again', async () => {
+    await openEditor();
+    act(() => reportConnectionState?.('connected'));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'shared.viewButton' })
+    );
+
+    await startEditing();
+
+    expect(connectionStatus()).toBeNull();
   });
 });
 

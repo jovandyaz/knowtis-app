@@ -156,8 +156,13 @@
     "accessLost": "El acceso a esta nota terminó",
     "accessLostDesc": "El dueño pudo haber revocado tu acceso, o la nota fue eliminada. Tu cuenta y sesión no se ven afectadas.",
     "loadingEditor": "Cargando editor...",
-    "connected": "Conectado al servidor",
-    "connecting": "Conectando...",
+    "connection": {
+      "connecting": "Conectando…",
+      "syncing": "Sincronizando…",
+      "connected": "Conectado",
+      "disconnected": "Sin conexión",
+      "accessDenied": "Acceso perdido"
+    },
     "editorError": "Error del Editor",
     "editorErrorDesc": "Algo salió mal con el editor colaborativo. Esto puede deberse a un problema de sincronización o un problema temporal.",
     "errorDetails": "Detalles del Error",

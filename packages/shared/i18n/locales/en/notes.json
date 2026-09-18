@@ -156,8 +156,13 @@
     "accessLost": "Access to this note ended",
     "accessLostDesc": "The owner may have revoked your access, or the note was deleted. Your account and session are unaffected.",
     "loadingEditor": "Loading editor...",
-    "connected": "Connected to server",
-    "connecting": "Connecting...",
+    "connection": {
+      "connecting": "Connecting…",
+      "syncing": "Syncing…",
+      "connected": "Connected",
+      "disconnected": "Offline",
+      "accessDenied": "Access lost"
+    },
     "editorError": "Editor Error",
     "editorErrorDesc": "Something went wrong with the collaborative editor. This could be due to a synchronization issue or a temporary problem.",
     "errorDetails": "Error Details",
