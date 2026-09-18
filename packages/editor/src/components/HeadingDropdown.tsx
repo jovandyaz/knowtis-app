@@ -16,9 +16,10 @@ import {
 } from '@knowtis/design-system';
 
 import { useMenuFocusReturn } from '../hooks/useMenuFocusReturn';
+import type { ToolbarItemProps } from '../hooks/useRovingToolbar';
 import { toolbarButtonClasses } from './toolbar-button.styles';
 
-interface HeadingDropdownProps {
+interface HeadingDropdownProps extends ToolbarItemProps {
   editor: Editor;
 }
 
@@ -29,7 +30,10 @@ const HEADING_OPTIONS = [
   { level: 3 as const, labelKey: 'editor.toolbar.heading3', icon: Heading3 },
 ] as const;
 
-export function HeadingDropdown({ editor }: HeadingDropdownProps) {
+export function HeadingDropdown({
+  editor,
+  ...itemProps
+}: HeadingDropdownProps) {
   const { t } = useTranslation('notes');
   const { markSelected, onCloseAutoFocus } = useMenuFocusReturn();
   const label = t('editor.toolbar.heading');
@@ -43,6 +47,7 @@ export function HeadingDropdown({ editor }: HeadingDropdownProps) {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
+              {...itemProps}
               type="button"
               variant="ghost"
               size="sm"

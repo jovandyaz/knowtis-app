@@ -1,9 +1,21 @@
-import { useCallback, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useViewportWidth } from '@/hooks/useViewportWidth';
 import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
+import {
+  DOCK_MAX_WIDTH,
+  DOCK_MIN_WIDTH,
+  useDockPreferenceStore,
+} from '@/stores/dock-preference.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
+import { useSidebarStore } from '@/stores/sidebar.store';
 import { RotateCcw } from 'lucide-react';
 
 import {
@@ -15,16 +27,24 @@ import {
   DialogTitle,
   ResizablePanel,
 } from '@knowtis/design-system';
-import { useMediaQuery } from '@knowtis/shared-hooks';
+import { useCollapseFocusReturn, useMediaQuery } from '@knowtis/shared-hooks';
 
 import { isStudyFocusOpen } from '../artifacts/focus/study-focus-marker';
 import { AgentCopilotPanel } from '../copilot';
 
-const DOCK_MIN_WIDTH = 300;
-const DOCK_MAX_WIDTH = 500;
-const DOCK_DEFAULT_WIDTH = DOCK_MAX_WIDTH;
 const DOCK_COLLAPSE_THRESHOLD = 240;
-const TOGGLE_ID = 'right-dock-toggle';
+const DOCK_PRESENTATION = {
+  CLOSED: 'closed',
+  INLINE: 'inline',
+  DIALOG: 'dialog',
+} as const;
+type DockPresentation =
+  (typeof DOCK_PRESENTATION)[keyof typeof DOCK_PRESENTATION];
+export const TOGGLE_ID = 'right-dock-toggle';
+export const PANEL_ID = 'right-dock-panel';
+
+/** 480 px of content plus the 64 px of outer gutters the main column adds. */
+const DOCUMENT_RESERVE = 544;
 
 const REVIEW_MAX_WIDTH = 960;
 const REVIEW_VIEWPORT_RATIO = 0.6;
@@ -38,22 +58,30 @@ export function reviewDockWidth(viewportWidth: number): number {
   );
 }
 
+/** Room left for the dock once the document keeps its reserve. */
+function roomBesideDocument(
+  viewportWidth: number,
+  sidebarWidth: number
+): number {
+  return viewportWidth - sidebarWidth - DOCUMENT_RESERVE;
+}
+
 function DockHeader() {
   const { t } = useTranslation('notes');
   const newConversation = useAgentStore((s) => s.newConversation);
-  const messages = useAgentStore((s) => s.messages);
+  const hasConversation = useAgentStore((s) => s.messages.length > 0);
+
+  if (!hasConversation) {
+    return null;
+  }
 
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-      <span className="text-sm font-medium text-foreground">
-        {t('ai.copilot.title')}
-      </span>
+    <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
       <Button
         type="button"
         variant="ghost"
         size="icon"
         onClick={newConversation}
-        disabled={messages.length === 0}
         aria-label={t('ai.copilot.newConversation')}
         className="shrink-0"
       >
@@ -64,13 +92,91 @@ function DockHeader() {
 }
 
 function DockBody() {
+  const { t } = useTranslation('notes');
+
   return (
     <div className="flex h-full flex-col min-w-0">
+      <h2 className="sr-only">{t('ai.copilot.title')}</h2>
       <DockHeader />
-      <div className="flex-1 overflow-hidden min-h-0">
+      <div id={PANEL_ID} className="flex-1 overflow-hidden min-h-0">
         <AgentCopilotPanel />
       </div>
     </div>
+  );
+}
+
+interface DockDialogProps {
+  modal: boolean;
+  openInlineRef: RefObject<boolean>;
+  holdOpenOnEscape: boolean;
+  onClose: () => void;
+}
+
+function DockDialog({
+  modal,
+  openInlineRef,
+  holdOpenOnEscape,
+  onClose,
+}: DockDialogProps) {
+  const { t } = useTranslation(['notes', 'common']);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <Dialog open modal={modal} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="flex h-[90vh] max-w-full flex-col gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)]"
+        closeLabel={t('common:labels.closeDialog')}
+        onOpenAutoFocus={(event) => {
+          if (isStudyFocusOpen()) {
+            event.preventDefault();
+            onClose();
+            return;
+          }
+          if (!modal) {
+            event.preventDefault();
+          }
+        }}
+        onCloseAutoFocus={(event) => {
+          // The content is detached by the time this runs, so focus it held now
+          // reads as <body>; anything else is focus the dialog never took.
+          const dialogTookFocusAway =
+            document.activeElement === null ||
+            document.activeElement === document.body;
+          if (!openInlineRef.current || !dialogTookFocusAway) {
+            return;
+          }
+          event.preventDefault();
+          document.getElementById(TOGGLE_ID)?.focus({ preventScroll: true });
+        }}
+        onInteractOutside={(event) => {
+          if (!modal) {
+            event.preventDefault();
+          }
+        }}
+        // Escape discards the proposal under review, or would cancel a live
+        // turn; Radix reads Escape in a document capture handler, so only its
+        // own opt-out can hold the dock open. pendingProposal stays out of
+        // this: there Escape must still reach the dialog. Beside a page still
+        // in use, only an Escape pressed inside the dock is meant for it.
+        onEscapeKeyDown={(event) => {
+          const pressedInsideDock =
+            event.target instanceof Node &&
+            bodyRef.current
+              ?.closest('[role="dialog"]')
+              ?.contains(event.target) === true;
+          if (holdOpenOnEscape || (!modal && !pressedInsideDock)) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{t('ai.copilot.tab')}</DialogTitle>
+        </DialogHeader>
+        <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col">
+          <DockBody />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -78,6 +184,8 @@ export function RightDock() {
   const { t } = useTranslation(['notes', 'common']);
   const isOpen = useRightDockStore((s) => s.isOpen);
   const close = useRightDockStore((s) => s.close);
+  const preferredWidth = useDockPreferenceStore((s) => s.preferredWidth);
+  const setPreferredWidth = useDockPreferenceStore((s) => s.setPreferredWidth);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const reviewOpen = useRightDockStore((s) => s.reviewOpen);
   const hasUpdateProposal = useAgentStore(
@@ -85,29 +193,57 @@ export function RightDock() {
   );
   const isStreaming = useAgentStore((s) => s.status === 'streaming');
   const reviewingUpdate = reviewOpen && hasUpdateProposal;
-  const reviewWidth = reviewDockWidth(useViewportWidth(reviewingUpdate));
+  const viewportWidth = useViewportWidth();
+  const sidebarWidth = useSidebarStore((s) => s.visibleWidth);
+  const room = roomBesideDocument(viewportWidth, sidebarWidth);
+  const everydayMaxWidth = Math.min(DOCK_MAX_WIDTH, room);
+  const fitsBesideDocument = isDesktop && everydayMaxWidth >= DOCK_MIN_WIDTH;
+  // The reserve protects writing, and nobody writes behind a diff they opened
+  // to read: a review owes the document nothing, and only the sidebar and the
+  // viewport bound it.
+  const dockMaxWidth = reviewingUpdate
+    ? Math.min(reviewDockWidth(viewportWidth), viewportWidth - sidebarWidth)
+    : everydayMaxWidth;
+  const presentation: DockPresentation = !isOpen
+    ? DOCK_PRESENTATION.CLOSED
+    : fitsBesideDocument
+      ? DOCK_PRESENTATION.INLINE
+      : DOCK_PRESENTATION.DIALOG;
+  const [lastPresentation, setLastPresentation] = useState(presentation);
+  const [layoutMovedDockIntoDialog, setLayoutMovedDockIntoDialog] =
+    useState(false);
+  // A dialog that took over from the open inline dock was the layout's doing,
+  // not the user's, so it must not take the page from them. This only changes
+  // with the presentation: Radix remounts the content whenever `modal` flips.
+  if (presentation !== lastPresentation) {
+    setLastPresentation(presentation);
+    setLayoutMovedDockIntoDialog(lastPresentation === DOCK_PRESENTATION.INLINE);
+  }
   const panelRef = useRef<HTMLElement>(null);
+  const openInlineRef = useRef(false);
+  useEffect(() => {
+    openInlineRef.current = isOpen && fitsBesideDocument;
+  }, [isOpen, fitsBesideDocument]);
 
+  const returnFocusToToggle = useCollapseFocusReturn(panelRef, TOGGLE_ID);
   const handleCollapse = useCallback(() => {
-    // The handle unmounts with the panel, so focus would fall to <body>.
-    if (panelRef.current?.contains(document.activeElement)) {
-      document.getElementById(TOGGLE_ID)?.focus({ preventScroll: true });
-    }
+    returnFocusToToggle();
     close();
-  }, [close]);
+  }, [returnFocusToToggle, close]);
 
-  if (isDesktop) {
+  if (fitsBesideDocument) {
     return (
       <ResizablePanel
         ref={panelRef}
         side={DIALOG_SIDE.RIGHT}
-        defaultWidth={DOCK_DEFAULT_WIDTH}
+        defaultWidth={preferredWidth}
         minWidth={DOCK_MIN_WIDTH}
-        maxWidth={reviewingUpdate ? reviewWidth : DOCK_MAX_WIDTH}
-        targetWidth={reviewingUpdate ? reviewWidth : undefined}
+        maxWidth={dockMaxWidth}
+        targetWidth={reviewingUpdate ? dockMaxWidth : undefined}
         collapseThreshold={DOCK_COLLAPSE_THRESHOLD}
         isOpen={isOpen}
         onCollapse={handleCollapse}
+        onResizeEnd={setPreferredWidth}
         handleAriaLabel={t('ai.artifacts.sidebar.resizePanel', 'Resize panel')}
         className="bg-background"
       >
@@ -121,33 +257,11 @@ export function RightDock() {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent
-        className="flex h-[90vh] max-w-full flex-col gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)]"
-        closeLabel={t('common:labels.closeDialog')}
-        onOpenAutoFocus={(event) => {
-          if (isStudyFocusOpen()) {
-            event.preventDefault();
-            close();
-          }
-        }}
-        // Escape discards the proposal under review, or would cancel a live
-        // turn; Radix reads Escape in a document capture handler, so only its
-        // own opt-out can hold the dock open. pendingProposal stays out of
-        // this: there Escape must still reach the dialog.
-        onEscapeKeyDown={(event) => {
-          if (reviewingUpdate || isStreaming) {
-            event.preventDefault();
-          }
-        }}
-      >
-        <DialogHeader className="sr-only">
-          <DialogTitle>{t('ai.copilot.tab')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <DockBody />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <DockDialog
+      modal={!layoutMovedDockIntoDialog}
+      openInlineRef={openInlineRef}
+      holdOpenOnEscape={reviewingUpdate || isStreaming}
+      onClose={close}
+    />
   );
 }

@@ -85,4 +85,26 @@ describe('useSidebarPreferenceStore', () => {
 
     expect(useSidebarPreferenceStore.getState().preferredWidth).toBe(272);
   });
+
+  it.each([
+    { label: 'the minimum', width: 224, expected: 224 },
+    { label: 'the maximum', width: 360, expected: 360 },
+    { label: 'below the minimum', width: 100, expected: 224 },
+    { label: 'above the maximum', width: 1000, expected: 360 },
+  ])('clamps a direct write at $label', ({ width, expected }) => {
+    useSidebarPreferenceStore.getState().setPreferredWidth(width);
+
+    expect(useSidebarPreferenceStore.getState().preferredWidth).toBe(expected);
+  });
+
+  it.each([{ width: NaN }, { width: Infinity }])(
+    'ignores a direct write of $width',
+    ({ width }) => {
+      useSidebarPreferenceStore.getState().setPreferredWidth(320);
+
+      useSidebarPreferenceStore.getState().setPreferredWidth(width);
+
+      expect(useSidebarPreferenceStore.getState().preferredWidth).toBe(320);
+    }
+  );
 });

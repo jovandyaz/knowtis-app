@@ -6,7 +6,7 @@ import { isTurnAlive, type AgentStatus } from '@/stores/agent.store';
 import { ArrowUp, Square } from 'lucide-react';
 
 import { Button, Textarea } from '@knowtis/design-system';
-import { modifierKeyLabel } from '@knowtis/shared-util';
+import { formatShortcut } from '@knowtis/shared-util';
 
 interface AgentComposerProps {
   draft: string;
@@ -73,7 +73,9 @@ export function AgentComposer({
   };
 
   const hint = alive
-    ? t('ai.copilot.composerHintBusy', { mod: modifierKeyLabel() })
+    ? t('ai.copilot.composerHintBusy', {
+        shortcut: formatShortcut('Mod+Enter'),
+      })
     : queueLength > 0
       ? t('ai.copilot.composerHintPaused')
       : t('ai.copilot.composerHint');

@@ -154,6 +154,7 @@ export function useHocuspocusCollaboration({
       }
       if (recoveryAttempts >= 3) {
         halted = true;
+        pauseEditing();
         setStatus('disconnected');
         provider.configuration.websocketProvider.disconnect();
         return;

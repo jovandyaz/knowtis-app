@@ -19,7 +19,7 @@
     "study": "Review",
     "studyDueCount_one": "{{count}} card due",
     "studyDueCount_other": "{{count}} cards due",
-    "search": "Search",
+    "searchNotes": "Search notes",
     "notes": "Notes",
     "flashcards": "Flashcards",
     "expand": "Expand",
@@ -37,6 +37,8 @@
     "loading": "Loading...",
     "saving": "Saving...",
     "saved": "Saved",
+    "pendingChanges": "Unsaved changes",
+    "saveFailed": "Couldn't save",
     "comingSoon": "Coming soon"
   },
   "errors": {
@@ -63,7 +65,8 @@
     "signedOutSuccess": "Signed out successfully",
     "createAccount": "Create account",
     "signIn": "Sign in",
-    "account": "Account"
+    "account": "Account",
+    "accountLabel": "Account: {{name}}"
   },
   "welcome": {
     "goodMorning": "Good morning",

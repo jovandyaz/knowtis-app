@@ -8,6 +8,7 @@ export const ROUTES = {
   NOTES: '/notes',
   NOTE: '/notes/$noteId',
   STUDY: '/study',
+  OAUTH_CONSENT: '/oauth/consent',
   SHARED_NOTE: '/s/$token',
   LOGIN: '/login',
   REGISTER: '/register',

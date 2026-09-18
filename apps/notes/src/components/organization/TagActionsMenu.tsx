@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
@@ -26,6 +27,8 @@ interface TagActionsMenuProps {
   tagId: string;
   path: string;
   color: TagColor | null;
+  triggerClassName: string;
+  triggerRef?: Ref<HTMLButtonElement>;
   onRenameRequest: () => void;
   onDeleteRequest: () => void;
 }
@@ -34,6 +37,8 @@ export function TagActionsMenu({
   tagId,
   path,
   color,
+  triggerClassName,
+  triggerRef,
   onRenameRequest,
   onDeleteRequest,
 }: TagActionsMenuProps) {
@@ -54,9 +59,13 @@ export function TagActionsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="ghost"
           size="icon"
-          className="h-11 w-11 text-(--muted-foreground) hover:text-(--foreground) md:h-7 md:w-7"
+          className={cn(
+            'text-(--muted-foreground) hover:text-(--foreground)',
+            triggerClassName
+          )}
           aria-label={t('organization.tags.actionsLabel', { tag: path })}
         >
           <MoreHorizontal className="h-4 w-4" />
