@@ -28,7 +28,7 @@ Everything below is exported from [`src/index.ts`](src/index.ts).
 | `EditorErrorBoundary`                  | Error boundary around the editor                                          |
 | `EditorToolbar`                        | Formatting toolbar; optional `onVoiceNote`, `onAskAI`, `onAddImage` hooks |
 | `ReadOnlyEditor`                       | Non-editable Tiptap instance rendering HTML `content`                     |
-| `SaveStatusIndicator` (+ `SaveStatus`) | `saving` / `saved` indicator                                              |
+| `SaveStatusIndicator` (+ `SaveStatus`) | `pending` / `saving` / `saved` / `error` indicator                        |
 | `TableControls`                        | Floating row/column controls for the active table                         |
 
 ### Utilities

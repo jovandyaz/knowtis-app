@@ -1,8 +1,24 @@
-import { Check, Loader2 } from 'lucide-react';
+import {
+  Check,
+  CircleDashed,
+  Loader2,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { cn } from '@knowtis/design-system';
 
-export type SaveStatus = 'saving' | 'saved';
+export type SaveStatus = 'pending' | 'saving' | 'saved' | 'error';
+
+const STATUS_ICONS: Record<
+  SaveStatus,
+  { Icon: LucideIcon; className: string }
+> = {
+  pending: { Icon: CircleDashed, className: '' },
+  saving: { Icon: Loader2, className: 'animate-spin' },
+  saved: { Icon: Check, className: 'text-(--success)' },
+  error: { Icon: TriangleAlert, className: 'text-(--destructive)' },
+};
 
 interface SaveStatusIndicatorProps {
   status: SaveStatus;
@@ -17,6 +33,8 @@ export function SaveStatusIndicator({
   className,
   transient = false,
 }: SaveStatusIndicatorProps) {
+  const { Icon, className: iconClassName } = STATUS_ICONS[status];
+
   return (
     <div
       className={cn(
@@ -25,11 +43,7 @@ export function SaveStatusIndicator({
         className
       )}
     >
-      {status === 'saving' ? (
-        <Loader2 className="h-3 w-3 animate-spin" />
-      ) : (
-        <Check className="h-3 w-3 text-(--success)" />
-      )}
+      <Icon aria-hidden className={cn('h-3 w-3 shrink-0', iconClassName)} />
       {label && <span>{label}</span>}
     </div>
   );

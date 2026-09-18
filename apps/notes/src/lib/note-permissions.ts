@@ -7,14 +7,15 @@ interface NoteActionContext {
   editorsCanShare?: boolean;
 }
 
-export const ACCESS_BADGE_CONFIG: Record<
+/** `labelKey` belongs to the `notes` namespace, beside the share dialog copy. */
+export const ACCESS_BADGE_CONFIG = {
+  owner: { labelKey: 'share.owner', variant: 'default' },
+  editor: { labelKey: 'share.editor', variant: 'secondary' },
+  viewer: { labelKey: 'share.viewer', variant: 'outline' },
+} as const satisfies Record<
   NoteAccessLevel,
-  { label: string; variant: 'default' | 'secondary' | 'outline' }
-> = {
-  owner: { label: 'Owner', variant: 'default' },
-  editor: { label: 'Editor', variant: 'secondary' },
-  viewer: { label: 'Viewer', variant: 'outline' },
-};
+  { labelKey: string; variant: 'default' | 'secondary' | 'outline' }
+>;
 
 export function canPerformNoteAction(
   accessLevel: NoteAccessLevel,

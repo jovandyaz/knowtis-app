@@ -2,16 +2,17 @@ import { create } from 'zustand';
 
 interface SidebarStore {
   collapsed: boolean;
-  width: number;
+  /** Preferred width while open, 0 while collapsed; set in a layout effect before the slide animation. */
+  visibleWidth: number;
   toggle: () => void;
   setCollapsed: (collapsed: boolean) => void;
-  setWidth: (width: number) => void;
+  setVisibleWidth: (visibleWidth: number) => void;
 }
 
 export const useSidebarStore = create<SidebarStore>((set) => ({
   collapsed: false,
-  width: 0,
+  visibleWidth: 0,
   toggle: () => set((state) => ({ collapsed: !state.collapsed })),
   setCollapsed: (collapsed) => set({ collapsed }),
-  setWidth: (width) => set({ width }),
+  setVisibleWidth: (visibleWidth) => set({ visibleWidth }),
 }));

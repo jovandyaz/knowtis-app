@@ -177,5 +177,20 @@ describe('BucketNav', () => {
 
     expect(row).toHaveClass(...NAV_ROW.split(' '));
     expect(row?.firstElementChild).toHaveClass(...NAV_ICON_SLOT.split(' '));
+    expect(row).toHaveClass(
+      'min-h-8',
+      'px-2',
+      'gap-2',
+      'pointer-coarse:min-h-11'
+    );
+    expect(row?.firstElementChild).toHaveClass('w-4', 'shrink-0');
+    expect(screen.getByText('3')).toHaveClass(
+      'text-xs',
+      'tabular-nums',
+      'shrink-0',
+      'text-foreground',
+      'dark:text-muted-foreground'
+    );
+    expect(screen.getByText('3')).not.toHaveClass('text-muted-foreground/60');
   });
 });

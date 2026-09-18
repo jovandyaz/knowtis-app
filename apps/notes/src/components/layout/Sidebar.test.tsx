@@ -12,7 +12,9 @@ import {
 } from '@testing-library/react';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Sidebar } from './Sidebar';
+import type * as DesignSystem from '@knowtis/design-system';
+
+import { APP_SIDEBAR_WIDTH_VAR, Sidebar } from './Sidebar';
 
 interface PanelMockProps {
   children: ReactNode;
@@ -24,6 +26,7 @@ interface PanelMockProps {
   collapseThreshold: number;
   isOpen: boolean;
   onCollapse: () => void;
+  onWidthChange: (width: number) => void;
   onResizeEnd: (width: number) => void;
 }
 
@@ -49,7 +52,8 @@ vi.mock('@jovandyaz/auth-react', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-vi.mock('@knowtis/design-system', () => ({
+vi.mock('@knowtis/design-system', async (importOriginal) => ({
+  ...(await importOriginal<typeof DesignSystem>()),
   ResizablePanel: ({ children, ref, ...props }: PanelMockProps) => {
     panel.props = props;
     return (
@@ -76,7 +80,10 @@ vi.mock('./SidebarUserMenu', () => ({ SidebarUserMenu: () => null }));
 afterAll(() => userAgent.mockRestore());
 
 const searchTrigger = () =>
-  screen.getByText('labels.search').closest('button') as HTMLElement;
+  screen.getByRole('button', { name: 'labels.searchNotes' });
+
+const sidebarWidthVariable = () =>
+  document.documentElement.style.getPropertyValue(APP_SIDEBAR_WIDTH_VAR);
 
 describe('Sidebar', () => {
   beforeEach(() => {
@@ -84,11 +91,99 @@ describe('Sidebar', () => {
     panel.props = null;
     navigate.mockResolvedValue(undefined);
     useNotesSearchStore.setState({ focusRequested: false, query: '' });
-    useSidebarStore.setState({ collapsed: false, width: 0 });
+    useSidebarStore.setState({ collapsed: false, visibleWidth: 0 });
     useSidebarPreferenceStore.setState({ preferredWidth: 272 });
     localStorage.clear();
     authUser.mockReturnValue({ name: 'Ada', isAnonymous: false });
+    userAgent.mockReturnValue('Macintosh');
   });
+
+  it('offers a legible search action with the platform shortcut and shared icon rail', () => {
+    render(<Sidebar />);
+
+    const search = searchTrigger();
+    expect(search).toHaveClass(
+      'w-full',
+      'min-h-9',
+      'px-2',
+      'text-sm',
+      'bg-muted/50',
+      'hover:bg-muted',
+      'text-foreground',
+      'focus-visible:ring-2'
+    );
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Meta+K');
+    expect(search.querySelector('svg')).toHaveClass('h-4', 'w-4');
+    expect(search.querySelector('svg')?.parentElement).toHaveClass('w-4');
+    expect(search.querySelector('kbd')).toHaveAttribute('aria-hidden', 'true');
+    expect(search.querySelector('kbd')).toHaveTextContent('⌘K');
+  });
+
+  it('advertises and handles Control+K on non-Mac platforms', async () => {
+    userAgent.mockReturnValue('Windows');
+    render(<Sidebar />);
+    expect(searchTrigger()).toHaveAttribute('aria-keyshortcuts', 'Control+K');
+    expect(searchTrigger().querySelector('kbd')).toHaveTextContent('Ctrl+K');
+    await act(async () =>
+      fireEvent.keyDown(document, { key: 'K', ctrlKey: true })
+    );
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/notes',
+      search: { view: 'all' },
+    });
+  });
+
+  it('requests focus only after navigation to all notes completes', async () => {
+    let finishNavigation: () => void = () => undefined;
+    navigate.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishNavigation = resolve;
+      })
+    );
+    render(<Sidebar />);
+    fireEvent.click(searchTrigger());
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/notes',
+      search: { view: 'all' },
+    });
+    expect(useNotesSearchStore.getState().focusRequested).toBe(false);
+    await act(async () => finishNavigation());
+    expect(useNotesSearchStore.getState().focusRequested).toBe(true);
+  });
+
+  it.each(['handled', 'composing'])(
+    'ignores a %s search shortcut',
+    async (state) => {
+      render(<Sidebar />);
+      const event = createEvent.keyDown(document, {
+        key: 'k',
+        metaKey: true,
+        isComposing: state === 'composing',
+      });
+      if (state === 'handled') {
+        event.preventDefault();
+      }
+      await act(async () => fireEvent(document, event));
+      expect(navigate).not.toHaveBeenCalled();
+      expect(useNotesSearchStore.getState().focusRequested).toBe(false);
+    }
+  );
+
+  it.each([{ shiftKey: true }, { altKey: true }, { ctrlKey: true }])(
+    'ignores Meta+K with extra modifiers: %o',
+    async (modifiers) => {
+      render(<Sidebar />);
+      await act(async () =>
+        fireEvent.keyDown(document, {
+          key: 'K',
+          metaKey: true,
+          ...modifiers,
+        })
+      );
+      expect(navigate).not.toHaveBeenCalled();
+      expect(useNotesSearchStore.getState().focusRequested).toBe(false);
+    }
+  );
 
   it('opens at the persisted preferred width within the resize bounds', () => {
     useSidebarPreferenceStore.setState({ preferredWidth: 300 });
@@ -153,6 +248,44 @@ describe('Sidebar', () => {
     act(() => panel.props?.onResizeEnd(320));
 
     expect(useSidebarPreferenceStore.getState().preferredWidth).toBe(320);
+    expect(useSidebarStore.getState().visibleWidth).toBe(320);
+  });
+
+  it('drives the layout offset through a custom property while dragging', () => {
+    render(<Sidebar />);
+
+    act(() => panel.props?.onWidthChange(311));
+
+    expect(sidebarWidthVariable()).toBe('311px');
+    expect(useSidebarStore.getState().visibleWidth).toBe(272);
+  });
+
+  it('clears the layout offset when the sidebar unmounts', () => {
+    const view = render(<Sidebar />);
+    act(() => panel.props?.onWidthChange(311));
+    expect(sidebarWidthVariable()).toBe('311px');
+
+    view.unmount();
+
+    expect(sidebarWidthVariable()).toBe('');
+  });
+
+  it('reports no visible width while collapsed', () => {
+    render(<Sidebar />);
+    expect(useSidebarStore.getState().visibleWidth).toBe(272);
+
+    act(() => useSidebarStore.getState().setCollapsed(true));
+
+    expect(useSidebarStore.getState().visibleWidth).toBe(0);
+  });
+
+  it('reports the preferred width again when it reopens', () => {
+    render(<Sidebar />);
+    act(() => useSidebarStore.getState().setCollapsed(true));
+
+    act(() => useSidebarStore.getState().setCollapsed(false));
+
+    expect(useSidebarStore.getState().visibleWidth).toBe(272);
   });
 
   it('renders an opaque panel whose divider is the resize handle', () => {
@@ -183,7 +316,8 @@ describe('Sidebar', () => {
     expect(screen.getByTestId('bucket-nav').parentElement).toHaveClass(
       'min-w-0',
       'overflow-x-hidden',
-      'overflow-y-auto'
+      'overflow-y-auto',
+      'px-3'
     );
   });
 
@@ -208,7 +342,23 @@ describe('Sidebar', () => {
       fireEvent.keyDown(document, { key: 'k', metaKey: true });
     });
 
-    expect(navigate).toHaveBeenCalledWith({ to: '/notes' });
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/notes',
+      search: { view: 'all' },
+    });
+    expect(useNotesSearchStore.getState().focusRequested).toBe(true);
+  });
+
+  it('opens search from the launcher while Study Focus is active', async () => {
+    render(<Sidebar />);
+    render(<div data-study-focus="" />);
+
+    await act(async () => fireEvent.click(searchTrigger()));
+
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/notes',
+      search: { view: 'all' },
+    });
     expect(useNotesSearchStore.getState().focusRequested).toBe(true);
   });
 

@@ -37,6 +37,17 @@ const EXIT_BODY_KEY = {
   quiz: 'ai.artifacts.focus.exit.quizBody',
 } as const satisfies Record<StudyTool, string>;
 
+const STAGE_FOCUSABLE_SELECTOR = 'a[href], button, input, select, textarea';
+
+function focusStage(stage: HTMLDivElement) {
+  const tabbable = Array.from(
+    stage.querySelectorAll<HTMLElement>(STAGE_FOCUSABLE_SELECTOR)
+  ).find(
+    (element) => element.tabIndex >= 0 && !element.hasAttribute('disabled')
+  );
+  (tabbable ?? stage).focus();
+}
+
 export interface StudyFocusProgress {
   segments: readonly SegmentState[];
   label: string;
@@ -94,7 +105,9 @@ export function StudyFocusDialog({
       }
     };
   }, []);
+  const keepStudyingRef = useRef(false);
   const cancelExit = () => {
+    keepStudyingRef.current = true;
     setConfirmOpen(false);
     blocker.reset?.();
   };
@@ -186,6 +199,19 @@ export function StudyFocusDialog({
           <DialogContent
             side="center"
             closeLabel={t('common:labels.closeDialog')}
+            onCloseAutoFocus={(event) => {
+              if (!keepStudyingRef.current) {
+                return;
+              }
+              keepStudyingRef.current = false;
+              const stage = stageRef.current;
+              if (!stage) {
+                return;
+              }
+              // This confirmation opens programmatically, so Radix has no trigger to restore focus to.
+              event.preventDefault();
+              focusStage(stage);
+            }}
           >
             <DialogTitle>{t('ai.artifacts.focus.exit.title')}</DialogTitle>
             <DialogDescription>{t(EXIT_BODY_KEY[tool])}</DialogDescription>

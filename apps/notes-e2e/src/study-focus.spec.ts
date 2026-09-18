@@ -59,9 +59,12 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
   await expect(
     dialog.getByRole('progressbar', { name: '1 of 2 answered', exact: true })
   ).toBeVisible();
-  await expect(
-    dialog.getByRole('button', { name: '¿Dónde ocurre?', exact: true })
-  ).toBeVisible();
+  const secondCard = dialog.getByRole('button', {
+    name: '¿Dónde ocurre?',
+    exact: true,
+  });
+  await expect(secondCard).toBeVisible();
+  await expect(secondCard).toBeFocused();
 
   await page.keyboard.press('Escape');
   const confirmation = page.getByRole('dialog', {
@@ -87,6 +90,7 @@ test('studies a deck in focus mode with the keyboard and returns to the note', a
       url.pathname === `/notes/${note.id}` &&
       url.searchParams.get('study') === deckId
   );
+  await expect(secondCard).toBeFocused();
 
   await page.keyboard.press('Space');
   await expect(
@@ -340,7 +344,7 @@ for (const locale of ['en', 'es'] as const) {
         name: 'Copilot',
         exact: true,
       });
-      if ((await copilotToggle.getAttribute('aria-pressed')) === 'true') {
+      if ((await copilotToggle.getAttribute('aria-expanded')) === 'true') {
         await copilotToggle.click();
       }
 

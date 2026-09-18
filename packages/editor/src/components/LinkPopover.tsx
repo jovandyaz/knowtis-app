@@ -12,14 +12,14 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import type { ToolbarItemProps } from '../hooks/useRovingToolbar';
 import { toolbarButtonClasses } from './toolbar-button.styles';
 
-interface LinkPopoverProps {
+interface LinkPopoverProps extends ToolbarItemProps {
   editor: Editor;
-  shortcut?: string | undefined;
 }
 
-export function LinkPopover({ editor, shortcut }: LinkPopoverProps) {
+export function LinkPopover({ editor, ...itemProps }: LinkPopoverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [url, setUrl] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,13 +75,13 @@ export function LinkPopover({ editor, shortcut }: LinkPopoverProps) {
 
   const { t } = useTranslation('notes');
   const label = t('editor.toolbar.link');
-  const tooltipLabel = shortcut ? `${label} (${shortcut})` : label;
 
   return (
     <div ref={containerRef} className="relative shrink-0">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
+            {...itemProps}
             type="button"
             variant="ghost"
             size="sm"
@@ -96,7 +96,7 @@ export function LinkPopover({ editor, shortcut }: LinkPopoverProps) {
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{tooltipLabel}</TooltipContent>
+        <TooltipContent>{label}</TooltipContent>
       </Tooltip>
 
       {isOpen && (

@@ -44,6 +44,7 @@ export interface ToolbarToolConfig {
   /** Present on toggles only; one-shot actions (undo, insert rule) omit it. */
   isActive?: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
+  /** Platform-neutral (`Mod+Shift+S`); render it with `formatShortcut`. */
   shortcut?: string;
   fold?: ToolbarFold;
 }
@@ -58,7 +59,6 @@ export interface ToolbarHeadingConfig {
 
 export interface ToolbarLinkConfig {
   type: 'link-popover';
-  shortcut?: string;
 }
 
 export interface ToolbarHighlightConfig {
@@ -87,28 +87,28 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     labelKey: 'editor.toolbar.bold',
     action: (editor) => editor.chain().focus().toggleBold().run(),
     isActive: (editor) => editor.isActive('bold'),
-    shortcut: 'Ctrl+B',
+    shortcut: 'Mod+B',
   },
   {
     icon: Italic,
     labelKey: 'editor.toolbar.italic',
     action: (editor) => editor.chain().focus().toggleItalic().run(),
     isActive: (editor) => editor.isActive('italic'),
-    shortcut: 'Ctrl+I',
+    shortcut: 'Mod+I',
   },
   {
     icon: Underline,
     labelKey: 'editor.toolbar.underline',
     action: (editor) => editor.chain().focus().toggleUnderline().run(),
     isActive: (editor) => editor.isActive('underline'),
-    shortcut: 'Ctrl+U',
+    shortcut: 'Mod+U',
   },
   {
     icon: Strikethrough,
     labelKey: 'editor.toolbar.strikethrough',
     action: (editor) => editor.chain().focus().toggleStrike().run(),
     isActive: (editor) => editor.isActive('strike'),
-    shortcut: 'Ctrl+Shift+S',
+    shortcut: 'Mod+Shift+S',
   },
   { type: 'separator' },
   {
@@ -138,7 +138,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     labelKey: 'editor.toolbar.inlineCode',
     action: (editor) => editor.chain().focus().toggleCode().run(),
     isActive: (editor) => editor.isActive('code'),
-    shortcut: 'Ctrl+E',
+    shortcut: 'Mod+E',
     fold: 'early',
   },
   {
@@ -146,18 +146,18 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     labelKey: 'editor.toolbar.codeBlock',
     action: (editor) => editor.chain().focus().toggleCodeBlock().run(),
     isActive: (editor) => editor.isActive('codeBlock'),
-    shortcut: 'Ctrl+Alt+C',
+    shortcut: 'Mod+Alt+C',
     fold: 'early',
   },
   { type: 'separator' },
-  { type: 'link-popover', shortcut: 'Ctrl+K' },
+  { type: 'link-popover' },
   { type: 'highlight-picker' },
   {
     icon: SuperscriptIcon,
     labelKey: 'editor.toolbar.superscript',
     action: (editor) => editor.chain().focus().toggleSuperscript().run(),
     isActive: (editor) => editor.isActive('superscript'),
-    shortcut: 'Ctrl+.',
+    shortcut: 'Mod+.',
     fold: 'early',
   },
   {
@@ -165,7 +165,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     labelKey: 'editor.toolbar.subscript',
     action: (editor) => editor.chain().focus().toggleSubscript().run(),
     isActive: (editor) => editor.isActive('subscript'),
-    shortcut: 'Ctrl+,',
+    shortcut: 'Mod+,',
     fold: 'early',
   },
   {

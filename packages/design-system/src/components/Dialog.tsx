@@ -10,6 +10,7 @@ import {
   type ComponentPropsWithoutRef,
   type HTMLAttributes,
   type ReactNode,
+  type RefObject,
 } from 'react';
 
 import { X } from 'lucide-react';
@@ -39,6 +40,9 @@ interface DialogSemanticsContextValue {
 const DialogSemanticsContext =
   createContext<DialogSemanticsContextValue | null>(null);
 
+const EnclosingDialogContentContext =
+  createContext<RefObject<HTMLElement | null> | null>(null);
+
 function useDialogSemantics() {
   const context = useContext(DialogSemanticsContext);
   if (!context) {
@@ -51,9 +55,12 @@ interface DialogProps {
   children: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** False leaves the rest of the page announced and interactive. Radix
+   *  remounts the content when this flips, so hold it for a whole open. */
+  modal?: boolean;
 }
 
-function Dialog({ children, open, onOpenChange }: DialogProps) {
+function Dialog({ children, open, onOpenChange, modal = true }: DialogProps) {
   const [descriptionPresent, setDescriptionPresent] = useState(false);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = open !== undefined;
@@ -210,7 +217,11 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
         takeFocusOrigin,
       }}
     >
-      <DialogPrimitive.Root open={resolvedOpen} onOpenChange={handleOpenChange}>
+      <DialogPrimitive.Root
+        open={resolvedOpen}
+        onOpenChange={handleOpenChange}
+        modal={modal}
+      >
         {children}
       </DialogPrimitive.Root>
     </DialogSemanticsContext.Provider>
@@ -285,6 +296,8 @@ function DialogContent({
     registerContent,
     takeFocusOrigin,
   } = useDialogSemantics();
+  const enclosingContentRef = useContext(EnclosingDialogContentContext);
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
   // Overlay commits before Content descendants can move focus in layout effects.
   const handleOverlayRef = useCallback(
@@ -298,6 +311,7 @@ function DialogContent({
 
   const handleContentRef = useCallback(
     (content: HTMLDivElement | null) => {
+      contentRef.current = content;
       if (content) {
         registerContent(content);
       }
@@ -318,11 +332,19 @@ function DialogContent({
     }
 
     event.preventDefault();
-    if (origin?.opener && canRestoreFocus(origin.opener)) {
+    if (!origin) {
+      return;
+    }
+    if (origin.opener && canRestoreFocus(origin.opener)) {
       origin.opener.focus();
       return;
     }
-    focusParentDialog(origin?.parentDialog ?? null);
+    // Content is portaled to <body>, so only the React tree knows which dialog encloses it.
+    focusParentDialog(
+      origin.parentDialog?.isConnected
+        ? origin.parentDialog
+        : (enclosingContentRef?.current ?? null)
+    );
   };
 
   return (
@@ -365,7 +387,9 @@ function DialogContent({
             <div className="h-1 w-8 rounded-full bg-(--muted-foreground)/30" />
           </div>
         ) : null}
-        {children}
+        <EnclosingDialogContentContext.Provider value={contentRef}>
+          {children}
+        </EnclosingDialogContentContext.Provider>
         <DialogPrimitive.Close
           type="button"
           className={cn(

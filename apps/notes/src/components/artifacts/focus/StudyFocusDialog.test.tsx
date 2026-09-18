@@ -1,4 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,8 +25,8 @@ vi.mock('react-i18next', () => ({
 
 const onClose = vi.fn();
 
-function renderDialog(inProgress: boolean) {
-  return render(
+function studyTree(inProgress: boolean, stage: ReactNode = <p>stage</p>) {
+  return (
     <TooltipProvider>
       <StudyFocusDialog
         tool={STUDY_TOOL.FLASHCARDS}
@@ -42,11 +44,26 @@ function renderDialog(inProgress: boolean) {
         inProgress={inProgress}
         onClose={onClose}
       >
-        <p>stage</p>
+        {stage}
       </StudyFocusDialog>
     </TooltipProvider>
   );
 }
+
+function renderDialog(inProgress: boolean) {
+  return render(studyTree(inProgress));
+}
+
+function dropFocus() {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+}
+
+const settleCloseAutoFocus = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -236,6 +253,106 @@ describe('StudyFocusDialog', () => {
       screen.queryByText('ai.artifacts.focus.exit.title')
     ).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('returns focus to the stage when Keep studying answers a blocked navigation', async () => {
+    blocker.status = 'blocked';
+    blocker.reset.mockImplementation(() => {
+      blocker.status = 'idle';
+    });
+    const { rerender } = renderDialog(true);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.focus.exit.keep' })
+    );
+    rerender(studyTree(true));
+
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(document.activeElement).toContainElement(screen.getByText('stage'));
+  });
+
+  it('returns focus to the stage when Escape dismisses the confirmation after focus was dropped', async () => {
+    renderDialog(true);
+    dropFocus();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toContainElement(screen.getByText('stage'));
+  });
+
+  it('returns focus to the card the stage is showing rather than to the stage itself', async () => {
+    render(
+      studyTree(
+        true,
+        <>
+          <p>stage</p>
+          <button type="button">card</button>
+        </>
+      )
+    );
+    dropFocus();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.focus.exit.keep' })
+    );
+
+    expect(screen.getByRole('button', { name: 'card' })).toHaveFocus();
+  });
+
+  it.each<{
+    opener: string;
+    openConfirmation: (rerender: (ui: ReactNode) => void) => Promise<void>;
+  }>([
+    {
+      opener: 'Escape',
+      openConfirmation: async () => {
+        await userEvent.keyboard('{Escape}');
+      },
+    },
+    {
+      opener: 'a blocked Back navigation',
+      openConfirmation: async (rerender) => {
+        blocker.status = 'blocked';
+        rerender(studyTree(true));
+      },
+    },
+  ])(
+    'keeps focus off the stage when the session completes during a confirmation opened by $opener',
+    async ({ openConfirmation }) => {
+      const { rerender } = renderDialog(true);
+      const stage = screen.getByText('stage').closest('[tabindex="-1"]');
+      dropFocus();
+      await openConfirmation(rerender);
+      expect(
+        screen.getByRole('dialog', { name: 'ai.artifacts.focus.exit.title' })
+      ).toBeInTheDocument();
+
+      rerender(studyTree(false));
+      await settleCloseAutoFocus();
+
+      expect(
+        screen.queryByText('ai.artifacts.focus.exit.title')
+      ).not.toBeInTheDocument();
+      expect(stage).not.toHaveFocus();
+    }
+  );
+
+  it('leaves focus to the exit path when the user confirms leaving', async () => {
+    renderDialog(true);
+    const stage = screen.getByText('stage').closest('[tabindex="-1"]');
+    dropFocus();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'ai.artifacts.focus.exit.leave' })
+    );
+    await settleCloseAutoFocus();
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(stage).not.toHaveFocus();
   });
 
   it('leaves once the user confirms', async () => {

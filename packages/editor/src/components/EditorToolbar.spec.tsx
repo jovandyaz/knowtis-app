@@ -1,10 +1,10 @@
 import type { ComponentProps } from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@knowtis/design-system';
 
@@ -20,16 +20,39 @@ vi.mock('react-i18next', () => ({
 }));
 
 const KEY = {
+  toolbar: 'editor.toolbar.label',
+  heading: 'editor.toolbar.heading',
+  heading3: 'editor.toolbar.heading3',
   bold: 'editor.toolbar.bold',
+  italic: 'editor.toolbar.italic',
   bulletList: 'editor.toolbar.bulletList',
   inlineCode: 'editor.toolbar.inlineCode',
   codeBlock: 'editor.toolbar.codeBlock',
+  link: 'editor.toolbar.link',
   horizontalRule: 'editor.toolbar.horizontalRule',
   undo: 'editor.toolbar.undo',
   redo: 'editor.toolbar.redo',
   moreTools: 'editor.toolbar.moreTools',
   autocomplete: 'editor.toolbar.autocomplete',
+  askAI: 'ai.menu.askAI',
+  voiceNote: 'ai.slash.voiceNote',
 } as const;
+
+interface PlatformHints {
+  mac: string;
+  other: string;
+}
+
+const SHORTCUT_HINTS: Readonly<Record<string, PlatformHints>> = {
+  'editor.toolbar.bold': { mac: '⌘B', other: 'Ctrl+B' },
+  'editor.toolbar.italic': { mac: '⌘I', other: 'Ctrl+I' },
+  'editor.toolbar.underline': { mac: '⌘U', other: 'Ctrl+U' },
+  'editor.toolbar.strikethrough': { mac: '⇧⌘S', other: 'Ctrl+Shift+S' },
+  'editor.toolbar.inlineCode': { mac: '⌘E', other: 'Ctrl+E' },
+  'editor.toolbar.codeBlock': { mac: '⌥⌘C', other: 'Ctrl+Alt+C' },
+  'editor.toolbar.superscript': { mac: '⌘.', other: 'Ctrl+.' },
+  'editor.toolbar.subscript': { mac: '⌘,', other: 'Ctrl+,' },
+};
 
 const TOOLS = TOOLBAR_TOOLS.filter(
   (item): item is ToolbarToolConfig => !('type' in item)
@@ -42,41 +65,122 @@ const startsWith = (prefix: string) => (name: string) =>
 
 let editor: Editor;
 
-type ToolbarProps = ComponentProps<typeof EditorToolbar>;
+type ToolbarProps = Omit<ComponentProps<typeof EditorToolbar>, 'editor'>;
 
-function mount(width: number, props: Omit<ToolbarProps, 'editor'> = {}) {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    width,
-    height: 40,
-    top: 0,
-    left: 0,
-    right: width,
-    bottom: 40,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  });
+const TOOLBAR_HEIGHT = 40;
+
+function boxOf(width: number): DOMRect {
+  return DOMRect.fromRect({ width, height: TOOLBAR_HEIGHT });
+}
+
+function mount(width: number, props: ToolbarProps = {}) {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+    boxOf(width)
+  );
   editor = new Editor({
     extensions: [StarterKit],
     content: '<p>hello</p>',
   });
-  render(
+  const toolbar = (nextProps: ToolbarProps) => (
     <TooltipProvider>
-      <EditorToolbar editor={editor} {...props} />
+      <EditorToolbar editor={editor} {...nextProps} />
     </TooltipProvider>
   );
+  const { rerender } = render(toolbar(props));
+  return {
+    rerender: (nextProps: ToolbarProps) => rerender(toolbar(nextProps)),
+  };
 }
 
 async function openOverflowMenu() {
   await userEvent.click(screen.getByRole('button', { name: KEY.moreTools }));
 }
 
+function captureResizes() {
+  const observers: ResizeObserverSpy[] = [];
+
+  class ResizeObserverSpy implements ResizeObserver {
+    private readonly callback: ResizeObserverCallback;
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    resize(target: Element, width: number) {
+      const size = { inlineSize: width, blockSize: TOOLBAR_HEIGHT };
+      this.callback(
+        [
+          {
+            target,
+            borderBoxSize: [size],
+            contentBoxSize: [size],
+            devicePixelContentBoxSize: [size],
+            contentRect: boxOf(width),
+          },
+        ],
+        this
+      );
+    }
+  }
+
+  vi.stubGlobal('ResizeObserver', ResizeObserverSpy);
+  return (width: number) => {
+    act(() => {
+      for (const observer of observers) {
+        observer.resize(getToolbar(), width);
+      }
+    });
+  };
+}
+
+function getToolbar() {
+  return screen.getByRole('toolbar', { name: KEY.toolbar });
+}
+
+function control(name: string) {
+  return within(getToolbar()).getByRole('button', { name });
+}
+
+function tabStops() {
+  return within(getToolbar())
+    .getAllByRole('button')
+    .filter((button) => button.tabIndex !== -1);
+}
+
 afterEach(() => {
   editor?.destroy();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('EditorToolbar folding', () => {
+  it('keeps the sticky overflow row on an opaque toolbar surface', () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+
+    const capsule = getToolbar();
+    expect(capsule).toHaveClass(
+      'bg-background',
+      'border-border',
+      'shadow-sm',
+      'overflow-x-auto'
+    );
+    expect(capsule).not.toHaveClass(
+      'bg-background/80',
+      'dark:bg-muted/30',
+      'border-border/50',
+      'backdrop-blur-md',
+      'shadow-lg'
+    );
+    expect(capsule.parentElement).toHaveClass(
+      'sticky',
+      'top-0',
+      'max-md:fixed'
+    );
+  });
+
   it('shows every tool in the row when the container fits the full row', () => {
     mount(TOOLBAR_FOLD_WIDTHS.early);
 
@@ -149,22 +253,60 @@ describe('EditorToolbar folding', () => {
   });
 });
 
-describe('EditorToolbar overflow menu', () => {
-  it('lists folded tools with their shortcuts', async () => {
-    mount(TOOLBAR_FOLD_WIDTHS.late - 1);
-    await openOverflowMenu();
+describe.each([
+  { platform: 'Macintosh', notation: 'mac' },
+  { platform: 'Windows', notation: 'other' },
+] as const)(
+  'EditorToolbar shortcut hints on $platform',
+  ({ platform, notation }) => {
+    beforeEach(() => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform);
+    });
 
-    for (const tool of [...EARLY_TOOLS, ...LATE_TOOLS]) {
-      const item = screen.getByRole(
-        tool.isActive ? 'menuitemcheckbox' : 'menuitem',
-        { name: startsWith(tool.labelKey) }
-      );
-      if (tool.shortcut) {
-        expect(item).toHaveTextContent(tool.shortcut);
+    it('writes each tooltip shortcut in the platform notation', async () => {
+      mount(TOOLBAR_FOLD_WIDTHS.early);
+
+      for (const [name, hints] of Object.entries(SHORTCUT_HINTS)) {
+        act(() => {
+          screen.getByRole('button', { name }).focus();
+        });
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(
+          `${name} (${hints[notation]})`
+        );
       }
-    }
-  });
+    });
 
+    it('labels the link control without a shortcut it does not have', async () => {
+      mount(TOOLBAR_FOLD_WIDTHS.early);
+
+      act(() => {
+        screen.getByRole('button', { name: KEY.link }).focus();
+      });
+
+      expect((await screen.findByRole('tooltip')).textContent).toBe(KEY.link);
+    });
+
+    it('writes each folded tool shortcut in the platform notation', async () => {
+      mount(TOOLBAR_FOLD_WIDTHS.late - 1);
+      await openOverflowMenu();
+
+      for (const tool of [...EARLY_TOOLS, ...LATE_TOOLS]) {
+        if (!tool.shortcut) {
+          continue;
+        }
+        expect(Object.keys(SHORTCUT_HINTS)).toContain(tool.labelKey);
+        const hint = SHORTCUT_HINTS[tool.labelKey]?.[notation];
+        expect(
+          screen.getByRole(tool.isActive ? 'menuitemcheckbox' : 'menuitem', {
+            name: startsWith(tool.labelKey),
+          })
+        ).toHaveTextContent(`${tool.labelKey}${hint}`);
+      }
+    });
+  }
+);
+
+describe('EditorToolbar overflow menu', () => {
   it('runs the tool action when a menu item is selected', async () => {
     mount(TOOLBAR_FOLD_WIDTHS.early - 1);
     expect(editor.isActive('codeBlock')).toBe(false);
@@ -261,6 +403,181 @@ describe('EditorToolbar active state', () => {
     });
 
     expect(undo).toBeEnabled();
+  });
+});
+
+describe('EditorToolbar keyboard navigation', () => {
+  it('exposes the row as a horizontal toolbar with its first control as the only tab stop', () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+
+    expect(getToolbar()).toHaveAttribute('aria-orientation', 'horizontal');
+    expect(tabStops()).toEqual([control(KEY.heading)]);
+    for (const button of within(getToolbar()).getAllByRole('button')) {
+      expect(button.tabIndex).toBe(button === control(KEY.heading) ? 0 : -1);
+    }
+  });
+
+  it('enters on the first control and leaves on the next Tab', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+
+    await userEvent.tab();
+    expect(control(KEY.heading)).toHaveFocus();
+
+    await userEvent.tab();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('comes back to the last focused control when tabbing in again', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}');
+    expect(control(KEY.italic)).toHaveFocus();
+
+    await userEvent.tab();
+    expect(document.body).toHaveFocus();
+    await userEvent.tab({ shift: true });
+
+    expect(control(KEY.italic)).toHaveFocus();
+    expect(tabStops()).toEqual([control(KEY.italic)]);
+  });
+
+  it('moves focus to the next and previous control with ArrowRight and ArrowLeft', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(control(KEY.bold)).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(control(KEY.italic)).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(control(KEY.bold)).toHaveFocus();
+  });
+
+  it('wraps focus around both ends of the row', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early, { onVoiceNote: vi.fn() });
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(control(KEY.voiceNote)).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(control(KEY.heading)).toHaveFocus();
+  });
+
+  it('jumps to the first and last controls with Home and End', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early, { onVoiceNote: vi.fn() });
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}');
+
+    await userEvent.keyboard('{End}');
+    expect(control(KEY.voiceNote)).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(control(KEY.heading)).toHaveFocus();
+  });
+
+  it('skips controls that are disabled', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    expect(control(KEY.undo)).toBeDisabled();
+    expect(control(KEY.redo)).toBeDisabled();
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(control(KEY.horizontalRule)).toHaveFocus();
+
+    act(() => {
+      editor.chain().insertContent(' edited').run();
+    });
+    await userEvent.keyboard('{ArrowRight}');
+
+    expect(control(KEY.undo)).toHaveFocus();
+  });
+
+  it('leaves ArrowDown to a dropdown trigger so it still opens its menu', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{ArrowDown}');
+
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: KEY.heading, hidden: true })
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('does not take arrow, Home or End keys away from an open menu', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}');
+    await screen.findByRole('menu');
+
+    await userEvent.keyboard('{End}');
+    const lastOption = screen.getByRole('menuitem', { name: KEY.heading3 });
+    expect(lastOption).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}{ArrowLeft}');
+
+    expect(lastOption).toHaveFocus();
+  });
+
+  it('does not take caret keys away from the link field', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.click(control(KEY.link));
+    const field = within(getToolbar()).getByRole('textbox');
+    await waitFor(() => expect(field).toHaveFocus());
+
+    await userEvent.keyboard('{ArrowLeft}{ArrowRight}{Home}{End}');
+
+    expect(field).toHaveFocus();
+  });
+
+  it('leaves modified arrow keys to the browser', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+
+    await userEvent.keyboard('{Alt>}{ArrowRight}{/Alt}');
+
+    expect(control(KEY.heading)).toHaveFocus();
+  });
+
+  it('keeps the tab stop on its control while other controls join the row', async () => {
+    const { rerender } = mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}');
+
+    rerender({ onAskAI: vi.fn() });
+
+    expect(control(KEY.askAI)).toBeInTheDocument();
+    expect(tabStops()).toEqual([control(KEY.bold)]);
+  });
+
+  it('hands the tab stop to the first control when its control leaves the row', async () => {
+    const { rerender } = mount(TOOLBAR_FOLD_WIDTHS.early, {
+      onVoiceNote: vi.fn(),
+    });
+    await userEvent.tab();
+    await userEvent.keyboard('{End}');
+    expect(control(KEY.voiceNote)).toHaveFocus();
+
+    rerender({});
+
+    expect(tabStops()).toEqual([control(KEY.heading)]);
+    await userEvent.tab();
+    expect(control(KEY.heading)).toHaveFocus();
+  });
+
+  it('hands the tab stop on when its control folds into the overflow menu', async () => {
+    const resizeTo = captureResizes();
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(control(KEY.horizontalRule)).toHaveFocus();
+
+    resizeTo(TOOLBAR_FOLD_WIDTHS.early - 1);
+
+    expect(
+      within(getToolbar()).queryByRole('button', { name: KEY.horizontalRule })
+    ).not.toBeInTheDocument();
+    expect(tabStops()).toEqual([control(KEY.heading)]);
+    await userEvent.tab();
+    expect(control(KEY.heading)).toHaveFocus();
   });
 });
 

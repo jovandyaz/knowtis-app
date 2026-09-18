@@ -1,7 +1,12 @@
 import { useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useLocation,
+} from '@tanstack/react-router';
 
 import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
@@ -19,10 +24,11 @@ import {
   RightDockToggle,
 } from '@/components/right-dock';
 import { SettingsModal } from '@/components/settings/SettingsModal';
-import { ROUTES } from '@/config';
+import { ROUTES } from '@/config/routes.config';
 import { useAIStore } from '@/stores/ai.store';
 import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
@@ -31,12 +37,37 @@ import { PanelLeft } from 'lucide-react';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { Button } from '@knowtis/design-system';
-import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 import { isMacPlatform } from '@knowtis/shared-util';
 
 function RightDockLayout() {
   return <RightDock />;
+}
+
+function ShellContextLabel() {
+  const { t } = useTranslation(['common', 'notes']);
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const noteTitle = useNoteEditorStore((state) =>
+    state.noteId && pathname === `/notes/${state.noteId}` ? state.title : null
+  );
+  const viewLabel =
+    pathname === ROUTES.DASHBOARD
+      ? t('labels.home')
+      : pathname === ROUTES.STUDY
+        ? t('labels.study')
+        : pathname === ROUTES.OAUTH_CONSENT
+          ? t('oauth.title')
+          : t('labels.notes');
+  const label =
+    noteTitle === null
+      ? viewLabel
+      : noteTitle.trim() || t('sidebar.untitled', { ns: 'notes' });
+
+  return (
+    <span className="min-w-0 truncate text-sm" title={label}>
+      {label}
+    </span>
+  );
 }
 
 function ArtifactGeneratorDialogLayout() {
@@ -72,7 +103,6 @@ function AppLayout() {
   const { t, i18n } = useTranslation('common');
   const isAnonymous = user?.isAnonymous ?? false;
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const sidebarWidth = useSidebarStore((s) => s.width);
   const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
@@ -81,7 +111,6 @@ function AppLayout() {
   );
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
   const setVoiceNotesEnabled = useAIStore((s) => s.setVoiceNotesEnabled);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
   const showLimitModal = useAnonymousLimitStore((s) => s.showModal);
   const closeLimitModal = useAnonymousLimitStore((s) => s.closeModal);
   const toggleDock = useRightDockStore((s) => s.toggle);
@@ -138,37 +167,41 @@ function AppLayout() {
       <BottomNav />
       <MobileFabRail>{aiEnabled && <CopilotMobileFAB />}</MobileFabRail>
 
-      <main
-        className="flex-1 flex min-w-0 min-h-0 pb-20 md:pb-0"
-        style={{ paddingLeft: isDesktop ? `${sidebarWidth}px` : undefined }}
-      >
+      <main className="flex-1 flex min-w-0 min-h-0 pb-20 md:pb-0 md:pl-(--app-sidebar-width)">
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <VerifyEmailBanner />
-          <div className="hidden md:flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
-            <Button
-              id="sidebar-toggle"
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={toggle}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label={
-                sidebarCollapsed
-                  ? t('labels.expandSidebar')
-                  : t('labels.collapseSidebar')
-              }
-            >
-              <PanelLeft className="h-4 w-4" />
-            </Button>
+          <header className="hidden md:flex h-12 shrink-0 items-center justify-between gap-2 px-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Button
+                id="sidebar-toggle"
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggle}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label={
+                  sidebarCollapsed
+                    ? t('labels.expandSidebar')
+                    : t('labels.collapseSidebar')
+                }
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+              <ShellContextLabel />
+            </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 items-center gap-2">
               <div
                 id="note-controls-portal"
-                className="flex items-center gap-1"
+                className="flex min-w-0 items-center gap-2"
               />
-              {aiEnabled && <RightDockToggle />}
+              {aiEnabled && (
+                <div className="ml-2 shrink-0">
+                  <RightDockToggle />
+                </div>
+              )}
             </div>
-          </div>
+          </header>
           <div className="flex-1 min-h-0 p-4 md:px-8 md:pt-3 md:pb-8 w-full overflow-y-auto">
             <Outlet />
           </div>

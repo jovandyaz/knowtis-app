@@ -6,10 +6,6 @@ function readViewportWidth(): number {
   return window.innerWidth;
 }
 
-function subscribeToNothing() {
-  return () => undefined;
-}
-
 function subscribeToDebouncedResize(onChange: () => void) {
   let pending: ReturnType<typeof setTimeout> | undefined;
   const onResize = () => {
@@ -24,9 +20,9 @@ function subscribeToDebouncedResize(onChange: () => void) {
   };
 }
 
-export function useViewportWidth(enabled: boolean): number {
+export function useViewportWidth(): number {
   return useSyncExternalStore(
-    enabled ? subscribeToDebouncedResize : subscribeToNothing,
+    subscribeToDebouncedResize,
     readViewportWidth,
     () => 0
   );

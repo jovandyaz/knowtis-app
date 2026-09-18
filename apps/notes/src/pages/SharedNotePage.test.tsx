@@ -19,6 +19,17 @@ interface StudyToolsTabProps {
   noteId: string | null;
   artifacts?: Artifact[];
   readOnly?: boolean;
+  selectedArtifactId: string | null;
+  onSelectArtifact: (id: string | null) => void;
+}
+
+interface SharedNoteFixture {
+  id: string;
+  title: string;
+  content: string;
+  owner: { name: string };
+  updatedAt: string;
+  accessLevel: 'viewer' | 'editor';
 }
 
 const ensureGuestSession = vi.fn<() => Promise<boolean>>();
@@ -62,21 +73,13 @@ const {
 const authUser = vi.fn<() => { isAnonymous?: boolean } | null>();
 const authLoading = vi.fn<() => boolean>();
 let denyEdit: (() => void) | undefined;
+let reportUpdate: ((content: string) => void) | undefined;
 let reportConnectionState:
   | ((state: DocumentConnectionState | null) => void)
   | undefined;
 let token = 'tok';
 let noteQuery: {
-  data:
-    | {
-        id: string;
-        title: string;
-        content: string;
-        owner: { name: string };
-        updatedAt: string;
-        accessLevel: 'viewer' | 'editor';
-      }
-    | undefined;
+  data: SharedNoteFixture | undefined;
   isLoading: boolean;
   isError: boolean;
   error: unknown;
@@ -105,15 +108,28 @@ vi.mock('sonner', () => ({
 }));
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
   CollaborativeEditor: ({
+    noteId,
+    shareToken,
+    onUpdate,
     onEditDenied,
     onConnectionStateChange,
   }: {
+    noteId: string;
+    shareToken?: string;
+    onUpdate: (content: string) => void;
     onEditDenied?: () => void;
     onConnectionStateChange?: (state: DocumentConnectionState | null) => void;
   }) => {
     denyEdit = onEditDenied;
+    reportUpdate = onUpdate;
     reportConnectionState = onConnectionStateChange;
-    return <div data-testid="collaborative-editor" />;
+    return (
+      <div
+        data-testid="collaborative-editor"
+        data-note-id={noteId}
+        data-share-token={shareToken}
+      />
+    );
   },
 }));
 vi.mock('@knowtis/editor', () => ({
@@ -148,9 +164,13 @@ const clickEdit = () =>
 const signInLinks = () =>
   screen.queryAllByRole('link', { name: 'shared.signIn' });
 
+const connectionStatus = () =>
+  within(screen.getByRole('banner')).queryByRole('status');
+
 beforeEach(() => {
   vi.clearAllMocks();
   denyEdit = undefined;
+  reportUpdate = undefined;
   reportConnectionState = undefined;
   token = 'tok';
   sharedArtifacts.data = [];
@@ -385,9 +405,6 @@ describe('SharedNotePage editing as a visitor', () => {
 });
 
 describe('SharedNotePage connection status', () => {
-  const connectionStatus = () =>
-    within(screen.getByRole('banner')).queryByRole('status');
-
   const startEditing = async () => {
     await clickEdit();
     await waitFor(() =>
@@ -551,5 +568,122 @@ describe('SharedNotePage study tab', () => {
     expect(noteTab()).toHaveAttribute('aria-selected', 'true');
     expect(notePanel()).not.toHaveClass('hidden');
     expect(screen.getByTestId('read-only-editor')).toBeInTheDocument();
+  });
+});
+
+describe('SharedNotePage following another share link', () => {
+  const otherNote: SharedNoteFixture = {
+    id: 'note-2',
+    title: 'Other shared note',
+    content: '<p>other body</p>',
+    owner: { name: 'Other owner' },
+    updatedAt: '2026-08-15T00:00:00.000Z',
+    accessLevel: 'editor',
+  };
+
+  const followLink = (rerender: (ui: ReactNode) => void) => {
+    token = 'tok-2';
+    noteQuery = { ...noteQuery, data: otherNote };
+    rerender(<SharedNotePage />);
+  };
+
+  const collaborativeEditor = () => screen.getByTestId('collaborative-editor');
+
+  const openEditor = async () => {
+    ensureGuestSession.mockResolvedValue(true);
+    const view = renderPage();
+    await clickEdit();
+    await waitFor(() => expect(collaborativeEditor()).toBeInTheDocument());
+    return view;
+  };
+
+  it('closes the previous note editor and opens the next note read-only', async () => {
+    const { rerender } = await openEditor();
+    const previousEditor = collaborativeEditor();
+    act(() => reportConnectionState?.('connected'));
+
+    followLink(rerender);
+
+    expect(previousEditor).not.toBeInTheDocument();
+    expect(screen.queryByTestId('collaborative-editor')).toBeNull();
+    expect(screen.getByTestId('read-only-editor')).toHaveTextContent(
+      '<p>other body</p>'
+    );
+    expect(
+      screen.getByRole('button', { name: 'shared.editButton' })
+    ).toBeInTheDocument();
+    expect(connectionStatus()).toBeNull();
+  });
+
+  it('gives the next note a fresh editor that reports only its own connection', async () => {
+    const { rerender } = await openEditor();
+    const previousEditor = collaborativeEditor();
+    act(() => reportConnectionState?.('connected'));
+    followLink(rerender);
+
+    await clickEdit();
+    await waitFor(() => expect(collaborativeEditor()).toBeInTheDocument());
+
+    expect(collaborativeEditor()).not.toBe(previousEditor);
+    expect(collaborativeEditor()).toHaveAttribute('data-note-id', 'note-2');
+    expect(collaborativeEditor()).toHaveAttribute('data-share-token', 'tok-2');
+    expect(connectionStatus()).toBeNull();
+
+    act(() => reportConnectionState?.('connecting'));
+    expect(connectionStatus()).toHaveTextContent(
+      'editor.connection.connecting'
+    );
+  });
+
+  it('does not carry the previous note edits into the next note', async () => {
+    const { rerender } = await openEditor();
+    act(() => reportUpdate?.('<p>draft for the first note</p>'));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'shared.viewButton' })
+    );
+    expect(screen.getByTestId('read-only-editor')).toHaveTextContent(
+      '<p>draft for the first note</p>'
+    );
+
+    followLink(rerender);
+
+    expect(screen.getByTestId('read-only-editor')).toHaveTextContent(
+      '<p>other body</p>'
+    );
+  });
+
+  it('keeps an edit request still pending for the previous note from opening the next one', async () => {
+    let release: ((ready: boolean) => void) | undefined;
+    ensureGuestSession.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      })
+    );
+    const { rerender } = renderPage();
+    await clickEdit();
+
+    followLink(rerender);
+    await act(async () => {
+      release?.(true);
+    });
+
+    expect(screen.queryByTestId('collaborative-editor')).toBeNull();
+    expect(screen.getByTestId('read-only-editor')).toHaveTextContent(
+      '<p>other body</p>'
+    );
+  });
+
+  it('opens the next note study tools fresh, with nothing selected', () => {
+    sharedArtifacts.data = artifactFixtures;
+    const { rerender } = renderPage();
+    const previousStudyTools = screen.getByTestId('study-tools-tab');
+    act(() => studyToolsProps.last?.onSelectArtifact('a1'));
+    expect(studyToolsProps.last?.selectedArtifactId).toBe('a1');
+
+    followLink(rerender);
+
+    expect(previousStudyTools).not.toBeInTheDocument();
+    expect(studyToolsProps.last?.noteId).toBe('note-2');
+    expect(studyToolsProps.last?.selectedArtifactId).toBeNull();
   });
 });

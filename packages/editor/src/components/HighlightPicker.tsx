@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import type { ToolbarItemProps } from '../hooks/useRovingToolbar';
 import { toolbarButtonClasses } from './toolbar-button.styles';
 
 const HIGHLIGHT_COLORS = [
@@ -25,11 +26,14 @@ const HIGHLIGHT_COLORS = [
   { labelKey: 'editor.highlight.colorPurple', value: '#e9d5ff' },
 ] as const;
 
-interface HighlightPickerProps {
+interface HighlightPickerProps extends ToolbarItemProps {
   editor: Editor;
 }
 
-export function HighlightPicker({ editor }: HighlightPickerProps) {
+export function HighlightPicker({
+  editor,
+  ...itemProps
+}: HighlightPickerProps) {
   const { t } = useTranslation('notes');
   const isActive = editor.isActive('highlight');
   const label = t('editor.highlight.label');
@@ -40,6 +44,7 @@ export function HighlightPicker({ editor }: HighlightPickerProps) {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
+              {...itemProps}
               type="button"
               variant="ghost"
               size="sm"

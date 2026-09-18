@@ -1,4 +1,10 @@
-import type { ReactNode } from 'react';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
 
 import { NAVIGATION_LINKS } from '@/config/navigation.config';
 import { ROUTES } from '@/config/routes.config';
@@ -25,21 +31,6 @@ vi.mock('react-i18next', () => ({
     t: (key: string, opts?: Record<string, unknown>) =>
       opts ? `${key} ${JSON.stringify(opts)}` : key,
   }),
-}));
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({
-    to,
-    children,
-    onClick,
-  }: {
-    to: string;
-    children: ReactNode;
-    onClick?: () => void;
-  }) => (
-    <a href={to} onClick={onClick}>
-      {children}
-    </a>
-  ),
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlags: () => flagsQuery,
@@ -71,11 +62,61 @@ beforeEach(() => {
   statsQuery = { data: makeStats(), isPending: false, isError: false };
 });
 
+async function renderNavigation(path = '/dashboard', links = NAVIGATION_LINKS) {
+  const rootRoute = createRootRoute({
+    component: () => <NavigationLinks links={links} />,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([
+      createRoute({ getParentRoute: () => rootRoute, path: '/dashboard' }),
+      createRoute({ getParentRoute: () => rootRoute, path: '/study' }),
+    ]),
+    history: createMemoryHistory({ initialEntries: [path] }),
+  });
+  render(<RouterProvider router={router} />);
+  await screen.findByRole('navigation');
+}
+
 describe('NavigationLinks', () => {
-  it('shows the review item, labelled from common.json, when the flag is on', () => {
+  it('aligns primary links on the shared icon rail with a taller row', async () => {
+    isStudyEnabled = true;
+    await renderNavigation();
+
+    expect(screen.getByRole('navigation')).toHaveClass('px-3');
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).toHaveClass(
+        'min-h-9',
+        'px-2',
+        'gap-2',
+        'rounded-md',
+        'pointer-coarse:min-h-11'
+      );
+      expect(link.firstElementChild).toHaveClass('w-4', 'shrink-0');
+    }
+  });
+
+  it('preserves route selection with the shared active and idle treatment', async () => {
+    isStudyEnabled = true;
+    await renderNavigation('/study');
+
+    expect(screen.getByRole('link', { name: 'labels.study' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(
+      screen.getByRole('link', { name: 'labels.home' })
+    ).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'labels.home' })).toHaveClass(
+      'text-foreground',
+      'dark:text-muted-foreground',
+      'hover:text-primary'
+    );
+  });
+
+  it('shows the review item, labelled from common.json, when the flag is on', async () => {
     isStudyEnabled = true;
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(screen.getByRole('link', { name: /labels\.study/ })).toHaveAttribute(
       'href',
@@ -83,21 +124,21 @@ describe('NavigationLinks', () => {
     );
   });
 
-  it('hides the review item when the flag is off', () => {
+  it('hides the review item when the flag is off', async () => {
     isStudyEnabled = false;
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(
       screen.queryByRole('link', { name: /labels\.study/ })
     ).not.toBeInTheDocument();
   });
 
-  it('renders no review item, not even a placeholder, while the flag is still loading', () => {
+  it('renders no review item, not even a placeholder, while the flag is still loading', async () => {
     flagsQuery = { isPending: true, isError: false };
     isStudyEnabled = false;
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(
       screen.queryByRole('link', { name: /labels\.study/ })
@@ -107,38 +148,38 @@ describe('NavigationLinks', () => {
     );
   });
 
-  it('asks for no study stats while the flag is off', () => {
+  it('asks for no study stats while the flag is off', async () => {
     isStudyEnabled = false;
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
       enabled: false,
     });
   });
 
-  it('asks for no study stats until the flags have settled', () => {
+  it('asks for no study stats until the flags have settled', async () => {
     flagsQuery = { isPending: true, isError: false };
     isStudyEnabled = true;
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
       enabled: false,
     });
   });
 
-  it('asks for the study stats once the flag is on', () => {
+  it('asks for the study stats once the flag is on', async () => {
     isStudyEnabled = true;
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(studyStatsSpy).toHaveBeenCalledWith(BROWSER_TIME_ZONE, {
       enabled: true,
     });
   });
 
-  it('shows the due count on the review item', () => {
+  it('shows the due count on the review item', async () => {
     isStudyEnabled = true;
     statsQuery = {
       data: makeStats({ dueCount: 7 }),
@@ -146,14 +187,14 @@ describe('NavigationLinks', () => {
       isError: false,
     };
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(
       screen.getByRole('link', { name: /labels\.study/ })
     ).toHaveTextContent('7');
   });
 
-  it('names the due count instead of leaving a bare number', () => {
+  it('names the due count instead of leaving a bare number', async () => {
     isStudyEnabled = true;
     statsQuery = {
       data: makeStats({ dueCount: 7 }),
@@ -161,7 +202,7 @@ describe('NavigationLinks', () => {
       isError: false,
     };
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(
       screen.getByRole('link', { name: /labels\.studyDueCount/ })
@@ -172,7 +213,7 @@ describe('NavigationLinks', () => {
     expect(screen.getByText('7')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('renders no badge when nothing is due', () => {
+  it('renders no badge when nothing is due', async () => {
     isStudyEnabled = true;
     statsQuery = {
       data: makeStats({ dueCount: 0 }),
@@ -180,7 +221,7 @@ describe('NavigationLinks', () => {
       isError: false,
     };
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(
       screen.getByRole('link', { name: /labels\.study/ })
@@ -190,7 +231,7 @@ describe('NavigationLinks', () => {
     ).toBe('labels.study');
   });
 
-  it('ignores new cards for the badge, counting only what is due', () => {
+  it('ignores new cards for the badge, counting only what is due', async () => {
     isStudyEnabled = true;
     statsQuery = {
       data: makeStats({ dueCount: 0, newCount: 9 }),
@@ -198,7 +239,7 @@ describe('NavigationLinks', () => {
       isError: false,
     };
 
-    render(<NavigationLinks links={NAVIGATION_LINKS} />);
+    await renderNavigation();
 
     expect(
       screen.getByRole('link', { name: /labels\.study/ }).textContent

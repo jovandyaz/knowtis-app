@@ -19,7 +19,7 @@
     "study": "Repasar",
     "studyDueCount_one": "{{count}} tarjeta pendiente",
     "studyDueCount_other": "{{count}} tarjetas pendientes",
-    "search": "Buscar",
+    "searchNotes": "Buscar notas",
     "notes": "Notas",
     "flashcards": "Flashcards",
     "expand": "Expandir",
@@ -37,6 +37,8 @@
     "loading": "Cargando...",
     "saving": "Guardando...",
     "saved": "Guardado",
+    "pendingChanges": "Cambios sin guardar",
+    "saveFailed": "No se pudo guardar",
     "comingSoon": "Próximamente"
   },
   "errors": {
@@ -63,7 +65,8 @@
     "signedOutSuccess": "Sesión cerrada exitosamente",
     "createAccount": "Crear cuenta",
     "signIn": "Iniciar sesión",
-    "account": "Cuenta"
+    "account": "Cuenta",
+    "accountLabel": "Cuenta: {{name}}"
   },
   "welcome": {
     "goodMorning": "Buenos días",

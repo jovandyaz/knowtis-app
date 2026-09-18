@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@knowtis/design-system';
-import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
+import { ACCESS } from '@knowtis/shared-types';
 
 import { NoteActionsMenu } from './NoteActionsMenu';
 
@@ -32,6 +32,7 @@ interface NoteCardProps {
 export const NoteCard = memo(function NoteCard({ note }: NoteCardProps) {
   const { t } = useTranslation('notes');
   const contentPreview = createPreview(note.content);
+  const accessBadge = ACCESS_BADGE_CONFIG[note.accessLevel];
 
   return (
     <motion.div
@@ -55,16 +56,10 @@ export const NoteCard = memo(function NoteCard({ note }: NoteCardProps) {
               </CardTitle>
               {note.accessLevel !== ACCESS.OWNER && (
                 <Badge
-                  variant={
-                    ACCESS_BADGE_CONFIG[note.accessLevel as NoteAccessLevel]
-                      .variant
-                  }
+                  variant={accessBadge.variant}
                   className="shrink-0 text-[10px] px-1.5 py-0"
                 >
-                  {
-                    ACCESS_BADGE_CONFIG[note.accessLevel as NoteAccessLevel]
-                      .label
-                  }
+                  {t(accessBadge.labelKey)}
                 </Badge>
               )}
             </div>

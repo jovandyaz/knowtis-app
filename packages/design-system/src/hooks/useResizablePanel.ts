@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { useMotionPreset } from '../motion/useMotionPreset';
 
@@ -11,7 +17,8 @@ const KEYBOARD_MIN_WIDTH = 1;
 export type PanelSide = 'left' | 'right';
 
 export interface ResizablePanelConfig {
-  /** Width when the panel first opens */
+  /** Width the panel opens at until the user resizes it; once they have,
+   *  their width wins over any later default. */
   defaultWidth: number;
   /** Minimum usable width — snaps up to this on release if above collapse threshold */
   minWidth?: number;
@@ -23,7 +30,8 @@ export interface ResizablePanelConfig {
   isOpen: boolean;
   /** Called when the panel collapses via drag or keyboard */
   onCollapse: () => void;
-  /** Called whenever the width changes — use to sync external state */
+  /** Called whenever the width changes, before the browser paints it, so
+   *  layout that follows the panel never shows a stale width. */
   onWidthChange?: (width: number) => void;
   /** Called with the width the user settled on, after a drag release that does
    *  not collapse and after every keyboard adjustment — use to persist it. */
@@ -125,24 +133,38 @@ export function useResizablePanel({
   side,
 }: ResizablePanelConfig): ResizablePanelState {
   const { reduced } = useMotionPreset();
-  const [width, setWidth] = useState(isOpen ? defaultWidth : 0);
+  const [userWidth, setWidth] = useState(isOpen ? defaultWidth : 0);
+  // Layout can take the room back at any time, so the maximum is applied on
+  // read: the width the user chose survives and returns when the room does.
+  const width = Math.min(userWidth, maxWidth);
+  // A minimum above the maximum would push the panel past the room it has.
+  const effectiveMinWidth = Math.min(minWidth, maxWidth);
   const [isDragging, setIsDragging] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const widthRef = useRef(width);
+  const userWidthRef = useRef(userWidth);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
   const snapTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const prevIsOpenRef = useRef(isOpen);
   const lastUserWidthRef = useRef(defaultWidth);
+  const userSetWidthRef = useRef(false);
   const targetWidthRef = useRef<number | undefined>(undefined);
   const restoreWidthRef = useRef<number | null>(null);
 
   useEffect(() => {
     widthRef.current = width;
+    userWidthRef.current = userWidth;
   });
 
   useEffect(() => {
+    if (!userSetWidthRef.current) {
+      lastUserWidthRef.current = defaultWidth;
+    }
+  }, [defaultWidth]);
+
+  useLayoutEffect(() => {
     onWidthChange?.(width);
   }, [width, onWidthChange]);
 
@@ -194,7 +216,9 @@ export function useResizablePanel({
     if (targetWidth !== undefined) {
       if (previousTarget === undefined) {
         restoreWidthRef.current =
-          widthRef.current > 0 ? widthRef.current : lastUserWidthRef.current;
+          userWidthRef.current > 0
+            ? userWidthRef.current
+            : lastUserWidthRef.current;
       }
       animateWidth(
         snapTimeoutRef,
@@ -206,10 +230,7 @@ export function useResizablePanel({
       return;
     }
 
-    const restore = Math.min(
-      restoreWidthRef.current ?? lastUserWidthRef.current,
-      maxWidth
-    );
+    const restore = restoreWidthRef.current ?? lastUserWidthRef.current;
     restoreWidthRef.current = null;
     animateWidth(
       snapTimeoutRef,
@@ -264,9 +285,10 @@ export function useResizablePanel({
           return;
         }
 
-        const snappedWidth = Math.max(currentWidth, minWidth);
+        const snappedWidth = Math.max(currentWidth, effectiveMinWidth);
         if (targetWidthRef.current === undefined) {
           lastUserWidthRef.current = snappedWidth;
+          userSetWidthRef.current = true;
           onResizeEnd?.(snappedWidth);
         }
 
@@ -279,7 +301,14 @@ export function useResizablePanel({
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
-    [maxWidth, minWidth, collapseThreshold, onCollapse, onResizeEnd, side]
+    [
+      maxWidth,
+      effectiveMinWidth,
+      collapseThreshold,
+      onCollapse,
+      onResizeEnd,
+      side,
+    ]
   );
 
   const handleKeyDown = useCallback(
@@ -297,7 +326,7 @@ export function useResizablePanel({
         e.key,
         widthRef.current,
         side,
-        minWidth,
+        effectiveMinWidth,
         maxWidth
       );
       if (next === null) {
@@ -310,13 +339,13 @@ export function useResizablePanel({
         return;
       }
 
-      const clamped = Math.max(
-        KEYBOARD_MIN_WIDTH,
-        minWidth,
-        Math.min(maxWidth, next)
+      const clamped = Math.min(
+        maxWidth,
+        Math.max(KEYBOARD_MIN_WIDTH, effectiveMinWidth, next)
       );
       widthRef.current = clamped;
       lastUserWidthRef.current = clamped;
+      userSetWidthRef.current = true;
       setWidth(clamped);
       onResizeEnd?.(clamped);
     },
@@ -324,7 +353,7 @@ export function useResizablePanel({
       isOpen,
       isDragging,
       targetWidth,
-      minWidth,
+      effectiveMinWidth,
       maxWidth,
       side,
       onCollapse,

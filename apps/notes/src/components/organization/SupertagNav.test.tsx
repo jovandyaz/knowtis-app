@@ -7,7 +7,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,7 +66,7 @@ describe('SupertagNav', () => {
     supertagCounts.mockReturnValue({ ...noCounts, person: 3, meeting: 1 });
   });
 
-  it('should render nothing while no type is in use', () => {
+  it('should render nothing while no type is in use', async () => {
     supertagCounts.mockReturnValue(noCounts);
     const rootRoute = createRootRoute({ component: () => <SupertagNav /> });
     const router = createRouter({
@@ -74,7 +74,9 @@ describe('SupertagNav', () => {
       history: createMemoryHistory({ initialEntries: ['/notes'] }),
     });
 
-    render(<RouterProvider router={router} />);
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+    });
 
     expect(
       screen.queryByText('organization.typesTitle')
@@ -146,5 +148,14 @@ describe('SupertagNav', () => {
 
     expect(row).toHaveClass(...NAV_ROW.split(' '));
     expect(row?.firstElementChild).toHaveClass(...NAV_ICON_SLOT.split(' '));
+    expect(row?.firstElementChild).toHaveClass('w-4', 'shrink-0');
+    expect(row?.querySelector('svg')).toHaveClass('h-4', 'w-4');
+    expect(row?.querySelector('svg')).not.toHaveClass('opacity-60');
+    expect(screen.getByText('3')).toHaveClass(
+      'tabular-nums',
+      'text-foreground',
+      'dark:text-muted-foreground'
+    );
+    expect(screen.getByText('3')).not.toHaveClass('text-muted-foreground/60');
   });
 });

@@ -12,12 +12,12 @@ import { AgentComposer } from './AgentComposer';
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (k: string, opts?: Record<string, unknown>) =>
-      opts?.['mod'] ? `${k}:${String(opts['mod'])}` : k,
+      opts?.['shortcut'] ? `${k}:${String(opts['shortcut'])}` : k,
   }),
 }));
 vi.mock('@knowtis/shared-util', async (importOriginal) => ({
   ...(await importOriginal<typeof SharedUtil>()),
-  modifierKeyLabel: () => '⌘',
+  formatShortcut: (shortcut: string) => shortcut,
 }));
 
 type Handlers = Partial<
@@ -215,8 +215,8 @@ describe('AgentComposer', () => {
 
   it.each([
     ['idle', 0, 'ai.copilot.composerHint'],
-    ['streaming', 0, 'ai.copilot.composerHintBusy:⌘'],
-    ['pendingProposal', 2, 'ai.copilot.composerHintBusy:⌘'],
+    ['streaming', 0, 'ai.copilot.composerHintBusy:Mod+Enter'],
+    ['pendingProposal', 2, 'ai.copilot.composerHintBusy:Mod+Enter'],
     ['idle', 2, 'ai.copilot.composerHintPaused'],
     ['error', 1, 'ai.copilot.composerHintPaused'],
   ] as const)(

@@ -77,6 +77,18 @@ function resolving(profile: AuthUserProfile) {
 }
 
 describe('VerifyEmailBanner', () => {
+  it('aligns the interruption with the shell padding without adding a divider', async () => {
+    renderBanner(resolving(UNVERIFIED));
+    const banner = await screen.findByRole('status');
+    expect(banner).toHaveClass('px-4', 'bg-(--primary)/5');
+    expect(banner).not.toHaveClass(
+      'mx-4',
+      'md:mx-8',
+      'border',
+      'border-b',
+      'shadow-sm'
+    );
+  });
   it('asks an unverified account to verify', async () => {
     renderBanner(resolving(UNVERIFIED));
 

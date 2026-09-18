@@ -48,14 +48,13 @@ export function SupertagNav({ onNavigate }: SupertagNavProps) {
           search={{ supertag: type, view: 'all' }}
           onClick={onNavigate}
           activeProps={{}}
-          inactiveProps={{}}
           aria-current={activeType === type ? 'page' : undefined}
           className={`${NAV_ROW} ${
             activeType === type ? NAV_ROW_ACTIVE : NAV_ROW_IDLE
           }`}
         >
           <span className={NAV_ICON_SLOT}>
-            <Shapes className="h-3 w-3 opacity-60" />
+            <Shapes className="h-4 w-4" />
           </span>
           <span className={NAV_LABEL}>
             {t(`organization.supertags.names.${type}`)}

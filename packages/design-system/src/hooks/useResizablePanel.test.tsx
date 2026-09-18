@@ -1,6 +1,7 @@
-import type {
-  KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent,
+import {
+  useLayoutEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 
 import { act, fireEvent, renderHook } from '@testing-library/react';
@@ -24,8 +25,10 @@ const COLLAPSE_THRESHOLD = 240;
 const KEYBOARD_STEP = 8;
 
 interface PanelProps {
+  defaultWidth?: number;
   isOpen?: boolean;
   minWidth?: number;
+  maxWidth?: number;
   targetWidth?: number;
   onCollapse?: () => void;
   onResizeEnd?: (width: number) => void;
@@ -37,17 +40,19 @@ const noop = () => undefined;
 function renderPanel(initialProps: PanelProps = {}) {
   return renderHook(
     ({
+      defaultWidth = DEFAULT_WIDTH,
       isOpen = true,
       minWidth = MIN_WIDTH,
+      maxWidth = MAX_WIDTH,
       targetWidth,
       onCollapse = noop,
       onResizeEnd = noop,
       side = 'right',
     }: PanelProps) =>
       useResizablePanel({
-        defaultWidth: DEFAULT_WIDTH,
+        defaultWidth,
         minWidth,
-        maxWidth: MAX_WIDTH,
+        maxWidth,
         collapseThreshold: COLLAPSE_THRESHOLD,
         isOpen,
         onCollapse,
@@ -150,6 +155,71 @@ describe('useResizablePanel', () => {
     expect(onCollapse).not.toHaveBeenCalled();
   });
 
+  it('restores the chosen width, not the clamped one, once a target is released', async () => {
+    const { result, rerender } = renderPanel();
+    rerender({ maxWidth: 400 });
+
+    rerender({ maxWidth: 400, targetWidth: 700 });
+    await flushFrames();
+    rerender({ maxWidth: 400 });
+    await flushFrames();
+    rerender({ maxWidth: MAX_WIDTH });
+
+    expect(result.current.width).toBe(DEFAULT_WIDTH);
+  });
+
+  it('holds the panel inside a maximum that shrank under it', () => {
+    const onResizeEnd = vi.fn();
+    const { result, rerender } = renderPanel({ onResizeEnd });
+
+    rerender({ maxWidth: 400, onResizeEnd });
+
+    expect(result.current.width).toBe(400);
+    expect(result.current.handleProps['aria-valuemax']).toBe(400);
+    expect(onResizeEnd).not.toHaveBeenCalled();
+    expectAnnouncedRangeHolds(result);
+  });
+
+  it('gives the width back when the maximum grows again', () => {
+    const { result, rerender } = renderPanel();
+
+    rerender({ maxWidth: 400 });
+    rerender({ maxWidth: MAX_WIDTH });
+
+    expect(result.current.width).toBe(DEFAULT_WIDTH);
+  });
+
+  it('keeps a drag inside a maximum that shrank under it', () => {
+    const { result, rerender } = renderPanel();
+    rerender({ maxWidth: 400 });
+
+    dragTo(result, -200);
+
+    expect(result.current.width).toBe(400);
+  });
+
+  it('reports the width before the browser paints', () => {
+    const reported: number[] = [];
+    const reportedBeforePaint: number[][] = [];
+    renderHook(() => {
+      useResizablePanel({
+        defaultWidth: DEFAULT_WIDTH,
+        minWidth: MIN_WIDTH,
+        maxWidth: MAX_WIDTH,
+        collapseThreshold: COLLAPSE_THRESHOLD,
+        isOpen: true,
+        onCollapse: noop,
+        onWidthChange: (width) => reported.push(width),
+        side: 'left',
+      });
+      useLayoutEffect(() => {
+        reportedBeforePaint.push([...reported]);
+      }, []);
+    });
+
+    expect(reportedBeforePaint).toEqual([[DEFAULT_WIDTH]]);
+  });
+
   it('exposes the resize bounds through ARIA', () => {
     const { result } = renderPanel();
 
@@ -180,6 +250,68 @@ describe('useResizablePanel', () => {
     expect(result.current.isVisible).toBe(true);
     expect(result.current.width).toBe(0);
     expectAnnouncedRangeHolds(result);
+  });
+});
+
+describe('useResizablePanel default width', () => {
+  it('reopens at a default width that changed before the user resized', async () => {
+    const { result, rerender } = renderPanel({ isOpen: false });
+
+    rerender({ isOpen: false, defaultWidth: 400 });
+    rerender({ isOpen: true, defaultWidth: 400 });
+    await flushFrames();
+
+    expect(result.current.width).toBe(400);
+  });
+
+  it('follows a changed default width back after a close', async () => {
+    const { result, rerender } = renderPanel();
+
+    rerender({ defaultWidth: 400 });
+    rerender({ isOpen: false, defaultWidth: 400 });
+    await flushFrames();
+    rerender({ isOpen: true, defaultWidth: 400 });
+    await flushFrames();
+
+    expect(result.current.width).toBe(400);
+  });
+
+  it('keeps the width the user set over a later default width', async () => {
+    const { result, rerender } = renderPanel();
+
+    pressKey(result, 'ArrowLeft');
+    rerender({ defaultWidth: 400 });
+    rerender({ isOpen: false, defaultWidth: 400 });
+    await flushFrames();
+    rerender({ isOpen: true, defaultWidth: 400 });
+    await flushFrames();
+
+    expect(result.current.width).toBe(DEFAULT_WIDTH + KEYBOARD_STEP);
+  });
+
+  it('keeps the width the user dragged to over a later default width', async () => {
+    const { result, rerender } = renderPanel();
+
+    dragTo(result, -100);
+    rerender({ defaultWidth: 400 });
+    rerender({ isOpen: false, defaultWidth: 400 });
+    await flushFrames();
+    rerender({ isOpen: true, defaultWidth: 400 });
+    await flushFrames();
+
+    expect(result.current.width).toBe(DEFAULT_WIDTH + 100);
+  });
+
+  it('restores a changed default width once a target width is released', async () => {
+    const { result, rerender } = renderPanel({ isOpen: false });
+
+    rerender({ isOpen: false, defaultWidth: 400 });
+    rerender({ isOpen: true, defaultWidth: 400, targetWidth: 700 });
+    await flushFrames();
+    rerender({ isOpen: true, defaultWidth: 400 });
+    await flushFrames();
+
+    expect(result.current.width).toBe(400);
   });
 });
 
@@ -324,6 +456,70 @@ describe('useResizablePanel keyboard resizing', () => {
     fireEvent.mouseUp(document);
     expect(onResizeEnd).toHaveBeenCalledTimes(1);
     expect(onResizeEnd).toHaveBeenCalledWith(DEFAULT_WIDTH + 100);
+  });
+});
+
+describe('useResizablePanel with a minimum above its maximum', () => {
+  const INVERTED_MIN_WIDTH = 400;
+  const INVERTED_MAX_WIDTH = 280;
+
+  const renderInverted = (onResizeEnd: (width: number) => void = noop) =>
+    renderPanel({
+      minWidth: INVERTED_MIN_WIDTH,
+      maxWidth: INVERTED_MAX_WIDTH,
+      onResizeEnd,
+    });
+
+  it('holds keyboard steps at the maximum', () => {
+    const onResizeEnd = vi.fn();
+    const { result } = renderInverted(onResizeEnd);
+
+    pressKey(result, 'ArrowRight');
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expect(onResizeEnd).toHaveBeenLastCalledWith(INVERTED_MAX_WIDTH);
+
+    pressKey(result, 'ArrowLeft');
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expect(onResizeEnd).toHaveBeenLastCalledWith(INVERTED_MAX_WIDTH);
+    expectAnnouncedRangeHolds(result);
+  });
+
+  it('sends Home and End to the maximum', () => {
+    const onResizeEnd = vi.fn();
+    const { result } = renderInverted(onResizeEnd);
+
+    pressKey(result, 'Home');
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expect(onResizeEnd).toHaveBeenLastCalledWith(INVERTED_MAX_WIDTH);
+
+    pressKey(result, 'End');
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expect(onResizeEnd).toHaveBeenLastCalledWith(INVERTED_MAX_WIDTH);
+    expect(onResizeEnd).toHaveBeenCalledTimes(2);
+  });
+
+  it('snaps a drag release up to the maximum, not the minimum', () => {
+    const onResizeEnd = vi.fn();
+    const { result } = renderInverted(onResizeEnd);
+
+    dragTo(result, 20);
+
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd).toHaveBeenCalledWith(INVERTED_MAX_WIDTH);
+  });
+
+  it('renders at its maximum and settles there without a snap to the minimum', () => {
+    const { result } = renderInverted();
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expectAnnouncedRangeHolds(result);
+
+    dragTo(result, -20);
+
+    expect(result.current.width).toBe(INVERTED_MAX_WIDTH);
+    expect(result.current.isTransitioning).toBe(false);
+    expect(result.current.transitionStyle).toBe('none');
+    expectAnnouncedRangeHolds(result);
   });
 });
 

@@ -25,31 +25,26 @@ describe('useViewportWidth', () => {
     vi.useRealTimers();
   });
 
-  it('does not listen for resizes while disabled', () => {
-    const addEventListener = vi.spyOn(window, 'addEventListener');
-
-    renderHook(() => useViewportWidth(false));
-
-    expect(resizeListenerCount(addEventListener)).toBe(0);
-    addEventListener.mockRestore();
-  });
-
-  it('keeps the width read at call time while disabled', () => {
-    const { result } = renderHook(() => useViewportWidth(false));
-
-    act(() => {
-      resizeTo(1600);
-      vi.advanceTimersByTime(VIEWPORT_RESIZE_DEBOUNCE_MS * 5);
-    });
+  it('reports the width the viewport has on the first render', () => {
+    const { result } = renderHook(() => useViewportWidth());
 
     expect(result.current).toBe(1024);
+  });
+
+  it('listens for resizes as soon as it is mounted', () => {
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+
+    renderHook(() => useViewportWidth());
+
+    expect(resizeListenerCount(addEventListener)).toBe(1);
+    addEventListener.mockRestore();
   });
 
   it('reports one width after a burst of resizes', () => {
     let renders = 0;
     const { result } = renderHook(() => {
       renders += 1;
-      return useViewportWidth(true);
+      return useViewportWidth();
     });
     const rendersBeforeBurst = renders;
 
@@ -69,28 +64,11 @@ describe('useViewportWidth', () => {
     expect(renders).toBe(rendersBeforeBurst + 1);
   });
 
-  it('picks up the width the viewport reached while it was disabled', () => {
-    const { result, rerender } = renderHook(
-      ({ enabled }) => useViewportWidth(enabled),
-      { initialProps: { enabled: false } }
-    );
-
-    act(() => {
-      window.innerWidth = 1600;
-    });
-    rerender({ enabled: true });
-
-    expect(result.current).toBe(1600);
-  });
-
-  it('drops the listener when it is disabled again', () => {
+  it('drops the listener when it unmounts', () => {
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
-    const { rerender } = renderHook(
-      ({ enabled }) => useViewportWidth(enabled),
-      { initialProps: { enabled: true } }
-    );
+    const { unmount } = renderHook(() => useViewportWidth());
 
-    rerender({ enabled: false });
+    unmount();
 
     expect(resizeListenerCount(removeEventListener)).toBe(1);
     removeEventListener.mockRestore();
