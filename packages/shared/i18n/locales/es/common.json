@@ -37,6 +37,8 @@
     "loading": "Cargando...",
     "saving": "Guardando...",
     "saved": "Guardado",
+    "pendingChanges": "Cambios sin guardar",
+    "saveFailed": "No se pudo guardar",
     "comingSoon": "Próximamente"
   },
   "errors": {

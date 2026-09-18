@@ -37,6 +37,8 @@
     "loading": "Loading...",
     "saving": "Saving...",
     "saved": "Saved",
+    "pendingChanges": "Unsaved changes",
+    "saveFailed": "Couldn't save",
     "comingSoon": "Coming soon"
   },
   "errors": {

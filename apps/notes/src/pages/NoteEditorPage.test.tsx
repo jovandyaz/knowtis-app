@@ -3,13 +3,15 @@ import type { ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
+import type { NoteSaveState } from '@/components/editor/NoteControlsPortal';
+import { DEBOUNCE_DELAYS } from '@/lib';
 import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
 
-import { NoteEditorPage } from './NoteEditorPage';
+import { NoteEditorPage, SAVED_STATE_DISPLAY_MS } from './NoteEditorPage';
 
 const renderWithClient = (ui: ReactElement) =>
   render(
@@ -102,13 +104,15 @@ vi.mock('@/components/editor/MobileEditorHeader', () => ({
   MobileEditorHeader: () => null,
 }));
 
-const noteControlsProps =
-  vi.fn<(props: { connectionState: DocumentConnectionState | null }) => void>();
+interface CapturedControlsProps {
+  connectionState: DocumentConnectionState | null;
+  saveState: NoteSaveState;
+}
+
+const noteControlsProps = vi.fn<(props: CapturedControlsProps) => void>();
 
 vi.mock('@/components/editor/NoteControlsPortal', () => ({
-  NoteControlsPortal: (props: {
-    connectionState: DocumentConnectionState | null;
-  }) => {
+  NoteControlsPortal: (props: CapturedControlsProps) => {
     noteControlsProps(props);
     return null;
   },
@@ -145,7 +149,7 @@ function loadNote(overrides: Partial<typeof loadedNote.data>) {
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => noteQuery(),
-  useUpdateNote: () => ({ mutate: updateNoteMutate, isPending: false }),
+  useUpdateNote: () => ({ mutate: updateNoteMutate }),
   useDeleteNote: () => ({ mutate: vi.fn() }),
   useRestoreNote: () => ({ mutate: vi.fn() }),
   useSuggestOrganization: () => ({
@@ -163,7 +167,7 @@ describe('NoteEditorPage', () => {
     capturedOnEditorReady = undefined;
     capturedOnConnectionStateChange = undefined;
     noteControlsProps.mockClear();
-    updateNoteMutate.mockClear();
+    updateNoteMutate.mockReset();
     captureProductEvent.mockClear();
     propertiesRowProps.mockClear();
     noteQuery.mockReturnValue(loadedNote);
@@ -326,7 +330,7 @@ describe('NoteEditorPage', () => {
     }
   });
 
-  it('does not re-render the editor subtree on content keystrokes', () => {
+  it('re-renders the editor subtree once per autosave burst, never per keystroke', () => {
     renderWithClient(<NoteEditorPage />);
     expect(editorRenders.count).toBe(1);
 
@@ -335,8 +339,204 @@ describe('NoteEditorPage', () => {
       capturedOnUpdate?.('<p>hello wo</p>');
       capturedOnUpdate?.('<p>hello world</p>');
     });
+    expect(editorRenders.count).toBe(2);
 
-    expect(editorRenders.count).toBe(1);
+    act(() => {
+      capturedOnUpdate?.('<p>hello world again</p>');
+      capturedOnUpdate?.('<p>hello world again and again</p>');
+    });
+
+    expect(editorRenders.count).toBe(2);
+  });
+
+  describe('save status', () => {
+    interface SaveHandlers {
+      onSuccess: () => void;
+      onError: (error: Error) => void;
+    }
+
+    const succeed = (_input: unknown, handlers: SaveHandlers) =>
+      handlers.onSuccess();
+    const fail = (_input: unknown, handlers: SaveHandlers) =>
+      handlers.onError(new Error('offline'));
+
+    const saveState = () => noteControlsProps.mock.lastCall?.[0].saveState;
+
+    const edit = async (html: string) => {
+      await act(async () => {
+        capturedOnUpdate?.(html);
+      });
+    };
+
+    const runDebounce = async () => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_DELAYS.AUTO_SAVE);
+      });
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('starts idle and reports queued changes while the debounce runs', async () => {
+      renderWithClient(<NoteEditorPage />);
+      expect(saveState()).toBe('idle');
+
+      await edit('<p>first words</p>');
+
+      expect(saveState()).toBe('pending');
+      expect(updateNoteMutate).not.toHaveBeenCalled();
+    });
+
+    it('reports the request in flight and claims success only once it settles', async () => {
+      let settle: (() => void) | undefined;
+      updateNoteMutate.mockImplementation(
+        (_input: unknown, handlers: SaveHandlers) => {
+          settle = handlers.onSuccess;
+        }
+      );
+      renderWithClient(<NoteEditorPage />);
+
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('saving');
+
+      await act(async () => settle?.());
+
+      expect(saveState()).toBe('saved');
+    });
+
+    it('does not claim success while a newer edit is already queued', async () => {
+      let settle: (() => void) | undefined;
+      updateNoteMutate.mockImplementation(
+        (_input: unknown, handlers: SaveHandlers) => {
+          settle = handlers.onSuccess;
+        }
+      );
+      renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+
+      await edit('<p>second words</p>');
+      await act(async () => settle?.());
+
+      expect(saveState()).toBe('pending');
+    });
+
+    it('keeps a failed save on screen instead of falling back to the earlier success', async () => {
+      updateNoteMutate.mockImplementation(succeed);
+      renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('saved');
+
+      updateNoteMutate.mockImplementation(fail);
+      await edit('<p>second words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('error');
+
+      act(() => capturedOnConnectionStateChange?.('connected'));
+
+      expect(saveState()).toBe('error');
+    });
+
+    it('clears the failure once a later attempt succeeds', async () => {
+      updateNoteMutate.mockImplementation(fail);
+      renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('error');
+
+      updateNoteMutate.mockImplementation(succeed);
+      await edit('<p>second words</p>');
+      await runDebounce();
+
+      expect(saveState()).toBe('saved');
+    });
+
+    it('returns the saved indicator to idle after its display duration', async () => {
+      updateNoteMutate.mockImplementation(succeed);
+      renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('saved');
+
+      await act(async () => {
+        vi.advanceTimersByTime(SAVED_STATE_DISPLAY_MS);
+      });
+
+      expect(saveState()).toBe('idle');
+    });
+
+    it('does not let a stale saved timer clobber a newer pending edit', async () => {
+      updateNoteMutate.mockImplementation(succeed);
+      renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('saved');
+
+      let settle: (() => void) | undefined;
+      updateNoteMutate.mockImplementation(
+        (_input: unknown, handlers: SaveHandlers) => {
+          settle = handlers.onSuccess;
+        }
+      );
+      await edit('<p>second words</p>');
+      expect(saveState()).toBe('pending');
+
+      await act(async () => {
+        vi.advanceTimersByTime(SAVED_STATE_DISPLAY_MS);
+      });
+
+      expect(saveState()).not.toBe('idle');
+      expect(saveState()).toBe('saving');
+      expect(settle).toBeInstanceOf(Function);
+    });
+
+    it('does not let a stale saved timer clobber an error', async () => {
+      updateNoteMutate.mockImplementation(succeed);
+      renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('saved');
+
+      updateNoteMutate.mockImplementation(fail);
+      await edit('<p>second words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('error');
+
+      await act(async () => {
+        vi.advanceTimersByTime(SAVED_STATE_DISPLAY_MS);
+      });
+
+      expect(saveState()).toBe('error');
+    });
+
+    it('clears the saved timer on unmount', async () => {
+      updateNoteMutate.mockImplementation(succeed);
+      const { unmount } = renderWithClient(<NoteEditorPage />);
+      await edit('<p>first words</p>');
+      await runDebounce();
+      expect(saveState()).toBe('saved');
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+      await edit('<p>more words</p>');
+      await runDebounce();
+      const savedTimerCall = setTimeoutSpy.mock.calls.findIndex(
+        ([, delay]) => delay === SAVED_STATE_DISPLAY_MS
+      );
+      const savedTimerId = setTimeoutSpy.mock.results[savedTimerCall]?.value;
+
+      unmount();
+
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(savedTimerId);
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
   });
 
   describe('load errors', () => {

@@ -8,7 +8,10 @@ import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
 import { DocumentConnectionStatus } from '@/components/editor/DocumentConnectionStatus';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
-import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
+import {
+  NoteControlsPortal,
+  type NoteSaveState,
+} from '@/components/editor/NoteControlsPortal';
 import { NoteEditorSkeleton } from '@/components/editor/NoteEditorSkeleton';
 import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
@@ -75,6 +78,15 @@ function noteLoadErrorKey(error: unknown): NoteLoadErrorKey {
   return NOTE_LOAD_ERROR_KEYS[error.code] ?? GENERIC_NOTE_LOAD_ERROR_KEY;
 }
 
+interface NoteUpdateDraft {
+  title: string;
+  content: string;
+}
+
+// Mirrors --animate-fade-out in apps/notes/src/index.css (2.5s) so a
+// reduced-motion "Saved" label still disappears without the CSS animation.
+export const SAVED_STATE_DISPLAY_MS = 2500;
+
 interface NoteEditorProps {
   noteId: string;
   initialTitle: string;
@@ -130,12 +142,10 @@ function NoteEditor({
   const { getYDoc } = useYjs();
   const refreshNotesList = useNotesListRefresh();
   const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [isPendingUpdate, setIsPendingUpdate] = useState(false);
+  const [saveState, setSaveState] = useState<NoteSaveState>('idle');
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [connectionState, setConnectionState] =
     useState<DocumentConnectionState | null>(null);
-  const pendingUpdateRef = useRef(false);
   const contentRef = useRef(initialContent);
   const [initiallyEmpty] = useState(() => !hasMeaningfulText(initialContent));
   const activationCapturedRef = useRef(false);
@@ -154,12 +164,8 @@ function NoteEditor({
     [requestSuggestion]
   );
 
-  const debouncedUpdateNote = useDebouncedMerge<{
-    title: string;
-    content: string;
-  }>((updates) => {
-    pendingUpdateRef.current = true;
-    setIsPendingUpdate(true);
+  const debouncedSave = useDebouncedMerge<NoteUpdateDraft>((updates) => {
+    setSaveState('saving');
     // Content saves carry the doc's own CRDT state: the server stores it
     // verbatim, so it never mints a parallel history from the HTML — the
     // root cause of notes duplicating on reload.
@@ -172,18 +178,35 @@ function NoteEditor({
           : {}),
       },
       {
-        onSuccess: () => {
-          setLastSaved(new Date());
-          pendingUpdateRef.current = false;
-          setIsPendingUpdate(false);
-        },
-        onError: () => {
-          pendingUpdateRef.current = false;
-          setIsPendingUpdate(false);
-        },
+        // A newer edit queued mid-flight leaves the state on `pending`, and
+        // this success does not speak for it.
+        onSuccess: () =>
+          setSaveState((current) => (current === 'saving' ? 'saved' : current)),
+        onError: () => setSaveState('error'),
       }
     );
   }, DEBOUNCE_DELAYS.AUTO_SAVE);
+
+  const queueSave = useCallback(
+    (updates: Partial<NoteUpdateDraft>) => {
+      setSaveState('pending');
+      debouncedSave(updates);
+    },
+    [debouncedSave]
+  );
+
+  // Reduced motion drops the CSS fade that used to hide "Saved"; this timer
+  // is what clears it instead. A newer save or an error changes `saveState`
+  // away from `saved` before the timeout fires, which cleans up this effect.
+  useEffect(() => {
+    if (saveState !== 'saved') {
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      setSaveState((current) => (current === 'saved' ? 'idle' : current));
+    }, SAVED_STATE_DISPLAY_MS);
+    return () => clearTimeout(timeoutId);
+  }, [saveState]);
 
   const defaultTitle = t('sidebar.untitled');
   const {
@@ -193,7 +216,7 @@ function NoteEditor({
   } = useAutoTitle({
     initialTitle,
     defaultTitle,
-    onAutoTitleChange: (newTitle) => debouncedUpdateNote({ title: newTitle }),
+    onAutoTitleChange: (newTitle) => queueSave({ title: newTitle }),
   });
 
   const attachLiveEditor = useNoteEditorStore((s) => s.attach);
@@ -253,7 +276,7 @@ function NoteEditor({
     }
     const newTitle = e.target.value;
     onTitleChange(newTitle);
-    debouncedUpdateNote({ title: newTitle });
+    queueSave({ title: newTitle });
   };
 
   const handleContentChange = useCallback(
@@ -276,20 +299,14 @@ function NoteEditor({
       if (!isLiveCollabRef.current) {
         // Live CRDT already holds these edits and persists them via Hocuspocus
         // onStoreDocument; a REST content write would echo back and reset the caret.
-        debouncedUpdateNote({ content: newContent });
+        queueSave({ content: newContent });
       } else {
         refreshNotesList();
       }
       reportEditRef.current(newContent);
       deriveAutoTitle(newContent);
     },
-    [
-      canEdit,
-      debouncedUpdateNote,
-      deriveAutoTitle,
-      initiallyEmpty,
-      refreshNotesList,
-    ]
+    [canEdit, deriveAutoTitle, initiallyEmpty, queueSave, refreshNotesList]
   );
 
   const handleEditorReady = useCallback(
@@ -330,7 +347,6 @@ function NoteEditor({
     }
   }, [voiceNoteEditorOpen, t]);
 
-  const isSaving = updateNote.isPending || isPendingUpdate;
   const openShareDialog = () => setIsShareDialogOpen(true);
   const showVoiceNote = canEdit && aiEnabled && voiceNotesEnabled;
 
@@ -362,8 +378,7 @@ function NoteEditor({
           shareToken,
         }}
         connectionState={connectionState}
-        isSaving={isSaving}
-        hasSaved={!!lastSaved}
+        saveState={saveState}
         shareDialogOpen={isShareDialogOpen}
         onShareDialogOpenChange={setIsShareDialogOpen}
       />

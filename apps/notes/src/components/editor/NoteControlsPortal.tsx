@@ -10,11 +10,12 @@ import { Share2 } from 'lucide-react';
 import {
   Badge,
   Button,
+  cn,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
-import { SaveStatusIndicator } from '@knowtis/editor';
+import { SaveStatusIndicator, type SaveStatus } from '@knowtis/editor';
 import type {
   GeneralAccessLevel,
   NoteAccessLevel,
@@ -25,6 +26,17 @@ import type { DocumentConnectionState } from './CollaborativeEditor.types';
 import { DocumentConnectionStatus } from './DocumentConnectionStatus';
 
 const PORTAL_TARGET_ID = 'note-controls-portal';
+const HEADER_ACTION_CLASSES = 'h-8 w-8 shrink-0';
+
+/** `idle` covers the note nobody has edited yet, which has nothing to report. */
+export type NoteSaveState = SaveStatus | 'idle';
+
+const SAVE_STATE_LABEL_KEYS = {
+  pending: 'states.pendingChanges',
+  saving: 'states.saving',
+  saved: 'states.saved',
+  error: 'states.saveFailed',
+} as const satisfies Record<SaveStatus, string>;
 
 export interface NoteControlsDetails {
   id: string;
@@ -39,8 +51,7 @@ export interface NoteControlsDetails {
 interface NoteControlsPortalProps {
   note: NoteControlsDetails;
   connectionState: DocumentConnectionState | null;
-  isSaving: boolean;
-  hasSaved: boolean;
+  saveState: NoteSaveState;
   shareDialogOpen: boolean;
   onShareDialogOpenChange: (open: boolean) => void;
 }
@@ -48,8 +59,7 @@ interface NoteControlsPortalProps {
 export function NoteControlsPortal({
   note,
   connectionState,
-  isSaving,
-  hasSaved,
+  saveState,
   shareDialogOpen,
   onShareDialogOpenChange,
 }: NoteControlsPortalProps) {
@@ -64,6 +74,8 @@ export function NoteControlsPortal({
     editorsCanShare: note.editorsCanShare,
   });
   const canDelete = canPerformNoteAction(note.accessLevel, 'delete');
+  const showConnection = connectionState !== null;
+  const showSaveState = canEdit && saveState !== 'idle';
 
   if (!portalTarget) {
     return null;
@@ -75,24 +87,40 @@ export function NoteControlsPortal({
         <Badge variant={badgeConfig.variant}>{t(badgeConfig.labelKey)}</Badge>
       )}
 
-      <DocumentConnectionStatus state={connectionState} />
+      {(showConnection || showSaveState) && (
+        <div className="grid shrink-0 grid-flow-col auto-cols-max items-center gap-2 2xl:auto-cols-[minmax(--spacing(20),max-content)]">
+          {showConnection && (
+            <DocumentConnectionStatus state={connectionState} />
+          )}
+          {showSaveState && (
+            <SaveStatusIndicator
+              status={saveState}
+              label={tCommon(SAVE_STATE_LABEL_KEYS[saveState])}
+              className={cn(
+                'text-xs',
+                saveState === 'error'
+                  ? 'text-(--destructive)'
+                  : 'text-(--muted-foreground)'
+              )}
+              transient
+            />
+          )}
+        </div>
+      )}
 
-      {canEdit &&
-        (isSaving ? (
-          <SaveStatusIndicator
-            status="saving"
-            label={tCommon('states.saving')}
-            className="text-xs text-(--muted-foreground)"
-            transient
-          />
-        ) : hasSaved ? (
-          <SaveStatusIndicator
-            status="saved"
-            label={tCommon('states.saved')}
-            className="text-xs text-(--muted-foreground)"
-            transient
-          />
-        ) : null)}
+      {canEdit && (
+        // A live region only reaches AT reliably once it's already mounted and observed;
+        // toggling aria-live on the same commit that inserts the failure text is not dependable.
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          aria-label={t('editor.saveStatus')}
+          className="sr-only"
+        >
+          {saveState === 'error' ? tCommon(SAVE_STATE_LABEL_KEYS.error) : ''}
+        </div>
+      )}
 
       {canShare && (
         <>
@@ -102,7 +130,10 @@ export function NoteControlsPortal({
                 variant="ghost"
                 size="icon"
                 aria-label={t('editor.share')}
-                className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
+                className={cn(
+                  HEADER_ACTION_CLASSES,
+                  'text-(--muted-foreground) hover:text-(--foreground)'
+                )}
                 onClick={() => onShareDialogOpenChange(true)}
               >
                 <Share2 className="h-4 w-4" />
@@ -127,7 +158,13 @@ export function NoteControlsPortal({
         </>
       )}
 
-      {canDelete && <NoteActionsMenu noteId={note.id} noteTitle={note.title} />}
+      {canDelete && (
+        <NoteActionsMenu
+          noteId={note.id}
+          noteTitle={note.title}
+          triggerClassName={HEADER_ACTION_CLASSES}
+        />
+      )}
     </>,
     portalTarget
   );

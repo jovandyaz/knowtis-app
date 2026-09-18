@@ -60,6 +60,12 @@
     animation: var(--animate-fade-out);
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-out {
+      animation: none;
+    }
+  }
+
   .glass {
     @apply bg-white/80 dark:bg-black/30 backdrop-blur-md border border-white/20 dark:border-white/5 shadow-sm;
   }
