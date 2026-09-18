@@ -193,6 +193,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     expect(provider.websocketProvider.disconnect).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe('disconnected');
     expect(result.current.isSynced).toBe(false);
+    expect(result.current.readOnly).toBe(true);
     expect(yDoc.getMap('local').get('draft')).toBe('keep');
     expect(provider.destroy).not.toHaveBeenCalled();
     expect(destroyAwareness).not.toHaveBeenCalled();
