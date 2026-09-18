@@ -4,8 +4,8 @@ import type { PanelSide } from '../hooks/useResizablePanel';
 import { cn } from '../utils/cn';
 
 const POSITION_CLASSES: Record<PanelSide, string> = {
-  left: 'left-0 -ml-px',
-  right: 'right-0 -mr-px',
+  left: 'left-0 after:left-0',
+  right: 'right-0 after:right-0',
 };
 
 interface ResizeHandleProps extends Omit<
@@ -22,11 +22,11 @@ const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(
       ref={ref}
       {...props}
       className={cn(
-        'absolute top-0 bottom-0 w-1.5 z-10 cursor-col-resize outline-none transition-colors duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none',
+        "absolute top-0 bottom-0 w-2 z-10 cursor-col-resize outline-none bg-transparent after:absolute after:inset-y-0 after:w-px after:content-[''] after:transition-colors after:duration-(--motion-duration-fast) after:ease-standard motion-reduce:after:transition-none",
         POSITION_CLASSES[side],
         isDragging
-          ? 'bg-primary'
-          : 'bg-transparent hover:bg-primary/40 focus-visible:bg-primary/40'
+          ? 'after:bg-primary'
+          : 'after:bg-border hover:after:bg-primary/40 focus-visible:after:bg-primary focus-visible:after:w-0.5'
       )}
     />
   )
