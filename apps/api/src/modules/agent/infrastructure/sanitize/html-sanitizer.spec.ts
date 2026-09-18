@@ -5,11 +5,7 @@ import * as Y from 'yjs';
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import { htmlToYjsState } from '../../../notes/infrastructure/html-to-yjs';
-import {
-  htmlToPlainText,
-  markdownToNoteHtml,
-  markdownToPreviewHtml,
-} from './html-sanitizer';
+import { htmlToPlainText, markdownToNoteHtml } from './html-sanitizer';
 
 interface PMJson {
   readonly type: string;
@@ -127,15 +123,6 @@ describe('markdownToNoteHtml', () => {
     );
     expect(html).not.toMatch(/<div[^>]*onclick/i);
     expect(html).toContain('data-mermaid-block');
-  });
-
-  it('leaves a mermaid fence readable in the chat preview, which cannot draw it', () => {
-    const preview = markdownToPreviewHtml(
-      '```mermaid\nflowchart LR\n  A --> B\n```'
-    );
-    expect(preview).not.toContain('data-mermaid-block');
-    expect(preview).toContain('class="language-mermaid"');
-    expect(preview).toContain('flowchart LR');
   });
 
   it('survives the editor persistence round-trip as a mermaidBlock node', () => {

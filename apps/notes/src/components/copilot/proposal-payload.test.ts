@@ -41,7 +41,7 @@ describe('readProposalPayload', () => {
 
   it('ignores the extra keys the server still sends', () => {
     expect(
-      readProposalPayload({ summary: 'Create note', previewHtml: '<p>x</p>' })
+      readProposalPayload({ summary: 'Create note', kind: 'create' })
     ).toEqual({
       title: undefined,
       contentHtml: undefined,

@@ -13,11 +13,10 @@ const proposal = {
 };
 
 describe('AgentProposalCard', () => {
-  it('never renders the summary or preview the wire object still carries', () => {
+  it('never renders the summary the wire object still carries', () => {
     const wire = {
       ...proposal,
       summary: 'Create note "GTD"',
-      previewHtml: '<p>server preview</p>',
     } as unknown as PendingProposal;
     render(
       <AgentProposalCard
@@ -27,7 +26,6 @@ describe('AgentProposalCard', () => {
       />
     );
     expect(screen.queryByText('Create note "GTD"')).not.toBeInTheDocument();
-    expect(screen.queryByText('server preview')).not.toBeInTheDocument();
   });
 
   it('renders the proposal kind and fires approve', async () => {

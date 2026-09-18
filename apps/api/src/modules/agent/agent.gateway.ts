@@ -164,7 +164,6 @@ export class AgentGateway
         kind: proposal.kind,
         targetNoteId: proposal.kind === 'create' ? null : proposal.targetNoteId,
         summary: proposal.summary,
-        previewHtml: proposal.previewHtml ?? null,
         payload: proposal.payload,
       });
 

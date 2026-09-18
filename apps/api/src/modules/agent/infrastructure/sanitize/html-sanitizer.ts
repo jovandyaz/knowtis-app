@@ -1,6 +1,6 @@
 import sanitizeHtml from 'sanitize-html';
 
-import { markdownToHtml, type MermaidRendering } from '@knowtis/note-markdown';
+import { markdownToHtml } from '@knowtis/note-markdown';
 
 const MERMAID_BLOCK_ATTR = 'data-mermaid-block';
 const MERMAID_CODE_ATTR = 'data-code';
@@ -37,11 +37,12 @@ const ALLOWED_TAGS = [
   'sup',
 ];
 
-function renderSafeHtml(markdown: string, mermaid: MermaidRendering): string {
+/** Sanitized note body for the editor: mermaid fences become diagram blocks. */
+export function markdownToNoteHtml(markdown: string): string {
   if (!markdown.trim()) {
     return '';
   }
-  const sanitized = sanitizeHtml(markdownToHtml(markdown, { mermaid }), {
+  const sanitized = sanitizeHtml(markdownToHtml(markdown), {
     allowedTags: ALLOWED_TAGS,
     allowedAttributes: {
       a: ['href'],
@@ -56,17 +57,6 @@ function renderSafeHtml(markdown: string, mermaid: MermaidRendering): string {
     disallowedTagsMode: 'discard',
   });
   return sanitized.trim();
-}
-
-/** Sanitized note body for the editor: mermaid fences become diagram blocks. */
-export function markdownToNoteHtml(markdown: string): string {
-  return renderSafeHtml(markdown, 'block');
-}
-
-/** Sanitized proposal preview for the chat card, which renders raw HTML and so
- *  cannot draw a diagram — mermaid stays a readable code block there. */
-export function markdownToPreviewHtml(markdown: string): string {
-  return renderSafeHtml(markdown, 'fence');
 }
 
 const BLOCK_BOUNDARY_PATTERN =

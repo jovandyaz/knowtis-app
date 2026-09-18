@@ -59,7 +59,6 @@ export interface AgentProposalPayload {
   kind: 'create' | 'update' | 'share';
   targetNoteId: string | null;
   summary: string;
-  previewHtml: string | null;
   payload: Record<string, unknown>;
 }
 
