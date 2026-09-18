@@ -11,6 +11,66 @@ import {
   markdownToPreviewHtml,
 } from './html-sanitizer';
 
+interface PMJson {
+  readonly type: string;
+  readonly attrs?: Record<string, unknown>;
+  readonly marks?: readonly { readonly type: string }[];
+  readonly content?: readonly PMJson[];
+}
+
+const EDITOR_VOCABULARY_MARKDOWN = [
+  '# Trip',
+  '',
+  'Fly to [Guatemala](https://example.com/gt) with **cash**.',
+  '',
+  '| City | Days |',
+  '| --- | --- |',
+  '| Antigua | 2 |',
+  '',
+  '- [x] passport',
+  '- [ ] visa',
+  '',
+  'Bring ==sunscreen== and H~2~O for the 30^th^.',
+  '',
+  '```mermaid',
+  'flowchart LR',
+  '  A --> B',
+  '```',
+].join('\n');
+
+function persistedDocument(html: string): PMJson {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, htmlToYjsState(html));
+  const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME) as PMJson;
+  doc.destroy();
+  return json;
+}
+
+function collectTypes(node: PMJson, into = new Set<string>()): Set<string> {
+  into.add(node.type);
+  for (const mark of node.marks ?? []) {
+    into.add(mark.type);
+  }
+  for (const child of node.content ?? []) {
+    collectTypes(child, into);
+  }
+  return into;
+}
+
+function collectNodes(
+  node: PMJson,
+  type: string,
+  into: PMJson[] = []
+): PMJson[] {
+  if (node.type === type) {
+    into.push(node);
+  }
+  for (const child of node.content ?? []) {
+    collectNodes(child, type, into);
+  }
+  return into;
+}
+
 describe('markdownToNoteHtml', () => {
   it('renders basic markdown to html', () => {
     const html = markdownToNoteHtml('# Title\n\nHello **world**');
@@ -80,6 +140,59 @@ describe('markdownToNoteHtml', () => {
 
     expect(json.content[0].type).toBe('mermaidBlock');
     expect(json.content[0].attrs?.code).toContain('A --> B');
+  });
+
+  it('keeps every construct the editor can hold through the persistence round-trip', () => {
+    const json = persistedDocument(
+      markdownToNoteHtml(EDITOR_VOCABULARY_MARKDOWN)
+    );
+
+    const types = [...collectTypes(json)];
+    for (const expected of [
+      'heading',
+      'link',
+      'bold',
+      'table',
+      'tableRow',
+      'tableHeader',
+      'tableCell',
+      'taskList',
+      'taskItem',
+      'highlight',
+      'subscript',
+      'superscript',
+      'mermaidBlock',
+    ]) {
+      expect(types).toContain(expected);
+    }
+    expect(
+      collectNodes(json, 'taskItem').map((item) => item.attrs?.['checked'])
+    ).toEqual([true, false]);
+  });
+
+  it('keeps a bare url as a link the scheme allowlist accepts', () => {
+    expect(markdownToNoteHtml('See https://example.com today')).toContain(
+      '<a href="https://example.com">https://example.com</a>'
+    );
+  });
+
+  it('drops the style attribute markdown-it emits for aligned table columns', () => {
+    const html = markdownToNoteHtml('| A |\n| :-: |\n| 1 |');
+    expect(html).toContain('<th>A</th>');
+    expect(html).not.toContain('style=');
+  });
+
+  it('drops images: the server schema has no image node yet', () => {
+    const html = markdownToNoteHtml('![map](https://example.com/map.png)');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('map.png');
+  });
+
+  it('drops an event handler smuggled into a table cell', () => {
+    const html = markdownToNoteHtml(
+      '| A |\n| --- |\n| <td onclick="alert(1)">x</td> |'
+    );
+    expect(html).not.toMatch(/<[a-z]+[^>]*onclick/i);
   });
 });
 
