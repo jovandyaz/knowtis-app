@@ -3,23 +3,23 @@ import { persist } from 'zustand/middleware';
 
 import { clampWidth, readPersistedWidth } from './persisted-width';
 
-const SIDEBAR_DEFAULT_WIDTH = 272;
-export const SIDEBAR_MIN_WIDTH = 224;
-export const SIDEBAR_MAX_WIDTH = 360;
+const DOCK_DEFAULT_WIDTH = 360;
+export const DOCK_MIN_WIDTH = 300;
+export const DOCK_MAX_WIDTH = 500;
 
-const SIDEBAR_WIDTH_BOUNDS = {
-  min: SIDEBAR_MIN_WIDTH,
-  max: SIDEBAR_MAX_WIDTH,
-  fallback: SIDEBAR_DEFAULT_WIDTH,
+const DOCK_WIDTH_BOUNDS = {
+  min: DOCK_MIN_WIDTH,
+  max: DOCK_MAX_WIDTH,
+  fallback: DOCK_DEFAULT_WIDTH,
 };
 
-interface SidebarPreferenceStore {
-  /** The width the user resized the sidebar to — persisted across sessions. */
+interface DockPreferenceStore {
+  /** The width the user resized the dock to — persisted across sessions. */
   preferredWidth: number;
   setPreferredWidth: (width: number) => void;
 }
 
-function readPersistedSidebarWidth(persistedState: unknown): number {
+function readPersistedDockWidth(persistedState: unknown): number {
   const value =
     typeof persistedState === 'object' &&
     persistedState !== null &&
@@ -27,15 +27,15 @@ function readPersistedSidebarWidth(persistedState: unknown): number {
       ? persistedState.preferredWidth
       : undefined;
 
-  return readPersistedWidth(value, SIDEBAR_WIDTH_BOUNDS);
+  return readPersistedWidth(value, DOCK_WIDTH_BOUNDS);
 }
 
-export const useSidebarPreferenceStore = create<SidebarPreferenceStore>()(
+export const useDockPreferenceStore = create<DockPreferenceStore>()(
   persist(
     (set) => ({
-      preferredWidth: SIDEBAR_DEFAULT_WIDTH,
+      preferredWidth: DOCK_DEFAULT_WIDTH,
       setPreferredWidth: (width) => {
-        const preferredWidth = clampWidth(width, SIDEBAR_WIDTH_BOUNDS);
+        const preferredWidth = clampWidth(width, DOCK_WIDTH_BOUNDS);
         if (preferredWidth === undefined) {
           return;
         }
@@ -43,11 +43,11 @@ export const useSidebarPreferenceStore = create<SidebarPreferenceStore>()(
       },
     }),
     {
-      name: 'notes-sidebar',
+      name: 'notes-dock',
       partialize: (s) => ({ preferredWidth: s.preferredWidth }),
       merge: (persistedState, currentState) => ({
         ...currentState,
-        preferredWidth: readPersistedSidebarWidth(persistedState),
+        preferredWidth: readPersistedDockWidth(persistedState),
       }),
     }
   )

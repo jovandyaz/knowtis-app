@@ -72,7 +72,7 @@ function AppLayout() {
   const { t, i18n } = useTranslation('common');
   const isAnonymous = user?.isAnonymous ?? false;
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const sidebarWidth = useSidebarStore((s) => s.width);
+  const sidebarWidth = useSidebarStore((s) => s.visibleWidth);
   const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);

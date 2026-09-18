@@ -19,7 +19,7 @@
     "study": "Repasar",
     "studyDueCount_one": "{{count}} tarjeta pendiente",
     "studyDueCount_other": "{{count}} tarjetas pendientes",
-    "search": "Buscar",
+    "searchNotes": "Buscar notas",
     "notes": "Notas",
     "flashcards": "Flashcards",
     "expand": "Expandir",

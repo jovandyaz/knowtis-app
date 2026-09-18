@@ -4,13 +4,13 @@ import { useSidebarStore } from './sidebar.store';
 
 describe('useSidebarStore', () => {
   beforeEach(() => {
-    useSidebarStore.setState({ collapsed: false, width: 0 });
+    useSidebarStore.setState({ collapsed: false, visibleWidth: 0 });
     localStorage.clear();
   });
 
-  it('starts expanded with no measured width', () => {
+  it('starts expanded with no visible width', () => {
     expect(useSidebarStore.getState().collapsed).toBe(false);
-    expect(useSidebarStore.getState().width).toBe(0);
+    expect(useSidebarStore.getState().visibleWidth).toBe(0);
   });
 
   it('flips the collapsed state on toggle', () => {
@@ -21,18 +21,16 @@ describe('useSidebarStore', () => {
     expect(useSidebarStore.getState().collapsed).toBe(false);
   });
 
-  it('records the collapsed state and the width the panel renders at', () => {
+  it('records the collapsed state and the visible width', () => {
     useSidebarStore.getState().setCollapsed(true);
-    useSidebarStore.getState().setWidth(300);
+    useSidebarStore.getState().setVisibleWidth(300);
 
     expect(useSidebarStore.getState().collapsed).toBe(true);
-    expect(useSidebarStore.getState().width).toBe(300);
+    expect(useSidebarStore.getState().visibleWidth).toBe(300);
   });
 
-  it('keeps the width a drag streams through out of storage', () => {
-    for (const width of [300, 301, 302]) {
-      useSidebarStore.getState().setWidth(width);
-    }
+  it('keeps the visible width out of storage', () => {
+    useSidebarStore.getState().setVisibleWidth(300);
     useSidebarStore.getState().setCollapsed(true);
 
     expect(localStorage.length).toBe(0);
