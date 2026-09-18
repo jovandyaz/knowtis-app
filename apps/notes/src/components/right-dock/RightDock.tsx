@@ -20,6 +20,7 @@ import { RotateCcw } from 'lucide-react';
 
 import {
   Button,
+  cn,
   Dialog,
   DIALOG_SIDE,
   DialogContent,
@@ -46,6 +47,10 @@ export const PANEL_ID = 'right-dock-panel';
 /** 480 px of content plus the 64 px of outer gutters the main column adds. */
 const DOCUMENT_RESERVE = 544;
 
+/** Chat prose stops being readable past ~80 characters, so the conversation
+ * keeps its measure while the dock itself gets the extra width. */
+export const CONVERSATION_MEASURE = 'max-w-xl';
+
 const REVIEW_MAX_WIDTH = 960;
 const REVIEW_VIEWPORT_RATIO = 0.6;
 
@@ -71,17 +76,14 @@ function DockHeader() {
   const newConversation = useAgentStore((s) => s.newConversation);
   const hasConversation = useAgentStore((s) => s.messages.length > 0);
 
-  if (!hasConversation) {
-    return null;
-  }
-
   return (
-    <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
+    <div className="flex h-12 shrink-0 items-center justify-end px-4">
       <Button
         type="button"
         variant="ghost"
         size="icon"
         onClick={newConversation}
+        disabled={!hasConversation}
         aria-label={t('ai.copilot.newConversation')}
         className="shrink-0"
       >
@@ -91,21 +93,34 @@ function DockHeader() {
   );
 }
 
-function DockBody() {
+interface DockBodyProps {
+  /** A diff is two columns of note text, so it takes the whole dock. */
+  fullBleed: boolean;
+}
+
+function DockBody({ fullBleed }: DockBodyProps) {
   const { t } = useTranslation('notes');
 
   return (
     <div className="flex h-full flex-col min-w-0">
       <h2 className="sr-only">{t('ai.copilot.title')}</h2>
-      <DockHeader />
-      <div id={PANEL_ID} className="flex-1 overflow-hidden min-h-0">
-        <AgentCopilotPanel />
+      <div
+        className={cn(
+          'mx-auto flex w-full flex-1 flex-col min-h-0 min-w-0',
+          !fullBleed && CONVERSATION_MEASURE
+        )}
+      >
+        <DockHeader />
+        <div id={PANEL_ID} className="flex-1 overflow-hidden min-h-0">
+          <AgentCopilotPanel />
+        </div>
       </div>
     </div>
   );
 }
 
 interface DockDialogProps {
+  fullBleed: boolean;
   modal: boolean;
   openInlineRef: RefObject<boolean>;
   holdOpenOnEscape: boolean;
@@ -113,6 +128,7 @@ interface DockDialogProps {
 }
 
 function DockDialog({
+  fullBleed,
   modal,
   openInlineRef,
   holdOpenOnEscape,
@@ -173,7 +189,7 @@ function DockDialog({
           <DialogTitle>{t('ai.copilot.tab')}</DialogTitle>
         </DialogHeader>
         <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col">
-          <DockBody />
+          <DockBody fullBleed={fullBleed} />
         </div>
       </DialogContent>
     </Dialog>
@@ -247,7 +263,7 @@ export function RightDock() {
         handleAriaLabel={t('ai.artifacts.sidebar.resizePanel', 'Resize panel')}
         className="bg-background"
       >
-        <DockBody />
+        <DockBody fullBleed={reviewingUpdate} />
       </ResizablePanel>
     );
   }
@@ -258,6 +274,7 @@ export function RightDock() {
 
   return (
     <DockDialog
+      fullBleed={reviewingUpdate}
       modal={!layoutMovedDockIntoDialog}
       openInlineRef={openInlineRef}
       holdOpenOnEscape={reviewingUpdate || isStreaming}

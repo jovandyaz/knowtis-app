@@ -25,7 +25,7 @@ describe('useDockPreferenceStore', () => {
   });
 
   it('starts at the default preferred width', () => {
-    expect(useDockPreferenceStore.getInitialState().preferredWidth).toBe(360);
+    expect(useDockPreferenceStore.getInitialState().preferredWidth).toBe(500);
   });
 
   it('records the width the user settles on', () => {
@@ -60,7 +60,7 @@ describe('useDockPreferenceStore', () => {
 
   it.each([
     { label: 'the minimum', raw: '300' },
-    { label: 'the maximum', raw: '500' },
+    { label: 'the maximum', raw: '720' },
   ])('restores a persisted width at $label', async ({ raw }) => {
     seedPersistedWidth(raw);
 
@@ -73,20 +73,20 @@ describe('useDockPreferenceStore', () => {
     { label: 'a non-finite width', raw: '1e999' },
     { label: 'a string width', raw: '"420"' },
     { label: 'a width below the minimum', raw: '299' },
-    { label: 'a review width above the maximum', raw: '840' },
+    { label: 'a review width above the maximum', raw: '961' },
   ])('falls back to the default width for $label', async ({ raw }) => {
     seedPersistedWidth(raw);
 
     await useDockPreferenceStore.persist.rehydrate();
 
-    expect(useDockPreferenceStore.getState().preferredWidth).toBe(360);
+    expect(useDockPreferenceStore.getState().preferredWidth).toBe(500);
   });
 
   it.each([
     { label: 'the minimum', width: 300, expected: 300 },
-    { label: 'the maximum', width: 500, expected: 500 },
+    { label: 'the maximum', width: 720, expected: 720 },
     { label: 'below the minimum', width: 100, expected: 300 },
-    { label: 'above the maximum', width: 1000, expected: 500 },
+    { label: 'above the maximum', width: 1000, expected: 720 },
   ])('clamps a direct write at $label', ({ width, expected }) => {
     useDockPreferenceStore.getState().setPreferredWidth(width);
 

@@ -3,9 +3,9 @@ import { persist } from 'zustand/middleware';
 
 import { clampWidth, readPersistedWidth } from './persisted-width';
 
-const DOCK_DEFAULT_WIDTH = 360;
+const DOCK_DEFAULT_WIDTH = 500;
 export const DOCK_MIN_WIDTH = 300;
-export const DOCK_MAX_WIDTH = 500;
+export const DOCK_MAX_WIDTH = 720;
 
 const DOCK_WIDTH_BOUNDS = {
   min: DOCK_MIN_WIDTH,
