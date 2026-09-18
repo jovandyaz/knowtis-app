@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClient from '@knowtis/api-client';
+import { agentClient } from '@knowtis/api-client';
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
 import {
@@ -18,8 +19,10 @@ import { AgentCopilotPanel } from './AgentCopilotPanel';
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+const routeParams = vi.hoisted(() => ({ current: {} as { noteId?: string } }));
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
+  useParams: () => routeParams.current,
 }));
 vi.mock('./AgentComposer', () => ({
   AgentComposer: (props: {
@@ -287,6 +290,50 @@ describe('AgentCopilotPanel', () => {
     );
     expect(useAgentStore.getState().messages.at(-2)?.content).toBe('later');
     expect(useAgentStore.getState().queue).toEqual([]);
+  });
+});
+
+describe('AgentCopilotPanel note context', () => {
+  beforeEach(() => {
+    routeParams.current = { noteId: 'note-1' };
+    act(() => {
+      useAgentStore.setState({ status: 'idle', messages: [], queue: [] });
+    });
+  });
+
+  it('sends the note the route names before the editor has loaded', async () => {
+    const user = userEvent.setup();
+    render(<AgentCopilotPanel />, { wrapper });
+
+    await user.click(screen.getByRole('button', { name: 'send' }));
+
+    expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[2]).toBe(
+      'note-1'
+    );
+  });
+
+  it('queues a message with the note the route names', async () => {
+    const user = userEvent.setup();
+    act(() => useAgentStore.setState({ status: 'streaming' }));
+    render(<AgentCopilotPanel />, { wrapper });
+
+    await user.click(screen.getByRole('button', { name: 'send' }));
+
+    expect(useAgentStore.getState().queue.map((q) => q.noteId)).toEqual([
+      'note-1',
+    ]);
+  });
+
+  it('sends no note away from a note route', async () => {
+    routeParams.current = {};
+    const user = userEvent.setup();
+    render(<AgentCopilotPanel />, { wrapper });
+
+    await user.click(screen.getByRole('button', { name: 'send' }));
+
+    expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[2]).toBe(
+      undefined
+    );
   });
 });
 

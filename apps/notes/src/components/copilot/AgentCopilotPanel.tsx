@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useParams } from '@tanstack/react-router';
+
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
-import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
@@ -39,7 +40,9 @@ export function AgentCopilotPanel() {
   const draft = useAgentStore((s) => s.draft);
   const setDraft = useAgentStore((s) => s.setDraft);
   const takeBackQueued = useAgentStore((s) => s.takeBackQueued);
-  const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
+  // Not the editor's activeNoteId: that stays null until the lazy editor chunk
+  // mounts, and a message sent in that window would lose its note.
+  const { noteId } = useParams({ strict: false }) as { noteId?: string };
   const { canVerify, prompt: promptVerification } = useVerifyEmailGate();
   const reviewOpen = useRightDockStore((s) => s.reviewOpen);
   const openReview = useRightDockStore((s) => s.openReview);
@@ -60,10 +63,10 @@ export function AgentCopilotPanel() {
   }, [updateProposalId, openReview, closeReview]);
 
   const send = (text: string) => {
-    sendMessage(text, activeNoteId ?? undefined);
+    sendMessage(text, noteId);
   };
   const sendNow = (text: string) => {
-    sendMessage(text, activeNoteId ?? undefined, { interrupt: true });
+    sendMessage(text, noteId, { interrupt: true });
   };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
