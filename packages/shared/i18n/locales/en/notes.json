@@ -426,7 +426,7 @@
       "placeholder": "Ask about your notes…",
       "send": "Send",
       "composerHint": "Enter to send · Shift+Enter for a new line",
-      "composerHintBusy": "Enter queues · {{mod}}+Enter sends now · Esc stops",
+      "composerHintBusy": "Enter queues · {{shortcut}} sends now · Esc stops",
       "composerHintPaused": "Enter sends and resumes the queue · ↑ takes the last one back",
       "queue": "Queued",
       "queueAdd": "Add to queue",
