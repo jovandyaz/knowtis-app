@@ -125,9 +125,9 @@ describe('RightDock', () => {
     expect(panel).toContainElement(screen.getByText('copilot-panel'));
   });
 
-  it('renders the new-conversation action once a conversation exists', () => {
+  it('enables the new-conversation action once a conversation exists', () => {
     render(<RightDock />);
-    expect(resetAction()).toBeInTheDocument();
+    expect(resetAction()).toBeEnabled();
   });
 
   it('starts a new conversation from the header action', () => {
@@ -138,29 +138,38 @@ describe('RightDock', () => {
     expect(agentState.newConversation).toHaveBeenCalledTimes(1);
   });
 
-  it('gives the dock header the shared panel chrome without a label', () => {
+  it('gives the dock header the panel chrome without a label or a rule', () => {
     render(<RightDock />);
 
-    expect(dockHeader()).toHaveClass(
-      'h-12',
-      'shrink-0',
-      'border-b',
-      'border-border',
-      'px-4'
-    );
+    expect(dockHeader()).toHaveClass('h-12', 'shrink-0', 'px-4');
+    expect(dockHeader()).not.toHaveClass('border-b');
     expect(dockHeader()).not.toHaveTextContent('ai.copilot.title');
   });
 
-  it('drops the header band while the conversation is empty', () => {
+  it('keeps the header and disables the action while the conversation is empty', () => {
     agentState.messages = [];
 
     render(<RightDock />);
 
-    expect(
-      screen.queryByRole('button', { name: /ai.copilot.newConversation/ })
-    ).not.toBeInTheDocument();
-    expect(dockAside().querySelector('.h-12')).toBeNull();
-    expect(dockAside().querySelector('.border-b')).toBeNull();
+    expect(resetAction()).toBeDisabled();
+    expect(dockHeader()).toHaveClass('h-12');
+  });
+
+  it('holds the conversation to a readable measure inside a wide dock', () => {
+    render(<RightDock />);
+
+    expect(dockHeader().parentElement).toHaveClass('max-w-xl');
+  });
+
+  it('gives a review under way the whole dock', async () => {
+    window.innerWidth = 1400;
+    agentState.pendingProposal = { kind: 'update', targetNoteId: 'n1' };
+    useRightDockStore.setState({ isOpen: true, reviewOpen: true });
+
+    render(<RightDock />);
+    await waitFor(() => expect(dockAside().style.width).toBe('840px'));
+
+    expect(dockHeader().parentElement).not.toHaveClass('max-w-xl');
   });
 
   it('names the dock for screen readers while the conversation is empty', () => {
@@ -259,8 +268,8 @@ describe('RightDock', () => {
   });
 
   it('computes the review width inside its bounds', () => {
-    expect(reviewDockWidth(768)).toBe(500);
-    expect(reviewDockWidth(1000)).toBe(600);
+    expect(reviewDockWidth(768)).toBe(720);
+    expect(reviewDockWidth(1000)).toBe(720);
     expect(reviewDockWidth(1280)).toBe(768);
     expect(reviewDockWidth(1400)).toBe(840);
     expect(reviewDockWidth(2000)).toBe(960);
@@ -272,7 +281,7 @@ describe('RightDock', () => {
     expect(dockAside().style.width).toBe('360px');
     expect(screen.getByRole('separator')).toHaveAttribute(
       'aria-valuemax',
-      '500'
+      '720'
     );
   });
 
@@ -622,10 +631,10 @@ describe('RightDock', () => {
 
     render(<RightDock />);
 
-    await waitFor(() => expect(dockAside().style.width).toBe('670px'));
+    await waitFor(() => expect(dockAside().style.width).toBe('720px'));
     expect(screen.getByRole('separator')).toHaveAttribute(
       'aria-valuemax',
-      '670'
+      '720'
     );
   });
 
@@ -777,7 +786,7 @@ describe('RightDock', () => {
 
     expect(screen.getByRole('separator')).toHaveAttribute(
       'aria-valuemax',
-      '500'
+      '720'
     );
   });
 
@@ -873,7 +882,7 @@ describe('RightDock', () => {
     expect(dockAside().style.width).toBe('360px');
     expect(screen.getByRole('separator')).toHaveAttribute(
       'aria-valuemax',
-      '500'
+      '720'
     );
   });
 });
