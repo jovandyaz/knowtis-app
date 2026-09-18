@@ -52,13 +52,16 @@ const DOCUMENT_RESERVE = 544;
 export const CONVERSATION_MEASURE = 'max-w-xl';
 
 const REVIEW_MAX_WIDTH = 960;
+/** Independent of DOCK_MAX_WIDTH: how wide the user may drag the everyday dock
+ * must not decide how much of the document a diff is allowed to cover. */
+const REVIEW_MIN_WIDTH = 500;
 const REVIEW_VIEWPORT_RATIO = 0.6;
 
 export function reviewDockWidth(viewportWidth: number): number {
   return Math.round(
     Math.min(
       REVIEW_MAX_WIDTH,
-      Math.max(DOCK_MAX_WIDTH, viewportWidth * REVIEW_VIEWPORT_RATIO)
+      Math.max(REVIEW_MIN_WIDTH, viewportWidth * REVIEW_VIEWPORT_RATIO)
     )
   );
 }
@@ -76,19 +79,22 @@ function DockHeader() {
   const newConversation = useAgentStore((s) => s.newConversation);
   const hasConversation = useAgentStore((s) => s.messages.length > 0);
 
+  // The row is always here so the panel's top edge does not jump when the first
+  // message lands; the action itself has nothing to reset until then.
   return (
     <div className="flex h-12 shrink-0 items-center justify-end px-4">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={newConversation}
-        disabled={!hasConversation}
-        aria-label={t('ai.copilot.newConversation')}
-        className="shrink-0"
-      >
-        <RotateCcw className="h-4 w-4" />
-      </Button>
+      {hasConversation && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={newConversation}
+          aria-label={t('ai.copilot.newConversation')}
+          className="shrink-0"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }
