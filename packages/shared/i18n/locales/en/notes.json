@@ -350,6 +350,9 @@
   },
   "sidebar": {
     "allNotes": "All notes",
+    "recentNotes": "Recent notes",
+    "loadFailed": "Couldn't load notes",
+    "retry": "Retry",
     "newNote": "New note",
     "noNotesYet": "No notes yet",
     "untitled": "Untitled",
