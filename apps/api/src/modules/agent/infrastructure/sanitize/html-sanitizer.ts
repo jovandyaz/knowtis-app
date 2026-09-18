@@ -46,11 +46,13 @@ function renderSafeHtml(markdown: string, mermaid: MermaidRendering): string {
     allowedAttributes: {
       a: ['href'],
       div: [MERMAID_BLOCK_ATTR, MERMAID_CODE_ATTR],
+      ol: ['start'],
       ul: ['data-type'],
       li: ['data-type', 'data-checked'],
     },
     allowedClasses: { code: ['language-*'] },
     allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
     disallowedTagsMode: 'discard',
   });
   return sanitized.trim();

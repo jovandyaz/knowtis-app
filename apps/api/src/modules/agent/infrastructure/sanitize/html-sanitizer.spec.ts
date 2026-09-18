@@ -29,6 +29,7 @@ const EDITOR_VOCABULARY_MARKDOWN = [
   '',
   '- [x] passport',
   '- [ ] visa',
+  '  - [x] photo',
   '',
   'Bring ==sunscreen== and H~2~O for the 30^th^.',
   '',
@@ -167,7 +168,8 @@ describe('markdownToNoteHtml', () => {
     }
     expect(
       collectNodes(json, 'taskItem').map((item) => item.attrs?.['checked'])
-    ).toEqual([true, false]);
+    ).toEqual([true, false, true]);
+    expect(collectNodes(json, 'taskList')).toHaveLength(2);
   });
 
   it('keeps a bare url as a link the scheme allowlist accepts', () => {
@@ -193,6 +195,16 @@ describe('markdownToNoteHtml', () => {
       '| A |\n| --- |\n| <td onclick="alert(1)">x</td> |'
     );
     expect(html).not.toMatch(/<[a-z]+[^>]*onclick/i);
+  });
+
+  it('keeps the first number of an ordered list that does not start at one', () => {
+    expect(markdownToNoteHtml('3. three\n4. four')).toContain('<ol start="3">');
+  });
+
+  it('drops a protocol-relative href, which no allowed scheme covers', () => {
+    const html = markdownToNoteHtml('[pr](//evil.com) and //evil.com/x');
+    expect(html).toContain('pr');
+    expect(html).not.toMatch(/href="\/\//);
   });
 });
 
