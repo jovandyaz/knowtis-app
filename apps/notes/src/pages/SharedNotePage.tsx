@@ -29,10 +29,21 @@ import { PERMISSION, type Artifact } from '@knowtis/shared-types';
 
 const NO_ARTIFACTS: Artifact[] = [];
 
+interface SharedNoteViewProps {
+  token: string;
+}
+
 export function SharedNotePage() {
+  const { token } = useParams({ from: '/s/$token' });
+
+  // The route stays mounted across share links, so the key keeps edit mode,
+  // the editor and its connection state from carrying over to the next note.
+  return <SharedNoteView key={token} token={token} />;
+}
+
+function SharedNoteView({ token }: SharedNoteViewProps) {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
-  const { token } = useParams({ from: '/s/$token' });
   const { data, isLoading, isError, isFetching, error, refetch } =
     useNoteByToken(token);
   const user = useAuthUser();
@@ -180,7 +191,6 @@ export function SharedNotePage() {
             {hasArtifacts && (
               <WorkspaceTabPanel tab="study" tabbed>
                 <StudyToolsTab
-                  key={token}
                   noteId={data.id}
                   artifacts={sharedArtifacts}
                   readOnly
