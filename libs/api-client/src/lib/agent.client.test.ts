@@ -52,6 +52,19 @@ const AUTH_ERROR = {
   message: 'Authentication required',
 };
 
+/** The socket takes its token through an `auth` callback, so the value it would
+ *  send is only observable by invoking that callback. */
+function authTokenOf(ioCall: unknown[] | undefined): string | undefined {
+  const options = ioCall?.[1] as
+    | { auth?: (cb: (payload: { token: string }) => void) => void }
+    | undefined;
+  let token: string | undefined;
+  options?.auth?.((payload) => {
+    token = payload.token;
+  });
+  return token;
+}
+
 const PROPOSAL = {
   id: 'p1',
   kind: 'create' as const,
@@ -661,6 +674,10 @@ describe('AgentClient – auth/transport failure paths', () => {
 
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(io).toHaveBeenCalledTimes(1);
+
+    fake.trigger('agent:chunk', { text: 'still here' });
+
+    expect(callbacks.onChunk).toHaveBeenCalledWith({ text: 'still here' });
   });
 
   it('carries the turn sent while the token refresh was still in flight', async () => {
@@ -958,6 +975,148 @@ describe('AgentClient – auth/transport failure paths', () => {
       }),
       expect.any(Function)
     );
+  });
+  it('leaves a proposal awaiting its decision untouched when the token expires', async () => {
+    let token = 'stale-token';
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+    fake.socket.emit.mockClear();
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+    await flush();
+
+    expect(fake.socket.emit).not.toHaveBeenCalledWith(
+      'agent:message',
+      expect.anything(),
+      expect.any(Function)
+    );
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    client.approve('p1');
+    await flush();
+
+    expect(fake.socket.emit).toHaveBeenLastCalledWith(
+      'agent:approve',
+      expect.objectContaining({ proposalId: 'p1' }),
+      expect.any(Function)
+    );
+    expect(authTokenOf(vi.mocked(io).mock.calls.at(-1))).toBe('fresh-token');
+  });
+
+  it('ignores a proposal arriving on a socket the client already replaced', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    const superseded = fake;
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client.sendMessage('second', callbacks);
+    await flush();
+
+    superseded.trigger('agent:proposal', PROPOSAL);
+
+    expect(callbacks.onProposal).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('never re-runs the live turn when a replaced socket reports an auth error', async () => {
+    let token = 'stale-token';
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    const superseded = fake;
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client.sendMessage('second', callbacks);
+    await flush();
+    fake.socket.emit.mockClear();
+
+    superseded.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(fake.socket.emit).not.toHaveBeenCalledWith(
+      'agent:message',
+      expect.anything(),
+      expect.any(Function)
+    );
+  });
+
+  it('ends the session when the refresh behind a pending decision is exhausted', async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'rejected');
+    const sessionExpired = vi.fn();
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'stale-token',
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+    client.setSessionExpiredHandler(sessionExpired);
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AUTH_REQUIRED' })
+    );
+    expect(sessionExpired).toHaveBeenCalledTimes(1);
+    expect(client.canResume()).toBe(false);
   });
 });
 
