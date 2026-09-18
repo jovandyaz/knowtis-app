@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
@@ -9,6 +9,11 @@ import { SupertagNav } from '@/components/organization/SupertagNav';
 import { TagTree } from '@/components/organization/TagTree';
 import { NAVIGATION_LINKS, ROUTES } from '@/config';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
+import {
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  useSidebarPreferenceStore,
+} from '@/stores/sidebar-preference.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { Search } from 'lucide-react';
@@ -23,8 +28,8 @@ import { SidebarUserMenu } from './SidebarUserMenu';
 
 const isMac = isMacPlatform();
 
-const SIDEBAR_WIDTH = 224;
 const COLLAPSE_THRESHOLD = 80;
+const TOGGLE_ID = 'sidebar-toggle';
 
 export function Sidebar() {
   const user = useAuthUser();
@@ -33,10 +38,22 @@ export function Sidebar() {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const setCollapsed = useSidebarStore((s) => s.setCollapsed);
   const setStoreWidth = useSidebarStore((s) => s.setWidth);
+  const preferredWidth = useSidebarPreferenceStore((s) => s.preferredWidth);
+  const setPreferredWidth = useSidebarPreferenceStore(
+    (s) => s.setPreferredWidth
+  );
   const { requestFocus } = useNotesSearchStore();
   const navigate = useNavigate();
 
-  const handleCollapse = useCallback(() => setCollapsed(true), [setCollapsed]);
+  const panelRef = useRef<HTMLElement>(null);
+
+  const handleCollapse = useCallback(() => {
+    // The handle unmounts with the panel, so focus would fall to <body>.
+    if (panelRef.current?.contains(document.activeElement)) {
+      document.getElementById(TOGGLE_ID)?.focus({ preventScroll: true });
+    }
+    setCollapsed(true);
+  }, [setCollapsed]);
 
   const openSearch = useCallback(async () => {
     await navigate({ to: ROUTES.NOTES });
@@ -61,24 +78,21 @@ export function Sidebar() {
 
   return (
     <ResizablePanel
+      ref={panelRef}
       side="left"
-      defaultWidth={SIDEBAR_WIDTH}
-      minWidth={SIDEBAR_WIDTH}
-      maxWidth={SIDEBAR_WIDTH}
+      defaultWidth={preferredWidth}
+      minWidth={SIDEBAR_MIN_WIDTH}
+      maxWidth={SIDEBAR_MAX_WIDTH}
       collapseThreshold={COLLAPSE_THRESHOLD}
       isOpen={!collapsed}
       onCollapse={handleCollapse}
       onWidthChange={setStoreWidth}
+      onResizeEnd={setPreferredWidth}
       handleAriaLabel={t('labels.resizeSidebar', 'Resize sidebar')}
-      className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 border-r border-border/40 bg-background/40 backdrop-blur-xl"
+      className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 bg-background"
     >
-      <div
-        className="flex flex-col h-full min-w-0"
-        style={{ width: `${SIDEBAR_WIDTH}px` }}
-      >
-        <div className="flex items-center">
-          <SidebarBrand />
-        </div>
+      <div className="flex h-full w-full min-w-0 flex-col">
+        <SidebarBrand />
         <NavigationLinks links={NAVIGATION_LINKS} />
         <div className="px-3 mb-3">
           <button
@@ -95,7 +109,7 @@ export function Sidebar() {
             </kbd>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-4">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 py-2 flex flex-col gap-4">
           {!isAnonymous && <BucketNav />}
           {!isAnonymous && <SupertagNav />}
           {!isAnonymous && <TagTree />}

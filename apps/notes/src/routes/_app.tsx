@@ -28,9 +28,9 @@ import { useSidebarStore } from '@/stores/sidebar.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { PanelLeft } from 'lucide-react';
-import { motion } from 'motion/react';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { Button } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 import { isMacPlatform } from '@knowtis/shared-util';
@@ -144,21 +144,22 @@ function AppLayout() {
       >
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <VerifyEmailBanner />
-          <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
-            <motion.button
+          <div className="hidden md:flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+            <Button
+              id="sidebar-toggle"
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={toggle}
-              className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
+              className="text-muted-foreground hover:text-foreground"
               aria-label={
                 sidebarCollapsed
                   ? t('labels.expandSidebar')
                   : t('labels.collapseSidebar')
               }
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
             >
               <PanelLeft className="h-4 w-4" />
-            </motion.button>
+            </Button>
 
             <div className="flex items-center gap-1">
               <div
