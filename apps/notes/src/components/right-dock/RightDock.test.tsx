@@ -64,6 +64,98 @@ describe('RightDock', () => {
     ).toBeInTheDocument();
   });
 
+  it('gives the dock header the shared panel chrome', () => {
+    render(<RightDock />);
+    const title = screen.getByText('ai.copilot.title');
+
+    expect(title).toHaveClass('text-sm', 'font-medium', 'text-foreground');
+    expect(title).not.toHaveClass('px-1');
+    expect(title.parentElement).toHaveClass(
+      'h-12',
+      'shrink-0',
+      'border-b',
+      'border-border',
+      'px-4'
+    );
+  });
+
+  it('sizes the new-conversation action like the other panel icon buttons', () => {
+    render(<RightDock />);
+    const action = screen.getByRole('button', {
+      name: /ai.copilot.newConversation/,
+    });
+
+    expect(action).toHaveClass('h-8', 'w-8');
+    expect(action.querySelector('svg')).toHaveClass('h-4', 'w-4');
+  });
+
+  it('returns focus to the dock toggle when the collapsing panel holds it', async () => {
+    render(
+      <>
+        <button type="button" id="right-dock-toggle">
+          toggle
+        </button>
+        <RightDock />
+      </>
+    );
+    const separator = screen.getByRole('separator');
+    separator.focus();
+
+    fireEvent.keyDown(separator, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'toggle' })).toHaveFocus()
+    );
+    expect(useRightDockStore.getState().isOpen).toBe(false);
+  });
+
+  it('leaves focus alone when the collapsing panel does not hold it', async () => {
+    render(
+      <>
+        <button type="button" id="right-dock-toggle">
+          toggle
+        </button>
+        <button type="button">Outside</button>
+        <RightDock />
+      </>
+    );
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    outside.focus();
+
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(useRightDockStore.getState().isOpen).toBe(false)
+    );
+    expect(outside).toHaveFocus();
+  });
+
+  it('collapses on a host that offers no dock toggle', async () => {
+    render(
+      <>
+        <button type="button">Outside</button>
+        <RightDock />
+      </>
+    );
+    const separator = screen.getByRole('separator');
+    separator.focus();
+
+    fireEvent.keyDown(separator, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(useRightDockStore.getState().isOpen).toBe(false)
+    );
+    expect(screen.getByRole('button', { name: 'Outside' })).not.toHaveFocus();
+  });
+
+  it('leaves the panel divider to the resize handle', () => {
+    render(<RightDock />);
+    const aside = screen.getByText('copilot-panel').closest('aside');
+
+    expect(aside).toHaveClass('bg-background');
+    expect(aside).not.toHaveClass('border-l');
+  });
+
   it('computes the review width inside its bounds', () => {
     expect(reviewDockWidth(768)).toBe(500);
     expect(reviewDockWidth(1000)).toBe(600);

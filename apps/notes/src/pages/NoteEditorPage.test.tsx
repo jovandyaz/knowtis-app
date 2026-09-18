@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
 import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -76,6 +77,9 @@ const editorRenders: { count: number } = { count: 0 };
 let capturedOnUpdate: ((html: string) => void) | undefined;
 let capturedOnVoiceNote: (() => void) | undefined;
 let capturedOnEditorReady: ((editor: unknown) => void) | undefined;
+let capturedOnConnectionStateChange:
+  | ((state: DocumentConnectionState | null) => void)
+  | undefined;
 const updateNoteMutate = vi.fn();
 
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
@@ -83,11 +87,13 @@ vi.mock('@/components/editor/CollaborativeEditor', () => ({
     onUpdate: (html: string) => void;
     onVoiceNote?: () => void;
     onEditorReady?: (editor: unknown) => void;
+    onConnectionStateChange?: (state: DocumentConnectionState | null) => void;
   }) => {
     editorRenders.count += 1;
     capturedOnUpdate = props.onUpdate;
     capturedOnVoiceNote = props.onVoiceNote;
     capturedOnEditorReady = props.onEditorReady;
+    capturedOnConnectionStateChange = props.onConnectionStateChange;
     return <div data-testid="collaborative-editor" />;
   },
 }));
@@ -96,8 +102,16 @@ vi.mock('@/components/editor/MobileEditorHeader', () => ({
   MobileEditorHeader: () => null,
 }));
 
+const noteControlsProps =
+  vi.fn<(props: { connectionState: DocumentConnectionState | null }) => void>();
+
 vi.mock('@/components/editor/NoteControlsPortal', () => ({
-  NoteControlsPortal: () => null,
+  NoteControlsPortal: (props: {
+    connectionState: DocumentConnectionState | null;
+  }) => {
+    noteControlsProps(props);
+    return null;
+  },
 }));
 
 vi.mock('@/components/voice-note/VoiceNoteRecorder', () => ({
@@ -147,6 +161,8 @@ describe('NoteEditorPage', () => {
     capturedOnUpdate = undefined;
     capturedOnVoiceNote = undefined;
     capturedOnEditorReady = undefined;
+    capturedOnConnectionStateChange = undefined;
+    noteControlsProps.mockClear();
     updateNoteMutate.mockClear();
     captureProductEvent.mockClear();
     propertiesRowProps.mockClear();
@@ -201,6 +217,51 @@ describe('NoteEditorPage', () => {
   it('renders the editor', () => {
     renderWithClient(<NoteEditorPage />);
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
+  });
+
+  it('forwards the document connection state to the header controls', () => {
+    renderWithClient(<NoteEditorPage />);
+
+    expect(noteControlsProps.mock.lastCall?.[0].connectionState).toBeNull();
+
+    act(() => capturedOnConnectionStateChange?.('syncing'));
+
+    expect(noteControlsProps.mock.lastCall?.[0].connectionState).toBe(
+      'syncing'
+    );
+  });
+
+  it('hosts the connection status on the phone layout, where the header portal is hidden', () => {
+    const { container } = renderWithClient(<NoteEditorPage />);
+
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(container.querySelector('.md\\:hidden')).toBeNull();
+
+    act(() => capturedOnConnectionStateChange?.('connected'));
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('editor.connection.connected');
+    expect(status.parentElement).toHaveClass('md:hidden');
+  });
+
+  it('drops a stale connection state when another note takes over the page', () => {
+    const client = new QueryClient();
+    const page = () => (
+      <QueryClientProvider client={client}>
+        <NoteEditorPage />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(page());
+
+    act(() => capturedOnConnectionStateChange?.('connected'));
+    expect(noteControlsProps.mock.lastCall?.[0].connectionState).toBe(
+      'connected'
+    );
+
+    loadNote({ id: 'note-2' });
+    rerender(page());
+
+    expect(noteControlsProps.mock.lastCall?.[0].connectionState).toBeNull();
   });
 
   it('exposes the live editor to the note-editor store and detaches on unmount', () => {

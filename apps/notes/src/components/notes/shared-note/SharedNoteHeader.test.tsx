@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -32,6 +33,7 @@ const defaultProps = {
   sharedPath: '/s/tok',
   ownerName: 'Owner',
   updatedAt: new Date('2026-08-14T00:00:00.000Z'),
+  connectionState: null as DocumentConnectionState | null,
   onCopyLink: vi.fn(),
   onStartEditing: vi.fn(),
   onStopEditing: vi.fn(),
@@ -121,6 +123,31 @@ describe('SharedNoteHeader', () => {
     renderHeader({ offerSignIn: false });
 
     expect(screen.queryByRole('link', { name: 'shared.signIn' })).toBeNull();
+  });
+
+  it('announces the document connection state ahead of the actions', () => {
+    renderHeader({ connectionState: 'syncing' });
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('editor.connection.syncing');
+    expect(
+      status.compareDocumentPosition(buttonNamed('buttons.copyLink')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('hides the connection label on small screens to keep the actions from overflowing', () => {
+    renderHeader({ connectionState: 'syncing' });
+
+    expect(screen.getByText('editor.connection.syncing')).toHaveClass(
+      'max-sm:sr-only'
+    );
+  });
+
+  it('shows no connection state while the note is only being read', () => {
+    renderHeader({ connectionState: null });
+
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('builds its controls out of design-system buttons', () => {

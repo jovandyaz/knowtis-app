@@ -102,6 +102,8 @@ const SKIP_BUTTON = { name: 'ai.artifacts.flashcards.skipCard' };
 const BACK_TO_NOTE_BUTTON = { name: 'ai.artifacts.focus.backToNote' };
 const FRONT_ONE = { name: /Front one/ };
 const FRONT_TWO = { name: /Front two/ };
+// Focus follows a real AnimatePresence exit, so the wait must tolerate CPU contention.
+const EXIT_FOCUS_TIMEOUT_MS = 5000;
 
 async function rateCorrect(front: RegExp) {
   await userEvent.click(await screen.findByRole('button', { name: front }));
@@ -748,8 +750,9 @@ describe('FlashcardStudy', () => {
     expect(completedProgress()).toHaveAccessibleName(
       'ai.artifacts.focus.trackLabel {"done":1,"count":2}'
     );
-    await waitFor(() =>
-      expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus()
+    await waitFor(
+      () => expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus(),
+      { timeout: EXIT_FOCUS_TIMEOUT_MS }
     );
   });
 
@@ -758,17 +761,20 @@ describe('FlashcardStudy', () => {
     renderStudy(true);
 
     await rateCorrect(FRONT_ONE.name);
-    await waitFor(() =>
-      expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus()
+    await waitFor(
+      () => expect(screen.getByRole('button', FRONT_TWO)).toHaveFocus(),
+      { timeout: EXIT_FOCUS_TIMEOUT_MS }
     );
     await rateCorrect(FRONT_TWO.name);
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole('heading', {
-          name: 'ai.artifacts.flashcards.summary.headline {"correct":2,"total":2}',
-        })
-      ).toHaveFocus()
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole('heading', {
+            name: 'ai.artifacts.flashcards.summary.headline {"correct":2,"total":2}',
+          })
+        ).toHaveFocus(),
+      { timeout: EXIT_FOCUS_TIMEOUT_MS }
     );
     expect(reviewCard).not.toHaveBeenCalled();
   });

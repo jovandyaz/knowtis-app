@@ -5,6 +5,7 @@ import { useParams } from '@tanstack/react-router';
 
 import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import type { DocumentConnectionState } from '@/components/editor/CollaborativeEditor.types';
 import { EditorCardSkeleton } from '@/components/editor/EditorCardSkeleton';
 import { SharedNoteAccessError } from '@/components/notes/shared-note/SharedNoteAccessError';
 import { SharedNoteHeader } from '@/components/notes/shared-note/SharedNoteHeader';
@@ -49,6 +50,8 @@ export function SharedNotePage() {
   } = useSharedNoteEditing();
   const { copied, copy: copyLink } = useCopyLink();
   const [studyArtifactId, setStudyArtifactId] = useState<string | null>(null);
+  const [connectionState, setConnectionState] =
+    useState<DocumentConnectionState | null>(null);
   const sharedArtifacts = artifacts ?? NO_ARTIFACTS;
   const hasArtifacts = sharedArtifacts.length > 0;
   const sharedPath = sharedNotePath(token);
@@ -126,7 +129,11 @@ export function SharedNotePage() {
         updatedAt={data.updatedAt}
         onCopyLink={copyLink}
         onStartEditing={handleStartEditing}
-        onStopEditing={handleStopEditing}
+        onStopEditing={() => {
+          handleStopEditing();
+          setConnectionState(null);
+        }}
+        connectionState={connectionState}
       />
 
       <div className="flex flex-1 flex-col min-w-0 min-h-0">
@@ -163,6 +170,7 @@ export function SharedNotePage() {
                   editable={true}
                   shareToken={token}
                   onEditDenied={handleEditDenied}
+                  onConnectionStateChange={setConnectionState}
                 />
               ) : (
                 <ReadOnlyEditor content={displayContent} />

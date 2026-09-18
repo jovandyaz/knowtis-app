@@ -11,10 +11,14 @@ import {
   NAV_ICON_SLOT,
   NAV_LABEL,
   NAV_ROW,
+  NAV_ROW_ACTIVE,
+  NAV_ROW_IDLE,
 } from '@/components/organization/nav-row.styles';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TooltipProvider } from '@knowtis/design-system';
 
 import { SidebarNotesSection } from './SidebarNotesSection';
 
@@ -24,13 +28,20 @@ interface RecentNote {
   accessLevel: 'owner' | 'editor' | 'viewer';
 }
 
+const LONG_TITLE =
+  'A note title far wider than the sidebar panel it has to live inside';
+
 const recentNotes = vi.fn<() => RecentNote[] | undefined>();
+const createNote = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useRecentNotes: () => ({ data: recentNotes() }),
 }));
 vi.mock('@/hooks/useCreateNoteAction', () => ({
-  useCreateNoteAction: () => ({ createNote: vi.fn() }),
+  useCreateNoteAction: () => ({ createNote }),
+}));
+vi.mock('@/lib/preload-editor', () => ({
+  preloadEditorChunk: vi.fn(),
 }));
 vi.mock('@/components/notes/NoteActionsMenu', () => ({
   NoteActionsMenu: ({ noteTitle }: { noteTitle: string }) => (
@@ -44,20 +55,22 @@ vi.mock('react-i18next', () => ({
 async function renderAt(path: string) {
   const rootRoute = createRootRoute({
     component: () => (
-      <>
+      <TooltipProvider delayDuration={0}>
         <SidebarNotesSection />
         <Outlet />
-      </>
+      </TooltipProvider>
     ),
   });
   const notesRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/notes',
+    validateSearch: (search: Record<string, unknown>) => search,
     component: () => <p>list</p>,
   });
   const noteRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/notes/$noteId',
+    validateSearch: (search: Record<string, unknown>) => search,
     component: () => <p>editor</p>,
   });
   const router = createRouter({
@@ -66,8 +79,8 @@ async function renderAt(path: string) {
   });
 
   const result = render(<RouterProvider router={router} />);
-  await screen.findByText('sidebar.myNotes');
-  return result;
+  await screen.findByText('sidebar.allNotes');
+  return { ...result, router };
 }
 
 const rowFor = (label: string) => screen.getByText(label).closest('a');
@@ -75,6 +88,7 @@ const rowFor = (label: string) => screen.getByText(label).closest('a');
 describe('SidebarNotesSection', () => {
   beforeEach(() => {
     localStorage.clear();
+    createNote.mockClear();
     recentNotes.mockReturnValue([
       { id: 'note-1', title: 'Roadmap', accessLevel: 'owner' },
       { id: 'note-2', title: 'Shared with me', accessLevel: 'viewer' },
@@ -99,16 +113,113 @@ describe('SidebarNotesSection', () => {
     expect(list).not.toHaveClass('pl-2');
   });
 
-  it('should sit the My Notes row on the same rail as the notes below it', async () => {
+  it('should keep a note row within the panel', async () => {
+    recentNotes.mockReturnValue([
+      { id: 'note-1', title: LONG_TITLE, accessLevel: 'owner' },
+    ]);
+
     await renderAt('/notes');
 
-    const row = rowFor('sidebar.myNotes')?.parentElement;
+    const row = rowFor(LONG_TITLE);
+
+    expect(row).toHaveClass('min-w-0', 'flex-1');
+    expect(row).not.toHaveAttribute('title');
+    expect(row?.parentElement).toHaveClass('min-w-0', 'w-full');
+    expect(screen.getByText(LONG_TITLE)).toHaveClass(...NAV_LABEL.split(' '));
+  });
+
+  it('should reveal the full note title on keyboard focus', async () => {
+    const user = userEvent.setup();
+    recentNotes.mockReturnValue([
+      { id: 'note-1', title: LONG_TITLE, accessLevel: 'owner' },
+    ]);
+    await renderAt('/notes');
+    const row = rowFor(LONG_TITLE);
+
+    screen.getByRole('button', { name: 'sidebar.newNote' }).focus();
+    await user.tab();
+
+    expect(row).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LONG_TITLE);
+  });
+
+  it('should reveal the full note title on hover', async () => {
+    const user = userEvent.setup();
+    recentNotes.mockReturnValue([
+      { id: 'note-1', title: LONG_TITLE, accessLevel: 'owner' },
+    ]);
+    await renderAt('/notes');
+
+    await user.hover(rowFor(LONG_TITLE) as HTMLElement);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LONG_TITLE);
+  });
+
+  it('should leave the note link name and target untouched by the tooltip', async () => {
+    recentNotes.mockReturnValue([
+      { id: 'note-1', title: LONG_TITLE, accessLevel: 'owner' },
+    ]);
+
+    await renderAt('/notes');
+
+    const row = rowFor(LONG_TITLE);
+
+    expect(row).toHaveAccessibleName(LONG_TITLE);
+    expect(row).toHaveAttribute('href', '/notes/note-1');
+  });
+
+  it('should sit the All notes row on the same rail as the notes below it', async () => {
+    await renderAt('/notes');
+
+    const row = rowFor('sidebar.allNotes')?.parentElement;
 
     expect(row).toHaveClass(...NAV_ROW.split(' '));
     expect(row?.firstElementChild).toHaveClass(...NAV_ICON_SLOT.split(' '));
-    expect(screen.getByText('sidebar.myNotes')).toHaveClass(
+    expect(row?.firstElementChild?.querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByText('sidebar.allNotes')).toHaveClass(
       ...NAV_LABEL.split(' ')
     );
+  });
+
+  it('should link the All notes row to the unfiltered note list', async () => {
+    await renderAt('/notes');
+
+    expect(rowFor('sidebar.allNotes')).toHaveAttribute(
+      'href',
+      '/notes?view=all'
+    );
+  });
+
+  it('should mark the All notes row as the current page on the unfiltered list', async () => {
+    await renderAt('/notes');
+
+    const row = rowFor('sidebar.allNotes');
+
+    expect(row).toHaveAttribute('aria-current', 'page');
+    expect(row?.parentElement).toHaveClass(...NAV_ROW_ACTIVE.split(' '));
+  });
+
+  it('should leave the All notes row idle while a note is open', async () => {
+    await renderAt('/notes/note-1');
+
+    const row = rowFor('sidebar.allNotes');
+
+    expect(row).not.toHaveAttribute('aria-current');
+    expect(row?.parentElement).toHaveClass(...NAV_ROW_IDLE.split(' '));
+  });
+
+  it.each([
+    '/notes?bucket=projects&view=all',
+    '/notes?tag=work',
+    '/notes?supertag=book',
+    '/notes?view=mine',
+  ])('should leave the All notes row idle on %s', async (path) => {
+    await renderAt(path);
+
+    const row = rowFor('sidebar.allNotes');
+
+    expect(row).not.toHaveAttribute('aria-current');
+    expect(row?.parentElement).toHaveClass(...NAV_ROW_IDLE.split(' '));
   });
 
   it('should fold the whole section away from its own header', async () => {
@@ -118,22 +229,35 @@ describe('SidebarNotesSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'labels.notes' }));
 
-    expect(screen.queryByText('sidebar.myNotes')).not.toBeInTheDocument();
+    expect(screen.queryByText('sidebar.allNotes')).not.toBeInTheDocument();
     expect(screen.queryByText('Roadmap')).not.toBeInTheDocument();
   });
 
-  it('should keep the new-note button clickable above the row-wide My Notes link', async () => {
+  it('should keep the new-note button clickable above the row-wide All notes link', async () => {
     await renderAt('/notes');
 
     expect(screen.getByTitle('sidebar.newNote')).toHaveClass(
       'relative',
-      'z-10'
+      'z-10',
+      'size-6'
     );
-    expect(rowFor('sidebar.myNotes')).toHaveClass(
+    expect(rowFor('sidebar.allNotes')).toHaveClass(
       'after:absolute',
       'after:inset-0',
       "after:content-['']"
     );
+  });
+
+  it('should create a note from the row button without navigating away', async () => {
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes');
+    const button = screen.getByRole('button', { name: 'sidebar.newNote' });
+
+    await user.click(button);
+
+    expect(createNote).toHaveBeenCalledTimes(1);
+    expect(button.closest('a')).toBeNull();
+    expect(router.state.location.pathname).toBe('/notes');
   });
 
   it('should keep the note actions menu above its row link', async () => {
@@ -143,6 +267,26 @@ describe('SidebarNotesSection', () => {
 
     expect(menu.parentElement).toHaveClass('absolute', 'z-10');
     expect(screen.queryByLabelText('actions:Shared with me')).toBeNull();
+  });
+
+  it('should open the note when its row is clicked', async () => {
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes');
+    const row = rowFor('Roadmap') as HTMLElement;
+
+    await user.click(row);
+
+    expect(await screen.findByText('editor')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/notes/note-1');
+  });
+
+  it('should keep the note actions menu reachable beside the tooltipped link', async () => {
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes');
+
+    await user.click(screen.getByLabelText('actions:Roadmap'));
+
+    expect(router.state.location.pathname).toBe('/notes');
   });
 
   it('should mark the open note as the active row', async () => {

@@ -193,6 +193,8 @@ export function useHocuspocusCollaboration({
           }
           halted = true;
           clearRecovery();
+          pauseEditing();
+          setStatus('disconnected');
           provider.destroy();
           transport.destroy();
           onSessionExpiredRef.current?.();

@@ -21,6 +21,9 @@ import type {
   PermissionLevel,
 } from '@knowtis/shared-types';
 
+import type { DocumentConnectionState } from './CollaborativeEditor.types';
+import { DocumentConnectionStatus } from './DocumentConnectionStatus';
+
 const PORTAL_TARGET_ID = 'note-controls-portal';
 
 export interface NoteControlsDetails {
@@ -35,6 +38,7 @@ export interface NoteControlsDetails {
 
 interface NoteControlsPortalProps {
   note: NoteControlsDetails;
+  connectionState: DocumentConnectionState | null;
   isSaving: boolean;
   hasSaved: boolean;
   shareDialogOpen: boolean;
@@ -43,6 +47,7 @@ interface NoteControlsPortalProps {
 
 export function NoteControlsPortal({
   note,
+  connectionState,
   isSaving,
   hasSaved,
   shareDialogOpen,
@@ -69,6 +74,8 @@ export function NoteControlsPortal({
       {showBadge && (
         <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
       )}
+
+      <DocumentConnectionStatus state={connectionState} />
 
       {canEdit &&
         (isSaving ? (

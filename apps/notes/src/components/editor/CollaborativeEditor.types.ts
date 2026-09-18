@@ -4,6 +4,13 @@ import type * as Y from 'yjs';
 
 import type { CollaborativeUser } from '@knowtis/crdt';
 
+export type DocumentConnectionState =
+  | 'connecting'
+  | 'syncing'
+  | 'connected'
+  | 'disconnected'
+  | 'accessDenied';
+
 export interface CollaborativeEditorProps {
   noteId: string;
   initialContent: string;
@@ -26,6 +33,11 @@ export interface CollaborativeEditorProps {
    *  truth — connected AND synced. The page uses it to suppress the redundant
    *  REST content autosave that otherwise echoes back and resets the caret. */
   onLiveCollaborationChange?: ((isLive: boolean) => void) | undefined;
+  /** Fires on every change of the collaboration session's state, and with
+   *  `null` while WS collaboration is off — the note header owns the display. */
+  onConnectionStateChange?:
+    | ((state: DocumentConnectionState | null) => void)
+    | undefined;
 }
 
 export interface InternalEditorProps {

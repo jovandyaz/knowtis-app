@@ -301,7 +301,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     const onAuthRefresh = vi.fn().mockResolvedValue('rejected');
     const onSessionExpired = vi.fn();
 
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
@@ -325,6 +325,8 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       expect(provider.destroy).toHaveBeenCalledTimes(1);
       expect(onSessionExpired).toHaveBeenCalledTimes(1);
     });
+    expect(result.current.status).toBe('disconnected');
+    expect(result.current.readOnly).toBe(true);
   });
 
   it('passes onAuthenticationFailed to the HocuspocusProvider constructor', () => {

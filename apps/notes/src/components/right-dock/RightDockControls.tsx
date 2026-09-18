@@ -3,21 +3,29 @@ import { useTranslation } from 'react-i18next';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { PanelLeft, Sparkles } from 'lucide-react';
 
+import { Button, cn } from '@knowtis/design-system';
+
 export function RightDockToggle() {
   const { t } = useTranslation('common');
   const isOpen = useRightDockStore((s) => s.isOpen);
   const toggle = useRightDockStore((s) => s.toggle);
 
   return (
-    <button
+    <Button
+      id="right-dock-toggle"
       type="button"
+      variant="ghost"
+      size="icon"
       onClick={toggle}
       aria-pressed={isOpen}
       aria-label={t('labels.copilot', 'Copilot')}
-      className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
+      className={cn(
+        'text-muted-foreground hover:text-foreground',
+        isOpen && 'bg-muted text-foreground'
+      )}
     >
       <PanelLeft className="h-4 w-4 -scale-x-100" />
-    </button>
+    </Button>
   );
 }
 

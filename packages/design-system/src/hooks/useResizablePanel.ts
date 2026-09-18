@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMotionPreset } from '../motion/useMotionPreset';
 
 const SNAP_TRANSITION_MS = 300;
+const KEYBOARD_STEP = 8;
+// Collapsing is Enter/Space only, so the keyboard must never land on a width
+// that unmounts the panel behind the consumer's back.
+const KEYBOARD_MIN_WIDTH = 1;
 
 export type PanelSide = 'left' | 'right';
 
@@ -21,6 +25,9 @@ export interface ResizablePanelConfig {
   onCollapse: () => void;
   /** Called whenever the width changes — use to sync external state */
   onWidthChange?: (width: number) => void;
+  /** Called with the width the user settled on, after a drag release that does
+   *  not collapse and after every keyboard adjustment — use to persist it. */
+  onResizeEnd?: (width: number) => void;
   /** When set, the panel animates to this width and holds it; clearing it
    *  animates back to the width the user had before. */
   targetWidth?: number | undefined;
@@ -44,6 +51,30 @@ export interface ResizablePanelState {
     'aria-valuemax': number;
     tabIndex: 0;
   };
+}
+
+function keyboardTargetWidth(
+  key: string,
+  currentWidth: number,
+  side: PanelSide,
+  minWidth: number,
+  maxWidth: number
+): number | null {
+  const step = side === 'left' ? KEYBOARD_STEP : -KEYBOARD_STEP;
+
+  if (key === 'ArrowRight') {
+    return currentWidth + step;
+  }
+  if (key === 'ArrowLeft') {
+    return currentWidth - step;
+  }
+  if (key === 'Home') {
+    return minWidth;
+  }
+  if (key === 'End') {
+    return maxWidth;
+  }
+  return null;
 }
 
 function startSnapTransition(
@@ -89,6 +120,7 @@ export function useResizablePanel({
   isOpen,
   onCollapse,
   onWidthChange,
+  onResizeEnd,
   targetWidth,
   side,
 }: ResizablePanelConfig): ResizablePanelState {
@@ -235,6 +267,7 @@ export function useResizablePanel({
         const snappedWidth = Math.max(currentWidth, minWidth);
         if (targetWidthRef.current === undefined) {
           lastUserWidthRef.current = snappedWidth;
+          onResizeEnd?.(snappedWidth);
         }
 
         if (snappedWidth !== currentWidth) {
@@ -246,7 +279,7 @@ export function useResizablePanel({
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
-    [maxWidth, minWidth, collapseThreshold, onCollapse, side]
+    [maxWidth, minWidth, collapseThreshold, onCollapse, onResizeEnd, side]
   );
 
   const handleKeyDown = useCallback(
@@ -257,9 +290,46 @@ export function useResizablePanel({
           setWidth(0);
           startSnapTransition(snapTimeoutRef, setIsTransitioning, onCollapse);
         }
+        return;
       }
+
+      const next = keyboardTargetWidth(
+        e.key,
+        widthRef.current,
+        side,
+        minWidth,
+        maxWidth
+      );
+      if (next === null) {
+        return;
+      }
+
+      e.preventDefault();
+
+      if (!isOpen || isDragging || targetWidth !== undefined) {
+        return;
+      }
+
+      const clamped = Math.max(
+        KEYBOARD_MIN_WIDTH,
+        minWidth,
+        Math.min(maxWidth, next)
+      );
+      widthRef.current = clamped;
+      lastUserWidthRef.current = clamped;
+      setWidth(clamped);
+      onResizeEnd?.(clamped);
     },
-    [isOpen, onCollapse]
+    [
+      isOpen,
+      isDragging,
+      targetWidth,
+      minWidth,
+      maxWidth,
+      side,
+      onCollapse,
+      onResizeEnd,
+    ]
   );
 
   const transitionStyle =
@@ -281,6 +351,8 @@ export function useResizablePanel({
       role: 'separator' as const,
       'aria-orientation': 'vertical' as const,
       'aria-valuenow': width,
+      // A drag can go under minWidth and a collapse animates through 0 while
+      // the handle is still mounted; WAI-ARIA needs valuenow inside the range.
       'aria-valuemin': 0,
       'aria-valuemax': maxWidth,
       tabIndex: 0 as const,

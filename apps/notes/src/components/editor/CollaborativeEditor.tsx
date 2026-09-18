@@ -13,6 +13,7 @@ import {
   getCollaborationServerUrl,
   isWebSocketEnabled,
   useHocuspocusCollaboration,
+  type CollaborationStatus,
 } from '@/collaboration/useHocuspocusCollaboration';
 import { ROUTES } from '@/config';
 import {
@@ -45,6 +46,7 @@ import { AIMenuPopover } from './ai/AIMenuPopover';
 import { AIResultPanel } from './ai/AIResultPanel';
 import type {
   CollaborativeEditorProps,
+  DocumentConnectionState,
   InternalEditorProps,
 } from './CollaborativeEditor.types';
 import {
@@ -75,6 +77,27 @@ function TypewriterPlaceholder({ texts }: { texts: string[] }) {
       {text}
     </div>
   );
+}
+
+function toConnectionState(
+  status: CollaborationStatus,
+  isSynced: boolean
+): DocumentConnectionState {
+  switch (status) {
+    case 'accessDenied':
+      return 'accessDenied';
+    case 'disconnected':
+      return 'disconnected';
+    case 'connected':
+      return isSynced ? 'connected' : 'syncing';
+    case 'connecting':
+    case 'authenticationFailed':
+      return 'connecting';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled collaboration status: ${String(exhaustive)}`);
+    }
+  }
 }
 
 const SYNC_SKELETON_LINES = 6;
@@ -299,6 +322,7 @@ export function CollaborativeEditor({
   onVoiceNote,
   localFirst = false,
   onLiveCollaborationChange,
+  onConnectionStateChange,
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
   const aiEnabled = useAIStore((s) => s.aiEnabled);
@@ -367,9 +391,17 @@ export function CollaborativeEditor({
     });
   const accessDenied = status === 'accessDenied';
 
+  const connectionState = wsEnabled
+    ? toConnectionState(status, isSynced)
+    : null;
+
   useEffect(() => {
     onLiveCollaborationChange?.(wsEnabled && isConnected && isSynced);
   }, [wsEnabled, isConnected, isSynced, onLiveCollaborationChange]);
+
+  useEffect(() => {
+    onConnectionStateChange?.(connectionState);
+  }, [connectionState, onConnectionStateChange]);
 
   if (!editorState.isReady) {
     return (
@@ -393,20 +425,6 @@ export function CollaborativeEditor({
   return (
     <EditorErrorBoundary>
       <div className={cn('relative', className)}>
-        {wsEnabled && (
-          <div className="absolute top-2 right-2 z-10">
-            <div
-              className={cn(
-                'w-2 h-2 rounded-full',
-                isConnected ? 'bg-(--success)' : 'bg-(--warning)'
-              )}
-              title={
-                isConnected ? t('editor.connected') : t('editor.connecting')
-              }
-            />
-          </div>
-        )}
-
         {otherUsers.length > 0 && <CollaborationIndicator users={otherUsers} />}
 
         <InternalEditor

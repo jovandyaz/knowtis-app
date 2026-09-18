@@ -86,7 +86,7 @@ Key features:
 The owner (or direct editors if `editorsCanShare` is true) can grant existing accounts `viewer` or `editor` access by exact email, normalized with `trim().toLowerCase()`. No invitation email or pending account is created. This creates a record in the `note_permissions` table.
 
 - If a permission already exists for the user, it is updated (upsert behavior)
-- Notes shared via direct permissions appear in the recipient's dashboard ("My Notes")
+- Notes shared via direct permissions appear in the recipient's dashboard ("All notes")
 - Revoking deletes the permission record
 
 ### 3. Editors Can Share
@@ -323,7 +323,7 @@ The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.e
 | `/_app/notes/$noteId` | Yes           | Full note editor (owns or has permissions) |
 | `/s/$token`           | No            | Shared note view via token                 |
 
-### Dashboard ("My Notes")
+### Dashboard ("All notes")
 
 The `useNotes()` hook fetches `GET /notes`, which returns only:
 
