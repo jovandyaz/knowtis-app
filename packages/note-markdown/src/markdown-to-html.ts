@@ -7,18 +7,6 @@ import markdownItTaskLists from 'markdown-it-task-lists';
 
 const MERMAID_LANGUAGE = 'mermaid';
 
-/** How a ```mermaid fence renders: the editor's diagram block, or a plain code
- *  block for a surface that cannot draw one (the copilot's chat card). */
-export type MermaidRendering = 'block' | 'fence';
-
-export interface MarkdownToHtmlOptions {
-  readonly mermaid?: MermaidRendering;
-}
-
-interface RenderEnv {
-  readonly mermaid: MermaidRendering;
-}
-
 const TASK_LIST_UL_PATTERN = /<ul class="contains-task-list">/g;
 const LOOSE_TASK_ITEM_PATTERN =
   /(<li class="task-list-item[^"]*">)\s*<p>(<label><input class="task-list-item-checkbox"[^>]*>[\s\S]*?<\/label>)<\/p>/g;
@@ -52,10 +40,10 @@ md.use(markdownItSub);
 
 const defaultFence = md.renderer.rules.fence;
 
-md.renderer.rules.fence = (tokens, idx, options, env: RenderEnv, self) => {
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
 
-  if (env.mermaid === 'block' && token.info.trim() === MERMAID_LANGUAGE) {
+  if (token.info.trim() === MERMAID_LANGUAGE) {
     const code = md.utils.escapeHtml(token.content);
     return `<div data-mermaid-block data-code="${code}"></div>`;
   }
@@ -73,13 +61,8 @@ md.renderer.rules.fence = (tokens, idx, options, env: RenderEnv, self) => {
  * - Highlight: `==text==` → `<mark>text</mark>`
  * - Superscript: `^text^` → `<sup>text</sup>`
  * - Subscript: `~text~` → `<sub>text</sub>`
- * - Mermaid diagrams: ```` ```mermaid ... ``` ```` → `<div data-mermaid-block data-code="...">`,
- *   or a plain fenced code block with `{ mermaid: 'fence' }`
+ * - Mermaid diagrams: ```` ```mermaid ... ``` ```` → `<div data-mermaid-block data-code="...">`
  */
-export function markdownToHtml(
-  markdown: string,
-  options: MarkdownToHtmlOptions = {}
-): string {
-  const env: RenderEnv = { mermaid: options.mermaid ?? 'block' };
-  return rewriteTaskListFormat(md.render(markdown, env));
+export function markdownToHtml(markdown: string): string {
+  return rewriteTaskListFormat(md.render(markdown));
 }

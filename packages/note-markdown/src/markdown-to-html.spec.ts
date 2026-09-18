@@ -195,13 +195,4 @@ describe('markdownToHtml', () => {
     expect(result).toContain('<pre>');
     expect(result).not.toContain('data-mermaid-block');
   });
-
-  it('renders a mermaid fence as a readable code block when asked for a fence', () => {
-    const result = markdownToHtml('```mermaid\ngraph TD\n  A --> B\n```', {
-      mermaid: 'fence',
-    });
-    expect(result).not.toContain('data-mermaid-block');
-    expect(result).toContain('class="language-mermaid"');
-    expect(result).toContain('A --&gt; B');
-  });
 });
