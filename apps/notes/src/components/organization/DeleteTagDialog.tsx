@@ -19,6 +19,7 @@ interface DeleteTagDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeleted: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function DeleteTagDialog({
@@ -27,6 +28,7 @@ export function DeleteTagDialog({
   open,
   onOpenChange,
   onDeleted,
+  onCloseAutoFocus,
 }: DeleteTagDialogProps) {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
@@ -46,7 +48,10 @@ export function DeleteTagDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel={tCommon('labels.closeDialog')}>
+      <DialogContent
+        closeLabel={tCommon('labels.closeDialog')}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>{t('organization.tags.deleteTitle')}</DialogTitle>
         </DialogHeader>

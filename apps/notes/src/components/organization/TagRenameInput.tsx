@@ -8,13 +8,15 @@ import {
 } from '@knowtis/shared-types';
 
 type RenameError = 'invalidSegment' | 'conflict';
+/** Enter and Escape leave focus on the field; a blur has already moved it. */
+export type RenameExit = 'keyboard' | 'blur';
 
 interface TagRenameInputProps {
   segment: string;
   /** Lowercased sibling segments, so a rename cannot collide before it is sent. */
   siblings: string[];
-  onCommit: (segment: string) => void;
-  onCancel: () => void;
+  onCommit: (segment: string, exit: RenameExit) => void;
+  onCancel: (exit: RenameExit) => void;
 }
 
 function validate(
@@ -56,7 +58,7 @@ export function TagRenameInput({
   const submit = () => {
     const candidate = candidateOf();
     if (candidate === segment) {
-      settle(onCancel);
+      settle(() => onCancel('keyboard'));
       return;
     }
 
@@ -65,7 +67,7 @@ export function TagRenameInput({
       setError(failure);
       return;
     }
-    settle(() => onCommit(candidate));
+    settle(() => onCommit(candidate, 'keyboard'));
   };
 
   // Leaving the row abandons an edit the server would reject; only Enter is
@@ -73,10 +75,10 @@ export function TagRenameInput({
   const handleBlur = () => {
     const candidate = candidateOf();
     if (candidate === segment || validate(candidate, siblings)) {
-      settle(onCancel);
+      settle(() => onCancel('blur'));
       return;
     }
-    settle(() => onCommit(candidate));
+    settle(() => onCommit(candidate, 'blur'));
   };
 
   return (
@@ -99,7 +101,7 @@ export function TagRenameInput({
           }
           if (event.key === 'Escape') {
             event.preventDefault();
-            settle(onCancel);
+            settle(() => onCancel('keyboard'));
           }
         }}
         className="h-8"
