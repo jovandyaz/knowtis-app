@@ -235,11 +235,14 @@ export class AgentClient {
       },
       onExhausted: () => {
         this.recoveringAuth = false;
-        const pendingRequest = pending();
-        if (!pendingRequest) {
+        // A turn awaiting a decision has no pending request, and a dead
+        // credential still ends its session: fall back to its callbacks so the
+        // dock stops waiting on a decision the server will never accept.
+        const callbacks = pending()?.callbacks ?? this.activeCallbacks;
+        if (!callbacks) {
           return;
         }
-        this.failRequest(pendingRequest.callbacks, AUTH_ERROR);
+        this.failRequest(callbacks, AUTH_ERROR);
         this.onSessionExpired?.();
       },
       onError: (error) =>
@@ -476,6 +479,9 @@ export class AgentClient {
     });
 
     socket.on('agent:proposal', (payload: AgentProposalPayload) => {
+      if (this.socket !== socket) {
+        return;
+      }
       this.pending = null;
       this.awaitingReceipt = null;
       this.awaitingDecision = true;
@@ -487,14 +493,11 @@ export class AgentClient {
     });
 
     socket.on('agent:error', (payload: AgentErrorPayload) => {
-      if (this.awaitingDecision && this.canRecoverFromAuthError(payload)) {
-        return;
-      }
-      if (
-        this.pending &&
-        this.activeCallbacks &&
-        this.canRecoverFromAuthError(payload)
-      ) {
+      // A turn suspended on a proposal has no request in flight, but its
+      // decision still needs a live token: `getAccessToken` keeps returning the
+      // expired one, so without refreshing here the decision would emit with
+      // the very token the server just rejected.
+      if (this.activeCallbacks && this.canRecoverFromAuthError(payload)) {
         this.beginAuthRecovery();
         return;
       }

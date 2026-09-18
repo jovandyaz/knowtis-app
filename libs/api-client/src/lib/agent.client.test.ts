@@ -52,6 +52,19 @@ const AUTH_ERROR = {
   message: 'Authentication required',
 };
 
+/** The socket takes its token through an `auth` callback, so the value it would
+ *  send is only observable by invoking that callback. */
+function authTokenOf(ioCall: unknown[] | undefined): string | undefined {
+  const options = ioCall?.[1] as
+    | { auth?: (cb: (payload: { token: string }) => void) => void }
+    | undefined;
+  let token: string | undefined;
+  options?.auth?.((payload) => {
+    token = payload.token;
+  });
+  return token;
+}
+
 const PROPOSAL = {
   id: 'p1',
   kind: 'create' as const,
@@ -995,6 +1008,7 @@ describe('AgentClient – auth/transport failure paths', () => {
     );
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(client.canResume()).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
 
     client.approve('p1');
     await flush();
@@ -1004,6 +1018,63 @@ describe('AgentClient – auth/transport failure paths', () => {
       expect.objectContaining({ proposalId: 'p1' }),
       expect.any(Function)
     );
+    expect(authTokenOf(vi.mocked(io).mock.calls.at(-1))).toBe('fresh-token');
+  });
+
+  it('ignores a proposal arriving on a socket the client already replaced', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    const superseded = fake;
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client.sendMessage('second', callbacks);
+    await flush();
+
+    superseded.trigger('agent:proposal', PROPOSAL);
+
+    expect(callbacks.onProposal).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('ends the session when the refresh behind a pending decision is exhausted', async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'rejected');
+    const sessionExpired = vi.fn();
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'stale-token',
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+    client.setSessionExpiredHandler(sessionExpired);
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AUTH_REQUIRED' })
+    );
+    expect(sessionExpired).toHaveBeenCalledTimes(1);
+    expect(client.canResume()).toBe(false);
   });
 });
 
