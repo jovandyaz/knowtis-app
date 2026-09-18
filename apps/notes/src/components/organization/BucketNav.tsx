@@ -55,7 +55,6 @@ export function BucketNav({ onNavigate }: BucketNavProps) {
             onClick={onNavigate}
             activeOptions={{ exact: true }}
             activeProps={{}}
-            inactiveProps={{}}
             aria-current={isActive ? 'page' : undefined}
             className={`${NAV_ROW} ${isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE}`}
           >

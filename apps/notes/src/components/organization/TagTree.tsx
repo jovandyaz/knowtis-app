@@ -152,15 +152,6 @@ export function TagTree({ onNavigate }: TagTreeProps) {
             </span>
           )}
 
-          {hasChildren && item.color && (
-            <span
-              aria-hidden
-              className={`size-[7px] shrink-0 rounded-full ${tagSwatchClass(
-                item.color
-              )}`}
-            />
-          )}
-
           {isRenaming ? (
             <TagRenameInput
               segment={item.label}
@@ -175,17 +166,26 @@ export function TagTree({ onNavigate }: TagTreeProps) {
                 search={{ tag: item.path, view: 'all' }}
                 onClick={onNavigate}
                 activeProps={{}}
-                inactiveProps={{}}
                 aria-current={isActive ? 'page' : undefined}
                 className="flex min-w-0 flex-1 items-center gap-2 after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
               >
                 <span className={NAV_LABEL}>{item.label}</span>
-                {item.noteCount > 0 && (
-                  <span className={NAV_COUNT}>{item.noteCount}</span>
+                {(item.noteCount > 0 || (hasChildren && item.color)) && (
+                  <span className="flex shrink-0 items-center gap-2">
+                    {hasChildren && item.color && (
+                      <span
+                        aria-hidden
+                        className={`size-[7px] shrink-0 rounded-full ${tagSwatchClass(item.color)}`}
+                      />
+                    )}
+                    {item.noteCount > 0 && (
+                      <span className={NAV_COUNT}>{item.noteCount}</span>
+                    )}
+                  </span>
                 )}
               </Link>
 
-              <div className="relative z-10 opacity-100 transition-opacity md:opacity-0 md:group-hover/tag:opacity-100 md:group-focus-within/tag:opacity-100">
+              <div className="relative z-10 flex shrink-0 items-center opacity-100 transition-opacity md:opacity-0 md:group-hover/tag:opacity-100 md:group-focus-within/tag:opacity-100 [&>button]:size-6">
                 <TagActionsMenu
                   tagId={item.id}
                   path={item.path}

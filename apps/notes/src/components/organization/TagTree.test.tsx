@@ -7,7 +7,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -78,7 +78,7 @@ describe('TagTree', () => {
     ]);
   });
 
-  it('should render nothing until the vocabulary has tags', () => {
+  it('should render nothing until the vocabulary has tags', async () => {
     tagTree.mockReturnValue([]);
     const rootRoute = createRootRoute({ component: () => <TagTree /> });
     const router = createRouter({
@@ -86,7 +86,9 @@ describe('TagTree', () => {
       history: createMemoryHistory({ initialEntries: ['/notes'] }),
     });
 
-    render(<RouterProvider router={router} />);
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+    });
 
     expect(
       screen.queryByText('organization.tagsTitle')
@@ -150,8 +152,8 @@ describe('TagTree', () => {
     const slotOf = (label: string) =>
       rowFor(label)?.parentElement?.firstElementChild;
 
-    expect(slotOf('work')).toHaveClass('w-3', 'shrink-0');
-    expect(slotOf('personal')).toHaveClass('w-3', 'shrink-0');
+    expect(slotOf('work')).toHaveClass('w-4', 'shrink-0');
+    expect(slotOf('personal')).toHaveClass('w-4', 'shrink-0');
   });
 
   it('should let a long tag ellipsise rather than squeeze its icon slot', async () => {
@@ -223,6 +225,59 @@ describe('TagTree', () => {
     expect(
       rowFor('pale')?.parentElement?.querySelector('.bg-tag-yellow')
     ).toBeInTheDocument();
+    const label = screen.getByText('pale');
+    const trailing = label.nextElementSibling;
+    expect(label).toBe(rowFor('pale')?.firstElementChild);
+    expect(rowFor('pale')?.previousElementSibling).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(trailing).toHaveClass('flex', 'shrink-0', 'items-center', 'gap-2');
+    expect(trailing?.querySelector('.bg-tag-yellow')).toHaveAttribute(
+      'aria-hidden',
+      'true'
+    );
+    expect(trailing?.lastElementChild).toHaveClass(
+      'tabular-nums',
+      'text-foreground',
+      'dark:text-muted-foreground'
+    );
+  });
+
+  it('keeps twelve pixels of indentation per level without shifting siblings', async () => {
+    tagTree.mockReturnValue([
+      node('work', 5),
+      node('work/alpha', 2),
+      node('work/beta', 1),
+      node('work/alpha/deep', 1),
+    ]);
+    await renderAt('/notes');
+
+    expect(rowFor('alpha')?.parentElement).toHaveStyle({
+      marginLeft: '0.75rem',
+    });
+    expect(rowFor('beta')?.parentElement).toHaveStyle({
+      marginLeft: '0.75rem',
+    });
+    expect(rowFor('deep')?.parentElement).toHaveStyle({ marginLeft: '1.5rem' });
+  });
+
+  it('reserves a compact action without removing its touch target', async () => {
+    await renderAt('/notes');
+
+    const action = screen.getByRole('button', {
+      name: 'organization.tags.actionsLabel:work',
+    });
+    expect(action.parentElement).toHaveClass(
+      'shrink-0',
+      '[&>button]:size-6',
+      'flex',
+      'items-center'
+    );
+    expect(action).toHaveClass(
+      'pointer-coarse:min-h-11',
+      'pointer-coarse:min-w-11'
+    );
   });
 
   it('should tint a leaf hash with the tag palette token', async () => {

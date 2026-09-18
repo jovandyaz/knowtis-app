@@ -11,7 +11,7 @@ import {
 } from '@knowtis/design-system';
 import { useCollapsible } from '@knowtis/shared-hooks';
 
-const HEADER_CLASSES = `flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 transition-colors hover:text-muted-foreground ${TOUCH_TARGET_HEIGHT_CLASS}`;
+const HEADER_CLASSES = `flex min-h-7 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs leading-4 font-medium normal-case tracking-normal text-foreground dark:text-muted-foreground transition-colors dark:hover:text-foreground ${TOUCH_TARGET_HEIGHT_CLASS}`;
 
 interface SidebarSectionProps {
   title: string;

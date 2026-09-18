@@ -34,6 +34,30 @@ describe('SidebarSection', () => {
     expect(screen.getByText('work')).toBeInTheDocument();
   });
 
+  it('keeps section titles readable in a compact sentence-case header', () => {
+    renderSection();
+
+    expect(header()).toHaveClass(
+      'min-h-7',
+      'px-2',
+      'py-1',
+      'text-xs',
+      'leading-4',
+      'font-medium',
+      'normal-case',
+      'tracking-normal',
+      'text-foreground',
+      'dark:text-muted-foreground',
+      'dark:hover:text-foreground'
+    );
+    expect(header()).not.toHaveClass(
+      'uppercase',
+      'tracking-wider',
+      'text-muted-foreground/60',
+      'hover:text-foreground'
+    );
+  });
+
   it('hides its rows but keeps the title when collapsed', async () => {
     const user = userEvent.setup();
     renderSection();
