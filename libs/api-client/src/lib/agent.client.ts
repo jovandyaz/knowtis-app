@@ -454,22 +454,40 @@ export class AgentClient {
       }
     });
 
-    socket.on('agent:chunk', (payload: AgentChunkPayload) => {
+    // A socket the client has already replaced can still deliver buffered
+    // events, and every handler below reads or writes the LIVE turn's state —
+    // so each one runs only while its own socket is still the current one.
+    const onCurrentSocket = <T>(
+      event: string,
+      handle: (payload: T) => void
+    ) => {
+      socket.on(event, (payload: T) => {
+        if (this.socket !== socket) {
+          return;
+        }
+        handle(payload);
+      });
+    };
+
+    onCurrentSocket('agent:chunk', (payload: AgentChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);
     });
 
-    socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
+    onCurrentSocket('agent:thinking', (payload: AgentThinkingPayload) => {
       this.activeCallbacks?.onThinking?.(payload);
     });
 
-    socket.on('agent:conversation', (payload: AgentConversationPayload) => {
-      // A late announcement after cancel + new conversation would re-attach the old thread.
-      if (this.activeCallbacks) {
-        this.conversationId = payload.conversationId;
+    onCurrentSocket(
+      'agent:conversation',
+      (payload: AgentConversationPayload) => {
+        // A late announcement after cancel + new conversation would re-attach the old thread.
+        if (this.activeCallbacks) {
+          this.conversationId = payload.conversationId;
+        }
       }
-    });
+    );
 
-    socket.on('agent:done', (payload: AgentDonePayload) => {
+    onCurrentSocket('agent:done', (payload: AgentDonePayload) => {
       if (payload.conversationId) {
         this.conversationId = payload.conversationId;
       }
@@ -478,21 +496,18 @@ export class AgentClient {
       callbacks?.onDone(payload);
     });
 
-    socket.on('agent:proposal', (payload: AgentProposalPayload) => {
-      if (this.socket !== socket) {
-        return;
-      }
+    onCurrentSocket('agent:proposal', (payload: AgentProposalPayload) => {
       this.pending = null;
       this.awaitingReceipt = null;
       this.awaitingDecision = true;
       this.activeCallbacks?.onProposal?.(payload);
     });
 
-    socket.on('agent:committed', (payload: AgentCommittedPayload) => {
+    onCurrentSocket('agent:committed', (payload: AgentCommittedPayload) => {
       this.activeCallbacks?.onCommitted?.(payload);
     });
 
-    socket.on('agent:error', (payload: AgentErrorPayload) => {
+    onCurrentSocket('agent:error', (payload: AgentErrorPayload) => {
       // A turn suspended on a proposal has no request in flight, but its
       // decision still needs a live token: `getAccessToken` keeps returning the
       // expired one, so without refreshing here the decision would emit with

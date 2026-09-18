@@ -1047,6 +1047,44 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(client.canResume()).toBe(true);
   });
 
+  it('never re-runs the live turn when a replaced socket reports an auth error', async () => {
+    let token = 'stale-token';
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    const superseded = fake;
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client.sendMessage('second', callbacks);
+    await flush();
+    fake.socket.emit.mockClear();
+
+    superseded.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(fake.socket.emit).not.toHaveBeenCalledWith(
+      'agent:message',
+      expect.anything(),
+      expect.any(Function)
+    );
+  });
+
   it('ends the session when the refresh behind a pending decision is exhausted', async () => {
     const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'rejected');
     const sessionExpired = vi.fn();
