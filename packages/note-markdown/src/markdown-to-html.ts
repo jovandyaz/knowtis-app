@@ -21,20 +21,24 @@ interface RenderEnv {
 
 const TASK_LIST_UL_PATTERN = /<ul class="contains-task-list">/g;
 const TASK_LIST_ITEM_PATTERN =
-  /<li class="task-list-item[^"]*"><label><input class="task-list-item-checkbox"( checked="")?[^>]*>\s*([\s\S]*?)<\/label><\/li>/g;
+  /<li class="task-list-item[^"]*"><label><input class="task-list-item-checkbox"( checked="")?[^>]*>\s*([\s\S]*?)<\/label>/g;
 
 /**
  * Rewrites markdown-it-task-lists output to the format Tiptap's TaskList/TaskItem expects.
  *
  * markdown-it emits: `<ul class="contains-task-list"><li class="task-list-item"><label><input [checked]>...</label></li></ul>`
  * Tiptap expects:    `<ul data-type="taskList"><li data-type="taskItem" data-checked="true|false"><p>...</p></li></ul>`
+ *
+ * A nested sublist sits between `</label>` and `</li>`, so the rewrite stops at
+ * `</label>` and leaves the item's own `</li>` in place; consuming it would make
+ * the parent swallow its children.
  */
 function rewriteTaskListFormat(html: string): string {
   return html
     .replace(TASK_LIST_UL_PATTERN, '<ul data-type="taskList">')
     .replace(TASK_LIST_ITEM_PATTERN, (_match, checkedAttr, content) => {
       const checked = checkedAttr ? 'true' : 'false';
-      return `<li data-type="taskItem" data-checked="${checked}"><p>${content.trim()}</p></li>`;
+      return `<li data-type="taskItem" data-checked="${checked}"><p>${content.trim()}</p>`;
     });
 }
 

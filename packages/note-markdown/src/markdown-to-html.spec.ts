@@ -73,6 +73,23 @@ describe('markdownToHtml', () => {
     );
   });
 
+  it('keeps a nested task item taggable and ticked', () => {
+    const result = markdownToHtml('- [ ] parent\n  - [x] child\n- [x] other');
+
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="false"><p>parent</p>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>child</p></li>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>other</p></li>'
+    );
+    expect(result).not.toContain('task-list-item');
+    expect(result).not.toContain('</label>');
+    expect(result).not.toContain('<p></p>');
+  });
+
   it('should convert highlight marks', () => {
     expect(markdownToHtml('text ==highlight== more')).toContain(
       '<mark>highlight</mark>'
