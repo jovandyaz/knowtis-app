@@ -96,6 +96,46 @@ function InvalidNestedOpener({ mode }: { mode: InvalidOpenerMode }) {
   );
 }
 
+function NestedDialog({
+  nestedOpen,
+  onNestedCloseAutoFocus,
+}: {
+  nestedOpen: boolean;
+  onNestedCloseAutoFocus?: (event: Event) => void;
+}) {
+  return (
+    <Dialog open onOpenChange={vi.fn()}>
+      <DialogContent closeLabel="Close parent dialog">
+        <DialogTitle>Parent</DialogTitle>
+        <button type="button">Parent first action</button>
+        <button type="button">Parent second action</button>
+        <Dialog open={nestedOpen} onOpenChange={vi.fn()}>
+          <DialogContent
+            closeLabel="Close nested dialog"
+            onCloseAutoFocus={onNestedCloseAutoFocus}
+          >
+            <DialogTitle>Nested</DialogTitle>
+            <button type="button">Nested action</button>
+          </DialogContent>
+        </Dialog>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function dropFocus() {
+  act(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  });
+}
+
+const settleCloseAutoFocus = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
 describe('Dialog accessibility', () => {
   it('lets the fullscreen grid column shrink below its content width', () => {
     render(
@@ -417,6 +457,52 @@ describe('Dialog accessibility', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus();
   });
 
+  it('hides and blocks the rest of the page while modal by default', async () => {
+    const { container } = render(
+      <>
+        <button type="button">Background action</button>
+        <Dialog open onOpenChange={vi.fn()}>
+          <DialogContent closeLabel="Close dialog">
+            <DialogTitle>Blocking</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+
+    await waitFor(() => expect(document.body.style.pointerEvents).toBe('none'));
+    expect(container).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('leaves the rest of the page announced and clickable when not modal', async () => {
+    const user = userEvent.setup();
+    const onBackgroundClick = vi.fn();
+    const { container } = render(
+      <>
+        <button type="button" onClick={onBackgroundClick}>
+          Background action
+        </button>
+        <Dialog open modal={false} onOpenChange={vi.fn()}>
+          <DialogContent closeLabel="Close dialog">
+            <DialogTitle>Beside the page</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Beside the page' })
+    ).toBeInTheDocument();
+    expect(container).not.toHaveAttribute('aria-hidden');
+    expect(document.body.style.pointerEvents).not.toBe('none');
+    expect(document.querySelectorAll('[data-state="open"]')).toEqual(
+      expect.objectContaining({ length: 1, 0: screen.getByRole('dialog') })
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Background action' }));
+
+    expect(onBackgroundClick).toHaveBeenCalledTimes(1);
+  });
+
   it('lets a consumer cancel an outside pointer dismissal', async () => {
     const onOpenChange = vi.fn();
     const onPointerDownOutside = vi.fn((event: Event) =>
@@ -544,9 +630,7 @@ describe('Dialog accessibility', () => {
     expect(
       screen.getByRole('dialog', { name: 'Controlled dialog' })
     ).toBeInTheDocument();
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCloseAutoFocus();
 
     await user.click(screen.getByRole('button', { name: 'Allow close' }));
     await user.click(screen.getByRole('button', { name: 'Close dialog' }));
@@ -667,9 +751,7 @@ describe('Dialog accessibility', () => {
     secondOpener.focus();
     rerender(<RapidReopenDialog open />);
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCloseAutoFocus();
     expect(screen.getByRole('textbox', { name: 'Dialog field' })).toHaveFocus();
 
     rerender(<RapidReopenDialog open={false} />);
@@ -768,9 +850,7 @@ describe('Dialog accessibility', () => {
     await user.click(
       screen.getByRole('button', { name: 'Finish owned dialog' })
     );
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settleCloseAutoFocus();
 
     expect(focus).not.toHaveBeenCalled();
     expect(fallback).not.toHaveFocus();
@@ -939,6 +1019,108 @@ describe('Dialog accessibility', () => {
         screen.getByRole('button', { name: 'Lower fallback' })
       ).toHaveFocus()
     );
+  });
+
+  it('focuses the enclosing dialog when a nested dialog opened over the body closes', async () => {
+    const { rerender } = render(<NestedDialog nestedOpen={false} />);
+    const first = screen.getByRole('button', { name: 'Parent first action' });
+    dropFocus();
+
+    rerender(<NestedDialog nestedOpen />);
+    expect(screen.getByRole('button', { name: 'Nested action' })).toHaveFocus();
+    rerender(<NestedDialog nestedOpen={false} />);
+    await settleCloseAutoFocus();
+
+    expect(first).toHaveFocus();
+  });
+
+  it('leaves focus alone when a top-level dialog opened over the body closes', async () => {
+    function TopLevel({ open }: { open: boolean }) {
+      return (
+        <>
+          <button type="button">Page action</button>
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Top level</DialogTitle>
+              <button type="button">Dialog action</button>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<TopLevel open={false} />);
+    const pageAction = screen.getByRole('button', { name: 'Page action' });
+    const focus = vi.spyOn(pageAction, 'focus');
+    dropFocus();
+
+    rerender(<TopLevel open />);
+    expect(screen.getByRole('button', { name: 'Dialog action' })).toHaveFocus();
+    rerender(<TopLevel open={false} />);
+    await settleCloseAutoFocus();
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('restores a nested opener before falling back to the enclosing dialog', async () => {
+    const { rerender } = render(<NestedDialog nestedOpen={false} />);
+    const second = screen.getByRole('button', { name: 'Parent second action' });
+    act(() => second.focus());
+
+    rerender(<NestedDialog nestedOpen />);
+    rerender(<NestedDialog nestedOpen={false} />);
+    await settleCloseAutoFocus();
+
+    expect(second).toHaveFocus();
+  });
+
+  it('lets a nested consumer that prevents close autofocus keep the fallback out', async () => {
+    const onNestedCloseAutoFocus = vi.fn((event: Event) =>
+      event.preventDefault()
+    );
+    const { rerender } = render(
+      <NestedDialog
+        nestedOpen={false}
+        onNestedCloseAutoFocus={onNestedCloseAutoFocus}
+      />
+    );
+    const first = screen.getByRole('button', { name: 'Parent first action' });
+    const focus = vi.spyOn(first, 'focus');
+    dropFocus();
+
+    rerender(
+      <NestedDialog
+        nestedOpen
+        onNestedCloseAutoFocus={onNestedCloseAutoFocus}
+      />
+    );
+    rerender(
+      <NestedDialog
+        nestedOpen={false}
+        onNestedCloseAutoFocus={onNestedCloseAutoFocus}
+      />
+    );
+    await settleCloseAutoFocus();
+
+    expect(onNestedCloseAutoFocus).toHaveBeenCalledTimes(1);
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('keeps a reopened nested dialog focused when the prior close autofocus runs', async () => {
+    const { rerender } = render(<NestedDialog nestedOpen={false} />);
+    const first = screen.getByRole('button', { name: 'Parent first action' });
+    const focus = vi.spyOn(first, 'focus');
+    dropFocus();
+
+    rerender(<NestedDialog nestedOpen />);
+    rerender(<NestedDialog nestedOpen={false} />);
+    rerender(<NestedDialog nestedOpen />);
+    await settleCloseAutoFocus();
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Nested action' })).toHaveFocus();
   });
 
   it('renders a right-side drawer when side="right"', () => {
