@@ -12,7 +12,7 @@ import type {
 } from './agent-tool';
 
 const CONTENT_MARKDOWN_DESCRIPTION =
-  'The note body in Markdown: headings, bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x]), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, and ```mermaid fenced diagrams. Images and raw HTML are not supported.';
+  'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x]), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, and ```mermaid fenced diagrams. Images and raw HTML are not supported.';
 
 function captureProposal(
   collector: ProposalCollector,
