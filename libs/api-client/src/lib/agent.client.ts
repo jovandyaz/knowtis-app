@@ -403,7 +403,7 @@ export class AgentClient {
       ackTimeout: AGENT_ACK_TIMEOUT_MS,
     });
 
-    this.setupEventListeners();
+    this.setupEventListeners(this.socket);
   }
 
   /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
@@ -413,12 +413,7 @@ export class AgentClient {
     socket?.disconnect();
   }
 
-  private setupEventListeners(): void {
-    const socket = this.socket;
-    if (!socket) {
-      return;
-    }
-
+  private setupEventListeners(socket: Socket): void {
     socket.on('connect', () => {
       this.reconnectAttempts = 0;
       logger.info('Agent WebSocket connected', { context: 'AgentClient' });

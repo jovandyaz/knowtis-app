@@ -674,6 +674,10 @@ describe('AgentClient – auth/transport failure paths', () => {
 
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(io).toHaveBeenCalledTimes(1);
+
+    fake.trigger('agent:chunk', { text: 'still here' });
+
+    expect(callbacks.onChunk).toHaveBeenCalledWith({ text: 'still here' });
   });
 
   it('carries the turn sent while the token refresh was still in flight', async () => {
