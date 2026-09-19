@@ -18,7 +18,7 @@ import { toNoteHit } from './note-hit.mapper';
 const MAX_SEARCH_HITS = 20;
 const MAX_NOTE_CONTENT_CHARS = 10_000;
 const TRUNCATION_MARKER = '[truncated]';
-const FENCE_MARKER_RE = /<<\s*\/?\s*(?:END_)?NOTE_DATA\b[^>]*>>/gi;
+const FENCE_MARKER_RE = /<<\s*\\?\/?\s*(?:END\\?_)?NOTE\\?_DATA\b[^>]*>>/gi;
 const WITHHELD_CONTENT =
   '[Note content withheld: it failed the injection safety check]';
 
@@ -102,8 +102,9 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       // emphasised word inside a phrase hides it from a Markdown scan; the
       // plain text drops href values, hiding an exfiltration link from a
       // plain-text scan. Neither view covers the other.
-      const scanned = [markdown, this.bound(htmlToPlainText(html))];
-      for (const text of scanned) {
+      const plain = this.bound(htmlToPlainText(html));
+      const views = plain === markdown ? [markdown] : [markdown, plain];
+      for (const text of views) {
         const verdict = await this.injectionGuard.guard(text, userId);
         if (!verdict.safe) {
           this.logger.warn({
