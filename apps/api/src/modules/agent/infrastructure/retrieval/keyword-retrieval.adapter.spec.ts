@@ -648,6 +648,37 @@ describe('KeywordRetrievalAdapter', () => {
         }
       );
 
+      const PLACEHOLDER_SHAPES: ReadonlyArray<readonly [string, string]> = [
+        [
+          'a templating placeholder',
+          '<p>Our export template uses <code>&lt;&lt;noteData&gt;&gt;</code> for the body.</p>',
+        ],
+        [
+          'a list of template variables',
+          '<p>Template vars: &lt;&lt;title&gt;&gt;, &lt;&lt;noteData&gt;&gt;, &lt;&lt;author&gt;&gt;</p>',
+        ],
+        [
+          'a spaced placeholder',
+          '<p>Placeholders like &lt;&lt;note data&gt;&gt; get replaced at render time.</p>',
+        ],
+        [
+          'an upper-case placeholder',
+          '<p>Use &lt;&lt;NOTE DATA&gt;&gt; in the mail-merge template.</p>',
+        ],
+      ];
+
+      it.each(PLACEHOLDER_SHAPES)(
+        'neutralizes %s rather than withholding the body',
+        async (_shape, html) => {
+          const repo = makeRepo({ note: noteView(NOTE_ID, 'Note', html) });
+          const { adapter } = makeAdapter(repo);
+
+          const found = await adapter.getById(USER, NOTE_ID);
+
+          expect(found?.content).not.toContain(WITHHELD_MARKER);
+        }
+      );
+
       it('neutralizes a spaced marker in place rather than withholding the body', async () => {
         const repo = makeRepo({
           note: noteView(

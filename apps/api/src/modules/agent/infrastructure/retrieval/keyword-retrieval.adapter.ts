@@ -23,9 +23,10 @@ const MARKDOWN_NOISE = '[\\s\\\\*_`=^~\\[\\]()]*';
 function noisyLiteral(literal: string): string {
   return literal
     .split('')
-    .map(
-      (char) =>
-        `${MARKDOWN_NOISE}${/[a-z0-9]/i.test(char) ? char : `\\${char}`}`
+    .map((char) =>
+      char === '_'
+        ? MARKDOWN_NOISE
+        : `${MARKDOWN_NOISE}${/[a-z0-9]/i.test(char) ? char : `\\${char}`}`
     )
     .join('');
 }
@@ -153,8 +154,8 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     const neutralized = markdown.replace(FENCE_MARKER_RE, '[removed]');
     // Decoration inside the marker is cosmetic to the model, so a marker that
     // survives once Markdown noise is stripped means the pattern missed a shape
-    // the converter emits. Nothing benign reaches here; withhold rather than
-    // hand the model a body that can close its own fence.
+    // the converter emits. Withhold rather than hand the model a body that can
+    // close its own fence.
     if (carriesFenceMarker(neutralized)) {
       this.logger.warn({
         event: 'agent.retrieval.fence_marker_survived',
