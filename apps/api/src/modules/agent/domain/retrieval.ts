@@ -10,10 +10,19 @@ export interface NoteHit extends NoteMeta {
   readonly title: string;
 }
 
+export const NOTE_CONTENT_STATUSES = [
+  'complete',
+  'truncated',
+  'withheld',
+] as const;
+export type NoteContentStatus = (typeof NOTE_CONTENT_STATUSES)[number];
+
 export interface AgentNote extends NoteMeta {
   readonly id: string;
   readonly title: string;
   readonly content: string;
+  /** Whether `content` is the whole body: `truncated` was cut at the read bound, `withheld` is a stub standing in for a body that failed the injection check. */
+  readonly contentStatus: NoteContentStatus;
   readonly createdAt: string;
 }
 

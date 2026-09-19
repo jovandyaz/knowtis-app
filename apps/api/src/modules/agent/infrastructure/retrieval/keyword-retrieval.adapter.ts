@@ -11,7 +11,12 @@ import {
 } from '../../../notes/domain/ports/note-read.repository';
 import { InjectionGuardService } from '../../application/injection-guard.service';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
-import type { AgentNote, NoteHit, NotesOverview } from '../../domain/retrieval';
+import type {
+  AgentNote,
+  NoteContentStatus,
+  NoteHit,
+  NotesOverview,
+} from '../../domain/retrieval';
 import { htmlToPlainText } from '../sanitize/html-sanitizer';
 import { toNoteHit } from './note-hit.mapper';
 
@@ -20,6 +25,16 @@ const MAX_NOTE_CONTENT_CHARS = 10_000;
 const TRUNCATION_MARKER = '[truncated]';
 const WITHHELD_CONTENT =
   '[Note content withheld: it failed the injection safety check]';
+
+interface BoundedText {
+  readonly text: string;
+  readonly truncated: boolean;
+}
+
+interface ToolContent {
+  readonly content: string;
+  readonly contentStatus: NoteContentStatus;
+}
 
 @Injectable()
 export class KeywordRetrievalAdapter implements RetrievalPort {
@@ -62,7 +77,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     }
     return {
       ...toNoteHit(note, userId),
-      content: await this.toToolContent(note.content, userId, note.id),
+      ...(await this.toToolContent(note.content, userId, note.id)),
       createdAt: note.createdAt.toISOString(),
     };
   }
@@ -94,7 +109,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     html: string,
     userId: string,
     noteId: string
-  ): Promise<string> {
+  ): Promise<ToolContent> {
     const markdown = this.bound(htmlToMarkdown(html));
     if (await this.scanFlagOn()) {
       // The heuristics match instruction phrases as contiguous text, so one
@@ -102,7 +117,10 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       // plain text drops href values, hiding an exfiltration link from a
       // plain-text scan. Neither view covers the other.
       const plain = this.bound(htmlToPlainText(html));
-      const views = plain === markdown ? [markdown] : [markdown, plain];
+      const views =
+        plain.text === markdown.text
+          ? [markdown.text]
+          : [markdown.text, plain.text];
       for (const text of views) {
         const verdict = await this.injectionGuard.guard(text, userId);
         if (!verdict.safe) {
@@ -111,17 +129,23 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
             noteId,
             score: verdict.score,
           });
-          return WITHHELD_CONTENT;
+          return { content: WITHHELD_CONTENT, contentStatus: 'withheld' };
         }
       }
     }
-    return markdown;
+    return {
+      content: markdown.text,
+      contentStatus: markdown.truncated ? 'truncated' : 'complete',
+    };
   }
 
-  private bound(text: string): string {
+  private bound(text: string): BoundedText {
     return text.length <= MAX_NOTE_CONTENT_CHARS
-      ? text
-      : `${text.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`;
+      ? { text, truncated: false }
+      : {
+          text: `${text.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`,
+          truncated: true,
+        };
   }
 
   private async scanFlagOn(): Promise<boolean> {
