@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
+import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
+
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { SearchApi } from '../api-client/search.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
-import { htmlToMarkdown } from '../utils/html-to-markdown.js';
-import { markdownToHtml } from '../utils/markdown-to-html.js';
 import { decodePageCursor, nextPageCursor } from '../utils/note-cursor.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,

@@ -1,28 +1,9 @@
-import MarkdownIt from 'markdown-it';
 import sanitizeHtml from 'sanitize-html';
 
-const md = new MarkdownIt({ html: false, linkify: false, breaks: false });
+import { markdownToHtml } from '@knowtis/note-markdown';
 
-const MERMAID_LANGUAGE = 'mermaid';
 const MERMAID_BLOCK_ATTR = 'data-mermaid-block';
 const MERMAID_CODE_ATTR = 'data-code';
-
-interface RenderEnv {
-  readonly mermaidAsDiagram?: boolean;
-}
-
-const defaultFence = md.renderer.rules.fence;
-
-md.renderer.rules.fence = (tokens, idx, options, env: RenderEnv, self) => {
-  const token = tokens[idx];
-  if (env.mermaidAsDiagram && token.info.trim() === MERMAID_LANGUAGE) {
-    const code = md.utils.escapeHtml(token.content);
-    return `<div ${MERMAID_BLOCK_ATTR} ${MERMAID_CODE_ATTR}="${code}"></div>`;
-  }
-  return defaultFence
-    ? defaultFence(tokens, idx, options, env, self)
-    : self.renderToken(tokens, idx, options);
-};
 
 const ALLOWED_TAGS = [
   'p',
@@ -45,35 +26,37 @@ const ALLOWED_TAGS = [
   'a',
   'hr',
   'div',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
+  'mark',
+  'sub',
+  'sup',
 ];
 
-function renderSafeHtml(markdown: string, env: RenderEnv): string {
+/** Sanitized note body for the editor: mermaid fences become diagram blocks. */
+export function markdownToNoteHtml(markdown: string): string {
   if (!markdown.trim()) {
     return '';
   }
-  const rendered = md.render(markdown, env);
-  const sanitized = sanitizeHtml(rendered, {
+  const sanitized = sanitizeHtml(markdownToHtml(markdown), {
     allowedTags: ALLOWED_TAGS,
     allowedAttributes: {
       a: ['href'],
       div: [MERMAID_BLOCK_ATTR, MERMAID_CODE_ATTR],
+      ol: ['start'],
+      ul: ['data-type'],
+      li: ['data-type', 'data-checked'],
     },
     allowedClasses: { code: ['language-*'] },
     allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
     disallowedTagsMode: 'discard',
   });
   return sanitized.trim();
-}
-
-/** Sanitized note body for the editor: mermaid fences become diagram blocks. */
-export function markdownToNoteHtml(markdown: string): string {
-  return renderSafeHtml(markdown, { mermaidAsDiagram: true });
-}
-
-/** Sanitized proposal preview for the chat card, which renders raw HTML and so
- *  cannot draw a diagram — mermaid stays a readable code block there. */
-export function markdownToPreviewHtml(markdown: string): string {
-  return renderSafeHtml(markdown, { mermaidAsDiagram: false });
 }
 
 const BLOCK_BOUNDARY_PATTERN =

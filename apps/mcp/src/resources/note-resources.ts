@@ -7,6 +7,8 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
+
 import { ApiError } from '../api-client/client.js';
 import type { NotesApi, NotesPageResponse } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
@@ -16,7 +18,6 @@ import {
   resolveCredentialToken,
 } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
-import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { decodePageCursor, nextPageCursor } from '../utils/note-cursor.js';
 
 const NOTE_URI_PATTERN =

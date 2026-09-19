@@ -24,7 +24,6 @@ interface SerializedRecord {
     targetNoteId?: string;
     payload: ProposedMutation['payload'];
     summary: string;
-    previewHtml?: string;
     baseVersion?: string;
   };
 }
@@ -64,9 +63,6 @@ return v
         }),
         payload: record.mutation.payload,
         summary: record.mutation.summary,
-        ...(record.mutation.previewHtml && {
-          previewHtml: record.mutation.previewHtml,
-        }),
         ...(record.mutation.baseVersion && {
           baseVersion: record.mutation.baseVersion,
         }),

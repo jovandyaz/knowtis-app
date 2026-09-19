@@ -12,10 +12,7 @@ import {
   ProposedMutation,
   type UpdateMutationPayload,
 } from '../../domain/proposed-mutation';
-import {
-  markdownToNoteHtml,
-  markdownToPreviewHtml,
-} from '../sanitize/html-sanitizer';
+import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 
 export interface UpdateProposalInput {
   readonly title?: string;
@@ -42,7 +39,6 @@ export class MutationProposalBuilder {
       kind: 'create',
       payload: { title, contentHtml },
       summary: `Create note "${title}"`,
-      previewHtml: markdownToPreviewHtml(contentMarkdown),
     });
   }
 
@@ -61,13 +57,11 @@ export class MutationProposalBuilder {
       return err(AgentErrors.noteNotFound(noteId));
     }
     let contentHtml: string | undefined;
-    let previewHtml: string | undefined;
     if (input.contentMarkdown !== undefined) {
       contentHtml = markdownToNoteHtml(input.contentMarkdown);
       if (input.contentMarkdown.trim() && !contentHtml) {
         return err(AgentErrors.sanitizeRejected());
       }
-      previewHtml = markdownToPreviewHtml(input.contentMarkdown);
     }
     const payload: UpdateMutationPayload = {
       ...(input.title !== undefined && { title: input.title }),
@@ -86,7 +80,6 @@ export class MutationProposalBuilder {
       targetNoteId: noteId,
       payload,
       summary: `Update "${note.title}": ${parts.join(', ') || 'no changes'}`,
-      ...(previewHtml && { previewHtml }),
       baseVersion: note.updatedAt,
     });
   }

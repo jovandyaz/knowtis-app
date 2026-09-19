@@ -51,7 +51,6 @@ test('reviews a proposed note update before applying it', async ({
           kind: 'update',
           targetNoteId: note.id,
           summary: 'Update "Landing de agencia": title, content updated',
-          previewHtml: PROPOSED_HTML,
           payload: {
             title: 'Landing de agencia — Especificacion tecnica',
             contentHtml: PROPOSED_HTML,
@@ -151,7 +150,6 @@ test('discards a proposed update with a reason', async ({ sharing }) => {
           kind: 'update',
           targetNoteId: note.id,
           summary: 'Update "Nota descartable": content updated',
-          previewHtml: '<p>Contenido reescrito</p>',
           payload: { contentHtml: '<p>Contenido reescrito</p>' },
         },
       ],

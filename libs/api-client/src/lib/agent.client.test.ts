@@ -70,7 +70,6 @@ const PROPOSAL = {
   kind: 'create' as const,
   targetNoteId: null,
   summary: 'Create "My Note"',
-  previewHtml: null,
   payload: {},
 };
 

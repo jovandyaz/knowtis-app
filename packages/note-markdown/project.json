@@ -1,0 +1,29 @@
+{
+  "name": "note-markdown",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/note-markdown/src",
+  "projectType": "library",
+  "tags": ["type:util", "scope:shared"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/note-markdown",
+        "command": "eslint src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/note-markdown",
+        "command": "vitest run --passWithNoTests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tools/typecheck-project.sh {projectRoot}"
+      }
+    }
+  }
+}

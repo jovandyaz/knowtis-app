@@ -25,7 +25,6 @@ export type MutationPayload =
 interface ProposedMutationBase {
   readonly id: string;
   readonly summary: string;
-  readonly previewHtml?: string;
   // Target note updatedAt as ISO string at propose time; compared via toISOString() at commit (optimistic concurrency).
   readonly baseVersion?: string;
 }
@@ -58,7 +57,6 @@ export interface ProposedMutationInput {
   readonly targetNoteId?: string;
   readonly payload: MutationPayload;
   readonly summary: string;
-  readonly previewHtml?: string;
   readonly baseVersion?: string;
 }
 
@@ -92,7 +90,6 @@ function baseProps(props: ProposedMutationInput): ProposedMutationBase {
   return {
     id: props.id,
     summary: props.summary,
-    ...(props.previewHtml !== undefined && { previewHtml: props.previewHtml }),
     ...(props.baseVersion !== undefined && { baseVersion: props.baseVersion }),
   };
 }

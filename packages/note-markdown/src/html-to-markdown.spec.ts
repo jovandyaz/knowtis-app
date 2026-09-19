@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { htmlToMarkdown } from '../html-to-markdown.js';
-import { markdownToHtml } from '../markdown-to-html.js';
+import { htmlToMarkdown } from './html-to-markdown';
+import { markdownToHtml } from './markdown-to-html';
 
 describe('htmlToMarkdown', () => {
   it('should convert basic formatting', () => {
