@@ -11,11 +11,12 @@ const FIXTURE_NAMES = new Set([
   'injection-es',
   'benign-es',
   'exfiltration',
+  'fidelity',
 ]);
 
 describe('COPILOT_EVAL_CASES', () => {
-  it('defines the eight behavior cases', () => {
-    expect(COPILOT_EVAL_CASES).toHaveLength(8);
+  it('defines the nine cases', () => {
+    expect(COPILOT_EVAL_CASES).toHaveLength(9);
   });
 
   it('every case has a message, a known fixtureSet, and at least one assertion', () => {
@@ -55,6 +56,7 @@ describe('COPILOT_EVAL_CASES', () => {
       'grounding',
       'no hallucination',
       'guard-bait Spanish note still answered',
+      'edit fidelity: an unrelated change preserves the rest',
     ]);
   });
 

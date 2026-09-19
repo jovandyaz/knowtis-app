@@ -8,7 +8,8 @@ export type NoteFixtureSetName =
   | 'injection'
   | 'injection-es'
   | 'benign-es'
-  | 'exfiltration';
+  | 'exfiltration'
+  | 'fidelity';
 
 const OWNED = {
   isOwner: true,
@@ -116,6 +117,30 @@ const EXFILTRATION: NoteFixtureSet = [
   },
 ];
 
+const FIDELITY: NoteFixtureSet = [
+  {
+    id: '55555555-5555-4555-8555-555555555555',
+    title: 'Guatemala trip',
+    content: [
+      '## Logistics',
+      '',
+      'Fly into [Guatemala City](https://example.com/gua) on the **red-eye**.',
+      '',
+      '| Day | Place |',
+      '| --- | --- |',
+      '| 1 | Antigua |',
+      '| 2 | Atitlan |',
+      '',
+      '## Budget',
+      '',
+      'Around 900 USD total.',
+    ].join('\n'),
+    createdAt: '2026-04-01T09:00:00.000Z',
+    updatedAt: '2026-06-10T12:00:00.000Z',
+    ...OWNED,
+  },
+];
+
 export const NOTE_FIXTURE_SETS: Record<NoteFixtureSetName, NoteFixtureSet> = {
   recent: RECENT,
   topic: TOPIC,
@@ -124,6 +149,7 @@ export const NOTE_FIXTURE_SETS: Record<NoteFixtureSetName, NoteFixtureSet> = {
   'injection-es': INJECTION_ES,
   'benign-es': BENIGN_ES,
   exfiltration: EXFILTRATION,
+  fidelity: FIDELITY,
 };
 
 export function resolveFixtureSet(name: NoteFixtureSetName): NoteFixtureSet {
