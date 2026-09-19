@@ -1,5 +1,7 @@
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
+import type { NoteContentStatus } from './retrieval';
+
 export interface AgentDomainError {
   readonly code: string;
   readonly message: string;
@@ -38,4 +40,11 @@ export const AgentErrors = {
     make('AGENT_NOTE_NOT_FOUND', `Note ${noteId} not found or not accessible`),
   targetUserNotFound: (email: string) =>
     make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
+  wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>
+    make(
+      'AGENT_WHOLE_BODY_UPDATE_REFUSED',
+      status === 'truncated'
+        ? 'You only received part of this note, so replacing its whole body would delete the rest. Use proposeEditNote to change the part you can see, or its appendMarkdown to add to the end.'
+        : 'The content of this note was withheld from you, so its body cannot be replaced.'
+    ),
 } as const;

@@ -19,6 +19,11 @@ export interface UpdateProposalInput {
   readonly contentMarkdown?: string;
 }
 
+interface NoteSubject {
+  readonly title: string;
+  readonly updatedAt: string;
+}
+
 @Injectable()
 export class MutationProposalBuilder {
   constructor(
@@ -52,11 +57,20 @@ export class MutationProposalBuilder {
         AgentErrors.invalidProposal('update requires a title or content change')
       );
     }
-    const note = await this.retrieval.getById(userId, noteId);
+    let contentHtml: string | undefined;
+    let note: NoteSubject | null;
+    if (input.contentMarkdown === undefined) {
+      note = await this.retrieval.getBody(userId, noteId);
+    } else {
+      const read = await this.retrieval.getById(userId, noteId);
+      if (read && read.contentStatus !== 'complete') {
+        return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
+      }
+      note = read;
+    }
     if (!note) {
       return err(AgentErrors.noteNotFound(noteId));
     }
-    let contentHtml: string | undefined;
     if (input.contentMarkdown !== undefined) {
       contentHtml = markdownToNoteHtml(input.contentMarkdown);
       if (input.contentMarkdown.trim() && !contentHtml) {
@@ -90,7 +104,7 @@ export class MutationProposalBuilder {
     targetEmail: string,
     permission: 'viewer' | 'editor'
   ): Promise<Result<ProposedMutation, AgentDomainError>> {
-    const note = await this.retrieval.getById(userId, noteId);
+    const note = await this.retrieval.getBody(userId, noteId);
     if (!note) {
       return err(AgentErrors.noteNotFound(noteId));
     }
