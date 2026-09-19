@@ -26,6 +26,13 @@ export interface AgentNote extends NoteMeta {
   readonly createdAt: string;
 }
 
+/** The stored note, unconverted and unscreened. Never hand `html` to a model: it has not passed the injection guard. `updatedAt` is the ISO string `getById` reports. */
+export interface NoteBody {
+  readonly title: string;
+  readonly html: string;
+  readonly updatedAt: string;
+}
+
 /** `unindexed` is present only on a total miss: accessible notes whose current
  * text the semantic leg cannot reach yet. */
 export interface SearchNotesResult {

@@ -1,13 +1,20 @@
+import { markdownToHtml } from '@knowtis/note-markdown';
+
 import type { RetrievalPort } from '../domain/ports/retrieval.port';
-import type { AgentNote, NoteHit, NotesOverview } from '../domain/retrieval';
-import type { NoteFixtureSet } from './fixtures/note-sets';
+import type {
+  AgentNote,
+  NoteBody,
+  NoteHit,
+  NotesOverview,
+} from '../domain/retrieval';
+import type { NoteFixture, NoteFixtureSet } from './fixtures/note-sets';
 
 export interface RecordedCall {
   readonly name: string;
   readonly args: unknown;
 }
 
-function toHit(note: AgentNote): NoteHit {
+function toHit(note: NoteFixture): NoteHit {
   return {
     id: note.id,
     title: note.title,
@@ -18,8 +25,17 @@ function toHit(note: AgentNote): NoteHit {
   };
 }
 
+function toAgentNote(note: NoteFixture): AgentNote {
+  return {
+    ...toHit(note),
+    content: note.content,
+    contentStatus: note.contentStatus,
+    createdAt: note.createdAt,
+  };
+}
+
 export class RecordingFixtureRetrieval implements RetrievalPort {
-  private notes: readonly AgentNote[] = [];
+  private notes: NoteFixtureSet = [];
   private calls: RecordedCall[] = [];
 
   seed(set: NoteFixtureSet): void {
@@ -49,7 +65,22 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
 
   async getById(_userId: string, noteId: string): Promise<AgentNote | null> {
     this.calls.push({ name: 'getNote', args: { noteId } });
-    return this.notes.find((n) => n.id === noteId) ?? null;
+    const fixture = this.notes.find((n) => n.id === noteId);
+    return fixture ? toAgentNote(fixture) : null;
+  }
+
+  // No model tool call reaches getBody, so recording it would put a phantom
+  // getNote in the transcript the eval asserts against.
+  async getBody(_userId: string, noteId: string): Promise<NoteBody | null> {
+    const fixture = this.notes.find((n) => n.id === noteId);
+    if (!fixture) {
+      return null;
+    }
+    return {
+      title: fixture.title,
+      html: markdownToHtml(fixture.body ?? fixture.content),
+      updatedAt: fixture.updatedAt,
+    };
   }
 
   async listRecent(_userId: string, limit: number): Promise<NoteHit[]> {

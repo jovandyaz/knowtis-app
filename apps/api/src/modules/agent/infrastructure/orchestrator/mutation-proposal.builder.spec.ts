@@ -17,6 +17,7 @@ function makeRetrieval(over: Partial<RetrievalPort> = {}): RetrievalPort {
       isSharedWithMe: false,
       isPubliclyShared: false,
     }),
+    getBody: vi.fn(),
     listRecent: vi.fn(),
     overview: vi.fn(),
     ...over,

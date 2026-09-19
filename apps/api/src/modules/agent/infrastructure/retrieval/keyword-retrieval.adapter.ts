@@ -13,6 +13,7 @@ import { InjectionGuardService } from '../../application/injection-guard.service
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type {
   AgentNote,
+  NoteBody,
   NoteContentStatus,
   NoteHit,
   NotesOverview,
@@ -79,6 +80,22 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       ...toNoteHit(note, userId),
       ...(await this.toToolContent(note.content, userId, note.id)),
       createdAt: note.createdAt.toISOString(),
+    };
+  }
+
+  async getBody(userId: string, noteId: string): Promise<NoteBody | null> {
+    const branded = this.brandUser(userId, 'getBody');
+    if (!branded) {
+      return null;
+    }
+    const note = await this.noteReadRepository.findByIdForUser(noteId, branded);
+    if (!note) {
+      return null;
+    }
+    return {
+      title: note.title,
+      html: note.content,
+      updatedAt: note.updatedAt.toISOString(),
     };
   }
 

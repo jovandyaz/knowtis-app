@@ -1,6 +1,8 @@
 import type { AgentNote } from '../../domain/retrieval';
 
-export type NoteFixtureSet = readonly AgentNote[];
+/** `body` is the whole note as Markdown, present only when `content` is a view of it rather than the whole thing. */
+export type NoteFixture = AgentNote & { readonly body?: string };
+export type NoteFixtureSet = readonly NoteFixture[];
 export type NoteFixtureSetName =
   | 'recent'
   | 'topic'
