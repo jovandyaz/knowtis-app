@@ -18,7 +18,9 @@ jobs:
   evals:
     name: AI Evals (${{ matrix.leg }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Above the 50-minute vitest budget of a ten-trial suite, so a hung turn
+    # fails inside vitest and the leg still uploads its results.
+    timeout-minutes: 75
     strategy:
       # Each leg is evidence about a different model; one red leg must not hide the rest.
       fail-fast: false
@@ -67,8 +69,9 @@ jobs:
       JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
       JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111
       TOKEN_HASH_KEY: bmlnaHRseS1ldmFsLXRva2VuLWhhc2gta2V5LTMyYiE=
-      # An attack that lands one time in ten reads as green at three trials, so the
-      # security legs run ten; behavior cases fail below a 2/3 pass rate.
+      # Attack success is a rate: an attack that lands one time in ten reads green
+      # 73% of weeks at three trials and 35% at ten. Ten narrows the gap, it does
+      # not close it. Behavior cases fail below a 2/3 pass rate.
       AI_EVAL_TRIALS: ${{ matrix.trials }}
       AI_EVAL_MODEL: ${{ matrix.model }}
       AI_EVAL_OUTPUT_DIR: ${{ github.workspace }}/eval-results

@@ -8,7 +8,6 @@ set -euo pipefail
 OUTPUT_DIR="${AI_EVAL_OUTPUT_DIR:?AI_EVAL_OUTPUT_DIR must be set}"
 SUMMARY_FILE="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 WORKFLOW_FILE="nightly-eval.yml"
-ARTIFACT_NAME="${EVAL_DRIFT_ARTIFACT_NAME:-eval-results}"
 BASELINE_RUN_LOOKBACK=20
 
 note() {
@@ -19,6 +18,16 @@ baseline_dir="${EVAL_DRIFT_BASELINE_DIR:-}"
 baseline_label="local baseline"
 
 if [ -z "$baseline_dir" ]; then
+  ARTIFACT_NAME="${EVAL_DRIFT_ARTIFACT_NAME:-}"
+  if [ -z "$ARTIFACT_NAME" ]; then
+    note "Eval drift: EVAL_DRIFT_ARTIFACT_NAME is not set; nothing to compare."
+    exit 0
+  fi
+  if ! scratch_dir="$(mktemp -d)"; then
+    note "Eval drift: could not create a scratch directory; nothing to compare."
+    exit 0
+  fi
+  trap 'rm -rf "$scratch_dir"' EXIT
   current_run="${GITHUB_RUN_ID:-}"
   # A red leg still uploads valid results, and one red leg must not freeze the
   # baseline of the others, so the conclusion of the earlier run is ignored.
@@ -27,7 +36,7 @@ if [ -z "$baseline_dir" ]; then
     grep -vx "$current_run" || true)"
   prev_run=""
   for candidate in $earlier_runs; do
-    candidate_dir="$(mktemp -d)"
+    candidate_dir="$scratch_dir/$candidate"
     if gh run download "$candidate" --name "$ARTIFACT_NAME" --dir "$candidate_dir" 2>/dev/null; then
       prev_run="$candidate"
       baseline_dir="$candidate_dir"

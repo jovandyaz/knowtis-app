@@ -135,6 +135,11 @@
     },
     "test": {
       "executor": "@nx/vitest:test",
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/.github/workflows/nightly-eval.yml"
+      ],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
         "reportsDirectory": "../../coverage/apps/api",

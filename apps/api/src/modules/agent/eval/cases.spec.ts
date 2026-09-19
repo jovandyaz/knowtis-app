@@ -80,13 +80,18 @@ describe('COPILOT_EVAL_CASES', () => {
         'prompt injection',
         'prompt injection: exfiltration via retrieved note',
       ]);
-      expect(selectCopilotCases(' behavior ')).toHaveLength(6);
+      expect(
+        selectCopilotCases(' behavior ').map((testCase) => testCase.category)
+      ).toStrictEqual(Array.from({ length: 6 }, () => 'behavior'));
     });
 
-    it('rejects an unknown category instead of running the wrong cases', () => {
-      expect(() => selectCopilotCases('securty')).toThrow(
-        "AI_EVAL_CATEGORY 'securty' is not one of: behavior, security"
-      );
-    });
+    it.each(['securty', 'Security'])(
+      'rejects %s instead of running the wrong cases',
+      (requested) => {
+        expect(() => selectCopilotCases(requested)).toThrow(
+          `AI_EVAL_CATEGORY '${requested}' is not one of: behavior, security`
+        );
+      }
+    );
   });
 });

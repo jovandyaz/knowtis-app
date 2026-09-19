@@ -90,10 +90,11 @@ Proposals live in Redis keyed by `proposalId`; approve and reject both resume th
 
 ## Eval harness
 
-Opt-in, non-CI. Boots the real `AgentModule` via Vitest (requires `pnpm docker:up` for Postgres/Redis); some evals call real Voyage/Tavily.
+Opt-in, never on a PR — a weekly workflow runs it across the production models. Boots the real `AgentModule` via Vitest (requires `pnpm docker:up` for Postgres/Redis); some evals call real Voyage/Tavily.
 
 ```bash
-nx run api:eval
+nx run api:eval            # every suite
+nx run api:eval-security   # Copilot security cases + injection-guard (AI_EVAL_CATEGORY=security)
 ```
 
 [`eval/`](eval) contents: the suites `copilot.eval`, `injection-guard.eval`, `memory-recall.eval`, `retrieval-quality.eval`, `transcript-replay.eval`, `web-search-quality.eval`; `agent-eval-harness` (boots the module graph), `cases` (promptfoo cases), `copilot-provider` (`createCopilotProvider`), `assertions`, `transcript` (`EvalTranscript`), `pinned-model` (`assertPinnedModelAvailable` / `assertPinnedModelServed`), `recording-fixture-retrieval`, `transcript-replay.fixtures`; `fixtures/` (note sets); `runtime/eval-runtime` (Promptfoo runner, trials, result output); `calibration/` (judge-calibration CLIs `judgment-extract.cli` / `agreement.cli` and their `labels/` directory).

@@ -1062,10 +1062,12 @@ pnpm nx run api:eval
   test — a fixed judge from another family keeps runs comparable and avoids a model grading its
   own family — so `ANTHROPIC_API_KEY` is required even when the model under test is not
   Anthropic's. An `openrouter:*` model additionally needs `OPENROUTER_API_KEY`, and cannot run
-  in gateway mode (`AI_GATEWAY_API_KEY` set). The harness boots the real module graph, so an
-  OpenRouter turn is routed the way a production turn is: upstream preferences resolve from
-  `ai_config` (`ai_openrouter_providers`), which on CI's fresh database means the code
-  defaults.
+  in gateway mode (`AI_GATEWAY_API_KEY` set).
+- **Production parity:** the harness calls the orchestrator directly, skipping
+  `RunAgentTurnHandler` — the layer that resolves a turn's OpenRouter upstream order, ignored
+  upstreams and reasoning effort. It therefore resolves those three itself, from the same
+  `AIConfigService` and `TurnEffortResolver`, so an eval turn reaches the upstreams and the
+  effort a user's turn does. On CI's fresh database that means the code defaults.
 - **Security only:** `pnpm nx run api:eval-security` runs just the Copilot security cases and
   the `injection-guard` suite (`AI_EVAL_CATEGORY=security`; `behavior` is the other value, and
   an unknown one throws rather than running the wrong cases).
@@ -1103,8 +1105,8 @@ pnpm nx run api:eval
 - **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
   sources) plus `llm-rubric` graders (Anthropic) for grounding, no-hallucination, HITL, and
   injection resistance. Each Copilot case is judged on its category-specific
-  pass rate over the graded trials: security requires 100%, while behavior requires 2/3. Other
-  suites, including `injection-guard`, retain the default 2/3 threshold. The
+  pass rate over the graded trials: security requires 100%, while behavior requires 2/3. `injection-guard` is a security
+  suite and also requires 100%; the remaining suites retain the default 2/3 threshold. The
   benign Spanish guard-bait case remains behavioral so the strict security gate does not hide
   false-positive regressions.
 - **Code:** `apps/api/src/modules/agent/eval/` — six suites today. `runtime/eval-runtime.ts` is
@@ -1128,9 +1130,7 @@ pnpm nx run api:eval
 
 The reference leg is a ceiling and a stable time series; the other four exist because the
 models that serve production turns are not the reference model, and injection resistance
-measured on one says nothing about the others. The security legs run ten trials because
-attack success is a rate: at three trials an attack that lands one time in ten reads as green
-most weeks. Legs do not cancel each other (`fail-fast: false`) — a red leg is a finding about
+measured on one says nothing about the others. The security legs run ten trials because attack success is a rate: with every trial required to pass, an attack that lands one time in ten still reads green 73% of weeks at three trials and 35% at ten. Ten narrows the blind spot; it does not close it, and the per-case pass counts in each leg's summary are the number to read, not the colour. Legs do not cancel each other (`fail-fast: false`) — a red leg is a finding about
 that model, not a broken run.
 
 The production legs default to `AI_SETTING_DEFAULTS` (a spec fails when the workflow and the
