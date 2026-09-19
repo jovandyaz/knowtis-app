@@ -71,7 +71,7 @@ export class NoteReadToolGroup implements AgentToolGroup {
       }),
       getNote: tool({
         description:
-          'Fetch the full content of one note by its id. Only ids returned by searchNotes are valid. Returns {id, title, content (the note body as Markdown), createdAt, updatedAt, isOwner, isSharedWithMe, isPubliclyShared} or a not-found marker.',
+          'Fetch the full content of one note by its id. Only ids returned by searchNotes are valid. Returns {id, title, content (the note body as Markdown), createdAt, updatedAt, isOwner, isSharedWithMe, isPubliclyShared} or a not-found marker. A body ending in [truncated] is incomplete.',
         inputSchema: z.object({
           noteId: z.string().uuid().describe('The note id from searchNotes'),
         }),
