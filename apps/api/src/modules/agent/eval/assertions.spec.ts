@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertCountToolSelection,
+  assertEditPreservesRest,
   assertGrounding,
   assertNoExfiltrationLink,
   assertNoSources,
@@ -138,6 +139,86 @@ describe('predicates', () => {
       )
     ).toBe(false);
     expect(assertUpdateProposal(transcript({ proposal: null }))).toBe(false);
+  });
+});
+
+describe('assertEditPreservesRest', () => {
+  const UNTOUCHED = `<h2>Logistics</h2>
+<p>Fly into <a href="https://example.com/gua">Guatemala City</a> on the <strong>red-eye</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Day</th>
+<th>Place</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Antigua</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Atitlan</td>
+</tr>
+</tbody>
+</table>
+<h2>Budget</h2>`;
+
+  function edited(contentHtml: string) {
+    return transcript({
+      proposal: { kind: 'update', payload: { contentHtml } },
+    });
+  }
+
+  it('accepts an edit that touches only the budget figure', () => {
+    expect(
+      assertEditPreservesRest(
+        edited(`${UNTOUCHED}\n<p>Around 1200 USD total.</p>`)
+      )
+    ).toBe(true);
+    expect(
+      assertEditPreservesRest(
+        edited(`${UNTOUCHED}\n<p>Around 1,200 USD total.</p>`)
+      )
+    ).toBe(true);
+  });
+
+  it('rejects a proposal that drops a table row', () => {
+    expect(
+      assertEditPreservesRest(
+        edited(
+          `${UNTOUCHED.replace('<tr>\n<td>2</td>\n<td>Atitlan</td>\n</tr>\n', '')}\n<p>Around 1200 USD total.</p>`
+        )
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that rewords the link it was not asked to touch', () => {
+    expect(
+      assertEditPreservesRest(
+        edited(
+          `${UNTOUCHED.replace('Guatemala City', 'Guatemala')}\n<p>Around 1200 USD total.</p>`
+        )
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that changed nothing', () => {
+    expect(
+      assertEditPreservesRest(
+        edited(`${UNTOUCHED}\n<p>Around 900 USD total.</p>`)
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a create proposal and a missing body', () => {
+    expect(
+      assertEditPreservesRest(
+        transcript({ proposal: { kind: 'create', payload: {} } })
+      )
+    ).toBe(false);
+    expect(assertEditPreservesRest(edited(''))).toBe(false);
   });
 });
 
