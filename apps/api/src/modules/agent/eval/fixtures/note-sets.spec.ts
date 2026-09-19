@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { detectPromptInjection } from '@knowtis/ai-gateway';
+import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 
 import { NOTE_FIXTURE_SETS, resolveFixtureSet } from './note-sets';
 
@@ -36,6 +37,19 @@ describe('resolveFixtureSet', () => {
       set.map((note) => note.id)
     );
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('keeps every fixture note reachable through getBody byte-identical to the content getNote serves', () => {
+    const drifted = Object.values(NOTE_FIXTURE_SETS)
+      .flatMap((set) => set)
+      .filter(
+        (note) =>
+          htmlToMarkdown(markdownToHtml(note.body ?? note.content)) !==
+          note.content
+      )
+      .map((note) => note.id);
+
+    expect(drifted).toStrictEqual([]);
   });
 
   it('throws on an unknown set name', () => {

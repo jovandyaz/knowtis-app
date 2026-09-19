@@ -476,6 +476,20 @@ describe('KeywordRetrievalAdapter', () => {
       });
     });
 
+    it('escapes a marker the note wrote as plain text, so only a real cut can end a body in one', async () => {
+      const repo = makeRepo({
+        note: noteView(NOTE_ID, 'Marker', `<p>done ${TRUNCATION_MARKER}</p>`),
+      });
+      const { adapter } = makeAdapter(repo);
+
+      const found = await adapter.getById(USER, NOTE_ID);
+
+      expect(contentPair(found)).toStrictEqual({
+        content: 'done \\[truncated\\]',
+        contentStatus: 'complete',
+      });
+    });
+
     it('returns null for a note the user cannot access', async () => {
       const repo = makeRepo({ note: null });
       const { adapter } = makeAdapter(repo);

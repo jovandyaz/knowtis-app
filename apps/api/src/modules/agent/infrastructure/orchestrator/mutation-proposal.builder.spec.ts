@@ -1,22 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
+import type { AgentNote } from '../../domain/retrieval';
 import { MutationProposalBuilder } from './mutation-proposal.builder';
+
+const NOTE: AgentNote = {
+  id: 'note-1',
+  title: 'Old',
+  content: 'old',
+  contentStatus: 'complete',
+  createdAt: '2024-01-01T00:00:00.000Z',
+  updatedAt: '2024-02-01T00:00:00.000Z',
+  isOwner: true,
+  isSharedWithMe: false,
+  isPubliclyShared: false,
+};
 
 function makeRetrieval(over: Partial<RetrievalPort> = {}): RetrievalPort {
   return {
     search: vi.fn(),
     listUnindexed: vi.fn().mockResolvedValue([]),
-    getById: vi.fn().mockResolvedValue({
-      id: 'note-1',
-      title: 'Old',
-      content: '<p>old</p>',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-02-01T00:00:00.000Z',
-      isOwner: true,
-      isSharedWithMe: false,
-      isPubliclyShared: false,
-    }),
+    getById: vi.fn().mockResolvedValue(NOTE),
     getBody: vi.fn(),
     listRecent: vi.fn(),
     overview: vi.fn(),

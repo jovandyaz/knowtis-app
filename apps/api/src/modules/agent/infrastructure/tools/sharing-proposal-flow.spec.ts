@@ -15,6 +15,7 @@ import type { UserReadRepository } from '../../../users/domain/ports/user-read.r
 import { ApproveMutationHandler } from '../../application/approve-mutation.handler';
 import type { PendingMutationRecord } from '../../domain/ports/pending-mutation.store';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
+import type { AgentNote } from '../../domain/retrieval';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import { ProposalCollector } from '../orchestrator/proposal-collector';
 import { WebFetchAllowlist } from '../orchestrator/web-fetch-allowlist';
@@ -25,6 +26,18 @@ type Level = 'viewer' | 'editor';
 const grant = (permission: Level) => ({
   permission: PermissionLevel.create(permission)._unsafeUnwrap(),
 });
+
+const SHARED_NOTE: AgentNote = {
+  id: 'note-1',
+  title: 'Plan',
+  content: 'Plan the offsite.',
+  contentStatus: 'complete',
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-07T00:00:00.000Z',
+  isOwner: true,
+  isSharedWithMe: false,
+  isPubliclyShared: false,
+};
 
 function flow(
   current: Level | null,
@@ -52,16 +65,18 @@ function flow(
       isAnonymous: false,
     }),
   };
-  const retrieval = {
-    getById: vi.fn().mockResolvedValue({
-      id: 'note-1',
-      title: 'Plan',
-      updatedAt: '2026-09-07T00:00:00.000Z',
-    }),
+  const getById = vi.fn().mockResolvedValue(SHARED_NOTE);
+  const retrieval: RetrievalPort = {
+    search: vi.fn(),
+    listUnindexed: vi.fn(),
+    getById,
+    getBody: vi.fn(),
+    listRecent: vi.fn(),
+    overview: vi.fn(),
   };
   const proposals = new ProposalCollector();
   const tool = new NoteMutateToolGroup(
-    new MutationProposalBuilder(retrieval as unknown as RetrievalPort)
+    new MutationProposalBuilder(retrieval)
   ).build({
     userId: 'u1',
     phase: 'full',
@@ -102,7 +117,7 @@ function flow(
   return {
     repo,
     users,
-    retrieval,
+    getById,
     approval,
     tool,
     proposals,
@@ -118,7 +133,7 @@ function flow(
       expect(result).toMatchObject({ ok: true });
       expect(repo.upsertPermission).not.toHaveBeenCalled();
       expect(users.findByEmail).not.toHaveBeenCalled();
-      expect(retrieval.getById).toHaveBeenCalledWith('u1', 'note-1');
+      expect(getById).toHaveBeenCalledWith('u1', 'note-1');
       const mutation = proposals.captured;
       if (!mutation) {
         throw new Error('Expected a proposal awaiting confirmation');
@@ -205,7 +220,7 @@ describe('Copilot sharing proposal to canonical execution', () => {
 
   it('preserves the proposal builder note visibility check', async () => {
     const f = flow('editor');
-    f.retrieval.getById.mockResolvedValue(null);
+    f.getById.mockResolvedValue(null);
     expect(
       await f.tool.execute(
         {
