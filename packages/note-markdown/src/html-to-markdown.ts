@@ -1,3 +1,4 @@
+/// <reference path="./types/turndown-plugin-gfm.d.ts" />
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 

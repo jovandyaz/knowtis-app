@@ -437,7 +437,6 @@ describe('useAgentStore', () => {
         kind: 'create',
         targetNoteId: null,
         summary: 's',
-        previewHtml: null,
         payload: {},
       });
       useAgentStore.getState().sendMessage('second');
@@ -594,7 +593,6 @@ describe('useAgentStore', () => {
         kind: 'create',
         targetNoteId: null,
         summary: 's',
-        previewHtml: null,
         payload: {},
       });
       useAgentStore.getState().sendMessage('second');
@@ -627,7 +625,6 @@ describe('useAgentStore', () => {
         kind: 'create',
         targetNoteId: null,
         summary: 's',
-        previewHtml: null,
         payload: {},
       });
       useAgentStore
@@ -749,7 +746,6 @@ describe('agent.store server-authoritative wire', () => {
     kind: 'create',
     targetNoteId: null,
     summary: 'Create "My Note"',
-    previewHtml: null,
     payload: {},
   };
 
@@ -973,7 +969,6 @@ describe('agent.store proposals', () => {
       kind: 'create',
       targetNoteId: null,
       summary: 's',
-      previewHtml: null,
       payload: {},
     });
     vi.mocked(agentClient.approve).mockImplementation(() => {
@@ -1015,7 +1010,6 @@ describe('agent.store thinking tail', () => {
     kind: 'create',
     targetNoteId: null,
     summary: 'Create "My Note"',
-    previewHtml: null,
     payload: {},
   };
 

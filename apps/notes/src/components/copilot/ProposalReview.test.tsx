@@ -72,15 +72,13 @@ describe('ProposalReview', () => {
     ready();
   });
 
-  it('never renders the summary or preview the wire object still carries', () => {
+  it('never renders the summary the wire object still carries', () => {
     renderReview({
       summary: 'Update "Landing": content updated',
-      previewHtml: '<p>server preview</p>',
     } as unknown as Partial<UpdateProposal>);
     expect(
       screen.queryByText('Update "Landing": content updated')
     ).not.toBeInTheDocument();
-    expect(screen.queryByText('server preview')).not.toBeInTheDocument();
   });
 
   it('shows a skeleton and disables the actions while the before version loads', () => {

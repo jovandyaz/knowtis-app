@@ -1,8 +1,8 @@
 import type { ProposedMutation } from '../../domain/proposed-mutation';
 
 /**
- * Per-run proposal sink so the full proposal (incl. previewHtml) never re-enters
- * the model context; one per run — a later capture replaces an earlier one.
+ * Per-run proposal sink so the full proposal never re-enters the model context;
+ * one per run — a later capture replaces an earlier one.
  */
 export class ProposalCollector {
   private proposal: ProposedMutation | null = null;

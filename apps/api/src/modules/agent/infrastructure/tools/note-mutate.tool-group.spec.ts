@@ -37,8 +37,6 @@ function run(
   return t.execute(input, {});
 }
 
-const PREVIEW = '<h1>secret preview</h1>'.repeat(2000);
-
 function group(builder: MutationProposalBuilder): NoteMutateToolGroup {
   return new NoteMutateToolGroup(builder);
 }
@@ -47,7 +45,6 @@ const proposal: CreateProposedMutation = {
   id: 'p1',
   kind: 'create',
   summary: 'Create note "Plan"',
-  previewHtml: PREVIEW,
   payload: { title: 'Plan', contentHtml: '<h1>Plan</h1>' },
 };
 
@@ -58,7 +55,7 @@ describe('NoteMutateToolGroup', () => {
     expect(g.availableIn('readonly')).toBe(false);
   });
 
-  it('returns only {ok, proposalId, summary} to the model and never leaks previewHtml or payload', async () => {
+  it('returns only {ok, proposalId, summary} to the model and never leaks the payload', async () => {
     const builder = {
       buildCreate: vi.fn().mockResolvedValue(ok(proposal)),
     } as unknown as MutationProposalBuilder;
@@ -72,12 +69,11 @@ describe('NoteMutateToolGroup', () => {
       summary: 'Create note "Plan"',
     });
     const serialized = JSON.stringify(out);
-    expect(serialized).not.toContain('previewHtml');
-    expect(serialized).not.toContain('secret preview');
     expect(serialized).not.toContain('payload');
+    expect(serialized).not.toContain('<h1>Plan</h1>');
   });
 
-  it('captures the full proposal (incl. previewHtml) in the per-run collector', async () => {
+  it('captures the full proposal in the per-run collector', async () => {
     const builder = {
       buildCreate: vi.fn().mockResolvedValue(ok(proposal)),
     } as unknown as MutationProposalBuilder;
@@ -87,7 +83,10 @@ describe('NoteMutateToolGroup', () => {
       contentMarkdown: '# Plan',
     });
     expect(c.proposals.captured).toBe(proposal);
-    expect(c.proposals.captured?.previewHtml).toBe(PREVIEW);
+    expect(c.proposals.captured?.payload).toEqual({
+      title: 'Plan',
+      contentHtml: '<h1>Plan</h1>',
+    });
   });
 
   it('returns {error} and captures nothing when the builder fails', async () => {
@@ -111,7 +110,6 @@ describe('NoteMutateToolGroup', () => {
       kind: 'update',
       targetNoteId: 'n1',
       summary: 'Update note "Plan"',
-      previewHtml: PREVIEW,
       payload: { title: 'New title' },
     };
     const builder = {
@@ -127,7 +125,7 @@ describe('NoteMutateToolGroup', () => {
       proposalId: 'p2',
       summary: 'Update note "Plan"',
     });
-    expect(JSON.stringify(out)).not.toContain('previewHtml');
+    expect(JSON.stringify(out)).not.toContain('payload');
     expect(c.proposals.captured).toBe(updateProposal);
   });
 

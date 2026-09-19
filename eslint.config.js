@@ -149,6 +149,18 @@ export default defineConfig([
       ],
     },
   },
+  // A source-only package can only hand its ambient module declarations to
+  // consumers through a reference directive; imports cannot reach a .d.ts.
+  {
+    basePath: workspaceRoot,
+    files: ['packages/note-markdown/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/triple-slash-reference': [
+        'error',
+        { lib: 'always', path: 'always', types: 'prefer-import' },
+      ],
+    },
+  },
   // Accessibility - a single-select group without exposed state ships silently otherwise
   {
     basePath: workspaceRoot,
