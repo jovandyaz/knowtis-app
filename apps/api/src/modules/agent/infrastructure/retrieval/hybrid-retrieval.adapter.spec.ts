@@ -4,8 +4,28 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { EmbeddingPort } from '../../../ai/domain/ports/embedding.port';
 import type { NoteReadRepository } from '../../../notes/domain/ports/note-read.repository';
+import type { RetrievalPort } from '../../domain/ports/retrieval.port';
+import type { AgentNote, NoteBody } from '../../domain/retrieval';
 import { HybridRetrievalAdapter } from './hybrid-retrieval.adapter';
-import { KeywordRetrievalAdapter } from './keyword-retrieval.adapter';
+import type { KeywordRetrievalAdapter } from './keyword-retrieval.adapter';
+
+const KEYWORD_NOTE: AgentNote = {
+  id: 'kw',
+  title: 'kw',
+  content: 'kw body',
+  contentStatus: 'complete',
+  createdAt: '2026-06-01T00:00:00.000Z',
+  updatedAt: '2026-07-01T00:00:00.000Z',
+  isOwner: true,
+  isSharedWithMe: false,
+  isPubliclyShared: false,
+};
+
+const KEYWORD_BODY: NoteBody = {
+  title: 'kw',
+  html: '<p>kw body</p>',
+  updatedAt: KEYWORD_NOTE.updatedAt,
+};
 
 function summary(id: string) {
   return {
@@ -44,12 +64,14 @@ function make(opts: {
     }),
     embedDocuments: vi.fn(),
   } as unknown as EmbeddingPort;
-  const keyword = {
-    search: vi.fn(async () => [] as never),
-    getById: vi.fn(),
-    listRecent: vi.fn(),
-    overview: vi.fn(),
-  } as unknown as KeywordRetrievalAdapter;
+  const keyword: RetrievalPort = {
+    search: vi.fn(async () => []),
+    listUnindexed: vi.fn(async () => []),
+    getById: vi.fn(async () => KEYWORD_NOTE),
+    getBody: vi.fn(async () => KEYWORD_BODY),
+    listRecent: vi.fn(async () => []),
+    overview: vi.fn(async () => ({ total: 0, owned: 0, sharedWithMe: 0 })),
+  };
   const config = {
     get: (key: string) =>
       key === 'VOYAGE_API_KEY' ? (opts.voyageKey ?? 'vk-test') : 'voyage-4',
@@ -61,12 +83,13 @@ function make(opts: {
     adapter: new HybridRetrievalAdapter(
       repo,
       embed,
-      keyword,
+      keyword as unknown as KeywordRetrievalAdapter,
       config,
       rateLimit
     ),
     repo,
     embed,
+    keyword,
     rateLimit,
   };
 }
@@ -161,5 +184,23 @@ describe('HybridRetrievalAdapter.listUnindexed', () => {
 
     expect(await adapter.listUnindexed('', 5)).toEqual([]);
     expect(repo.findAccessibleNotesUnindexed).not.toHaveBeenCalled();
+  });
+});
+
+describe('HybridRetrievalAdapter note reads', () => {
+  it('delegates getBody to the keyword adapter, never to the vector leg', async () => {
+    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+
+    expect(await adapter.getBody('u1', 'n1')).toBe(KEYWORD_BODY);
+    expect(keyword.getBody).toHaveBeenCalledWith('u1', 'n1');
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+  });
+
+  it('delegates getById to the keyword adapter, never to the vector leg', async () => {
+    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+
+    expect(await adapter.getById('u1', 'n1')).toBe(KEYWORD_NOTE);
+    expect(keyword.getById).toHaveBeenCalledWith('u1', 'n1');
+    expect(embed.embedQuery).not.toHaveBeenCalled();
   });
 });

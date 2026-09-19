@@ -1,9 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
+import type { RetrievalPort } from '../../domain/ports/retrieval.port';
+import type { AgentNote, NoteBody, NoteHit } from '../../domain/retrieval';
 import { FeatureFlaggedRetrievalAdapter } from './feature-flagged-retrieval.adapter';
 import type { HybridRetrievalAdapter } from './hybrid-retrieval.adapter';
 import type { KeywordRetrievalAdapter } from './keyword-retrieval.adapter';
+
+const hit = (id: string): NoteHit => ({
+  id,
+  title: id,
+  updatedAt: '2026-07-01T00:00:00.000Z',
+  isOwner: true,
+  isSharedWithMe: false,
+  isPubliclyShared: false,
+});
+
+const KEYWORD_NOTE: AgentNote = {
+  ...hit('kw'),
+  content: 'kw body',
+  contentStatus: 'complete',
+  createdAt: '2026-06-01T00:00:00.000Z',
+};
+
+const KEYWORD_BODY: NoteBody = {
+  title: 'kw',
+  html: '<p>kw body</p>',
+  updatedAt: KEYWORD_NOTE.updatedAt,
+};
+
+function port(over: Partial<RetrievalPort> = {}): RetrievalPort {
+  return {
+    search: vi.fn(async () => []),
+    listUnindexed: vi.fn(async () => []),
+    getById: vi.fn(async () => null),
+    getBody: vi.fn(async () => null),
+    listRecent: vi.fn(async () => []),
+    overview: vi.fn(async () => ({ total: 0, owned: 0, sharedWithMe: 0 })),
+    ...over,
+  };
+}
 
 function make(enabled: boolean, hybridThrows = false, flagThrows = false) {
   const flags = {
@@ -14,20 +50,27 @@ function make(enabled: boolean, hybridThrows = false, flagThrows = false) {
       return enabled;
     }),
   } as unknown as FeatureFlagsService;
-  const hybrid = {
+  const hybrid = port({
     search: vi.fn(async () => {
       if (hybridThrows) {
         throw new Error('boom');
       }
-      return [{ id: 'hyb' }] as never;
+      return [hit('hyb')];
     }),
-    listUnindexed: vi.fn(async () => [{ id: 'pending' }] as never),
-  } as unknown as HybridRetrievalAdapter;
-  const keyword = {
-    search: vi.fn(async () => [{ id: 'kw' }] as never),
-  } as unknown as KeywordRetrievalAdapter;
+    listUnindexed: vi.fn(async () => [hit('pending')]),
+  });
+  const keyword = port({
+    search: vi.fn(async () => [hit('kw')]),
+    getById: vi.fn(async () => KEYWORD_NOTE),
+    getBody: vi.fn(async () => KEYWORD_BODY),
+  });
   return {
-    adapter: new FeatureFlaggedRetrievalAdapter(flags, hybrid, keyword),
+    adapter: new FeatureFlaggedRetrievalAdapter(
+      flags,
+      hybrid as unknown as HybridRetrievalAdapter,
+      keyword as unknown as KeywordRetrievalAdapter
+    ),
+    flags,
     hybrid,
     keyword,
   };
@@ -72,5 +115,25 @@ describe('FeatureFlaggedRetrievalAdapter.listUnindexed', () => {
   it('reports none when the flag service is down', async () => {
     const { adapter } = make(true, false, true);
     expect(await adapter.listUnindexed('u', 5)).toEqual([]);
+  });
+});
+
+describe('FeatureFlaggedRetrievalAdapter note reads', () => {
+  it('serves getBody from keyword whatever the flag says', async () => {
+    const { adapter, flags, hybrid, keyword } = make(true);
+
+    expect(await adapter.getBody('u', 'n')).toBe(KEYWORD_BODY);
+    expect(keyword.getBody).toHaveBeenCalledWith('u', 'n');
+    expect(hybrid.getBody).not.toHaveBeenCalled();
+    expect(flags.isEnabled).not.toHaveBeenCalled();
+  });
+
+  it('serves getById from keyword whatever the flag says', async () => {
+    const { adapter, flags, hybrid, keyword } = make(true);
+
+    expect(await adapter.getById('u', 'n')).toBe(KEYWORD_NOTE);
+    expect(keyword.getById).toHaveBeenCalledWith('u', 'n');
+    expect(hybrid.getById).not.toHaveBeenCalled();
+    expect(flags.isEnabled).not.toHaveBeenCalled();
   });
 });

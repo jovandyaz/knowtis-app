@@ -69,8 +69,6 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
     return fixture ? toAgentNote(fixture) : null;
   }
 
-  // No model tool call reaches getBody, so recording it would put a phantom
-  // getNote in the transcript the eval asserts against.
   async getBody(_userId: string, noteId: string): Promise<NoteBody | null> {
     const fixture = this.notes.find((n) => n.id === noteId);
     if (!fixture) {

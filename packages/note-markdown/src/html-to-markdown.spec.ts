@@ -83,6 +83,21 @@ describe('htmlToMarkdown', () => {
     }
   });
 
+  it('should escape literal brackets so plain text cannot re-parse as a link', () => {
+    expect(htmlToMarkdown('<p>done [truncated]</p>')).toBe(
+      'done \\[truncated\\]'
+    );
+    expect(htmlToMarkdown('<p>see [note] here</p>')).toBe(
+      'see \\[note\\] here'
+    );
+
+    const roundTripped = markdownToHtml(
+      htmlToMarkdown('<p>[a](https://x.test)</p>')
+    );
+    expect(roundTripped).not.toContain('<a href="https://x.test">a</a>');
+    expect(roundTripped).toContain('[a](');
+  });
+
   it('should keep intended marks intact after the escape override', () => {
     expect(htmlToMarkdown('<p><mark>hi</mark></p>')).toContain('==hi==');
     expect(htmlToMarkdown('<p>H<sub>2</sub>O</p>')).toContain('~2~');

@@ -25,11 +25,16 @@ function toLineFeeds(text: string): string {
 }
 
 function countOccurrences(document: string, target: string): number {
+  // indexOf('') clamps to the search position instead of returning -1, so the
+  // scan needs both a non-zero step and an upper bound to terminate at all.
+  const step = Math.max(target.length, 1);
   let count = 0;
-  let at = document.indexOf(target);
-  while (at !== -1) {
+  for (
+    let at = document.indexOf(target);
+    at !== -1 && at < document.length;
+    at = document.indexOf(target, at + step)
+  ) {
     count += 1;
-    at = document.indexOf(target, at + target.length);
   }
   return count;
 }

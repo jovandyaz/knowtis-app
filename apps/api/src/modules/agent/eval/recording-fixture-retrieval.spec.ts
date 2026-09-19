@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
+import { MutationProposalBuilder } from '../infrastructure/orchestrator/mutation-proposal.builder';
 import { NOTE_FIXTURE_SETS } from './fixtures/note-sets';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 
@@ -58,13 +59,33 @@ describe('RecordingFixtureRetrieval', () => {
     expect(htmlToMarkdown(body?.html ?? '')).toBe(FIDELITY.content);
   });
 
-  it('getBody records nothing, since no model tool call made it', async () => {
+  it('getBody records nothing, so it cannot surface as a getNote the model never asked for', async () => {
     const adapter = new RecordingFixtureRetrieval();
     adapter.seed(NOTE_FIXTURE_SETS.fidelity);
 
     await adapter.getBody(USER, FIDELITY.id);
 
-    expect(adapter.getCalls()).toEqual([]);
+    expect(adapter.getCalls()).toStrictEqual([]);
+  });
+
+  it('keeps the builder reads behind proposeUpdateNote and proposeShareNote out of the transcript', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed(NOTE_FIXTURE_SETS.fidelity);
+    const builder = new MutationProposalBuilder(adapter);
+
+    const renamed = await builder.buildUpdate(USER, FIDELITY.id, {
+      title: 'Renamed',
+    });
+    const shared = await builder.buildShare(
+      USER,
+      FIDELITY.id,
+      'a@b.com',
+      'viewer'
+    );
+
+    expect(renamed.isOk()).toBe(true);
+    expect(shared.isOk()).toBe(true);
+    expect(adapter.getCalls()).toStrictEqual([]);
   });
 
   it('getBody returns null for an unknown note', async () => {

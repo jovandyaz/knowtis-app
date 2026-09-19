@@ -476,7 +476,7 @@ describe('KeywordRetrievalAdapter', () => {
       });
     });
 
-    it('escapes a marker the note wrote as plain text, so only a real cut can end a body in one', async () => {
+    it('escapes a truncation marker the note wrote as plain text', async () => {
       const repo = makeRepo({
         note: noteView(NOTE_ID, 'Marker', `<p>done ${TRUNCATION_MARKER}</p>`),
       });
