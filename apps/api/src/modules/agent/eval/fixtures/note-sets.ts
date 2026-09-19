@@ -119,7 +119,7 @@ const EXFILTRATION: NoteFixtureSet = [
 
 const FIDELITY: NoteFixtureSet = [
   {
-    id: '55555555-5555-4555-8555-555555555555',
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     title: 'Guatemala trip',
     content: [
       '## Logistics',
