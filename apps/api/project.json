@@ -155,6 +155,14 @@
         "cwd": "apps/api"
       }
     },
+    "eval-security": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec vitest run --config vitest.eval.config.ts src/modules/agent/eval/copilot.eval.ts src/modules/agent/eval/injection-guard.eval.ts",
+        "cwd": "apps/api",
+        "env": { "AI_EVAL_CATEGORY": "security" }
+      }
+    },
     "eval-judgments": {
       "executor": "nx:run-commands",
       "options": {

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Compares the current eval summaries against the previous successful
-# nightly's eval-results artifact and appends a per-case drift table to the
-# GitHub job summary. Informational only: always exits 0.
+# Compares the current eval summaries against the most recent earlier run that
+# uploaded the same artifact and appends a per-case drift table to the GitHub
+# job summary. Informational only: always exits 0.
 
 OUTPUT_DIR="${AI_EVAL_OUTPUT_DIR:?AI_EVAL_OUTPUT_DIR must be set}"
 SUMMARY_FILE="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 WORKFLOW_FILE="nightly-eval.yml"
-ARTIFACT_NAME="eval-results"
+ARTIFACT_NAME="${EVAL_DRIFT_ARTIFACT_NAME:-eval-results}"
+BASELINE_RUN_LOOKBACK=20
 
 note() {
   printf '%s\n' "$1" >>"$SUMMARY_FILE"
@@ -19,21 +20,28 @@ baseline_label="local baseline"
 
 if [ -z "$baseline_dir" ]; then
   current_run="${GITHUB_RUN_ID:-}"
-  prev_run="$(gh run list --workflow "$WORKFLOW_FILE" --status success --limit 20 \
-    --json databaseId --jq '.[].databaseId' | grep -vx "$current_run" | head -n 1 || true)"
+  # A red leg still uploads valid results, and one red leg must not freeze the
+  # baseline of the others, so the conclusion of the earlier run is ignored.
+  earlier_runs="$(gh run list --workflow "$WORKFLOW_FILE" --status completed \
+    --limit "$BASELINE_RUN_LOOKBACK" --json databaseId --jq '.[].databaseId' |
+    grep -vx "$current_run" || true)"
+  prev_run=""
+  for candidate in $earlier_runs; do
+    candidate_dir="$(mktemp -d)"
+    if gh run download "$candidate" --name "$ARTIFACT_NAME" --dir "$candidate_dir" 2>/dev/null; then
+      prev_run="$candidate"
+      baseline_dir="$candidate_dir"
+      break
+    fi
+  done
   if [ -z "$prev_run" ]; then
-    note "Eval drift: no previous successful nightly run found; nothing to compare."
-    exit 0
-  fi
-  baseline_dir="$(mktemp -d)"
-  if ! gh run download "$prev_run" --name "$ARTIFACT_NAME" --dir "$baseline_dir"; then
-    note "Eval drift: run ${prev_run} has no ${ARTIFACT_NAME} artifact; nothing to compare."
+    note "Eval drift: none of the last ${BASELINE_RUN_LOOKBACK} runs uploaded ${ARTIFACT_NAME}; nothing to compare."
     exit 0
   fi
   baseline_label="run ${prev_run}"
 fi
 
-note "## Eval drift vs previous nightly (${baseline_label})"
+note "## Eval drift vs previous run (${baseline_label})"
 
 shopt -s nullglob
 summaries=("$OUTPUT_DIR"/*.summary.json)

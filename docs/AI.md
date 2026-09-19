@@ -1057,12 +1057,23 @@ pnpm nx run api:eval
   Anthropic-gated suites (without it they skip and the command still exits 0) — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
-  (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).
+  (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs). That is the model
+  **under test**. The rubric **judge** is always the Anthropic haiku grader, whatever is under
+  test — a fixed judge from another family keeps runs comparable and avoids a model grading its
+  own family — so `ANTHROPIC_API_KEY` is required even when the model under test is not
+  Anthropic's. An `openrouter:*` model additionally needs `OPENROUTER_API_KEY`, and cannot run
+  in gateway mode (`AI_GATEWAY_API_KEY` set). The harness boots the real module graph, so an
+  OpenRouter turn is routed the way a production turn is: upstream preferences resolve from
+  `ai_config` (`ai_openrouter_providers`), which on CI's fresh database means the code
+  defaults.
+- **Security only:** `pnpm nx run api:eval-security` runs just the Copilot security cases and
+  the `injection-guard` suite (`AI_EVAL_CATEGORY=security`; `behavior` is the other value, and
+  an unknown one throws rather than running the wrong cases).
 - **Trials:** `AI_EVAL_TRIALS` (default 1) repeats every promptfoo case N times. Copilot security cases
   (HITL and prompt-injection resistance) require every graded trial to pass; behavior cases fail
   when they pass fewer than `ceil(2/3 * G)` of their **graded** trials G. Agent behavior is
-  stochastic, so a single trial cannot distinguish a regression from variance — nightly CI runs
-  3 trials, while the local default stays at 1 for cheap pre-merge runs. These are per-case pass
+  stochastic, so a single trial cannot distinguish a regression from variance — weekly CI runs
+  3 trials (10 on its security legs), while the local default stays at 1 for cheap pre-merge runs. These are per-case pass
   rates, not a statistical pass@k estimate.
 - **Ungraded trials:** a trial whose every failing assertion is a grader transport error
   (`metadata.graderError` — e.g. HTTP 529 from the rubric model) carries no verdict, so it
@@ -1102,26 +1113,54 @@ pnpm nx run api:eval
   `resolveEvalModel` also gate `transcript-replay.eval.ts`; `memory-recall`,
   `retrieval-quality`, and `web-search-quality` assert directly in Vitest.
 
-### Nightly CI run
+### Weekly CI run
 
-`.github/workflows/nightly-eval.yml` runs `nx eval api` on a schedule (08:00 UTC) and on
-`workflow_dispatch`. It provisions a `pgvector/pgvector:pg16` service (migrations create the
-`vector` extension), applies migrations, then runs the suite against the `ANTHROPIC_API_KEY`
-repository secret. Each suite self-skips without its provider key, so only the Anthropic-gated
-cases (injection resistance, copilot behaviors) run unless the `VOYAGE_API_KEY` / `TAVILY_API_KEY`
-secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is missing, so a
-silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
-(a zero-credit key surfaces as an eval error, not a skip). The workflow sets `AI_EVAL_TRIALS=3`,
-so every promptfoo case runs three times. Copilot security cases require every evaluable trial
-to pass; behavior cases require at least 2/3 of evaluable trials. Grader errors leave the
-denominator, and a case with no evaluable trials fails. A grader outage therefore reads as
-`N of 3 ungraded` per case rather than as a wave of
-behavioral regressions — the failure mode that made the 2026-09-01 nightly report
+`.github/workflows/nightly-eval.yml` ("Weekly Evals") runs every Monday at 08:00 UTC and on
+`workflow_dispatch`, as a matrix of five legs:
+
+| Leg                      | Model under test            | Target          | Trials |
+| ------------------------ | --------------------------- | --------------- | ------ |
+| `reference`              | `anthropic:claude-sonnet-5` | `eval`          | 3      |
+| `default-model`          | `ai_default_model`          | `eval`          | 3      |
+| `default-model-security` | `ai_default_model`          | `eval-security` | 10     |
+| `fast-model-security`    | `ai_fast_model`             | `eval-security` | 10     |
+| `deep-model-security`    | `ai_deep_model`             | `eval-security` | 10     |
+
+The reference leg is a ceiling and a stable time series; the other four exist because the
+models that serve production turns are not the reference model, and injection resistance
+measured on one says nothing about the others. The security legs run ten trials because
+attack success is a rate: at three trials an attack that lands one time in ten reads as green
+most weeks. Legs do not cancel each other (`fail-fast: false`) — a red leg is a finding about
+that model, not a broken run.
+
+The production legs default to `AI_SETTING_DEFAULTS` (a spec fails when the workflow and the
+code defaults drift apart). Production's `ai_config` is edited from the backoffice without a
+deploy, so when it diverges from the code defaults, set the repository variables
+`AI_EVAL_DEFAULT_MODEL`, `AI_EVAL_FAST_MODEL` and `AI_EVAL_DEEP_MODEL` to the ids it serves —
+otherwise CI keeps grading models no user reaches.
+
+Each leg provisions a `pgvector/pgvector:pg16` service (migrations create the `vector`
+extension), applies migrations, then runs its target. Every leg needs the `ANTHROPIC_API_KEY`
+secret for the judge and fails fast without it, so a silently-skipped run can't read as green —
+and the graded run needs a funded Anthropic account (a zero-credit key surfaces as an eval
+error, not a skip). Legs that pin an `openrouter:*` model also fail fast without
+`OPENROUTER_API_KEY`; the reference leg deliberately does not receive that key, so its fallback
+chain stays empty and its history stays comparable. Each suite self-skips without its own
+provider key, so the retrieval and web-search suites only run when `VOYAGE_API_KEY` /
+`TAVILY_API_KEY` are configured.
+
+Copilot security cases require every evaluable trial to pass; behavior cases require at least
+2/3 of evaluable trials. Grader errors leave the denominator, and a case with no evaluable
+trials fails. A grader outage therefore reads as `N of 3 ungraded` per case rather than as a
+wave of behavioral regressions — the failure mode that made the 2026-09-01 run report
 `Failed: 13  Errors: 0` while the same code passed 24/24 ninety minutes earlier.
-Each run persists results to the `eval-results` artifact (90-day retention) and a
-non-blocking step compares per-case pass rates against the previous successful nightly,
-writing a drift table to the job summary; it refuses the comparison when the pinned model
-or trial count changed, and never fails the job.
+
+Each leg persists results to its own `eval-results-<leg>` artifact (90-day retention) and a
+non-blocking step compares per-case pass rates against the most recent earlier run that
+uploaded the same artifact, writing a drift table to the job summary. The earlier run's
+conclusion is ignored — a red leg still uploads valid results, and one red leg must not freeze
+the baseline of the others. The step refuses the comparison when the pinned model or trial
+count changed, and never fails the job.
 
 ### Judge calibration
 
@@ -1132,7 +1171,7 @@ as precision/recall rather than raw agreement). Two measurement-only CLIs close 
 — neither gates CI:
 
 1. Produce native results: run `pnpm nx run api:eval` with `AI_EVAL_OUTPUT_DIR=<dir>`
-   exported, or download a nightly `eval-results` artifact.
+   exported, or download a weekly `eval-results-<leg>` artifact.
 2. `pnpm nx run api:eval-judgments -- --dir <dir>` extracts every `llm-rubric` judgment
    from the native `<suite>.json` files into `<dir>/judgments.jsonl` — one row per
    case × trial × rubric carrying the judge's verdict (`judgePass`) and critique
