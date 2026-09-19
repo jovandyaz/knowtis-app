@@ -18,7 +18,7 @@ const OTHER = '22222222-2222-2222-2222-222222222222';
 const NOTE_ID = '33333333-3333-3333-3333-333333333333';
 const WITHHELD_CONTENT =
   '[Note content withheld: it failed the injection safety check]';
-const NEUTRALIZED_MARKER = '[removed]';
+const REWRITTEN_PLACEHOLDER = '[removed]';
 const MAX_NOTE_CONTENT_CHARS = 10_000;
 const TRUNCATION_MARKER = '[truncated]';
 const DECORATION_RUN_CHARS = 15_000;
@@ -302,7 +302,7 @@ describe('KeywordRetrievalAdapter', () => {
 
         const found = await adapter.getById(USER, NOTE_ID);
 
-        expect(found?.content).not.toContain(NEUTRALIZED_MARKER);
+        expect(found?.content).not.toContain(REWRITTEN_PLACEHOLDER);
         expect(found?.content).not.toBe(WITHHELD_CONTENT);
         expect(found?.content).toBe(expected);
       }
