@@ -124,51 +124,66 @@ const NO_TURN_SETTINGS: EvalTurnSettings = {
 };
 
 describe('production parity of an eval turn', () => {
-  it('hands the orchestrator the routing and effort a production turn gets', async () => {
-    const { chain } = setup();
-    const inputs: AgentRunInput[] = [];
-    const orchestrator: AgentOrchestrator = {
-      run: (input) => {
-        inputs.push(input);
-        return (async function* (): AsyncGenerator<AgentEvent> {
-          yield {
-            type: 'done',
-            sources: [],
-            knownNotes: [],
-            webSources: [],
-            stopReason: 'completed',
-            usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
-          };
-        })();
-      },
-    };
-    const effortFor = vi.fn().mockResolvedValue('medium');
-    const harness = AgentEvalHarness.withCollaborators({
-      moduleRef: { close: async () => undefined },
-      orchestrator,
-      fallbackChain: chain,
-      catalog: createTestCatalog(),
-      retrieval: new RecordingFixtureRetrieval(),
-      turnSettings: {
-        openRouterProviderOrder: async () => ['fireworks', 'baseten'],
-        openRouterIgnoredProviders: async () => ['slowhost'],
-        effortFor,
-      },
-      maxSteps: 2,
-      maxTurnTokens: 10_000,
-    });
+  it.each([
+    {
+      settings: 'configured routing and effort',
+      providerOrder: ['fireworks', 'baseten'],
+      ignoredProviders: ['slowhost'],
+      effort: 'medium',
+    },
+    {
+      settings: 'no routing preference and no effort',
+      providerOrder: [],
+      ignoredProviders: [],
+      effort: undefined,
+    },
+  ] as const)(
+    'hands the orchestrator what a production turn gets: $settings',
+    async ({ providerOrder, ignoredProviders, effort }) => {
+      const { chain } = setup();
+      const inputs: AgentRunInput[] = [];
+      const orchestrator: AgentOrchestrator = {
+        run: (input) => {
+          inputs.push(input);
+          return (async function* (): AsyncGenerator<AgentEvent> {
+            yield {
+              type: 'done',
+              sources: [],
+              knownNotes: [],
+              webSources: [],
+              stopReason: 'completed',
+              usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
+            };
+          })();
+        },
+      };
+      const effortFor = vi.fn().mockResolvedValue(effort);
+      const harness = AgentEvalHarness.withCollaborators({
+        moduleRef: { close: async () => undefined },
+        orchestrator,
+        fallbackChain: chain,
+        catalog: createTestCatalog(),
+        retrieval: new RecordingFixtureRetrieval(),
+        turnSettings: {
+          openRouterProviderOrder: async () => providerOrder,
+          openRouterIgnoredProviders: async () => ignoredProviders,
+          effortFor,
+        },
+        maxSteps: 2,
+        maxTurnTokens: 10_000,
+      });
 
-    await harness.runCase('hello', 'empty', MODEL);
+      await harness.runCase('hello', 'empty', MODEL);
 
-    expect(inputs).toHaveLength(1);
-    expect(inputs[0]?.openrouterProviderOrder).toStrictEqual([
-      'fireworks',
-      'baseten',
-    ]);
-    expect(inputs[0]?.openrouterIgnoredProviders).toStrictEqual(['slowhost']);
-    await expect(inputs[0]?.effortFor?.(MODEL)).resolves.toBe('medium');
-    expect(effortFor).toHaveBeenCalledWith(MODEL);
-  });
+      expect(inputs).toHaveLength(1);
+      expect(inputs[0]?.openrouterProviderOrder).toStrictEqual(providerOrder);
+      expect(inputs[0]?.openrouterIgnoredProviders).toStrictEqual(
+        ignoredProviders
+      );
+      expect(await inputs[0]?.effortFor?.(MODEL)).toBe(effort);
+      expect(effortFor).toHaveBeenCalledWith(MODEL);
+    }
+  );
 });
 
 describe('history replay through harness, real orchestrator and AI SDK', () => {

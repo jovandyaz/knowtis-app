@@ -133,4 +133,5 @@ jobs:
           name: eval-results-${{ matrix.leg }}
           path: eval-results
           retention-days: 90
-          if-no-files-found: warn
+          # A leg without results is a leg that graded nothing; never let it pass.
+          if-no-files-found: error
