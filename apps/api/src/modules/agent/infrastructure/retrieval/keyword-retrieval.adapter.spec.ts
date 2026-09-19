@@ -676,6 +676,7 @@ describe('KeywordRetrievalAdapter', () => {
           const found = await adapter.getById(USER, NOTE_ID);
 
           expect(found?.content).not.toContain(WITHHELD_MARKER);
+          expect(found?.content).toContain('[removed]');
         }
       );
 
