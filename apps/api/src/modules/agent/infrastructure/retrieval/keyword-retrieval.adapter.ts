@@ -1,6 +1,7 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
@@ -17,9 +18,34 @@ import { toNoteHit } from './note-hit.mapper';
 const MAX_SEARCH_HITS = 20;
 const MAX_NOTE_CONTENT_CHARS = 10_000;
 const TRUNCATION_MARKER = '[truncated]';
-const FENCE_MARKER_RE = /<<\s*\/?\s*(?:END_)?NOTE_DATA\b[^>]*>>/gi;
+const MARKDOWN_NOISE = '[\\s\\\\*_`=^~\\[\\]()]*';
+
+function noisyLiteral(literal: string): string {
+  return literal
+    .split('')
+    .map((char) =>
+      char === '_'
+        ? MARKDOWN_NOISE
+        : `${MARKDOWN_NOISE}${/[a-z0-9]/i.test(char) ? char : `\\${char}`}`
+    )
+    .join('');
+}
+
+const FENCE_MARKER_RE = new RegExp(
+  `${noisyLiteral('<<')}${MARKDOWN_NOISE}\\/?(?:${noisyLiteral('END_')})?${noisyLiteral('NOTE_DATA')}[^>]*${noisyLiteral('>>')}`,
+  'gi'
+);
+const MARKDOWN_LINK_RE = /\[([^\]]*)\]\([^)]*\)/g;
+const DECORATION_RE = /[\s\\*_`=^~[\]()]/g;
+const UNDECORATED_MARKER_RE = /<<\/?(?:END)?NOTEDATA\b[^>]*>>/i;
 const WITHHELD_CONTENT =
   '[Note content withheld: it failed the injection safety check]';
+
+function carriesFenceMarker(markdown: string): boolean {
+  return [markdown, markdown.replace(MARKDOWN_LINK_RE, '$1')].some((view) =>
+    UNDECORATED_MARKER_RE.test(view.replace(DECORATION_RE, ''))
+  );
+}
 
 @Injectable()
 export class KeywordRetrievalAdapter implements RetrievalPort {
@@ -95,23 +121,49 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     userId: string,
     noteId: string
   ): Promise<string> {
-    const plain = htmlToPlainText(html);
-    const bounded =
-      plain.length <= MAX_NOTE_CONTENT_CHARS
-        ? plain
-        : `${plain.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`;
+    const markdown = this.bound(htmlToMarkdown(html));
     if (await this.scanFlagOn()) {
-      const verdict = await this.injectionGuard.guard(bounded, userId);
-      if (!verdict.safe) {
-        this.logger.warn({
-          event: 'agent.retrieval.content_blocked',
-          noteId,
-          score: verdict.score,
-        });
-        return this.fence(WITHHELD_CONTENT);
+      // The heuristics match instruction phrases as contiguous text, so one
+      // emphasised word inside a phrase hides it from a Markdown scan; the
+      // plain text drops href values, hiding an exfiltration link from a
+      // plain-text scan. Neither view covers the other.
+      const plain = this.bound(htmlToPlainText(html));
+      const views = plain === markdown ? [markdown] : [markdown, plain];
+      for (const text of views) {
+        const verdict = await this.injectionGuard.guard(text, userId);
+        if (!verdict.safe) {
+          this.logger.warn({
+            event: 'agent.retrieval.content_blocked',
+            noteId,
+            score: verdict.score,
+          });
+          return this.fence(WITHHELD_CONTENT);
+        }
       }
     }
-    return this.fence(bounded.replace(FENCE_MARKER_RE, '[removed]'));
+    return this.fence(this.neutralizeFenceMarkers(markdown, noteId));
+  }
+
+  private bound(text: string): string {
+    return text.length <= MAX_NOTE_CONTENT_CHARS
+      ? text
+      : `${text.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`;
+  }
+
+  private neutralizeFenceMarkers(markdown: string, noteId: string): string {
+    const neutralized = markdown.replace(FENCE_MARKER_RE, '[removed]');
+    // Decoration inside the marker is cosmetic to the model, so a marker that
+    // survives once Markdown noise is stripped means the pattern missed a shape
+    // the converter emits. Withhold rather than hand the model a body that can
+    // close its own fence.
+    if (carriesFenceMarker(neutralized)) {
+      this.logger.warn({
+        event: 'agent.retrieval.fence_marker_survived',
+        noteId,
+      });
+      return WITHHELD_CONTENT;
+    }
+    return neutralized;
   }
 
   private fence(body: string): string {

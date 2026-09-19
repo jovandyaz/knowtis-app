@@ -31,6 +31,13 @@ describe('resolveFixtureSet', () => {
     ).toBe(false);
   });
 
+  it('gives every fixture note its own id across all sets', () => {
+    const ids = Object.values(NOTE_FIXTURE_SETS).flatMap((set) =>
+      set.map((note) => note.id)
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('throws on an unknown set name', () => {
     expect(() => resolveFixtureSet('nope' as never)).toThrow(
       /unknown fixture set/i
