@@ -1,6 +1,7 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
@@ -95,23 +96,32 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     userId: string,
     noteId: string
   ): Promise<string> {
-    const plain = htmlToPlainText(html);
-    const bounded =
-      plain.length <= MAX_NOTE_CONTENT_CHARS
-        ? plain
-        : `${plain.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`;
+    const markdown = this.bound(htmlToMarkdown(html));
     if (await this.scanFlagOn()) {
-      const verdict = await this.injectionGuard.guard(bounded, userId);
-      if (!verdict.safe) {
-        this.logger.warn({
-          event: 'agent.retrieval.content_blocked',
-          noteId,
-          score: verdict.score,
-        });
-        return this.fence(WITHHELD_CONTENT);
+      // The heuristics match instruction phrases as contiguous text, so one
+      // emphasised word inside a phrase hides it from a Markdown scan; the
+      // plain text drops href values, hiding an exfiltration link from a
+      // plain-text scan. Neither view covers the other.
+      const scanned = [markdown, this.bound(htmlToPlainText(html))];
+      for (const text of scanned) {
+        const verdict = await this.injectionGuard.guard(text, userId);
+        if (!verdict.safe) {
+          this.logger.warn({
+            event: 'agent.retrieval.content_blocked',
+            noteId,
+            score: verdict.score,
+          });
+          return this.fence(WITHHELD_CONTENT);
+        }
       }
     }
-    return this.fence(bounded.replace(FENCE_MARKER_RE, '[removed]'));
+    return this.fence(markdown.replace(FENCE_MARKER_RE, '[removed]'));
+  }
+
+  private bound(text: string): string {
+    return text.length <= MAX_NOTE_CONTENT_CHARS
+      ? text
+      : `${text.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`;
   }
 
   private fence(body: string): string {
