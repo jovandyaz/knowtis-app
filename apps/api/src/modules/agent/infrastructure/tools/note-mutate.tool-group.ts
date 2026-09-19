@@ -11,6 +11,8 @@ import type {
   AgentToolPhase,
 } from './agent-tool';
 
+const MAX_EDITS_PER_PROPOSAL = 20;
+const MAX_EDIT_TEXT_CHARS = 10_000;
 const CONTENT_MARKDOWN_DESCRIPTION =
   'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x]), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, and ```mermaid fenced diagrams. Images and raw HTML are not supported.';
 
@@ -56,9 +58,48 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             : { error: r.error.message };
         },
       }),
+      proposeEditNote: tool({
+        description:
+          "Propose changing PART of an existing note. Does NOT edit it — the user must confirm. Prefer this over proposeUpdateNote whenever the user asks to add, fix, remove or reword something: you send only the text that changes, so the rest of the note cannot be lost. Each edit replaces oldText — copied EXACTLY from getNote's content, Markdown punctuation included, and long enough to appear only once — with newText. Edits apply in order. To add to the end of the note use appendMarkdown instead of an edit. noteId must come from searchNotes/getNote.",
+        inputSchema: z.object({
+          noteId: z.string().uuid().describe('The note id to edit'),
+          edits: z
+            .array(
+              z.object({
+                oldText: z
+                  .string()
+                  .min(1)
+                  .max(MAX_EDIT_TEXT_CHARS)
+                  .describe(
+                    'Exact text currently in the note, as getNote returned it'
+                  ),
+                newText: z
+                  .string()
+                  .max(MAX_EDIT_TEXT_CHARS)
+                  .describe('Replacement Markdown; empty to delete oldText'),
+              })
+            )
+            .max(MAX_EDITS_PER_PROPOSAL)
+            .default([]),
+          appendMarkdown: z
+            .string()
+            .max(MAX_EDIT_TEXT_CHARS)
+            .optional()
+            .describe('Markdown to add after the end of the note'),
+        }),
+        execute: async ({ noteId, edits, appendMarkdown }) => {
+          const r = await this.proposalBuilder.buildEdit(userId, noteId, {
+            edits,
+            ...(appendMarkdown !== undefined && { appendMarkdown }),
+          });
+          return r.isOk()
+            ? captureProposal(proposals, r.value)
+            : { error: r.error.message };
+        },
+      }),
       proposeUpdateNote: tool({
         description:
-          'Propose editing an existing note (title and/or content). Does NOT edit it — the user must confirm. noteId must come from searchNotes/getNote.',
+          "Propose replacing an existing note's title and/or its WHOLE content. Does NOT edit it — the user must confirm. Use it for a title change, or when the user asks to rewrite or restructure the entire note; to change part of a note use proposeEditNote. Refused when you did not receive the whole note. noteId must come from searchNotes/getNote.",
         inputSchema: z
           .object({
             noteId: z.string().uuid().describe('The note id to edit'),

@@ -12,6 +12,13 @@ const make = (code: string, message: string): AgentDomainError => ({
   message,
 });
 
+const MAX_ECHOED_EDIT_CHARS = 200;
+
+const echo = (text: string): string =>
+  text.length <= MAX_ECHOED_EDIT_CHARS
+    ? text
+    : `${text.slice(0, MAX_ECHOED_EDIT_CHARS)}…`;
+
 export const AgentErrors = {
   invalidProposal: (reason: string) =>
     make('AGENT_INVALID_PROPOSAL', `Invalid proposal: ${reason}`),
@@ -40,6 +47,16 @@ export const AgentErrors = {
     make('AGENT_NOTE_NOT_FOUND', `Note ${noteId} not found or not accessible`),
   targetUserNotFound: (email: string) =>
     make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
+  editTextNotFound: (position: number, oldText: string) =>
+    make(
+      'AGENT_EDIT_TEXT_NOT_FOUND',
+      `Edit ${position}: this text is not in the note: "${echo(oldText)}". Call getNote again and copy the text exactly as it appears, including Markdown punctuation. If an earlier edit in this call already changed it, target the new text instead.`
+    ),
+  editTextAmbiguous: (position: number, oldText: string, matches: number) =>
+    make(
+      'AGENT_EDIT_TEXT_AMBIGUOUS',
+      `Edit ${position}: this text appears ${matches} times in the note: "${echo(oldText)}". Include more of the surrounding text so it matches exactly once.`
+    ),
   wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>
     make(
       'AGENT_WHOLE_BODY_UPDATE_REFUSED',
