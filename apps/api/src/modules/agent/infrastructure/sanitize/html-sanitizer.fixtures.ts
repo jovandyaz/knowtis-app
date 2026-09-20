@@ -3,7 +3,10 @@ import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
-import { htmlToYjsState } from '../../../notes/infrastructure/html-to-yjs';
+import {
+  htmlToYjsState,
+  yDocToHtml,
+} from '../../../notes/infrastructure/html-to-yjs';
 
 export interface PMJson {
   readonly type: string;
@@ -56,4 +59,13 @@ export function collectTypes(
     collectTypes(child, into);
   }
   return into;
+}
+
+/** The HTML the server actually stores for `html`, so a fixture cannot drift from the real shape. */
+export function storedHtml(html: string): string {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, htmlToYjsState(html));
+  const stored = yDocToHtml(doc);
+  doc.destroy();
+  return stored;
 }

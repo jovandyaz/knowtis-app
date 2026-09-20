@@ -13,6 +13,59 @@ function mermaidFence(node: HTMLElement): string {
   return `\n\n\`\`\`mermaid\n${code}\n\`\`\`\n\n`;
 }
 
+const CELL_LINE_BREAK = /\s*\n+\s*/g;
+const CELL_PIPE = /\|/g;
+const COLUMN_DIVIDERS = new Map([
+  ['left', ':--'],
+  ['right', '--:'],
+  ['center', ':-:'],
+]);
+const DEFAULT_COLUMN_DIVIDER = '---';
+
+function toCellText(content: string): string {
+  return content.replace(CELL_LINE_BREAK, ' ').trim().replace(CELL_PIPE, '\\|');
+}
+
+/** A row heads its table when it sits in a `<thead>`, or is the first row and no earlier `<thead>` holds one. */
+function isHeadingRow(row: HTMLElement): boolean {
+  const section = row.parentElement;
+  if (!section) {
+    return false;
+  }
+  if (section.nodeName === 'THEAD') {
+    return true;
+  }
+  if (row.previousElementSibling !== null) {
+    return false;
+  }
+  if (section.nodeName === 'TABLE') {
+    return true;
+  }
+  if (section.nodeName !== 'TBODY') {
+    return false;
+  }
+  for (
+    let earlier = section.previousElementSibling;
+    earlier !== null;
+    earlier = earlier.previousElementSibling
+  ) {
+    if (earlier.nodeName === 'THEAD' && earlier.childElementCount > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function dividerRow(row: HTMLElement): string {
+  return Array.from(row.children)
+    .map((cell, index) => {
+      const align = cell.getAttribute('align')?.toLowerCase() ?? '';
+      const divider = COLUMN_DIVIDERS.get(align) ?? DEFAULT_COLUMN_DIVIDER;
+      return `${index === 0 ? '| ' : ' '}${divider} |`;
+    })
+    .join('');
+}
+
 const turndown = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced',
@@ -36,6 +89,26 @@ turndown.addRule('tiptapTaskItem', {
     const checked = node.getAttribute('data-checked') === 'true';
     return `- [${checked ? 'x' : ' '}] ${content.trim()}\n`;
   },
+});
+
+// turndown-plugin-gfm only treats a <tbody>'s first row as a heading row when
+// nothing precedes the <tbody>, so the editor's <colgroup> sends every stored
+// table down the raw-HTML `keep` path. These rules replace its table handling.
+turndown.addRule('editorTableCell', {
+  filter: ['th', 'td'],
+  replacement: (content, node) =>
+    `${node.previousElementSibling === null ? '| ' : ' '}${toCellText(content)} |`,
+});
+
+turndown.addRule('editorTableRow', {
+  filter: 'tr',
+  replacement: (content, node) =>
+    isHeadingRow(node) ? `\n${content}\n${dividerRow(node)}` : `\n${content}`,
+});
+
+turndown.addRule('editorTable', {
+  filter: 'table',
+  replacement: (content) => `\n\n${content.replace(/\n{2,}/g, '\n')}\n\n`,
 });
 
 turndown.addRule('highlight', {

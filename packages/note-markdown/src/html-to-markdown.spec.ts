@@ -152,3 +152,104 @@ describe('htmlToMarkdown', () => {
     expect(html).not.toContain('<s>');
   });
 });
+
+const EDITOR_TABLE_HTML =
+  '<table style="min-width: 50px;"><colgroup><col style="min-width: 25px;"><col style="min-width: 25px;"></colgroup><tbody>' +
+  '<tr><th colspan="1" rowspan="1"><p>Day</p></th><th colspan="1" rowspan="1"><p>Place</p></th></tr>' +
+  '<tr><td colspan="1" rowspan="1"><p>1</p></td><td colspan="1" rowspan="1"><p>Antigua</p></td></tr>' +
+  '</tbody></table>';
+
+const editorTable = (rows: string) =>
+  `<table style="min-width: 50px;"><colgroup><col style="min-width: 25px;"></colgroup><tbody>${rows}</tbody></table>`;
+
+describe('htmlToMarkdown editor-authored tables', () => {
+  it('should convert a stored table, colgroup and paragraph cells included', () => {
+    expect(htmlToMarkdown(EDITOR_TABLE_HTML)).toBe(
+      '| Day | Place |\n| --- | --- |\n| 1 | Antigua |'
+    );
+  });
+
+  it('should round-trip a stored table back into a table, not escaped text', () => {
+    const html = markdownToHtml(htmlToMarkdown(EDITOR_TABLE_HTML));
+
+    expect(html).toContain('<th>Day</th>');
+    expect(html).toContain('<td>Antigua</td>');
+    expect(html).not.toContain('&lt;table');
+  });
+
+  it('should convert a header-only table', () => {
+    expect(
+      htmlToMarkdown(
+        editorTable('<tr><th colspan="1" rowspan="1"><p>Day</p></th></tr>')
+      )
+    ).toBe('| Day |\n| --- |');
+  });
+
+  it('should escape a pipe in cell text so it cannot forge a column', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>A | B</p></th></tr><tr><td colspan="1" rowspan="1"><p>x | y</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe('| A \\| B |\n| --- |\n| x \\| y |');
+    expect(markdownToHtml(markdown)).toContain('<td>x | y</td>');
+  });
+
+  it('should keep emphasis inside a cell', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>Note</p></th></tr><tr><td colspan="1" rowspan="1"><p>Bring <strong>cash</strong></p></td></tr>'
+      )
+    );
+
+    expect(markdown).toContain('| Bring **cash** |');
+    expect(markdownToHtml(markdown)).toContain('<strong>cash</strong>');
+  });
+
+  it('should collapse a multi-paragraph cell onto the single line a row allows', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>Day</p></th></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>Antigua</p><p>then Atitlan</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe('| Day |\n| --- |\n| Antigua then Atitlan |');
+    expect(markdownToHtml(markdown)).toContain('<td>Antigua then Atitlan</td>');
+  });
+
+  it('should collapse a line break inside a cell', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>Day</p></th></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>Antigua<br>then Atitlan</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe('| Day |\n| --- |\n| Antigua then Atitlan |');
+  });
+
+  it('should keep an empty cell as a column instead of dropping it', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>Day</p></th><th colspan="1" rowspan="1"><p>Place</p></th></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p></p></td><td colspan="1" rowspan="1"><p>Antigua</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe('| Day | Place |\n| --- | --- |\n|  | Antigua |');
+    expect(markdownToHtml(markdown)).toContain('<td>Antigua</td>');
+  });
+
+  it('should promote the first row of a header-less table, which GFM cannot express otherwise', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><td colspan="1" rowspan="1"><p>Day</p></td></tr><tr><td colspan="1" rowspan="1"><p>1</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe('| Day |\n| --- |\n| 1 |');
+    expect(markdownToHtml(markdown)).toContain('<th>Day</th>');
+  });
+});

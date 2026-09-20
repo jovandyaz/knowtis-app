@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
+
 import { htmlToPlainText, markdownToNoteHtml } from './html-sanitizer';
 import {
   collectTypes,
   EDITOR_VOCABULARY_MARKDOWN,
   persistedDocument,
+  storedHtml,
   type PMJson,
 } from './html-sanitizer.fixtures';
 
@@ -87,6 +90,21 @@ describe('markdownToNoteHtml', () => {
     const [first] = json.content ?? [];
     expect(first?.type).toBe('mermaidBlock');
     expect(first?.attrs?.code).toContain('A --> B');
+  });
+
+  it('keeps an editor-authored table through the store, read and propose round trip', () => {
+    const stored = storedHtml(
+      '<table><tbody><tr><th><p>Day</p></th><th><p>Place</p></th></tr><tr><td><p>1</p></td><td><p>Antigua</p></td></tr></tbody></table>'
+    );
+    expect(stored).toContain('<colgroup>');
+
+    const markdown = htmlToMarkdown(stored);
+    expect(markdown).toBe('| Day | Place |\n| --- | --- |\n| 1 | Antigua |');
+
+    const proposed = markdownToNoteHtml(markdown);
+    expect(proposed).toContain('<th>Day</th>');
+    expect(proposed).toContain('<td>Antigua</td>');
+    expect(proposed).not.toContain('&lt;table');
   });
 
   it('keeps every construct the editor can hold through the persistence round-trip', () => {
