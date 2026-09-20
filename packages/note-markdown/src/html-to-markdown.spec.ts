@@ -242,6 +242,38 @@ describe('htmlToMarkdown editor-authored tables', () => {
     expect(markdownToHtml(markdown)).toContain('<td>Antigua</td>');
   });
 
+  // GFM cannot express a merged cell, so the span is dropped — but dropping it
+  // must not slide the cells after it into another column, which would change
+  // what the row says without showing a change.
+  it('should keep a cell under a rowspan in its own column', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>Day</p></th><th colspan="1" rowspan="1"><p>Place</p></th></tr>' +
+          '<tr><td colspan="1" rowspan="2"><p>Mon</p></td><td colspan="1" rowspan="1"><p>Antigua</p></td></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>Atitlan</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe(
+      '| Day | Place |\n| --- | --- |\n| Mon | Antigua |\n|  | Atitlan |'
+    );
+    expect(markdownToHtml(markdown)).toContain('<td>Atitlan</td>');
+  });
+
+  it('should keep a row whose cell spans columns as wide as the table', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>Day</p></th><th colspan="1" rowspan="1"><p>Place</p></th></tr>' +
+          '<tr><td colspan="2" rowspan="1"><p>All week</p></td></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>2</p></td><td colspan="1" rowspan="1"><p>Atitlan</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe(
+      '| Day | Place |\n| --- | --- |\n| All week |  |\n| 2 | Atitlan |'
+    );
+  });
+
   it('should promote the first row of a header-less table, which GFM cannot express otherwise', () => {
     const markdown = htmlToMarkdown(
       editorTable(

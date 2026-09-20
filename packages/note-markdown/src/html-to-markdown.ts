@@ -21,6 +21,69 @@ const COLUMN_DIVIDERS = new Map([
   ['center', ':-:'],
 ]);
 const DEFAULT_COLUMN_DIVIDER = '---';
+const EMPTY_CELL = '|  ';
+
+interface CellPlacement {
+  readonly column: number;
+  readonly colspan: number;
+}
+
+interface TableGeometry {
+  readonly placement: Map<Element, CellPlacement>;
+  readonly columns: number;
+}
+
+const geometryCache = new WeakMap<Element, TableGeometry>();
+
+function spanOf(cell: Element, attribute: string): number {
+  const parsed = Number.parseInt(cell.getAttribute(attribute) ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function ownRows(table: Element): Element[] {
+  return Array.from(table.querySelectorAll('tr')).filter(
+    (row) => row.closest('table') === table
+  );
+}
+
+/**
+ * Where every cell sits once `rowspan` and `colspan` are accounted for. GFM has
+ * no merged cell, so a span is dropped — but a dropped span must not shift the
+ * cells after it into another column, which would silently change what the data
+ * says.
+ */
+function geometryOf(table: Element): TableGeometry {
+  const cached = geometryCache.get(table);
+  if (cached) {
+    return cached;
+  }
+  const placement = new Map<Element, CellPlacement>();
+  const carried = new Map<number, Set<number>>();
+  let columns = 0;
+  ownRows(table).forEach((row, rowIndex) => {
+    const taken = carried.get(rowIndex) ?? new Set<number>();
+    let column = 0;
+    for (const cell of Array.from(row.children)) {
+      while (taken.has(column)) {
+        column += 1;
+      }
+      const colspan = spanOf(cell, 'colspan');
+      placement.set(cell, { column, colspan });
+      for (let below = 1; below < spanOf(cell, 'rowspan'); below += 1) {
+        const later = carried.get(rowIndex + below) ?? new Set<number>();
+        for (let offset = 0; offset < colspan; offset += 1) {
+          later.add(column + offset);
+        }
+        carried.set(rowIndex + below, later);
+      }
+      column += colspan;
+      columns = Math.max(columns, column);
+    }
+  });
+  const geometry = { placement, columns };
+  geometryCache.set(table, geometry);
+  return geometry;
+}
 
 function toCellText(content: string): string {
   return content.replace(CELL_LINE_BREAK, ' ').trim().replace(CELL_PIPE, '\\|');
@@ -57,13 +120,27 @@ function isHeadingRow(row: HTMLElement): boolean {
 }
 
 function dividerRow(row: HTMLElement): string {
-  return Array.from(row.children)
-    .map((cell, index) => {
-      const align = cell.getAttribute('align')?.toLowerCase() ?? '';
-      const divider = COLUMN_DIVIDERS.get(align) ?? DEFAULT_COLUMN_DIVIDER;
-      return `${index === 0 ? '| ' : ' '}${divider} |`;
-    })
-    .join('');
+  const table = row.closest('table');
+  if (!table) {
+    return '';
+  }
+  const { placement, columns } = geometryOf(table);
+  const alignments = new Map<number, string>();
+  for (const cell of Array.from(row.children)) {
+    const spot = placement.get(cell);
+    const align = cell.getAttribute('align')?.toLowerCase();
+    if (spot && align) {
+      alignments.set(spot.column, align);
+    }
+  }
+  return `${Array.from(
+    { length: columns },
+    (_unused, column) =>
+      COLUMN_DIVIDERS.get(alignments.get(column) ?? '') ??
+      DEFAULT_COLUMN_DIVIDER
+  )
+    .map((divider) => `| ${divider} `)
+    .join('')}|`;
 }
 
 const turndown = new TurndownService({
@@ -96,14 +173,24 @@ turndown.addRule('tiptapTaskItem', {
 // table down the raw-HTML `keep` path. These rules replace its table handling.
 turndown.addRule('editorTableCell', {
   filter: ['th', 'td'],
-  replacement: (content, node) =>
-    `${node.previousElementSibling === null ? '| ' : ' '}${toCellText(content)} |`,
+  replacement: (content, node) => {
+    const table = node.closest('table');
+    const spot = table ? geometryOf(table).placement.get(node) : undefined;
+    if (!spot) {
+      return `| ${toCellText(content)} `;
+    }
+    const before =
+      node.previousElementSibling === null
+        ? EMPTY_CELL.repeat(spot.column)
+        : '';
+    return `${before}| ${toCellText(content)} ${EMPTY_CELL.repeat(spot.colspan - 1)}`;
+  },
 });
 
 turndown.addRule('editorTableRow', {
   filter: 'tr',
   replacement: (content, node) =>
-    isHeadingRow(node) ? `\n${content}\n${dividerRow(node)}` : `\n${content}`,
+    isHeadingRow(node) ? `\n${content}|\n${dividerRow(node)}` : `\n${content}|`,
 });
 
 turndown.addRule('editorTable', {

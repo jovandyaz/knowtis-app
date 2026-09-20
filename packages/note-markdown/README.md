@@ -10,10 +10,10 @@ import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 
 ## Exports
 
-| Export                     | Purpose                                                                                                                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `markdownToHtml(markdown)` | CommonMark + GFM tables, task lists (`- [ ]`), `==mark==`, `^sup^`, `~sub~`, linkify; a ` ```mermaid ``` ` fence becomes the editor's diagram block (`<div data-mermaid-block data-code>`) |
-| `htmlToMarkdown(html)`     | Inverse for editor-produced HTML: task lists, marks, mermaid blocks and GFM tables survive a round trip; literal `~`, `^`, `==` are escaped so they stay literal                           |
+| Export                     | Purpose                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `markdownToHtml(markdown)` | CommonMark + GFM tables, task lists (`- [ ]`), `==mark==`, `^sup^`, `~sub~`, linkify; a ` ```mermaid ``` ` fence becomes the editor's diagram block (`<div data-mermaid-block data-code>`)                                                                                                           |
+| `htmlToMarkdown(html)`     | Inverse for editor-produced HTML: task lists, marks, mermaid blocks and tables survive a round trip; literal `~`, `^`, `==` are escaped so they stay literal. A merged cell (`colspan`/`rowspan`) loses its merge — GFM has none — but keeps every cell in its own column; column widths are dropped |
 
 The output is **not** sanitized. The MCP writes it through the authenticated notes API; the API's agent sanitizer (`apps/api/src/modules/agent/infrastructure/sanitize/html-sanitizer.ts`) allowlists it before it becomes a proposal.
 
