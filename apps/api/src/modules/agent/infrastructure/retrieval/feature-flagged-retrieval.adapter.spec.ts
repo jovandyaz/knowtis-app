@@ -128,6 +128,26 @@ describe('FeatureFlaggedRetrievalAdapter note reads', () => {
     expect(flags.isEnabled).not.toHaveBeenCalled();
   });
 
+  it('passes through a missing note without consulting the flag', async () => {
+    const { adapter, flags, hybrid, keyword } = make(true);
+    keyword.getBody = vi.fn(async () => null);
+
+    expect(await adapter.getBody('u', 'n')).toBeNull();
+    expect(hybrid.getBody).not.toHaveBeenCalled();
+    expect(flags.isEnabled).not.toHaveBeenCalled();
+  });
+
+  it('lets a keyword read failure surface instead of degrading to hybrid', async () => {
+    const { adapter, flags, hybrid, keyword } = make(true);
+    keyword.getBody = vi.fn(async () => {
+      throw new Error('note store down');
+    });
+
+    await expect(adapter.getBody('u', 'n')).rejects.toThrow('note store down');
+    expect(hybrid.getBody).not.toHaveBeenCalled();
+    expect(flags.isEnabled).not.toHaveBeenCalled();
+  });
+
   it('serves getById from keyword whatever the flag says', async () => {
     const { adapter, flags, hybrid, keyword } = make(true);
 

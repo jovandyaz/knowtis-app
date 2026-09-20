@@ -260,6 +260,53 @@ describe('htmlToMarkdown editor-authored tables', () => {
     expect(markdownToHtml(markdown)).toContain('<td>Atitlan</td>');
   });
 
+  it('should keep a cell beside a rowspan in its own column', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>A</p></th><th colspan="1" rowspan="1"><p>B</p></th><th colspan="1" rowspan="1"><p>C</p></th></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>a1</p></td><td colspan="1" rowspan="2"><p>SPAN</p></td><td colspan="1" rowspan="1"><p>c1</p></td></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>a2</p></td><td colspan="1" rowspan="1"><p>c2</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe(
+      '| A | B | C |\n| --- | --- | --- |\n| a1 | SPAN | c1 |\n| a2 |  | c2 |'
+    );
+  });
+
+  // HTML reads rowspan="0" as "the rest of this row group"; turndown's own
+  // plugin treats it as 1, which would shift every later cell left a column.
+  it('should carry a rowspan of zero to the end of its row group', () => {
+    const markdown = htmlToMarkdown(
+      editorTable(
+        '<tr><th colspan="1" rowspan="1"><p>A</p></th><th colspan="1" rowspan="1"><p>B</p></th></tr>' +
+          '<tr><td colspan="1" rowspan="0"><p>X</p></td><td colspan="1" rowspan="1"><p>b1</p></td></tr>' +
+          '<tr><td colspan="1" rowspan="1"><p>b2</p></td></tr>'
+      )
+    );
+
+    expect(markdown).toBe('| A | B |\n| --- | --- |\n| X | b1 |\n|  | b2 |');
+  });
+
+  it('should not let a rowspan reach past its own row group', () => {
+    const markdown = htmlToMarkdown(
+      '<table><tbody><tr><td colspan="1" rowspan="3"><p>S</p></td><td colspan="1" rowspan="1"><p>b1</p></td></tr></tbody>' +
+        '<tfoot><tr><td colspan="1" rowspan="1"><p>f1</p></td><td colspan="1" rowspan="1"><p>f2</p></td></tr></tfoot></table>'
+    );
+
+    expect(markdown).toBe('| S | b1 |\n| --- | --- |\n| f1 | f2 |');
+  });
+
+  it('should give a multi-row thead exactly one divider, as GFM allows', () => {
+    const markdown = htmlToMarkdown(
+      '<table><thead><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><th><p>A2</p></th><th><p>B2</p></th></tr></thead>' +
+        '<tbody><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>'
+    );
+
+    expect(markdown).toBe('| A | B |\n| --- | --- |\n| A2 | B2 |\n| 1 | 2 |');
+    expect(markdownToHtml(markdown)).toContain('<td>A2</td>');
+  });
+
   it('should keep a row whose cell spans columns as wide as the table', () => {
     const markdown = htmlToMarkdown(
       editorTable(

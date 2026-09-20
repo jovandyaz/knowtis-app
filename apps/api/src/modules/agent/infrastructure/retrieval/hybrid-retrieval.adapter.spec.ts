@@ -196,6 +196,29 @@ describe('HybridRetrievalAdapter note reads', () => {
     expect(embed.embedQuery).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['a missing note', null],
+    ['an inaccessible note', null],
+  ])('passes through what keyword returns for %s', async (_label, expected) => {
+    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+    keyword.getBody = vi.fn(async () => expected);
+
+    expect(await adapter.getBody('u1', 'n1')).toBe(expected);
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+  });
+
+  it('lets a keyword read failure surface instead of degrading to the vector leg', async () => {
+    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+    keyword.getBody = vi.fn(async () => {
+      throw new Error('note store down');
+    });
+
+    await expect(adapter.getBody('u1', 'n1')).rejects.toThrow(
+      'note store down'
+    );
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+  });
+
   it('delegates getById to the keyword adapter, never to the vector leg', async () => {
     const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
 

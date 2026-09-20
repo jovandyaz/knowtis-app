@@ -383,8 +383,16 @@ describe('MutationProposalBuilder.buildEdit', () => {
     expect(r._unsafeUnwrap().summary).toBe(`Update "Old": ${expected}`);
   });
 
+  // The shared vocabulary fixture nests a task list, which the converter pair
+  // flattens, so an edit to it is refused — this fixture is the same minus the
+  // nesting, which is what proves an edit keeps what it can carry.
+  const EDITABLE_VOCABULARY_MARKDOWN = EDITOR_VOCABULARY_MARKDOWN.replace(
+    '\n  - [x] photo',
+    ''
+  );
+
   it('keeps every editor construct the note already held', async () => {
-    const bodyHtml = markdownToNoteHtml(EDITOR_VOCABULARY_MARKDOWN);
+    const bodyHtml = markdownToNoteHtml(EDITABLE_VOCABULARY_MARKDOWN);
     const original = htmlToMarkdown(bodyHtml);
     const { builder } = editing(bodyHtml);
 
@@ -408,9 +416,43 @@ describe('MutationProposalBuilder.buildEdit', () => {
     const after = htmlToMarkdown(html).split('\n');
     const editedLine = before.findIndex((line) => line.includes('**cash**'));
     expect(editedLine).toBeGreaterThan(-1);
+    expect(after).toHaveLength(before.length);
     expect(
       after.flatMap((line, i) => (line === before[i] ? [] : [i]))
     ).toStrictEqual([editedLine]);
     expect(after[editedLine]).toContain('**a card**');
+  });
+
+  // The guard asks whether the NOTE survives a round trip, not whether the
+  // proposal is smaller — an edit the user asked for may legitimately remove a
+  // whole paragraph, and refusing that would make the tool useless.
+  it('allows an edit that deletes a paragraph outright', async () => {
+    const bodyHtml = markdownToNoteHtml('# Trip\n\nKeep this.\n\nDrop this.');
+    const { builder } = editing(bodyHtml);
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: '\n\nDrop this.', newText: '' }],
+    });
+
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
+      const html = contentHtmlOf(r.value);
+      expect(html).toContain('Keep this.');
+      expect(html).not.toContain('Drop this.');
+    }
+  });
+
+  it('refuses an edit to a note the converter cannot rebuild whole', async () => {
+    const { builder } = editing(markdownToNoteHtml(EDITOR_VOCABULARY_MARKDOWN));
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'with **cash**', newText: 'with **a card**' }],
+    });
+
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_EDIT_WOULD_LOSE_CONTENT');
+      expect(r.error.message).toContain('taskList');
+    }
   });
 });

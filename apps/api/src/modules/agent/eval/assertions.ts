@@ -180,29 +180,38 @@ export function assertLineAdded(output: unknown): boolean {
   const tailKept =
     lines.slice(start + added).join('\n') ===
     FIDELITY_LINES.slice(start).join('\n');
+  const inserted = lines
+    .slice(start, start + added)
+    .filter((line) => line.trim() !== '');
   return (
-    tailKept && ADDED_LINE.test(lines.slice(start, start + added).join('\n'))
+    tailKept && inserted.length === 1 && ADDED_LINE.test(inserted[0] ?? '')
   );
 }
 
 const APPENDED_LINE = /Back home on the 12th/i;
-const UNCHANGED_PREFIX_CHARS = 2_000;
-const LONG_NOTE_PREFIX = LONG_NOTE_BODY.slice(0, UNCHANGED_PREFIX_CHARS);
 
 /**
  * The model only ever received the note cut at the read bound, so the sentinel
  * sentence past it appears in the proposal only when the body was rebuilt from
  * storage — a proposal echoing what the model read would silently delete it.
  */
+/** An append must leave the note it was appended to intact — including the
+ *  tail the model never received, which is the whole point of the case. Only
+ *  lines after the original body may differ. */
 export function assertAppendKeepsUnseenTail(output: unknown): boolean {
   const html = updateContentHtml(output);
   if (html === null) {
     return false;
   }
+  const lines = htmlToMarkdown(html).split('\n');
+  const original = LONG_NOTE_BODY.split('\n');
+  const kept =
+    lines.length >= original.length &&
+    original.every((line, index) => lines[index] === line);
   return (
+    kept &&
     html.includes(LONG_NOTE_SENTINEL) &&
-    APPENDED_LINE.test(html) &&
-    htmlToMarkdown(html).startsWith(LONG_NOTE_PREFIX)
+    APPENDED_LINE.test(lines.slice(original.length).join('\n'))
   );
 }
 

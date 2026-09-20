@@ -247,6 +247,10 @@ describe('assertLineAdded', () => {
     ANCHOR,
     `${ANCHOR}\n\nPack a rain jacket.`
   );
+  const WITH_EXTRA_PROSE = FIDELITY_NOTE_MARKDOWN.replace(
+    ANCHOR,
+    `${ANCHOR}\n\nPack a rain jacket.\n\nAlso repack the whole bag tonight.`
+  );
 
   it('accepts a proposal that only adds the requested line', () => {
     expect(assertLineAdded(proposedMarkdown(WITH_LINE))).toBe(true);
@@ -318,6 +322,9 @@ describe('assertLineAdded', () => {
         })
       )
     ).toBe(false);
+  });
+  it('rejects a proposal that smuggled a second line in with the requested one', () => {
+    expect(assertLineAdded(proposedMarkdown(WITH_EXTRA_PROSE))).toBe(false);
   });
 });
 

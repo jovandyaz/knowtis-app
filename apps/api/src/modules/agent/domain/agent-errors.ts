@@ -57,6 +57,11 @@ export const AgentErrors = {
       'AGENT_EDIT_TEXT_AMBIGUOUS',
       `Edit ${position}: this text appears ${matches} times in the note: "${echo(oldText)}". Include more of the surrounding text so it matches exactly once.`
     ),
+  editWouldLoseContent: (nodes: readonly string[]) =>
+    make(
+      'AGENT_EDIT_WOULD_LOSE_CONTENT',
+      `This note holds something the edit path cannot rebuild without dropping it (${nodes.join(', ')}), so the edit was refused rather than applied — approving it would have deleted that from parts of the note nobody asked to change. Tell the user the note has to be edited by hand for now.`
+    ),
   wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>
     make(
       'AGENT_WHOLE_BODY_UPDATE_REFUSED',

@@ -19,6 +19,7 @@ import {
   ProposedMutation,
   type UpdateMutationPayload,
 } from '../../domain/proposed-mutation';
+import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 
 export interface UpdateProposalInput {
@@ -156,6 +157,10 @@ export class MutationProposalBuilder {
     const contentHtml = markdownToNoteHtml(merged);
     if (merged.trim() && !contentHtml) {
       return err(AgentErrors.sanitizeRejected());
+    }
+    const lost = nodesLostBetween(body.html, markdownToNoteHtml(original));
+    if (lost.length > 0) {
+      return err(AgentErrors.editWouldLoseContent(lost));
     }
     const changes = input.edits.length + (appendMarkdown === undefined ? 0 : 1);
     return ProposedMutation.create({
