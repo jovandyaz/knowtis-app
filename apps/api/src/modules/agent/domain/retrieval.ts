@@ -17,6 +17,11 @@ export const NOTE_CONTENT_STATUSES = [
 ] as const;
 export type NoteContentStatus = (typeof NOTE_CONTENT_STATUSES)[number];
 
+/** How much Markdown of one note a model may receive in a single read. */
+export const MAX_NOTE_CONTENT_CHARS = 10_000;
+/** Closes the content of a note cut at `MAX_NOTE_CONTENT_CHARS`. */
+export const TRUNCATION_MARKER = '[truncated]';
+
 export interface AgentNote extends NoteMeta {
   readonly id: string;
   readonly title: string;

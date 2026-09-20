@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
+import { markdownToNoteHtml } from '../infrastructure/sanitize/html-sanitizer';
 import {
+  assertAppendKeepsUnseenTail,
   assertCountToolSelection,
   assertEditPreservesRest,
   assertGrounding,
   assertInjectionNotObeyed,
+  assertLineAdded,
   assertNoExfiltrationLink,
   assertNoSources,
   assertRecencyToolSelection,
   assertUpdateProposal,
   asTranscript,
 } from './assertions';
+import {
+  FIDELITY_NOTE_MARKDOWN,
+  LONG_NOTE_BODY,
+  NOTE_FIXTURE_SETS,
+} from './fixtures/note-sets';
 import type { EvalTranscript } from './transcript';
 
 function transcript(partial: Partial<EvalTranscript>): EvalTranscript {
@@ -220,6 +228,150 @@ describe('assertEditPreservesRest', () => {
       )
     ).toBe(false);
     expect(assertEditPreservesRest(edited(''))).toBe(false);
+  });
+});
+
+function proposedMarkdown(markdown: string): EvalTranscript {
+  return transcript({
+    proposal: {
+      kind: 'update',
+      payload: { contentHtml: markdownToNoteHtml(markdown) },
+    },
+  });
+}
+
+describe('assertLineAdded', () => {
+  const ANCHOR =
+    'Fly into [Guatemala City](https://example.com/gua) on the **red-eye**.';
+  const WITH_LINE = FIDELITY_NOTE_MARKDOWN.replace(
+    ANCHOR,
+    `${ANCHOR}\n\nPack a rain jacket.`
+  );
+
+  it('accepts a proposal that only adds the requested line', () => {
+    expect(assertLineAdded(proposedMarkdown(WITH_LINE))).toBe(true);
+  });
+
+  it('rejects a proposal that drops a table row while adding the line', () => {
+    expect(
+      assertLineAdded(
+        proposedMarkdown(WITH_LINE.replace('| 2 | Atitlan |\n', ''))
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that adds the line but drops the trailing section', () => {
+    expect(
+      assertLineAdded(
+        proposedMarkdown(
+          WITH_LINE.replace('\n\n## Budget\n\nAround 900 USD total.', '')
+        )
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that rewords a line it was not asked to touch', () => {
+    expect(
+      assertLineAdded(
+        proposedMarkdown(WITH_LINE.replace('Guatemala City', 'Guatemala'))
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that adds nothing', () => {
+    expect(assertLineAdded(proposedMarkdown(FIDELITY_NOTE_MARKDOWN))).toBe(
+      false
+    );
+  });
+
+  it('rejects a proposal that adds some other line', () => {
+    expect(
+      assertLineAdded(
+        proposedMarkdown(
+          WITH_LINE.replace('Pack a rain jacket.', 'Bring sandals.')
+        )
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that also inserts a line somewhere else', () => {
+    expect(
+      assertLineAdded(
+        proposedMarkdown(
+          WITH_LINE.replace(
+            'Around 900 USD total.',
+            'Around 900 USD total.\n\nSplit three ways.'
+          )
+        )
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a create proposal and a missing body', () => {
+    expect(
+      assertLineAdded(transcript({ proposal: { kind: 'create', payload: {} } }))
+    ).toBe(false);
+    expect(
+      assertLineAdded(
+        transcript({
+          proposal: { kind: 'update', payload: { contentHtml: '' } },
+        })
+      )
+    ).toBe(false);
+  });
+});
+
+describe('assertAppendKeepsUnseenTail', () => {
+  const APPENDED = 'Back home on the 12th.';
+  const WHOLE_BODY_APPENDED = `${LONG_NOTE_BODY}\n\n${APPENDED}`;
+  const SERVED_VIEW = NOTE_FIXTURE_SETS['long-note'][0].content;
+
+  it('accepts a proposal that appends the line and keeps the unseen tail', () => {
+    expect(
+      assertAppendKeepsUnseenTail(proposedMarkdown(WHOLE_BODY_APPENDED))
+    ).toBe(true);
+  });
+
+  it('rejects a proposal rebuilt from the truncated view the model was served', () => {
+    expect(
+      assertAppendKeepsUnseenTail(
+        proposedMarkdown(`${SERVED_VIEW}\n\n${APPENDED}`)
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a proposal that keeps the tail but never adds the line', () => {
+    expect(assertAppendKeepsUnseenTail(proposedMarkdown(LONG_NOTE_BODY))).toBe(
+      false
+    );
+  });
+
+  it('rejects a proposal that reworded the opening it was not asked to touch', () => {
+    expect(
+      assertAppendKeepsUnseenTail(
+        proposedMarkdown(
+          WHOLE_BODY_APPENDED.replace(
+            'Walked the ridge trail',
+            'Hiked the ridge trail'
+          )
+        )
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a create proposal and a missing body', () => {
+    expect(
+      assertAppendKeepsUnseenTail(
+        transcript({ proposal: { kind: 'create', payload: {} } })
+      )
+    ).toBe(false);
+    expect(
+      assertAppendKeepsUnseenTail(
+        transcript({
+          proposal: { kind: 'update', payload: { contentHtml: '' } },
+        })
+      )
+    ).toBe(false);
   });
 });
 

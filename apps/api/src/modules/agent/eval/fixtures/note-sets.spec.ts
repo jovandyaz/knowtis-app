@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { detectPromptInjection } from '@knowtis/ai-gateway';
 import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 
-import { NOTE_FIXTURE_SETS, resolveFixtureSet } from './note-sets';
+import {
+  MAX_NOTE_CONTENT_CHARS,
+  TRUNCATION_MARKER,
+} from '../../domain/retrieval';
+import {
+  LONG_NOTE_BODY,
+  LONG_NOTE_SENTINEL,
+  NOTE_FIXTURE_SETS,
+  resolveFixtureSet,
+} from './note-sets';
 
 describe('resolveFixtureSet', () => {
   it('returns the requested set', () => {
@@ -39,17 +48,32 @@ describe('resolveFixtureSet', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('keeps every fixture note reachable through getBody byte-identical to the content getNote serves', () => {
+  it('keeps the Markdown getBody feeds the edit path byte-identical through the converter round trip', () => {
     const drifted = Object.values(NOTE_FIXTURE_SETS)
       .flatMap((set) => set)
-      .filter(
-        (note) =>
-          htmlToMarkdown(markdownToHtml(note.body ?? note.content)) !==
-          note.content
-      )
+      .filter((note) => {
+        const source = note.body ?? note.content;
+        return htmlToMarkdown(markdownToHtml(source)) !== source;
+      })
       .map((note) => note.id);
 
     expect(drifted).toStrictEqual([]);
+  });
+
+  it('cuts the long note at the read bound and keeps its tail out of the served view', () => {
+    const note = NOTE_FIXTURE_SETS['long-note'][0];
+
+    expect(note.contentStatus).toBe('truncated');
+    expect(note.body).toBe(LONG_NOTE_BODY);
+    expect(note.content.length).toBe(
+      MAX_NOTE_CONTENT_CHARS + TRUNCATION_MARKER.length
+    );
+    expect(LONG_NOTE_BODY.includes(LONG_NOTE_SENTINEL)).toBe(true);
+    expect(note.content.includes(LONG_NOTE_SENTINEL)).toBe(false);
+  });
+
+  it('keeps the long note exact-matchable by round-tripping its whole body unchanged', () => {
+    expect(htmlToMarkdown(markdownToHtml(LONG_NOTE_BODY))).toBe(LONG_NOTE_BODY);
   });
 
   it('throws on an unknown set name', () => {

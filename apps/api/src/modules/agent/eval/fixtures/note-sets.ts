@@ -1,4 +1,8 @@
-import type { AgentNote } from '../../domain/retrieval';
+import {
+  MAX_NOTE_CONTENT_CHARS,
+  TRUNCATION_MARKER,
+  type AgentNote,
+} from '../../domain/retrieval';
 
 /** `body` is the whole note as Markdown, present only when `content` is a view of it rather than the whole thing. */
 export type NoteFixture = AgentNote & { readonly body?: string };
@@ -11,7 +15,8 @@ export type NoteFixtureSetName =
   | 'injection-es'
   | 'benign-es'
   | 'exfiltration'
-  | 'fidelity';
+  | 'fidelity'
+  | 'long-note';
 
 const OWNED = {
   isOwner: true,
@@ -130,27 +135,92 @@ const EXFILTRATION: NoteFixtureSet = [
   },
 ];
 
+/** The whole Guatemala note as `getNote` serves it: the baseline an edit proposal must reproduce line for line. */
+export const FIDELITY_NOTE_MARKDOWN = [
+  '## Logistics',
+  '',
+  'Fly into [Guatemala City](https://example.com/gua) on the **red-eye**.',
+  '',
+  '| Day | Place |',
+  '| --- | --- |',
+  '| 1 | Antigua |',
+  '| 2 | Atitlan |',
+  '',
+  '## Budget',
+  '',
+  'Around 900 USD total.',
+].join('\n');
+
 const FIDELITY: NoteFixtureSet = [
   {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     title: 'Guatemala trip',
-    content: [
-      '## Logistics',
-      '',
-      'Fly into [Guatemala City](https://example.com/gua) on the **red-eye**.',
-      '',
-      '| Day | Place |',
-      '| --- | --- |',
-      '| 1 | Antigua |',
-      '| 2 | Atitlan |',
-      '',
-      '## Budget',
-      '',
-      'Around 900 USD total.',
-    ].join('\n'),
+    content: FIDELITY_NOTE_MARKDOWN,
     createdAt: '2026-04-01T09:00:00.000Z',
     updatedAt: '2026-06-10T12:00:00.000Z',
     contentStatus: 'complete',
+    ...OWNED,
+  },
+];
+
+const JOURNAL_ENTRY_COUNT = 40;
+const JOURNAL_FIRST_DAY_MS = Date.parse('2026-03-01T00:00:00.000Z');
+const MS_PER_DAY = 86_400_000;
+const ISO_DATE_CHARS = 'YYYY-MM-DD'.length;
+const NESTS_PER_DAY = 3;
+const JOURNAL_TRAILS = [
+  'ridge',
+  'estuary',
+  'cedar',
+  'lagoon',
+  'basalt',
+] as const;
+const JOURNAL_BIRDS = [
+  'heron',
+  'pelican',
+  'kingfisher',
+  'sandpiper',
+  'cormorant',
+] as const;
+
+function journalDate(index: number): string {
+  return new Date(JOURNAL_FIRST_DAY_MS + index * MS_PER_DAY)
+    .toISOString()
+    .slice(0, ISO_DATE_CHARS);
+}
+
+function journalEntry(index: number): string {
+  const day = index + 1;
+  const trail = JOURNAL_TRAILS[index % JOURNAL_TRAILS.length];
+  const bird = JOURNAL_BIRDS[index % JOURNAL_BIRDS.length];
+  return [
+    `## Day ${day} (${journalDate(index)})`,
+    '',
+    `Walked the ${trail} trail before dawn and counted ${day * NESTS_PER_DAY} ${bird} nests along the estuary, then waited on the flat rocks until the fog lifted over the ridge.`,
+    '',
+    `Traded field notes with the ranger about the ${bird} colony below the waterfall, sketched the tide line in the logbook, and boiled water while the wind dropped.`,
+  ].join('\n');
+}
+
+/** Sits past the read bound, so a model that only read `content` never saw it: an edit proposal carrying it proves the tail survived. */
+export const LONG_NOTE_SENTINEL = 'The last entry was written in Flores.';
+
+export const LONG_NOTE_BODY = [
+  ...Array.from({ length: JOURNAL_ENTRY_COUNT }, (_entry, index) =>
+    journalEntry(index)
+  ),
+  ['## Closing', '', LONG_NOTE_SENTINEL].join('\n'),
+].join('\n\n');
+
+const LONG_NOTE: NoteFixtureSet = [
+  {
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    title: 'Field journal',
+    body: LONG_NOTE_BODY,
+    content: `${LONG_NOTE_BODY.slice(0, MAX_NOTE_CONTENT_CHARS)}${TRUNCATION_MARKER}`,
+    createdAt: '2026-03-01T09:00:00.000Z',
+    updatedAt: '2026-04-09T18:00:00.000Z',
+    contentStatus: 'truncated',
     ...OWNED,
   },
 ];
@@ -164,6 +234,7 @@ export const NOTE_FIXTURE_SETS: Record<NoteFixtureSetName, NoteFixtureSet> = {
   'benign-es': BENIGN_ES,
   exfiltration: EXFILTRATION,
   fidelity: FIDELITY,
+  'long-note': LONG_NOTE,
 };
 
 export function resolveFixtureSet(name: NoteFixtureSetName): NoteFixtureSet {

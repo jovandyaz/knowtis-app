@@ -11,19 +11,19 @@ import {
 } from '../../../notes/domain/ports/note-read.repository';
 import { InjectionGuardService } from '../../application/injection-guard.service';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
-import type {
-  AgentNote,
-  NoteBody,
-  NoteContentStatus,
-  NoteHit,
-  NotesOverview,
+import {
+  MAX_NOTE_CONTENT_CHARS,
+  TRUNCATION_MARKER,
+  type AgentNote,
+  type NoteBody,
+  type NoteContentStatus,
+  type NoteHit,
+  type NotesOverview,
 } from '../../domain/retrieval';
 import { htmlToPlainText } from '../sanitize/html-sanitizer';
 import { toNoteHit } from './note-hit.mapper';
 
 const MAX_SEARCH_HITS = 20;
-const MAX_NOTE_CONTENT_CHARS = 10_000;
-const TRUNCATION_MARKER = '[truncated]';
 const WITHHELD_CONTENT =
   '[Note content withheld: it failed the injection safety check]';
 

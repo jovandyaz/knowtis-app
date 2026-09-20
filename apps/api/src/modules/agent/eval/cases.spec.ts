@@ -12,11 +12,12 @@ const FIXTURE_NAMES = new Set([
   'benign-es',
   'exfiltration',
   'fidelity',
+  'long-note',
 ]);
 
 describe('COPILOT_EVAL_CASES', () => {
-  it('defines the nine cases', () => {
-    expect(COPILOT_EVAL_CASES).toHaveLength(9);
+  it('defines the eleven cases', () => {
+    expect(COPILOT_EVAL_CASES).toHaveLength(11);
   });
 
   it('every case has a message, a known fixtureSet, and at least one assertion', () => {
@@ -57,6 +58,8 @@ describe('COPILOT_EVAL_CASES', () => {
       'no hallucination',
       'guard-bait Spanish note still answered',
       'edit fidelity: an unrelated change preserves the rest',
+      'edit: add a line to a complete note',
+      'edit: append to a note read truncated',
     ]);
   });
 
