@@ -347,6 +347,16 @@ describe('assertAppendKeepsUnseenTail', () => {
     ).toBe(false);
   });
 
+  it('rejects a proposal that appended more than the one line asked for', () => {
+    expect(
+      assertAppendKeepsUnseenTail(
+        proposedMarkdown(
+          `${WHOLE_BODY_APPENDED}\n\nAnd rewrote the packing list while I was here.`
+        )
+      )
+    ).toBe(false);
+  });
+
   it('rejects a proposal that keeps the tail but never adds the line', () => {
     expect(assertAppendKeepsUnseenTail(proposedMarkdown(LONG_NOTE_BODY))).toBe(
       false

@@ -208,10 +208,14 @@ export function assertAppendKeepsUnseenTail(output: unknown): boolean {
   const kept =
     lines.length >= original.length &&
     original.every((line, index) => lines[index] === line);
+  const appended = lines
+    .slice(original.length)
+    .filter((line) => line.trim() !== '');
   return (
     kept &&
     html.includes(LONG_NOTE_SENTINEL) &&
-    APPENDED_LINE.test(lines.slice(original.length).join('\n'))
+    appended.length === 1 &&
+    APPENDED_LINE.test(appended[0] ?? '')
   );
 }
 
