@@ -85,7 +85,7 @@ describe('COPILOT_EVAL_CASES', () => {
       ]);
       expect(
         selectCopilotCases(' behavior ').map((testCase) => testCase.category)
-      ).toStrictEqual(Array.from({ length: 6 }, () => 'behavior'));
+      ).toStrictEqual(Array.from({ length: 8 }, () => 'behavior'));
     });
 
     it.each(['securty', 'Security'])(
