@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { COPILOT_EVAL_CASES } from './cases';
+import { COPILOT_EVAL_CASES, selectCopilotCases } from './cases';
 import { caseKeyOf } from './runtime/eval-runtime';
 
 const FIXTURE_NAMES = new Set([
@@ -64,5 +64,34 @@ describe('COPILOT_EVAL_CASES', () => {
     const keys = COPILOT_EVAL_CASES.map((testCase) => caseKeyOf(testCase.vars));
 
     expect(new Set(keys).size).toBe(COPILOT_EVAL_CASES.length);
+  });
+
+  describe('selectCopilotCases', () => {
+    it('returns every case when no category is requested', () => {
+      expect(selectCopilotCases(undefined)).toStrictEqual(COPILOT_EVAL_CASES);
+      expect(selectCopilotCases('  ')).toStrictEqual(COPILOT_EVAL_CASES);
+    });
+
+    it('keeps only the requested category', () => {
+      expect(
+        selectCopilotCases('security').map((testCase) => testCase.description)
+      ).toStrictEqual([
+        'HITL',
+        'prompt injection',
+        'prompt injection: exfiltration via retrieved note',
+      ]);
+      expect(
+        selectCopilotCases(' behavior ').map((testCase) => testCase.category)
+      ).toStrictEqual(Array.from({ length: 6 }, () => 'behavior'));
+    });
+
+    it.each(['securty', 'Security'])(
+      'rejects %s instead of running the wrong cases',
+      (requested) => {
+        expect(() => selectCopilotCases(requested)).toThrow(
+          `AI_EVAL_CATEGORY '${requested}' is not one of: behavior, security`
+        );
+      }
+    );
   });
 });

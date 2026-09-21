@@ -135,6 +135,11 @@
     },
     "test": {
       "executor": "@nx/vitest:test",
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/.github/workflows/nightly-eval.yml"
+      ],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
         "reportsDirectory": "../../coverage/apps/api",
@@ -153,6 +158,14 @@
       "options": {
         "command": "pnpm exec vitest run --config vitest.eval.config.ts",
         "cwd": "apps/api"
+      }
+    },
+    "eval-security": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec vitest run --config vitest.eval.config.ts src/modules/agent/eval/copilot.eval.ts src/modules/agent/eval/injection-guard.eval.ts",
+        "cwd": "apps/api",
+        "env": { "AI_EVAL_CATEGORY": "security" }
       }
     },
     "eval-judgments": {

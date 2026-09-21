@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  # actions: read lets the drift step download the previous nightly's artifact.
+  # actions: read lets the drift step download an earlier run's artifact.
   actions: read
 
 concurrency:
@@ -16,9 +16,38 @@ concurrency:
 
 jobs:
   evals:
-    name: AI Evals
+    name: AI Evals (${{ matrix.leg }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Above the 50-minute vitest budget of a ten-trial suite, so a hung turn
+    # fails inside vitest and the leg still uploads its results.
+    timeout-minutes: 75
+    strategy:
+      # Each leg is evidence about a different model; one red leg must not hide the rest.
+      fail-fast: false
+      matrix:
+        # The production legs fall back to AI_SETTING_DEFAULTS; set the
+        # AI_EVAL_*_MODEL repository variables to whatever ai_config serves.
+        include:
+          - leg: reference
+            model: anthropic:claude-sonnet-5
+            target: eval
+            trials: 3
+          - leg: default-model
+            model: ${{ vars.AI_EVAL_DEFAULT_MODEL || 'openrouter:deepseek/deepseek-v3.2' }}
+            target: eval
+            trials: 3
+          - leg: default-model-security
+            model: ${{ vars.AI_EVAL_DEFAULT_MODEL || 'openrouter:deepseek/deepseek-v3.2' }}
+            target: eval-security
+            trials: 10
+          - leg: fast-model-security
+            model: ${{ vars.AI_EVAL_FAST_MODEL || 'openrouter:minimax/minimax-m2.5' }}
+            target: eval-security
+            trials: 10
+          - leg: deep-model-security
+            model: ${{ vars.AI_EVAL_DEEP_MODEL || 'openrouter:moonshotai/kimi-k2.5' }}
+            target: eval-security
+            trials: 10
     services:
       postgres:
         # pgvector image: migrations create the `vector` extension for embeddings.
@@ -40,8 +69,11 @@ jobs:
       JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
       JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111
       TOKEN_HASH_KEY: bmlnaHRseS1ldmFsLXRva2VuLWhhc2gta2V5LTMyYiE=
-      # Multi-trial: each promptfoo case runs 3 times; a case fails below a 2/3 pass rate.
-      AI_EVAL_TRIALS: '3'
+      # Attack success is a rate: an attack that lands one time in ten reads green
+      # 73% of weeks at three trials and 35% at ten. Ten narrows the gap, it does
+      # not close it. Behavior cases fail below a 2/3 pass rate.
+      AI_EVAL_TRIALS: ${{ matrix.trials }}
+      AI_EVAL_MODEL: ${{ matrix.model }}
       AI_EVAL_OUTPUT_DIR: ${{ github.workspace }}/eval-results
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -55,12 +87,18 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
-      - name: Fail fast if the Anthropic key is missing
+      - name: Fail fast if a provider key is missing
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NEEDS_OPENROUTER: ${{ startsWith(matrix.model, 'openrouter:') }}
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::ANTHROPIC_API_KEY secret is not set — every eval would silently skip."
+            echo "::error::ANTHROPIC_API_KEY secret is not set — every eval would silently skip, and the rubric judge needs it on every leg."
+            exit 1
+          fi
+          if [ "$NEEDS_OPENROUTER" = "true" ] && [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::OPENROUTER_API_KEY secret is not set — this leg pins an OpenRouter model."
             exit 1
           fi
 
@@ -75,20 +113,25 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: npx nx eval api
+          # The reference leg keeps the environment it has always had, so its
+          # time series stays comparable and its fallback chain stays empty.
+          OPENROUTER_API_KEY: ${{ startsWith(matrix.model, 'openrouter:') && secrets.OPENROUTER_API_KEY || '' }}
+        run: npx nx run api:${{ matrix.target }}
 
-      - name: Compare against previous nightly
+      - name: Compare against the previous run
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          EVAL_DRIFT_ARTIFACT_NAME: eval-results-${{ matrix.leg }}
         run: .github/scripts/eval-drift.sh
 
       - name: Upload eval results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: eval-results
+          name: eval-results-${{ matrix.leg }}
           path: eval-results
           retention-days: 90
-          if-no-files-found: warn
+          # A leg without results is a leg that graded nothing; never let it pass.
+          if-no-files-found: error
