@@ -18,9 +18,14 @@ import { createMockConfig } from '../../ai/testing/create-mock-config';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import { createTestChain } from '../../ai/testing/create-test-chain';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
+import type { AgentEvent } from '../domain/agent-event';
+import type {
+  AgentOrchestrator,
+  AgentRunInput,
+} from '../domain/ports/agent-orchestrator.port';
 import { AgentToolRegistry } from '../infrastructure/orchestrator/agent-tool.registry';
 import { AiSdkAgentOrchestrator } from '../infrastructure/orchestrator/ai-sdk-agent.orchestrator';
-import { AgentEvalHarness } from './agent-eval-harness';
+import { AgentEvalHarness, type EvalTurnSettings } from './agent-eval-harness';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 import {
   caseKeyOf,
@@ -105,11 +110,81 @@ function setup() {
     fallbackChain: chain,
     catalog: createTestCatalog(),
     retrieval: new RecordingFixtureRetrieval(),
+    turnSettings: NO_TURN_SETTINGS,
     maxSteps: 2,
     maxTurnTokens: 10_000,
   });
-  return { model, harness };
+  return { model, harness, chain };
 }
+
+const NO_TURN_SETTINGS: EvalTurnSettings = {
+  openRouterProviderOrder: async () => [],
+  openRouterIgnoredProviders: async () => [],
+  effortFor: async () => undefined,
+};
+
+describe('production parity of an eval turn', () => {
+  it.each([
+    {
+      settings: 'configured routing and effort',
+      providerOrder: ['fireworks', 'baseten'],
+      ignoredProviders: ['slowhost'],
+      effort: 'medium',
+    },
+    {
+      settings: 'no routing preference and no effort',
+      providerOrder: [],
+      ignoredProviders: [],
+      effort: undefined,
+    },
+  ] as const)(
+    'hands the orchestrator what a production turn gets: $settings',
+    async ({ providerOrder, ignoredProviders, effort }) => {
+      const { chain } = setup();
+      const inputs: AgentRunInput[] = [];
+      const orchestrator: AgentOrchestrator = {
+        run: (input) => {
+          inputs.push(input);
+          return (async function* (): AsyncGenerator<AgentEvent> {
+            yield {
+              type: 'done',
+              sources: [],
+              knownNotes: [],
+              webSources: [],
+              stopReason: 'completed',
+              usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
+            };
+          })();
+        },
+      };
+      const effortFor = vi.fn().mockResolvedValue(effort);
+      const harness = AgentEvalHarness.withCollaborators({
+        moduleRef: { close: async () => undefined },
+        orchestrator,
+        fallbackChain: chain,
+        catalog: createTestCatalog(),
+        retrieval: new RecordingFixtureRetrieval(),
+        turnSettings: {
+          openRouterProviderOrder: async () => providerOrder,
+          openRouterIgnoredProviders: async () => ignoredProviders,
+          effortFor,
+        },
+        maxSteps: 2,
+        maxTurnTokens: 10_000,
+      });
+
+      await harness.runCase('hello', 'empty', MODEL);
+
+      expect(inputs).toHaveLength(1);
+      expect(inputs[0]?.openrouterProviderOrder).toStrictEqual(providerOrder);
+      expect(inputs[0]?.openrouterIgnoredProviders).toStrictEqual(
+        ignoredProviders
+      );
+      expect(await inputs[0]?.effortFor?.(MODEL)).toBe(effort);
+      expect(effortFor).toHaveBeenCalledWith(MODEL);
+    }
+  );
+});
 
 describe('history replay through harness, real orchestrator and AI SDK', () => {
   let configDir: string;

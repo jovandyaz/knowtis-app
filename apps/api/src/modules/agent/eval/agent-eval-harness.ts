@@ -10,10 +10,13 @@ import {
   MODEL_CATALOG,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
+import type { ReasoningEffort } from '@knowtis/shared-types';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
 import { DatabaseModule } from '../../../database';
+import { AIConfigService } from '../../ai/application/services/ai-config.service';
+import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { FallbackChainService } from '../../ai/infrastructure/providers/fallback-chain.service';
 import { AgentModule } from '../agent.module';
 import type { AgentMessage } from '../domain/agent-message';
@@ -35,6 +38,16 @@ import { drainEvents, type EvalTranscript } from './transcript';
 
 const EVAL_USER_ID = '00000000-0000-4000-8000-000000000e7a';
 
+/** The per-turn inputs `RunAgentTurnHandler` resolves before it calls the
+ *  orchestrator. The harness calls the orchestrator directly, so without these
+ *  an eval turn would reach a different upstream, at a different reasoning
+ *  effort, than the turn a user gets. */
+export interface EvalTurnSettings {
+  openRouterProviderOrder(): Promise<readonly string[]>;
+  openRouterIgnoredProviders(): Promise<readonly string[]>;
+  effortFor(model: string): Promise<ReasoningEffort | undefined>;
+}
+
 const NOOP_PENDING_STORE = {
   save: () => Promise.resolve(),
   take: () => Promise.resolve(null),
@@ -47,6 +60,7 @@ export class AgentEvalHarness {
     private readonly fallbackChain: FallbackChainService,
     private readonly catalog: ModelCatalog,
     private readonly retrieval: RecordingFixtureRetrieval,
+    private readonly turnSettings: EvalTurnSettings,
     private readonly maxSteps: number,
     private readonly maxTurnTokens: number
   ) {}
@@ -58,6 +72,7 @@ export class AgentEvalHarness {
     fallbackChain: FallbackChainService;
     catalog: ModelCatalog;
     retrieval: RecordingFixtureRetrieval;
+    turnSettings: EvalTurnSettings;
     maxSteps: number;
     maxTurnTokens: number;
   }): AgentEvalHarness {
@@ -67,6 +82,7 @@ export class AgentEvalHarness {
       deps.fallbackChain,
       deps.catalog,
       deps.retrieval,
+      deps.turnSettings,
       deps.maxSteps,
       deps.maxTurnTokens
     );
@@ -122,6 +138,15 @@ export class AgentEvalHarness {
         ConfigService,
         { strict: false }
       );
+      const aiConfig = moduleRef.get(AIConfigService, { strict: false });
+      const turnEffort = moduleRef.get(TurnEffortResolver, { strict: false });
+      const turnSettings: EvalTurnSettings = {
+        openRouterProviderOrder: () => aiConfig.getOpenRouterProviderOrder(),
+        openRouterIgnoredProviders: () =>
+          aiConfig.getOpenRouterIgnoredProviders(),
+        effortFor: (model) =>
+          turnEffort.resolve({ userId: EVAL_USER_ID, model, isByok: false }),
+      };
       const maxSteps = config.get('AI_AGENT_MAX_STEPS');
       const maxTurnTokens = config.get('AI_AGENT_TURN_TOKEN_BUDGET');
 
@@ -131,6 +156,7 @@ export class AgentEvalHarness {
         fallbackChain,
         catalog,
         retrieval,
+        turnSettings,
         maxSteps,
         maxTurnTokens
       );
@@ -148,12 +174,20 @@ export class AgentEvalHarness {
   ): Promise<EvalTranscript> {
     assertPinnedModelAvailable(this.fallbackChain.candidatesFor(model), model);
     this.retrieval.seed(resolveFixtureSet(fixtureSet));
+    const [openrouterProviderOrder, openrouterIgnoredProviders] =
+      await Promise.all([
+        this.turnSettings.openRouterProviderOrder(),
+        this.turnSettings.openRouterIgnoredProviders(),
+      ]);
     const events = this.orchestrator.run({
       userId: EVAL_USER_ID,
       messages,
       model,
       maxSteps: this.maxSteps,
       maxTurnTokens: this.maxTurnTokens,
+      effortFor: (candidate) => this.turnSettings.effortFor(candidate),
+      openrouterProviderOrder,
+      openrouterIgnoredProviders,
     });
     const drained = await drainEvents(events);
     assertPinnedModelServed(drained, model);
