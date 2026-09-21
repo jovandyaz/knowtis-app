@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { composeSystemPrompt } from './compose-system-prompt';
 
 describe('composeSystemPrompt', () => {
+  it('offers proposeEditNote for a partial change and rules out a whole-body update of a truncated read', () => {
+    const prompt = composeSystemPrompt();
+
+    expect(prompt).toContain('proposeEditNote');
+    expect(prompt).toMatch(
+      /"truncated"[\s\S]*proposeUpdateNote will be refused/
+    );
+  });
+
   it('injects user memories as DATA, not instructions', () => {
     const out = composeSystemPrompt(undefined, undefined, [
       'Is vegan',

@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
+
+import { MutationProposalBuilder } from '../infrastructure/orchestrator/mutation-proposal.builder';
 import { NOTE_FIXTURE_SETS } from './fixtures/note-sets';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 
 const USER = 'eval-user';
+const FIDELITY = NOTE_FIXTURE_SETS.fidelity[0];
+const WHOLE_BODY = 'The whole note, every word of it.';
 
 describe('RecordingFixtureRetrieval', () => {
   it('search matches title/content case-insensitively and records the call', async () => {
@@ -41,6 +46,86 @@ describe('RecordingFixtureRetrieval', () => {
       'getNote',
       'getNote',
     ]);
+  });
+
+  it('getBody hands back html the model-facing content converts from exactly', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed(NOTE_FIXTURE_SETS.fidelity);
+
+    const body = await adapter.getBody(USER, FIDELITY.id);
+
+    expect(body?.title).toBe(FIDELITY.title);
+    expect(body?.updatedAt).toBe(FIDELITY.updatedAt);
+    expect(htmlToMarkdown(body?.html ?? '')).toBe(FIDELITY.content);
+  });
+
+  it('getBody records nothing, so it cannot surface as a getNote the model never asked for', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed(NOTE_FIXTURE_SETS.fidelity);
+
+    await adapter.getBody(USER, FIDELITY.id);
+
+    expect(adapter.getCalls()).toStrictEqual([]);
+  });
+
+  it('keeps the builder reads behind proposeUpdateNote and proposeShareNote out of the transcript', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed(NOTE_FIXTURE_SETS.fidelity);
+    const builder = new MutationProposalBuilder(adapter);
+
+    const renamed = await builder.buildUpdate(USER, FIDELITY.id, {
+      title: 'Renamed',
+    });
+    const shared = await builder.buildShare(
+      USER,
+      FIDELITY.id,
+      'a@b.com',
+      'viewer'
+    );
+
+    expect(renamed.isOk()).toBe(true);
+    expect(shared.isOk()).toBe(true);
+    expect(adapter.getCalls()).toStrictEqual([]);
+  });
+
+  it('getBody returns null for an unknown note', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed(NOTE_FIXTURE_SETS.fidelity);
+
+    expect(await adapter.getBody(USER, 'missing')).toBeNull();
+  });
+
+  it('getBody serves the whole note when content is only a view of it', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed([
+      { ...FIDELITY, content: 'a partial view', body: WHOLE_BODY },
+    ]);
+
+    const body = await adapter.getBody(USER, FIDELITY.id);
+
+    expect(htmlToMarkdown(body?.html ?? '')).toBe(WHOLE_BODY);
+  });
+
+  it('getById never hands the model the whole-note body', async () => {
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed([
+      { ...FIDELITY, content: 'a partial view', body: WHOLE_BODY },
+    ]);
+
+    const note = await adapter.getById(USER, FIDELITY.id);
+
+    expect(note).not.toHaveProperty('body');
+    expect(note).toStrictEqual({
+      id: FIDELITY.id,
+      title: FIDELITY.title,
+      content: 'a partial view',
+      contentStatus: FIDELITY.contentStatus,
+      createdAt: FIDELITY.createdAt,
+      updatedAt: FIDELITY.updatedAt,
+      isOwner: FIDELITY.isOwner,
+      isSharedWithMe: FIDELITY.isSharedWithMe,
+      isPubliclyShared: FIDELITY.isPubliclyShared,
+    });
   });
 
   it('listRecent honours the limit and records listRecentNotes', async () => {

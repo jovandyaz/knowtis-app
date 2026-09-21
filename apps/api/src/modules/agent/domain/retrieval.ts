@@ -10,11 +10,32 @@ export interface NoteHit extends NoteMeta {
   readonly title: string;
 }
 
+export const NOTE_CONTENT_STATUSES = [
+  'complete',
+  'truncated',
+  'withheld',
+] as const;
+export type NoteContentStatus = (typeof NOTE_CONTENT_STATUSES)[number];
+
+/** How much Markdown of one note a model may receive in a single read. */
+export const MAX_NOTE_CONTENT_CHARS = 10_000;
+/** Closes the content of a note cut at `MAX_NOTE_CONTENT_CHARS`. */
+export const TRUNCATION_MARKER = '[truncated]';
+
 export interface AgentNote extends NoteMeta {
   readonly id: string;
   readonly title: string;
   readonly content: string;
+  /** Whether `content` is the whole body: `truncated` was cut at the read bound, `withheld` is a stub standing in for a body that failed the injection check. */
+  readonly contentStatus: NoteContentStatus;
   readonly createdAt: string;
+}
+
+/** The stored note, unconverted and unscreened. Never hand `html` to a model: it has not passed the injection guard. `updatedAt` is the ISO string `getById` reports. */
+export interface NoteBody {
+  readonly title: string;
+  readonly html: string;
+  readonly updatedAt: string;
 }
 
 /** `unindexed` is present only on a total miss: accessible notes whose current
