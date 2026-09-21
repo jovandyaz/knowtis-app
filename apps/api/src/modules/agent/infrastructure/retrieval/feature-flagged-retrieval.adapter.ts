@@ -4,7 +4,12 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
-import type { AgentNote, NoteHit, NotesOverview } from '../../domain/retrieval';
+import type {
+  AgentNote,
+  NoteBody,
+  NoteHit,
+  NotesOverview,
+} from '../../domain/retrieval';
 import { HybridRetrievalAdapter } from './hybrid-retrieval.adapter';
 import { KeywordRetrievalAdapter } from './keyword-retrieval.adapter';
 
@@ -54,6 +59,10 @@ export class FeatureFlaggedRetrievalAdapter implements RetrievalPort {
 
   getById(userId: string, noteId: string): Promise<AgentNote | null> {
     return this.keyword.getById(userId, noteId);
+  }
+
+  getBody(userId: string, noteId: string): Promise<NoteBody | null> {
+    return this.keyword.getBody(userId, noteId);
   }
 
   listRecent(userId: string, limit: number): Promise<NoteHit[]> {

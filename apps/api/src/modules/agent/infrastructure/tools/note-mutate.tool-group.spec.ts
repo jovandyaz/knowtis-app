@@ -1,5 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { AgentErrors } from '../../domain/agent-errors';
 import type {
@@ -171,5 +172,128 @@ describe('NoteMutateToolGroup', () => {
       'viewer'
     );
     expect(c.proposals.captured).toBe(shareProposal);
+  });
+});
+
+const NOTE_ID = '11111111-1111-4111-8111-111111111111';
+
+const editProposal: UpdateProposedMutation = {
+  id: 'p4',
+  kind: 'update',
+  targetNoteId: NOTE_ID,
+  summary: 'Update "Plan": content edited (1 edit)',
+  payload: { contentHtml: '<p>edited</p>' },
+};
+
+function editSchema(g: NoteMutateToolGroup): z.ZodType {
+  const { inputSchema } = g.build(ctx()).proposeEditNote;
+  if (!(inputSchema instanceof z.ZodType)) {
+    throw new Error('expected a zod input schema');
+  }
+  return inputSchema;
+}
+
+describe('NoteMutateToolGroup.proposeEditNote', () => {
+  const EDITS = [{ oldText: 'milk', newText: 'oat milk' }];
+
+  it('forwards the edits and the append to the builder and returns only the slim result', async () => {
+    const builder = {
+      buildEdit: vi.fn().mockResolvedValue(ok(editProposal)),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+
+    const out = await run(group(builder), c, 'proposeEditNote', {
+      noteId: NOTE_ID,
+      edits: EDITS,
+      appendMarkdown: 'tail',
+    });
+
+    expect(builder.buildEdit).toHaveBeenCalledWith('u1', NOTE_ID, {
+      edits: EDITS,
+      appendMarkdown: 'tail',
+    });
+    expect(out).toStrictEqual({
+      ok: true,
+      proposalId: 'p4',
+      summary: editProposal.summary,
+    });
+    expect(JSON.stringify(out)).not.toContain('payload');
+    expect(c.proposals.captured).toBe(editProposal);
+  });
+
+  it('surfaces a builder refusal as an error and captures nothing', async () => {
+    const builder = {
+      buildEdit: vi
+        .fn()
+        .mockResolvedValue(err(AgentErrors.editTextNotFound(1, 'milk'))),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+
+    const out = (await run(group(builder), c, 'proposeEditNote', {
+      noteId: NOTE_ID,
+      edits: EDITS,
+    })) as { error: string };
+
+    expect(out.error).toContain('Edit 1');
+    expect(c.proposals.captured).toBeNull();
+  });
+
+  it('rejects an empty oldText, which would match everywhere', () => {
+    const schema = editSchema(group({} as MutationProposalBuilder));
+
+    expect(
+      schema.safeParse({
+        noteId: NOTE_ID,
+        edits: [{ oldText: '', newText: 'x' }],
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejects more edits than one proposal may carry', () => {
+    const schema = editSchema(group({} as MutationProposalBuilder));
+
+    expect(
+      schema.safeParse({
+        noteId: NOTE_ID,
+        edits: Array.from({ length: 21 }, () => ({
+          oldText: 'a',
+          newText: 'b',
+        })),
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejects a noteId the model did not get from a tool', () => {
+    const schema = editSchema(group({} as MutationProposalBuilder));
+
+    expect(
+      schema.safeParse({ noteId: 'not-a-uuid', edits: EDITS }).success
+    ).toBe(false);
+  });
+
+  it('defaults edits to none so an append-only call is valid', () => {
+    const schema = editSchema(group({} as MutationProposalBuilder));
+
+    expect(
+      schema.safeParse({ noteId: NOTE_ID, appendMarkdown: 'tail' })
+    ).toMatchObject({ success: true, data: { edits: [] } });
+  });
+
+  it('is offered only in the phase that can propose mutations at all', () => {
+    const g = group({} as MutationProposalBuilder);
+
+    expect(g.build(ctx()).proposeEditNote).toBeDefined();
+    expect(g.availableIn('readonly')).toBe(false);
+  });
+
+  it('steers the model here instead of a whole-body rewrite', () => {
+    const tools = group({} as MutationProposalBuilder).build(ctx());
+
+    expect(tools.proposeEditNote.description).toContain(
+      'Prefer this over proposeUpdateNote'
+    );
+    expect(tools.proposeUpdateNote.description).toContain(
+      'Refused when you did not receive the whole note'
+    );
   });
 });

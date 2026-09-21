@@ -1,39 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import * as Y from 'yjs';
 
-import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import { htmlToMarkdown } from '@knowtis/note-markdown';
 
-import { htmlToYjsState } from '../../../notes/infrastructure/html-to-yjs';
 import { htmlToPlainText, markdownToNoteHtml } from './html-sanitizer';
-
-interface PMJson {
-  readonly type: string;
-  readonly attrs?: Record<string, unknown>;
-  readonly marks?: readonly { readonly type: string }[];
-  readonly content?: readonly PMJson[];
-}
-
-const EDITOR_VOCABULARY_MARKDOWN = [
-  '# Trip',
-  '',
-  'Fly to [Guatemala](https://example.com/gt) with **cash**.',
-  '',
-  '| City | Days |',
-  '| --- | --- |',
-  '| Antigua | 2 |',
-  '',
-  '- [x] passport',
-  '- [ ] visa',
-  '  - [x] photo',
-  '',
-  'Bring ==sunscreen== and H~2~O for the 30^th^.',
-  '',
-  '```mermaid',
-  'flowchart LR',
-  '  A --> B',
-  '```',
-].join('\n');
+import {
+  collectTypes,
+  EDITOR_VOCABULARY_MARKDOWN,
+  persistedDocument,
+  storedHtml,
+  type PMJson,
+} from './html-sanitizer.fixtures';
 
 const LOOSE_TASK_LIST_MARKDOWN = [
   '- [x] passport',
@@ -42,25 +18,6 @@ const LOOSE_TASK_LIST_MARKDOWN = [
   '  needs photo',
   '- [x] tickets',
 ].join('\n');
-
-function persistedDocument(html: string): PMJson {
-  const doc = new Y.Doc();
-  Y.applyUpdate(doc, htmlToYjsState(html));
-  const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME) as PMJson;
-  doc.destroy();
-  return json;
-}
-
-function collectTypes(node: PMJson, into = new Set<string>()): Set<string> {
-  into.add(node.type);
-  for (const mark of node.marks ?? []) {
-    into.add(mark.type);
-  }
-  for (const child of node.content ?? []) {
-    collectTypes(child, into);
-  }
-  return into;
-}
 
 function collectNodes(
   node: PMJson,
@@ -126,16 +83,28 @@ describe('markdownToNoteHtml', () => {
   });
 
   it('survives the editor persistence round-trip as a mermaidBlock node', () => {
-    const html = markdownToNoteHtml('```mermaid\nflowchart LR\n  A --> B\n```');
-    const doc = new Y.Doc();
-    Y.applyUpdate(doc, htmlToYjsState(html));
-    const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME) as {
-      content: Array<{ type: string; attrs?: { code?: string } }>;
-    };
-    doc.destroy();
+    const json = persistedDocument(
+      markdownToNoteHtml('```mermaid\nflowchart LR\n  A --> B\n```')
+    );
 
-    expect(json.content[0].type).toBe('mermaidBlock');
-    expect(json.content[0].attrs?.code).toContain('A --> B');
+    const [first] = json.content ?? [];
+    expect(first?.type).toBe('mermaidBlock');
+    expect(first?.attrs?.code).toContain('A --> B');
+  });
+
+  it('keeps an editor-authored table through the store, read and propose round trip', () => {
+    const stored = storedHtml(
+      '<table><tbody><tr><th><p>Day</p></th><th><p>Place</p></th></tr><tr><td><p>1</p></td><td><p>Antigua</p></td></tr></tbody></table>'
+    );
+    expect(stored).toContain('<colgroup>');
+
+    const markdown = htmlToMarkdown(stored);
+    expect(markdown).toBe('| Day | Place |\n| --- | --- |\n| 1 | Antigua |');
+
+    const proposed = markdownToNoteHtml(markdown);
+    expect(proposed).toContain('<th>Day</th>');
+    expect(proposed).toContain('<td>Antigua</td>');
+    expect(proposed).not.toContain('&lt;table');
   });
 
   it('keeps every construct the editor can hold through the persistence round-trip', () => {

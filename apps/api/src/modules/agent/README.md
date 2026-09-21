@@ -73,8 +73,10 @@ Framework-free core: messages (`agent-message`, `coalesce-messages` for provider
 Tools are grouped, not flat. Each group implements `AgentToolGroup` (`readonly name` + a `tools(ctx)` factory) and is composed by `AgentToolRegistry`:
 
 - **`note-read`** — `searchNotes`, `getNote`, `listRecentNotes`, `getNotesOverview` (retrieval-backed). `searchNotes` returns `{hits}`, plus `unindexed` when nothing matched — notes the vector leg has not caught up with; see [docs/AI.md](../../../../../docs/AI.md).
-- **`note-mutate`** — `proposeCreateNote`, `proposeUpdateNote`, `proposeShareNote` → emit a **proposal** (never auto-applied; gated by HITL).
+- **`note-mutate`** — `proposeCreateNote`, `proposeEditNote`, `proposeUpdateNote`, `proposeShareNote` → emit a **proposal** (never auto-applied; gated by HITL).
 - **`web`** — `webSearch` / `webFetch` via the gateway's Tavily port (flag `agent_web_search`).
+
+**Read/edit contract.** A model only ever sees the `getNote` view: the body as Markdown, cut at 10 000 characters and reported as `contentStatus` (`complete` / `truncated` / `withheld`), which is why `proposeUpdateNote` refuses to replace the content of a note that was not read whole. `MutationProposalBuilder` instead applies `proposeEditNote`'s exact-match edits to `RetrievalPort.getBody` — the raw stored HTML, unbounded and unscreened, never handed to a model — so the parts the model never received survive the edit; the proposal it builds is still a whole-body replacement through `packages/note-markdown`, so before returning one the builder checks whether the note survives a no-op round trip and refuses with `AGENT_EDIT_WOULD_LOSE_CONTENT` when it would not — a construct the conversion cannot carry (today, task-list nesting) blocks the edit rather than disappearing from it. See [Reading a note versus editing one](../../../../../docs/AI.md#reading-a-note-versus-editing-one).
 
 Per-tool descriptions: [Agent tools](../../../../../docs/AI.md#agent-tools).
 
@@ -86,7 +88,7 @@ Proposals live in Redis keyed by `proposalId`; approve and reject both resume th
 
 ## Error codes
 
-`AgentErrors` ([`domain/agent-errors.ts`](domain/agent-errors.ts)): `AGENT_INVALID_PROPOSAL`, `AGENT_STALE_NOTE`, `AGENT_PROPOSAL_EXPIRED`, `AGENT_PERMISSION_DENIED`, `AGENT_EMAIL_NOT_VERIFIED` (`AGENT_EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`), `AGENT_COMMIT_FAILED`, `AGENT_SANITIZE_REJECTED`, `AGENT_NOTE_NOT_FOUND`, `AGENT_TARGET_USER_NOT_FOUND`. Causes: [Agent error codes](../../../../../docs/AI.md#agent-error-codes). Everything else on `agent:error` is an `AIErrorCodes` member.
+`AgentErrors` ([`domain/agent-errors.ts`](domain/agent-errors.ts)): `AGENT_INVALID_PROPOSAL`, `AGENT_STALE_NOTE`, `AGENT_PROPOSAL_EXPIRED`, `AGENT_PERMISSION_DENIED`, `AGENT_EMAIL_NOT_VERIFIED` (`AGENT_EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`), `AGENT_COMMIT_FAILED`, `AGENT_SANITIZE_REJECTED`, `AGENT_NOTE_NOT_FOUND`, `AGENT_TARGET_USER_NOT_FOUND`, `AGENT_EDIT_TEXT_NOT_FOUND`, `AGENT_EDIT_TEXT_AMBIGUOUS`, `AGENT_WHOLE_BODY_UPDATE_REFUSED`, `AGENT_EDIT_WOULD_LOSE_CONTENT`. Causes: [Agent error codes](../../../../../docs/AI.md#agent-error-codes). Everything else on `agent:error` is an `AIErrorCodes` member.
 
 ## Eval harness
 

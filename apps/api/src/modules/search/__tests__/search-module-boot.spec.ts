@@ -32,6 +32,7 @@ const stubRetrieval: RetrievalPort = {
   search: async () => [sentinel],
   listUnindexed: async () => [],
   getById: async () => null,
+  getBody: async () => null,
   listRecent: async () => [],
   overview: async () => ({ total: 0, owned: 0, sharedWithMe: 0 }),
 };

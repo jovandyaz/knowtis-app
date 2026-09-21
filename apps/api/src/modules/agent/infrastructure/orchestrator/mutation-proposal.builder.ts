@@ -3,7 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { err, type Result } from 'neverthrow';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
+
 import { AgentErrors, type AgentDomainError } from '../../domain/agent-errors';
+import {
+  applyNoteEdits,
+  type NoteEdit,
+  type NoteEditFailure,
+} from '../../domain/note-edits';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
@@ -12,11 +19,34 @@ import {
   ProposedMutation,
   type UpdateMutationPayload,
 } from '../../domain/proposed-mutation';
+import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 
 export interface UpdateProposalInput {
   readonly title?: string;
   readonly contentMarkdown?: string;
+}
+
+export interface EditProposalInput {
+  readonly edits: readonly NoteEdit[];
+  readonly appendMarkdown?: string;
+}
+
+interface NoteSubject {
+  readonly title: string;
+  readonly updatedAt: string;
+}
+
+function toEditError(failure: NoteEditFailure): AgentDomainError {
+  const position = failure.index + 1;
+  return failure.kind === 'not_found'
+    ? AgentErrors.editTextNotFound(position, failure.oldText)
+    : AgentErrors.editTextAmbiguous(position, failure.oldText, failure.matches);
+}
+
+function withAppended(markdown: string, appendMarkdown: string): string {
+  const head = markdown.trimEnd();
+  return head === '' ? appendMarkdown : `${head}\n\n${appendMarkdown}`;
 }
 
 @Injectable()
@@ -52,11 +82,20 @@ export class MutationProposalBuilder {
         AgentErrors.invalidProposal('update requires a title or content change')
       );
     }
-    const note = await this.retrieval.getById(userId, noteId);
+    let contentHtml: string | undefined;
+    let note: NoteSubject | null;
+    if (input.contentMarkdown === undefined) {
+      note = await this.retrieval.getBody(userId, noteId);
+    } else {
+      const read = await this.retrieval.getById(userId, noteId);
+      if (read && read.contentStatus !== 'complete') {
+        return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
+      }
+      note = read;
+    }
     if (!note) {
       return err(AgentErrors.noteNotFound(noteId));
     }
-    let contentHtml: string | undefined;
     if (input.contentMarkdown !== undefined) {
       contentHtml = markdownToNoteHtml(input.contentMarkdown);
       if (input.contentMarkdown.trim() && !contentHtml) {
@@ -84,13 +123,63 @@ export class MutationProposalBuilder {
     });
   }
 
+  async buildEdit(
+    userId: string,
+    noteId: string,
+    input: EditProposalInput
+  ): Promise<Result<ProposedMutation, AgentDomainError>> {
+    const appendMarkdown = input.appendMarkdown?.trim()
+      ? input.appendMarkdown
+      : undefined;
+    if (input.edits.length === 0 && appendMarkdown === undefined) {
+      return err(
+        AgentErrors.invalidProposal(
+          'an edit needs at least one edit or appendMarkdown'
+        )
+      );
+    }
+    const body = await this.retrieval.getBody(userId, noteId);
+    if (!body) {
+      return err(AgentErrors.noteNotFound(noteId));
+    }
+    const original = htmlToMarkdown(body.html);
+    const edited = applyNoteEdits(original, input.edits);
+    if (edited.isErr()) {
+      return err(toEditError(edited.error));
+    }
+    const merged =
+      appendMarkdown === undefined
+        ? edited.value
+        : withAppended(edited.value, appendMarkdown);
+    if (merged === original) {
+      return err(AgentErrors.invalidProposal('the edits change nothing'));
+    }
+    const contentHtml = markdownToNoteHtml(merged);
+    if (merged.trim() && !contentHtml) {
+      return err(AgentErrors.sanitizeRejected());
+    }
+    const lost = nodesLostBetween(body.html, markdownToNoteHtml(original));
+    if (lost.length > 0) {
+      return err(AgentErrors.editWouldLoseContent(lost));
+    }
+    const changes = input.edits.length + (appendMarkdown === undefined ? 0 : 1);
+    return ProposedMutation.create({
+      id: randomUUID(),
+      kind: 'update',
+      targetNoteId: noteId,
+      payload: { contentHtml },
+      summary: `Update "${body.title}": content edited (${changes} ${changes === 1 ? 'edit' : 'edits'})`,
+      baseVersion: body.updatedAt,
+    });
+  }
+
   async buildShare(
     userId: string,
     noteId: string,
     targetEmail: string,
     permission: 'viewer' | 'editor'
   ): Promise<Result<ProposedMutation, AgentDomainError>> {
-    const note = await this.retrieval.getById(userId, noteId);
+    const note = await this.retrieval.getBody(userId, noteId);
     if (!note) {
       return err(AgentErrors.noteNotFound(noteId));
     }
