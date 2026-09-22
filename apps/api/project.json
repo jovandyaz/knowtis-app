@@ -153,6 +153,13 @@
         "cwd": "apps/api"
       }
     },
+    "backfill-note-content": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig tsconfig.app.json src/scripts/backfill-note-content.ts",
+        "cwd": "apps/api"
+      }
+    },
     "eval": {
       "executor": "nx:run-commands",
       "options": {
