@@ -14,7 +14,7 @@ import type {
 const MAX_EDITS_PER_PROPOSAL = 20;
 const MAX_EDIT_TEXT_CHARS = 10_000;
 const CONTENT_MARKDOWN_DESCRIPTION =
-  'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x]), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, and ```mermaid fenced diagrams. Images and raw HTML are not supported.';
+  'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, ```mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported.';
 
 function captureProposal(
   collector: ProposalCollector,
@@ -76,7 +76,9 @@ export class NoteMutateToolGroup implements AgentToolGroup {
                 newText: z
                   .string()
                   .max(MAX_EDIT_TEXT_CHARS)
-                  .describe('Replacement Markdown; empty to delete oldText'),
+                  .describe(
+                    'Replacement Markdown, same vocabulary as contentMarkdown (no raw HTML; an image only with a url getNote returned); empty to delete oldText'
+                  ),
               })
             )
             .max(MAX_EDITS_PER_PROPOSAL)
