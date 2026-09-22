@@ -5,10 +5,12 @@ import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
+import type { NoteEntity } from '../../../notes/domain/entities/note.entity';
 import {
   NOTE_READ_REPOSITORY,
   type NoteReadRepository,
 } from '../../../notes/domain/ports/note-read.repository';
+import { yjsStateToHtml } from '../../../notes/infrastructure/html-to-yjs';
 import { InjectionGuardService } from '../../application/injection-guard.service';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import {
@@ -35,6 +37,14 @@ interface BoundedText {
 interface ToolContent {
   readonly content: string;
   readonly contentStatus: NoteContentStatus;
+}
+
+// `content` is rendered from the state and stops updating whenever that
+// render fails, so an edit built on it would revert the note.
+function currentBody(note: NoteEntity): string {
+  return note.yjsState && note.yjsState.byteLength > 0
+    ? yjsStateToHtml(note.yjsState)
+    : note.content;
 }
 
 @Injectable()
@@ -78,7 +88,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     }
     return {
       ...toNoteHit(note, userId),
-      ...(await this.toToolContent(note.content, userId, note.id)),
+      ...(await this.toToolContent(currentBody(note), userId, note.id)),
       createdAt: note.createdAt.toISOString(),
     };
   }
@@ -94,7 +104,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     }
     return {
       title: note.title,
-      html: note.content,
+      html: currentBody(note),
       updatedAt: note.updatedAt.toISOString(),
     };
   }

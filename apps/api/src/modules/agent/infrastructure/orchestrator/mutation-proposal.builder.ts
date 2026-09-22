@@ -21,6 +21,7 @@ import {
 } from '../../domain/proposed-mutation';
 import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
+import { restoreStoredAttributes } from '../sanitize/stored-attributes';
 
 export interface UpdateProposalInput {
   readonly title?: string;
@@ -162,12 +163,13 @@ export class MutationProposalBuilder {
     if (lost.length > 0) {
       return err(AgentErrors.editWouldLoseContent(lost));
     }
+    const restoredHtml = restoreStoredAttributes(body.html, contentHtml);
     const changes = input.edits.length + (appendMarkdown === undefined ? 0 : 1);
     return ProposedMutation.create({
       id: randomUUID(),
       kind: 'update',
       targetNoteId: noteId,
-      payload: { contentHtml },
+      payload: { contentHtml: restoredHtml },
       summary: `Update "${body.title}": content edited (${changes} ${changes === 1 ? 'edit' : 'edits'})`,
       baseVersion: body.updatedAt,
     });

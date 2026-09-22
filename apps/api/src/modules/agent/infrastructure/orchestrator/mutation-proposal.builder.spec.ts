@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { AI_BLOCK_NAME } from '@knowtis/editor-schema';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
+import { AgentErrors } from '../../domain/agent-errors';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
 import type {
@@ -9,13 +11,23 @@ import type {
   NoteBody,
   NoteContentStatus,
 } from '../../domain/retrieval';
+import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 import {
+  AI_BLOCK_HTML,
+  collectNodesOfType,
   collectTypes,
   EDITOR_VOCABULARY_MARKDOWN,
   persistedDocument,
+  storedHtml,
 } from '../sanitize/html-sanitizer.fixtures';
 import { MutationProposalBuilder } from './mutation-proposal.builder';
+
+vi.mock('../sanitize/document-fidelity', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../sanitize/document-fidelity')>();
+  return { ...actual, nodesLostBetween: vi.fn(actual.nodesLostBetween) };
+});
 
 const NOTE: AgentNote = {
   id: 'note-1',
@@ -383,16 +395,8 @@ describe('MutationProposalBuilder.buildEdit', () => {
     expect(r._unsafeUnwrap().summary).toBe(`Update "Old": ${expected}`);
   });
 
-  // The shared vocabulary fixture nests a task list, which the converter pair
-  // flattens, so an edit to it is refused — this fixture is the same minus the
-  // nesting, which is what proves an edit keeps what it can carry.
-  const EDITABLE_VOCABULARY_MARKDOWN = EDITOR_VOCABULARY_MARKDOWN.replace(
-    '\n  - [x] photo',
-    ''
-  );
-
   it('keeps every editor construct the note already held', async () => {
-    const bodyHtml = markdownToNoteHtml(EDITABLE_VOCABULARY_MARKDOWN);
+    const bodyHtml = storedHtml(markdownToNoteHtml(EDITOR_VOCABULARY_MARKDOWN));
     const original = htmlToMarkdown(bodyHtml);
     const { builder } = editing(bodyHtml);
 
@@ -408,6 +412,7 @@ describe('MutationProposalBuilder.buildEdit', () => {
       'taskItem',
       'highlight',
       'mermaidBlock',
+      'image',
     ]) {
       expect(types).toContain(expected);
     }
@@ -423,11 +428,67 @@ describe('MutationProposalBuilder.buildEdit', () => {
     expect(after[editedLine]).toContain('**a card**');
   });
 
+  it('edits a note holding a blank line and keeps the blank line', async () => {
+    const { builder } = editing(
+      storedHtml('<p>First.</p><p></p><p>Old text.</p>')
+    );
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      '<p>First.</p><p></p><p>New text.</p>'
+    );
+  });
+
+  it('edits a note holding a paragraph that ends with a line break', async () => {
+    const { builder } = editing(storedHtml('<p>a<br></p><p>Old text.</p>'));
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      '<p>a<br></p><p>New text.</p>'
+    );
+  });
+
+  it('edits a note holding a pasted paragraph of nothing but a non-breaking space', async () => {
+    const { builder } = editing(storedHtml('<p>a</p><p>&nbsp;</p><p>b</p>'));
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'a', newText: 'c' }],
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      '<p>c</p><p></p><p>b</p>'
+    );
+  });
+
+  it('edits a note the copilot wrote with an image mid-sentence', async () => {
+    const src =
+      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    const { builder } = editing(
+      storedHtml(markdownToNoteHtml(`See ![map](${src}) here.\n\nOld text.`))
+    );
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      `<p>See</p><figure data-image=""><img src="${src}" alt="map"><figcaption></figcaption></figure><p>here.</p><p>New text.</p>`
+    );
+  });
+
   // The guard asks whether the NOTE survives a round trip, not whether the
   // proposal is smaller — an edit the user asked for may legitimately remove a
   // whole paragraph, and refusing that would make the tool useless.
   it('allows an edit that deletes a paragraph outright', async () => {
-    const bodyHtml = markdownToNoteHtml('# Trip\n\nKeep this.\n\nDrop this.');
+    const bodyHtml = storedHtml(
+      markdownToNoteHtml('# Trip\n\nKeep this.\n\nDrop this.')
+    );
     const { builder } = editing(bodyHtml);
 
     const r = await builder.buildEdit(USER, 'note-1', {
@@ -442,11 +503,93 @@ describe('MutationProposalBuilder.buildEdit', () => {
     }
   });
 
-  it('refuses an edit to a note the converter cannot rebuild whole', async () => {
-    const { builder } = editing(markdownToNoteHtml(EDITOR_VOCABULARY_MARKDOWN));
+  it('keeps an image and the size the user gave it through an edit to other text', async () => {
+    const src =
+      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    const bodyHtml = storedHtml(
+      `<figure data-image=""><img src="${src}" alt="lake" width="320" height="200"><figcaption>Lake</figcaption></figure><p>Old text.</p>`
+    );
+    const { builder } = editing(bodyHtml);
 
     const r = await builder.buildEdit(USER, 'note-1', {
-      edits: [{ oldText: 'with **cash**', newText: 'with **a card**' }],
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    const html = contentHtmlOf(r._unsafeUnwrap());
+    expect(
+      collectNodesOfType(persistedDocument(html), 'image').map((n) => n.attrs)
+    ).toEqual([{ src, alt: 'lake', width: 320, height: 200 }]);
+    expect(html).toContain('New text.');
+    expect(html).toContain('Lake');
+  });
+
+  it('keeps a highlight colour and a diagram view mode through an edit to other text', async () => {
+    const bodyHtml = storedHtml(
+      '<p>Bring <mark data-color="#ffc078" style="background-color: #ffc078; color: inherit">sunscreen</mark>.</p>' +
+        '<div data-mermaid-block="" data-code="flowchart LR" data-view-mode="code"></div>' +
+        '<p>Old text.</p>'
+    );
+    const { builder } = editing(bodyHtml);
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      bodyHtml.replace('Old text.', 'New text.')
+    );
+  });
+
+  it('blanks nothing when the edit removes the only sentence beside an image', async () => {
+    const src =
+      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    const bodyHtml = storedHtml(
+      `<p>Only sentence.</p><figure data-image=""><img src="${src}" alt="lake"><figcaption></figcaption></figure>`
+    );
+    const { builder } = editing(bodyHtml);
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Only sentence.\n\n', newText: '' }],
+    });
+
+    const html = contentHtmlOf(r._unsafeUnwrap());
+    expect([...collectTypes(persistedDocument(html))]).toContain('image');
+    expect(html).not.toContain('Only sentence.');
+  });
+
+  it('refuses an edit to a note holding a foreign image, which the collaboration socket stores without the server funnel', async () => {
+    const { builder } = editing(
+      '<p>Old text.</p><figure data-image=""><img src="https://attacker.example/x.png" alt="x"><figcaption></figcaption></figure>'
+    );
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    const error = r._unsafeUnwrapErr();
+    expect(error.code).toBe('AGENT_EDIT_WOULD_LOSE_CONTENT');
+    expect(error.message).toContain('image');
+  });
+
+  it('refuses an edit to a note holding an AI block, which Markdown has no form for', async () => {
+    const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(r._unsafeUnwrapErr()).toEqual(
+      AgentErrors.editWouldLoseContent([AI_BLOCK_NAME])
+    );
+  });
+
+  it('refuses an edit when the no-op round trip would drop a node', async () => {
+    const bodyHtml = storedHtml(markdownToNoteHtml('# Trip\n\nText.'));
+    const { builder } = editing(bodyHtml);
+    vi.mocked(nodesLostBetween).mockReturnValueOnce(['taskList']);
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Text.', newText: 'Other.' }],
     });
 
     expect(r.isErr()).toBe(true);
@@ -454,5 +597,9 @@ describe('MutationProposalBuilder.buildEdit', () => {
       expect(r.error.code).toBe('AGENT_EDIT_WOULD_LOSE_CONTENT');
       expect(r.error.message).toContain('taskList');
     }
+    expect(vi.mocked(nodesLostBetween)).toHaveBeenLastCalledWith(
+      bodyHtml,
+      markdownToNoteHtml(htmlToMarkdown(bodyHtml))
+    );
   });
 });
