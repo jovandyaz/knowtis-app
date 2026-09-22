@@ -149,7 +149,7 @@
     "seed-admin": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx src/scripts/seed-admin.ts",
+        "command": "tsx --tsconfig tsconfig.app.json src/scripts/seed-admin.ts",
         "cwd": "apps/api"
       }
     },
