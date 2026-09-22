@@ -135,7 +135,6 @@ function flow(
       await store.save({
         userId: 'u1',
         mutation,
-        toolName: 'proposeShareNote',
       });
       return mutation.id;
     },

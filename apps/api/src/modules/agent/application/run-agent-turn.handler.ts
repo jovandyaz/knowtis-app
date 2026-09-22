@@ -71,10 +71,7 @@ import {
   PENDING_MUTATION_STORE,
   type PendingMutationStore,
 } from '../domain/ports/pending-mutation.store';
-import type {
-  MutationKind,
-  ProposedMutation,
-} from '../domain/proposed-mutation';
+import type { ProposedMutation } from '../domain/proposed-mutation';
 import { pruneTranscript } from '../domain/prune-transcript';
 import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import { buildTurnRows } from '../domain/turn-transcript';
@@ -212,7 +209,6 @@ export class RunAgentTurnHandler {
         await this.pendingStore.save({
           userId,
           mutation: event.proposal,
-          toolName: this.toolNameForKind(event.proposal.kind),
           ...(conversationId ? { conversationId } : {}),
         });
         callbacks.onProposal(event.proposal);
@@ -444,7 +440,7 @@ export class RunAgentTurnHandler {
 
   async resumeTurn(
     input: RunAgentTurnInput & {
-      resume: { toolName: string; outcome: string };
+      resume: { outcome: string };
     },
     callbacks: Pick<
       RunAgentTurnCallbacks,
@@ -478,7 +474,7 @@ export class RunAgentTurnHandler {
           )
         : [];
       const synthInput: RunAgentTurnInput & {
-        resume: { toolName: string; outcome: string };
+        resume: { outcome: string };
       } = {
         userId: input.userId,
         messages: history,
@@ -504,7 +500,7 @@ export class RunAgentTurnHandler {
 
   private async runLoop(
     input: RunAgentTurnInput,
-    resume: { toolName: string; outcome: string } | undefined,
+    resume: { outcome: string } | undefined,
     callbacks: Pick<
       RunAgentTurnCallbacks,
       'onChunk' | 'onDone' | 'onError' | 'onThinking'
@@ -1014,14 +1010,6 @@ export class RunAgentTurnHandler {
       messages: history.filter((_, index) => index !== last),
       dropped: { score: verdict.score, contentLength: joined.length },
     };
-  }
-
-  private toolNameForKind(kind: MutationKind): string {
-    return kind === 'create'
-      ? 'proposeCreateNote'
-      : kind === 'update'
-        ? 'proposeUpdateNote'
-        : 'proposeShareNote';
   }
 
   private trimHistory(

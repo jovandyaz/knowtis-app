@@ -312,7 +312,7 @@ export class AgentGateway
     client: AuthenticatedSocket,
     userId: string,
     data: { noteId?: string | undefined },
-    outcome: { toolName: string; outcome: string },
+    result: { outcome: string },
     conversationId: string
   ): Promise<void> {
     await this.runInTurnSlot(client, userId, (controller) =>
@@ -323,7 +323,7 @@ export class AgentGateway
           ...(client.data.isAnonymous && { isAnonymous: true }),
           ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
           ...(data.noteId && { noteId: data.noteId }),
-          resume: outcome,
+          resume: result,
         },
         this.baseCallbacks(client, controller),
         controller.signal
