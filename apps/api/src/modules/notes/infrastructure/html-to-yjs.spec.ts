@@ -3,7 +3,12 @@ import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
-import { editorSchema, htmlToYjsState, yDocToHtml } from './html-to-yjs';
+import {
+  editorSchema,
+  evolveYjsState,
+  htmlToYjsState,
+  yDocToHtml,
+} from './html-to-yjs';
 
 function decodeState(state: Buffer) {
   const yDoc = new Y.Doc();
@@ -179,6 +184,9 @@ describe('htmlToYjsState', () => {
   });
 });
 
+const FOREIGN_FIGURE =
+  '<figure data-image=""><img src="https://attacker.example/x.png" alt="leak"><figcaption>cap</figcaption></figure>';
+
 describe('yDocToHtml', () => {
   it('round-trips html through a Y.Doc back to equivalent html', () => {
     const html = '<p>Hello <strong>world</strong></p>';
@@ -196,5 +204,49 @@ describe('yDocToHtml', () => {
     Y.applyUpdate(doc, new Uint8Array(htmlToYjsState('<p></p>')));
 
     expect(yDocToHtml(doc)).toContain('<p>');
+  });
+
+  it('keeps an image through the store and back, so its note keeps a live content column', () => {
+    const html =
+      '<p>before</p><figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a" width="320" height="200"><figcaption></figcaption></figure><p>after</p>';
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, htmlToYjsState(html));
+    expect(yDocToHtml(doc)).toBe(html);
+    doc.destroy();
+  });
+
+  it('drops an image from outside the blob store, keeping the text around it', () => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(
+      doc,
+      htmlToYjsState(`<p>before</p>${FOREIGN_FIGURE}<p>after</p>`)
+    );
+    expect(yDocToHtml(doc)).toBe('<p>before</p><p>after</p>');
+    doc.destroy();
+  });
+
+  it('drops it on an evolved note too, the path an MCP update-note takes', () => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(
+      doc,
+      evolveYjsState(
+        htmlToYjsState('<p>original</p>'),
+        `<p>kept</p>${FOREIGN_FIGURE}`
+      )
+    );
+    const html = yDocToHtml(doc);
+    expect(html).toContain('kept');
+    expect(html).not.toContain('attacker.example');
+    doc.destroy();
+  });
+
+  it('never stores a bare img, which the schema has no inline node for', () => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(
+      doc,
+      htmlToYjsState('<p>x <img src="https://attacker.example/x.png"> y</p>')
+    );
+    expect(yDocToHtml(doc)).toBe('<p>x y</p>');
+    doc.destroy();
   });
 });

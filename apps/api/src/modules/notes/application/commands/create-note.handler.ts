@@ -13,7 +13,10 @@ import {
   type NoteWriteRepository,
 } from '../../domain';
 import { NoteCreatedEvent } from '../../domain/events/note-created.event';
-import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
+import {
+  htmlToYjsState,
+  yjsStateToHtml,
+} from '../../infrastructure/html-to-yjs';
 
 export interface CreateNoteInput {
   readonly id?: string;
@@ -61,8 +64,10 @@ export class CreateNoteHandler {
 
     if (input.content !== undefined) {
       let yjsState: Buffer;
+      let content: string;
       try {
         yjsState = htmlToYjsState(input.content);
+        content = yjsStateToHtml(yjsState);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown parser error';
@@ -76,7 +81,10 @@ export class CreateNoteHandler {
         );
       }
 
-      result = await this.noteRepository.createWithYjsState(data, yjsState);
+      result = await this.noteRepository.createWithYjsState(
+        { ...data, content },
+        yjsState
+      );
     } else {
       result = await this.noteRepository.create(data);
     }

@@ -42,6 +42,7 @@ import { SHARE_TOKEN_BYTES } from '../../domain/share-token';
 import {
   evolveYjsState,
   htmlToYjsState,
+  yjsStateToHtml,
 } from '../../infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../infrastructure/trivial-html';
 import { decodeYjsStateUpdate } from '../../infrastructure/yjs-state-update';
@@ -71,6 +72,11 @@ export interface UpdateNoteInput {
 interface PersistUpdateResult {
   readonly entity: NoteEntity;
   readonly yjsState?: Buffer;
+}
+
+interface NoteState {
+  readonly yjsState: Buffer;
+  readonly content: string;
 }
 
 const CONTENT_FIELDS = ['title', 'content'] as const;
@@ -284,17 +290,17 @@ export class UpdateNoteHandler {
       return result.map((entity) => ({ entity }));
     }
 
-    const stateResult = clientYjsState
-      ? ok(clientYjsState)
-      : this.generateYjsState(noteId, content, existingYjsState);
+    const stateResult: Result<NoteState, NoteDomainError> = clientYjsState
+      ? ok({ yjsState: clientYjsState, content })
+      : this.generateNoteState(noteId, content, existingYjsState);
     if (stateResult.isErr()) {
       return err(stateResult.error);
     }
-    const yjsState = stateResult.value;
+    const { yjsState, content: storedContent } = stateResult.value;
 
     const result = await this.noteRepository.updateContentWithYjsState(
       noteId,
-      { ...updateData, content },
+      { ...updateData, content: storedContent },
       yjsState
     );
 
@@ -309,19 +315,20 @@ export class UpdateNoteHandler {
    * Server-side content writes (copilot, MCP, REST) evolve the note's
    * existing CRDT history when it has one. Minting a fresh doc instead
    * would leave any client holding the old history to merge two parallel
-   * copies of the same text.
+   * copies of the same text. The stored `content` is rendered back from that
+   * state, so the column never holds what the state dropped.
    */
-  private generateYjsState(
+  private generateNoteState(
     noteId: string,
     content: string,
     existingYjsState: Buffer | null
-  ): Result<Buffer, NoteDomainError> {
+  ): Result<NoteState, NoteDomainError> {
     try {
-      return ok(
+      const yjsState =
         existingYjsState && existingYjsState.byteLength > 0
           ? evolveYjsState(existingYjsState, content)
-          : htmlToYjsState(content)
-      );
+          : htmlToYjsState(content);
+      return ok({ yjsState, content: yjsStateToHtml(yjsState) });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown parser error';

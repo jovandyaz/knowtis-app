@@ -1,3 +1,4 @@
+import type { JSONContent } from '@tiptap/core';
 import { getSchema } from '@tiptap/core';
 import { generateHTML, generateJSON } from '@tiptap/html/server';
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
@@ -5,15 +6,41 @@ import * as Y from 'yjs';
 
 import {
   createSemanticExtensions,
+  IMAGE_NODE_NAME,
   YJS_XML_FRAGMENT_NAME,
 } from '@knowtis/editor-schema';
+import { isStoredImageUrl } from '@knowtis/shared-util';
 
-const tiptapExtensions = [...createSemanticExtensions()];
+export const SRC_ATTR = 'src';
 
-export const editorSchema = getSchema(tiptapExtensions);
+export const noteSchemaExtensions = [...createSemanticExtensions()];
+
+export const editorSchema = getSchema(noteSchemaExtensions);
+
+function isForeignImage(node: JSONContent): boolean {
+  if (node.type !== IMAGE_NODE_NAME) {
+    return false;
+  }
+  const src: unknown = node.attrs?.[SRC_ATTR];
+  return typeof src !== 'string' || !isStoredImageUrl(src);
+}
+
+// Every server-side write builds its state here, and an image the app did not
+// store is a URL every later reader's browser would fetch.
+function withoutForeignImages(node: JSONContent): JSONContent {
+  if (!node.content) {
+    return node;
+  }
+  return {
+    ...node,
+    content: node.content
+      .filter((child) => !isForeignImage(child))
+      .map(withoutForeignImages),
+  };
+}
 
 export function htmlToYjsState(html: string): Buffer {
-  const json = generateJSON(html, tiptapExtensions);
+  const json = withoutForeignImages(generateJSON(html, noteSchemaExtensions));
   const yDoc = prosemirrorJSONToYDoc(editorSchema, json, YJS_XML_FRAGMENT_NAME);
   const state = Y.encodeStateAsUpdate(yDoc);
   yDoc.destroy();
@@ -24,7 +51,18 @@ export function htmlToYjsState(html: string): Buffer {
  *  the canonical HTML used for previews, search and MCP reads. */
 export function yDocToHtml(doc: Y.Doc): string {
   const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME);
-  return generateHTML(json, tiptapExtensions);
+  return generateHTML(json, noteSchemaExtensions);
+}
+
+/** The HTML an encoded CRDT state renders to — what a note's `content` column must agree with. */
+export function yjsStateToHtml(state: Buffer): string {
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, new Uint8Array(state));
+    return yDocToHtml(doc);
+  } finally {
+    doc.destroy();
+  }
 }
 
 /**

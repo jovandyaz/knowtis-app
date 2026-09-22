@@ -136,6 +136,36 @@ describe('AgentProposalCard', () => {
     expect(onReject).toHaveBeenCalledTimes(1);
   });
 
+  it('previews an image from the app store and drops one from another host', async () => {
+    const storedSrc =
+      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    render(
+      <AgentProposalCard
+        proposal={{
+          ...proposal,
+          payload: {
+            title: 'Trip',
+            contentHtml:
+              `<figure data-image=""><img src="${storedSrc}" alt="lake"><figcaption>Lake</figcaption></figure>` +
+              '<figure data-image=""><img src="https://attacker.example/collect.png" alt="x"><figcaption>Planted</figcaption></figure>',
+          },
+        }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    const region = screen.getByTestId('proposal-preview');
+    await waitFor(() =>
+      expect(
+        [...region.querySelectorAll('img')].map((img) =>
+          img.getAttribute('src')
+        )
+      ).toEqual([storedSrc])
+    );
+    expect(region).toHaveTextContent('Lake');
+    expect(region).not.toHaveTextContent('Planted');
+  });
+
   it('renders the create preview through the read-only editor', async () => {
     render(
       <AgentProposalCard

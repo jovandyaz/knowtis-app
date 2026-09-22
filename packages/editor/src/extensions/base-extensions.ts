@@ -2,18 +2,27 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 
 import {
+  AI_BLOCK_NAME,
   createSemanticExtensions,
+  IMAGE_NODE_NAME,
   MERMAID_BLOCK_NAME,
   type NodeAttributeClasses,
 } from '@knowtis/editor-schema';
 
+import type {
+  AIBlockProvider,
+  AIBlockStorage,
+} from './ai-block/ai-block-provider';
+import { AIBlockView } from './ai-block/AIBlockView';
 import { CodeBlockView } from './code-block/CodeBlockView';
+import { ImageView } from './image/ImageView';
 import { MarkdownPaste } from './markdown-paste';
 import { MermaidBlockView } from './mermaid-block/MermaidBlockView';
 
 interface BaseExtensionsOptions {
   openLinksOnClick?: boolean;
   disableHistory?: boolean;
+  aiBlockProvider?: AIBlockProvider | null;
 }
 
 const EDITOR_NODE_CLASSES: NodeAttributeClasses = {
@@ -28,6 +37,7 @@ const EDITOR_NODE_CLASSES: NodeAttributeClasses = {
 export function createBaseExtensions({
   openLinksOnClick = false,
   disableHistory = false,
+  aiBlockProvider = null,
 }: BaseExtensionsOptions = {}) {
   const semantic = createSemanticExtensions({
     openLinksOnClick,
@@ -47,6 +57,23 @@ export function createBaseExtensions({
       return extension.extend({
         addNodeView() {
           return ReactNodeViewRenderer(MermaidBlockView);
+        },
+      });
+    }
+    if (extension.name === IMAGE_NODE_NAME) {
+      return extension.extend({
+        addNodeView() {
+          return ReactNodeViewRenderer(ImageView);
+        },
+      });
+    }
+    if (extension.name === AI_BLOCK_NAME) {
+      return extension.extend({
+        addStorage(): AIBlockStorage {
+          return { provider: aiBlockProvider };
+        },
+        addNodeView() {
+          return ReactNodeViewRenderer(AIBlockView);
         },
       });
     }

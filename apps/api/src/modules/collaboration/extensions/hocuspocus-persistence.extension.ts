@@ -113,9 +113,9 @@ export class HocuspocusPersistenceExtension {
           html = yDocToHtml(document);
         } catch (error) {
           // Never drop the edit: if HTML derivation fails, persist yjsState only.
-          logger.warn(
-            `yDocToHtml failed for note ${documentName}, persisting yjsState only`,
-            error instanceof Error ? error.stack : error
+          const cause = error instanceof Error ? error.message : String(error);
+          logger.error(
+            `Failed to render note ${documentName} to HTML, persisting yjsState only: ${cause}`
           );
           const fallback = await noteRepository.updateYjsState(
             documentName,

@@ -22,6 +22,7 @@ import {
 } from '@knowtis/design-system';
 import {
   CHANGE_ATTR,
+  createBaseExtensions,
   DIFF_DEL_CLASS,
   DIFF_INS_CLASS,
   diffNoteHtml,
@@ -31,13 +32,12 @@ import {
 } from '@knowtis/editor';
 import { logger } from '@knowtis/shared-util';
 
-import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
+import { sanitizeProposalHtml } from '../../lib/sanitize-ai-html';
 import { ConfirmationFooter } from '../ai-elements/confirmation';
 import {
   readProposalPayload,
   type ProposalPayloadView,
 } from './proposal-payload';
-import { REVIEW_EXTENSIONS } from './proposal-review-extensions';
 import { ProposalActions } from './ProposalActions';
 import { useProposalBefore } from './useProposalBefore';
 import { useProposalDecision } from './useProposalDecision';
@@ -52,6 +52,8 @@ interface ProposalReviewProps {
 type ReviewItem = { kind: 'title' } | { kind: 'change'; index: number };
 
 const PROSE_CLASSES = 'prose prose-sm dark:prose-invert max-w-none';
+
+const REVIEW_EXTENSIONS = createBaseExtensions({ openLinksOnClick: true });
 
 const ROOT_CLASSES =
   'flex h-full min-h-0 flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
@@ -118,10 +120,8 @@ export function ProposalReview({
     setShowDeleted(false);
   }
 
-  // The review is honest only because AI_HTML_FORBID_TAGS and the server's semantic
-  // schema drop the same tags today — a coincidence, not an invariant.
   const afterHtml = useMemo(
-    () => sanitizeAiHtml(payload.contentHtml ?? ''),
+    () => sanitizeProposalHtml(payload.contentHtml ?? ''),
     [payload.contentHtml]
   );
   const beforeHtml = before.status === 'ready' ? before.contentHtml : null;
