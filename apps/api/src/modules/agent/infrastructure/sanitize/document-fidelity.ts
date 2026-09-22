@@ -1,33 +1,37 @@
-import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import * as Y from 'yjs';
+import type { JSONContent } from '@tiptap/core';
+import { generateJSON } from '@tiptap/html/server';
 
-import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import { BLANK_TEXT } from '@knowtis/note-markdown';
 
-import { htmlToYjsState } from '../../../notes/infrastructure/html-to-yjs';
+import { noteSchemaExtensions } from '../../../notes/infrastructure/html-to-yjs';
 
-interface DocumentNode {
-  readonly type: string;
-  readonly content?: readonly DocumentNode[];
+// `<p>&nbsp;</p>` reads back as an empty paragraph that looks the same, so
+// counting its text would refuse an edit that loses nothing.
+function isBlankText(node: JSONContent): boolean {
+  return node.type === 'text' && BLANK_TEXT.test(node.text ?? '');
 }
 
+function countInto(node: JSONContent, counts: Map<string, number>): void {
+  if (node.type && !isBlankText(node)) {
+    counts.set(node.type, (counts.get(node.type) ?? 0) + 1);
+  }
+  for (const child of node.content ?? []) {
+    countInto(child, counts);
+  }
+}
+
+// Not through `htmlToYjsState`, since it drops foreign images and would hide
+// the very loss this check reports.
 function nodeCounts(html: string): Map<string, number> | null {
-  const doc = new Y.Doc();
+  let doc: JSONContent;
   try {
-    Y.applyUpdate(doc, htmlToYjsState(html));
-    const counts = new Map<string, number>();
-    const walk = (node: DocumentNode): void => {
-      counts.set(node.type, (counts.get(node.type) ?? 0) + 1);
-      for (const child of node.content ?? []) {
-        walk(child);
-      }
-    };
-    walk(yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME) as DocumentNode);
-    return counts;
+    doc = generateJSON(html, noteSchemaExtensions);
   } catch {
     return null;
-  } finally {
-    doc.destroy();
   }
+  const counts = new Map<string, number>();
+  countInto(doc, counts);
+  return counts;
 }
 
 /**
