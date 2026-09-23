@@ -810,7 +810,7 @@ describe('KeywordRetrievalAdapter', () => {
 
   describe('a note whose content column fell behind its CRDT state', () => {
     const SRC =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
     const LIVE_HTML = `<p>Intro</p><figure data-image=""><img src="${SRC}" alt="lake"><figcaption>Lake</figcaption></figure><p>Written after the image.</p>`;
     const FROZEN_CONTENT = '<p>Intro</p>';
 

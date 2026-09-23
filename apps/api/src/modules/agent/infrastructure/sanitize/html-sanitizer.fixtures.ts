@@ -32,7 +32,7 @@ export const EDITOR_VOCABULARY_MARKDOWN = [
   '- [ ] visa',
   '  - [x] photo',
   '',
-  '![Lake Atitlán](https://knowtis.public.blob.vercel-storage.com/notes/trip/lake.webp)',
+  '![Lake Atitlán](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/trip/lake.webp)',
   '',
   'Bring ==sunscreen== and H~2~O for the 30^th^.',
   '',

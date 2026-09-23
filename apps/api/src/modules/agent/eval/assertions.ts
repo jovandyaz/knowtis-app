@@ -131,7 +131,7 @@ const PRESERVED_HTML = `<h2>Logistics</h2>
 </tr>
 </tbody>
 </table>
-<figure data-image><img src="https://knowtis.public.blob.vercel-storage.com/notes/guatemala/lake.webp" alt="Lake Atitlán at dawn" /><figcaption></figcaption></figure>
+<figure data-image><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/guatemala/lake.webp" alt="Lake Atitlán at dawn" /><figcaption></figcaption></figure>
 <ul data-type="taskList">
 <li data-type="taskItem" data-checked="false"><div><p>book</p>
 <ul data-type="taskList">

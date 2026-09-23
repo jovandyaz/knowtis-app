@@ -2,16 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useAIStore } from '@/stores/ai.store';
+import type { Fragment } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
 import { useEscapeDismiss } from '@knowtis/design-system';
+import { markdownToFragment } from '@knowtis/editor';
 
 import { AIStreamingPreview } from './AIStreamingPreview';
 
+const PARAGRAPH_NODE = 'paragraph';
+
 interface AIResultPanelProps {
   editor: Editor;
+}
+
+function replacementContent(editor: Editor, markdown: string): Fragment {
+  const blocks = markdownToFragment(markdown, editor.schema);
+  const onlyBlock = blocks.childCount === 1 ? blocks.firstChild : null;
+  // Inserted as a block, a one-paragraph answer would split the sentence it
+  // replaces, or turn the heading it replaces into a paragraph.
+  return onlyBlock?.type.name === PARAGRAPH_NODE ? onlyBlock.content : blocks;
 }
 
 export function AIResultPanel({ editor }: AIResultPanelProps) {
@@ -26,17 +38,21 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
 
   const handleReplace = useCallback(
     (text: string) => {
+      if (editor.isDestroyed) {
+        return;
+      }
       const range = selectionRange;
+      const content = replacementContent(editor, text);
       if (range) {
         editor
           .chain()
           .focus()
           .setTextSelection(range)
           .deleteSelection()
-          .insertContent(text)
+          .insertContent(content)
           .run();
       } else {
-        editor.chain().focus().insertContent(text).run();
+        editor.chain().focus().insertContent(content).run();
       }
       reset();
     },
@@ -45,12 +61,15 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
 
   const handleInsertBelow = useCallback(
     (text: string) => {
+      if (editor.isDestroyed) {
+        return;
+      }
       const pos = selectionRange?.to ?? editor.state.selection.to;
       editor
         .chain()
         .focus()
         .setTextSelection(pos)
-        .insertContent(`\n${text}`)
+        .insertContent(markdownToFragment(text, editor.schema))
         .run();
       reset();
     },

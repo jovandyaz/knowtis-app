@@ -132,7 +132,7 @@ Each image ships its `dist/apps/<app>` output plus a production install of exact
 | `EMAIL_PROVIDER`               | No (default `console`)       | `resend` in production                                                                                                                                                |
 | `RESEND_API_KEY`               | When `EMAIL_PROVIDER=resend` | Resend API key                                                                                                                                                        |
 | `EMAIL_FROM`                   | No                           | Sender address                                                                                                                                                        |
-| `VERCEL_BLOB_READ_WRITE_TOKEN` | For image uploads            | Vercel Blob store token used by `VercelBlobStorage`                                                                                                                   |
+| `VERCEL_BLOB_READ_WRITE_TOKEN` | For image uploads            | Token of the Blob store whose host is `STORED_IMAGE_HOST` (`iy4r311mpkfdcnup`, `@knowtis/shared-util`); a token for any other store makes every upload fail           |
 | `NODE_ENV`                     | No                           | Declared as `production` in `.railway/railway.ts`                                                                                                                     |
 | `PORT`                         | No                           | Declared as `3333` in `.railway/railway.ts` (also the schema default)                                                                                                 |
 

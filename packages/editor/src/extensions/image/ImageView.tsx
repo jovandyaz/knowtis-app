@@ -7,6 +7,7 @@ import type { NodeViewProps } from '@tiptap/react';
 import { ImageOff, Pencil, Trash2 } from 'lucide-react';
 
 import type { ImageAttributes } from '@knowtis/editor-schema';
+import { isStoredImageUrl } from '@knowtis/shared-util';
 
 function readAttrs(node: ProseMirrorNode): ImageAttributes {
   const src = node.attrs['src'];
@@ -34,7 +35,7 @@ export function ImageView({
   return (
     <NodeViewWrapper className="group relative my-4" data-selected={selected}>
       <div className="relative inline-block max-w-full">
-        {src ? (
+        {isStoredImageUrl(src) ? (
           <img
             src={src}
             alt={alt}

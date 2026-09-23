@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { del, put } from '@vercel/blob';
 
+import { isStoredImageUrl, STORED_IMAGE_HOST } from '@knowtis/shared-util';
+
 import type { EnvConfig } from '../../../../config/env.config';
 import type {
   ImageStorage,
@@ -25,6 +27,12 @@ export class VercelBlobStorage implements ImageStorage {
         token,
       }
     );
+    if (!isStoredImageUrl(blob.url)) {
+      await del([blob.pathname], { token }).catch(() => undefined);
+      throw new Error(
+        `Uploaded image landed on ${new URL(blob.url).host}, not ${STORED_IMAGE_HOST}: VERCEL_BLOB_READ_WRITE_TOKEN belongs to another Blob store`
+      );
+    }
     return { url: blob.url, pathname: blob.pathname };
   }
 

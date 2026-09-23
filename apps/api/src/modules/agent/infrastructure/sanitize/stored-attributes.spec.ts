@@ -9,9 +9,10 @@ import {
 } from './html-sanitizer.fixtures';
 import { restoreStoredAttributes } from './stored-attributes';
 
-const SRC = 'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+const SRC =
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
 const OTHER =
-  'https://knowtis.public.blob.vercel-storage.com/notes/n1/map.webp';
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/map.webp';
 const SIZED = storedHtml(
   `<p>Trip</p><figure data-image=""><img src="${SRC}" alt="lake" width="320" height="200"><figcaption></figcaption></figure><p>Old text.</p>`
 );

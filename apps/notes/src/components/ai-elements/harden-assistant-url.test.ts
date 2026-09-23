@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
+
 import { hardenAssistantUrl } from './harden-assistant-url';
 
 const imgNode = { tagName: 'img' } as never;
@@ -25,15 +27,30 @@ describe('hardenAssistantUrl', () => {
     expect(hardenAssistantUrl('https:\\evil.com', 'src', imgNode)).toBe('');
   });
 
-  it('keeps an inline data image (cannot phone home)', () => {
-    const dataUri = 'data:image/png;base64,iVBORw0KGgo=';
-    expect(hardenAssistantUrl(dataUri, 'src', imgNode)).toBe(dataUri);
+  it('keeps an image from the app blob store', () => {
+    const stored = `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`;
+    expect(hardenAssistantUrl(stored, 'src', imgNode)).toBe(stored);
   });
 
-  it('keeps a relative image source', () => {
-    expect(hardenAssistantUrl('/img/local.png', 'src', imgNode)).toBe(
-      '/img/local.png'
-    );
+  it('drops an image from another blob store', () => {
+    expect(
+      hardenAssistantUrl(
+        'https://attacker123.public.blob.vercel-storage.com/x.png',
+        'src',
+        imgNode
+      )
+    ).toBe('');
+  });
+
+  it('drops a relative image source (resolves to the app origin proxies)', () => {
+    expect(hardenAssistantUrl('/t/x', 'src', imgNode)).toBe('');
+    expect(hardenAssistantUrl('/img/local.png', 'src', imgNode)).toBe('');
+  });
+
+  it('drops an inline data image', () => {
+    expect(
+      hardenAssistantUrl('data:image/png;base64,iVBORw0KGgo=', 'src', imgNode)
+    ).toBe('');
   });
 
   it('keeps a normal link href', () => {
@@ -66,9 +83,11 @@ describe('hardenAssistantUrl', () => {
     expect(hardenAssistantUrl('tel:+123', 'href', linkNode)).toBe('tel:+123');
   });
 
-  it('keeps a blob: image source (cannot phone home)', () => {
-    expect(hardenAssistantUrl('blob:https://x/abc', 'src', imgNode)).toBe(
-      'blob:https://x/abc'
-    );
+  it('drops a blob: image source', () => {
+    expect(hardenAssistantUrl('blob:https://x/abc', 'src', imgNode)).toBe('');
+  });
+
+  it('keeps a relative link href', () => {
+    expect(hardenAssistantUrl('/notes/n1', 'href', linkNode)).toBe('/notes/n1');
   });
 });

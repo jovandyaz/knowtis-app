@@ -341,7 +341,7 @@ describe('markdownToHtml', () => {
 
   describe('images', () => {
     const SRC =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
 
     it('renders a lone image as the editor figure, with no paragraph around it', () => {
       expect(markdownToHtml(`![a lake](${SRC} "Lake Atitlán")`)).toBe(

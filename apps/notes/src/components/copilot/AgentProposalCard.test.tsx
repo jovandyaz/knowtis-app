@@ -138,7 +138,7 @@ describe('AgentProposalCard', () => {
 
   it('previews an image from the app store and drops one from another host', async () => {
     const storedSrc =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
     render(
       <AgentProposalCard
         proposal={{

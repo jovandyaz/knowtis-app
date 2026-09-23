@@ -146,7 +146,7 @@ export const FIDELITY_NOTE_MARKDOWN = [
   '| 1 | Antigua |',
   '| 2 | Atitlan |',
   '',
-  '![Lake Atitlán at dawn](https://knowtis.public.blob.vercel-storage.com/notes/guatemala/lake.webp)',
+  '![Lake Atitlán at dawn](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/guatemala/lake.webp)',
   '',
   '- [ ] book',
   '  - [x] flight',

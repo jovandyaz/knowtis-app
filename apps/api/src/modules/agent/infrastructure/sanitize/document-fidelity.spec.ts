@@ -81,7 +81,7 @@ describe('the note shapes an edit can and cannot carry', () => {
     ],
     [
       'an image',
-      '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>',
+      '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>',
     ],
     ['a nested task list', NESTED_TASK_LIST],
     [

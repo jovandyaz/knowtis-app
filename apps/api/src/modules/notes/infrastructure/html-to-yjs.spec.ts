@@ -208,7 +208,7 @@ describe('yDocToHtml', () => {
 
   it('keeps an image through the store and back, so its note keeps a live content column', () => {
     const html =
-      '<p>before</p><figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a" width="320" height="200"><figcaption></figcaption></figure><p>after</p>';
+      '<p>before</p><figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a" width="320" height="200"><figcaption></figcaption></figure><p>after</p>';
     const doc = new Y.Doc();
     Y.applyUpdate(doc, htmlToYjsState(html));
     expect(yDocToHtml(doc)).toBe(html);
