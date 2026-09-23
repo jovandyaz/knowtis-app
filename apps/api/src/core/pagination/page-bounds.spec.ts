@@ -4,10 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import { PaginatedAuditQueryDto } from '../../modules/admin/dto/paginated-audit-query.dto';
 import { PaginatedUsersQueryDto } from '../../modules/admin/dto/paginated-users-query.dto';
+import { ListConversationsQueryDto } from '../../modules/agent/dto/list-conversations-query.dto';
 import { PaginatedCandidatesQueryDto } from '../../modules/ai/dto/paginated-candidates-query.dto';
 import { MAX_LIMIT, MAX_PAGE } from './pagination.constants';
 
 const PAGINATED_QUERY_DTOS = [
+  { route: 'GET /agent/conversations', dto: ListConversationsQueryDto },
   { route: 'GET /admin/audit', dto: PaginatedAuditQueryDto },
   { route: 'GET /admin/users', dto: PaginatedUsersQueryDto },
   { route: 'GET /ai/catalog/candidates', dto: PaginatedCandidatesQueryDto },
