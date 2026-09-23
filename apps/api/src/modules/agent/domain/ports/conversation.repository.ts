@@ -75,6 +75,12 @@ export interface ConversationRepository {
     userId: string,
     limit: number
   ): Promise<ConversationTranscript | null>;
+  rename(
+    conversationId: string,
+    userId: string,
+    title: string
+  ): Promise<boolean>;
+  deleteForUser(conversationId: string, userId: string): Promise<boolean>;
 }
 
 export const CONVERSATION_REPOSITORY = Symbol('CONVERSATION_REPOSITORY');

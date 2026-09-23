@@ -23,6 +23,7 @@ import {
   DatabaseModule,
   notePermissions,
   notes,
+  userMemories,
   users,
   type Database,
 } from '../../../../database';
@@ -915,6 +916,84 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         'a2',
       ]);
       expect(transcript?.hasEarlier).toBe(true);
+    });
+
+    it('renames only the owner conversation', async () => {
+      const id = await withTurn(LISTER, { title: 'Before' });
+
+      expect(await repo.rename(id, STRANGER, 'Hijacked')).toBe(false);
+      expect(await repo.rename(id, LISTER, 'After')).toBe(true);
+
+      const [row] = await db
+        .select({ title: conversations.title })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      expect(row?.title).toBe('After');
+    });
+
+    it('keeps the list order and updatedAt when a conversation is renamed', async () => {
+      const older = await withTurn(LISTER);
+      const newer = await withTurn(LISTER);
+      await touch(older, new Date('2026-09-01T10:00:00.000Z'));
+      await touch(newer, new Date('2026-09-02T10:00:00.000Z'));
+
+      await repo.rename(older, LISTER, 'Renamed');
+
+      const page = await repo.listForUser(LISTER, { offset: 0, limit: 10 });
+      expect(page.items.map((item) => [item.id, item.updatedAt])).toEqual([
+        [newer, '2026-09-02T10:00:00.000Z'],
+        [older, '2026-09-01T10:00:00.000Z'],
+      ]);
+    });
+
+    it('does not make a renamed conversation due for memory extraction again', async () => {
+      const id = await withTurn(LISTER);
+      await touch(id, new Date(Date.now() - 60 * 60 * 1000));
+      const due = async () =>
+        (await repo.findExtractable(0, 10_000)).some((row) => row.id === id);
+
+      expect(await due()).toBe(true);
+      await repo.markExtracted(LISTER, id);
+      expect(await due()).toBe(false);
+
+      await repo.rename(id, LISTER, 'Renamed');
+
+      expect(await due()).toBe(false);
+    });
+
+    it('deletes only the owner conversation, with its messages', async () => {
+      const id = await withTurn(LISTER);
+
+      expect(await repo.deleteForUser(id, STRANGER)).toBe(false);
+      expect(await repo.deleteForUser(id, LISTER)).toBe(true);
+      expect(await repo.deleteForUser(id, LISTER)).toBe(false);
+
+      const [counted] = await db
+        .select({ value: sql<number>`count(*)::int` })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, id));
+      expect(counted?.value).toBe(0);
+    });
+
+    it('keeps the memories extracted from a deleted conversation', async () => {
+      const id = await withTurn(LISTER);
+      const [memory] = await db
+        .insert(userMemories)
+        .values({
+          userId: LISTER,
+          content: 'prefers window seats',
+          embedding: new Array(1024).fill(0),
+          sourceConversationId: id,
+        })
+        .returning({ id: userMemories.id });
+
+      await repo.deleteForUser(id, LISTER);
+
+      const [kept] = await db
+        .select({ source: userMemories.sourceConversationId })
+        .from(userMemories)
+        .where(eq(userMemories.id, memory.id));
+      expect(kept).toEqual({ source: null });
     });
   });
 });

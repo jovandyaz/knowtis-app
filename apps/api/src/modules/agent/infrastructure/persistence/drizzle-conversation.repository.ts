@@ -357,4 +357,40 @@ export class DrizzleConversationRepository implements ConversationRepository {
     );
     return { ...header, hasEarlier, messages: rows };
   }
+
+  async rename(
+    conversationId: string,
+    userId: string,
+    title: string
+  ): Promise<boolean> {
+    // Never touches updatedAt: it means "last turn", so bumping it would reorder
+    // the list and make findExtractable re-mine the conversation's memories.
+    const renamed = await this.db
+      .update(conversations)
+      .set({ title })
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .returning({ id: conversations.id });
+    return renamed.length > 0;
+  }
+
+  async deleteForUser(
+    conversationId: string,
+    userId: string
+  ): Promise<boolean> {
+    const deleted = await this.db
+      .delete(conversations)
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .returning({ id: conversations.id });
+    return deleted.length > 0;
+  }
 }
