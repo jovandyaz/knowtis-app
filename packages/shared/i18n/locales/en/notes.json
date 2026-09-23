@@ -451,6 +451,7 @@
         "deleted": "Conversation deleted",
         "gone": "That conversation no longer exists",
         "loadFailed": "Couldn't load this conversation.",
+        "loading": "Loading conversation…",
         "openLabel": "Open conversation {{title}}"
       },
       "thinking": "Thinking…",

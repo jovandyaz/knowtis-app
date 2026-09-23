@@ -451,6 +451,7 @@
         "deleted": "Conversación eliminada",
         "gone": "Esa conversación ya no existe",
         "loadFailed": "No se pudo cargar esta conversación.",
+        "loading": "Cargando conversación…",
         "openLabel": "Abrir la conversación {{title}}"
       },
       "thinking": "Pensando…",

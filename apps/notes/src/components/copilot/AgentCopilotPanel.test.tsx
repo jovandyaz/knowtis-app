@@ -392,7 +392,7 @@ describe('AgentCopilotPanel', () => {
       );
     });
 
-    it('shows the thinking indicator while the conversation loads', async () => {
+    it('says the conversation is loading while it loads', async () => {
       useAgentStore.setState({
         userId: HARNESS_PROFILE.id,
         conversationId: 'c1',
@@ -403,9 +403,10 @@ describe('AgentCopilotPanel', () => {
 
       render(<AgentCopilotPanel />, { wrapper });
 
-      expect(
-        await screen.findByText('ai.copilot.thinking')
-      ).toBeInTheDocument();
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'ai.copilot.history.loading'
+      );
+      expect(screen.queryByText('ai.copilot.thinking')).toBeNull();
       expect(screen.queryByTestId('empty')).toBeNull();
     });
 

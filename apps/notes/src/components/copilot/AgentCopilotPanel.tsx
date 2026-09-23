@@ -146,7 +146,7 @@ export function AgentCopilotPanel() {
     <div className="flex h-full flex-col min-h-0">
       {hydration === 'loading' ? (
         <div className="flex-1 min-h-0 px-4 py-3">
-          <AgentStatusIndicator />
+          <AgentStatusIndicator label={t('ai.copilot.history.loading')} />
         </div>
       ) : messages.length === 0 ? (
         <div className="flex-1 min-h-0">
