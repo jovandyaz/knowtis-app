@@ -21,7 +21,9 @@ function countInto(node: JSONContent, counts: Map<string, number>): void {
     return;
   }
   if (node.type && !isBlankText(node)) {
-    counts.set(node.type, (counts.get(node.type) ?? 0) + 1);
+    for (const type of [node.type, ...(node.marks ?? []).map((m) => m.type)]) {
+      counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
   }
   for (const child of node.content ?? []) {
     countInto(child, counts);
@@ -41,10 +43,10 @@ function nodeCounts(html: string): Map<string, number> | null {
 }
 
 /**
- * Node types the editor would hold fewer of after `after` replaces `before`.
- * An edit changes the text of one region but rebuilds the whole body, so a
- * construct the converter pair cannot carry disappears from regions nobody
- * touched. Counting node types catches that without naming which constructs
+ * Node and mark types the editor would hold fewer of after `after` replaces
+ * `before`. An edit changes the text of one region but rebuilds the whole
+ * body, so a construct the converter pair cannot carry disappears from regions
+ * nobody touched. Counting types catches that without naming which constructs
  * are lossy today. Empty when either document cannot be parsed: absence of
  * evidence is not evidence of loss.
  */

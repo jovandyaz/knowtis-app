@@ -653,6 +653,20 @@ describe('MutationProposalBuilder.buildEdit', () => {
     );
   });
 
+  it('refuses an edit to a note holding underlined text, which Markdown has no form for', async () => {
+    const { builder } = editing(
+      storedHtml('<p><u>Signed.</u></p><p>Old text.</p>')
+    );
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(r._unsafeUnwrapErr()).toEqual(
+      AgentErrors.editWouldLoseContent(['underline'])
+    );
+  });
+
   it('refuses an edit when the no-op round trip would drop a node', async () => {
     const bodyHtml = storedHtml(markdownToNoteHtml('# Trip\n\nText.'));
     const { builder } = editing(bodyHtml);

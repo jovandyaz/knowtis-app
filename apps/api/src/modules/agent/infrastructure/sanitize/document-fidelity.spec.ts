@@ -67,6 +67,21 @@ describe('nodesLostBetween', () => {
     ).toStrictEqual(['text']);
   });
 
+  it('names a mark the second document no longer carries', () => {
+    expect(nodesLostBetween('<p><u>all</u></p>', '<p>all</p>')).toStrictEqual([
+      'underline',
+    ]);
+  });
+
+  it('reports nothing when a mark only moves off the space at its edge', () => {
+    expect(
+      nodesLostBetween(
+        '<p><strong>a </strong>b</p>',
+        '<p><strong>a</strong> b</p>'
+      )
+    ).toStrictEqual([]);
+  });
+
   it('does not count an image the app never stored, nor its caption', () => {
     expect(
       nodesLostBetween(
