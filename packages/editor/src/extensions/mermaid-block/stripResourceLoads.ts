@@ -1,3 +1,15 @@
+const DROPPED_ELEMENTS = new Set([
+  'set',
+  'animate',
+  'animatemotion',
+  'animatetransform',
+  'animatecolor',
+  'object',
+  'embed',
+  'iframe',
+  'frame',
+  'meta',
+]);
 const LOADING_ATTRIBUTES = new Set(['src', 'srcset', 'poster', 'background']);
 const REFERENCE_ATTRIBUTES = new Set(['href', 'xlink:href']);
 const LINK_ELEMENT = 'a';
@@ -57,20 +69,32 @@ function loadsResource(element: Element, attr: Attr): boolean {
   return cssLoadsResource(attr.value);
 }
 
+function dropsWhole(element: Element): boolean {
+  return (
+    DROPPED_ELEMENTS.has(element.localName.toLowerCase()) ||
+    (element.localName === STYLE_ELEMENT &&
+      cssLoadsResource(element.textContent ?? ''))
+  );
+}
+
 /**
- * Removes everything in rendered diagram markup that would make the browser
- * fetch a resource once injected: loading attributes, references to other
- * documents, and CSS (attributes or `<style>` elements) whose urls are not
- * `#fragment` references. Links are kept; they only navigate on a click.
+ * Removes from rendered diagram markup what would make the browser fetch or
+ * navigate on its own once it is injected:
+ * - elements that load or navigate by themselves (`object`, `embed`,
+ *   `iframe`, `frame`, `meta`) and SMIL animations, which can retarget an href;
+ * - `src`, `srcset`, `poster` and `background` on any element;
+ * - `href`/`xlink:href` other than a `#fragment`, an inline `data:image/` on
+ *   `<image>`, or a link (`<a>` only navigates on a click);
+ * - any attribute, and any `<style>` element, whose CSS has a `url()`/`src()`
+ *   that is not a `#fragment`, an `image()`/`image-set()` or an `@import`.
+ * Scripts and event handlers are not its concern: mermaid's strict DOMPurify
+ * pass removes them.
  */
 export function stripResourceLoads(markup: string): string {
   const template = document.createElement('template');
   template.innerHTML = markup;
   for (const element of template.content.querySelectorAll('*')) {
-    if (
-      element.localName === STYLE_ELEMENT &&
-      cssLoadsResource(element.textContent ?? '')
-    ) {
+    if (dropsWhole(element)) {
       element.remove();
       continue;
     }

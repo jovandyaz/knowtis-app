@@ -5,6 +5,18 @@ import { stripResourceLoads } from './stripResourceLoads';
 
 const FOREIGN = 'https://x.invalid/p.png';
 
+const DROPPED_ELEMENTS = new Set([
+  'set',
+  'animate',
+  'animateTransform',
+  'animateMotion',
+  'mpath',
+  'object',
+  'embed',
+  'iframe',
+  'meta',
+]);
+
 function parse(markup: string): DocumentFragment {
   const template = document.createElement('template');
   template.innerHTML = markup;
@@ -71,6 +83,49 @@ describe('stripResourceLoads', () => {
     const out = stripResourceLoads(svg(markup));
 
     expect(attributesOf(out, tag)).toEqual({});
+  });
+
+  it.each([
+    [
+      'a <set> retargeting an href',
+      `<image><set attributeName="href" to="${FOREIGN}"></set></image>`,
+    ],
+    [
+      'an <animate> cycling xlink:href',
+      `<image><animate attributeName="xlink:href" values="${FOREIGN};${FOREIGN}"></animate></image>`,
+    ],
+    [
+      'an <animateTransform>',
+      '<g><animateTransform attributeName="transform" type="rotate" to="90"></animateTransform></g>',
+    ],
+    [
+      'an <animateMotion> on an external path',
+      '<g><animateMotion><mpath href="https://x.invalid/p.svg#p"></mpath></animateMotion></g>',
+    ],
+    [
+      'an <object>',
+      `<foreignObject><div><object data="${FOREIGN}"></object></div></foreignObject>`,
+    ],
+    [
+      'an <embed>',
+      `<foreignObject><div><embed src="${FOREIGN}"></div></foreignObject>`,
+    ],
+    [
+      'an <iframe>',
+      '<foreignObject><div><iframe src="https://x.invalid/f"></iframe></div></foreignObject>',
+    ],
+    [
+      'a refreshing <meta>',
+      '<foreignObject><div><meta http-equiv="refresh" content="0;url=https://x.invalid/r"></div></foreignObject>',
+    ],
+  ])('drops %s outright', (_, markup) => {
+    const out = stripResourceLoads(svg(markup));
+
+    expect(
+      [...parse(out).querySelectorAll('*')]
+        .map((element) => element.localName)
+        .filter((name) => DROPPED_ELEMENTS.has(name))
+    ).toEqual([]);
   });
 
   it('keeps fragment references and inline image data', () => {
