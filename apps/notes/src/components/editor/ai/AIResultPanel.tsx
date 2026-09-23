@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useAIStore } from '@/stores/ai.store';
-import type { Fragment } from '@tiptap/pm/model';
+import type { Fragment, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
@@ -24,6 +24,18 @@ function replacementContent(editor: Editor, markdown: string): Fragment {
   // Inserted as a block, a one-paragraph answer would split the sentence it
   // replaces, or turn the heading it replaces into a paragraph.
   return onlyBlock?.type.name === PARAGRAPH_NODE ? onlyBlock.content : blocks;
+}
+
+function positionBelow(doc: ProseMirrorNode, from: number, to: number): number {
+  const $to = doc.resolve(to);
+  const block = $to.parent;
+  if (!block.isTextblock || block.content.size === 0) {
+    return to;
+  }
+  if ($to.parentOffset === 0 && from < to) {
+    return $to.before();
+  }
+  return $to.after();
 }
 
 export function AIResultPanel({ editor }: AIResultPanelProps) {
@@ -64,12 +76,14 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       if (editor.isDestroyed) {
         return;
       }
-      const pos = selectionRange?.to ?? editor.state.selection.to;
+      const { from, to } = selectionRange ?? editor.state.selection;
       editor
         .chain()
         .focus()
-        .setTextSelection(pos)
-        .insertContent(markdownToFragment(text, editor.schema))
+        .insertContentAt(
+          positionBelow(editor.state.doc, from, to),
+          markdownToFragment(text, editor.schema)
+        )
         .run();
       reset();
     },

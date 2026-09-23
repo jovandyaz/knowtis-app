@@ -283,6 +283,75 @@ describe('AIResultPanel inserting a finished result', () => {
     }
   );
 
+  it('inserts below the paragraph a selection ends inside, leaving it whole', () => {
+    const live = finishOver(
+      '<p>Keep this whole sentence intact.</p><p>Next</p>',
+      { from: 6, to: 16 },
+      STRUCTURED_RESULT
+    );
+
+    choose(INSERT_BELOW);
+
+    expect(blocks(live)).toEqual([
+      ['paragraph', 'Keep this whole sentence intact.'],
+      ['heading', 'Title'],
+      ['bulletList', 'ab'],
+      ['paragraph', 'Next'],
+    ]);
+  });
+
+  it('inserts below the last selected paragraph when the selection ends at the start of the next one', () => {
+    const live = finishOver(
+      TWO_PARAGRAPHS,
+      { from: 1, to: 13 },
+      STRUCTURED_RESULT
+    );
+
+    choose(INSERT_BELOW);
+
+    expect(blocks(live)).toEqual([
+      ['paragraph', 'First para'],
+      ['heading', 'Title'],
+      ['bulletList', 'ab'],
+      ['paragraph', 'Second para'],
+    ]);
+  });
+
+  it('inserts right after a selected block node', () => {
+    const live = finishOver(
+      '<p>Above</p><hr><p>Below</p>',
+      { from: 7, to: 8 },
+      STRUCTURED_RESULT
+    );
+
+    choose(INSERT_BELOW);
+
+    expect(blocks(live)).toEqual([
+      ['paragraph', 'Above'],
+      ['horizontalRule', ''],
+      ['heading', 'Title'],
+      ['bulletList', 'ab'],
+      ['paragraph', 'Below'],
+    ]);
+  });
+
+  it('fills the empty paragraph a cursor sits in instead of inserting below it', () => {
+    const live = finishOver(
+      '<p>Intro</p><p></p><p>Outro</p>',
+      { from: 8, to: 8 },
+      STRUCTURED_RESULT
+    );
+
+    choose(INSERT_BELOW);
+
+    expect(blocks(live)).toEqual([
+      ['paragraph', 'Intro'],
+      ['heading', 'Title'],
+      ['bulletList', 'ab'],
+      ['paragraph', 'Outro'],
+    ]);
+  });
+
   it('joins a soft line break the way the preview renders it', () => {
     const live = finishOver(
       TWO_PARAGRAPHS,
