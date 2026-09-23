@@ -47,8 +47,10 @@ describe('useClaimEscape', () => {
     expect(pressed).toBe(true);
   });
 
-  it('claims but does not act on an Escape that closes an IME window', () => {
+  it('leaves an Escape that closes an IME window for the browser, without dismissing around it', () => {
     const onEscape = vi.fn();
+    const dismiss = vi.fn();
+    document.addEventListener('keydown', dismiss, { capture: true });
     render(<Field onEscape={onEscape} />);
 
     const pressed = fireEvent.keyDown(
@@ -56,7 +58,9 @@ describe('useClaimEscape', () => {
       { key: 'Escape', isComposing: true }
     );
 
+    document.removeEventListener('keydown', dismiss, { capture: true });
     expect(onEscape).not.toHaveBeenCalled();
-    expect(pressed).toBe(false);
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(pressed).toBe(true);
   });
 });
