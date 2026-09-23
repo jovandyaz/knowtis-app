@@ -17,7 +17,10 @@ const hooks = vi.hoisted(() => ({
 
 vi.mock('@knowtis/data-access-agent', () => ({
   useConversations: () => ({ data: hooks.page }),
-  useRenameConversation: () => ({ mutate: hooks.rename, isPending: false }),
+  useRenameConversation: (callbacks: unknown) => ({
+    mutate: (input: unknown) => hooks.rename(input, callbacks),
+    isPending: false,
+  }),
   useDeleteConversation: (callbacks: unknown) => ({
     mutate: (id: string, options: unknown) =>
       hooks.remove(id, options, callbacks),
@@ -244,8 +247,10 @@ describe('ConversationSwitcher', () => {
 
     it('renames it with the normalized title', async () => {
       hooks.rename.mockImplementation(
-        (_input: unknown, options?: { onSuccess?: () => void }) =>
-          options?.onSuccess?.()
+        (
+          input: unknown,
+          callbacks?: { onSuccess?: (data: undefined, input: unknown) => void }
+        ) => callbacks?.onSuccess?.(undefined, input)
       );
       const user = userEvent.setup();
       render(<ConversationSwitcher />);
@@ -261,6 +266,7 @@ describe('ConversationSwitcher', () => {
         { id: 'c1', title: 'Trip to Oaxaca' },
         expect.any(Object)
       );
+      expect(useAgentStore.getState().conversationTitle).toBe('Trip to Oaxaca');
       expect(
         screen.getByRole('button', { name: 'Trip to Oaxaca' })
       ).toHaveFocus();
@@ -292,8 +298,8 @@ describe('ConversationSwitcher', () => {
 
     it('says so when the thread is gone before the rename lands', async () => {
       hooks.rename.mockImplementation(
-        (_input: unknown, options?: { onError?: (error: unknown) => void }) =>
-          options?.onError?.({ status: 404 })
+        (_input: unknown, callbacks?: { onError?: (error: unknown) => void }) =>
+          callbacks?.onError?.({ status: 404 })
       );
       const user = userEvent.setup();
       render(<ConversationSwitcher />);

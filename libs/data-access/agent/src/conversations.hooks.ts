@@ -23,9 +23,9 @@ export interface RenameConversationInput {
   title: string;
 }
 
-/** Outcome callbacks that still run when the component that deleted has unmounted. */
-export type DeleteConversationCallbacks = Pick<
-  UseMutationOptions<void, Error, string>,
+/** Outcome callbacks that still run when the component that mutated has unmounted. */
+export type ConversationMutationCallbacks<TVariables> = Pick<
+  UseMutationOptions<void, Error, TVariables>,
   'onSuccess' | 'onError'
 >;
 
@@ -48,17 +48,20 @@ export function useConversations(limit: number) {
   });
 }
 
-export function useRenameConversation() {
+export function useRenameConversation(
+  callbacks: ConversationMutationCallbacks<RenameConversationInput> = {}
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, title }: RenameConversationInput) =>
       conversationsApi.rename(id, title),
+    ...callbacks,
     onSettled: () => invalidateConversations(queryClient),
   });
 }
 
 export function useDeleteConversation(
-  callbacks: DeleteConversationCallbacks = {}
+  callbacks: ConversationMutationCallbacks<string> = {}
 ) {
   const queryClient = useQueryClient();
   return useMutation({

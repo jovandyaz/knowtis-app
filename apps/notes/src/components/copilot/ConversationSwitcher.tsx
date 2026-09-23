@@ -45,7 +45,16 @@ export function ConversationSwitcher() {
   const openConversation = useAgentStore((s) => s.openConversation);
   const setConversationTitle = useAgentStore((s) => s.setConversationTitle);
   const { data } = useConversations(CONVERSATION_SWITCHER_LIMIT);
-  const rename = useRenameConversation();
+  const rename = useRenameConversation({
+    onSuccess: (_data, renamed) => {
+      if (useAgentStore.getState().conversationId === renamed.id) {
+        setConversationTitle(renamed.title);
+      }
+    },
+    onError: (error) => {
+      toast.error(t(conversationErrorKey(error)));
+    },
+  });
   const [renaming, setRenaming] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -86,19 +95,7 @@ export function ConversationSwitcher() {
     if (!id || title === activeTitle) {
       return;
     }
-    rename.mutate(
-      { id, title },
-      {
-        onSuccess: () => {
-          if (useAgentStore.getState().conversationId === id) {
-            setConversationTitle(title);
-          }
-        },
-        onError: (error) => {
-          toast.error(t(conversationErrorKey(error)));
-        },
-      }
-    );
+    rename.mutate({ id, title });
   };
 
   if (renaming && conversationId) {
