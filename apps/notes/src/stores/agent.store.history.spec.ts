@@ -14,7 +14,10 @@ import type {
   AgentStreamHandle,
 } from '@knowtis/api-client';
 import { conversationsQueryKeys } from '@knowtis/data-access-agent';
-import type { ConversationTranscript } from '@knowtis/shared-types';
+import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  type ConversationTranscript,
+} from '@knowtis/shared-types';
 import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
 import { useAgentStore } from './agent.store';
@@ -439,6 +442,92 @@ describe('agent.store openConversation', () => {
     expect({ hydration, hasEarlier }).toEqual({
       hydration: 'idle',
       hasEarlier: false,
+    });
+  });
+});
+
+const GONE: AgentErrorPayload = {
+  code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+  message: 'Conversation not found',
+};
+
+describe('agent.store sending into a conversation deleted elsewhere', () => {
+  it('forgets the thread and gives the message back', () => {
+    useAgentStore.setState({ conversationId: 'c1', conversationTitle: 'Old' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('¿Sigues ahí?');
+
+    callbacks().onError(GONE);
+
+    const state = useAgentStore.getState();
+    expect({
+      conversationId: state.conversationId,
+      conversationTitle: state.conversationTitle,
+      messages: state.messages,
+      status: state.status,
+      draft: state.draft,
+      error: state.error,
+    }).toEqual({
+      conversationId: null,
+      conversationTitle: null,
+      messages: [],
+      status: 'idle',
+      draft: '¿Sigues ahí?',
+      error: GONE,
+    });
+    expect(agentClient.resetConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the returned message ahead of what the user typed since', () => {
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Primero');
+    useAgentStore.getState().setDraft('Luego');
+
+    callbacks().onError(GONE);
+
+    expect(useAgentStore.getState().draft).toBe('Primero\n\nLuego');
+  });
+
+  it('keeps the queue for the next thread', () => {
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Uno');
+    useAgentStore.getState().sendMessage('Dos');
+
+    callbacks().onError(GONE);
+
+    expect(useAgentStore.getState().queue.map((item) => item.text)).toEqual([
+      'Dos',
+    ]);
+  });
+
+  it('does not give back the text of a turn the user already decided on', () => {
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Crea la nota');
+    callbacks().onProposal?.({
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 'Create',
+      payload: {},
+    });
+    useAgentStore.getState().approveProposal();
+
+    callbacks().onError(GONE);
+
+    expect(useAgentStore.getState().draft).toBe('');
+  });
+
+  it('still shows any other failure in the dock', () => {
+    useAgentStore.setState({ conversationId: 'c1' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('x');
+
+    callbacks().onError({ code: 'AI_PROVIDER_ERROR', message: 'down' });
+
+    const { status, conversationId } = useAgentStore.getState();
+    expect({ status, conversationId }).toEqual({
+      status: 'error',
+      conversationId: 'c1',
     });
   });
 });

@@ -20,6 +20,7 @@ import {
   notesQueryKeys,
 } from '@knowtis/data-access-notes';
 import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
   deriveConversationTitle,
   type AgentStopReason,
   type ReasoningEffort,
@@ -110,6 +111,7 @@ export const AGENT_STREAM_INACTIVITY_MS = 310_000;
  * model cannot grow the store unbounded. */
 export const THINKING_TAIL_CHARS = 4_000;
 const CHUNK_FLUSH_MS = 50;
+const DRAFT_PARAGRAPH_SEPARATOR = '\n\n';
 
 /** Local failure only: whether the proposal itself expired is the server's to say. */
 const RESUME_UNAVAILABLE_ERROR: AgentErrorPayload = {
@@ -175,6 +177,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
   let lastNoteId: string | undefined;
+  let unsentText: string | null = null;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -206,6 +209,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   });
 
   const beginResumedTurn = (): AgentChatMessage => {
+    unsentText = null;
     const assistant: AgentChatMessage = {
       id: nextId(),
       role: 'assistant',
@@ -225,6 +229,30 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       thinkingText: '',
       _streamHandle: null,
     });
+  };
+
+  const forgetGoneConversation = (error: AgentErrorPayload) => {
+    const returned = unsentText;
+    unsentText = null;
+    activeAssistantId = null;
+    agentClient.resetConversation();
+    set((s) => ({
+      messages: [],
+      status: 'idle',
+      error,
+      pendingProposal: null,
+      thinkingText: '',
+      _streamHandle: null,
+      conversationId: null,
+      conversationTitle: null,
+      hydration: 'idle',
+      hasEarlier: false,
+      draft: [returned, s.draft]
+        .filter(
+          (part): part is string => part !== null && part.trim().length > 0
+        )
+        .join(DRAFT_PARAGRAPH_SEPARATOR),
+    }));
   };
 
   const run = (text: string, assistantId: string, noteId?: string) => {
@@ -293,6 +321,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
+          if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
+            forgetGoneConversation(error);
+            return;
+          }
           set({
             status: 'error',
             error,
@@ -360,6 +392,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     }
     streamVersion++;
     lastNoteId = noteId;
+    unsentText = text;
     buffer.clearInactivityTimer();
     buffer.discard();
     thinkingBuffer.discard();
@@ -444,6 +477,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       buffer.discard();
       thinkingBuffer.discard();
       activeAssistantId = null;
+      unsentText = null;
       agentClient.resumeConversation(id);
       const switching = id !== current.conversationId;
       set({
@@ -554,6 +588,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       buffer.discard();
       thinkingBuffer.discard();
       activeAssistantId = null;
+      unsentText = null;
       set({
         messages: [],
         queue: [],
