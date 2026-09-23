@@ -17,7 +17,7 @@ export default defineConfig({
     alias: {
       '@knowtis/shared-util': resolve(
         __dirname,
-        '../../shared/util/src/index.ts'
+        '../../../packages/shared/util/src/index.ts'
       ),
     },
   },
