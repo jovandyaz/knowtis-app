@@ -56,9 +56,9 @@ describe('VoiceNoteRecorder', () => {
     );
 
     expect(createNoteMutate).toHaveBeenCalledTimes(1);
-    const [note] = createNoteMutate.mock.calls[0];
-    expect(note.title).toBe(TITLE);
-    expect(note.content).toContain(TRANSCRIBED);
-    expect(note.content).not.toContain(FOREIGN_IMAGE);
+    expect(createNoteMutate.mock.calls[0][0]).toEqual({
+      title: TITLE,
+      content: `<p>${TRANSCRIBED}</p><figure data-image=""></figure>`,
+    });
   });
 });
