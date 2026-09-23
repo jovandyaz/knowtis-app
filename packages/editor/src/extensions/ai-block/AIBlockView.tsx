@@ -18,6 +18,7 @@ import { AIBlockInputForm } from './AIBlockInputForm';
 import { AIBlockResult } from './AIBlockResult';
 import { AIBlockStreaming } from './AIBlockStreaming';
 import { renderMarkdownToSanitizedHtml } from './markdown-renderer';
+import { UNTRUSTED_MARKDOWN_PROPS } from './untrusted-markdown';
 import { useAIBlockStream } from './useAIBlockStream';
 
 function readAttrs(node: ProseMirrorNode): AIBlockAttributes {
@@ -46,7 +47,9 @@ function ReadOnlyAIBlock({ node }: Pick<NodeViewProps, 'node'>) {
     <NodeViewWrapper>
       {status === AI_BLOCK_STATUS.DONE && (
         <div contentEditable={false} className={cn(BLOCK_CLASSES, 'p-4')}>
-          <Streamdown mode="static">{content}</Streamdown>
+          <Streamdown mode="static" {...UNTRUSTED_MARKDOWN_PROPS}>
+            {content}
+          </Streamdown>
         </div>
       )}
     </NodeViewWrapper>
