@@ -75,6 +75,7 @@
     },
     "test": {
       "executor": "@nx/vitest:test",
+      "inputs": ["default", "^production", "{workspaceRoot}/vercel.json"],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
         "reportsDirectory": "../../coverage/apps/notes",
