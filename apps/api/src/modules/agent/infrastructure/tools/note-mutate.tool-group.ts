@@ -14,7 +14,7 @@ import type {
 const MAX_EDITS_PER_PROPOSAL = 20;
 const MAX_EDIT_TEXT_CHARS = 10_000;
 const CONTENT_MARKDOWN_DESCRIPTION =
-  'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, ```mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported.';
+  'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, ++underline++, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, ```mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported.';
 
 function captureProposal(
   collector: ProposalCollector,

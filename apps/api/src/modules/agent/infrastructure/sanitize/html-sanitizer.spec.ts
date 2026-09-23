@@ -120,6 +120,7 @@ describe('markdownToNoteHtml', () => {
       'heading',
       'link',
       'bold',
+      'underline',
       'table',
       'tableRow',
       'tableHeader',
@@ -621,6 +622,25 @@ describe('the round trip of a stored note', () => {
       storedHtml(
         `<figure data-image=""><img src="${STORED_IMAGE}" alt="&amp;copy; a [b] c &quot;q&quot; \\ *x* \`y\`"><figcaption>&amp;copy; a [b] c "q" \\ *x* \`y\`</figcaption></figure>`
       ),
+    ],
+    ['an underlined word', storedHtml('<p>a <u>word</u> b</p>')],
+    [
+      'underline nested with bold, italic and a link',
+      storedHtml(
+        '<p><u><strong>b</strong></u> <em><u>i</u></em> <strong><em><u>bi</u></em></strong> <a href="https://example.com/doc"><u>l</u></a></p>'
+      ),
+    ],
+    [
+      'underline inside a list, a task list, a heading and a table',
+      storedHtml(
+        '<h2><u>Plan</u></h2><ul><li><p><u>one</u></p></li></ul>' +
+          taskList(taskItem('<p><u>book</u></p>')) +
+          '<table><tbody><tr><th><p><u>Day</u></p></th></tr><tr><td><p><u>1</u></p></td></tr></tbody></table>'
+      ),
+    ],
+    [
+      'text holding a literal ++ that reads as underline',
+      storedHtml('<p>C++ and a ++b++ c</p>'),
     ],
     [
       'a bullet whose text is a literal [ ]',

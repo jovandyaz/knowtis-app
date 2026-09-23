@@ -26,7 +26,7 @@ export interface PMJson {
 export const EDITOR_VOCABULARY_MARKDOWN = [
   '# Trip',
   '',
-  'Fly to [Guatemala](https://example.com/gt) with **cash**.',
+  'Fly to [Guatemala](https://example.com/gt) with **cash** and a ++signed++ form.',
   '',
   '| City | Days |',
   '| --- | --- |',

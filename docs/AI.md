@@ -1385,11 +1385,12 @@ That split is what makes a partial edit safe. `proposeEditNote` takes `edits: [{
 
 **A `proposeEditNote` proposal is still a whole-body replacement, not a surgical patch.** The builder converts the stored HTML to Markdown, applies the edits, and converts the result back to HTML, so approving it rewrites the note's entire content. Because that conversion could fall behind the editor's schema, the builder first checks whether the note survives a **no-op** round trip: if the editor would hold fewer nodes or marks of any type afterwards, the edit is refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` rather than applied, and the model is told to say the note must be edited by hand. That is what keeps an edit to one paragraph from deleting an unrelated construct on approval. The conversion is `packages/note-markdown` plus the `html-sanitizer` allowlist; anything added to one must be added to the other, or the check starts refusing edits it should allow. The builder's spec checks its fixture against the note schema, so a node or mark added to the schema fails CI until an edit either carries it or is refused over it.
 
-Every node the editor stores except an AI block survives a copilot edit today — images, nested task lists, mermaid blocks and tables included — so a refusal outside the shapes listed below means the converter fell behind the schema, and the guard is what says so before a user loses anything. The Markdown the model reads and writes carries:
+Every node and mark the editor stores except an AI block survives a copilot edit today — images, nested task lists, mermaid blocks, tables and underline included — so a refusal outside the shapes listed below means the converter fell behind the schema, and the guard is what says so before a user loses anything. The Markdown the model reads and writes carries:
 
 - blank lines and empty headings, as a line holding only `&nbsp;` and a bare `#`;
 - line breaks anywhere in a paragraph, as a trailing backslash; a break that ends a paragraph sits above a line holding only `&nbsp;`;
 - non-breaking spaces at the start or end of a text, or alone in a table cell, as `&nbsp;`;
+- underline, as `++text++`, and a literal `++` escaped as `\+\+`;
 - image alt text and captions, exactly as typed.
 
 A list the model writes mixing task and plain items is stored the way the editor holds it: as separate lists, and a numbered list keeps counting across the task list between its parts. An image is admitted only from the app's own blob store host (`STORED_IMAGE_HOST` over https, checked by `isStoredImageUrl`, `@knowtis/shared-util`): the copilot's sanitizer drops any other image the model writes, and every server-side HTML write (`htmlToYjsState` / `evolveYjsState`) drops it again before it reaches the note. The proposal review and the create preview render a proposal through `sanitizeProposalHtml` (`apps/notes/src/lib/sanitize-ai-html.ts`), which keeps images by the same rule, so the review shows the images approval writes.
@@ -1402,9 +1403,9 @@ What still changes on an edit:
 - trailing blank lines at the end of a diagram's code are trimmed;
 - an image from outside the app's blob store, which a note can hold only from before the host was pinned or through the collaboration socket, is dropped with its caption; the guard does not count it, since the editor shows it only as a placeholder;
 - a line holding nothing but non-breaking spaces comes back empty: a paragraph or task text of nothing else, or the last line of a paragraph after a line break;
-- a space or non-breaking space at the edge of a bold, italic, code or link run moves just outside the run.
+- a space or non-breaking space at the edge of a bold, italic, underline, code or link run moves just outside the run.
 
-Refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` instead of changed, because Markdown has no form for them: a line break inside a heading or a table cell, a table cell holding more than one paragraph, two lists of the same kind directly after each other, underlined text, and an AI block the user has not inserted or discarded yet.
+Refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` instead of changed, because Markdown has no form for them: a line break inside a heading or a table cell, a table cell holding more than one paragraph, two lists of the same kind directly after each other, and an AI block the user has not inserted or discarded yet.
 
 A whole-body rewrite (`proposeUpdateNote`) restores no attributes; it replaces the note with what the model wrote.
 

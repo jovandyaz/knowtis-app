@@ -664,17 +664,16 @@ describe('MutationProposalBuilder.buildEdit', () => {
     );
   });
 
-  it('refuses an edit to a note holding underlined text, which Markdown has no form for', async () => {
-    const { builder } = editing(
-      storedHtml('<p><u>Signed.</u></p><p>Old text.</p>')
-    );
+  it('keeps a wholly underlined paragraph through an edit to other text', async () => {
+    const bodyHtml = storedHtml('<p><u>Signed.</u></p><p>Old text.</p>');
+    const { builder } = editing(bodyHtml);
 
     const r = await builder.buildEdit(USER, 'note-1', {
       edits: [{ oldText: 'Old text.', newText: 'New text.' }],
     });
 
-    expect(r._unsafeUnwrapErr()).toEqual(
-      AgentErrors.editWouldLoseContent(['underline'])
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      bodyHtml.replace('Old text.', 'New text.')
     );
   });
 
@@ -720,6 +719,8 @@ const EVERY_CARRIED_CONSTRUCT: JSONContent[] = [
     text('italic', [{ type: 'italic' }]),
     text(' '),
     text('struck', [{ type: 'strike' }]),
+    text(' '),
+    text('under', [{ type: 'underline' }]),
     text(' '),
     text('inline', [{ type: 'code' }]),
     text(' '),
@@ -826,7 +827,6 @@ const REFUSED_CONSTRUCTS: Record<string, JSONContent> = {
     type: AI_BLOCK_NAME,
     attrs: { topic: 'Rome', status: AI_BLOCK_STATUS.DONE, content: 'Rome.' },
   },
-  underline: paragraph(text('Signed.', [{ type: 'underline' }])),
 };
 
 function typesHeldBy(blocks: JSONContent[]): string[] {
