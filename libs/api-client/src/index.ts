@@ -92,3 +92,8 @@ export {
 
 export { aiModelsApi } from './lib/ai-models.api';
 export { aiKeysApi } from './lib/ai-keys.api';
+
+export {
+  conversationsApi,
+  type ConversationPageRequest,
+} from './lib/conversations.api';
