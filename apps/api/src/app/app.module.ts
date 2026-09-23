@@ -34,6 +34,7 @@ import { OauthModule } from '../modules/oauth/oauth.module';
 import { ObservabilityModule } from '../modules/observability/observability.module';
 import { OrganizationModule } from '../modules/organization/organization.module';
 import { SearchModule } from '../modules/search';
+import { SecurityModule } from '../modules/security/security.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -85,6 +86,7 @@ import { AppService } from './app.service';
     HealthModule,
     ObservabilityModule,
     AnalyticsModule,
+    SecurityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

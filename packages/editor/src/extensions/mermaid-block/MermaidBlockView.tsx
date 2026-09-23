@@ -10,7 +10,6 @@ import {
   Eye,
   SplitSquareHorizontal,
 } from 'lucide-react';
-import type mermaidType from 'mermaid';
 
 import { Button, cn } from '@knowtis/design-system';
 import {
@@ -19,38 +18,15 @@ import {
 } from '@knowtis/editor-schema';
 
 import { MermaidDiagramViewer } from './MermaidDiagramViewer';
+import {
+  MERMAID_THEME,
+  renderMermaid,
+  type MermaidTheme,
+} from './renderMermaid';
 import { useDocumentDarkTheme } from './useDocumentDarkTheme';
 
 const DEFAULT_MERMAID_CODE = 'graph TD\n  A[Start] --> B[End]';
 const RENDER_DEBOUNCE_MS = 300;
-
-const MERMAID_THEME = {
-  LIGHT: 'neutral',
-  DARK: 'dark',
-} as const;
-
-type MermaidTheme = (typeof MERMAID_THEME)[keyof typeof MERMAID_THEME];
-
-let mermaidInstance: typeof mermaidType | null = null;
-let appliedTheme: MermaidTheme | null = null;
-
-async function getMermaid(theme: MermaidTheme) {
-  if (!mermaidInstance) {
-    const { default: mermaid } = await import('mermaid');
-    mermaidInstance = mermaid;
-  }
-  if (appliedTheme !== theme) {
-    // the rendered svg goes straight into innerHTML: strict is what makes
-    // mermaid DOMPurify its own output before we inject it
-    mermaidInstance.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme,
-    });
-    appliedTheme = theme;
-  }
-  return mermaidInstance;
-}
 
 const VIEW_MODE_BUTTONS = [
   {
@@ -107,13 +83,14 @@ export function MermaidBlockView({
         return;
       }
 
-      // mermaid.render deletes any DOM element with the target id — a reused id wipes the mounted svg
+      // mermaid.render deletes any DOM element with the target id, so reusing
+      // one would wipe the mounted svg
       const seq = ++renderSeqRef.current;
       try {
-        const mermaid = await getMermaid(theme);
-        const { svg: rendered } = await mermaid.render(
+        const rendered = await renderMermaid(
           `${renderId}-${seq}`,
-          source
+          source,
+          theme
         );
         if (seq !== renderSeqRef.current) {
           return;

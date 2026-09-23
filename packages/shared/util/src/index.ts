@@ -9,5 +9,4 @@ export { logger } from './logger';
 export { pickDefined } from './pick-defined';
 export { isMacPlatform } from './platform';
 export { safeLocalStorage, safeSessionStorage } from './safe-storage';
-export { AI_HTML_FORBID_ATTR, AI_HTML_FORBID_TAGS } from './sanitize-config';
 export { isStoredImageUrl, STORED_IMAGE_HOST } from './stored-image-url';
