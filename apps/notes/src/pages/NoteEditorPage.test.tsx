@@ -7,9 +7,12 @@ import type { NoteSaveState } from '@/components/editor/NoteControlsPortal';
 import { DEBOUNCE_DELAYS } from '@/lib';
 import { useNoteEditorStore } from '@/stores/note-editor.store';
 import { act, render, screen } from '@testing-library/react';
+import { Editor } from '@tiptap/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
+import { createBaseExtensions } from '@knowtis/editor';
+import { IMAGE_NODE_NAME } from '@knowtis/editor-schema';
 
 import { NoteEditorPage, SAVED_STATE_DISPLAY_MS } from './NoteEditorPage';
 
@@ -118,8 +121,13 @@ vi.mock('@/components/editor/NoteControlsPortal', () => ({
   },
 }));
 
+let capturedOnVoiceInsert: ((html: string) => void) | undefined;
+
 vi.mock('@/components/voice-note/VoiceNoteRecorder', () => ({
-  VoiceNoteRecorder: () => <div data-testid="voice-note-recorder" />,
+  VoiceNoteRecorder: (props: { onInsert: (html: string) => void }) => {
+    capturedOnVoiceInsert = props.onInsert;
+    return <div data-testid="voice-note-recorder" />;
+  },
 }));
 
 const loadedNote = {
@@ -166,6 +174,7 @@ describe('NoteEditorPage', () => {
     capturedOnVoiceNote = undefined;
     capturedOnEditorReady = undefined;
     capturedOnConnectionStateChange = undefined;
+    capturedOnVoiceInsert = undefined;
     noteControlsProps.mockClear();
     updateNoteMutate.mockReset();
     captureProductEvent.mockClear();
@@ -182,6 +191,33 @@ describe('NoteEditorPage', () => {
 
     expect(capturedOnVoiceNote).toBeInstanceOf(Function);
     expect(screen.getByTestId('voice-note-recorder')).toBeInTheDocument();
+  });
+
+  it('inserts a voice note without the images the model put in it', () => {
+    renderWithClient(<NoteEditorPage />);
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: createBaseExtensions({ disableHistory: true }),
+      content: '<p>hello</p>',
+    });
+    act(() => capturedOnEditorReady?.(editor));
+
+    act(() =>
+      capturedOnVoiceInsert?.(
+        '<p>Transcribed idea</p><figure data-image><img src="https://evil.com/p.png"></figure><p><img src="https://evil.com/p.png"></p>'
+      )
+    );
+
+    const images: string[] = [];
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === IMAGE_NODE_NAME) {
+        images.push(String(node.attrs['src']));
+      }
+    });
+    expect(editor.getText()).toContain('Transcribed idea');
+    expect(images).toEqual([]);
+    expect(editor.getHTML()).not.toContain('evil.com');
+    editor.destroy();
   });
 
   it('hides the voice note entry points when voice notes are disabled', () => {

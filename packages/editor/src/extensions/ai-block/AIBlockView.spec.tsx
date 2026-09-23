@@ -1,4 +1,6 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +19,7 @@ const GENERATED = 'Rome was founded in 753 BC.';
 const FAILURE = 'The model timed out';
 
 const STORED_IMAGE =
-  'https://knowtis.public.blob.vercel-storage.com/notes/n1/chart.webp';
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/chart.webp';
 const RAW_IMAGE = '<img src="https://attacker.example/raw.png">';
 const RAW_SCRIPT = '<script>window.pwned = true</script>';
 const HOSTILE_CONTENT = [
@@ -43,11 +45,18 @@ function noteWithBlock(status: AIBlockStatus, content = GENERATED): string {
   return `<p>${INTRO}</p><div data-ai-block="" topic="Rome" status="${status}" content="${attributeValue(content)}" errormessage="${FAILURE}"></div>`;
 }
 
-function EditableNote({ content }: { content: string }) {
+function EditableNote({
+  content,
+  onCreate,
+}: {
+  content: string;
+  onCreate?: (editor: Editor) => void;
+}) {
   const editor = useEditor({
     extensions: createBaseExtensions(),
     content,
     editable: true,
+    onCreate: ({ editor: created }) => onCreate?.(created),
   });
   return (
     <TooltipProvider>
@@ -105,6 +114,48 @@ describe('AIBlockView in an editable editor', () => {
     ]);
     expect(screen.getByText(GENERATED)).toBeInTheDocument();
     expect(document.activeElement).toBe(block);
+  });
+});
+
+describe('inserting a finished block', () => {
+  it('joins a soft line break the way the block showed it', async () => {
+    const user = userEvent.setup();
+    let editor: Editor | undefined;
+    render(
+      <EditableNote
+        content={`${noteWithBlock(AI_BLOCK_STATUS.DONE, 'line one\nline two')}<p>outro</p>`}
+        onCreate={(created) => {
+          editor = created;
+        }}
+      />
+    );
+
+    const insert = await screen.findByRole('button', {
+      name: 'ai.aiBlock.insert',
+    });
+    if (!editor) {
+      throw new Error('editor was not created');
+    }
+    // Insert focuses the editor, whose next frame scrolls to the caret through
+    // layout APIs jsdom does not implement.
+    vi.spyOn(editor.view, 'coordsAtPos').mockReturnValue({
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+
+    await user.click(insert);
+
+    const blocks: [string, string][] = [];
+    editor.state.doc.forEach((node) => {
+      blocks.push([node.type.name, node.textContent]);
+    });
+    expect(blocks).toEqual([
+      ['paragraph', INTRO],
+      ['paragraph', 'line one line two'],
+      ['paragraph', 'outro'],
+    ]);
   });
 });
 

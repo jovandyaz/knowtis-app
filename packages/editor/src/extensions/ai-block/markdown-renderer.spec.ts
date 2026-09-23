@@ -1,6 +1,11 @@
+import { getSchema } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 
-import { renderMarkdownToSanitizedHtml } from './markdown-renderer';
+import { createBaseExtensions } from '../base-extensions';
+import {
+  markdownToFragment,
+  renderMarkdownToSanitizedHtml,
+} from './markdown-renderer';
 
 describe('renderMarkdownToSanitizedHtml', () => {
   it('strips images produced by markdown image syntax', () => {
@@ -32,5 +37,23 @@ describe('renderMarkdownToSanitizedHtml', () => {
     );
     expect(result).toContain('<a href="https://a.example"');
     expect(result).not.toContain('title=');
+  });
+});
+
+describe('markdownToFragment', () => {
+  it("reads a soft line break as a space and keeps a code block's whitespace", () => {
+    const fragment = markdownToFragment(
+      'line one\nline two\n\n```ts\nconst a = 1;\n\n  b();\n```',
+      getSchema(createBaseExtensions())
+    );
+
+    const blocks: [string, string][] = [];
+    fragment.forEach((node) => {
+      blocks.push([node.type.name, node.textContent]);
+    });
+    expect(blocks).toEqual([
+      ['paragraph', 'line one line two'],
+      ['codeBlock', 'const a = 1;\n\n  b();\n'],
+    ]);
   });
 });

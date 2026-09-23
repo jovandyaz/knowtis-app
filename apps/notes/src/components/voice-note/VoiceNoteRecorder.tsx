@@ -5,6 +5,7 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
 import { useVoiceNote, useVoiceRecorder } from '@/hooks';
+import { sanitizeAiHtml } from '@/lib/sanitize-ai-html';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -196,7 +197,7 @@ export function VoiceNoteRecorder({
     const { title, content } = voiceNoteData;
 
     createNote.mutate(
-      { title, content },
+      { title, content: sanitizeAiHtml(content) },
       {
         onSuccess: (newNote) => {
           handleClose();

@@ -26,7 +26,7 @@ const LOOSE_TASK_LIST_MARKDOWN = [
 ].join('\n');
 
 const STORED_IMAGE =
-  'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
 const LONE_FIGURE = `<figure data-image=""><img src="${STORED_IMAGE}" alt="a"><figcaption></figcaption></figure>`;
 
 const DIAGRAM = '<div data-mermaid-block data-code="graph TD"></div>';
@@ -239,10 +239,14 @@ describe('markdownToNoteHtml', () => {
 
   it.each([
     ['another host', 'https://attacker.example/collect?d=secret'],
-    ['http', 'http://knowtis.public.blob.vercel-storage.com/x.webp'],
+    [
+      'another blob store',
+      'https://attacker123.public.blob.vercel-storage.com/x.webp',
+    ],
+    ['http', 'http://iy4r311mpkfdcnup.public.blob.vercel-storage.com/x.webp'],
     [
       'a look-alike host',
-      'https://knowtis.public.blob.vercel-storage.com.attacker.example/x.webp',
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com.attacker.example/x.webp',
     ],
   ])('drops an image from %s, caption included', (_label, src) => {
     const html = sanitizeNoteHtml(

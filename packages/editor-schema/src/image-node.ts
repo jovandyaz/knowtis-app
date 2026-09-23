@@ -1,4 +1,6 @@
-import { mergeAttributes, Node } from '@tiptap/core';
+import { Node } from '@tiptap/core';
+
+import { isStoredImageUrl } from '@knowtis/shared-util';
 
 export const IMAGE_NODE_NAME = 'image' as const;
 export const IMAGE_FIGURE_ATTRIBUTE = 'data-image';
@@ -59,17 +61,21 @@ export const ImageNode = Node.create({
       string,
       unknown
     >;
-    const dimensions: Record<string, unknown> = {};
+    // Every serialization (getHTML, clipboard, the server's `content`, the
+    // proposal diff's deleted slices) runs through here, so a foreign src never
+    // reaches a page; the figure stays, so a re-parse keeps the node.
+    const image: Record<string, unknown> =
+      typeof src === 'string' && isStoredImageUrl(src) ? { src, alt } : { alt };
     if (width) {
-      dimensions['width'] = width;
+      image['width'] = width;
     }
     if (height) {
-      dimensions['height'] = height;
+      image['height'] = height;
     }
     return [
       'figure',
       { [IMAGE_FIGURE_ATTRIBUTE]: '' },
-      ['img', mergeAttributes({ src, alt }, dimensions)],
+      ['img', image],
       ['figcaption', {}, 0],
     ];
   },

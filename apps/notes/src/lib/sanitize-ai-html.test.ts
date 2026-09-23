@@ -46,7 +46,7 @@ describe('sanitizeAiHtml', () => {
 
 describe('sanitizeProposalHtml', () => {
   const STORED_SRC =
-    'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
 
   it('keeps an image figure the app stored, with its size and caption', () => {
     const html = `<figure data-image=""><img src="${STORED_SRC}" alt="lake" width="320" height="200"><figcaption>Lake</figcaption></figure>`;
@@ -63,10 +63,14 @@ describe('sanitizeProposalHtml', () => {
 
   it.each([
     ['another host', 'https://attacker.example/collect.png'],
-    ['http', 'http://knowtis.public.blob.vercel-storage.com/x.webp'],
+    [
+      'another blob store',
+      'https://attacker123.public.blob.vercel-storage.com/x.webp',
+    ],
+    ['http', 'http://iy4r311mpkfdcnup.public.blob.vercel-storage.com/x.webp'],
     [
       'the store name as a subdomain prefix',
-      'https://knowtis.public.blob.vercel-storage.com.attacker.example/x.webp',
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com.attacker.example/x.webp',
     ],
     ['a data url', 'data:image/png;base64,AAAA'],
   ])('drops the whole figure of an image from %s', (_label, src) => {

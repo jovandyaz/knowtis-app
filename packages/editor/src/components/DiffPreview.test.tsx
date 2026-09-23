@@ -6,6 +6,9 @@ import { createBaseExtensions } from '../extensions/base-extensions';
 import { DiffPreview, type DiffPreviewProps } from './DiffPreview';
 
 const EXTENSIONS = createBaseExtensions();
+const STORED_IMAGE =
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/chart.webp';
+const FOREIGN_IMAGE = 'https://evil.com/p.png';
 const labels = {
   deletedBlocks: (count: number) => `${count} deleted`,
   deletedInline: 'deleted text',
@@ -215,6 +218,36 @@ describe('DiffPreview', () => {
     ).toBeInTheDocument();
     expect(container.querySelector('del')).toBeNull();
   });
+
+  it.each([
+    ['Show deleted', true],
+    ['its chip', false],
+  ])(
+    'expands a deleted foreign image through %s without its src',
+    async (_trigger, showDeleted) => {
+      const { container } = renderDiff(
+        `<p>Uno</p><figure data-image><img src="${FOREIGN_IMAGE}" alt="beacon"></figure><figure data-image><img src="${STORED_IMAGE}" alt="chart"></figure>`,
+        '<p>Uno</p>',
+        { showDeleted }
+      );
+      if (!showDeleted) {
+        fireEvent.click(
+          await screen.findByRole('button', { name: '2 deleted' })
+        );
+      }
+
+      await waitFor(() =>
+        expect(container.querySelectorAll('.diff-del-block img')).toHaveLength(
+          2
+        )
+      );
+      expect(
+        [...container.querySelectorAll('img[src]')].map((img) =>
+          img.getAttribute('src')
+        )
+      ).toEqual([STORED_IMAGE]);
+    }
+  );
 
   it('rings the current change', async () => {
     const { container } = renderDiff('<p>Astro</p>', '<p>Astro y Vite</p>', {

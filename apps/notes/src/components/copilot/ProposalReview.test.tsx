@@ -317,7 +317,7 @@ describe('ProposalReview', () => {
 
   describe('images', () => {
     const STORED_SRC =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
     const FOREIGN_SRC = 'https://attacker.example/collect.png';
     const figure = (src: string, caption: string) =>
       `<figure data-image=""><img src="${src}" alt="lake"><figcaption>${caption}</figcaption></figure>`;
