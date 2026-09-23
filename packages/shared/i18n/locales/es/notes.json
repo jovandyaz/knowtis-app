@@ -450,6 +450,7 @@
         "deleteConfirmBody": "«{{title}}» y sus mensajes se eliminarán para siempre. Lo que el copiloto recuerda de ella se conserva.",
         "deleted": "Conversación eliminada",
         "gone": "Esa conversación ya no existe",
+        "listFailed": "No se pudieron cargar las conversaciones",
         "loadFailed": "No se pudo cargar esta conversación.",
         "loading": "Cargando conversación…",
         "openLabel": "Abrir la conversación {{title}}"

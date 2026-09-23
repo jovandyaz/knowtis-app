@@ -450,6 +450,7 @@
         "deleteConfirmBody": "“{{title}}” and its messages will be deleted for good. What the copilot remembers from it is kept.",
         "deleted": "Conversation deleted",
         "gone": "That conversation no longer exists",
+        "listFailed": "Couldn't load conversations",
         "loadFailed": "Couldn't load this conversation.",
         "loading": "Loading conversation…",
         "openLabel": "Open conversation {{title}}"

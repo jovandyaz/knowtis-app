@@ -11,12 +11,13 @@ import { ConversationSwitcher } from './ConversationSwitcher';
 
 const hooks = vi.hoisted(() => ({
   page: undefined as ConversationPage | undefined,
+  listFailed: false,
   rename: vi.fn(),
   remove: vi.fn(),
 }));
 
 vi.mock('@knowtis/data-access-agent', () => ({
-  useConversations: () => ({ data: hooks.page }),
+  useConversations: () => ({ data: hooks.page, isError: hooks.listFailed }),
   useRenameConversation: (callbacks: unknown) => ({
     mutate: (input: unknown) => hooks.rename(input, callbacks),
     isPending: false,
@@ -69,6 +70,7 @@ describe('ConversationSwitcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hooks.page = undefined;
+    hooks.listFailed = false;
     useAgentStore.setState({
       conversationId: null,
       conversationTitle: null,
@@ -192,6 +194,39 @@ describe('ConversationSwitcher', () => {
     expect(
       screen.getByRole('menuitem', { name: 'ai.copilot.history.empty' })
     ).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('says so when the list fails to load', async () => {
+    hooks.listFailed = true;
+    const user = userEvent.setup();
+    render(<ConversationSwitcher />);
+
+    await openMenu(user, 'ai.copilot.history.recent');
+
+    expect(
+      screen.getByRole('menuitem', { name: 'ai.copilot.history.listFailed' })
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.queryByRole('menuitem', { name: 'ai.copilot.history.empty' })
+    ).toBeNull();
+  });
+
+  it('keeps the listed conversations when a refresh fails', async () => {
+    hooks.page = pageOf(TRIP);
+    hooks.listFailed = true;
+    const user = userEvent.setup();
+    render(<ConversationSwitcher />);
+
+    await openMenu(user, 'ai.copilot.history.recent');
+
+    expect(
+      screen.getByRole('menuitemradio', {
+        name: 'ai.copilot.history.openLabel:Trip',
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: 'ai.copilot.history.listFailed' })
+    ).toBeNull();
   });
 
   it('claims no empty history before the list has loaded', async () => {

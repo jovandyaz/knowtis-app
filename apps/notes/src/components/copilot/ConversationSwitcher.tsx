@@ -44,7 +44,7 @@ export function ConversationSwitcher() {
   const conversationTitle = useAgentStore((s) => s.conversationTitle);
   const openConversation = useAgentStore((s) => s.openConversation);
   const setConversationTitle = useAgentStore((s) => s.setConversationTitle);
-  const { data } = useConversations(CONVERSATION_SWITCHER_LIMIT);
+  const { data, isError } = useConversations(CONVERSATION_SWITCHER_LIMIT);
   const rename = useRenameConversation({
     onSuccess: (_data, renamed) => {
       if (useAgentStore.getState().conversationId === renamed.id) {
@@ -167,6 +167,11 @@ export function ConversationSwitcher() {
           <DropdownMenuLabel className="text-xs uppercase tracking-wide">
             {t('ai.copilot.history.recent')}
           </DropdownMenuLabel>
+          {isError && !data && (
+            <DropdownMenuItem disabled>
+              {t('ai.copilot.history.listFailed')}
+            </DropdownMenuItem>
+          )}
           {data && data.items.length === 0 && (
             <DropdownMenuItem disabled>
               {t('ai.copilot.history.empty')}
