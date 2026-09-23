@@ -1,3 +1,4 @@
+import { refuseStorage } from '@/test/refuse-storage';
 import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -146,6 +147,29 @@ describe('initAnonymousSession — demotion guard', () => {
       expect.objectContaining({ id: 'new-anon', isAnonymous: true })
     );
     expect(localStorage.getItem(ANON_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('starts a fresh anonymous session when the browser refuses storage', async () => {
+    refuseStorage();
+    vi.mocked(httpClient.post).mockResolvedValue({
+      user: { id: 'new-anon', name: 'Anonymous', isAnonymous: true },
+      accessToken: 'new-at',
+    });
+    const { store, state } = createMockAuthStore({
+      isAuthenticated: false,
+      user: null,
+    });
+
+    await initAnonymousSession(createMockTokenStorage(), store);
+
+    expect(state.setUser).toHaveBeenCalledWith({
+      id: 'new-anon',
+      email: '',
+      name: 'Anonymous',
+      avatarUrl: null,
+      isAnonymous: true,
+    });
+    expect(state.setLoading).not.toHaveBeenCalled();
   });
 
   it('never persists the access token to localStorage', async () => {

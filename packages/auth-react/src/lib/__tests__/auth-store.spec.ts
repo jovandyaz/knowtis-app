@@ -1,4 +1,5 @@
 import { USER_ROLE, type AuthResponse } from '@jovandyaz/auth';
+import type { StateStorage } from 'zustand/middleware';
 
 import { createTokenStorage } from '../storage/token-storage';
 import { createAuthStore } from '../store/auth.store';
@@ -204,6 +205,32 @@ describe('createAuthStore', () => {
         locale: 'es',
       });
     });
+  });
+
+  it('persists through the storage the host provides', () => {
+    const items = new Map<string, string>();
+    const storage: StateStorage = {
+      getItem: (name) => items.get(name) ?? null,
+      setItem: (name, value) => {
+        items.set(name, value);
+      },
+      removeItem: (name) => {
+        items.delete(name);
+      },
+    };
+    const store = createAuthStore({
+      tokenStorage: createTokenStorage(),
+      storageKey: 'hosted-auth',
+      storage,
+    });
+
+    store.getState().logout();
+
+    expect(JSON.parse(items.get('hosted-auth') ?? 'null')).toEqual({
+      state: { user: null, isAuthenticated: false },
+      version: 0,
+    });
+    expect(localStorage.getItem('hosted-auth')).toBeNull();
   });
 
   it('should set loading state', () => {

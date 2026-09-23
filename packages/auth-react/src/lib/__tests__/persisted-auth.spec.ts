@@ -11,11 +11,26 @@ describe('readPersistedAuth', () => {
   });
 
   afterEach(() => {
-    localStorage.clear();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it('returns null when the storage key is absent', () => {
+    expect(readPersistedAuth(KEY)).toBeNull();
+  });
+
+  it('returns null when the browser refuses to read storage', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage is unavailable', 'SecurityError');
+    });
+
+    expect(readPersistedAuth(KEY)).toBeNull();
+  });
+
+  it('returns null when the browser has no localStorage', () => {
+    vi.stubGlobal('localStorage', null);
+
     expect(readPersistedAuth(KEY)).toBeNull();
   });
 

@@ -11,6 +11,7 @@ import {
   withAuthRefreshLock,
   type RefreshFailure,
 } from '@knowtis/api-client';
+import { safeLocalStorage } from '@knowtis/shared-util';
 
 import { ANON_STORAGE_KEY, AUTH_STORAGE_KEY } from './constants';
 import { SessionExpiredError } from './init-auth';
@@ -95,7 +96,7 @@ export async function initAnonymousSession(
       authStore.getState().setLoading(false);
       return;
     }
-    localStorage.removeItem(ANON_STORAGE_KEY);
+    safeLocalStorage.removeItem(ANON_STORAGE_KEY);
   }
 
   const latest = authStore.getState();
@@ -148,14 +149,14 @@ async function restoreSessionViaRefresh(
 }
 
 export function persistAnonymousMarker(userId: string): void {
-  localStorage.setItem(
+  safeLocalStorage.setItem(
     ANON_STORAGE_KEY,
     JSON.stringify({ userId, expiresAt: Date.now() + ANON_MARKER_TTL_MS })
   );
 }
 
 function readStoredMarker(): StoredAnonymousMarker | null {
-  const stored = localStorage.getItem(ANON_STORAGE_KEY);
+  const stored = safeLocalStorage.getItem(ANON_STORAGE_KEY);
   if (!stored) {
     return null;
   }
@@ -166,7 +167,7 @@ function readStoredMarker(): StoredAnonymousMarker | null {
     };
   } catch (error) {
     console.warn('[AnonymousSession] Failed to parse stored session', error);
-    localStorage.removeItem(ANON_STORAGE_KEY);
+    safeLocalStorage.removeItem(ANON_STORAGE_KEY);
     return null;
   }
   if (
@@ -174,7 +175,7 @@ function readStoredMarker(): StoredAnonymousMarker | null {
     typeof parsed.expiresAt !== 'number' ||
     parsed.expiresAt < Date.now()
   ) {
-    localStorage.removeItem(ANON_STORAGE_KEY);
+    safeLocalStorage.removeItem(ANON_STORAGE_KEY);
     return null;
   }
   return {
@@ -186,7 +187,7 @@ function readStoredMarker(): StoredAnonymousMarker | null {
 }
 
 export function getAnonymousUserId(): string | null {
-  const stored = localStorage.getItem(ANON_STORAGE_KEY);
+  const stored = safeLocalStorage.getItem(ANON_STORAGE_KEY);
   if (!stored) {
     return null;
   }
@@ -207,5 +208,5 @@ export function getAnonymousUserId(): string | null {
 }
 
 export function clearAnonymousSession(): void {
-  localStorage.removeItem(ANON_STORAGE_KEY);
+  safeLocalStorage.removeItem(ANON_STORAGE_KEY);
 }

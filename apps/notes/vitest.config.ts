@@ -33,6 +33,10 @@ export default defineConfig({
         __dirname,
         '../../libs/data-access/notes/src/index.ts'
       ),
+      '@knowtis/data-access-agent': resolve(
+        __dirname,
+        '../../libs/data-access/agent/src/index.ts'
+      ),
       '@knowtis/data-access-oauth': resolve(
         __dirname,
         '../../libs/data-access/oauth/src/index.ts'

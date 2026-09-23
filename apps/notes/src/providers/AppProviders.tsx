@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -15,6 +14,7 @@ import { Toaster, TooltipProvider } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 
 import { AbilityProvider } from './ability-provider';
+import { AuthCacheSync } from './AuthCacheSync';
 import { PostHogProvider } from './PostHogProvider';
 import { ThemeProvider } from './ThemeProvider';
 
@@ -34,18 +34,6 @@ function SessionManager() {
     isTerminalRefreshFailure: (error) =>
       classifyRefreshFailure(error) === 'rejected',
   });
-  return null;
-}
-
-function AuthCacheSync() {
-  useEffect(() => {
-    return authStore.subscribe((state, prevState) => {
-      if (prevState.isAuthenticated && !state.isAuthenticated) {
-        queryClient.cancelQueries();
-        queryClient.clear();
-      }
-    });
-  }, []);
   return null;
 }
 

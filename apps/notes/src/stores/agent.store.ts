@@ -1,24 +1,51 @@
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   agentClient,
+  conversationsApi,
   type AgentErrorPayload,
   type AgentSource,
   type AgentStreamHandle,
   type WebSource,
 } from '@knowtis/api-client';
 import {
+  invalidateConversations,
+  isConversationGone,
+} from '@knowtis/data-access-agent';
+import {
   invalidateNoteCollections,
   notesQueryKeys,
 } from '@knowtis/data-access-notes';
-import type { AgentStopReason, ReasoningEffort } from '@knowtis/shared-types';
+import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  deriveConversationTitle,
+  type AgentStopReason,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
+import {
+  COPILOT_CONVERSATION_STORAGE_KEY,
+  safeLocalStorage,
+} from '@knowtis/shared-util';
 
 import { createChunkBuffer } from './chunk-buffer';
+import { toChatMessages } from './conversation-transcript';
 
 /** 'auto' leaves the reasoning budget to the server. */
 export type CopilotEffort = 'auto' | ReasoningEffort;
+
+export type ConversationHydration = 'idle' | 'loading' | 'failed';
+
+export type ConversationOpenSource = 'switcher' | 'reload';
+
+export type ConversationOpenOutcome =
+  | 'opened'
+  | 'gone'
+  | 'failed'
+  | 'superseded'
+  | 'unchanged';
 
 export type AgentStatus =
   | 'idle'
@@ -87,6 +114,7 @@ export const AGENT_STREAM_INACTIVITY_MS = 310_000;
  * model cannot grow the store unbounded. */
 export const THINKING_TAIL_CHARS = 4_000;
 const CHUNK_FLUSH_MS = 50;
+const DRAFT_PARAGRAPH_SEPARATOR = '\n\n';
 
 /** Local failure only: whether the proposal itself expired is the server's to say. */
 const RESUME_UNAVAILABLE_ERROR: AgentErrorPayload = {
@@ -109,8 +137,19 @@ interface AgentState {
   thinkingText: string;
   /** Per-conversation reasoning effort for the registered caller; never a stored preference. */
   reasoningEffort: CopilotEffort;
+  userId: string | null;
+  conversationId: string | null;
+  conversationTitle: string | null;
+  hydration: ConversationHydration;
+  hasEarlier: boolean;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
+  bindUser: (userId: string) => void;
+  setConversationTitle: (title: string) => void;
+  openConversation: (
+    id: string,
+    source: ConversationOpenSource
+  ) => Promise<ConversationOpenOutcome>;
   markErrorAnswered: () => void;
   sendMessage: (
     text: string,
@@ -130,14 +169,37 @@ interface AgentState {
   rejectProposal: (reason?: string) => void;
 }
 
-export const useAgentStore = create<AgentState>((set, get) => {
+type SetAgentState = StoreApi<AgentState>['setState'];
+type GetAgentState = StoreApi<AgentState>['getState'];
+
+interface PersistedConversation {
+  userId: string;
+  conversationId: string | null;
+}
+
+function isPersistedConversation(
+  value: unknown
+): value is PersistedConversation {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'userId' in value &&
+    typeof value.userId === 'string' &&
+    'conversationId' in value &&
+    (value.conversationId === null || typeof value.conversationId === 'string')
+  );
+}
+
+function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let seq = 0;
   const nextId = () => `m${++seq}`;
 
   let activeAssistantId: string | null = null;
-  // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
+  let threadVersion = 0;
   let lastNoteId: string | undefined;
+  let unsentText: string | null = null;
+  let titleEdits = 0;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -169,6 +231,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
   });
 
   const beginResumedTurn = (): AgentChatMessage => {
+    unsentText = null;
     const assistant: AgentChatMessage = {
       id: nextId(),
       role: 'assistant',
@@ -188,6 +251,41 @@ export const useAgentStore = create<AgentState>((set, get) => {
       thinkingText: '',
       _streamHandle: null,
     });
+  };
+
+  const abandonTurn = () => {
+    get()._streamHandle?.cancel();
+    streamVersion++;
+    buffer.clearInactivityTimer();
+    buffer.discard();
+    thinkingBuffer.discard();
+    activeAssistantId = null;
+    unsentText = null;
+  };
+
+  const forgetGoneConversation = (error: AgentErrorPayload) => {
+    threadVersion++;
+    const returned = unsentText;
+    unsentText = null;
+    activeAssistantId = null;
+    agentClient.resetConversation();
+    set((s) => ({
+      messages: [],
+      status: 'idle',
+      error,
+      pendingProposal: null,
+      thinkingText: '',
+      _streamHandle: null,
+      conversationId: null,
+      conversationTitle: null,
+      hydration: 'idle',
+      hasEarlier: false,
+      draft: [returned, s.draft]
+        .filter(
+          (part): part is string => part !== null && part.trim().length > 0
+        )
+        .join(DRAFT_PARAGRAPH_SEPARATOR),
+    }));
   };
 
   const run = (text: string, assistantId: string, noteId?: string) => {
@@ -214,10 +312,23 @@ export const useAgentStore = create<AgentState>((set, get) => {
           buffer.armInactivityTimer();
           thinkingBuffer.push(text);
         },
+        onConversation: (conversationId) => {
+          if (
+            version !== streamVersion ||
+            conversationId === get().conversationId
+          ) {
+            return;
+          }
+          set({
+            conversationId,
+            conversationTitle: deriveConversationTitle(text),
+          });
+        },
         onDone: ({ sources, webSources, stopReason }) => {
           if (version !== streamVersion || get().status !== 'streaming') {
             return;
           }
+          invalidateConversations(queryClient);
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
@@ -240,9 +351,14 @@ export const useAgentStore = create<AgentState>((set, get) => {
           if (version !== streamVersion) {
             return;
           }
+          invalidateConversations(queryClient);
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
+          if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
+            forgetGoneConversation(error);
+            return;
+          }
           set({
             status: 'error',
             error,
@@ -254,6 +370,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
           if (version !== streamVersion) {
             return;
           }
+          invalidateConversations(queryClient);
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
@@ -310,6 +427,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
     }
     streamVersion++;
     lastNoteId = noteId;
+    unsentText = text;
     buffer.clearInactivityTimer();
     buffer.discard();
     thinkingBuffer.discard();
@@ -332,6 +450,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       pendingProposal: null,
       thinkingText: '',
       _streamHandle: null,
+      hydration: 'idle',
     });
 
     run(text, assistantMessage.id, noteId);
@@ -356,9 +475,94 @@ export const useAgentStore = create<AgentState>((set, get) => {
     pendingProposal: null,
     thinkingText: '',
     reasoningEffort: 'auto',
+    userId: null,
+    conversationId: null,
+    conversationTitle: null,
+    hydration: 'idle',
+    hasEarlier: false,
     _streamHandle: null,
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
+
+    bindUser: (userId) => {
+      const { userId: boundUserId, conversationId } = get();
+      if (boundUserId === userId) {
+        return;
+      }
+      if (conversationId !== null) {
+        get().newConversation();
+      }
+      set({ userId });
+    },
+
+    setConversationTitle: (title) => {
+      titleEdits++;
+      set({ conversationTitle: title });
+    },
+
+    openConversation: async (id, source) => {
+      const current = get();
+      if (
+        id === current.conversationId &&
+        (current.hydration === 'loading' || current.messages.length > 0)
+      ) {
+        return 'unchanged';
+      }
+      abandonTurn();
+      const version = streamVersion;
+      const thread = ++threadVersion;
+      const titleEditsAtOpen = titleEdits;
+      agentClient.resumeConversation(id);
+      const switching = id !== current.conversationId;
+      set({
+        conversationId: id,
+        conversationTitle: switching ? null : current.conversationTitle,
+        messages: [],
+        queue: [],
+        status: 'idle',
+        error: null,
+        pendingProposal: null,
+        thinkingText: '',
+        _streamHandle: null,
+        hydration: 'loading',
+        hasEarlier: false,
+        ...(switching ? { reasoningEffort: 'auto' as const } : {}),
+      });
+      try {
+        const transcript = await conversationsApi.transcript(id);
+        if (thread !== threadVersion) {
+          return 'superseded';
+        }
+        set((s) => ({
+          messages: [
+            ...toChatMessages(transcript.messages, nextId),
+            ...s.messages,
+          ],
+          ...(titleEdits === titleEditsAtOpen
+            ? { conversationTitle: transcript.title }
+            : {}),
+          hasEarlier: transcript.hasEarlier,
+          hydration: 'idle',
+        }));
+        captureProductEvent('ai conversation opened', { source });
+        return 'opened';
+      } catch (error) {
+        if (thread !== threadVersion || version !== streamVersion) {
+          return 'superseded';
+        }
+        if (isConversationGone(error)) {
+          agentClient.resetConversation();
+          set({
+            conversationId: null,
+            conversationTitle: null,
+            hydration: 'idle',
+          });
+          return 'gone';
+        }
+        set({ hydration: 'failed' });
+        return 'failed';
+      }
+    },
 
     // Keyed on the failure itself, so a later one is answered again without
     // any of the store's error transitions having to remember to clear this.
@@ -409,13 +613,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
     },
 
     newConversation: () => {
-      get()._streamHandle?.cancel();
+      abandonTurn();
+      threadVersion++;
       agentClient.resetConversation();
-      streamVersion++;
-      buffer.clearInactivityTimer();
-      buffer.discard();
-      thinkingBuffer.discard();
-      activeAssistantId = null;
       set({
         messages: [],
         queue: [],
@@ -425,6 +625,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
         pendingProposal: null,
         thinkingText: '',
         reasoningEffort: 'auto',
+        conversationId: null,
+        conversationTitle: null,
+        hydration: 'idle',
+        hasEarlier: false,
         _streamHandle: null,
       });
     },
@@ -521,4 +725,23 @@ export const useAgentStore = create<AgentState>((set, get) => {
       buffer.armInactivityTimer();
     },
   };
-});
+}
+
+export const useAgentStore = create<AgentState>()(
+  persist((set, get) => createAgentState(set, get), {
+    name: COPILOT_CONVERSATION_STORAGE_KEY,
+    storage: createJSONStorage(() => safeLocalStorage),
+    partialize: (state) => ({
+      userId: state.userId,
+      conversationId: state.conversationId,
+    }),
+    merge: (persisted, current) =>
+      isPersistedConversation(persisted)
+        ? {
+            ...current,
+            userId: persisted.userId,
+            conversationId: persisted.conversationId,
+          }
+        : current,
+  })
+);

@@ -13,6 +13,7 @@
       "@knowtis/shared-types": ["packages/shared/types/src/index.ts"],
       "@knowtis/api-client": ["libs/api-client/src/index.ts"],
       "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
+      "@knowtis/data-access-agent": ["libs/data-access/agent/src/index.ts"],
       "@knowtis/data-access-artifacts": [
         "libs/data-access/artifacts/src/index.ts"
       ],
