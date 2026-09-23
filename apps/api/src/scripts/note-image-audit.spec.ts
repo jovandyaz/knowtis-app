@@ -10,8 +10,8 @@ import {
   editorSchema,
   yjsStateToHtml,
 } from '../modules/notes/infrastructure/html-to-yjs';
+import { SCAN_BATCH_SIZE } from './id-keyset-scan';
 import {
-  AUDIT_BATCH_SIZE,
   auditNoteImages,
   INVALID_SRC,
   SAME_ORIGIN_SRC,
@@ -203,7 +203,7 @@ describe('auditNoteImages', () => {
 
   it('reads past the first batch', async () => {
     const ids = Array.from(
-      { length: AUDIT_BATCH_SIZE + 1 },
+      { length: SCAN_BATCH_SIZE + 1 },
       (_, index) => `note-${String(index).padStart(3, '0')}`
     );
 

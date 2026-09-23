@@ -54,15 +54,20 @@ export function yDocToHtml(doc: Y.Doc): string {
   return generateHTML(json, noteSchemaExtensions);
 }
 
-/** The HTML an encoded CRDT state renders to — what a note's `content` column must agree with. */
-export function yjsStateToHtml(state: Buffer): string {
+/** Loads an encoded CRDT state into a throwaway Y.Doc for `read`, destroying the doc afterwards. */
+export function withYDoc<T>(state: Buffer, read: (doc: Y.Doc) => T): T {
   const doc = new Y.Doc();
   try {
     Y.applyUpdate(doc, new Uint8Array(state));
-    return yDocToHtml(doc);
+    return read(doc);
   } finally {
     doc.destroy();
   }
+}
+
+/** The HTML an encoded CRDT state renders to — what a note's `content` column must agree with. */
+export function yjsStateToHtml(state: Buffer): string {
+  return withYDoc(state, yDocToHtml);
 }
 
 /**

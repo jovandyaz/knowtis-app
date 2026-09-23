@@ -5,11 +5,14 @@ import * as Y from 'yjs';
 import { IMAGE_NODE_NAME, YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { isStoredImageUrl } from '@knowtis/shared-util';
 
+import { reasonOf } from '../core/errors/reason-of';
 import type { Database } from '../database/database.module';
 import { notes } from '../database/schema/notes.schema';
-import { SRC_ATTR } from '../modules/notes/infrastructure/html-to-yjs';
-
-export const AUDIT_BATCH_SIZE = 100;
+import {
+  SRC_ATTR,
+  withYDoc,
+} from '../modules/notes/infrastructure/html-to-yjs';
+import { scanById, type KeysetSource } from './id-keyset-scan';
 
 export const SAME_ORIGIN_SRC = '(same origin)';
 export const INVALID_SRC = '(invalid URL)';
@@ -25,12 +28,7 @@ export interface NoteImageState {
   readonly deletedAt: Date | null;
 }
 
-export interface NoteImageStore {
-  statesAfter(
-    id: string | null,
-    limit: number
-  ): Promise<readonly NoteImageState[]>;
-}
+export type NoteImageStore = KeysetSource<NoteImageState>;
 
 /** Hosts only: a foreign src's path and query may carry what it exfiltrates. */
 export interface NoteForeignImages {
@@ -50,10 +48,6 @@ export interface ImageAuditReport {
   readonly foreign: readonly NoteForeignImages[];
   readonly foreignInTrash: readonly NoteForeignImages[];
   readonly unreadable: readonly UnreadableState[];
-}
-
-function reasonOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function srcHost(src: string): string {
@@ -78,9 +72,7 @@ function foreignHosts(srcs: readonly unknown[]): string[] {
 
 // Rendering omits a foreign src, so the state's attributes are the only record of it.
 function imageSrcsInState(state: Buffer): unknown[] {
-  const doc = new Y.Doc();
-  try {
-    Y.applyUpdate(doc, new Uint8Array(state));
+  return withYDoc(state, (doc) => {
     const images = doc
       .getXmlFragment(YJS_XML_FRAGMENT_NAME)
       .createTreeWalker(
@@ -90,9 +82,7 @@ function imageSrcsInState(state: Buffer): unknown[] {
     return [...images].flatMap((image) =>
       image instanceof Y.XmlElement ? [image.getAttribute(SRC_ATTR)] : []
     );
-  } finally {
-    doc.destroy();
-  }
+  });
 }
 
 function imageSrcsInHtml(html: string): unknown[] {
@@ -117,36 +107,27 @@ export async function auditNoteImages(
   const foreignInTrash: NoteForeignImages[] = [];
   const unreadable: UnreadableState[] = [];
 
-  let after: string | null = null;
-  for (;;) {
-    const batch = await store.statesAfter(after, AUDIT_BATCH_SIZE);
-    const last = batch.at(-1);
-    if (!last) {
-      break;
-    }
-    for (const note of batch) {
-      const trashed = note.deletedAt !== null;
-      scanned += 1;
-      scannedInTrash += trashed ? 1 : 0;
+  for await (const note of scanById(store)) {
+    const trashed = note.deletedAt !== null;
+    scanned += 1;
+    scannedInTrash += trashed ? 1 : 0;
 
-      let stateSrcs: unknown[] = [];
-      if (note.yjsState && note.yjsState.length > 0) {
-        try {
-          stateSrcs = imageSrcsInState(note.yjsState);
-        } catch (error) {
-          unreadable.push({ id: note.id, reason: reasonOf(error) });
-        }
-      }
-      const found: NoteForeignImages = {
-        id: note.id,
-        inState: foreignHosts(stateSrcs),
-        inContent: foreignHosts(imageSrcsInHtml(note.content)),
-      };
-      if (found.inState.length > 0 || found.inContent.length > 0) {
-        (trashed ? foreignInTrash : foreign).push(found);
+    let stateSrcs: unknown[] = [];
+    if (note.yjsState && note.yjsState.length > 0) {
+      try {
+        stateSrcs = imageSrcsInState(note.yjsState);
+      } catch (error) {
+        unreadable.push({ id: note.id, reason: reasonOf(error) });
       }
     }
-    after = last.id;
+    const found: NoteForeignImages = {
+      id: note.id,
+      inState: foreignHosts(stateSrcs),
+      inContent: foreignHosts(imageSrcsInHtml(note.content)),
+    };
+    if (found.inState.length > 0 || found.inContent.length > 0) {
+      (trashed ? foreignInTrash : foreign).push(found);
+    }
   }
 
   return { scanned, scannedInTrash, foreign, foreignInTrash, unreadable };

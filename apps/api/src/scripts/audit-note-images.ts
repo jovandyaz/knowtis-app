@@ -1,32 +1,11 @@
 /* eslint-disable no-console */
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-
-import { validateEnv } from '../config/env.config';
-import {
-  DATABASE_CONNECTION,
-  DatabaseModule,
-  type Database,
-} from '../database/database.module';
 import {
   auditNoteImages,
   drizzleNoteImageStore,
   type ImageAuditReport,
   type NoteForeignImages,
 } from './note-image-audit';
-
-@Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: validateEnv,
-      envFilePath: ['.env.local', '.env'],
-    }),
-    DatabaseModule,
-  ],
-})
-class AuditModule {}
+import { withScriptDatabase } from './script-context';
 
 function printNotes(
   heading: string,
@@ -59,15 +38,9 @@ function printReport(report: ImageAuditReport): void {
 }
 
 async function main(): Promise<void> {
-  const app = await NestFactory.createApplicationContext(AuditModule, {
-    logger: ['error', 'warn'],
-  });
-  try {
-    const db = app.get<Database>(DATABASE_CONNECTION);
-    printReport(await auditNoteImages(drizzleNoteImageStore(db)));
-  } finally {
-    await app.close();
-  }
+  printReport(
+    await withScriptDatabase((db) => auditNoteImages(drizzleNoteImageStore(db)))
+  );
 }
 
 main().catch((error) => {
