@@ -1,3 +1,5 @@
+import { STATUS_CODES } from 'node:http';
+
 import {
   Catch,
   HttpException,
@@ -14,6 +16,11 @@ import { RETRY_AFTER_HEADER } from '../http/retry-after.header';
 interface FieldError {
   field: string;
   message: string;
+}
+
+interface ExposedHttpError extends Error {
+  status: number;
+  expose: true;
 }
 
 interface ErrorResponse {
@@ -59,6 +66,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = exceptionResponse as string;
         error = this.getDefaultErrorName(status);
       }
+    } else if (isExposedClientError(exception)) {
+      status = exception.status;
+      message = exception.message;
+      error = this.getDefaultErrorName(status);
     } else if (exception instanceof Error) {
       message = exception.message;
       error = exception.name;
@@ -99,15 +110,23 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   }
 
   private getDefaultErrorName(status: number): string {
-    const statusNames: Record<number, string> = {
-      400: 'Bad Request',
-      401: 'Unauthorized',
-      403: 'Forbidden',
-      404: 'Not Found',
-      409: 'Conflict',
-      422: 'Unprocessable Entity',
-      429: 'Too Many Requests',
-    };
-    return statusNames[status] ?? 'Internal Server Error';
+    return STATUS_CODES[status] ?? 'Internal Server Error';
   }
+}
+
+// Nest turns only a body parser's SyntaxError into a 400, so its other
+// rejections (413, 415) would otherwise be answered as a 500; `expose` is how
+// http-errors marks a status and message as safe for the client.
+function isExposedClientError(
+  exception: unknown
+): exception is ExposedHttpError {
+  return (
+    exception instanceof Error &&
+    'expose' in exception &&
+    exception.expose === true &&
+    'status' in exception &&
+    typeof exception.status === 'number' &&
+    exception.status >= HttpStatus.BAD_REQUEST &&
+    exception.status < HttpStatus.INTERNAL_SERVER_ERROR
+  );
 }

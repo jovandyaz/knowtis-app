@@ -40,7 +40,7 @@ That script starts the deploy detached and then polls until the deployment reach
 | File                                   | Purpose                                                                                                                                                                                                                                                    |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.railway/railway.ts`                  | Railway service config for `knowtis_app` and `knowtis-mcp`: Dockerfile builds, start commands, healthchecks, pre-deploy migrations, restart policy, 10 s draining; `NODE_ENV`, `PORT` and `MCP_ALLOWED_HOSTS` declared, every other variable `preserve()`d |
-| `vercel.json`                          | Notes frontend: build, SPA rewrite, PostHog `/t/*` proxy                                                                                                                                                                                                   |
+| `vercel.json`                          | Notes frontend: build, SPA rewrite, PostHog `/t/*` proxy, security headers and CSP ([rollout](#security-headers-and-the-csp-rollout))                                                                                                                      |
 | `apps/backoffice/vercel.json`          | Backoffice: build, SPA rewrite                                                                                                                                                                                                                             |
 | `.github/workflows/ci.yml`             | CI pipeline with the four deploy jobs                                                                                                                                                                                                                      |
 | `.github/workflows/railway-config.yml` | Plans `.railway/railway.ts` on PRs touching `.railway/**`, applies the pinned plan on merge                                                                                                                                                                |
@@ -77,6 +77,26 @@ Push to main → CI (same checks as above) → vercel pull/build/deploy --prebui
 The `deploy-frontend` job (`.github/workflows/ci.yml`) runs only on `push` to `main` and only when the `notes` app is affected (`needs.ci.outputs.notes_affected`). It installs the Vercel CLI and runs `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
 Config: `vercel.json` at repo root. Besides the SPA fallback it rewrites `/t/static/*` and `/t/*` to PostHog's US ingestion hosts, which is why the frontend's PostHog `api_host` defaults to `/t`.
+
+#### Security headers and the CSP rollout
+
+`vercel.json` sends one header set on every route. `apps/notes/src/security-headers.test.ts` pins every header and every CSP directive:
+
+- `Content-Security-Policy-Report-Only`: the policy. `img-src` allows only the app, `data:`, `blob:` and the blob store host (`STORED_IMAGE_HOST`); `connect-src` allows only the app and `api.knowtis.app` (`https` and `wss`).
+- `Reporting-Endpoints: csp="https://api.knowtis.app/api/v1/csp-reports"`, the endpoint group the policy's `report-to csp` names.
+- `Referrer-Policy`, `X-Content-Type-Options: nosniff`, `Permissions-Policy`, and `X-Frame-Options: SAMEORIGIN`, which is already enforced so framing is refused before the CSP's `frame-ancestors` is.
+
+The CSP rolls out in two steps:
+
+1. **Report-only (current).** Browsers block nothing and report every violation to the API's `POST /api/v1/csp-reports` (no auth, 64 KB body limit, 30 requests per minute per client IP). The API logs each distinct violation once per request as a WARN `security.csp.violation` with `effectiveDirective`, `blockedSource`, `documentPath`, `disposition` and `count`. `blockedSource` keeps only the scheme, the last two host labels (deeper ones become `*.`) and the port, because the path, the query and the subdomain labels of a blocked URL can all carry exfiltrated data; `documentPath` replaces ids and share tokens with `:param`. Past 20 distinct violations in one request, a single `security.csp.violations_truncated` line counts the rest. Nothing is stored; read them with `railway logs | grep security.csp`.
+2. **Enforce.** Once production reports show only expected violations, rename the header to `Content-Security-Policy` in `vercel.json` and in the header test, and keep `report-uri`/`report-to` so violations keep arriving. From then on the PostHog Toolbar no longer works (it would need `https://us.posthog.com` in `connect-src`, `img-src`, `font-src` and `style-src`, and `img-src` stays pinned to the blob store), and the mermaid statements that load CSS or images while drawing ([AI.md](AI.md)) are blocked.
+
+How reports reach the API:
+
+- **Chrome and Edge** use the Reporting API (`report-to`). They post `application/reports+json` from the page's origin in CORS mode, so the API has to answer a preflight, which it does only for origins in its CORS allowlist. **Production `FRONTEND_URL` must be exactly `https://knowtis.app`.** From any other origin (a preview deployment, a `www.` host) Chrome drops its reports without an error anywhere.
+- **Firefox and Safari** use `report-uri`: a no-cors `application/csp-report` post that needs no preflight. The CSP spec makes a browser ignore `report-uri` when it supports `report-to`, so the policy carries both.
+
+After a deploy that changes the headers, open the app in Chrome and in Firefox, run `new Image().src = 'https://example.com/csp-check.png'` in the console, and confirm a `security.csp.violation` line with `blockedSource: 'https://example.com'` arrives from each. Chrome queues its reports and sends them in batches, so its line can take about a minute.
 
 ### Backoffice (Vercel) — CI-driven
 
@@ -127,7 +147,7 @@ Each image ships its `dist/apps/<app>` output plus a production install of exact
 | `RATE_LIMITING_ENABLED`        | No (default `true`)          | `false` skips every `@nestjs/throttler` route budget; the `/oauth` tiers and AI budgets are separate. Refused in production, meant for disposable test environments   |
 | `JWT_EXPIRES_IN`               | No (default `15m`)           | Access token TTL                                                                                                                                                      |
 | `JWT_REFRESH_EXPIRES_IN`       | No (default `7d`)            | Refresh token TTL                                                                                                                                                     |
-| `FRONTEND_URL`                 | Yes                          | Notes frontend origin for CORS                                                                                                                                        |
+| `FRONTEND_URL`                 | Yes                          | Notes frontend origin for CORS; Chrome's CSP reports arrive only from this exact origin (see [CSP rollout](#security-headers-and-the-csp-rollout))                    |
 | `BACKOFFICE_URL`               | Yes in production            | Backoffice origin for CORS and its own refresh cookie; `env.config.ts` fails validation without it when `NODE_ENV=production`                                         |
 | `EMAIL_PROVIDER`               | No (default `console`)       | `resend` in production                                                                                                                                                |
 | `RESEND_API_KEY`               | When `EMAIL_PROVIDER=resend` | Resend API key                                                                                                                                                        |

@@ -97,6 +97,48 @@ describe('GlobalExceptionFilter', () => {
     expect(body.error).toBe('Not Found');
   });
 
+  describe('a request body the parser rejected', () => {
+    function bodyParserError(status: number, message: string, expose: boolean) {
+      return Object.assign(new Error(message), {
+        status,
+        statusCode: status,
+        expose,
+      });
+    }
+
+    it.each([
+      [413, 'request entity too large', 'Payload Too Large'],
+      [415, 'unsupported charset "LATIN1"', 'Unsupported Media Type'],
+      [400, 'request aborted', 'Bad Request'],
+    ])('answers %i with the message it exposes', (status, message, error) => {
+      const { host, getStatus, getBody } = createHost();
+
+      filter.catch(bodyParserError(status, message, true), host);
+
+      expect(getStatus()).toBe(status);
+      expect(getBody()).toMatchObject({ statusCode: status, message, error });
+      expect(loggerError).not.toHaveBeenCalled();
+    });
+
+    it('stays a generic 500 when the error does not expose itself', () => {
+      const { host, getStatus, getBody } = createHost();
+
+      filter.catch(bodyParserError(413, 'internal detail', false), host);
+
+      expect(getStatus()).toBe(500);
+      expect(getBody().message).toBe('Internal server error');
+    });
+
+    it('stays a generic 500 for an exposed server error', () => {
+      const { host, getStatus, getBody } = createHost();
+
+      filter.catch(bodyParserError(503, 'internal detail', true), host);
+
+      expect(getStatus()).toBe(500);
+      expect(getBody().message).toBe('Internal server error');
+    });
+  });
+
   it('keeps validation field errors for 4xx responses', () => {
     const { host, getBody } = createHost();
     const errors = [{ field: 'email', message: 'must be an email' }];

@@ -58,7 +58,7 @@ describe('VoiceNoteRecorder', () => {
     expect(createNoteMutate).toHaveBeenCalledTimes(1);
     expect(createNoteMutate.mock.calls[0][0]).toEqual({
       title: TITLE,
-      content: `<p>${TRANSCRIBED}</p><figure data-image=""></figure>`,
+      content: `<p>${TRANSCRIBED}</p>`,
     });
   });
 });

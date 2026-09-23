@@ -17,6 +17,7 @@ import {
   applyBodyParsersExcludingOauth,
   createOidcMount,
 } from './modules/oauth/oidc-mount.middleware';
+import { applyCspReportBodyParser } from './modules/security/csp-report-body-parser';
 
 async function bootstrap() {
   // bodyParser off app-wide: oidc-provider reads the raw request stream, so
@@ -31,6 +32,7 @@ async function bootstrap() {
   app.use(createOauthRateLimit());
   app.use(createOidcMount(app));
   applyBodyParsersExcludingOauth(app);
+  applyCspReportBodyParser(app);
   const configService = app.get(ConfigService);
   const isDevelopment = configService.get('NODE_ENV') === 'development';
 

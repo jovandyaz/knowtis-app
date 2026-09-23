@@ -14,6 +14,8 @@ const VERCEL_CONFIG_PATH = resolve(import.meta.dirname, '../../../vercel.json');
 const ALL_ROUTES_SOURCE = '/(.*)';
 const CSP_HEADER = 'Content-Security-Policy-Report-Only';
 const API_HOST = 'api.knowtis.app';
+const CSP_REPORT_URL = `https://${API_HOST}/api/v1/csp-reports`;
+const CSP_REPORT_GROUP = 'csp';
 
 const EXPECTED_CSP_DIRECTIVES: [string, string[]][] = [
   ['default-src', ["'self'"]],
@@ -28,6 +30,8 @@ const EXPECTED_CSP_DIRECTIVES: [string, string[]][] = [
   ['form-action', ["'self'"]],
   ['frame-ancestors', ["'self'"]],
   ['upgrade-insecure-requests', []],
+  ['report-uri', [CSP_REPORT_URL]],
+  ['report-to', [CSP_REPORT_GROUP]],
 ];
 
 function headerRules(): VercelHeaderRule[] | undefined {
@@ -55,6 +59,10 @@ describe('notes security headers (vercel.json)', () => {
         source: ALL_ROUTES_SOURCE,
         headers: [
           { key: CSP_HEADER, value: expect.any(String) },
+          {
+            key: 'Reporting-Endpoints',
+            value: `${CSP_REPORT_GROUP}="${CSP_REPORT_URL}"`,
+          },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
