@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DataAccessAdmin from '@knowtis/data-access-admin';
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { UsersPage } from '../UsersPage';
 
@@ -163,5 +164,60 @@ describe('UsersPage', () => {
 
     renderPage();
     expect(screen.getByText('AD')).toBeInTheDocument();
+  });
+
+  describe('avatar', () => {
+    function showUserWithAvatar(avatarUrl: string) {
+      useAdminUsersMock.mockReturnValue({
+        data: {
+          items: [
+            {
+              id: '3b241101-e2bb-4255-8caf-4136c566a962',
+              email: 'ada@knowtis.app',
+              name: 'Ada',
+              avatarUrl,
+              role: 'admin',
+              provider: 'local',
+              isAnonymous: false,
+              createdAt: new Date('2026-07-01'),
+              emailVerifiedAt: null,
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 25,
+        },
+        isLoading: false,
+        isError: false,
+        isSuccess: true,
+        refetch: vi.fn(),
+      });
+      return renderPage();
+    }
+
+    function imageSources(container: HTMLElement): string[] {
+      return Array.from(container.querySelectorAll('img'), (img) =>
+        img.getAttribute('src')
+      ).filter((src): src is string => src !== null);
+    }
+
+    it('shows an avatar stored in the app blob store', () => {
+      const storedAvatar = `https://${STORED_IMAGE_HOST}/avatars/ada.png`;
+
+      const { container } = showUserWithAvatar(storedAvatar);
+
+      expect(imageSources(container)).toEqual([storedAvatar]);
+    });
+
+    it.each([
+      'https://evil.example/pixel.png',
+      'https://attacker123.public.blob.vercel-storage.com/ada.png',
+      '/avatars/ada.png',
+    ])('loads nothing from %s and shows initials instead', (avatarUrl) => {
+      const { container } = showUserWithAvatar(avatarUrl);
+
+      expect(imageSources(container)).toEqual([]);
+      expect(screen.getByText('AD')).toBeInTheDocument();
+    });
   });
 });

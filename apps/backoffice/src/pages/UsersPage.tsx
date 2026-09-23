@@ -14,6 +14,7 @@ import {
   SegmentedControl,
 } from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
+import { isStoredImageUrl } from '@knowtis/shared-util';
 
 const columnHelper = createColumnHelper<AdminUser>();
 
@@ -35,7 +36,7 @@ const columns: ColumnDef<AdminUser, unknown>[] = [
     header: 'User',
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
-        {row.original.avatarUrl ? (
+        {row.original.avatarUrl && isStoredImageUrl(row.original.avatarUrl) ? (
           <img
             src={row.original.avatarUrl}
             alt=""
