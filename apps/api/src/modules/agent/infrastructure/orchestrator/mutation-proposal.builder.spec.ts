@@ -1,8 +1,19 @@
+import type { JSONContent } from '@tiptap/core';
+import { generateHTML } from '@tiptap/html/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AI_BLOCK_NAME } from '@knowtis/editor-schema';
+import {
+  AI_BLOCK_NAME,
+  AI_BLOCK_STATUS,
+  IMAGE_NODE_NAME,
+} from '@knowtis/editor-schema';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
+import {
+  editorSchema,
+  noteSchemaExtensions,
+} from '../../../notes/infrastructure/html-to-yjs';
 import { AgentErrors } from '../../domain/agent-errors';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
@@ -686,4 +697,206 @@ describe('MutationProposalBuilder.buildEdit', () => {
       markdownToNoteHtml(htmlToMarkdown(bodyHtml))
     );
   });
+});
+
+const text = (value: string, marks?: JSONContent['marks']): JSONContent => ({
+  type: 'text',
+  text: value,
+  ...(marks && { marks }),
+});
+
+const paragraph = (...content: JSONContent[]): JSONContent => ({
+  type: 'paragraph',
+  content,
+});
+
+const EVERY_CARRIED_CONSTRUCT: JSONContent[] = [
+  { type: 'heading', attrs: { level: 1 }, content: [text('Title')] },
+  { type: 'heading', attrs: { level: 2 }, content: [text('Section')] },
+  { type: 'heading', attrs: { level: 3 }, content: [text('Detail')] },
+  paragraph(
+    text('bold', [{ type: 'bold' }]),
+    text(' '),
+    text('italic', [{ type: 'italic' }]),
+    text(' '),
+    text('struck', [{ type: 'strike' }]),
+    text(' '),
+    text('inline', [{ type: 'code' }]),
+    text(' '),
+    text('link', [
+      { type: 'link', attrs: { href: 'https://example.com/doc' } },
+    ]),
+    text(' '),
+    text('marked', [{ type: 'highlight', attrs: { color: '#fde68a' } }]),
+    text(' '),
+    text('2', [{ type: 'superscript' }]),
+    text('i', [{ type: 'subscript' }]),
+    { type: 'hardBreak' },
+    text('next line')
+  ),
+  {
+    type: 'bulletList',
+    content: [
+      {
+        type: 'listItem',
+        content: [
+          paragraph(text('one')),
+          {
+            type: 'bulletList',
+            content: [
+              { type: 'listItem', content: [paragraph(text('nested'))] },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'orderedList',
+    attrs: { start: 3 },
+    content: [{ type: 'listItem', content: [paragraph(text('third'))] }],
+  },
+  {
+    type: 'taskList',
+    content: [
+      {
+        type: 'taskItem',
+        attrs: { checked: true },
+        content: [
+          paragraph(text('done')),
+          {
+            type: 'taskList',
+            content: [
+              {
+                type: 'taskItem',
+                attrs: { checked: false },
+                content: [paragraph(text('open'))],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  { type: 'blockquote', content: [paragraph(text('quoted'))] },
+  {
+    type: 'codeBlock',
+    attrs: { language: 'ts' },
+    content: [text('const a = 1;')],
+  },
+  { type: 'horizontalRule' },
+  {
+    type: 'table',
+    content: [
+      {
+        type: 'tableRow',
+        content: [
+          { type: 'tableHeader', content: [paragraph(text('Day'))] },
+          { type: 'tableHeader', content: [paragraph(text('Place'))] },
+        ],
+      },
+      {
+        type: 'tableRow',
+        content: [
+          { type: 'tableCell', content: [paragraph(text('1'))] },
+          { type: 'tableCell', content: [paragraph(text('Antigua'))] },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'mermaidBlock',
+    attrs: { code: 'graph TD\n  A --> B', viewMode: 'preview' },
+  },
+  {
+    type: IMAGE_NODE_NAME,
+    attrs: {
+      src: `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`,
+      alt: 'lake',
+      width: 320,
+      height: 200,
+    },
+    content: [text('Lake')],
+  },
+];
+
+// Markdown has no form for these, so an edit to a note holding one is refused.
+const REFUSED_CONSTRUCTS: Record<string, JSONContent> = {
+  [AI_BLOCK_NAME]: {
+    type: AI_BLOCK_NAME,
+    attrs: { topic: 'Rome', status: AI_BLOCK_STATUS.DONE, content: 'Rome.' },
+  },
+  underline: paragraph(text('Signed.', [{ type: 'underline' }])),
+};
+
+function typesHeldBy(blocks: JSONContent[]): string[] {
+  const doc = editorSchema.nodeFromJSON({ type: 'doc', content: blocks });
+  const types = new Set([doc.type.name]);
+  doc.descendants((node) => {
+    types.add(node.type.name);
+    node.marks.forEach((mark) => types.add(mark.type.name));
+  });
+  return [...types].sort();
+}
+
+function schemaTypesExcept(excluded: readonly string[]): string[] {
+  return [
+    ...Object.keys(editorSchema.nodes),
+    ...Object.keys(editorSchema.marks),
+  ]
+    .filter((type) => !excluded.includes(type))
+    .sort();
+}
+
+function noteHtml(blocks: JSONContent[]): string {
+  return storedHtml(
+    generateHTML({ type: 'doc', content: blocks }, noteSchemaExtensions)
+  );
+}
+
+describe('a copilot edit over every construct the note schema defines', () => {
+  it('covers every node and mark the schema defines', () => {
+    expect(
+      typesHeldBy([
+        ...EVERY_CARRIED_CONSTRUCT,
+        ...Object.values(REFUSED_CONSTRUCTS),
+      ])
+    ).toEqual(schemaTypesExcept([]));
+    expect(typesHeldBy(EVERY_CARRIED_CONSTRUCT)).toEqual(
+      schemaTypesExcept(Object.keys(REFUSED_CONSTRUCTS))
+    );
+  });
+
+  it('keeps every other construct, attributes included, through an edit to one paragraph', async () => {
+    const { builder } = editing(
+      noteHtml([...EVERY_CARRIED_CONSTRUCT, paragraph(text('Old text.'))])
+    );
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+    });
+
+    expect(persistedDocument(contentHtmlOf(r._unsafeUnwrap()))).toEqual(
+      persistedDocument(
+        noteHtml([...EVERY_CARRIED_CONSTRUCT, paragraph(text('New text.'))])
+      )
+    );
+  });
+
+  it.each(Object.entries(REFUSED_CONSTRUCTS))(
+    'refuses an edit to a note holding %s',
+    async (type, block) => {
+      const { builder } = editing(
+        noteHtml([block, paragraph(text('Old text.'))])
+      );
+
+      const r = await builder.buildEdit(USER, 'note-1', {
+        edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+      });
+
+      expect(r._unsafeUnwrapErr()).toEqual(
+        AgentErrors.editWouldLoseContent([type])
+      );
+    }
+  );
 });
