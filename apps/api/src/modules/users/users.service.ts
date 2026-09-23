@@ -9,13 +9,12 @@ export interface CreateUserData {
   passwordHash: string;
   provider?: string;
   providerId?: string;
-  avatarUrl?: string;
   isAnonymous?: boolean;
 }
 
 export interface UpdateUserData {
   name?: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   locale?: string;
 }
 
@@ -45,7 +44,6 @@ export class UsersService {
       passwordHash: data.passwordHash,
       provider: data.provider ?? 'local',
       providerId: data.providerId,
-      avatarUrl: data.avatarUrl,
       ...(data.isAnonymous && { isAnonymous: true }),
     });
   }
