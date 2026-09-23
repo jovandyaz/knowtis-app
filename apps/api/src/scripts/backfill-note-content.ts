@@ -1,35 +1,14 @@
 /* eslint-disable no-console */
 import { parseArgs } from 'node:util';
 
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-
-import { validateEnv } from '../config/env.config';
-import {
-  DATABASE_CONNECTION,
-  DatabaseModule,
-  type Database,
-} from '../database/database.module';
 import {
   backfillNoteContent,
   drizzleNoteContentStore,
   type BackfillReport,
 } from './content-backfill';
+import { withScriptDatabase } from './script-context';
 
 const USAGE = 'Usage: pnpm nx run api:backfill-note-content [--apply]';
-
-@Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: validateEnv,
-      envFilePath: ['.env.local', '.env'],
-    }),
-    DatabaseModule,
-  ],
-})
-class BackfillModule {}
 
 function printIds(heading: string, ids: readonly string[]): void {
   console.log(`${heading}: ${ids.length}`);
@@ -64,20 +43,12 @@ async function main(): Promise<void> {
   });
   const apply = values.apply;
 
-  const app = await NestFactory.createApplicationContext(BackfillModule, {
-    logger: ['error', 'warn'],
-  });
-  try {
-    const db = app.get<Database>(DATABASE_CONNECTION);
-    const report = await backfillNoteContent(drizzleNoteContentStore(db), {
-      apply,
-    });
-    printReport(report, apply);
-    if (report.failed.length > 0) {
-      process.exitCode = 1;
-    }
-  } finally {
-    await app.close();
+  const report = await withScriptDatabase((db) =>
+    backfillNoteContent(drizzleNoteContentStore(db), { apply })
+  );
+  printReport(report, apply);
+  if (report.failed.length > 0) {
+    process.exitCode = 1;
   }
 }
 

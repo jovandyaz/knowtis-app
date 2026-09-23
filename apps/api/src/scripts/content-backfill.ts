@@ -1,12 +1,12 @@
 import { and, asc, eq, gt, isNotNull, ne } from 'drizzle-orm';
 
+import { reasonOf } from '../core/errors/reason-of';
 import type { Database } from '../database/database.module';
 import { noteEmbeddings } from '../database/schema/note-embeddings.schema';
 import { notes } from '../database/schema/notes.schema';
 import { yjsStateToHtml } from '../modules/notes/infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../modules/notes/infrastructure/trivial-html';
-
-export const BACKFILL_BATCH_SIZE = 100;
+import { scanById, type KeysetSource } from './id-keyset-scan';
 
 const EMPTY_STATE = Buffer.alloc(0);
 
@@ -38,8 +38,7 @@ export interface ContentReplacement {
   readonly embeddingMarkedStale: boolean;
 }
 
-export interface NoteContentStore {
-  statesAfter(id: string | null, limit: number): Promise<readonly NoteState[]>;
+export interface NoteContentStore extends KeysetSource<NoteState> {
   replaceContent(note: NoteState, html: string): Promise<ContentReplacement>;
 }
 
@@ -55,10 +54,6 @@ export interface BackfillReport {
   readonly superseded: readonly string[];
   readonly failed: readonly BackfillFailure[];
   readonly embeddingsMarkedStale: number;
-}
-
-function reasonOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function decideContent(
@@ -93,37 +88,28 @@ export async function backfillNoteContent(
   const failed: BackfillFailure[] = [];
   let embeddingsMarkedStale = 0;
 
-  let after: string | null = null;
-  for (;;) {
-    const batch = await store.statesAfter(after, BACKFILL_BATCH_SIZE);
-    const last = batch.at(-1);
-    if (!last) {
-      break;
-    }
-    for (const note of batch) {
-      scanned += 1;
-      const decision = decideContent(note.yjsState, note.content);
-      if (decision.kind === CONTENT_DECISION.UNCHANGED) {
-        unchanged += 1;
-      } else if (decision.kind === CONTENT_DECISION.FAILED) {
-        failed.push({ id: note.id, reason: decision.reason });
-      } else if (!apply) {
-        changed.push(note.id);
-        embeddingsMarkedStale += note.hasEmbedding ? 1 : 0;
-      } else {
-        try {
-          const { written, embeddingMarkedStale } = await store.replaceContent(
-            note,
-            decision.html
-          );
-          (written ? changed : superseded).push(note.id);
-          embeddingsMarkedStale += embeddingMarkedStale ? 1 : 0;
-        } catch (error) {
-          failed.push({ id: note.id, reason: reasonOf(error) });
-        }
+  for await (const note of scanById(store)) {
+    scanned += 1;
+    const decision = decideContent(note.yjsState, note.content);
+    if (decision.kind === CONTENT_DECISION.UNCHANGED) {
+      unchanged += 1;
+    } else if (decision.kind === CONTENT_DECISION.FAILED) {
+      failed.push({ id: note.id, reason: decision.reason });
+    } else if (!apply) {
+      changed.push(note.id);
+      embeddingsMarkedStale += note.hasEmbedding ? 1 : 0;
+    } else {
+      try {
+        const { written, embeddingMarkedStale } = await store.replaceContent(
+          note,
+          decision.html
+        );
+        (written ? changed : superseded).push(note.id);
+        embeddingsMarkedStale += embeddingMarkedStale ? 1 : 0;
+      } catch (error) {
+        failed.push({ id: note.id, reason: reasonOf(error) });
       }
     }
-    after = last.id;
   }
 
   return {

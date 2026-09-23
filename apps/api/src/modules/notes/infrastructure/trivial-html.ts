@@ -5,12 +5,13 @@ import {
   isTrivialProseMirrorDoc,
 } from '@knowtis/editor-schema';
 
+import { reasonOf } from '../../../core/errors/reason-of';
 import { editorSchema } from './html-to-yjs';
 
 const tiptapExtensions = [...createSemanticExtensions()];
 
 function warnParseFailure(stage: string, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = reasonOf(error);
   console.warn(
     `isTrivialHtml: ${stage} failed, treating as trivial — ${message}`
   );

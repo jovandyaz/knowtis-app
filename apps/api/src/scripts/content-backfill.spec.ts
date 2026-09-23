@@ -8,7 +8,6 @@ import {
   yjsStateToHtml,
 } from '../modules/notes/infrastructure/html-to-yjs';
 import {
-  BACKFILL_BATCH_SIZE,
   backfillNoteContent,
   CONTENT_DECISION,
   decideContent,
@@ -16,6 +15,7 @@ import {
   type NoteContentStore,
   type NoteState,
 } from './content-backfill';
+import { SCAN_BATCH_SIZE } from './id-keyset-scan';
 
 const LIVE_HTML = '<p>Intro</p><p>Written after the column froze</p>';
 const FROZEN_HTML = '<p>Intro</p>';
@@ -210,7 +210,7 @@ describe('backfillNoteContent', () => {
 
   it('reads past the first batch', async () => {
     const ids = Array.from(
-      { length: BACKFILL_BATCH_SIZE + 1 },
+      { length: SCAN_BATCH_SIZE + 1 },
       (_, index) => `note-${String(index).padStart(3, '0')}`
     );
     const { store } = memoryStore(ids.map((id) => frozenNote(id)));
