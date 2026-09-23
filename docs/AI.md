@@ -327,10 +327,23 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 - **LLM-written HTML keeps only what the note schema reads.** Summaries, voice notes, copilot proposals and AI inserts go through one DOMPurify allowlist (`AI_HTML_PURIFY_CONFIG` and `createAiHtmlPurifier`, `@knowtis/editor`): headings, lists and task lists, tables, code, quotes, rules, marks, links and mermaid blocks. Anything else is dropped, including `<style>`, media, embeds, SVG, MathML, form controls and `style`/`src`/`background` attributes. Images come back only in `sanitizeProposalHtml`, and only from the blob store.
 - **A mermaid diagram loads nothing, and neither does the page drawing it.** Anyone who can write the note can author a diagram: a collaborator, the copilot, or a pasted note. Mermaid attaches the drawing to the live document to measure it, so rendering alone is an exfiltration channel. `renderMermaid` (`packages/editor/src/extensions/mermaid-block/renderMermaid.ts`) produces the SVG that both the inline view and the fullscreen viewer inject, and it has three layers:
   - **Labels** go through Mermaid's own `dompurifyConfig` before Mermaid attaches them. It keeps HTML and MathML only: no `img`, no `style` elements or attributes, and no `src`, `srcset`, `poster` or `background`.
-  - **`secure`** stops front matter and `%%{init}%%` directives from setting the config keys whose values reach CSS or a fill/stroke: `themeCSS`, `themeVariables`, `fontFamily`, `altFontFamily`, all of `c4`, `titleColor`, `linkColor`, `width`, `leftMargin`, `chartWidth`, `marginLeft` and `marginRight`. A spec sets every settable key to an injected `url()`, so a Mermaid upgrade that adds another one fails CI.
-  - **`stripResourceLoads`** removes from the returned SVG every loading attribute, every reference to another document, and every CSS `url()`, `image-set()` or `@import` that isn't a `#fragment`. Inline `data:image/` on `<image>` stays, because C4 draws its icons with it.
+  - **`secure`** stops front matter and `%%{init}%%` directives from setting the config keys whose values reach CSS or a fill/stroke: `themeCSS`, `themeVariables`, `fontFamily`, `altFontFamily`, all of `c4`, `titleColor`, `linkColor`, `width`, `useWidth`, `leftMargin`, `chartWidth`, `marginLeft` and `marginRight`. Mermaid matches these names at any depth, and keeps its own secure keys, so a diagram still cannot lower `securityLevel`. A diagram therefore can no longer set:
+    - its own theme colours, CSS or font;
+    - any C4 setting;
+    - a sequence diagram's actor `width`;
+    - `width` and `leftMargin` in journey and timeline diagrams, or a journey's `titleColor`;
+    - a gitGraph node label's `width`;
+    - `width` in xyChart, sankey, radar, venn and cynefin diagrams, a quadrant chart's `chartWidth`, or radar margins;
+    - `useWidth` in gantt, pie, xyChart, requirement and treeView diagrams;
+    - a sankey `linkColor`, or a railroad `fontFamily`.
 
-  Some diagram statements carry CSS or an image URL themselves and fire while Mermaid draws, before any of these layers can act. They are left to the `img-src` CSP in `vercel.json`:
+    `theme` (for example `forest`) still works.
+
+    A spec renders a sample of every diagram type with every settable key (nested ones included) set to an injected `url()`, and fails if a config section is neither sampled nor listed with a reason. Three sections are left out, each for a reason: `themeVariables` is secured whole and has a test of its own, the app never registers the `elk` layout engine, and jsdom cannot lay out a `mindmap` (its keys were checked in Chrome instead). So a Mermaid upgrade that adds a key or a diagram type fails CI until it is covered.
+
+  - **`stripResourceLoads`** removes from the returned SVG the elements that load or navigate by themselves (`object`, `embed`, `iframe`, `frame`, `meta` and SMIL animations), every loading attribute, every reference to another document, and every CSS `url()`, `image-set()` or `@import` that isn't a `#fragment`. Inline `data:image/` on `<image>` stays, because C4 draws its icons with it.
+
+  Some diagram statements carry CSS or an image URL themselves and fire while Mermaid draws, before any of these layers can act. They are left to the `img-src` CSP in `vercel.json`. That CSP ships report-only first and is enforced only after production verification, so until then these statements can still fetch:
   - state `classDef`
   - class `style`
   - block `style` and `classDef`
