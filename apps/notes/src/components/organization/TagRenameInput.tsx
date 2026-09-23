@@ -1,6 +1,8 @@
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClaimEscape } from '@/hooks/useClaimEscape';
+
 import { Input } from '@knowtis/design-system';
 import {
   TAG_SEGMENT_MAX_LENGTH,
@@ -43,6 +45,7 @@ export function TagRenameInput({
   const [value, setValue] = useState(segment);
   const [error, setError] = useState<RenameError>();
   const settled = useRef(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
   const errorId = useId();
 
   const settle = (action: () => void) => {
@@ -70,6 +73,8 @@ export function TagRenameInput({
     settle(() => onCommit(candidate, 'keyboard'));
   };
 
+  useClaimEscape(fieldRef, () => settle(() => onCancel('keyboard')));
+
   // Leaving the row abandons an edit the server would reject; only Enter is
   // worth an error message, since the field is still there to correct.
   const handleBlur = () => {
@@ -84,6 +89,7 @@ export function TagRenameInput({
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
       <Input
+        ref={fieldRef}
         autoFocus
         value={value}
         aria-label={t('organization.tags.renameLabel', { tag: segment })}
@@ -98,10 +104,6 @@ export function TagRenameInput({
           if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
             event.preventDefault();
             submit();
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            settle(() => onCancel('keyboard'));
           }
         }}
         className="h-8"

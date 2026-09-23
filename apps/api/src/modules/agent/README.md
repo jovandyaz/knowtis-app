@@ -27,12 +27,9 @@ Every client → server event is acknowledged on receipt, before validation (`@A
 
 Connection-time checks mirror the `/ai` gateway: JWT from `auth.token` or the `Authorization: Bearer` header, `ai_enabled` flag, and a timer at the token's expiry that emits `agent:error` `AUTH_REQUIRED` and disconnects. Turns (fresh or resumed) run inside a `ConcurrencySlotTracker` slot capped at `AI_MAX_CONCURRENT_STREAMS` per user; an acquire past the cap emits `agent:error` `AI_RATE_LIMIT_EXCEEDED`.
 
-The Notes client attaches `agent:done.stopReason` only to the active assistant
-response. It renders a polite status notice for non-`completed` reasons even
-when the response has no text; persisted history hydration is outside this live
-stream protocol.
+The Notes client attaches `agent:done.stopReason` only to the active assistant response. It renders a polite status notice for non-`completed` reasons even when the response has no text. A reloaded or reopened conversation is read over REST (`ConversationController`), not replayed over this socket.
 
-Also exposes a REST `MemoryController` ([memory.controller.ts](memory.controller.ts)) for listing/deleting long-term memories — `JwtAuthGuard` only, no `ai_enabled` gate.
+Also exposes two REST controllers, both `JwtAuthGuard` only with no `ai_enabled` gate: `MemoryController` ([memory.controller.ts](memory.controller.ts)) lists and deletes long-term memories, and `ConversationController` ([conversation.controller.ts](conversation.controller.ts)) lists, reads, renames and deletes the caller's conversations.
 
 ## Layer map
 
@@ -88,7 +85,7 @@ Proposals live in Redis keyed by `proposalId`; approve and reject both resume th
 
 ## Error codes
 
-`AgentErrors` ([`domain/agent-errors.ts`](domain/agent-errors.ts)): `AGENT_INVALID_PROPOSAL`, `AGENT_STALE_NOTE`, `AGENT_PROPOSAL_EXPIRED`, `AGENT_PERMISSION_DENIED`, `AGENT_EMAIL_NOT_VERIFIED` (`AGENT_EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`), `AGENT_COMMIT_FAILED`, `AGENT_SANITIZE_REJECTED`, `AGENT_NOTE_NOT_FOUND`, `AGENT_TARGET_USER_NOT_FOUND`, `AGENT_EDIT_TEXT_NOT_FOUND`, `AGENT_EDIT_TEXT_AMBIGUOUS`, `AGENT_WHOLE_BODY_UPDATE_REFUSED`, `AGENT_EDIT_WOULD_LOSE_CONTENT`. Causes: [Agent error codes](../../../../../docs/AI.md#agent-error-codes). Everything else on `agent:error` is an `AIErrorCodes` member.
+`AgentErrors` ([`domain/agent-errors.ts`](domain/agent-errors.ts)): `AGENT_INVALID_PROPOSAL`, `AGENT_STALE_NOTE`, `AGENT_PROPOSAL_EXPIRED`, `AGENT_PERMISSION_DENIED`, `AGENT_EMAIL_NOT_VERIFIED` (`AGENT_EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`), `AGENT_COMMIT_FAILED`, `AGENT_SANITIZE_REJECTED`, `AGENT_NOTE_NOT_FOUND`, `AGENT_CONVERSATION_NOT_FOUND` (`AGENT_CONVERSATION_NOT_FOUND_CODE` from `@knowtis/shared-types`), `AGENT_TARGET_USER_NOT_FOUND`, `AGENT_EDIT_TEXT_NOT_FOUND`, `AGENT_EDIT_TEXT_AMBIGUOUS`, `AGENT_WHOLE_BODY_UPDATE_REFUSED`, `AGENT_EDIT_WOULD_LOSE_CONTENT`. Causes: [Agent error codes](../../../../../docs/AI.md#agent-error-codes). Everything else on `agent:error` is an `AIErrorCodes` member.
 
 ## Eval harness
 

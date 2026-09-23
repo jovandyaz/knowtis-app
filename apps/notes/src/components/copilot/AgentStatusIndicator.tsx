@@ -49,11 +49,13 @@ function ReasoningTail({ detail, className, ...props }: ReasoningTailProps) {
 interface AgentStatusIndicatorProps {
   detail?: string | undefined;
   answering?: boolean;
+  label?: string;
 }
 
 export function AgentStatusIndicator({
   detail,
   answering = false,
+  label: labelOverride,
 }: AgentStatusIndicatorProps) {
   const { t } = useTranslation('notes');
   const [open, setOpen] = useState(false);
@@ -63,7 +65,9 @@ export function AgentStatusIndicator({
     return null;
   }
 
-  const label = t(answering ? 'ai.copilot.reasoning' : 'ai.copilot.thinking');
+  const label =
+    labelOverride ??
+    t(answering ? 'ai.copilot.reasoning' : 'ai.copilot.thinking');
 
   return (
     <div className="flex flex-col gap-2">

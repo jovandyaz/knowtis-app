@@ -41,6 +41,13 @@ describe('AgentStatusIndicator', () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
+  it('announces the label it is given instead of thinking', () => {
+    render(<AgentStatusIndicator label="Loading conversation…" />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading conversation…'
+    );
+  });
+
   it('shows the live reasoning tail when provided', () => {
     render(<AgentStatusIndicator detail="scanning sources" />);
     expect(screen.getByText('scanning sources')).toBeInTheDocument();
