@@ -1,4 +1,4 @@
-import { refuseStorageWrites } from '@/test/refuse-storage';
+import { refuseStorage } from '@/test/refuse-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSidebarPreferenceStore } from './sidebar-preference.store';
@@ -115,7 +115,7 @@ describe('useSidebarPreferenceStore', () => {
     });
 
     it('still applies the new width', () => {
-      refuseStorageWrites();
+      refuseStorage();
 
       useSidebarPreferenceStore.getState().setPreferredWidth(320);
 

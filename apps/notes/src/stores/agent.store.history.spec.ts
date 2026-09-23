@@ -1,5 +1,5 @@
 import { queryClient } from '@/lib/query-client';
-import { refuseStorageWrites } from '@/test/refuse-storage';
+import { refuseStorage } from '@/test/refuse-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClient from '@knowtis/api-client';
@@ -642,7 +642,7 @@ describe('agent.store restoring the stored conversation', () => {
 
 describe('agent.store when the browser refuses storage', () => {
   beforeEach(() => {
-    refuseStorageWrites();
+    refuseStorage();
   });
 
   afterEach(() => {

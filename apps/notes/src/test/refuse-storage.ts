@@ -1,8 +1,12 @@
 import { vi } from 'vitest';
 
-export function refuseStorageWrites(): void {
+const STORAGE_METHODS = ['getItem', 'setItem', 'removeItem'] as const;
+
+export function refuseStorage(): void {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-    throw new DOMException('Storage is full', 'QuotaExceededError');
-  });
+  for (const method of STORAGE_METHODS) {
+    vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+      throw new DOMException('Storage is unavailable', 'SecurityError');
+    });
+  }
 }

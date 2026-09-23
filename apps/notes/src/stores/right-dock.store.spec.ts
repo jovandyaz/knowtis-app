@@ -1,4 +1,4 @@
-import { refuseStorageWrites } from '@/test/refuse-storage';
+import { refuseStorage } from '@/test/refuse-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRightDockStore } from './right-dock.store';
@@ -28,7 +28,7 @@ describe('useRightDockStore', () => {
   });
 
   it('still opens when the browser refuses storage', () => {
-    refuseStorageWrites();
+    refuseStorage();
 
     useRightDockStore.getState().open();
 

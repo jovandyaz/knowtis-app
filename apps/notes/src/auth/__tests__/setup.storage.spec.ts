@@ -1,4 +1,4 @@
-import { refuseStorageWrites } from '@/test/refuse-storage';
+import { refuseStorage } from '@/test/refuse-storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { authStore } from '../setup';
@@ -15,7 +15,7 @@ describe('authStore when the browser refuses storage', () => {
       name: 'U1',
       avatarUrl: null,
     });
-    refuseStorageWrites();
+    refuseStorage();
 
     authStore.getState().logout();
 

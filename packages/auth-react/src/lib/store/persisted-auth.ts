@@ -18,15 +18,25 @@ export interface PersistedAuthSnapshot {
   isAuthenticated: boolean;
 }
 
-/** Reads the persisted auth snapshot; returns null on missing key, malformed
- * JSON, or shape drift (drift logs a warning so package upgrades surface it). */
-export function readPersistedAuth(
-  storageKey: string
-): PersistedAuthSnapshot | null {
+function readStoredValue(storageKey: string): string | null {
   if (typeof localStorage === 'undefined') {
     return null;
   }
-  const raw = localStorage.getItem(storageKey);
+  try {
+    return localStorage.getItem(storageKey);
+  } catch (error) {
+    console.warn('[auth-react] Persisted auth unreadable', error);
+    return null;
+  }
+}
+
+/** Reads the persisted auth snapshot; returns null on missing key, unreadable
+ * storage, malformed JSON, or shape drift (drift logs a warning so package
+ * upgrades surface it). */
+export function readPersistedAuth(
+  storageKey: string
+): PersistedAuthSnapshot | null {
+  const raw = readStoredValue(storageKey);
   if (!raw) {
     return null;
   }

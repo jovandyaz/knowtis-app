@@ -1,4 +1,4 @@
-import { refuseStorageWrites } from '@/test/refuse-storage';
+import { refuseStorage } from '@/test/refuse-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDockPreferenceStore } from './dock-preference.store';
@@ -111,7 +111,7 @@ describe('useDockPreferenceStore', () => {
     });
 
     it('still applies the new width', () => {
-      refuseStorageWrites();
+      refuseStorage();
 
       useDockPreferenceStore.getState().setPreferredWidth(440);
 
