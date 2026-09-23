@@ -18,7 +18,11 @@ const hooks = vi.hoisted(() => ({
 vi.mock('@knowtis/data-access-agent', () => ({
   useConversations: () => ({ data: hooks.page }),
   useRenameConversation: () => ({ mutate: hooks.rename, isPending: false }),
-  useDeleteConversation: () => ({ mutate: hooks.remove, isPending: false }),
+  useDeleteConversation: (callbacks: unknown) => ({
+    mutate: (id: string, options: unknown) =>
+      hooks.remove(id, options, callbacks),
+    isPending: false,
+  }),
   isConversationGone: (error: unknown) =>
     (error as { status?: number } | null)?.status === 404,
   invalidateConversations: vi.fn(),
@@ -346,8 +350,14 @@ describe('ConversationSwitcher', () => {
 
     it('clears the dock before deleting the thread', async () => {
       hooks.remove.mockImplementation(
-        (_id: unknown, options?: { onSuccess?: () => void }) =>
-          options?.onSuccess?.()
+        (
+          _id: unknown,
+          options?: { onSettled?: () => void },
+          callbacks?: { onSuccess?: () => void }
+        ) => {
+          callbacks?.onSuccess?.();
+          options?.onSettled?.();
+        }
       );
       const user = userEvent.setup();
       render(<ConversationSwitcher />);
@@ -361,7 +371,11 @@ describe('ConversationSwitcher', () => {
         within(dialog).getByRole('button', { name: 'buttons.delete' })
       );
 
-      expect(hooks.remove).toHaveBeenCalledWith('c1', expect.any(Object));
+      expect(hooks.remove).toHaveBeenCalledWith(
+        'c1',
+        expect.any(Object),
+        expect.any(Object)
+      );
       expect(newConversation.mock.invocationCallOrder[0]).toBeLessThan(
         hooks.remove.mock.invocationCallOrder[0]
       );
@@ -391,8 +405,14 @@ describe('ConversationSwitcher', () => {
 
     it('says so when the thread was already gone', async () => {
       hooks.remove.mockImplementation(
-        (_id: unknown, options?: { onError?: (error: unknown) => void }) =>
-          options?.onError?.({ status: 404 })
+        (
+          _id: unknown,
+          options?: { onSettled?: () => void },
+          callbacks?: { onError?: (error: unknown) => void }
+        ) => {
+          callbacks?.onError?.({ status: 404 });
+          options?.onSettled?.();
+        }
       );
       const user = userEvent.setup();
       render(<ConversationSwitcher />);

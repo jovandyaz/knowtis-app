@@ -3,6 +3,7 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type UseMutationOptions,
 } from '@tanstack/react-query';
 
 import { ApiClientError, conversationsApi } from '@knowtis/api-client';
@@ -21,6 +22,12 @@ export interface RenameConversationInput {
   id: string;
   title: string;
 }
+
+/** Outcome callbacks that still run when the component that deleted has unmounted. */
+export type DeleteConversationCallbacks = Pick<
+  UseMutationOptions<void, Error, string>,
+  'onSuccess' | 'onError'
+>;
 
 export function invalidateConversations(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: conversationsQueryKeys.all });
@@ -50,10 +57,13 @@ export function useRenameConversation() {
   });
 }
 
-export function useDeleteConversation() {
+export function useDeleteConversation(
+  callbacks: DeleteConversationCallbacks = {}
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => conversationsApi.remove(id),
+    ...callbacks,
     onSettled: () => invalidateConversations(queryClient),
   });
 }

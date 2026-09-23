@@ -112,6 +112,22 @@ describe('conversation hooks', () => {
     expect(isStale()).toBe(true);
   });
 
+  it('hands a delete outcome to the caller and still marks the list stale', async () => {
+    queryClient.setQueryData(conversationsQueryKeys.list(LIMIT), PAGE);
+    vi.mocked(conversationsApi.remove).mockResolvedValue(undefined);
+    const onSuccess = vi.fn();
+
+    const { result } = renderHook(() => useDeleteConversation({ onSuccess }), {
+      wrapper,
+    });
+    await act(() => result.current.mutateAsync('c1'));
+
+    expect(onSuccess.mock.calls.map(([data, id]) => [data, id])).toEqual([
+      [undefined, 'c1'],
+    ]);
+    expect(isStale()).toBe(true);
+  });
+
   it('marks every conversation list stale on demand', () => {
     queryClient.setQueryData(conversationsQueryKeys.list(LIMIT), PAGE);
 

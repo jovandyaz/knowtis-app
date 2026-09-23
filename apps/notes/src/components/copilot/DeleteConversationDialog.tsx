@@ -34,24 +34,22 @@ export function DeleteConversationDialog({
 }: DeleteConversationDialogProps) {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
-  const remove = useDeleteConversation();
+  const remove = useDeleteConversation({
+    onSuccess: () => {
+      captureProductEvent('ai conversation deleted', { source: 'switcher' });
+      toast.success(t('ai.copilot.history.deleted'));
+    },
+    onError: (error) => {
+      toast.error(t(conversationErrorKey(error)));
+    },
+  });
   const newConversation = useAgentStore((s) => s.newConversation);
 
   const confirm = () => {
     if (useAgentStore.getState().conversationId === conversationId) {
       newConversation();
     }
-    remove.mutate(conversationId, {
-      onSuccess: () => {
-        captureProductEvent('ai conversation deleted', { source: 'switcher' });
-        toast.success(t('ai.copilot.history.deleted'));
-        onOpenChange(false);
-      },
-      onError: (error) => {
-        toast.error(t(conversationErrorKey(error)));
-        onOpenChange(false);
-      },
-    });
+    remove.mutate(conversationId, { onSettled: () => onOpenChange(false) });
   };
 
   return (
