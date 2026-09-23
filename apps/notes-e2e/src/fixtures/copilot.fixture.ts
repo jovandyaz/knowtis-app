@@ -22,7 +22,7 @@ const POLLING_ROUTE_RE = /\/socket\.io\/\?.*EIO=4/;
 const COMPOSER_RE = /copilot|pregunta|ask/i;
 const DOCK_TOGGLE_RE = /^copilot$/i;
 const DOCK_HYDRATION_TIMEOUT_MS = 1_000;
-/** A same-origin file the preview serves as is, so the app does not boot on it. */
+// Same origin as the app, so its localStorage is reachable without booting it.
 const STATIC_PAGE_PATH = '/apple-touch-icon.png';
 
 export interface AgentScript {
@@ -252,9 +252,8 @@ export async function scriptAgent(
   };
 }
 
-/** The owner page outlives the test, so the next spec would hydrate whatever
- * thread this one left behind. Leaving the app first stops a store that is
- * still running from writing the key back. */
+// The owner page outlives the test, and a store still running would write the
+// thread back, so the app is left before the key is removed.
 async function forgetCopilotConversation(page: Page): Promise<void> {
   const response = await page.goto(STATIC_PAGE_PATH);
   expect(response?.ok()).toBe(true);

@@ -18,7 +18,7 @@ interface ConversationSeed {
 }
 
 interface ConversationsFixture {
-  /** Writes the rows a real turn would leave; there is no create endpoint. */
+  // There is no create endpoint, so this writes the rows a real turn would leave.
   seed(seed: ConversationSeed): Promise<string>;
 }
 
