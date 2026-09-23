@@ -1,4 +1,7 @@
-import type { MessageStopReason } from '@knowtis/shared-types';
+import type {
+  ConversationSummary,
+  MessageStopReason,
+} from '@knowtis/shared-types';
 
 import type { AgentSource } from '../agent-event';
 import type { AgentMessagePart, AgentRole } from '../agent-message';
@@ -62,6 +65,10 @@ export interface ConversationRepository {
     limit: number
   ): Promise<{ id: string; userId: string }[]>;
   markExtracted(userId: string, conversationId: string): Promise<void>;
+  listForUser(
+    userId: string,
+    page: { offset: number; limit: number }
+  ): Promise<{ items: ConversationSummary[]; total: number }>;
 }
 
 export const CONVERSATION_REPOSITORY = Symbol('CONVERSATION_REPOSITORY');

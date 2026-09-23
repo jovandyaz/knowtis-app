@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   afterAll,
   afterEach,
@@ -589,6 +589,35 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       return row?.noteId ?? null;
     };
 
+    const answer = (conversationId: string) =>
+      repo.appendTurn({
+        conversationId,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'question' },
+          { role: 'assistant', content: 'answer', sources: [] },
+        ],
+      });
+
+    const withTurn = async (
+      userId: string,
+      extra: { noteId?: string; title?: string } = {}
+    ): Promise<string> => {
+      const { id } = await repo.create({
+        userId,
+        title: extra.title ?? 'title',
+        ...(extra.noteId ? { noteId: extra.noteId } : {}),
+      });
+      await answer(id);
+      return id;
+    };
+
+    const touch = (id: string, at: Date) =>
+      db
+        .update(conversations)
+        .set({ updatedAt: at })
+        .where(eq(conversations.id, id));
+
     beforeAll(async () => {
       for (const [id, isAnonymous] of [
         [LISTER, false],
@@ -642,6 +671,116 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
 
       expect(await storedNoteId(id)).toBeNull();
+    });
+
+    it('lists the owner conversations newest first and hides the empty ones', async () => {
+      const older = await withTurn(LISTER);
+      const newer = await withTurn(LISTER);
+      await repo.create({ userId: LISTER, title: 'never answered' });
+      await touch(older, new Date('2026-09-01T10:00:00.000Z'));
+      await touch(newer, new Date('2026-09-02T10:00:00.000Z'));
+
+      const page = await repo.listForUser(LISTER, { offset: 0, limit: 10 });
+
+      expect(page.items.map((item) => item.id)).toEqual([newer, older]);
+      expect(page.total).toBe(2);
+      expect(page.items[0].updatedAt).toBe('2026-09-02T10:00:00.000Z');
+    });
+
+    it('breaks a tie on updated_at by id so the order never flips', async () => {
+      const LOW = '00000000-0000-4000-8000-0000000004b3';
+      const MID = '00000000-0000-4000-8000-0000000004b4';
+      const HIGH = '00000000-0000-4000-8000-0000000004b5';
+      const at = new Date('2026-09-03T10:00:00.000Z');
+      for (const id of [MID, HIGH, LOW]) {
+        await db
+          .insert(conversations)
+          .values({ id, userId: LISTER, title: 'tie' });
+        await answer(id);
+      }
+      for (const id of [MID, HIGH, LOW]) {
+        await touch(id, at);
+      }
+
+      const page = await repo.listForUser(LISTER, { offset: 0, limit: 10 });
+
+      expect(page.items.map((item) => item.id)).toEqual([HIGH, MID, LOW]);
+    });
+
+    it('pages with offset and limit and counts the whole set', async () => {
+      const ids: string[] = [];
+      for (let day = 1; day <= 3; day += 1) {
+        const id = await withTurn(LISTER);
+        await touch(id, new Date(`2026-09-0${day}T10:00:00.000Z`));
+        ids.push(id);
+      }
+
+      const page = await repo.listForUser(LISTER, { offset: 1, limit: 1 });
+
+      expect(page.items.map((item) => item.id)).toEqual([ids[1]]);
+      expect(page.total).toBe(3);
+    });
+
+    it('shows another user nothing', async () => {
+      await withTurn(LISTER);
+
+      expect(
+        await repo.listForUser(STRANGER, { offset: 0, limit: 10 })
+      ).toEqual({
+        items: [],
+        total: 0,
+      });
+    });
+
+    it('names the note a conversation started from while the user can read it', async () => {
+      const noteId = await noteOf(LISTER, 'Viaje a Oaxaca');
+      const id = await withTurn(LISTER, { noteId, title: 'Itinerario' });
+
+      const [item] = (await repo.listForUser(LISTER, { offset: 0, limit: 10 }))
+        .items;
+
+      expect(item).toEqual({
+        id,
+        title: 'Itinerario',
+        noteId,
+        noteTitle: 'Viaje a Oaxaca',
+        updatedAt: expect.any(String),
+      });
+    });
+
+    it('hides the note once it is in the trash', async () => {
+      const noteId = await noteOf(LISTER, 'Soon trashed');
+      await withTurn(LISTER, { noteId });
+      await db
+        .update(notes)
+        .set({ deletedAt: new Date() })
+        .where(eq(notes.id, noteId));
+
+      const [item] = (await repo.listForUser(LISTER, { offset: 0, limit: 10 }))
+        .items;
+
+      expect([item.noteId, item.noteTitle]).toEqual([null, null]);
+    });
+
+    it('hides the note once its share is revoked', async () => {
+      const noteId = await noteOf(STRANGER, 'Shared then revoked');
+      await db
+        .insert(notePermissions)
+        .values({ noteId, userId: LISTER, permission: 'viewer' });
+      await withTurn(LISTER, { noteId });
+      await db
+        .delete(notePermissions)
+        .where(
+          and(
+            eq(notePermissions.noteId, noteId),
+            eq(notePermissions.userId, LISTER)
+          )
+        );
+
+      const [item] = (await repo.listForUser(LISTER, { offset: 0, limit: 10 }))
+        .items;
+
+      expect([item.noteId, item.noteTitle]).toEqual([null, null]);
     });
   });
 });

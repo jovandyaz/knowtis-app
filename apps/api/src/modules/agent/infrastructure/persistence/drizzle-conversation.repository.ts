@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
+
+import type { ConversationSummary } from '@knowtis/shared-types';
 
 import {
   conversationMessages,
@@ -46,6 +48,8 @@ const persistedPartsSchema = z.object({
   v: z.literal(AGENT_MESSAGE_PARTS_VERSION),
   parts: z.array(agentMessagePartSchema),
 });
+
+const HAS_MESSAGES = sql`EXISTS (SELECT 1 FROM ${conversationMessages} WHERE ${conversationMessages.conversationId} = ${conversations.id})`;
 
 @Injectable()
 export class DrizzleConversationRepository implements ConversationRepository {
@@ -222,5 +226,39 @@ export class DrizzleConversationRepository implements ConversationRepository {
         )
       )
       .returning({ id: conversations.id });
+  }
+
+  async listForUser(
+    userId: string,
+    page: { offset: number; limit: number }
+  ): Promise<{ items: ConversationSummary[]; total: number }> {
+    const scope = and(eq(conversations.userId, userId), HAS_MESSAGES);
+    const [rows, counted] = await Promise.all([
+      this.db
+        .select({
+          id: conversations.id,
+          title: conversations.title,
+          noteId: notes.id,
+          noteTitle: notes.title,
+          updatedAt: conversations.updatedAt,
+        })
+        .from(conversations)
+        .leftJoin(
+          notes,
+          and(eq(notes.id, conversations.noteId), readableNoteCondition(userId))
+        )
+        .where(scope)
+        .orderBy(desc(conversations.updatedAt), desc(conversations.id))
+        .limit(page.limit)
+        .offset(page.offset),
+      this.db.select({ value: count() }).from(conversations).where(scope),
+    ]);
+    return {
+      items: rows.map((row) => ({
+        ...row,
+        updatedAt: row.updatedAt.toISOString(),
+      })),
+      total: counted[0]?.value ?? 0,
+    };
   }
 }
