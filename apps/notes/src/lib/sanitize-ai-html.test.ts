@@ -103,3 +103,27 @@ describe('sanitizeProposalHtml', () => {
     );
   });
 });
+
+function parse(html: string): DocumentFragment {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  return template.content;
+}
+
+describe.each([
+  ['sanitizeAiHtml', sanitizeAiHtml],
+  ['sanitizeProposalHtml', sanitizeProposalHtml],
+])('%s', (_name, sanitize) => {
+  it('keeps the code of a mermaid diagram, arrows included', () => {
+    const code = 'graph TD\n  A[Start] --> B\n  B -.-> C';
+    const block = document.createElement('div');
+    block.setAttribute('data-mermaid-block', '');
+    block.setAttribute('data-code', code);
+
+    const out = parse(sanitize(block.outerHTML)).querySelector(
+      'div[data-mermaid-block]'
+    );
+
+    expect(out?.getAttribute('data-code')).toBe(code);
+  });
+});

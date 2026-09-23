@@ -33,6 +33,7 @@ Everything below is exported from [`src/index.ts`](src/index.ts).
 ### Utilities
 
 - `shouldPropagateUpdate({ isInitializing, isSynced })` — gate for forwarding Tiptap `onUpdate` to autosave; false while seeding the Y.Doc or before the provider has synced, so a transient empty document never overwrites the stored note.
+- `createAiHtmlPurifier()` — the DOMPurify instance every sanitizer of LLM-shaped HTML uses (`markdownToFragment` here, `sanitizeAiHtml`/`sanitizeProposalHtml` in `apps/notes`); it keeps a mermaid block's `data-code` whole, arrows included.
 
 ## Relationship to other packages
 

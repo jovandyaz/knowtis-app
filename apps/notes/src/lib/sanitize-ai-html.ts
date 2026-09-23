@@ -1,5 +1,4 @@
-import DOMPurify from 'dompurify';
-
+import { createAiHtmlPurifier } from '@knowtis/editor';
 import {
   AI_HTML_FORBID_ATTR,
   AI_HTML_FORBID_TAGS,
@@ -25,7 +24,8 @@ function isForeignImageMarkup(element: Element, tagName: string): boolean {
   return tagName === IMAGE_TAG && !isStoredImage(element);
 }
 
-const proposalPurify = DOMPurify();
+const aiPurify = createAiHtmlPurifier();
+const proposalPurify = createAiHtmlPurifier();
 
 proposalPurify.addHook('uponSanitizeElement', (node, { tagName }) => {
   if (node instanceof Element && isForeignImageMarkup(node, tagName)) {
@@ -50,7 +50,7 @@ proposalPurify.addHook('uponSanitizeAttribute', (node, event) => {
  * content, so a remote fetch is an exfiltration channel.
  */
 export function sanitizeAiHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+  return aiPurify.sanitize(html, {
     FORBID_TAGS: AI_HTML_FORBID_TAGS,
     FORBID_ATTR: AI_HTML_FORBID_ATTR,
   });
