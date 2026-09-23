@@ -12,6 +12,7 @@ import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { InjectionGuardService } from './application/injection-guard.service';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
+import { ConversationController } from './conversation.controller';
 import { AGENT_ORCHESTRATOR } from './domain/ports/agent-orchestrator.port';
 import { CONVERSATION_REPOSITORY } from './domain/ports/conversation.repository';
 import { MEMORY_REPOSITORY } from './domain/ports/memory.repository';
@@ -56,7 +57,7 @@ import { MemoryController } from './memory.controller';
       }),
     }),
   ],
-  controllers: [MemoryController],
+  controllers: [ConversationController, MemoryController],
   providers: [
     KeywordRetrievalAdapter,
     HybridRetrievalAdapter,

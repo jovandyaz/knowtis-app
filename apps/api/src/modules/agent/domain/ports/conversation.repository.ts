@@ -1,4 +1,8 @@
-import type { MessageStopReason } from '@knowtis/shared-types';
+import type {
+  ConversationSummary,
+  ConversationTranscript,
+  MessageStopReason,
+} from '@knowtis/shared-types';
 
 import type { AgentSource } from '../agent-event';
 import type { AgentMessagePart, AgentRole } from '../agent-message';
@@ -15,7 +19,7 @@ export interface ConversationMessageRow {
 export interface CreateConversationInput {
   readonly userId: string;
   readonly noteId?: string;
-  readonly title: string;
+  readonly title: string | null;
 }
 
 export interface PersistedTurnMessage {
@@ -62,6 +66,21 @@ export interface ConversationRepository {
     limit: number
   ): Promise<{ id: string; userId: string }[]>;
   markExtracted(userId: string, conversationId: string): Promise<void>;
+  listForUser(
+    userId: string,
+    page: { offset: number; limit: number }
+  ): Promise<{ items: ConversationSummary[]; total: number }>;
+  loadTranscriptForUser(
+    conversationId: string,
+    userId: string,
+    limit: number
+  ): Promise<ConversationTranscript | null>;
+  rename(
+    conversationId: string,
+    userId: string,
+    title: string
+  ): Promise<boolean>;
+  deleteForUser(conversationId: string, userId: string): Promise<boolean>;
 }
 
 export const CONVERSATION_REPOSITORY = Symbol('CONVERSATION_REPOSITORY');

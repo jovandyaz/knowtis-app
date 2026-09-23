@@ -8,7 +8,11 @@ import {
   MAX_GUARD_INPUT_CHARS,
   providerOf,
 } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS, type ReasoningEffort } from '@knowtis/shared-types';
+import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  FEATURE_FLAG_KEYS,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
@@ -774,7 +778,7 @@ describe('RunAgentTurnHandler', () => {
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('orchestrator failed');
-        // TypeScript needs a yield to infer AsyncGenerator; unreachable:
+        // Unreachable, but without a yield TypeScript cannot infer an AsyncGenerator.
         yield { type: 'chunk', text: '' } as AgentEvent;
       }),
     };
@@ -812,7 +816,7 @@ describe('RunAgentTurnHandler', () => {
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('connection to 10.0.0.5:5432 refused');
-        // TypeScript needs a yield to infer AsyncGenerator; unreachable:
+        // Unreachable, but without a yield TypeScript cannot infer an AsyncGenerator.
         yield { type: 'chunk', text: '' } as AgentEvent;
       }),
     };
@@ -1271,7 +1275,7 @@ describe('RunAgentTurnHandler', () => {
     ]);
   });
 
-  it('resume rejects a foreign conversationId with forbidden and never runs the orchestrator', async () => {
+  it('resume rejects a foreign conversationId as not found and never runs the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     vi.mocked(conversations.findByIdForUser).mockResolvedValue(null);
@@ -1302,11 +1306,46 @@ describe('RunAgentTurnHandler', () => {
       { onChunk: vi.fn(), onDone: vi.fn(), onError }
     );
 
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'forbidden' })
-    );
+    expect(onError).toHaveBeenCalledWith({
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'Conversation not found',
+    });
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+  });
+
+  it('resume without a conversationId reports not found and never runs the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+    const onError = vi.fn();
+
+    await handler.resumeTurn(
+      { userId: USER, resume: { outcome: 'updated the note' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError }
+    );
+
+    expect(onError).toHaveBeenCalledWith({
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'Conversation not found',
+    });
+    expect(conversations.findByIdForUser).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
   });
 
   it('resumeTurn denies and never calls the orchestrator when rate-limited', async () => {
@@ -1738,7 +1777,7 @@ describe('RunAgentTurnHandler', () => {
       { onChunk: vi.fn(), onDone, onError: vi.fn(), onProposal: vi.fn() }
     );
 
-    // 20 uncached * 3e-6 + 60 read * 3e-7 + 20 write * 3.75e-6 + 10 out * 1.5e-5
+    // 0.000303 because 20 uncached*3e-6 + 60 read*3e-7 + 20 write*3.75e-6 + 10 out*1.5e-5.
     const recorded = vi.mocked(rateLimit.recordUsage).mock.calls[0][0];
     expect(recorded.costUsd).toBeCloseTo(0.000303, 9);
     expect(onDone).toHaveBeenCalledWith(
@@ -2970,6 +3009,46 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      'folds a multi-line first message into its title',
+      'Plan\n  a trip',
+      'Plan a trip',
+    ],
+    ['stores no title for a whitespace-only first message', ' \n\t ', null],
+  ])('%s', async (_label, content, title) => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.create).toHaveBeenCalledWith({ userId: USER, title });
+  });
+
   it('creates a conversation, loads history, and persists the turn on done (memory path)', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
@@ -3098,7 +3177,7 @@ describe('RunAgentTurnHandler', () => {
     expect(contents[contents.length - 1]).toBe('what is it?');
   });
 
-  it('rejects a foreign conversationId with a forbidden error (memory path)', async () => {
+  it('rejects a foreign conversationId as not found (memory path)', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     vi.mocked(conversations.findByIdForUser).mockResolvedValue(null);
@@ -3127,9 +3206,10 @@ describe('RunAgentTurnHandler', () => {
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError: error, onProposal: vi.fn() }
     );
-    expect(error).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'forbidden' })
-    );
+    expect(error).toHaveBeenCalledWith({
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'Conversation not found',
+    });
     expect(orchestrator.run).not.toHaveBeenCalled();
   });
 

@@ -3,11 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -20,6 +21,9 @@ import {
   conversations,
   DATABASE_CONNECTION,
   DatabaseModule,
+  notePermissions,
+  notes,
+  userMemories,
   users,
   type Database,
 } from '../../../../database';
@@ -32,8 +36,6 @@ import { pruneTranscript } from '../../domain/prune-transcript';
 import { buildTurnRows } from '../../domain/turn-transcript';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
 
-// Own ids: specs sharing fixture users delete each other's rows in afterAll when
-// the suite runs in parallel against one database.
 const USER = '00000000-0000-4000-8000-000000000091';
 const OTHER = '00000000-0000-4000-8000-000000000092';
 
@@ -554,6 +556,442 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       message: expect.stringContaining(
         'conversation_messages_stop_reason_check'
       ),
+    });
+  });
+
+  describe('conversation history', () => {
+    const LISTER = '00000000-0000-4000-8000-0000000004b1';
+    const STRANGER = '00000000-0000-4000-8000-0000000004b2';
+
+    const noteOf = async (
+      ownerId: string,
+      title: string,
+      trashed = false
+    ): Promise<string> => {
+      const [row] = await db
+        .insert(notes)
+        .values({
+          ownerId,
+          title,
+          content: '',
+          ...(trashed ? { deletedAt: new Date() } : {}),
+        })
+        .returning({ id: notes.id });
+      return row.id;
+    };
+
+    const storedNoteId = async (id: string): Promise<string | null> => {
+      const [row] = await db
+        .select({ noteId: conversations.noteId })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      return row?.noteId ?? null;
+    };
+
+    const answer = (conversationId: string) =>
+      repo.appendTurn({
+        conversationId,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'question' },
+          { role: 'assistant', content: 'answer', sources: [] },
+        ],
+      });
+
+    const withTurn = async (
+      userId: string,
+      extra: { noteId?: string; title?: string } = {}
+    ): Promise<string> => {
+      const { id } = await repo.create({
+        userId,
+        title: extra.title ?? 'title',
+        ...(extra.noteId ? { noteId: extra.noteId } : {}),
+      });
+      await answer(id);
+      return id;
+    };
+
+    const touch = (id: string, at: Date) =>
+      db
+        .update(conversations)
+        .set({ updatedAt: at })
+        .where(eq(conversations.id, id));
+
+    beforeAll(async () => {
+      for (const [id, isAnonymous] of [
+        [LISTER, false],
+        [STRANGER, true],
+      ] as const) {
+        await db
+          .insert(users)
+          .values({ id, email: `e-${id}@test.local`, name: 'H', isAnonymous })
+          .onConflictDoNothing();
+      }
+    });
+
+    beforeEach(async () => {
+      await db.delete(conversations).where(eq(conversations.userId, LISTER));
+      await db.delete(conversations).where(eq(conversations.userId, STRANGER));
+      await db.delete(notes).where(eq(notes.ownerId, LISTER));
+      await db.delete(notes).where(eq(notes.ownerId, STRANGER));
+    });
+
+    afterAll(async () => {
+      await db.delete(users).where(eq(users.id, LISTER));
+      await db.delete(users).where(eq(users.id, STRANGER));
+    });
+
+    it('keeps the note a conversation starts from when the user owns it', async () => {
+      const noteId = await noteOf(LISTER, 'Mine');
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBe(noteId);
+    });
+
+    it('keeps a note shared with the user', async () => {
+      const noteId = await noteOf(STRANGER, 'Shared with me');
+      await db
+        .insert(notePermissions)
+        .values({ noteId, userId: LISTER, permission: 'viewer' });
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBe(noteId);
+    });
+
+    it("stores no note when the id names someone else's note", async () => {
+      const noteId = await noteOf(STRANGER, 'Not yours');
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBeNull();
+    });
+
+    it('stores no note when the note is in the trash', async () => {
+      const noteId = await noteOf(LISTER, 'Trashed', true);
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBeNull();
+    });
+
+    it('lists the owner conversations newest first and hides the empty ones', async () => {
+      const older = await withTurn(LISTER);
+      const newer = await withTurn(LISTER);
+      await repo.create({ userId: LISTER, title: 'never answered' });
+      await touch(older, new Date('2026-09-01T10:00:00.000Z'));
+      await touch(newer, new Date('2026-09-02T10:00:00.000Z'));
+
+      const page = await repo.listForUser(LISTER, { offset: 0, limit: 10 });
+
+      expect(page.items.map((item) => item.id)).toEqual([newer, older]);
+      expect(page.total).toBe(2);
+      expect(page.items[0].updatedAt).toBe('2026-09-02T10:00:00.000Z');
+    });
+
+    it('breaks a tie on updated_at by id so the order never flips', async () => {
+      const LOW = '00000000-0000-4000-8000-0000000004b3';
+      const MID = '00000000-0000-4000-8000-0000000004b4';
+      const HIGH = '00000000-0000-4000-8000-0000000004b5';
+      const at = new Date('2026-09-03T10:00:00.000Z');
+      for (const id of [MID, HIGH, LOW]) {
+        await db
+          .insert(conversations)
+          .values({ id, userId: LISTER, title: 'tie' });
+        await answer(id);
+      }
+      for (const id of [MID, HIGH, LOW]) {
+        await touch(id, at);
+      }
+
+      const page = await repo.listForUser(LISTER, { offset: 0, limit: 10 });
+
+      expect(page.items.map((item) => item.id)).toEqual([HIGH, MID, LOW]);
+    });
+
+    it('pages with offset and limit and counts the whole set', async () => {
+      const ids: string[] = [];
+      for (let day = 1; day <= 3; day += 1) {
+        const id = await withTurn(LISTER);
+        await touch(id, new Date(`2026-09-0${day}T10:00:00.000Z`));
+        ids.push(id);
+      }
+
+      const page = await repo.listForUser(LISTER, { offset: 1, limit: 1 });
+
+      expect(page.items.map((item) => item.id)).toEqual([ids[1]]);
+      expect(page.total).toBe(3);
+    });
+
+    it('shows another user nothing', async () => {
+      await withTurn(LISTER);
+
+      expect(
+        await repo.listForUser(STRANGER, { offset: 0, limit: 10 })
+      ).toEqual({
+        items: [],
+        total: 0,
+      });
+    });
+
+    it('names the note a conversation started from while the user can read it', async () => {
+      const noteId = await noteOf(LISTER, 'Viaje a Oaxaca');
+      const id = await withTurn(LISTER, { noteId, title: 'Itinerario' });
+
+      const [item] = (await repo.listForUser(LISTER, { offset: 0, limit: 10 }))
+        .items;
+
+      expect(item).toEqual({
+        id,
+        title: 'Itinerario',
+        noteId,
+        noteTitle: 'Viaje a Oaxaca',
+        updatedAt: expect.any(String),
+      });
+    });
+
+    it('hides the note once it is in the trash', async () => {
+      const noteId = await noteOf(LISTER, 'Soon trashed');
+      await withTurn(LISTER, { noteId });
+      await db
+        .update(notes)
+        .set({ deletedAt: new Date() })
+        .where(eq(notes.id, noteId));
+
+      const [item] = (await repo.listForUser(LISTER, { offset: 0, limit: 10 }))
+        .items;
+
+      expect([item.noteId, item.noteTitle]).toEqual([null, null]);
+    });
+
+    it('hides the note once its share is revoked', async () => {
+      const noteId = await noteOf(STRANGER, 'Shared then revoked');
+      await db
+        .insert(notePermissions)
+        .values({ noteId, userId: LISTER, permission: 'viewer' });
+      await withTurn(LISTER, { noteId });
+      await db
+        .delete(notePermissions)
+        .where(
+          and(
+            eq(notePermissions.noteId, noteId),
+            eq(notePermissions.userId, LISTER)
+          )
+        );
+
+      const [item] = (await repo.listForUser(LISTER, { offset: 0, limit: 10 }))
+        .items;
+
+      expect([item.noteId, item.noteTitle]).toEqual([null, null]);
+    });
+
+    it('reads a transcript only for its owner', async () => {
+      const id = await withTurn(LISTER);
+
+      expect(await repo.loadTranscriptForUser(id, STRANGER, 40)).toBeNull();
+      expect(
+        await repo.loadTranscriptForUser(randomUUID(), LISTER, 40)
+      ).toBeNull();
+    });
+
+    it('returns the whole conversation with its header when it fits', async () => {
+      const noteId = await noteOf(LISTER, 'Origin');
+      const id = await withTurn(LISTER, { noteId, title: 'Trip' });
+
+      expect(await repo.loadTranscriptForUser(id, LISTER, 40)).toEqual({
+        id,
+        title: 'Trip',
+        noteId,
+        hasEarlier: false,
+        messages: [
+          {
+            turnId: expect.any(String),
+            role: 'user',
+            content: 'question',
+            sources: [],
+            stopReason: null,
+          },
+          {
+            turnId: expect.any(String),
+            role: 'assistant',
+            content: 'answer',
+            sources: [],
+            stopReason: null,
+          },
+        ],
+      });
+    });
+
+    it('hides a note the user can no longer read from the transcript header', async () => {
+      const noteId = await noteOf(LISTER, 'Trashed later');
+      const id = await withTurn(LISTER, { noteId });
+      await db
+        .update(notes)
+        .set({ deletedAt: new Date() })
+        .where(eq(notes.id, noteId));
+
+      expect(
+        (await repo.loadTranscriptForUser(id, LISTER, 40))?.noteId
+      ).toBeNull();
+    });
+
+    it('keeps the empty terminal row that carries a stop reason and skips tool rows', async () => {
+      const { id } = await repo.create({ userId: LISTER, title: 't' });
+      const turnId = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId,
+        messages: [
+          { role: 'user', content: 'read n1' },
+          {
+            role: 'assistant',
+            content: '',
+            parts: [
+              {
+                type: 'tool-call',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                input: { id: 'n1' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                output: 'body',
+                outputType: 'text',
+              },
+            ],
+          },
+          {
+            role: 'assistant',
+            content: '',
+            sources: [{ id: 'n1', title: 'N1' }],
+            stopReason: 'max_steps',
+          },
+        ],
+      });
+
+      expect(
+        (await repo.loadTranscriptForUser(id, LISTER, 40))?.messages
+      ).toEqual([
+        {
+          turnId,
+          role: 'user',
+          content: 'read n1',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId,
+          role: 'assistant',
+          content: '',
+          sources: [{ id: 'n1', title: 'N1' }],
+          stopReason: 'max_steps',
+        },
+      ]);
+    });
+
+    it('aligns a cut window to a question and says earlier messages exist', async () => {
+      const { id } = await repo.create({ userId: LISTER, title: 't' });
+      for (let turn = 0; turn < 3; turn += 1) {
+        await repo.appendTurn({
+          conversationId: id,
+          turnId: randomUUID(),
+          messages: [
+            { role: 'user', content: `u${turn}` },
+            { role: 'assistant', content: `a${turn}`, sources: [] },
+          ],
+        });
+      }
+
+      const transcript = await repo.loadTranscriptForUser(id, LISTER, 3);
+
+      expect(transcript?.messages.map((message) => message.content)).toEqual([
+        'u2',
+        'a2',
+      ]);
+      expect(transcript?.hasEarlier).toBe(true);
+    });
+
+    it('renames only the owner conversation', async () => {
+      const id = await withTurn(LISTER, { title: 'Before' });
+
+      expect(await repo.rename(id, STRANGER, 'Hijacked')).toBe(false);
+      expect(await repo.rename(id, LISTER, 'After')).toBe(true);
+
+      const [row] = await db
+        .select({ title: conversations.title })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      expect(row?.title).toBe('After');
+    });
+
+    it('keeps the list order and updatedAt when a conversation is renamed', async () => {
+      const older = await withTurn(LISTER);
+      const newer = await withTurn(LISTER);
+      await touch(older, new Date('2026-09-01T10:00:00.000Z'));
+      await touch(newer, new Date('2026-09-02T10:00:00.000Z'));
+
+      await repo.rename(older, LISTER, 'Renamed');
+
+      const page = await repo.listForUser(LISTER, { offset: 0, limit: 10 });
+      expect(page.items.map((item) => [item.id, item.updatedAt])).toEqual([
+        [newer, '2026-09-02T10:00:00.000Z'],
+        [older, '2026-09-01T10:00:00.000Z'],
+      ]);
+    });
+
+    it('does not make a renamed conversation due for memory extraction again', async () => {
+      const id = await withTurn(LISTER);
+      await touch(id, new Date(Date.now() - 60 * 60 * 1000));
+      const due = async () =>
+        (await repo.findExtractable(0, 10_000)).some((row) => row.id === id);
+
+      expect(await due()).toBe(true);
+      await repo.markExtracted(LISTER, id);
+      expect(await due()).toBe(false);
+
+      await repo.rename(id, LISTER, 'Renamed');
+
+      expect(await due()).toBe(false);
+    });
+
+    it('deletes only the owner conversation, with its messages', async () => {
+      const id = await withTurn(LISTER);
+
+      expect(await repo.deleteForUser(id, STRANGER)).toBe(false);
+      expect(await repo.deleteForUser(id, LISTER)).toBe(true);
+      expect(await repo.deleteForUser(id, LISTER)).toBe(false);
+
+      const [counted] = await db
+        .select({ value: sql<number>`count(*)::int` })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, id));
+      expect(counted?.value).toBe(0);
+    });
+
+    it('keeps the memories extracted from a deleted conversation', async () => {
+      const id = await withTurn(LISTER);
+      const [memory] = await db
+        .insert(userMemories)
+        .values({
+          userId: LISTER,
+          content: 'prefers window seats',
+          embedding: new Array(1024).fill(0),
+          sourceConversationId: id,
+        })
+        .returning({ id: userMemories.id });
+
+      await repo.deleteForUser(id, LISTER);
+
+      const [kept] = await db
+        .select({ source: userMemories.sourceConversationId })
+        .from(userMemories)
+        .where(eq(userMemories.id, memory.id));
+      expect(kept).toEqual({ source: null });
     });
   });
 });

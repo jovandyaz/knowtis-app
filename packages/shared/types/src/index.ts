@@ -212,3 +212,15 @@ export {
   type FlashcardReviewKind,
   FLASHCARD_REVIEW_KIND,
 } from './lib/analytics.types';
+
+export {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  CONVERSATION_TITLE_MAX,
+  deriveConversationTitle,
+  isValidConversationTitle,
+  normalizeConversationTitle,
+  type ConversationPage,
+  type ConversationSummary,
+  type ConversationTranscript,
+  type ConversationTranscriptMessage,
+} from './lib/conversation.types';
