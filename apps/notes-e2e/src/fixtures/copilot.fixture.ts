@@ -9,6 +9,11 @@ const SEPARATOR = '\x1e';
 const HOLD_MS = 3_000;
 const POLL_MS = 25;
 const CONNECT_RE = /^40(\/[^,]*)?,?/;
+const CLOSE_PACKET_RE = /^(41\/agent,?|1)$/;
+const UNKNOWN_SESSION = JSON.stringify({
+  code: 1,
+  message: 'Session ID unknown',
+});
 /** `42/agent,<ackId>["event",payload]` — the ack id is present when the client waits for a receipt. */
 const AGENT_EVENT_RE = /^42\/agent,(\d+)?(\[[\s\S]*\])$/;
 const POLLING_ROUTE_RE = /\/socket\.io\/\?.*EIO=4/;
@@ -26,11 +31,14 @@ export interface AgentScript {
 }
 
 export interface ScriptedAgent {
-  /** Every client→server socket.io event seen so far, in order. */
-  readonly sent: readonly { event: string; payload: unknown }[];
+  /** Every client→server socket.io event seen so far, in order, with the
+   * socket that sent it, numbered from 0 in the order the client opened them. */
+  readonly sent: readonly { event: string; payload: unknown; socket: number }[];
+  readonly closedSockets: readonly number[];
   waitForSent(event: string): Promise<unknown>;
-  /** Pushes one server→client event, for turns the static script cannot end on its own. */
-  emit(event: string, payload: unknown): void;
+  /** Pushes one server→client event on the newest socket, or on `socket`, for
+   * turns the static script cannot end on its own. */
+  emit(event: string, payload: unknown, socket?: number): void;
 }
 
 function handshake(sid: string): string {
@@ -64,9 +72,13 @@ export async function scriptAgent(
   page: Page,
   script: AgentScript
 ): Promise<ScriptedAgent> {
-  const sid = randomUUID().replaceAll('-', '').slice(0, 20);
-  const outbox: string[] = [];
-  const sent: { event: string; payload: unknown }[] = [];
+  const sidPrefix = randomUUID().replaceAll('-', '').slice(0, 20);
+  // A dropped socket leaves its long-poll pending until it is answered, so a
+  // shared outbox would hand the live socket's packets to that orphaned poll.
+  const outboxes: string[][] = [];
+  const socketsBySid = new Map<string, number>();
+  const sent: { event: string; payload: unknown; socket: number }[] = [];
+  const closedSockets: number[] = [];
   const sleepers = new Set<() => void>();
   const heldPolls = new Set<Promise<void>>();
   let released = false;
@@ -77,14 +89,28 @@ export async function scriptAgent(
     'agent:reject': script.onReject,
   };
 
-  function receive(packet: string): void {
+  function openSocket(): string {
+    const sid = `${sidPrefix}${outboxes.length}`;
+    socketsBySid.set(sid, outboxes.length);
+    outboxes.push([]);
+    return sid;
+  }
+
+  function receive(packet: string, socket: number): void {
+    if (CLOSE_PACKET_RE.test(packet)) {
+      if (!closedSockets.includes(socket)) {
+        closedSockets.push(socket);
+      }
+      return;
+    }
     const match = packet.match(AGENT_EVENT_RE);
     if (!match) {
       return;
     }
     const [, ackId, body] = match;
     const [name, payload] = JSON.parse(body) as [string, unknown];
-    sent.push({ event: name, payload });
+    sent.push({ event: name, payload, socket });
+    const outbox = outboxes[socket];
     if (ackId !== undefined) {
       outbox.push(`43/agent,${ackId}[]`);
     }
@@ -129,7 +155,7 @@ export async function scriptAgent(
     });
   }
 
-  async function drain(route: Route): Promise<void> {
+  async function drain(route: Route, outbox: string[]): Promise<void> {
     const deadline = Date.now() + HOLD_MS;
     while (!released && outbox.length === 0 && Date.now() < deadline) {
       await hold(POLL_MS);
@@ -146,16 +172,35 @@ export async function scriptAgent(
 
   async function intercept(route: Route): Promise<void> {
     const request = route.request();
-    const url = new URL(request.url());
+    const sid = new URL(request.url()).searchParams.get('sid');
+
+    if (!sid) {
+      await safeFulfill(route, {
+        status: 200,
+        headers: corsHeaders(request),
+        body: handshake(openSocket()),
+      });
+      return;
+    }
+
+    const socket = socketsBySid.get(sid);
+    if (socket === undefined) {
+      await safeFulfill(route, {
+        status: 400,
+        headers: corsHeaders(request),
+        body: UNKNOWN_SESSION,
+      });
+      return;
+    }
 
     if (request.method() === 'POST') {
       for (const packet of (request.postData() ?? '').split(SEPARATOR)) {
         const connectMatch = packet.match(CONNECT_RE);
         if (connectMatch) {
           const namespace = connectMatch[1] ?? '';
-          outbox.push(`40${namespace},${JSON.stringify({ sid })}`);
+          outboxes[socket].push(`40${namespace},${JSON.stringify({ sid })}`);
         } else {
-          receive(packet);
+          receive(packet, socket);
         }
       }
       await safeFulfill(route, {
@@ -166,16 +211,7 @@ export async function scriptAgent(
       return;
     }
 
-    if (!url.searchParams.get('sid')) {
-      await safeFulfill(route, {
-        status: 200,
-        headers: corsHeaders(request),
-        body: handshake(sid),
-      });
-      return;
-    }
-
-    const poll = drain(route);
+    const poll = drain(route, outboxes[socket]);
     heldPolls.add(poll);
     try {
       await poll;
@@ -197,6 +233,7 @@ export async function scriptAgent(
 
   return {
     sent,
+    closedSockets,
     async waitForSent(name: string) {
       await expect
         .poll(() => sent.some((item) => item.event === name), {
@@ -205,8 +242,8 @@ export async function scriptAgent(
         .toBe(true);
       return sent.findLast((item) => item.event === name)?.payload;
     },
-    emit(name, payload) {
-      outbox.push(event(name, payload));
+    emit(name, payload, socket = outboxes.length - 1) {
+      outboxes[socket].push(event(name, payload));
     },
   };
 }
