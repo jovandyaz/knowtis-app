@@ -24,7 +24,7 @@ export class CspReportsController {
   @ApiOperation({
     summary: 'Collect Content Security Policy violation reports',
     description:
-      'Where browsers send the notes app policy violations: `report-uri` posts `application/csp-report`, the Reporting API posts `application/reports+json`. Unauthenticated. Each distinct violation is logged once per request with its directive, the blocked origin, the document path and a count, up to 20; nothing is stored.',
+      'Where browsers send the notes app policy violations: `report-uri` posts `application/csp-report`, the Reporting API posts `application/reports+json`. Unauthenticated. Each distinct violation is logged once per request with its directive, the blocked scheme, host and port (subdomains folded into `*.`), the document path and a count, up to 20; nothing is stored.',
   })
   @ApiResponse({ status: 204, description: 'Report received' })
   @ApiResponse({ status: 400, description: 'Not a CSP violation report' })

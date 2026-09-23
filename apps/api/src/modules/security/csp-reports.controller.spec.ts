@@ -42,6 +42,7 @@ const EDGE_IP = '203.0.113.7';
 const OTHER_EDGE_IP = '203.0.113.8';
 
 const EXFILTRATED = 'd=private-note-text';
+const SUBDOMAIN_PAYLOAD = 'private-note-text-'.repeat(12);
 const SHARE_TOKEN = 'a3f9'.repeat(16);
 const NOTE_ID = '5b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d';
 const POLICY = "default-src 'self'; img-src 'self'";
@@ -231,7 +232,7 @@ describe('POST /api/v1/csp-reports', () => {
       {
         event: VIOLATION_EVENT,
         effectiveDirective: 'img-src',
-        blockedSource: 'https://cdn.evil.example:8443',
+        blockedSource: 'https://*.evil.example:8443',
         documentPath: '/s/:param',
         disposition: 'report',
         count: 1,
@@ -333,13 +334,13 @@ describe('POST /api/v1/csp-reports', () => {
     ]);
   });
 
-  it('never logs the blocked URL, the document query or a share token', async () => {
+  it('never logs the blocked URL, its subdomains, the document query or a share token', async () => {
     await post(LEGACY_TYPE, JSON.stringify(legacyReport()));
     await post(
       REPORTING_API_TYPE,
       JSON.stringify([
         cspViolation({
-          blockedURL: `https://evil.example/p.png?${EXFILTRATED}`,
+          blockedURL: `https://${SUBDOMAIN_PAYLOAD}.evil.example/p.png?${EXFILTRATED}`,
           documentURL: `https://knowtis.app/s/${SHARE_TOKEN}`,
           effectiveDirective: 'img-src',
           disposition: 'report',
@@ -350,6 +351,7 @@ describe('POST /api/v1/csp-reports', () => {
     const logged = JSON.stringify(warn.mock.calls);
     expect(loggedViolations()).toHaveLength(2);
     expect(logged).not.toContain(EXFILTRATED);
+    expect(logged).not.toContain(SUBDOMAIN_PAYLOAD);
     expect(logged).not.toContain(SHARE_TOKEN);
     expect(logged).not.toContain(NOTE_ID);
     expect(logged).not.toContain('secret');
@@ -361,6 +363,38 @@ describe('POST /api/v1/csp-reports', () => {
     ['eval', 'eval', 'eval'],
     ['wasm-eval', 'wasm-eval', 'wasm-eval'],
     ['a websocket URL', 'wss://evil.example/socket?x=1', 'wss://evil.example'],
+    ['a plain host', 'https://evil.example/p.png', 'https://evil.example'],
+    [
+      'a payload in subdomain labels',
+      `https://${SUBDOMAIN_PAYLOAD}.cdn.evil.example/p.png`,
+      'https://*.evil.example',
+    ],
+    [
+      'a subdomain with a port',
+      'https://a.b.evil.example:8443/p.png',
+      'https://*.evil.example:8443',
+    ],
+    [
+      'an IPv4 host with a port',
+      'http://203.0.113.9:8080/p.png?d=x',
+      'http://203.0.113.9:8080',
+    ],
+    ['an IPv6 host', 'http://[2001:db8::1]/p.png', 'http://[2001:db8::1]'],
+    [
+      'a punycode host',
+      'https://payload.xn--bcher-kva.example/p.png',
+      'https://*.xn--bcher-kva.example',
+    ],
+    [
+      'an internationalized host',
+      'https://daten.bücher.example/p.png',
+      'https://*.xn--bcher-kva.example',
+    ],
+    [
+      'a registrable part longer than a host is logged',
+      `https://x.${'a'.repeat(100)}.example/p.png`,
+      'https://*',
+    ],
   ])('reduces %s to its source', async (_label, blocked, expected) => {
     await post(
       LEGACY_TYPE,

@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import { z } from 'zod';
 
 const CSP_VIOLATION_REPORT_TYPE = 'csp-violation';
@@ -6,6 +8,11 @@ const MAX_WORD_LENGTH = 32;
 const WORD = /^[a-z]+(?:-[a-z]+)*$/;
 const PATH_PARAMETER = ':param';
 const OPAQUE_ORIGIN = 'null';
+const REGISTRABLE_LABEL_COUNT = 2;
+const MAX_LOGGED_HOST_LENGTH = 64;
+const SUBDOMAIN_WILDCARD = '*.';
+const HOST_WILDCARD = '*';
+const IPV6_BRACKETS = /^\[|\]$/g;
 const DISPOSITIONS = ['enforce', 'report'] as const;
 
 type Disposition = (typeof DISPOSITIONS)[number];
@@ -141,10 +148,10 @@ function toViolation(fields: ViolationFields): CspViolation {
   return violation;
 }
 
-// A blocked URL is whatever the page tried to load, query string included, so
-// an exfiltration attempt carries its payload in it: only the origin is kept.
-// Keywords (inline, eval) and the bare scheme browsers send for data: or blob:
-// pass as they are.
+// A blocked URL is whatever the page tried to load, so an exfiltration attempt
+// can carry its payload in the path, the query or the subdomain labels: only
+// the scheme, the last two host labels and the port are kept. Keywords (inline,
+// eval) and the bare scheme browsers send for data: or blob: pass as they are.
 function sourceOf(blocked: string): string | undefined {
   if (isWord(blocked)) {
     return blocked;
@@ -153,11 +160,28 @@ function sourceOf(blocked: string): string | undefined {
   if (url === null) {
     return undefined;
   }
-  if (url.origin !== OPAQUE_ORIGIN) {
-    return url.origin;
+  if (url.origin === OPAQUE_ORIGIN) {
+    const scheme = url.protocol.slice(0, -1);
+    return isWord(scheme) ? scheme : undefined;
   }
-  const scheme = url.protocol.slice(0, -1);
-  return isWord(scheme) ? scheme : undefined;
+  const origin = new URL(url.origin);
+  const port = origin.port === '' ? '' : `:${origin.port}`;
+  return `${origin.protocol}//${registrableHostOf(origin.hostname)}${port}`;
+}
+
+// The URL parser enforces no label length, so even the kept labels are capped.
+function registrableHostOf(hostname: string): string {
+  const labels =
+    isIP(hostname.replace(IPV6_BRACKETS, '')) !== 0
+      ? [hostname]
+      : hostname.split('.');
+  const registrable = labels.slice(-REGISTRABLE_LABEL_COUNT).join('.');
+  if (registrable.length > MAX_LOGGED_HOST_LENGTH) {
+    return HOST_WILDCARD;
+  }
+  return labels.length > REGISTRABLE_LABEL_COUNT
+    ? `${SUBDOMAIN_WILDCARD}${registrable}`
+    : registrable;
 }
 
 // A path segment can be a share-link token, which grants access to the note,
