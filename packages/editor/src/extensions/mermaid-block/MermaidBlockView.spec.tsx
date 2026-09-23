@@ -45,6 +45,7 @@ vi.mock('@tiptap/react', () => ({
 
 const CODE = 'flowchart LR\n  A[Start] --> B[End]';
 const SETTLE_TIMEOUT_MS = 3000;
+const ATTACKER = 'x.invalid';
 
 function Harness({
   initialViewMode,
@@ -76,6 +77,17 @@ function findSvg() {
   return waitFor(() => expect(previewArea()).not.toBeNull(), {
     timeout: SETTLE_TIMEOUT_MS,
   });
+}
+
+function attackerReferences(root: Element): string[] {
+  return [...root.querySelectorAll('*')].flatMap((element) => [
+    ...[...element.attributes]
+      .filter((attr) => attr.value.includes(ATTACKER))
+      .map((attr) => `${element.localName}[${attr.name}]`),
+    ...(element.localName === 'style' && element.textContent?.includes(ATTACKER)
+      ? ['style']
+      : []),
+  ]);
 }
 
 function switchMode(user: ReturnType<typeof userEvent.setup>, key: string) {
@@ -233,5 +245,22 @@ describe('MermaidBlockView', () => {
     expect(
       screen.getByRole('dialog').querySelector('svg[data-source-hash]')
     ).not.toBeNull();
+  });
+
+  it('injects the diagram, inline and expanded, with nothing that loads a resource', async () => {
+    const user = userEvent.setup();
+    renderMock.mockImplementationOnce(async (id: string) => ({
+      svg: `<svg id="${id}" data-source-hash="0"><style>#${id} span{background:url(https://${ATTACKER}/a.png)}</style><image href="https://${ATTACKER}/b.png"></image></svg>`,
+    }));
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+
+    expect(attackerReferences(screen.getByTestId('node-view'))).toEqual([]);
+
+    await user.click(
+      screen.getByRole('button', { name: 'editor.mermaid.expand' })
+    );
+
+    expect(attackerReferences(screen.getByRole('dialog'))).toEqual([]);
   });
 });
