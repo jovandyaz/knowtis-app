@@ -23,6 +23,8 @@ import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 import { restoreStoredAttributes } from '../sanitize/stored-attributes';
 
+const UNRENDERABLE_CONTENT = 'content the server cannot render';
+
 export interface UpdateProposalInput {
   readonly title?: string;
   readonly contentMarkdown?: string;
@@ -142,6 +144,9 @@ export class MutationProposalBuilder {
     const body = await this.retrieval.getBody(userId, noteId);
     if (!body) {
       return err(AgentErrors.noteNotFound(noteId));
+    }
+    if (body.html === null) {
+      return err(AgentErrors.editWouldLoseContent([UNRENDERABLE_CONTENT]));
     }
     const original = htmlToMarkdown(body.html);
     const edited = applyNoteEdits(original, input.edits);

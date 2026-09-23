@@ -215,6 +215,27 @@ describe('MutationProposalBuilder', () => {
 
     expect(r._unsafeUnwrapErr().code).toBe('AGENT_NOTE_NOT_FOUND');
   });
+
+  it('still renames and shares a note whose state does not render', async () => {
+    const builder = new MutationProposalBuilder(
+      makeRetrieval({
+        getBody: vi.fn().mockResolvedValue({ ...BODY, html: null }),
+      })
+    );
+
+    const renamed = await builder.buildUpdate(USER, 'note-1', { title: 'New' });
+    const shared = await builder.buildShare(
+      USER,
+      'note-1',
+      'a@b.com',
+      'viewer'
+    );
+
+    expect(renamed._unsafeUnwrap().summary).toBe('Update "Old": title → "New"');
+    expect(shared._unsafeUnwrap().summary).toBe(
+      'Share "Old" with a@b.com as viewer'
+    );
+  });
 });
 
 const READ_BOUND_CHARS = 10_000;
@@ -360,6 +381,20 @@ describe('MutationProposalBuilder.buildEdit', () => {
     });
 
     expect(r._unsafeUnwrapErr().code).toBe('AGENT_NOTE_NOT_FOUND');
+  });
+
+  it('refuses an edit to a note whose state does not render', async () => {
+    const { builder } = editing('<p>body</p>', {
+      getBody: vi.fn().mockResolvedValue({ ...BODY, html: null }),
+    });
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'body', newText: 'text' }],
+    });
+
+    expect(r._unsafeUnwrapErr()).toEqual(
+      AgentErrors.editWouldLoseContent(['content the server cannot render'])
+    );
   });
 
   it('never reads the model-facing view, which would cost a conversion and a scan', async () => {

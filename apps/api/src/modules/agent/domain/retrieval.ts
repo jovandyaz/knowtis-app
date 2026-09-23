@@ -26,10 +26,10 @@ export interface AgentNote extends NoteMeta {
   readonly createdAt: string;
 }
 
-/** The whole note, rendered from its CRDT state, unconverted and unscreened. Never hand `html` to a model: it has not passed the injection guard. `updatedAt` is the ISO string `getById` reports. */
+/** The whole note, rendered from its CRDT state, unconverted and unscreened. Never hand `html` to a model: it has not passed the injection guard. `html` is null when the state does not render: the `content` column stops updating then, so an edit built on it would revert the note. `updatedAt` is the ISO string `getById` reports. */
 export interface NoteBody {
   readonly title: string;
-  readonly html: string;
+  readonly html: string | null;
   readonly updatedAt: string;
 }
 

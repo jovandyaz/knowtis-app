@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as Y from 'yjs';
 
 import { detectPromptInjection } from '@knowtis/ai-gateway';
+import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
@@ -17,6 +19,7 @@ import {
   yjsStateToHtml,
 } from '../../../notes/infrastructure/html-to-yjs';
 import type { InjectionGuardService } from '../../application/injection-guard.service';
+import { AgentErrors } from '../../domain/agent-errors';
 import type { AgentNote } from '../../domain/retrieval';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import { storedHtml } from '../sanitize/html-sanitizer.fixtures';
@@ -850,6 +853,75 @@ describe('KeywordRetrievalAdapter', () => {
       expect(
         yjsStateToHtml(evolveYjsState(state, proposal.payload.contentHtml))
       ).toBe(storedHtml(LIVE_HTML.replace('Intro', 'Welcome')));
+    });
+
+    describe('when the state does not render', () => {
+      const UNKNOWN_NODE = 'nodeFromANewerEditor';
+      const RENDER_FAILED_EVENT = 'agent.retrieval.state_render_failed';
+
+      function withUnknownNode(state: Buffer): Buffer {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, new Uint8Array(state));
+        const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+        fragment.insert(fragment.length, [new Y.XmlElement(UNKNOWN_NODE)]);
+        const next = Buffer.from(Y.encodeStateAsUpdate(doc));
+        doc.destroy();
+        return next;
+      }
+
+      const unrenderableNote = () =>
+        frozenNote(withUnknownNode(htmlToYjsState(LIVE_HTML)));
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('getById shows the model the content column and logs the note id alone', async () => {
+        const errorSpy = vi
+          .spyOn(Logger.prototype, 'error')
+          .mockImplementation(() => undefined);
+        const { adapter } = makeAdapter(unrenderableNote());
+
+        const read = await adapter.getById(USER, NOTE_ID);
+
+        expect(read?.content).toBe('Intro');
+        expect(read?.contentStatus).toBe('complete');
+        expect(errorSpy.mock.calls).toEqual([
+          [{ event: RENDER_FAILED_EVENT, noteId: NOTE_ID, op: 'getById' }],
+        ]);
+      });
+
+      it('getBody returns no html rather than the stale content column', async () => {
+        const errorSpy = vi
+          .spyOn(Logger.prototype, 'error')
+          .mockImplementation(() => undefined);
+        const { adapter } = makeAdapter(unrenderableNote());
+
+        const body = await adapter.getBody(USER, NOTE_ID);
+
+        expect(body).toStrictEqual({
+          title: 'Trip',
+          html: null,
+          updatedAt: BASE_DATE.toISOString(),
+        });
+        expect(errorSpy.mock.calls).toEqual([
+          [{ event: RENDER_FAILED_EVENT, noteId: NOTE_ID, op: 'getBody' }],
+        ]);
+      });
+
+      it('refuses an edit instead of building it on the content column', async () => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const { adapter } = makeAdapter(unrenderableNote());
+        const builder = new MutationProposalBuilder(adapter);
+
+        const r = await builder.buildEdit(USER, NOTE_ID, {
+          edits: [{ oldText: 'Intro', newText: 'Welcome' }],
+        });
+
+        expect(r._unsafeUnwrapErr()).toEqual(
+          AgentErrors.editWouldLoseContent(['content the server cannot render'])
+        );
+      });
     });
 
     it.each([

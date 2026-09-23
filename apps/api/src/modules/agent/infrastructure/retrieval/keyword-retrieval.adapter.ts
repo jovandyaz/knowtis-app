@@ -39,14 +39,6 @@ interface ToolContent {
   readonly contentStatus: NoteContentStatus;
 }
 
-// `content` is rendered from the state and stops updating whenever that
-// render fails, so an edit built on it would revert the note.
-function currentBody(note: NoteEntity): string {
-  return note.yjsState && note.yjsState.byteLength > 0
-    ? yjsStateToHtml(note.yjsState)
-    : note.content;
-}
-
 @Injectable()
 export class KeywordRetrievalAdapter implements RetrievalPort {
   private readonly logger = new Logger(KeywordRetrievalAdapter.name);
@@ -86,9 +78,10 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     if (!note) {
       return null;
     }
+    const html = this.currentBody(note, 'getById') ?? note.content;
     return {
       ...toNoteHit(note, userId),
-      ...(await this.toToolContent(currentBody(note), userId, note.id)),
+      ...(await this.toToolContent(html, userId, note.id)),
       createdAt: note.createdAt.toISOString(),
     };
   }
@@ -104,7 +97,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     }
     return {
       title: note.title,
-      html: currentBody(note),
+      html: this.currentBody(note, 'getBody'),
       updatedAt: note.updatedAt.toISOString(),
     };
   }
@@ -130,6 +123,23 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     const { total, owned } =
       await this.noteReadRepository.countAccessibleByUser(branded);
     return { total, owned, sharedWithMe: total - owned };
+  }
+
+  private currentBody(note: NoteEntity, op: string): string | null {
+    if (!note.yjsState || note.yjsState.byteLength === 0) {
+      return note.content;
+    }
+    try {
+      return yjsStateToHtml(note.yjsState);
+    } catch {
+      // ProseMirror errors can quote note text, so only the id is logged.
+      this.logger.error({
+        event: 'agent.retrieval.state_render_failed',
+        noteId: note.id,
+        op,
+      });
+      return null;
+    }
   }
 
   private async toToolContent(
