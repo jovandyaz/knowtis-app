@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import { expect, type Page, type Request, type Route } from '@playwright/test';
 
+import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
+
 import { E2E } from '../../support/environment';
 import { test as sharingTest } from './sharing.fixture';
 
@@ -20,6 +22,8 @@ const POLLING_ROUTE_RE = /\/socket\.io\/\?.*EIO=4/;
 const COMPOSER_RE = /copilot|pregunta|ask/i;
 const DOCK_TOGGLE_RE = /^copilot$/i;
 const DOCK_HYDRATION_TIMEOUT_MS = 1_000;
+/** A same-origin file the preview serves as is, so the app does not boot on it. */
+const STATIC_PAGE_PATH = '/apple-touch-icon.png';
 
 export interface AgentScript {
   /** Emitted in order once the client sends `agent:message`. */
@@ -248,6 +252,18 @@ export async function scriptAgent(
   };
 }
 
+/** The owner page outlives the test, so the next spec would hydrate whatever
+ * thread this one left behind. Leaving the app first stops a store that is
+ * still running from writing the key back. */
+async function forgetCopilotConversation(page: Page): Promise<void> {
+  const response = await page.goto(STATIC_PAGE_PATH);
+  expect(response?.ok()).toBe(true);
+  await page.evaluate(
+    (key) => localStorage.removeItem(key),
+    COPILOT_CONVERSATION_STORAGE_KEY
+  );
+}
+
 /**
  * Test-scoped, not worker-scoped: a worker-scoped fixture here would give this
  * file its own worker "shape", so Playwright would restart the worker and
@@ -255,14 +271,12 @@ export async function scriptAgent(
  */
 export const test = sharingTest.extend<{ scriptedAgents: true }, object>({
   scriptedAgents: [
-    // Playwright parses this signature's text to resolve fixture deps, so the
-    // empty destructure is required even though this fixture needs nothing.
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({ sharing }, use) => {
       try {
         await use(true);
       } finally {
         await releaseScriptedAgents();
+        await forgetCopilotConversation(sharing.owner.page);
       }
     },
     { auto: true },
