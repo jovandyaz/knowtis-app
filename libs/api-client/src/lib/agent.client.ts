@@ -482,10 +482,10 @@ export class AgentClient {
     );
 
     onCurrentSocket('agent:done', (payload: AgentDonePayload) => {
-      if (payload.conversationId) {
+      const callbacks = this.activeCallbacks;
+      if (callbacks && payload.conversationId) {
         this.conversationId = payload.conversationId;
       }
-      const callbacks = this.activeCallbacks;
       this.clearPending();
       callbacks?.onDone(payload);
     });

@@ -184,6 +184,35 @@ describe('AgentClient', () => {
     );
   });
 
+  it("does not re-attach a cancelled turn's thread when its agent:done lands late", () => {
+    const client = makeClient();
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const handle = client.sendMessage('hi', callbacks);
+    const receipt = emit.mock.calls.at(-1)?.[2] as (
+      error: Error | null
+    ) => void;
+    receipt(null);
+    handle.cancel();
+    client.resetConversation();
+
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+      conversationId: 'conv-late',
+    });
+    client.sendMessage('fresh', callbacks);
+
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      { message: { content: 'fresh' } },
+      expect.any(Function)
+    );
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+
   it('resetConversation clears the remembered conversationId', () => {
     const client = makeClient();
     client.sendMessage('hi', {
