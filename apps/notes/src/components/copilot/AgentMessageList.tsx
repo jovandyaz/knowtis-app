@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
 
 import {
@@ -13,13 +15,16 @@ interface AgentMessageListProps {
   messages: AgentChatMessage[];
   status: AgentStatus;
   thinkingDetail?: string;
+  hasEarlier?: boolean;
 }
 
 export function AgentMessageList({
   messages,
   status,
   thinkingDetail,
+  hasEarlier = false,
 }: AgentMessageListProps) {
+  const { t } = useTranslation('notes');
   const lastAssistant = messages.at(-1);
   const isAssistantTurn =
     status === 'streaming' && lastAssistant?.role === 'assistant';
@@ -28,6 +33,11 @@ export function AgentMessageList({
   return (
     <Conversation aria-busy={status === 'streaming'} aria-live="polite">
       <ConversationContent>
+        {hasEarlier && (
+          <p className="text-center text-xs text-muted-foreground">
+            {t('ai.copilot.history.earlier')}
+          </p>
+        )}
         {messages.map((message) => (
           <AgentMessage
             key={message.id}
