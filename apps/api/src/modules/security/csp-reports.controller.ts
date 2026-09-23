@@ -1,0 +1,43 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Post,
+} from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+
+import { readCspViolations } from './csp-violation';
+
+const CSP_VIOLATION_EVENT = 'security.csp.violation';
+const CSP_REPORT_THROTTLE = { default: { limit: 30, ttl: 60_000 } };
+
+@ApiTags('Security')
+@Controller('csp-reports')
+export class CspReportsController {
+  private readonly logger = new Logger(CspReportsController.name);
+
+  @ApiOperation({
+    summary: 'Collect Content Security Policy violation reports',
+    description:
+      'Where browsers send the notes app policy violations: `report-uri` posts `application/csp-report`, the Reporting API posts `application/reports+json`. Unauthenticated. Each violation is logged with its directive, the blocked origin and the document path; nothing is stored.',
+  })
+  @ApiResponse({ status: 204, description: 'Report received' })
+  @ApiResponse({ status: 400, description: 'Not a CSP violation report' })
+  @ApiResponse({ status: 413, description: 'Body larger than 16 KB' })
+  @Throttle(CSP_REPORT_THROTTLE)
+  @Post()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  collect(@Body() body: unknown): void {
+    const violations = readCspViolations(body);
+    if (violations === null) {
+      throw new BadRequestException('Not a CSP violation report');
+    }
+    for (const violation of violations) {
+      this.logger.warn({ event: CSP_VIOLATION_EVENT, ...violation });
+    }
+  }
+}
