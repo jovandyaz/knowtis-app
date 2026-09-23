@@ -2,7 +2,11 @@ import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClient from '@knowtis/api-client';
-import { agentClient } from '@knowtis/api-client';
+import {
+  agentClient,
+  ApiClientError,
+  conversationsApi,
+} from '@knowtis/api-client';
 import type {
   AgentDonePayload,
   AgentErrorPayload,
@@ -10,6 +14,7 @@ import type {
   AgentStreamHandle,
 } from '@knowtis/api-client';
 import { conversationsQueryKeys } from '@knowtis/data-access-agent';
+import type { ConversationTranscript } from '@knowtis/shared-types';
 import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
 import { useAgentStore } from './agent.store';
@@ -191,5 +196,249 @@ describe('agent.store conversation identity', () => {
     useAgentStore.getState().bindUser('u1');
 
     expect(useAgentStore.getState().conversationId).toBeNull();
+  });
+});
+
+const TRANSCRIPT: ConversationTranscript = {
+  id: 'c1',
+  title: 'Trip',
+  noteId: null,
+  hasEarlier: true,
+  messages: [
+    {
+      turnId: 't1',
+      role: 'user',
+      content: 'Plan it',
+      sources: [],
+      stopReason: null,
+    },
+    {
+      turnId: 't1',
+      role: 'assistant',
+      content: 'Day one.',
+      sources: [],
+      stopReason: 'completed',
+    },
+  ],
+};
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+const contents = () =>
+  useAgentStore.getState().messages.map((message) => message.content);
+
+describe('agent.store openConversation', () => {
+  it('binds the client to the thread before fetching it', () => {
+    vi.mocked(conversationsApi.transcript).mockReturnValue(
+      deferred<ConversationTranscript>().promise
+    );
+
+    void useAgentStore.getState().openConversation('c1', 'switcher');
+
+    const resumed = vi.mocked(agentClient.resumeConversation).mock
+      .invocationCallOrder[0];
+    const fetched = vi.mocked(conversationsApi.transcript).mock
+      .invocationCallOrder[0];
+    expect(resumed).toBeLessThan(fetched);
+    const { conversationId, hydration, messages } = useAgentStore.getState();
+    expect({ conversationId, hydration, messages }).toEqual({
+      conversationId: 'c1',
+      hydration: 'loading',
+      messages: [],
+    });
+  });
+
+  it('shows the transcript it fetched', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+
+    const outcome = await useAgentStore
+      .getState()
+      .openConversation('c1', 'switcher');
+
+    const state = useAgentStore.getState();
+    expect(outcome).toBe('opened');
+    expect(state.messages).toEqual([
+      { id: expect.any(String), role: 'user', content: 'Plan it' },
+      {
+        id: expect.any(String),
+        role: 'assistant',
+        content: 'Day one.',
+        sources: [],
+        stopReason: 'completed',
+      },
+    ]);
+    expect([
+      state.conversationTitle,
+      state.hasEarlier,
+      state.hydration,
+    ]).toEqual(['Trip', true, 'idle']);
+    expect(captureProductEvent).toHaveBeenCalledWith('ai conversation opened', {
+      source: 'switcher',
+    });
+  });
+
+  it('keeps the draft and drops the queue', async () => {
+    useAgentStore.setState({
+      draft: 'half typed',
+      queue: [{ id: 'q1', text: 'later' }],
+    });
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+
+    expect([
+      useAgentStore.getState().draft,
+      useAgentStore.getState().queue,
+    ]).toEqual(['half typed', []]);
+  });
+
+  it('cancels the live turn before switching and ignores its late chunks', async () => {
+    const { cancel, callbacks } = capture();
+    useAgentStore.getState().sendMessage('first');
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+    callbacks().onChunk({ text: 'late' });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(contents()).toEqual(['Plan it', 'Day one.']);
+  });
+
+  it('drops a transcript that lands after the user moved on', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    capture();
+    useAgentStore.getState().sendMessage('new question');
+
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('superseded');
+    expect(contents()).toEqual(['new question', '']);
+    expect(useAgentStore.getState().hydration).toBe('idle');
+  });
+
+  it('names the thread from a superseded transcript when nothing named it yet', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    capture();
+    useAgentStore.getState().sendMessage('new question');
+
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('superseded');
+    const { conversationId, conversationTitle } = useAgentStore.getState();
+    expect({ conversationId, conversationTitle }).toEqual({
+      conversationId: 'c1',
+      conversationTitle: 'Trip',
+    });
+  });
+
+  it('keeps the title a superseding thread already has', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    useAgentStore.getState().setConversationTitle('Renamed meanwhile');
+
+    capture();
+    useAgentStore.getState().sendMessage('new question');
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('superseded');
+    expect(useAgentStore.getState().conversationTitle).toBe(
+      'Renamed meanwhile'
+    );
+  });
+
+  it('does not name a different thread from a superseded transcript', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    useAgentStore.getState().newConversation();
+
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('superseded');
+    const { conversationId, conversationTitle } = useAgentStore.getState();
+    expect({ conversationId, conversationTitle }).toEqual({
+      conversationId: null,
+      conversationTitle: null,
+    });
+  });
+
+  it('forgets a conversation that is gone', async () => {
+    vi.mocked(conversationsApi.transcript).mockRejectedValue(
+      new ApiClientError('Conversation not found', 404)
+    );
+
+    const outcome = await useAgentStore
+      .getState()
+      .openConversation('c1', 'reload');
+
+    const { conversationId, hydration } = useAgentStore.getState();
+    expect([outcome, conversationId, hydration]).toEqual([
+      'gone',
+      null,
+      'idle',
+    ]);
+    expect(agentClient.resetConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the thread and offers a retry for any other failure', async () => {
+    vi.mocked(conversationsApi.transcript).mockRejectedValue(
+      new ApiClientError('boom', 500)
+    );
+
+    const outcome = await useAgentStore
+      .getState()
+      .openConversation('c1', 'reload');
+
+    const { conversationId, hydration } = useAgentStore.getState();
+    expect([outcome, conversationId, hydration]).toEqual([
+      'failed',
+      'c1',
+      'failed',
+    ]);
+  });
+
+  it('does not refetch the thread already on screen', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+
+    const again = await useAgentStore
+      .getState()
+      .openConversation('c1', 'switcher');
+
+    expect(again).toBe('unchanged');
+    expect(conversationsApi.transcript).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a different thread at the automatic effort', async () => {
+    useAgentStore.getState().setReasoningEffort('high');
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+
+    expect(useAgentStore.getState().reasoningEffort).toBe('auto');
+  });
+
+  it('clears what hydration left on newConversation', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+
+    useAgentStore.getState().newConversation();
+
+    const { hydration, hasEarlier } = useAgentStore.getState();
+    expect({ hydration, hasEarlier }).toEqual({
+      hydration: 'idle',
+      hasEarlier: false,
+    });
   });
 });

@@ -5,12 +5,16 @@ import { persist } from 'zustand/middleware';
 
 import {
   agentClient,
+  conversationsApi,
   type AgentErrorPayload,
   type AgentSource,
   type AgentStreamHandle,
   type WebSource,
 } from '@knowtis/api-client';
-import { invalidateConversations } from '@knowtis/data-access-agent';
+import {
+  invalidateConversations,
+  isConversationGone,
+} from '@knowtis/data-access-agent';
 import {
   invalidateNoteCollections,
   notesQueryKeys,
@@ -23,9 +27,21 @@ import {
 import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
 import { createChunkBuffer } from './chunk-buffer';
+import { toChatMessages } from './conversation-transcript';
 
 /** 'auto' leaves the reasoning budget to the server. */
 export type CopilotEffort = 'auto' | ReasoningEffort;
+
+export type ConversationHydration = 'idle' | 'loading' | 'failed';
+
+export type ConversationOpenSource = 'switcher' | 'reload';
+
+export type ConversationOpenOutcome =
+  | 'opened'
+  | 'gone'
+  | 'failed'
+  | 'superseded'
+  | 'unchanged';
 
 export type AgentStatus =
   | 'idle'
@@ -119,10 +135,16 @@ interface AgentState {
   userId: string | null;
   conversationId: string | null;
   conversationTitle: string | null;
+  hydration: ConversationHydration;
+  hasEarlier: boolean;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
   bindUser: (userId: string) => void;
   setConversationTitle: (title: string) => void;
+  openConversation: (
+    id: string,
+    source: ConversationOpenSource
+  ) => Promise<ConversationOpenOutcome>;
   markErrorAnswered: () => void;
   sendMessage: (
     text: string,
@@ -360,6 +382,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       pendingProposal: null,
       thinkingText: '',
       _streamHandle: null,
+      hydration: 'idle',
     });
 
     run(text, assistantMessage.id, noteId);
@@ -387,6 +410,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     userId: null,
     conversationId: null,
     conversationTitle: null,
+    hydration: 'idle',
+    hasEarlier: false,
     _streamHandle: null,
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
@@ -403,6 +428,75 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     },
 
     setConversationTitle: (title) => set({ conversationTitle: title }),
+
+    openConversation: async (id, source) => {
+      const current = get();
+      if (
+        id === current.conversationId &&
+        (current.hydration === 'loading' || current.messages.length > 0)
+      ) {
+        return 'unchanged';
+      }
+      current._streamHandle?.cancel();
+      streamVersion++;
+      const version = streamVersion;
+      buffer.clearInactivityTimer();
+      buffer.discard();
+      thinkingBuffer.discard();
+      activeAssistantId = null;
+      agentClient.resumeConversation(id);
+      const switching = id !== current.conversationId;
+      set({
+        conversationId: id,
+        conversationTitle: switching ? null : current.conversationTitle,
+        messages: [],
+        queue: [],
+        status: 'idle',
+        error: null,
+        pendingProposal: null,
+        thinkingText: '',
+        _streamHandle: null,
+        hydration: 'loading',
+        hasEarlier: false,
+        ...(switching ? { reasoningEffort: 'auto' as const } : {}),
+      });
+      try {
+        const transcript = await conversationsApi.transcript(id);
+        if (version !== streamVersion) {
+          const latest = get();
+          if (
+            latest.conversationId === id &&
+            latest.conversationTitle === null
+          ) {
+            set({ conversationTitle: transcript.title });
+          }
+          return 'superseded';
+        }
+        set({
+          messages: toChatMessages(transcript.messages, nextId),
+          conversationTitle: transcript.title,
+          hasEarlier: transcript.hasEarlier,
+          hydration: 'idle',
+        });
+        captureProductEvent('ai conversation opened', { source });
+        return 'opened';
+      } catch (error) {
+        if (version !== streamVersion) {
+          return 'superseded';
+        }
+        if (isConversationGone(error)) {
+          agentClient.resetConversation();
+          set({
+            conversationId: null,
+            conversationTitle: null,
+            hydration: 'idle',
+          });
+          return 'gone';
+        }
+        set({ hydration: 'failed' });
+        return 'failed';
+      }
+    },
 
     // Keyed on the failure itself, so a later one is answered again without
     // any of the store's error transitions having to remember to clear this.
@@ -471,6 +565,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         reasoningEffort: 'auto',
         conversationId: null,
         conversationTitle: null,
+        hydration: 'idle',
+        hasEarlier: false,
         _streamHandle: null,
       });
     },
