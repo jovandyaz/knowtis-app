@@ -12,6 +12,7 @@ import {
   httpClient,
   type RefreshOutcome,
 } from '@knowtis/api-client';
+import { safeLocalStorage } from '@knowtis/shared-util';
 
 import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
@@ -30,6 +31,7 @@ export const tokenStorage = createTokenStorage();
 export const authStore = createAuthStore({
   tokenStorage,
   storageKey: AUTH_STORAGE_KEY,
+  storage: safeLocalStorage,
 });
 
 setCollaborationTokenStorage(tokenStorage);
