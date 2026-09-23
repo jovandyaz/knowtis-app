@@ -56,4 +56,50 @@ describe('markdownToFragment', () => {
       ['codeBlock', 'const a = 1;\n\n  b();\n'],
     ]);
   });
+
+  it('keeps every construct markdown hands it', () => {
+    const fragment = markdownToFragment(
+      [
+        '# One',
+        '## Two',
+        '**b** *i* ~~s~~ `c` [l](https://example.com)',
+        '- a\n- b',
+        '3. c',
+        '> q',
+        '```ts\nx\n```',
+        '---',
+        '| h | k |\n| - | - |\n| 1 | 2 |',
+        '```mermaid\ngraph TD\n  A --> B\n```',
+      ].join('\n\n'),
+      getSchema(createBaseExtensions())
+    );
+
+    const blocks: string[] = [];
+    const marks = new Set<string>();
+    fragment.forEach((node) => {
+      blocks.push(node.type.name);
+      node.descendants((child) => {
+        child.marks.forEach((mark) => marks.add(mark.type.name));
+      });
+    });
+    expect(blocks).toEqual([
+      'heading',
+      'heading',
+      'paragraph',
+      'bulletList',
+      'orderedList',
+      'blockquote',
+      'codeBlock',
+      'horizontalRule',
+      'table',
+      'mermaidBlock',
+    ]);
+    expect([...marks].sort()).toEqual([
+      'bold',
+      'code',
+      'italic',
+      'link',
+      'strike',
+    ]);
+  });
 });

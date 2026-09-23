@@ -1,17 +1,26 @@
-import { createAiHtmlPurifier } from '@knowtis/editor';
-import {
-  AI_HTML_FORBID_ATTR,
-  AI_HTML_FORBID_TAGS,
-  isStoredImageUrl,
-} from '@knowtis/shared-util';
+import { AI_HTML_PURIFY_CONFIG, createAiHtmlPurifier } from '@knowtis/editor';
+import { IMAGE_FIGURE_ATTRIBUTE } from '@knowtis/editor-schema';
+import { isStoredImageUrl } from '@knowtis/shared-util';
 
 const IMAGE_TAG = 'img';
 const FIGURE_TAG = 'figure';
+const FIGCAPTION_TAG = 'figcaption';
 const SRC_ATTRIBUTE = 'src';
 const IMAGE_ATTRIBUTES = new Set([SRC_ATTRIBUTE, 'alt', 'width', 'height']);
-const PROPOSAL_FORBID_TAGS = AI_HTML_FORBID_TAGS.filter(
-  (tag) => tag !== IMAGE_TAG
-);
+const PROPOSAL_PURIFY_CONFIG = {
+  ...AI_HTML_PURIFY_CONFIG,
+  ALLOWED_TAGS: [
+    ...AI_HTML_PURIFY_CONFIG.ALLOWED_TAGS,
+    FIGURE_TAG,
+    FIGCAPTION_TAG,
+    IMAGE_TAG,
+  ],
+  ALLOWED_ATTR: [
+    ...AI_HTML_PURIFY_CONFIG.ALLOWED_ATTR,
+    IMAGE_FIGURE_ATTRIBUTE,
+    ...IMAGE_ATTRIBUTES,
+  ],
+};
 
 function isStoredImage(img: Element): boolean {
   return isStoredImageUrl(img.getAttribute(SRC_ATTRIBUTE) ?? '');
@@ -44,16 +53,13 @@ proposalPurify.addHook('uponSanitizeAttribute', (node, event) => {
 
 /**
  * Sanitizes LLM-produced HTML before it is rendered, whether injected as raw
- * HTML or parsed into the editor's ProseMirror schema. Beyond DOMPurify
- * defaults, strips every element/attribute that auto-fires a network request
- * (img/media/CSS url()) — assistant output is injectable via shared-note
- * content, so a remote fetch is an exfiltration channel.
+ * HTML or parsed into the editor's ProseMirror schema. Only what the note
+ * schema reads survives (`AI_HTML_PURIFY_CONFIG`), images excluded: assistant
+ * output is injectable via shared-note content, so anything that fetches on
+ * render is an exfiltration channel.
  */
 export function sanitizeAiHtml(html: string): string {
-  return aiPurify.sanitize(html, {
-    FORBID_TAGS: AI_HTML_FORBID_TAGS,
-    FORBID_ATTR: AI_HTML_FORBID_ATTR,
-  });
+  return aiPurify.sanitize(html, AI_HTML_PURIFY_CONFIG);
 }
 
 /**
@@ -62,8 +68,5 @@ export function sanitizeAiHtml(html: string): string {
  * as the server does, so the review shows exactly the images approval writes.
  */
 export function sanitizeProposalHtml(html: string): string {
-  return proposalPurify.sanitize(html, {
-    FORBID_TAGS: PROPOSAL_FORBID_TAGS,
-    FORBID_ATTR: AI_HTML_FORBID_ATTR,
-  });
+  return proposalPurify.sanitize(html, PROPOSAL_PURIFY_CONFIG);
 }

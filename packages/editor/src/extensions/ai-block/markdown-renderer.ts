@@ -2,9 +2,10 @@ import { createNodeFromContent } from '@tiptap/core';
 import { Fragment, type Schema } from '@tiptap/pm/model';
 import MarkdownIt from 'markdown-it';
 
-import { AI_HTML_FORBID_ATTR, AI_HTML_FORBID_TAGS } from '@knowtis/shared-util';
-
-import { createAiHtmlPurifier } from '../../markdown/ai-html-purifier';
+import {
+  AI_HTML_PURIFY_CONFIG,
+  createAiHtmlPurifier,
+} from '../../markdown/ai-html-purifier';
 import { mermaidFence } from '../../markdown/mermaid-fence';
 
 const MARKDOWN_RENDERER = new MarkdownIt({
@@ -26,10 +27,10 @@ const purifier = createAiHtmlPurifier();
  * the explicit sanitize step keeps this util safe in any consumer context.
  */
 export function renderMarkdownToSanitizedHtml(markdown: string): string {
-  return purifier.sanitize(MARKDOWN_RENDERER.render(markdown), {
-    FORBID_TAGS: AI_HTML_FORBID_TAGS,
-    FORBID_ATTR: AI_HTML_FORBID_ATTR,
-  });
+  return purifier.sanitize(
+    MARKDOWN_RENDERER.render(markdown),
+    AI_HTML_PURIFY_CONFIG
+  );
 }
 
 /**
