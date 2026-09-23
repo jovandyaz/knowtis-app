@@ -1,3 +1,5 @@
+import { safeSessionStorage } from '@knowtis/shared-util';
+
 const CHUNK_RELOAD_KEY = 'chunk-reload';
 const DEBOUNCE_MS = 10_000;
 
@@ -18,13 +20,13 @@ export function isChunkLoadError(error: Error): boolean {
 }
 
 export function shouldReloadForStaleChunk(): boolean {
-  const lastReload = sessionStorage.getItem(CHUNK_RELOAD_KEY);
+  const lastReload = safeSessionStorage.getItem(CHUNK_RELOAD_KEY);
   return !lastReload || Date.now() - Number(lastReload) > DEBOUNCE_MS;
 }
 
 export function reloadIfStaleChunk(): boolean {
   if (shouldReloadForStaleChunk()) {
-    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+    safeSessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
     window.location.reload();
     return true;
   }
