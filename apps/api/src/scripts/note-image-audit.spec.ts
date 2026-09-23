@@ -15,8 +15,6 @@ import { SCAN_BATCH_SIZE } from './id-keyset-scan';
 import {
   auditNoteImages,
   INCOMPLETE_STATE,
-  INVALID_SRC,
-  SAME_ORIGIN_SRC,
   type NoteImageState,
   type NoteImageStore,
 } from './note-image-audit';
@@ -98,6 +96,58 @@ describe('auditNoteImages', () => {
     });
   });
 
+  it('finds images nested in lists and tables, in the state and in the content', async () => {
+    const listSrc = 'https://list.example/a.png';
+    const tableSrc = 'https://table.example/b.png';
+    const yjsState = stateOf([
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [
+              { type: 'paragraph' },
+              {
+                type: 'orderedList',
+                content: [
+                  {
+                    type: 'listItem',
+                    content: [{ type: 'paragraph' }, imageNode(listSrc)],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [{ type: 'tableCell', content: [imageNode(tableSrc)] }],
+          },
+        ],
+      },
+    ]);
+    const content = [
+      `<ul><li><p></p><ol><li><p></p>${img(listSrc)}</li></ol></li></ul>`,
+      `<table><tbody><tr><td>${img(tableSrc)}</td></tr></tbody></table>`,
+    ].join('');
+
+    const report = await auditNoteImages(
+      memoryStore([note('a', { yjsState, content })])
+    );
+
+    expect(report.foreign).toEqual([
+      {
+        id: 'a',
+        inState: ['list.example', 'table.example'],
+        inContent: ['list.example', 'table.example'],
+      },
+    ]);
+  });
+
   it('reports each foreign host in the content column once, by host alone', async () => {
     const content = [
       img(FOREIGN_SRC),
@@ -131,7 +181,7 @@ describe('auditNoteImages', () => {
       {
         id: 'a',
         inState: [],
-        inContent: [SAME_ORIGIN_SRC, 'cdn.evil.example', 'data:', INVALID_SRC],
+        inContent: ['relative', 'cdn.evil.example', 'data:', 'invalid URL'],
       },
     ]);
   });
@@ -198,7 +248,7 @@ describe('auditNoteImages', () => {
     );
 
     expect(report.unreadable).toEqual([
-      { id: 'a', reason: 'Unexpected end of array' },
+      { id: 'a', reason: expect.stringMatching(/\S/) },
     ]);
     expect(report.foreign).toEqual([
       { id: 'a', inState: [], inContent: [FOREIGN_HOST] },

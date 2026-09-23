@@ -14,8 +14,8 @@ import {
 } from '../modules/notes/infrastructure/html-to-yjs';
 import { scanById, type KeysetSource } from './id-keyset-scan';
 
-export const SAME_ORIGIN_SRC = '(same origin)';
-export const INVALID_SRC = '(invalid URL)';
+const RELATIVE_SRC = 'relative';
+const INVALID_SRC = 'invalid URL';
 export const INCOMPLETE_STATE =
   'the CRDT state depends on updates it does not hold';
 
@@ -58,7 +58,7 @@ function srcHost(src: string): string {
   }
   const url = new URL(src, PAGE_ORIGIN);
   if (url.origin === PAGE_ORIGIN) {
-    return SAME_ORIGIN_SRC;
+    return RELATIVE_SRC;
   }
   return url.host || url.protocol;
 }
@@ -93,6 +93,8 @@ function imageSrcsInState(state: Buffer): unknown[] {
 function imageSrcsInHtml(html: string): unknown[] {
   const srcs: unknown[] = [];
   sanitizeHtml(html, {
+    allowedTags: [],
+    allowedAttributes: {},
     onOpenTag: (tag, attribs) => {
       if (tag === 'img') {
         srcs.push(attribs[SRC_ATTR]);
