@@ -796,6 +796,23 @@ describe('TagTree', () => {
       expect(triggerFor('personal')).toHaveFocus();
     });
 
+    it('should keep the explore sheet open when Escape cancels a rename', async () => {
+      const onClose = vi.fn();
+      const user = userEvent.setup();
+      await renderAt('/notes', (tree) => (
+        <MobileSheet isOpen onClose={onClose} label="Explore">
+          {tree}
+        </MobileSheet>
+      ));
+
+      await chooseRename(user, 'personal');
+      await user.type(screen.getByRole('textbox'), 'x{Escape}');
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(updateTag).not.toHaveBeenCalled();
+      expect(triggerFor('personal')).toHaveFocus();
+    });
+
     it('should keep focus on a renamed tag as the tree re-sorts and rolls it back', async () => {
       const vocabulary = [
         node('work', 5),

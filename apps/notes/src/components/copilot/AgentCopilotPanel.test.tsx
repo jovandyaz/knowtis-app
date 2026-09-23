@@ -1,13 +1,22 @@
 import { useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClient from '@knowtis/api-client';
-import { agentClient } from '@knowtis/api-client';
-import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  agentClient,
+  ApiClientError,
+  conversationsApi,
+} from '@knowtis/api-client';
+import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_EMAIL_NOT_VERIFIED_CODE,
+  type ConversationTranscript,
+} from '@knowtis/shared-types';
 
 import {
   createAuthApiMock,
@@ -68,10 +77,15 @@ vi.mock('@knowtis/api-client', async (importOriginal) => ({
     approve: vi.fn(),
     reject: vi.fn(),
     resetConversation: vi.fn(),
+    resumeConversation: vi.fn(),
     setTokenProvider: vi.fn(),
     setAuthRefreshHandler: vi.fn(),
     setSessionExpiredHandler: vi.fn(),
   },
+  conversationsApi: { transcript: vi.fn() },
+}));
+vi.mock('sonner', () => ({
+  toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() },
 }));
 
 const wrapper = createAuthWrapper(createAuthApiMock(), {
@@ -103,7 +117,15 @@ describe('AgentCopilotPanel', () => {
       pendingProposal: null,
       queue: [],
       draft: '',
+      userId: null,
+      conversationId: null,
+      conversationTitle: null,
+      hydration: 'idle',
+      hasEarlier: false,
     });
+    vi.mocked(conversationsApi.transcript).mockReset();
+    vi.mocked(agentClient.resumeConversation).mockClear();
+    vi.mocked(toast.info).mockClear();
   });
 
   it('offers verification when the copilot share is refused for an unverified account', () => {
@@ -260,6 +282,28 @@ describe('AgentCopilotPanel', () => {
     expect(composer).toHaveAttribute('data-queue', '1');
   });
 
+  it('shows a queue kept after the thread was found deleted instead of the empty state', () => {
+    act(() => {
+      useAgentStore.setState({
+        messages: [],
+        queue: [{ id: 'q1', text: 'Dos' }],
+        error: {
+          code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+          message: 'Conversation not found',
+        },
+      });
+    });
+
+    render(<AgentCopilotPanel />, { wrapper });
+
+    expect(
+      within(screen.getByRole('list', { name: 'ai.copilot.queue' })).getByText(
+        'Dos'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('empty')).toBeNull();
+  });
+
   it('queues a composer send, interrupts on send-now, and releases the queued row', async () => {
     const user = userEvent.setup();
     act(() => {
@@ -290,6 +334,182 @@ describe('AgentCopilotPanel', () => {
     );
     expect(useAgentStore.getState().messages.at(-2)?.content).toBe('later');
     expect(useAgentStore.getState().queue).toEqual([]);
+  });
+
+  describe('conversation history', () => {
+    const TRANSCRIPT: ConversationTranscript = {
+      id: 'c1',
+      title: 'Trip',
+      noteId: null,
+      hasEarlier: false,
+      messages: [
+        {
+          turnId: 't1',
+          role: 'user',
+          content: 'Plan it',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId: 't1',
+          role: 'assistant',
+          content: 'Day one.',
+          sources: [],
+          stopReason: 'completed',
+        },
+      ],
+    };
+
+    it('restores the conversation this browser remembered for this user', async () => {
+      useAgentStore.setState({
+        userId: HARNESS_PROFILE.id,
+        conversationId: 'c1',
+      });
+      vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+
+      render(<AgentCopilotPanel />, { wrapper });
+
+      expect(await screen.findByText('Day one.')).toBeInTheDocument();
+      expect(vi.mocked(conversationsApi.transcript).mock.calls).toEqual([
+        ['c1'],
+      ]);
+    });
+
+    it("does not restore another account's conversation", async () => {
+      useAgentStore.setState({ userId: 'someone-else', conversationId: 'c1' });
+
+      render(<AgentCopilotPanel />, { wrapper });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().userId).toBe(HARNESS_PROFILE.id)
+      );
+      expect(useAgentStore.getState().conversationId).toBeNull();
+      expect(conversationsApi.transcript).not.toHaveBeenCalled();
+    });
+
+    it('continues the remembered thread when a message goes out before it loads', async () => {
+      useAgentStore.setState({
+        userId: HARNESS_PROFILE.id,
+        conversationId: 'c1',
+      });
+      vi.mocked(conversationsApi.transcript).mockReturnValue(
+        new Promise(() => undefined)
+      );
+      const user = userEvent.setup();
+
+      render(<AgentCopilotPanel />, { wrapper });
+      await user.click(screen.getByRole('button', { name: 'send' }));
+
+      expect(vi.mocked(agentClient.resumeConversation).mock.calls).toEqual([
+        ['c1'],
+      ]);
+      expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
+        'later'
+      );
+      expect(
+        vi.mocked(agentClient.resumeConversation).mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        vi.mocked(agentClient.sendMessage).mock.invocationCallOrder.at(-1) ??
+          Number.NEGATIVE_INFINITY
+      );
+    });
+
+    it('says the conversation is loading while it loads', async () => {
+      useAgentStore.setState({
+        userId: HARNESS_PROFILE.id,
+        conversationId: 'c1',
+      });
+      vi.mocked(conversationsApi.transcript).mockReturnValue(
+        new Promise(() => undefined)
+      );
+
+      render(<AgentCopilotPanel />, { wrapper });
+
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'ai.copilot.history.loading'
+      );
+      expect(screen.queryByText('ai.copilot.thinking')).toBeNull();
+      expect(screen.queryByTestId('empty')).toBeNull();
+    });
+
+    it('offers a retry when the conversation fails to load', async () => {
+      useAgentStore.setState({
+        userId: HARNESS_PROFILE.id,
+        conversationId: 'c1',
+      });
+      vi.mocked(conversationsApi.transcript).mockRejectedValue(
+        new ApiClientError('boom', 500)
+      );
+      const user = userEvent.setup();
+
+      render(<AgentCopilotPanel />, { wrapper });
+      await screen.findByText('ai.copilot.history.loadFailed');
+      await user.click(
+        screen.getByRole('button', { name: 'ai.preview.retry' })
+      );
+
+      await waitFor(() =>
+        expect(conversationsApi.transcript).toHaveBeenCalledTimes(2)
+      );
+    });
+
+    it('opens the earlier-messages note when the thread was cut', async () => {
+      useAgentStore.setState({
+        userId: HARNESS_PROFILE.id,
+        conversationId: 'c1',
+      });
+      vi.mocked(conversationsApi.transcript).mockResolvedValue({
+        ...TRANSCRIPT,
+        hasEarlier: true,
+      });
+
+      render(<AgentCopilotPanel />, { wrapper });
+
+      expect(
+        await screen.findByText('ai.copilot.history.earlier')
+      ).toBeInTheDocument();
+    });
+
+    it('tells the user once when a send lands in a deleted conversation', () => {
+      render(<AgentCopilotPanel />, { wrapper });
+
+      act(() => {
+        useAgentStore.setState({
+          status: 'idle',
+          error: {
+            code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+            message: 'Conversation not found',
+          },
+        });
+      });
+      act(() => {
+        useAgentStore.setState({ draft: 'typing on' });
+      });
+
+      expect(vi.mocked(toast.info).mock.calls).toEqual([
+        ['ai.copilot.history.gone'],
+      ]);
+    });
+
+    it('does not repeat the notice when the dock reopens', () => {
+      const { unmount } = render(<AgentCopilotPanel />, { wrapper });
+      act(() => {
+        useAgentStore.setState({
+          status: 'idle',
+          error: {
+            code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+            message: 'Conversation not found',
+          },
+        });
+      });
+
+      unmount();
+      render(<AgentCopilotPanel />, { wrapper });
+
+      expect(vi.mocked(toast.info).mock.calls).toEqual([
+        ['ai.copilot.history.gone'],
+      ]);
+    });
   });
 });
 

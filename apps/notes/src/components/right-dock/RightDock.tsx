@@ -31,7 +31,8 @@ import {
 import { useCollapseFocusReturn, useMediaQuery } from '@knowtis/shared-hooks';
 
 import { isStudyFocusOpen } from '../artifacts/focus/study-focus-marker';
-import { AgentCopilotPanel } from '../copilot';
+import { AgentCopilotPanel } from '../copilot/AgentCopilotPanel';
+import { ConversationSwitcher } from '../copilot/ConversationSwitcher';
 
 const DOCK_COLLAPSE_THRESHOLD = 240;
 const DOCK_PRESENTATION = {
@@ -77,12 +78,15 @@ function roomBesideDocument(
 function DockHeader() {
   const { t } = useTranslation('notes');
   const newConversation = useAgentStore((s) => s.newConversation);
-  const hasConversation = useAgentStore((s) => s.messages.length > 0);
+  const hasConversation = useAgentStore(
+    (s) => s.messages.length > 0 || s.conversationId !== null
+  );
 
-  // The row is always here so the panel's top edge does not jump when the first
-  // message lands; the action itself has nothing to reset until then.
   return (
-    <div className="flex h-12 shrink-0 items-center justify-end px-4">
+    <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-4">
+      <div className="min-w-0 flex-1">
+        <ConversationSwitcher />
+      </div>
       {hasConversation && (
         <Button
           type="button"

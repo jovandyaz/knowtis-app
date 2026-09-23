@@ -3,6 +3,7 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type UseMutationOptions,
 } from '@tanstack/react-query';
 
 import { ApiClientError, conversationsApi } from '@knowtis/api-client';
@@ -21,6 +22,12 @@ export interface RenameConversationInput {
   id: string;
   title: string;
 }
+
+/** Outcome callbacks that still run when the component that mutated has unmounted. */
+export type ConversationMutationCallbacks<TVariables> = Pick<
+  UseMutationOptions<void, Error, TVariables>,
+  'onSuccess' | 'onError'
+>;
 
 export function invalidateConversations(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: conversationsQueryKeys.all });
@@ -41,19 +48,25 @@ export function useConversations(limit: number) {
   });
 }
 
-export function useRenameConversation() {
+export function useRenameConversation(
+  callbacks: ConversationMutationCallbacks<RenameConversationInput> = {}
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, title }: RenameConversationInput) =>
       conversationsApi.rename(id, title),
+    ...callbacks,
     onSettled: () => invalidateConversations(queryClient),
   });
 }
 
-export function useDeleteConversation() {
+export function useDeleteConversation(
+  callbacks: ConversationMutationCallbacks<string> = {}
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => conversationsApi.remove(id),
+    ...callbacks,
     onSettled: () => invalidateConversations(queryClient),
   });
 }

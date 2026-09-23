@@ -146,4 +146,31 @@ describe('AgentMessageList', () => {
     render(list({ content: 'La respuesta', status: 'idle' }));
     expect(screen.getByText('luego')).toBeInTheDocument();
   });
+
+  it('opens with a note when earlier messages are not shown', () => {
+    render(
+      <AgentMessageList
+        messages={[{ id: 'u1', role: 'user', content: 'hola' }]}
+        status="idle"
+        hasEarlier
+      />
+    );
+
+    const note = screen.getByText('ai.copilot.history.earlier');
+    expect(
+      note.compareDocumentPosition(screen.getByText('hola')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('says nothing about earlier messages when the whole thread is shown', () => {
+    render(
+      <AgentMessageList
+        messages={[{ id: 'u1', role: 'user', content: 'hola' }]}
+        status="idle"
+      />
+    );
+
+    expect(screen.queryByText('ai.copilot.history.earlier')).toBeNull();
+  });
 });
