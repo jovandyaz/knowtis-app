@@ -1400,6 +1400,7 @@ What still changes on an edit:
 
 - a table's merged cells lose their merge (GFM has none), and its column widths are dropped; every cell keeps its text and its column;
 - trailing blank lines at the end of a diagram's code are trimmed;
+- an image from outside the app's blob store, which a note can hold only from before the host was pinned or through the collaboration socket, is dropped with its caption; the guard does not count it, since the editor shows it only as a placeholder;
 - a line holding nothing but non-breaking spaces comes back empty: a paragraph or task text of nothing else, or the last line of a paragraph after a line break;
 - a space or non-breaking space at the edge of a bold, italic, code or link run moves just outside the run.
 

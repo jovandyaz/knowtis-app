@@ -1,10 +1,14 @@
-import { yDocToProsemirrorJSON } from 'y-prosemirror';
+import { generateJSON } from '@tiptap/html/server';
+import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import {
+  editorSchema,
   htmlToYjsState,
+  noteSchemaExtensions,
+  yDocToHtml,
   yjsStateToHtml,
 } from '../../../notes/infrastructure/html-to-yjs';
 
@@ -86,4 +90,18 @@ export function collectTypes(
 /** The HTML the server actually stores for `html`, so a fixture cannot drift from the real shape. */
 export function storedHtml(html: string): string {
   return yjsStateToHtml(htmlToYjsState(html));
+}
+
+/** The HTML the server reads back for `html` written over the collaboration socket, which skips the server's foreign-image filter. */
+export function socketStoredHtml(html: string): string {
+  const doc = prosemirrorJSONToYDoc(
+    editorSchema,
+    generateJSON(html, noteSchemaExtensions),
+    YJS_XML_FRAGMENT_NAME
+  );
+  try {
+    return yDocToHtml(doc);
+  } finally {
+    doc.destroy();
+  }
 }

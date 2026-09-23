@@ -3,7 +3,10 @@ import { generateJSON } from '@tiptap/html/server';
 
 import { BLANK_TEXT } from '@knowtis/note-markdown';
 
-import { noteSchemaExtensions } from '../../../notes/infrastructure/html-to-yjs';
+import {
+  isForeignImage,
+  noteSchemaExtensions,
+} from '../../../notes/infrastructure/html-to-yjs';
 
 // `<p>&nbsp;</p>` reads back as an empty paragraph that looks the same, so
 // counting its text would refuse an edit that loses nothing.
@@ -11,7 +14,12 @@ function isBlankText(node: JSONContent): boolean {
   return node.type === 'text' && BLANK_TEXT.test(node.text ?? '');
 }
 
+// Every sanitizer drops an image the app never stored, caption and all, so
+// counting it would refuse any edit to a note that holds one.
 function countInto(node: JSONContent, counts: Map<string, number>): void {
+  if (isForeignImage(node)) {
+    return;
+  }
   if (node.type && !isBlankText(node)) {
     counts.set(node.type, (counts.get(node.type) ?? 0) + 1);
   }
@@ -20,8 +28,6 @@ function countInto(node: JSONContent, counts: Map<string, number>): void {
   }
 }
 
-// Not through `htmlToYjsState`, since it drops foreign images and would hide
-// the very loss this check reports.
 function nodeCounts(html: string): Map<string, number> | null {
   let doc: JSONContent;
   try {

@@ -19,6 +19,7 @@ import {
   collectTypes,
   EDITOR_VOCABULARY_MARKDOWN,
   persistedDocument,
+  socketStoredHtml,
   storedHtml,
 } from '../sanitize/html-sanitizer.fixtures';
 import { MutationProposalBuilder } from './mutation-proposal.builder';
@@ -612,19 +613,33 @@ describe('MutationProposalBuilder.buildEdit', () => {
     expect(html).not.toContain('Only sentence.');
   });
 
-  it('refuses an edit to a note holding a foreign image, which the collaboration socket stores without the server funnel', async () => {
-    const { builder } = editing(
-      '<p>Old text.</p><figure data-image=""><img src="https://attacker.example/x.png" alt="x"><figcaption></figcaption></figure>'
-    );
+  it.each([
+    [
+      'read from the content column',
+      '<p>Old text.</p><figure data-image=""><img src="https://attacker.example/x.png" alt="x"><figcaption>cap</figcaption></figure>',
+    ],
+    [
+      'written over the collaboration socket',
+      socketStoredHtml(
+        '<p>Old text.</p><figure data-image=""><img src="https://attacker.example/x.png" alt="x"><figcaption>cap</figcaption></figure>'
+      ),
+    ],
+  ])(
+    'edits a note holding a foreign image %s and drops the image',
+    async (_label, bodyHtml) => {
+      const { builder } = editing(bodyHtml);
 
-    const r = await builder.buildEdit(USER, 'note-1', {
-      edits: [{ oldText: 'Old text.', newText: 'New text.' }],
-    });
+      const r = await builder.buildEdit(USER, 'note-1', {
+        edits: [{ oldText: 'Old text.', newText: 'New text.' }],
+      });
 
-    const error = r._unsafeUnwrapErr();
-    expect(error.code).toBe('AGENT_EDIT_WOULD_LOSE_CONTENT');
-    expect(error.message).toContain('image');
-  });
+      const html = contentHtmlOf(r._unsafeUnwrap());
+      expect(
+        collectNodesOfType(persistedDocument(html), 'image')
+      ).toStrictEqual([]);
+      expect(storedHtml(html)).toBe('<p>New text.</p>');
+    }
+  );
 
   it('refuses an edit to a note holding an AI block, which Markdown has no form for', async () => {
     const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
