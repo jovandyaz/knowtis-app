@@ -184,6 +184,35 @@ describe('AgentClient', () => {
     );
   });
 
+  it("does not re-attach a cancelled turn's thread when its agent:done lands late", () => {
+    const client = makeClient();
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const handle = client.sendMessage('hi', callbacks);
+    const receipt = emit.mock.calls.at(-1)?.[2] as (
+      error: Error | null
+    ) => void;
+    receipt(null);
+    handle.cancel();
+    client.resetConversation();
+
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+      conversationId: 'conv-late',
+    });
+    client.sendMessage('fresh', callbacks);
+
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      { message: { content: 'fresh' } },
+      expect.any(Function)
+    );
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+
   it('resetConversation clears the remembered conversationId', () => {
     const client = makeClient();
     client.sendMessage('hi', {
@@ -1234,14 +1263,43 @@ describe('AgentClient – abandoning an unacknowledged request', () => {
     });
   });
 
-  it('cancels an acknowledged turn with agent:cancel and keeps its socket', () => {
+  it('cancels an acknowledged turn with agent:cancel and drops its socket', () => {
     const handle = client.sendMessage('one', callbacksOf());
     receiptOf(lastEmit())(null);
 
     handle.cancel();
 
     expect(eventsEmitted()).toEqual(['agent:message', 'agent:cancel']);
-    expect(fake.socket.disconnect).not.toHaveBeenCalled();
+    expect(fake.socket.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a cancelled turn late agent:done and agent:chunk once a new turn is sent', () => {
+    const handle = client.sendMessage('one', callbacksOf());
+    receiptOf(lastEmit())(null);
+    handle.cancel();
+
+    const second = createFakeSocket();
+    vi.mocked(io).mockReturnValue(second.socket as never);
+    const b = callbacksOf();
+    client.sendMessage('fresh', b);
+
+    const sentMessage = (second.socket.emit.mock.calls as unknown[][]).find(
+      (call) => call[0] === 'agent:message'
+    );
+    expect(sentMessage?.[1]).toEqual({ message: { content: 'fresh' } });
+
+    fake.trigger('agent:done', {
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+      conversationId: 'stale-conversation',
+    });
+    fake.trigger('agent:chunk', { text: 'late chunk' });
+
+    expect(b.onDone).not.toHaveBeenCalled();
+    expect(b.onChunk).not.toHaveBeenCalled();
   });
 
   it('drops the socket instead of cancelling when the message was never acknowledged', () => {
