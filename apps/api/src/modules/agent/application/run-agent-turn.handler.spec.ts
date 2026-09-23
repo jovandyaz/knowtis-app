@@ -3009,6 +3009,46 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      'folds a multi-line first message into its title',
+      'Plan\n  a trip',
+      'Plan a trip',
+    ],
+    ['stores no title for a whitespace-only first message', ' \n\t ', null],
+  ])('%s', async (_label, content, title) => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.create).toHaveBeenCalledWith({ userId: USER, title });
+  });
+
   it('creates a conversation, loads history, and persists the turn on done (memory path)', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();

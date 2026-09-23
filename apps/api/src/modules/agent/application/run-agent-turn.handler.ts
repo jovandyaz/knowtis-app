@@ -336,7 +336,7 @@ export class RunAgentTurnHandler {
     const created = await this.conversations.create({
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
-      title: deriveConversationTitle(message.content),
+      title: deriveConversationTitle(message.content) || null,
     });
     return { id: created.id, model: null, created: true };
   }

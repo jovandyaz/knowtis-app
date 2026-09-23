@@ -19,7 +19,7 @@ export interface ConversationMessageRow {
 export interface CreateConversationInput {
   readonly userId: string;
   readonly noteId?: string;
-  readonly title: string;
+  readonly title: string | null;
 }
 
 export interface PersistedTurnMessage {
