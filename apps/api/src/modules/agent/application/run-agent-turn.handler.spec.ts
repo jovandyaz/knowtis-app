@@ -778,7 +778,7 @@ describe('RunAgentTurnHandler', () => {
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('orchestrator failed');
-        // TypeScript needs a yield to infer AsyncGenerator; unreachable:
+        // Unreachable, but without a yield TypeScript cannot infer an AsyncGenerator.
         yield { type: 'chunk', text: '' } as AgentEvent;
       }),
     };
@@ -816,7 +816,7 @@ describe('RunAgentTurnHandler', () => {
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('connection to 10.0.0.5:5432 refused');
-        // TypeScript needs a yield to infer AsyncGenerator; unreachable:
+        // Unreachable, but without a yield TypeScript cannot infer an AsyncGenerator.
         yield { type: 'chunk', text: '' } as AgentEvent;
       }),
     };
@@ -1777,7 +1777,7 @@ describe('RunAgentTurnHandler', () => {
       { onChunk: vi.fn(), onDone, onError: vi.fn(), onProposal: vi.fn() }
     );
 
-    // 20 uncached * 3e-6 + 60 read * 3e-7 + 20 write * 3.75e-6 + 10 out * 1.5e-5
+    // 0.000303 because 20 uncached*3e-6 + 60 read*3e-7 + 20 write*3.75e-6 + 10 out*1.5e-5.
     const recorded = vi.mocked(rateLimit.recordUsage).mock.calls[0][0];
     expect(recorded.costUsd).toBeCloseTo(0.000303, 9);
     expect(onDone).toHaveBeenCalledWith(

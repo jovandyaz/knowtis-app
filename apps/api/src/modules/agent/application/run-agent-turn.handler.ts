@@ -457,7 +457,8 @@ export class RunAgentTurnHandler {
       const { history, knownNotes } = await this.loadConversationContext(
         input.conversationId
       );
-      // Embed the user's last real message, not the tool-confirmation outcome, for memory retrieval.
+      // A resume carries a tool-confirmation outcome, not the user's words, so
+      // memory retrieval embeds the last real user message instead.
       const latestUserContent =
         history.findLast((m) => m.role === 'user')?.content ?? '';
       const userMemories = latestUserContent
@@ -784,7 +785,8 @@ export class RunAgentTurnHandler {
             return;
           }
           case 'proposal':
-            // Proposal events carry no sources; the post-approval turn re-derives them.
+            // Empty because proposal events carry no sources; the post-approval
+            // turn re-derives them.
             await persistTurnOnce([], AGENT_STOP_REASON.COMPLETED);
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
@@ -897,7 +899,8 @@ export class RunAgentTurnHandler {
       return input.model;
     }
     const stored = input.conversationModel ?? null;
-    // On HITL resume this is the only carrier of the model that served the first half of the turn.
+    // On a HITL resume the stored model is the only record of which model served
+    // the first half of the turn, so it wins over the default while selectable.
     if (
       stored &&
       resuming &&

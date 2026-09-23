@@ -36,8 +36,6 @@ import { pruneTranscript } from '../../domain/prune-transcript';
 import { buildTurnRows } from '../../domain/turn-transcript';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
 
-// Own ids: specs sharing fixture users delete each other's rows in afterAll when
-// the suite runs in parallel against one database.
 const USER = '00000000-0000-4000-8000-000000000091';
 const OTHER = '00000000-0000-4000-8000-000000000092';
 
