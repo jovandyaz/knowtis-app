@@ -533,6 +533,69 @@ describe('agent.store sending into a conversation deleted elsewhere', () => {
   });
 });
 
+function seedStoredConversation(state: unknown) {
+  localStorage.setItem(
+    COPILOT_CONVERSATION_STORAGE_KEY,
+    JSON.stringify({ state, version: 0 })
+  );
+}
+
+describe('agent.store restoring the stored conversation', () => {
+  it('restores the user and the conversation it stored', async () => {
+    seedStoredConversation({ userId: 'u1', conversationId: 'c1' });
+
+    await useAgentStore.persist.rehydrate();
+
+    const { userId, conversationId } = useAgentStore.getState();
+    expect({ userId, conversationId }).toEqual({
+      userId: 'u1',
+      conversationId: 'c1',
+    });
+  });
+
+  it('restores a user who had no conversation open', async () => {
+    seedStoredConversation({ userId: 'u1', conversationId: null });
+
+    await useAgentStore.persist.rehydrate();
+
+    const { userId, conversationId } = useAgentStore.getState();
+    expect({ userId, conversationId }).toEqual({
+      userId: 'u1',
+      conversationId: null,
+    });
+  });
+
+  it.each([
+    ['a numeric conversation id', { userId: 'u1', conversationId: 42 }],
+    ['a missing owner', { conversationId: 'c1' }],
+    ['a stored value that is not an object', 'c1'],
+  ])('ignores %s', async (_label, stored) => {
+    seedStoredConversation(stored);
+
+    await useAgentStore.persist.rehydrate();
+
+    const { userId, conversationId } = useAgentStore.getState();
+    expect({ userId, conversationId }).toEqual({
+      userId: null,
+      conversationId: null,
+    });
+  });
+
+  it('never restores state it did not store', async () => {
+    seedStoredConversation({
+      userId: 'u1',
+      conversationId: 'c1',
+      messages: 'oops',
+      status: 'streaming',
+    });
+
+    await useAgentStore.persist.rehydrate();
+
+    const { messages, status } = useAgentStore.getState();
+    expect({ messages, status }).toEqual({ messages: [], status: 'idle' });
+  });
+});
+
 describe('agent.store when the browser refuses storage', () => {
   beforeEach(() => {
     refuseStorageWrites();

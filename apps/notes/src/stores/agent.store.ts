@@ -172,6 +172,24 @@ interface AgentState {
 type SetAgentState = StoreApi<AgentState>['setState'];
 type GetAgentState = StoreApi<AgentState>['getState'];
 
+interface PersistedConversation {
+  userId: string;
+  conversationId: string | null;
+}
+
+function isPersistedConversation(
+  value: unknown
+): value is PersistedConversation {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'userId' in value &&
+    typeof value.userId === 'string' &&
+    'conversationId' in value &&
+    (value.conversationId === null || typeof value.conversationId === 'string')
+  );
+}
+
 function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let seq = 0;
   const nextId = () => `m${++seq}`;
@@ -711,5 +729,13 @@ export const useAgentStore = create<AgentState>()(
       userId: state.userId,
       conversationId: state.conversationId,
     }),
+    merge: (persisted, current) =>
+      isPersistedConversation(persisted)
+        ? {
+            ...current,
+            userId: persisted.userId,
+            conversationId: persisted.conversationId,
+          }
+        : current,
   })
 );
