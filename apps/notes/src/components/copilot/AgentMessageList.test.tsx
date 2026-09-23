@@ -160,7 +160,7 @@ describe('AgentMessageList', () => {
     expect(
       note.compareDocumentPosition(screen.getByText('hola')) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('says nothing about earlier messages when the whole thread is shown', () => {
