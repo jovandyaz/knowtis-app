@@ -5,6 +5,8 @@ import { Streamdown } from 'streamdown';
 
 import { Button } from '@knowtis/design-system';
 
+import { UNTRUSTED_MARKDOWN_PROPS } from './untrusted-markdown';
+
 interface AIBlockStreamingProps {
   streamedText: string;
   onCancel: () => void;
@@ -30,7 +32,9 @@ export function AIBlockStreaming({
         </Button>
       </div>
       {streamedText ? (
-        <Streamdown isAnimating>{streamedText}</Streamdown>
+        <Streamdown isAnimating {...UNTRUSTED_MARKDOWN_PROPS}>
+          {streamedText}
+        </Streamdown>
       ) : (
         <div className="space-y-2">
           <div className="h-4 w-3/4 animate-pulse rounded bg-primary/10" />

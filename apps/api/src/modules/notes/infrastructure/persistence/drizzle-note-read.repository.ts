@@ -68,6 +68,8 @@ const noteViewColumns = {
   updatedAt: notes.updatedAt,
 };
 
+const noteEntityColumns = { ...noteViewColumns, yjsState: notes.yjsState };
+
 const noteSummaryColumns = {
   id: notes.id,
   title: notes.title,
@@ -128,9 +130,9 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
   async findByIdForUser(
     noteId: string,
     userId: UserId
-  ): Promise<NoteView | null> {
+  ): Promise<NoteEntity | null> {
     const result = await this.db
-      .select(noteViewColumns)
+      .select(noteEntityColumns)
       .from(notes)
       .leftJoin(notePermissions, this.permissionJoinCondition(userId))
       .where(and(eq(notes.id, noteId), this.accessCondition(userId)))
@@ -139,7 +141,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
     if (!result[0]) {
       return null;
     }
-    return mapToNoteView(result[0]);
+    return mapToNoteEntity(result[0]);
   }
 
   async findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]> {

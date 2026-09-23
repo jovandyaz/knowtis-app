@@ -42,7 +42,7 @@ export interface AccessibleNotesCount {
 export interface NoteReadRepository {
   findById(id: string): Promise<NoteEntity | null>;
   findByIdWithOwner(id: string): Promise<NoteViewWithOwner | null>;
-  findByIdForUser(noteId: string, userId: UserId): Promise<NoteView | null>;
+  findByIdForUser(noteId: string, userId: UserId): Promise<NoteEntity | null>;
   findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]>;
   /** Live notes among `ids` that `userId` owns, in one round trip; ids that are missing, deleted or foreign are simply absent. */
   findOwnedSummariesByIds(

@@ -10,12 +10,7 @@ export interface NoteHit extends NoteMeta {
   readonly title: string;
 }
 
-export const NOTE_CONTENT_STATUSES = [
-  'complete',
-  'truncated',
-  'withheld',
-] as const;
-export type NoteContentStatus = (typeof NOTE_CONTENT_STATUSES)[number];
+export type NoteContentStatus = 'complete' | 'truncated' | 'withheld';
 
 /** How much Markdown of one note a model may receive in a single read. */
 export const MAX_NOTE_CONTENT_CHARS = 10_000;
@@ -31,10 +26,10 @@ export interface AgentNote extends NoteMeta {
   readonly createdAt: string;
 }
 
-/** The stored note, unconverted and unscreened. Never hand `html` to a model: it has not passed the injection guard. `updatedAt` is the ISO string `getById` reports. */
+/** The whole note, rendered from its CRDT state, unconverted and unscreened. Never hand `html` to a model: it has not passed the injection guard. `html` is null when the state does not render: the `content` column stops updating then, so an edit built on it would revert the note. `updatedAt` is the ISO string `getById` reports. */
 export interface NoteBody {
   readonly title: string;
-  readonly html: string;
+  readonly html: string | null;
   readonly updatedAt: string;
 }
 

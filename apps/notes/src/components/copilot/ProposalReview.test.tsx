@@ -315,6 +315,67 @@ describe('ProposalReview', () => {
     ).toBeEnabled();
   });
 
+  describe('images', () => {
+    const STORED_SRC =
+      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    const FOREIGN_SRC = 'https://attacker.example/collect.png';
+    const figure = (src: string, caption: string) =>
+      `<figure data-image=""><img src="${src}" alt="lake"><figcaption>${caption}</figcaption></figure>`;
+    const imageSources = (container: HTMLElement) =>
+      [...container.querySelectorAll('img')].map((img) =>
+        img.getAttribute('src')
+      );
+
+    it('reports only the text change when the proposal keeps the image', async () => {
+      const kept = `<p>Intro</p>${figure(STORED_SRC, 'Lake')}`;
+      ready({ contentHtml: `${kept}<p>Old text.</p>` });
+      const { container } = renderReview({
+        payload: { contentHtml: `${kept}<p>New text.</p>` },
+      });
+
+      expect(
+        await screen.findByText('ai.copilot.review.changeOf:1/1')
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', {
+          name: /ai\.copilot\.review\.deletedBlocks/,
+        })
+      ).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(imageSources(container)).toEqual([STORED_SRC])
+      );
+    });
+
+    it('shows an image the proposal adds from the app store', async () => {
+      ready({ contentHtml: '<p>Intro</p>' });
+      const { container } = renderReview({
+        payload: { contentHtml: `<p>Intro</p>${figure(STORED_SRC, 'Lake')}` },
+      });
+
+      expect(
+        await screen.findByText('ai.copilot.review.changeOf:1/1')
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(imageSources(container)).toEqual([STORED_SRC])
+      );
+    });
+
+    it('drops an image from another host with its caption, as approval does', async () => {
+      ready({ contentHtml: '<p>Intro</p>' });
+      const { container } = renderReview({
+        payload: {
+          contentHtml: `<p>Intro</p>${figure(FOREIGN_SRC, 'Planted')}`,
+        },
+      });
+
+      expect(
+        await screen.findByText('ai.copilot.review.noChanges')
+      ).toBeInTheDocument();
+      expect(imageSources(container)).toEqual([]);
+      expect(container).not.toHaveTextContent('Planted');
+    });
+  });
+
   it('still shows a title-only proposal when the before version failed', () => {
     mockedBefore.mockReturnValue({ status: 'error' });
     renderReview({ payload: { title: 'Landing' } });

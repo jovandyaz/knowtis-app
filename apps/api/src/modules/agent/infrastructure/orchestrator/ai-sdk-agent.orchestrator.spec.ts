@@ -786,7 +786,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       })
     );
 
@@ -836,7 +836,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       })
     );
 
@@ -856,7 +856,6 @@ describe('AiSdkAgentOrchestrator', () => {
         ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
         resume: {
-          toolName: 'proposeCreateNote',
           outcome: 'created the note "E2E HITL"',
         },
       })
@@ -962,7 +961,6 @@ describe('AiSdkAgentOrchestrator', () => {
         ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
         resume: {
-          toolName: 'proposeCreateNote',
           outcome: 'you declined it, so nothing was changed',
         },
       })
@@ -988,7 +986,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
-        resume: { toolName: 'proposeCreateNote', outcome: hostile },
+        resume: { outcome: hostile },
       })
     );
 

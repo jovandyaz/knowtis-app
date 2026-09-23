@@ -98,6 +98,16 @@ describe('htmlToMarkdown', () => {
     expect(roundTripped).toContain('[a](');
   });
 
+  it('should escape text that reads as an HTML entity so it stays literal', () => {
+    const md = htmlToMarkdown(
+      '<p>&amp;nbsp; &amp;copy; &amp;#169; AT&amp;T</p>'
+    );
+    expect(md).toBe('\\&nbsp; \\&copy; \\&#169; AT&T');
+    expect(markdownToHtml(md)).toBe(
+      '<p>&amp;nbsp; &amp;copy; &amp;#169; AT&amp;T</p>\n'
+    );
+  });
+
   it('should keep intended marks intact after the escape override', () => {
     expect(htmlToMarkdown('<p><mark>hi</mark></p>')).toContain('==hi==');
     expect(htmlToMarkdown('<p>H<sub>2</sub>O</p>')).toContain('~2~');
@@ -330,5 +340,276 @@ describe('htmlToMarkdown editor-authored tables', () => {
 
     expect(markdown).toBe('| Day |\n| --- |\n| 1 |');
     expect(markdownToHtml(markdown)).toContain('<th>Day</th>');
+  });
+});
+
+describe('htmlToMarkdown images', () => {
+  // This package cannot import storedHtml() from the API; this is its output.
+  const STORED_FIGURE =
+    '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp" alt="a lake" width="320" height="200"><figcaption>Lake Atitlán</figcaption></figure>';
+
+  it('converts the stored figure to an image with the caption as title', () => {
+    expect(htmlToMarkdown(`<p>before</p>${STORED_FIGURE}<p>after</p>`)).toBe(
+      'before\n\n![a lake](https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp "Lake Atitlán")\n\nafter'
+    );
+  });
+
+  it('omits the title when the caption is empty', () => {
+    expect(
+      htmlToMarkdown(
+        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="a"><figcaption></figcaption></figure>'
+      )
+    ).toBe('![a](https://x.public.blob.vercel-storage.com/a.webp)');
+  });
+
+  it('escapes quotes in the caption and brackets in the alt', () => {
+    expect(
+      htmlToMarkdown(
+        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="a [b]"><figcaption>say "hi"</figcaption></figure>'
+      )
+    ).toBe(
+      '![a \\[b\\]](https://x.public.blob.vercel-storage.com/a.webp "say \\"hi\\"")'
+    );
+  });
+
+  it('escapes the alt and caption so markdown-it reads them back as written', () => {
+    expect(
+      htmlToMarkdown(
+        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="&amp;copy; \\ `x`"><figcaption>&amp;copy; \\ "q"</figcaption></figure>'
+      )
+    ).toBe(
+      '![\\&copy; \\\\ \\`x\\`](https://x.public.blob.vercel-storage.com/a.webp "\\&copy; \\\\ \\"q\\"")'
+    );
+  });
+
+  it.each([
+    ['an entity', '&copy;'],
+    ['brackets', 'a [b] c'],
+    ['quotes', 'a "q" b'],
+    ['backslashes', 'a\\b \\* c\\'],
+    ['emphasis', '*x* _y_'],
+    ['backticks', 'a ` b `c`'],
+  ])('keeps %s in the alt and caption literal', (_kind, text) => {
+    const attribute = text
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+    const html = markdownToHtml(
+      htmlToMarkdown(
+        `<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="${attribute}"><figcaption>${attribute}</figcaption></figure>`
+      )
+    );
+
+    expect(html).toBe(
+      `<figure data-image><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="${attribute}"><figcaption>${attribute}</figcaption></figure>\n`
+    );
+  });
+
+  it('round-trips the figure through markdownToHtml', () => {
+    const md = htmlToMarkdown(STORED_FIGURE);
+    expect(markdownToHtml(md)).toContain(
+      '<img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp" alt="a lake">'
+    );
+    expect(markdownToHtml(md)).toContain(
+      '<figcaption>Lake Atitlán</figcaption>'
+    );
+  });
+});
+
+describe('htmlToMarkdown nested task lists', () => {
+  // This package cannot import storedHtml() from the API; this is its output.
+  const STORED_NESTED =
+    '<ul data-type="taskList"><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div><p>book</p><ul data-type="taskList"><li data-checked="true" data-type="taskItem"><label><input type="checkbox" checked="checked"><span></span></label><div><p>flight</p></div></li><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div><p>hotel</p></div></li></ul></div></li><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div><p>pack</p></div></li></ul>';
+
+  it('indents a nested task list under its parent item', () => {
+    expect(htmlToMarkdown(STORED_NESTED)).toBe(
+      '- [ ] book\n  - [x] flight\n  - [ ] hotel\n- [ ] pack'
+    );
+  });
+
+  it('keeps a second paragraph of a task item as a continuation, not a sibling', () => {
+    const md = htmlToMarkdown(
+      '<ul data-type="taskList"><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div><p>book</p><p>ask about the window seat</p></div></li></ul>'
+    );
+    expect(md).toBe('- [ ] book\n  \n  ask about the window seat');
+    expect(markdownToHtml(md)).toContain('<p>ask about the window seat</p>');
+    expect(markdownToHtml(md).match(/data-type="taskItem"/g)).toHaveLength(1);
+  });
+
+  it('keeps a blank line inside a code block of a task item', () => {
+    const md = htmlToMarkdown(
+      '<ul data-type="taskList"><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div><p>fix</p><pre><code>a\n\n- b</code></pre></div></li></ul>'
+    );
+    expect(md).toBe('- [ ] fix\n  \n  ```\n  a\n  \n  - b\n  ```');
+    expect(markdownToHtml(md)).toContain('<pre><code>a\n\n- b');
+  });
+
+  it('writes a task item with no text as a bare checkbox', () => {
+    const item = (body: string) =>
+      `<ul data-type="taskList"><li data-checked="false" data-type="taskItem"><label><input type="checkbox"><span></span></label><div>${body}</div></li></ul>`;
+
+    expect(htmlToMarkdown(item('<p></p>'))).toBe('- [ ]');
+    expect(
+      htmlToMarkdown(
+        item(
+          '<p></p><ul data-type="taskList"><li data-checked="true" data-type="taskItem"><label><input type="checkbox" checked="checked"><span></span></label><div><p>b</p></div></li></ul>'
+        )
+      )
+    ).toBe('- [ ]\n  - [x] b');
+    expect(htmlToMarkdown(item('<p></p><p>later</p>'))).toBe(
+      '- [ ]\n  \n  later'
+    );
+  });
+
+  it('is a fixed point for the nested list', () => {
+    const once = htmlToMarkdown(STORED_NESTED);
+    expect(htmlToMarkdown(markdownToHtml(once))).toBe(once);
+  });
+});
+
+describe('htmlToMarkdown empty blocks', () => {
+  it('writes each empty paragraph as a line holding only a non-breaking space', () => {
+    expect(htmlToMarkdown('<p></p><p>a</p><p></p><p></p><p>b</p>')).toBe(
+      '&nbsp;\n\na\n\n&nbsp;\n\n&nbsp;\n\nb'
+    );
+    expect(htmlToMarkdown('<p>a</p><blockquote><p></p></blockquote>')).toBe(
+      'a\n\n> &nbsp;'
+    );
+  });
+
+  it('writes the empty paragraph a list item opens with only when text follows it', () => {
+    expect(
+      htmlToMarkdown('<ul><li><p></p><ul><li><p>b</p></li></ul></li></ul>')
+    ).toBe('-   -   b');
+    expect(htmlToMarkdown('<ul><li><p></p><p>a</p></li></ul>')).toBe(
+      '-   &nbsp;\n    \n    a'
+    );
+  });
+
+  it('writes an empty heading as its bare marker', () => {
+    expect(htmlToMarkdown('<h1></h1><p>a</p><h3></h3>')).toBe('#\n\na\n\n###');
+    expect(markdownToHtml('#\n\na\n\n###')).toBe(
+      '<h1></h1>\n<p>a</p>\n<h3></h3>\n'
+    );
+  });
+});
+
+describe('htmlToMarkdown non-breaking spaces', () => {
+  it('writes a non-breaking space that opens or ends a text as &nbsp;, which Markdown would trim', () => {
+    expect(htmlToMarkdown('<p>\u00a0a\u00a0</p>')).toBe('&nbsp;a&nbsp;');
+    expect(htmlToMarkdown('<p>a\u00a0\u00a0</p><p>b</p>')).toBe(
+      'a&nbsp;&nbsp;\n\nb'
+    );
+    expect(htmlToMarkdown('<h2>\u00a0a\u00a0</h2>')).toBe('## &nbsp;a&nbsp;');
+    expect(htmlToMarkdown('<h2>\u00a0</h2>')).toBe('## &nbsp;');
+  });
+
+  it('leaves a non-breaking space between words as it is', () => {
+    expect(htmlToMarkdown('<p>a\u00a0b</p>')).toBe('a\u00a0b');
+  });
+
+  it('keeps a cell holding only a non-breaking space', () => {
+    expect(
+      htmlToMarkdown(
+        editorTable(
+          '<tr><th colspan="1" rowspan="1"><p>h</p></th></tr>' +
+            '<tr><td colspan="1" rowspan="1"><p>\u00a0</p></td></tr>'
+        )
+      )
+    ).toBe('| h |\n| --- |\n| &nbsp; |');
+  });
+
+  it('keeps a non-breaking space that opens a caption', () => {
+    expect(
+      htmlToMarkdown(
+        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="a"><figcaption>\u00a0cap\u00a0</figcaption></figure>'
+      )
+    ).toBe(
+      '![a](https://x.public.blob.vercel-storage.com/a.webp "\u00a0cap\u00a0")'
+    );
+  });
+});
+
+describe('htmlToMarkdown line breaks', () => {
+  it('writes a line break as a backslash, so a line of nothing but a break stays in its paragraph', () => {
+    expect(htmlToMarkdown('<p>a<br><br>b</p>')).toBe('a\\\n\\\nb');
+  });
+
+  it('writes a line of only &nbsp; below a break that ends a paragraph', () => {
+    expect(htmlToMarkdown('<p><br></p>')).toBe('\\\n&nbsp;');
+    expect(htmlToMarkdown('<p>a<br></p>')).toBe('a\\\n&nbsp;');
+    expect(htmlToMarkdown('<p><br>a</p>')).toBe('\\\na');
+  });
+
+  it('writes a break in a heading or a cell, which hold one line, as a plain line end', () => {
+    expect(htmlToMarkdown('<h2>a<br>b</h2>')).toBe('## a\nb');
+    expect(
+      htmlToMarkdown(
+        editorTable('<tr><th colspan="1" rowspan="1"><p>a<br></p></th></tr>')
+      )
+    ).toBe('| a |\n| --- |');
+  });
+});
+
+describe('htmlToMarkdown list items', () => {
+  it('keeps an empty item as a bare marker', () => {
+    expect(htmlToMarkdown('<ul><li><p>a</p></li><li><p></p></li></ul>')).toBe(
+      '-   a\n    \n-'
+    );
+  });
+});
+
+describe('htmlToMarkdown code blocks', () => {
+  it('writes the code verbatim, its own last newline included', () => {
+    expect(htmlToMarkdown('<pre><code>x</code></pre>')).toBe('```\nx\n```');
+    expect(
+      htmlToMarkdown('<pre><code class="language-ts">x\n</code></pre>')
+    ).toBe('```ts\nx\n\n```');
+  });
+
+  it('keeps a code block with no code', () => {
+    expect(htmlToMarkdown('<pre><code></code></pre>')).toBe('```\n\n```');
+    expect(markdownToHtml('```\n\n```')).toBe('<pre><code></code></pre>\n');
+  });
+
+  it('opens a longer fence than any run of backticks that starts a line of the code', () => {
+    expect(htmlToMarkdown('<pre><code>```\nx\n  ````</code></pre>')).toBe(
+      '`````\n```\nx\n  ````\n`````'
+    );
+  });
+});
+
+describe('htmlToMarkdown mermaid', () => {
+  it('does not grow a blank line when the stored code ends with a newline', () => {
+    const md = htmlToMarkdown(
+      '<div data-code="graph TD\nA--&gt;B\n" data-view-mode="split" data-mermaid-block=""></div>'
+    );
+    expect(md).toBe('```mermaid\ngraph TD\nA-->B\n```');
+  });
+
+  it('settles code that ends with blank lines in one pass', () => {
+    const once = htmlToMarkdown(
+      '<div data-code="graph TD\nA--&gt;B\n\n" data-view-mode="split" data-mermaid-block=""></div>'
+    );
+    expect(once).toBe('```mermaid\ngraph TD\nA-->B\n```');
+    expect(htmlToMarkdown(markdownToHtml(once))).toBe(once);
+  });
+
+  it('keeps a diagram that is all its container holds', () => {
+    expect(
+      htmlToMarkdown(
+        '<blockquote><div data-code="graph TD" data-view-mode="split" data-mermaid-block=""></div></blockquote>'
+      )
+    ).toBe('> ```mermaid\n> graph TD\n> ```');
+  });
+
+  it('is a fixed point whether the code came from the editor or from Markdown', () => {
+    const fromEditor =
+      '<div data-code="graph TD\nA--&gt;B" data-view-mode="split" data-mermaid-block=""></div>';
+    const fromMarkdown =
+      '<div data-code="graph TD\nA--&gt;B\n" data-view-mode="split" data-mermaid-block=""></div>';
+    const once = htmlToMarkdown(fromEditor);
+    expect(htmlToMarkdown(fromMarkdown)).toBe(once);
+    expect(htmlToMarkdown(markdownToHtml(once))).toBe(once);
   });
 });

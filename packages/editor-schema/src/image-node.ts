@@ -1,7 +1,7 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
 
-import { ImageView } from './ImageView';
+export const IMAGE_NODE_NAME = 'image' as const;
+export const IMAGE_FIGURE_ATTRIBUTE = 'data-image';
 
 export interface ImageAttributes {
   src: string;
@@ -10,21 +10,15 @@ export interface ImageAttributes {
   height: number | null;
 }
 
-declare module '@tiptap/core' {
-  interface Commands<ReturnType> {
-    image: {
-      setImage: (attrs: {
-        src: string;
-        alt?: string;
-        width?: number | null;
-        height?: number | null;
-      }) => ReturnType;
-    };
-  }
+const IMAGE_FIGURE_TAG = `figure[${IMAGE_FIGURE_ATTRIBUTE}]`;
+
+function dimension(value: string | null): number | null {
+  const parsed = value === null ? Number.NaN : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 export const ImageNode = Node.create({
-  name: 'image',
+  name: IMAGE_NODE_NAME,
   group: 'block',
   content: 'inline*',
   draggable: false,
@@ -43,19 +37,17 @@ export const ImageNode = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'figure[data-image]',
+        tag: IMAGE_FIGURE_TAG,
         getAttrs: (node) => {
           const img = (node as HTMLElement).querySelector('img');
           if (!img) {
             return false;
           }
-          const w = img.getAttribute('width');
-          const h = img.getAttribute('height');
           return {
             src: img.getAttribute('src') ?? '',
             alt: img.getAttribute('alt') ?? '',
-            width: w ? Number(w) : null,
-            height: h ? Number(h) : null,
+            width: dimension(img.getAttribute('width')),
+            height: dimension(img.getAttribute('height')),
           };
         },
       },
@@ -76,30 +68,9 @@ export const ImageNode = Node.create({
     }
     return [
       'figure',
-      { 'data-image': '' },
+      { [IMAGE_FIGURE_ATTRIBUTE]: '' },
       ['img', mergeAttributes({ src, alt }, dimensions)],
       ['figcaption', {}, 0],
     ];
-  },
-
-  addNodeView() {
-    return ReactNodeViewRenderer(ImageView);
-  },
-
-  addCommands() {
-    return {
-      setImage:
-        (attrs) =>
-        ({ commands }) =>
-          commands.insertContent({
-            type: this.name,
-            attrs: {
-              src: attrs.src,
-              alt: attrs.alt ?? '',
-              width: attrs.width ?? null,
-              height: attrs.height ?? null,
-            },
-          }),
-    };
   },
 });

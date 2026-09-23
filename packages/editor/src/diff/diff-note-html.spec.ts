@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { createBaseExtensions } from '../extensions/base-extensions';
-import { ImageNode } from '../extensions/image/ImageNode';
 import { diffNoteHtml, type DocDiff } from './diff-note-html';
 
 const BASE = createBaseExtensions();
-const WITH_IMAGE = [...createBaseExtensions(), ImageNode];
 
 const NOTE_HTML = [
   '<h1>Landing de agencia</h1>',
@@ -117,16 +115,15 @@ describe('diffNoteHtml', () => {
     );
   });
 
-  it('surfaces a dropped image only when the schema knows images', () => {
+  it('surfaces a dropped image, which the base schema knows', () => {
     const before =
       '<p>Intro</p><figure data-image><img src="https://cdn.test/a.png" alt="a"></figure>';
     const after = '<p>Intro</p>';
-    expect(diffNoteHtml(before, after, BASE).count).toBe(0);
-    const rich = diffNoteHtml(before, after, WITH_IMAGE);
-    expect(rich.count).toBe(1);
-    const [change] = rich.changes;
+    const diff = diffNoteHtml(before, after, BASE);
+    expect(diff.count).toBe(1);
+    const [change] = diff.changes;
     expect(
-      rich.before.slice(change.fromA, change.toA).content.firstChild?.type.name
+      diff.before.slice(change.fromA, change.toA).content.firstChild?.type.name
     ).toBe('image');
   });
 
@@ -136,7 +133,7 @@ describe('diffNoteHtml', () => {
     const diff = diffNoteHtml(
       figure('https://cdn.test/a.png'),
       figure('https://cdn.test/b.png'),
-      WITH_IMAGE
+      BASE
     );
     expect(diff.count).toBe(1);
     const [change] = diff.changes;

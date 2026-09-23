@@ -10,19 +10,10 @@ export type {
   GhostTextStreamInput,
   GhostTextStreamChunk,
 } from './extensions/ghost-text';
-export {
-  AIBlockNode,
-  AI_BLOCK_STATUS,
-} from './extensions/ai-block/AIBlockNode';
-export type {
-  AIBlockOptions,
-  AIBlockProvider,
-  AIBlockStatus,
-} from './extensions/ai-block/AIBlockNode';
+export type { AIBlockProvider } from './extensions/ai-block/ai-block-provider';
+export { UNTRUSTED_MARKDOWN_PROPS } from './extensions/ai-block/untrusted-markdown';
 export { SuggestionMenu } from './extensions/suggestion-menu';
 export type { SuggestionMenuOptions } from './extensions/suggestion-menu';
-export { ImageNode } from './extensions/image/ImageNode';
-export type { ImageAttributes } from './extensions/image/ImageNode';
 export {
   ImageUpload,
   extractImageFiles,

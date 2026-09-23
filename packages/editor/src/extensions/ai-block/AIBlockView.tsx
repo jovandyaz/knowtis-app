@@ -4,17 +4,21 @@ import { useTranslation } from 'react-i18next';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper } from '@tiptap/react';
+import { Streamdown } from 'streamdown';
 
-import { AIBlockError } from './AIBlockError';
-import { AIBlockInputForm } from './AIBlockInputForm';
+import { cn } from '@knowtis/design-system';
 import {
   AI_BLOCK_STATUS,
   type AIBlockAttributes,
   type AIBlockStatus,
-} from './AIBlockNode';
+} from '@knowtis/editor-schema';
+
+import { AIBlockError } from './AIBlockError';
+import { AIBlockInputForm } from './AIBlockInputForm';
 import { AIBlockResult } from './AIBlockResult';
 import { AIBlockStreaming } from './AIBlockStreaming';
 import { renderMarkdownToSanitizedHtml } from './markdown-renderer';
+import { UNTRUSTED_MARKDOWN_PROPS } from './untrusted-markdown';
 import { useAIBlockStream } from './useAIBlockStream';
 
 function readAttrs(node: ProseMirrorNode): AIBlockAttributes {
@@ -34,7 +38,25 @@ function readAttrs(node: ProseMirrorNode): AIBlockAttributes {
   };
 }
 
-export function AIBlockView({
+const BLOCK_CLASSES =
+  'my-4 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden';
+
+function ReadOnlyAIBlock({ node }: Pick<NodeViewProps, 'node'>) {
+  const { status, content } = readAttrs(node);
+  return (
+    <NodeViewWrapper>
+      {status === AI_BLOCK_STATUS.DONE && (
+        <div contentEditable={false} className={cn(BLOCK_CLASSES, 'p-4')}>
+          <Streamdown mode="static" {...UNTRUSTED_MARKDOWN_PROPS}>
+            {content}
+          </Streamdown>
+        </div>
+      )}
+    </NodeViewWrapper>
+  );
+}
+
+function EditableAIBlock({
   node,
   updateAttributes,
   deleteNode,
@@ -103,7 +125,7 @@ export function AIBlockView({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         contentEditable={false}
-        className="my-4 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden outline-none"
+        className={cn(BLOCK_CLASSES, 'outline-none')}
       >
         {attrs.status === AI_BLOCK_STATUS.INPUT && (
           <AIBlockInputForm
@@ -135,5 +157,13 @@ export function AIBlockView({
         )}
       </div>
     </NodeViewWrapper>
+  );
+}
+
+export function AIBlockView(props: NodeViewProps) {
+  return props.editor.isEditable ? (
+    <EditableAIBlock {...props} />
+  ) : (
+    <ReadOnlyAIBlock node={props.node} />
   );
 }

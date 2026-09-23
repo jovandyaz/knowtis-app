@@ -902,7 +902,7 @@ Custom Tiptap node extension (`aiBlock`) that renders an inline AI content gener
 
 Inserted via slash command. The block is an atom node (non-editable content), rendered with `ReactNodeViewRenderer`. Markdown is converted to sanitized HTML via `markdown-it` + `DOMPurify` before insertion.
 
-**Source:** `packages/editor/src/extensions/ai-block/` (exported via `@knowtis/editor`)
+**Source:** the node is `AIBlockNode` in `@knowtis/editor-schema` (`packages/editor-schema/src/ai-block-node.ts`), part of `createSemanticExtensions`, so the server renders it into a note's `content`: a `div[data-ai-block]` whose generated text lives in its `content` attribute. The view is `packages/editor/src/extensions/ai-block/`, attached by `createBaseExtensions`, which takes the stream provider as `aiBlockProvider`.
 
 ---
 
@@ -1336,11 +1336,35 @@ Tool groups (`apps/api/src/modules/agent/infrastructure/tools/`, each implementi
 
 #### Reading a note versus editing one
 
-Two different views of the same note back these tools, and only one of them is ever shown to a model. `getNote` serves the **bounded, screened** view: the body converted to Markdown, cut at 10 000 characters, optionally run through the injection guard, with `contentStatus` reporting which happened (`complete`, `truncated`, `withheld`). `RetrievalPort.getBody` serves the **raw stored HTML** — no conversion, no bound, no guard — and exists only for `MutationProposalBuilder`; nothing it returns reaches a model.
+Two different views of the same note back these tools, and only one of them is ever shown to a model. `getNote` serves the **bounded, screened** view: the body converted to Markdown, cut at 10 000 characters, optionally run through the injection guard, with `contentStatus` reporting which happened (`complete`, `truncated`, `withheld`). `RetrievalPort.getBody` serves the **whole HTML body** — no conversion, no bound, no guard — and exists only for `MutationProposalBuilder`; only its `title` reaches a model, inside the proposal summary — the HTML never does.
+
+Both views render the body from the note's CRDT state (`yjs_state`), reading the `content` column only for a note that has none: `content` is rendered from the state and stops updating whenever that render fails, so an edit built on it would revert the note. When the state does not render, `getNote` falls back to `content` and `getBody` returns `html: null`, which `proposeEditNote` and the content path of `proposeUpdateNote` refuse with `AGENT_EDIT_WOULD_LOSE_CONTENT`; both log `agent.retrieval.state_render_failed` with the note id.
 
 That split is what makes a partial edit safe. `proposeEditNote` takes `edits: [{oldText, newText}]`, applied in order, plus an optional `appendMarkdown`; each `oldText` must appear exactly once in the note, and when it does not the tool answers with `AGENT_EDIT_TEXT_NOT_FOUND` or `AGENT_EDIT_TEXT_AMBIGUOUS` telling the model how to retarget. The edits are applied to the whole stored body, not to the slice the model read, so a note longer than the read bound keeps the part the model never received — which is why `proposeUpdateNote` refuses its content path unless `getNote` reported `complete` (`AGENT_WHOLE_BODY_UPDATE_REFUSED`); it stays the tool for a title change or a deliberate whole-note rewrite.
 
-**A `proposeEditNote` proposal is still a whole-body replacement, not a surgical patch.** The builder converts the stored HTML to Markdown, applies the edits, and converts the result back to HTML, so approving it rewrites the note's entire content. Because that conversion is lossy, the builder first checks whether the note survives a **no-op** round trip: if the editor would hold fewer nodes of any type afterwards, the edit is refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` rather than applied, and the model is told to say the note must be edited by hand. That is what keeps an edit to one paragraph from deleting an unrelated construct on approval. Today the shape that trips it is a **nested task list** (a sub-item would come back as a sibling); images cannot reach the column yet, and a mermaid fence only gains a blank line, which loses no node. Tables, links, marks, and top-level task lists survive; a table's merged cells lose the merge (GFM has none) but keep every cell in its own column, and column widths are dropped. The conversion is `packages/note-markdown` plus the `html-sanitizer` allowlist; anything added to one must be added to the other, or the check starts refusing edits it should allow.
+**A `proposeEditNote` proposal is still a whole-body replacement, not a surgical patch.** The builder converts the stored HTML to Markdown, applies the edits, and converts the result back to HTML, so approving it rewrites the note's entire content. Because that conversion could fall behind the editor's schema, the builder first checks whether the note survives a **no-op** round trip: if the editor would hold fewer nodes of any type afterwards, the edit is refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` rather than applied, and the model is told to say the note must be edited by hand. That is what keeps an edit to one paragraph from deleting an unrelated construct on approval. The conversion is `packages/note-markdown` plus the `html-sanitizer` allowlist; anything added to one must be added to the other, or the check starts refusing edits it should allow.
+
+Every node the editor stores except an AI block survives a copilot edit today — images, nested task lists, mermaid blocks and tables included — so a refusal outside the shapes listed below means the converter fell behind the schema, and the guard is what says so before a user loses anything. The Markdown the model reads and writes carries:
+
+- blank lines and empty headings, as a line holding only `&nbsp;` and a bare `#`;
+- line breaks anywhere in a paragraph, as a trailing backslash; a break that ends a paragraph sits above a line holding only `&nbsp;`;
+- non-breaking spaces at the start or end of a text, or alone in a table cell, as `&nbsp;`;
+- image alt text and captions, exactly as typed.
+
+A list the model writes mixing task and plain items is stored the way the editor holds it: as separate lists, and a numbered list keeps counting across the task list between its parts. An image is admitted only from the blob store (`isStoredImageUrl`, `@knowtis/shared-util`): the copilot's sanitizer drops any other image the model writes, and every server-side HTML write (`htmlToYjsState` / `evolveYjsState`) drops it again before it reaches the note. The proposal review and the create preview render a proposal through `sanitizeProposalHtml` (`apps/notes/src/lib/sanitize-ai-html.ts`), which keeps images by the same rule, so the review shows the images approval writes.
+
+Attributes Markdown cannot carry are restored from the stored note by `restoreStoredAttributes` (`agent/infrastructure/sanitize/stored-attributes.ts`), keyed by content, so they survive an edit to anything else: an image's `width`/`height` by its `src`, a highlight's colour by the highlighted text, and a diagram's view mode by its code. An attribute whose text or code the edit changed returns to its default. When a key repeats, occurrences are matched in order, for inserted text as well as deleted text: a newly inserted `==w==` above an existing coloured `w` takes that colour, and deleting the first of two differently coloured `w`s leaves the other with the first one's colour. A highlight colour exists only as a hex value (`#rgb` or `#rrggbb`); any other value is dropped when HTML is read, and never rendered.
+
+What still changes on an edit:
+
+- a table's merged cells lose their merge (GFM has none), and its column widths are dropped; every cell keeps its text and its column;
+- trailing blank lines at the end of a diagram's code are trimmed;
+- a line holding nothing but non-breaking spaces comes back empty: a paragraph or task text of nothing else, or the last line of a paragraph after a line break;
+- a space or non-breaking space at the edge of a bold, italic, code or link run moves just outside the run.
+
+Refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` instead of changed, because Markdown has no form for them: a line break inside a heading or a table cell, a table cell holding more than one paragraph, two lists of the same kind directly after each other, and an AI block the user has not inserted or discarded yet.
+
+A whole-body rewrite (`proposeUpdateNote`) restores no attributes; it replaces the note with what the model wrote.
 
 ### Human-in-the-loop
 
@@ -1385,7 +1409,7 @@ feature.
 | `AGENT_EDIT_TEXT_NOT_FOUND`       | A `proposeEditNote` `oldText` is not in the note; the message names the edit's position and tells the model to re-read and copy the text exactly                                                                                                                           |
 | `AGENT_EDIT_TEXT_AMBIGUOUS`       | A `proposeEditNote` `oldText` matches more than once; the message names the match count and asks for more surrounding text                                                                                                                                                 |
 | `AGENT_WHOLE_BODY_UPDATE_REFUSED` | `proposeUpdateNote` was asked to replace the content of a note read `truncated` or `withheld`; the message points at `proposeEditNote`                                                                                                                                     |
-| `AGENT_EDIT_WOULD_LOSE_CONTENT`   | `proposeEditNote` was asked to edit a note the converter pair cannot rebuild without dropping a node (today: a nested task list); the edit is refused rather than applied, and the message names the node types and tells the model to say the note must be edited by hand |
+| `AGENT_EDIT_WOULD_LOSE_CONTENT`   | `proposeEditNote` was asked to edit a note the converter pair cannot rebuild without dropping a node (today: see the list above); the edit is refused rather than applied, and the message names the node types and tells the model to say the note must be edited by hand |
 
 ### Timeouts and budgets
 

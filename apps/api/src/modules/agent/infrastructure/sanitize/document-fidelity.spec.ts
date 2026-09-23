@@ -23,10 +23,13 @@ describe('nodesLostBetween', () => {
     ).toStrictEqual([]);
   });
 
-  it('names a nested task list the converter flattened', () => {
+  it('names a nested task list the second document no longer holds', () => {
     expect(
-      nodesLostBetween(NESTED_TASK_LIST, roundTripped(NESTED_TASK_LIST))
-    ).toStrictEqual(['taskList']);
+      nodesLostBetween(
+        NESTED_TASK_LIST,
+        '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><div><p>book</p></div></li></ul>'
+      )
+    ).toStrictEqual(['paragraph', 'taskItem', 'taskList', 'text']);
   });
 
   it('reports nothing when content is added rather than lost', () => {
@@ -48,6 +51,18 @@ describe('nodesLostBetween', () => {
     ]);
   });
 
+  it('does not count a text node of nothing but spaces as content', () => {
+    expect(
+      nodesLostBetween('<p>a</p><p>&nbsp; &nbsp;</p>', '<p>a</p><p></p>')
+    ).toStrictEqual([]);
+  });
+
+  it('still counts a paragraph that holds text', () => {
+    expect(
+      nodesLostBetween('<p>a</p><p>&nbsp;b</p>', '<p>a</p><p></p>')
+    ).toStrictEqual(['text']);
+  });
+
   it('treats an unreadable document as no evidence of loss', () => {
     expect(nodesLostBetween('', '')).toStrictEqual([]);
   });
@@ -64,13 +79,16 @@ describe('the note shapes an edit can and cannot carry', () => {
       'a flat task list',
       '<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><div><p>book</p></div></li></ul>',
     ],
+    [
+      'an image',
+      '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>',
+    ],
+    ['a nested task list', NESTED_TASK_LIST],
+    [
+      'a mermaid block with a trailing newline',
+      '<div data-mermaid-block data-code="flowchart LR\n"></div>',
+    ],
   ])('survives a no-op round trip: %s', (_label, html) => {
     expect(nodesLostBetween(html, roundTripped(html))).toStrictEqual([]);
-  });
-
-  it('does not survive one when a task list is nested', () => {
-    expect(
-      nodesLostBetween(NESTED_TASK_LIST, roundTripped(NESTED_TASK_LIST))
-    ).toStrictEqual(['taskList']);
   });
 });

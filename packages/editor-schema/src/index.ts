@@ -1,4 +1,17 @@
+export {
+  AI_BLOCK_NAME,
+  AI_BLOCK_STATUS,
+  AIBlockNode,
+  type AIBlockAttributes,
+  type AIBlockStatus,
+} from './ai-block-node';
 export { YJS_XML_FRAGMENT_NAME } from './constants';
+export {
+  IMAGE_FIGURE_ATTRIBUTE,
+  IMAGE_NODE_NAME,
+  ImageNode,
+  type ImageAttributes,
+} from './image-node';
 export {
   MERMAID_BLOCK_NAME,
   MERMAID_VIEW_MODE,
@@ -7,6 +20,7 @@ export {
 } from './mermaid-block-node';
 export {
   createSemanticExtensions,
+  HIGHLIGHT_MARK_NAME,
   type NodeAttributeClasses,
   type SemanticExtensionsOptions,
 } from './semantic-extensions';

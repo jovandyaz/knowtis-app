@@ -20,6 +20,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AI_BLOCK_NAME, AI_BLOCK_STATUS } from '@knowtis/editor-schema';
 import {
   AI_ACTION,
   type AIAction,
@@ -309,7 +310,10 @@ export function executeAIAction({
       editor
         .chain()
         .focus()
-        .insertContent({ type: 'aiBlock', attrs: { status: 'input' } })
+        .insertContent({
+          type: AI_BLOCK_NAME,
+          attrs: { status: AI_BLOCK_STATUS.INPUT },
+        })
         .run();
       return;
     }
