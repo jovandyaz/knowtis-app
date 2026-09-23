@@ -82,8 +82,6 @@ function DockHeader() {
     (s) => s.messages.length > 0 || s.conversationId !== null
   );
 
-  // The row is always here so the panel's top edge does not jump when the first
-  // message lands; the action itself has nothing to reset until then.
   return (
     <div className="flex h-12 shrink-0 items-center justify-between gap-2 px-4">
       <div className="min-w-0 flex-1">
