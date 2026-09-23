@@ -27,6 +27,7 @@ export const test = copilotTest.extend<{ conversations: ConversationsFixture }>(
     // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixture dependency list.
     conversations: async ({}, use) => {
       const db = postgres(E2E.database, { max: 1 });
+      const seeded: string[] = [];
       try {
         await use({
           async seed({ userId, noteId, title, messages }) {
@@ -38,6 +39,7 @@ export const test = copilotTest.extend<{ conversations: ConversationsFixture }>(
             if (!conversation) {
               throw new Error('Conversation insert returned no id');
             }
+            seeded.push(conversation.id);
             let turnId = randomUUID();
             for (const message of messages) {
               if (message.role === 'user') {
@@ -52,7 +54,13 @@ export const test = copilotTest.extend<{ conversations: ConversationsFixture }>(
           },
         });
       } finally {
-        await db.end({ timeout: 5 });
+        try {
+          if (seeded.length > 0) {
+            await db`delete from conversations where id in ${db(seeded)}`;
+          }
+        } finally {
+          await db.end({ timeout: 5 });
+        }
       }
     },
   }

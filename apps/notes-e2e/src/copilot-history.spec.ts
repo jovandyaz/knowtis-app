@@ -204,6 +204,5 @@ test('a message sent while the thread loads continues it', async ({
     ]);
   } finally {
     releaseTranscript();
-    await owner.page.unroute(TRANSCRIPT_ROUTE_RE);
   }
 });

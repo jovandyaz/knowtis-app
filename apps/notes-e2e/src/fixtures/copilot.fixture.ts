@@ -275,6 +275,7 @@ export const test = sharingTest.extend<{ scriptedAgents: true }, object>({
         await use(true);
       } finally {
         await releaseScriptedAgents();
+        await sharing.owner.page.unrouteAll({ behavior: 'ignoreErrors' });
         await forgetCopilotConversation(sharing.owner.page);
       }
     },
