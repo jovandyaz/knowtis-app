@@ -75,6 +75,7 @@ interface AgentStreamCallbacks {
   onChunk: (payload: AgentChunkPayload) => void;
   onThinking?: (payload: AgentThinkingPayload) => void;
   onDone: (payload: AgentDonePayload) => void;
+  onConversation?: (conversationId: string) => void;
   onError: (payload: AgentErrorPayload) => void;
   onProposal?: (payload: AgentProposalPayload) => void;
   onCommitted?: (payload: AgentCommittedPayload) => void;
@@ -423,7 +424,8 @@ export class AgentClient {
       logger.info(`Agent WebSocket disconnected: ${reason}`, {
         context: 'AgentClient',
       });
-      // Our own teardown already decided what happens to the request.
+      // A replaced socket was torn down on purpose and an active one is still
+      // reconnecting, so neither may fail the turn.
       if (this.socket !== socket || socket.active) {
         return;
       }
@@ -476,8 +478,10 @@ export class AgentClient {
       'agent:conversation',
       (payload: AgentConversationPayload) => {
         // A late announcement after cancel + new conversation would re-attach the old thread.
-        if (this.activeCallbacks) {
+        const callbacks = this.activeCallbacks;
+        if (callbacks) {
           this.conversationId = payload.conversationId;
+          callbacks.onConversation?.(payload.conversationId);
         }
       }
     );
@@ -486,6 +490,7 @@ export class AgentClient {
       const callbacks = this.activeCallbacks;
       if (callbacks && payload.conversationId) {
         this.conversationId = payload.conversationId;
+        callbacks.onConversation?.(payload.conversationId);
       }
       this.clearPending();
       callbacks?.onDone(payload);
@@ -552,6 +557,10 @@ export class AgentClient {
   /** Starts a fresh server conversation on the next send. */
   resetConversation(): void {
     this.conversationId = undefined;
+  }
+
+  resumeConversation(conversationId: string): void {
+    this.conversationId = conversationId;
   }
 
   private canRecoverFromAuthError(payload: AgentErrorPayload): boolean {

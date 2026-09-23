@@ -1,3 +1,4 @@
+import { refuseStorage } from '@/test/refuse-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRightDockStore } from './right-dock.store';
@@ -23,6 +24,15 @@ describe('useRightDockStore', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('still opens when the browser refuses storage', () => {
+    refuseStorage();
+
+    useRightDockStore.getState().open();
+
+    expect(useRightDockStore.getState().isOpen).toBe(true);
   });
 
   it('opens the dock', () => {

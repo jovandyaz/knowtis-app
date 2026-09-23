@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+import { safeLocalStorage } from '@knowtis/shared-util';
 
 import { clampWidth, readPersistedWidth } from './persisted-width';
 
@@ -44,6 +46,7 @@ export const useDockPreferenceStore = create<DockPreferenceStore>()(
     }),
     {
       name: 'notes-dock',
+      storage: createJSONStorage(() => safeLocalStorage),
       partialize: (s) => ({ preferredWidth: s.preferredWidth }),
       merge: (persistedState, currentState) => ({
         ...currentState,

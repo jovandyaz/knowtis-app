@@ -32,7 +32,8 @@ function createFakeSocket() {
       return fakeSocket;
     }),
     emit: vi.fn(() => fakeSocket),
-    // Mirrors socket.io: a manual disconnect emits the event with the socket inactive.
+    // socket.io marks a manually closed socket inactive before emitting
+    // disconnect, and the client relies on that ordering.
     disconnect: vi.fn(() => {
       fakeSocket.connected = false;
       fakeSocket.active = false;
@@ -420,6 +421,90 @@ describe('AgentClient', () => {
     expect(client.canResume()).toBe(false);
     client.reject('p1', 'no');
     expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('reports the conversation announced mid-turn', () => {
+    const client = makeClient();
+    const onConversation = vi.fn();
+    client.sendMessage('hi', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onConversation,
+    });
+
+    handlers.get('agent:conversation')?.({ conversationId: 'conv-1' });
+
+    expect(onConversation).toHaveBeenCalledWith('conv-1');
+  });
+
+  it('reports the conversation carried by agent:done before the turn ends', () => {
+    const client = makeClient();
+    const order: string[] = [];
+    client.sendMessage('hi', {
+      onChunk: vi.fn(),
+      onError: vi.fn(),
+      onConversation: (id) => order.push(`conversation:${id}`),
+      onDone: () => order.push('done'),
+    });
+
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+      conversationId: 'conv-2',
+    });
+
+    expect(order).toEqual(['conversation:conv-2', 'done']);
+  });
+
+  it('does not report an announcement for a turn the user cancelled', () => {
+    const client = makeClient();
+    const onConversation = vi.fn();
+    const handle = client.sendMessage('hi', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onConversation,
+    });
+    const receipt = emit.mock.calls.at(-1)?.[2] as (
+      error: Error | null
+    ) => void;
+    receipt(null);
+    handle.cancel();
+
+    handlers.get('agent:conversation')?.({ conversationId: 'conv-late' });
+    client.sendMessage('again', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+
+    expect(onConversation).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      { message: { content: 'again' } },
+      expect.any(Function)
+    );
+  });
+
+  it('continues a resumed conversation on the next message', () => {
+    const client = makeClient();
+    client.resumeConversation('conv-9');
+
+    client.sendMessage('again', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      { conversationId: 'conv-9', message: { content: 'again' } },
+      expect.any(Function)
+    );
   });
 });
 

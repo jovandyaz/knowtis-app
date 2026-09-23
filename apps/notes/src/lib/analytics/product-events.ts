@@ -35,6 +35,12 @@ export interface BrowserProductEventMap {
     source: 'copilot';
     queue_length: number;
   };
+  'ai conversation opened': {
+    source: 'switcher' | 'reload';
+  };
+  'ai conversation deleted': {
+    source: 'switcher';
+  };
   'study session started': {
     source: StudySessionSource;
     due_count: number;
@@ -56,6 +62,8 @@ const PRODUCT_EVENT_PROPERTY_KEYS = {
   'shared note viewed': ['source', 'permission', 'actor_type'],
   'ai response completed': ['source', 'assistant_type', 'action'],
   'ai message queued': ['source', 'queue_length'],
+  'ai conversation opened': ['source'],
+  'ai conversation deleted': ['source'],
   'study session started': ['source', 'due_count', 'new_count'],
   'study session completed': [
     'source',

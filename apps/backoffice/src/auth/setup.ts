@@ -7,6 +7,7 @@ import {
 import type { AuthUserProfile } from '@jovandyaz/auth-react';
 
 import { classifyRefreshFailure, httpClient } from '@knowtis/api-client';
+import { safeLocalStorage } from '@knowtis/shared-util';
 
 import { createBackofficeAuthApi } from './auth-api-adapter';
 import { AUTH_STORAGE_KEY } from './constants';
@@ -16,6 +17,7 @@ export const tokenStorage = createTokenStorage();
 export const authStore = createAuthStore({
   tokenStorage,
   storageKey: AUTH_STORAGE_KEY,
+  storage: safeLocalStorage,
 });
 
 httpClient.setTokenProvider(tokenStorage);

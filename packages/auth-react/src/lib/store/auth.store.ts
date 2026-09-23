@@ -1,6 +1,10 @@
 import type { AuthResponse } from '@jovandyaz/auth';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from 'zustand/middleware';
 
 import type { TokenStorage } from '../storage/token-storage';
 import type { AuthUserProfile } from '../types';
@@ -9,12 +13,13 @@ import type { AuthStore } from './auth.store.types';
 export interface CreateAuthStoreOptions {
   storageKey?: string;
   tokenStorage: TokenStorage;
+  storage?: StateStorage;
 }
 
 const DEFAULT_STORAGE_KEY = 'auth-store';
 
-// Only what the shell reads before the profile refetch lands; the rest of the
-// /auth/me payload stays in memory.
+// Only what the shell reads before the profile refetch lands, so the rest of
+// the /auth/me payload never reaches storage.
 function toPersistedUser(user: AuthUserProfile | null) {
   if (user === null) {
     return null;
@@ -28,7 +33,7 @@ function toPersistedUser(user: AuthUserProfile | null) {
  * Creates a Zustand auth store with persist middleware.
  */
 export function createAuthStore(options: CreateAuthStoreOptions) {
-  const { tokenStorage, storageKey = DEFAULT_STORAGE_KEY } = options;
+  const { tokenStorage, storageKey = DEFAULT_STORAGE_KEY, storage } = options;
 
   return create<AuthStore>()(
     persist(
@@ -72,6 +77,7 @@ export function createAuthStore(options: CreateAuthStoreOptions) {
       }),
       {
         name: storageKey,
+        storage: createJSONStorage(() => storage ?? localStorage),
         partialize: (state) => ({
           user: toPersistedUser(state.user),
           isAuthenticated: state.isAuthenticated,
