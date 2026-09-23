@@ -8,5 +8,11 @@ export function isStoredImageUrl(url: string): boolean {
   } catch {
     return false;
   }
-  return parsed.protocol === 'https:' && parsed.hostname === STORED_IMAGE_HOST;
+  return (
+    parsed.protocol === 'https:' &&
+    parsed.hostname === STORED_IMAGE_HOST &&
+    parsed.port === '' &&
+    parsed.username === '' &&
+    parsed.password === ''
+  );
 }

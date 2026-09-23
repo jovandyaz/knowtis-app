@@ -13,6 +13,8 @@ describe('isStoredImageUrl', () => {
     'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.png',
     'https://IY4R311MPKFDCNUP.PUBLIC.BLOB.VERCEL-STORAGE.COM/a.png',
     'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/photo-abc.webp?download=1',
+    'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com:443/a.png',
+    '  https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.png  ',
   ])('accepts an image the app blob store served: %s', (url) => {
     expect(isStoredImageUrl(url)).toBe(true);
   });
@@ -42,6 +44,38 @@ describe('isStoredImageUrl', () => {
     [
       'userinfo before the real host',
       'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com@evil.com/a.png',
+    ],
+    [
+      'a non-default port on our host',
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com:8443/a.png',
+    ],
+    [
+      'userinfo on our host',
+      'https://user:pass@iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.png',
+    ],
+    [
+      'a username on our host',
+      'https://user@iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.png',
+    ],
+    [
+      'a trailing dot on the host',
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com./a.png',
+    ],
+    [
+      'a backslash hiding the real host',
+      'https://evil.com\\@iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.png',
+    ],
+    [
+      'an IDN look-alike host',
+      'https://iy4r311mpkfdcnup.public.blob.vercel-stor\u0430ge.com/a.png',
+    ],
+    [
+      'a punycode look-alike host',
+      'https://xn--iy4r311mpkfdcnup-.public.blob.vercel-storage.com/a.png',
+    ],
+    [
+      'whitespace inside the host',
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com .evil.com/a.png',
     ],
     ['the bare blob domain', 'https://public.blob.vercel-storage.com/a.png'],
     ['a relative path', '/t/x.png'],

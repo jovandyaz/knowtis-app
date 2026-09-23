@@ -1,8 +1,20 @@
 import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
+
 import type { EnvConfig } from '../../../../config/env.config';
 import { VercelBlobStorage } from './vercel-blob.storage';
+
+const STORED_URL = `https://${STORED_IMAGE_HOST}/notes/n1/x-abc.webp`;
+const FOREIGN_URL =
+  'https://otherstore123.public.blob.vercel-storage.com/notes/n1/x-abc.webp';
+const UPLOAD = {
+  noteId: 'n1',
+  filename: 'photo.webp',
+  data: Buffer.from('x'),
+  contentType: 'image/webp',
+};
 
 const put = vi.fn();
 const del = vi.fn();
@@ -32,17 +44,12 @@ describe('VercelBlobStorage', () => {
 
   it('uploads to a note-scoped public path and returns url + pathname', async () => {
     put.mockResolvedValue({
-      url: 'https://blob/x.webp',
+      url: STORED_URL,
       pathname: 'notes/n1/x-abc.webp',
     });
     const storage = makeStorage('vercel_blob_token');
 
-    const result = await storage.upload({
-      noteId: 'n1',
-      filename: 'photo.webp',
-      data: Buffer.from('x'),
-      contentType: 'image/webp',
-    });
+    const result = await storage.upload(UPLOAD);
 
     expect(put).toHaveBeenCalledWith(
       'notes/n1/photo.webp',
@@ -55,9 +62,40 @@ describe('VercelBlobStorage', () => {
       })
     );
     expect(result).toEqual({
-      url: 'https://blob/x.webp',
+      url: STORED_URL,
       pathname: 'notes/n1/x-abc.webp',
     });
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('deletes the blob and throws when the token belongs to another store', async () => {
+    put.mockResolvedValue({
+      url: FOREIGN_URL,
+      pathname: 'notes/n1/x-abc.webp',
+    });
+    del.mockResolvedValue(undefined);
+    const storage = makeStorage('vercel_blob_token');
+
+    await expect(storage.upload(UPLOAD)).rejects.toThrow(
+      new RegExp(`otherstore123.*${STORED_IMAGE_HOST}`)
+    );
+    expect(del).toHaveBeenCalledWith(
+      ['notes/n1/x-abc.webp'],
+      expect.objectContaining({ token: 'vercel_blob_token' })
+    );
+  });
+
+  it('still reports the store mismatch when deleting the blob fails', async () => {
+    put.mockResolvedValue({
+      url: FOREIGN_URL,
+      pathname: 'notes/n1/x-abc.webp',
+    });
+    del.mockRejectedValue(new Error('network down'));
+    const storage = makeStorage('vercel_blob_token');
+
+    await expect(storage.upload(UPLOAD)).rejects.toThrow(
+      /VERCEL_BLOB_READ_WRITE_TOKEN/
+    );
   });
 
   it('throws when the token is missing', async () => {
