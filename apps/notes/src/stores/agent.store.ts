@@ -196,6 +196,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
   let activeAssistantId: string | null = null;
   let streamVersion = 0;
+  let threadVersion = 0;
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;
   let titleEdits = 0;
@@ -263,6 +264,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   };
 
   const forgetGoneConversation = (error: AgentErrorPayload) => {
+    threadVersion++;
     const returned = unsentText;
     unsentText = null;
     activeAssistantId = null;
@@ -508,6 +510,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       }
       abandonTurn();
       const version = streamVersion;
+      const thread = ++threadVersion;
       const titleEditsAtOpen = titleEdits;
       agentClient.resumeConversation(id);
       const switching = id !== current.conversationId;
@@ -527,28 +530,24 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       });
       try {
         const transcript = await conversationsApi.transcript(id);
-        if (version !== streamVersion) {
-          const latest = get();
-          if (
-            latest.conversationId === id &&
-            latest.conversationTitle === null
-          ) {
-            set({ conversationTitle: transcript.title });
-          }
+        if (thread !== threadVersion) {
           return 'superseded';
         }
-        set({
-          messages: toChatMessages(transcript.messages, nextId),
+        set((s) => ({
+          messages: [
+            ...toChatMessages(transcript.messages, nextId),
+            ...s.messages,
+          ],
           ...(titleEdits === titleEditsAtOpen
             ? { conversationTitle: transcript.title }
             : {}),
           hasEarlier: transcript.hasEarlier,
           hydration: 'idle',
-        });
+        }));
         captureProductEvent('ai conversation opened', { source });
         return 'opened';
       } catch (error) {
-        if (version !== streamVersion) {
+        if (thread !== threadVersion || version !== streamVersion) {
           return 'superseded';
         }
         if (isConversationGone(error)) {
@@ -615,6 +614,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
     newConversation: () => {
       abandonTurn();
+      threadVersion++;
       agentClient.resetConversation();
       set({
         messages: [],

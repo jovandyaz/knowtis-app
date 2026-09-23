@@ -346,38 +346,110 @@ describe('agent.store openConversation', () => {
     expect(contents()).toEqual(['Plan it', 'Day one.']);
   });
 
-  it('drops a transcript that lands after the user moved on', async () => {
+  it('drops a transcript that lands after the user moved to another thread', async () => {
     const pending = deferred<ConversationTranscript>();
-    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    vi.mocked(conversationsApi.transcript)
+      .mockReturnValueOnce(pending.promise)
+      .mockReturnValueOnce(deferred<ConversationTranscript>().promise);
     const opening = useAgentStore.getState().openConversation('c1', 'reload');
-    capture();
-    useAgentStore.getState().sendMessage('new question');
+    void useAgentStore.getState().openConversation('c2', 'switcher');
 
     pending.resolve(TRANSCRIPT);
 
     expect(await opening).toBe('superseded');
-    expect(contents()).toEqual(['new question', '']);
-    expect(useAgentStore.getState().hydration).toBe('idle');
-  });
-
-  it('names the thread from a superseded transcript when nothing named it yet', async () => {
-    const pending = deferred<ConversationTranscript>();
-    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
-    const opening = useAgentStore.getState().openConversation('c1', 'reload');
-    capture();
-    useAgentStore.getState().sendMessage('new question');
-
-    pending.resolve(TRANSCRIPT);
-
-    expect(await opening).toBe('superseded');
-    const { conversationId, conversationTitle } = useAgentStore.getState();
-    expect({ conversationId, conversationTitle }).toEqual({
-      conversationId: 'c1',
-      conversationTitle: 'Trip',
+    const { conversationId, conversationTitle, messages, hydration } =
+      useAgentStore.getState();
+    expect({ conversationId, conversationTitle, messages, hydration }).toEqual({
+      conversationId: 'c2',
+      conversationTitle: null,
+      messages: [],
+      hydration: 'loading',
     });
   });
 
-  it('keeps the title a superseding thread already has', async () => {
+  it('shows the earlier messages above a message sent while the thread loaded', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    capture();
+    useAgentStore.getState().sendMessage('new question');
+
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('opened');
+    expect(contents()).toEqual(['Plan it', 'Day one.', 'new question', '']);
+    const { conversationTitle, hasEarlier, hydration } =
+      useAgentStore.getState();
+    expect({ conversationTitle, hasEarlier, hydration }).toEqual({
+      conversationTitle: 'Trip',
+      hasEarlier: true,
+      hydration: 'idle',
+    });
+  });
+
+  it('keeps streaming the answer to a message sent while the thread loaded', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('new question');
+    pending.resolve(TRANSCRIPT);
+    await opening;
+
+    callbacks().onChunk({ text: 'Day two.' });
+    callbacks().onDone(DONE);
+
+    expect(contents()).toEqual([
+      'Plan it',
+      'Day one.',
+      'new question',
+      'Day two.',
+    ]);
+    expect(useAgentStore.getState().status).toBe('done');
+  });
+
+  it('shows the earlier messages once without refetching when the thread is reopened', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    capture();
+    useAgentStore.getState().sendMessage('new question');
+    pending.resolve(TRANSCRIPT);
+    await opening;
+
+    const again = await useAgentStore
+      .getState()
+      .openConversation('c1', 'switcher');
+
+    expect(again).toBe('unchanged');
+    expect(contents()).toEqual(['Plan it', 'Day one.', 'new question', '']);
+    expect(conversationsApi.transcript).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the transcript of a thread a message found deleted while it loaded', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('new question');
+    callbacks().onError({
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'Conversation not found',
+    });
+
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('superseded');
+    const { conversationId, conversationTitle, messages } =
+      useAgentStore.getState();
+    expect({ conversationId, conversationTitle, messages }).toEqual({
+      conversationId: null,
+      conversationTitle: null,
+      messages: [],
+    });
+  });
+
+  it('keeps a rename saved before a message sent while the thread loaded', async () => {
     const pending = deferred<ConversationTranscript>();
     vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
     const opening = useAgentStore.getState().openConversation('c1', 'reload');
@@ -387,7 +459,7 @@ describe('agent.store openConversation', () => {
     useAgentStore.getState().sendMessage('new question');
     pending.resolve(TRANSCRIPT);
 
-    expect(await opening).toBe('superseded');
+    expect(await opening).toBe('opened');
     expect(useAgentStore.getState().conversationTitle).toBe(
       'Renamed meanwhile'
     );
