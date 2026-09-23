@@ -339,7 +339,7 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
     `theme` (for example `forest`) still works.
 
-    A spec renders a sample of every diagram type with every settable key (nested ones included) set to an injected `url()`, and fails if a config section is neither sampled nor listed with a reason. Three sections are left out, each for a reason: `themeVariables` is secured whole and has a test of its own, the app never registers the `elk` layout engine, and jsdom cannot lay out a `mindmap` (its keys were checked in Chrome instead). So a Mermaid upgrade that adds a key or a diagram type fails CI until it is covered.
+    A spec renders a sample of every diagram type with every settable key (nested ones included) set to an injected `url()`, and fails if a config section is neither sampled nor listed with a reason. Four sections are left out, each for a reason: `themeVariables` is secured whole and has a test of its own, `dompurifyConfig` is set by the app and Mermaid drops it from directives, the app never registers the `elk` layout engine, and jsdom cannot lay out a `mindmap` (its keys were checked in Chrome instead). So a Mermaid upgrade that adds a key or a diagram type fails CI until it is covered, except a key added to `mindmap`: nothing automated sees that one, so each upgrade needs the `mindmap` keys rechecked in Chrome.
 
   - **`stripResourceLoads`** removes from the returned SVG the elements that load or navigate by themselves (`object`, `embed`, `iframe`, `frame`, `meta` and SMIL animations), every loading attribute, every reference to another document, and every CSS `url()`, `image-set()` or `@import` that isn't a `#fragment`. Inline `data:image/` on `<image>` stays, because C4 draws its icons with it.
 
