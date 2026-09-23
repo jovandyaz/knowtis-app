@@ -8,6 +8,7 @@ import {
 } from '@knowtis/editor-schema';
 import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../core/errors/reason-of';
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
 import {
@@ -113,7 +114,7 @@ export class HocuspocusPersistenceExtension {
           html = yDocToHtml(document);
         } catch (error) {
           // Never drop the edit: if HTML derivation fails, persist yjsState only.
-          const cause = error instanceof Error ? error.message : String(error);
+          const cause = reasonOf(error);
           logger.error(
             `Failed to render note ${documentName} to HTML, persisting yjsState only: ${cause}`
           );

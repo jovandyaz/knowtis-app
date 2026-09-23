@@ -7,6 +7,7 @@ import { and, eq } from 'drizzle-orm';
 
 import type { McpScopeLevel } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../core/errors/reason-of';
 import { DATABASE_CONNECTION, mcpApiKeys, type Database } from '../../database';
 import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
 import { McpKeyCreatedEvent } from './mcp-key-created.event';
@@ -67,7 +68,7 @@ export class McpKeysService {
       );
     } catch (error) {
       new Logger(McpKeysService.name).warn(
-        `Key verification failed (likely malformed hash): ${error instanceof Error ? error.message : String(error)}`
+        `Key verification failed (likely malformed hash): ${reasonOf(error)}`
       );
       return false;
     }
