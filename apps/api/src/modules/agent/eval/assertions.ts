@@ -131,7 +131,18 @@ const PRESERVED_HTML = `<h2>Logistics</h2>
 </tr>
 </tbody>
 </table>
-<h2>Budget</h2>`;
+<figure data-image><img src="https://knowtis.public.blob.vercel-storage.com/notes/guatemala/lake.webp" alt="Lake Atitlán at dawn" /><figcaption></figcaption></figure>
+<ul data-type="taskList">
+<li data-type="taskItem" data-checked="false"><div><p>book</p>
+<ul data-type="taskList">
+<li data-type="taskItem" data-checked="true"><div><p>flight</p></div></li>
+<li data-type="taskItem" data-checked="false"><div><p>hotel</p></div></li>
+</ul>
+</div></li>
+<li data-type="taskItem" data-checked="false"><div><p>pack</p></div></li>
+</ul>
+<div data-mermaid-block data-code="flowchart LR
+  Antigua --&gt; Atitlan"></div><h2>Budget</h2>`;
 const EDITED_FIGURE = /1[,.]?200/;
 const REPLACED_FIGURE = /900/;
 

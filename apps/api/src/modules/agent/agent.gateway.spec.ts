@@ -581,7 +581,6 @@ describe('AgentGateway', () => {
       ok({
         result: { noteId: 'n1', title: 'GTD', kind: 'create' },
         outcome: 'created the note "GTD"',
-        toolName: 'proposeCreateNote',
         conversationId: 'conv-1',
       })
     );
@@ -603,7 +602,7 @@ describe('AgentGateway', () => {
     expect(resumeTurn).toHaveBeenCalledOnce();
     expect(resumeTurn.mock.calls[0][0]).toMatchObject({
       userId: 'u1',
-      resume: { toolName: 'proposeCreateNote' },
+      resume: { outcome: 'created the note "GTD"' },
     });
   });
 
@@ -612,7 +611,6 @@ describe('AgentGateway', () => {
       ok({
         result: { noteId: 'n1', title: 'GTD', kind: 'create' },
         outcome: 'created the note "GTD"',
-        toolName: 'proposeCreateNote',
         conversationId: 'conv-1',
       })
     );
@@ -638,7 +636,6 @@ describe('AgentGateway', () => {
       ok({
         result: { noteId: 'n1', title: 'GTD', kind: 'create' },
         outcome: 'created the note "GTD"',
-        toolName: 'proposeCreateNote',
       })
     );
     const resumeTurn = vi.fn().mockResolvedValue(undefined);
@@ -691,7 +688,6 @@ describe('AgentGateway', () => {
     const rejectExecute = vi.fn().mockResolvedValue(
       ok({
         outcome: 'The user rejected the proposal',
-        toolName: 'proposeCreateNote',
         conversationId: 'conv-1',
       })
     );

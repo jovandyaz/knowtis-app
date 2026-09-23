@@ -14,14 +14,17 @@ import {
 
 ## Key exports
 
-| Export                                              | Purpose                                                                       |
-| --------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `YJS_XML_FRAGMENT_NAME`                             | Name of the shared Yjs XML fragment — load-bearing CRDT invariant (see below) |
-| `MermaidBlockNode`, `MERMAID_BLOCK_NAME`            | Tiptap node for Mermaid diagram blocks; `MERMAID_BLOCK_NAME = 'mermaidBlock'` |
-| `MERMAID_VIEW_MODE` / `MermaidViewMode`             | Mermaid block view modes (`code` / `preview` / `split`)                       |
-| `createSemanticExtensions`                          | Factory for the shared set of semantic Tiptap extensions                      |
-| `SemanticExtensionsOptions`, `NodeAttributeClasses` | Options type for the factory and the per-node CSS class map it accepts        |
-| `isTrivialFragment` / `isTrivialProseMirrorDoc`     | Guards for detecting empty/placeholder editor content                         |
+| Export                                                                                  | Purpose                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `YJS_XML_FRAGMENT_NAME`                                                                 | Name of the shared Yjs XML fragment — load-bearing CRDT invariant (see below)                                                                                                                                                           |
+| `MermaidBlockNode`, `MERMAID_BLOCK_NAME`                                                | Tiptap node for Mermaid diagram blocks; `MERMAID_BLOCK_NAME = 'mermaidBlock'`                                                                                                                                                           |
+| `MERMAID_VIEW_MODE` / `MermaidViewMode`                                                 | Mermaid block view modes (`code` / `preview` / `split`)                                                                                                                                                                                 |
+| `ImageNode`, `IMAGE_NODE_NAME`, `IMAGE_FIGURE_ATTRIBUTE`, `ImageAttributes`             | Block image node: `figure[data-image] > img + figcaption`; the caption is the node's inline content. The browser attaches its node view in `@knowtis/editor`                                                                            |
+| `AIBlockNode`, `AI_BLOCK_NAME`, `AI_BLOCK_STATUS`, `AIBlockStatus`, `AIBlockAttributes` | Atom block for inline AI generation: `div[data-ai-block]` with `topic`, `status`, `content` and `errorMessage` attributes; its generated text lives in the `content` attribute. The browser attaches its node view in `@knowtis/editor` |
+| `createSemanticExtensions`                                                              | Factory for the shared set of semantic Tiptap extensions                                                                                                                                                                                |
+| `HIGHLIGHT_MARK_NAME`                                                                   | Name of the highlight mark. Its `color` is kept only as a hex value (`#rgb` or `#rrggbb`), both when HTML is parsed and when the mark renders, because Tiptap writes it into a `style` attribute                                        |
+| `SemanticExtensionsOptions`, `NodeAttributeClasses`                                     | Options type for the factory and the per-node CSS class map it accepts                                                                                                                                                                  |
+| `isTrivialFragment` / `isTrivialProseMirrorDoc`                                         | Guards for detecting empty/placeholder editor content                                                                                                                                                                                   |
 
 ## `YJS_XML_FRAGMENT_NAME` — CRDT invariant
 

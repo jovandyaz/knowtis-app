@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAIStore } from '@/stores/ai.store';
 import { act, fireEvent, render } from '@testing-library/react';
 import type { Editor } from '@tiptap/react';
+import type * as StreamdownModule from 'streamdown';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Dialog, DialogContent, DialogTitle } from '@knowtis/design-system';
@@ -17,7 +18,8 @@ vi.mock('tippy.js', () => ({
   default: () => ({ destroy: vi.fn() }),
 }));
 
-vi.mock('streamdown', () => ({
+vi.mock('streamdown', async (importOriginal) => ({
+  ...(await importOriginal<typeof StreamdownModule>()),
   Streamdown: () => null,
 }));
 

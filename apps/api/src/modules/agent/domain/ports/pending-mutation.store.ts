@@ -3,7 +3,6 @@ import type { ProposedMutation } from '../proposed-mutation';
 export interface PendingMutationRecord {
   readonly userId: string;
   readonly mutation: ProposedMutation;
-  readonly toolName: string;
   readonly conversationId?: string;
 }
 

@@ -4,7 +4,6 @@ import type { AgentEvent, AgentSource } from '../agent-event';
 import type { AgentMessage } from '../agent-message';
 
 export interface AgentResumeContext {
-  readonly toolName: string;
   readonly outcome: string;
 }
 

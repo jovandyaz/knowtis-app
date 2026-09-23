@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { htmlToMarkdown } from '@knowtis/note-markdown';
+
 import { markdownToNoteHtml } from '../infrastructure/sanitize/html-sanitizer';
 import {
   assertAppendKeepsUnseenTail,
@@ -151,28 +153,34 @@ describe('predicates', () => {
   });
 });
 
+describe('the fidelity fixture', () => {
+  it('is a fixed point of the converter pair, or the line-based assertions would misjudge a faithful proposal', () => {
+    expect(htmlToMarkdown(markdownToNoteHtml(FIDELITY_NOTE_MARKDOWN))).toBe(
+      FIDELITY_NOTE_MARKDOWN
+    );
+  });
+
+  it('preserves exactly the fixture up to the Budget heading', () => {
+    const edit = markdownToNoteHtml(
+      FIDELITY_NOTE_MARKDOWN.replace('900', '1200')
+    );
+    expect(
+      assertEditPreservesRest(
+        transcript({
+          proposal: { kind: 'update', payload: { contentHtml: edit } },
+        })
+      )
+    ).toBe(true);
+  });
+});
+
 describe('assertEditPreservesRest', () => {
-  const UNTOUCHED = `<h2>Logistics</h2>
-<p>Fly into <a href="https://example.com/gua">Guatemala City</a> on the <strong>red-eye</strong>.</p>
-<table>
-<thead>
-<tr>
-<th>Day</th>
-<th>Place</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1</td>
-<td>Antigua</td>
-</tr>
-<tr>
-<td>2</td>
-<td>Atitlan</td>
-</tr>
-</tbody>
-</table>
-<h2>Budget</h2>`;
+  const BUDGET_HEADING = '<h2>Budget</h2>';
+  const fixtureHtml = markdownToNoteHtml(FIDELITY_NOTE_MARKDOWN);
+  const UNTOUCHED = fixtureHtml.slice(
+    0,
+    fixtureHtml.indexOf(BUDGET_HEADING) + BUDGET_HEADING.length
+  );
 
   function edited(contentHtml: string) {
     return transcript({

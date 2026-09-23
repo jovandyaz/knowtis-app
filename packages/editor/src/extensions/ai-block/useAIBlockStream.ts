@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import type { Editor } from '@tiptap/core';
 
 import {
+  AI_BLOCK_NAME,
   AI_BLOCK_STATUS,
   type AIBlockAttributes,
-  type AIBlockProvider,
-  type AIBlockStorage,
-} from './AIBlockNode';
+} from '@knowtis/editor-schema';
+
+import type { AIBlockProvider, AIBlockStorage } from './ai-block-provider';
 
 interface UseAIBlockStreamReturn {
   streamedText: string;
@@ -18,7 +19,9 @@ interface UseAIBlockStreamReturn {
 }
 
 function resolveProvider(editor: Editor): AIBlockProvider | null {
-  const storage = (editor.storage as { aiBlock?: AIBlockStorage }).aiBlock;
+  const storage = (
+    editor.storage as Partial<Record<typeof AI_BLOCK_NAME, AIBlockStorage>>
+  )[AI_BLOCK_NAME];
   return storage?.provider ?? null;
 }
 
@@ -60,7 +63,6 @@ export function useAIBlockStream(
       setStreamedText('');
       updateAttributes({ status: AI_BLOCK_STATUS.STREAMING, topic });
 
-      // Cancel any prior in-flight stream owned by this hook.
       abortControllerRef.current?.abort();
       const controller = new AbortController();
       abortControllerRef.current = controller;

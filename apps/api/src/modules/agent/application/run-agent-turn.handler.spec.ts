@@ -1170,7 +1170,7 @@ describe('RunAgentTurnHandler', () => {
 
     expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
     expect(pendingStore.save).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER, toolName: 'proposeCreateNote' })
+      expect.objectContaining({ userId: USER, mutation: proposal })
     );
     expect(onProposal).toHaveBeenCalledWith(proposal);
   });
@@ -1214,7 +1214,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone, onError: vi.fn() }
     );
@@ -1252,7 +1252,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeUpdateNote', outcome: 'updated the note' },
+        resume: { outcome: 'updated the note' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
     );
@@ -1297,7 +1297,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'someone-elses',
-        resume: { toolName: 'proposeUpdateNote', outcome: 'updated the note' },
+        resume: { outcome: 'updated the note' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError }
     );
@@ -1335,7 +1335,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError }
     );
@@ -1384,7 +1384,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone, onError: vi.fn() }
     );
@@ -1437,7 +1437,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError }
     );
@@ -1474,7 +1474,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone, onError },
       controller.signal
@@ -2831,7 +2831,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError }
     );
@@ -3553,7 +3553,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
     );
@@ -4449,7 +4449,7 @@ describe('RunAgentTurnHandler', () => {
         {
           userId: USER,
           conversationId: 'conv-1',
-          resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+          resume: { outcome: 'created' },
         },
         { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
       );
@@ -4498,7 +4498,7 @@ describe('RunAgentTurnHandler', () => {
         {
           userId: USER,
           conversationId: 'conv-1',
-          resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+          resume: { outcome: 'created' },
         },
         { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
       );
@@ -5010,7 +5010,7 @@ describe('RunAgentTurnHandler replay guard', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       callbacks
     );
@@ -5032,7 +5032,7 @@ describe('RunAgentTurnHandler replay guard', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        resume: { outcome: 'created' },
       },
       callbacks
     );

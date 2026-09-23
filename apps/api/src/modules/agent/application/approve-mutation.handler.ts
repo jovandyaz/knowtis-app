@@ -30,7 +30,6 @@ export interface ApproveMutationInput {
 export interface ApproveMutationOutput {
   readonly result: AgentCommitResult;
   readonly outcome: string;
-  readonly toolName: string;
   readonly conversationId?: string;
 }
 
@@ -69,13 +68,9 @@ export class ApproveMutationHandler {
       case 'create':
         return withConversation(await this.commitCreate(input.userId, m));
       case 'update':
-        return withConversation(
-          await this.commitUpdate(input.userId, m, record.toolName)
-        );
+        return withConversation(await this.commitUpdate(input.userId, m));
       case 'share':
-        return withConversation(
-          await this.commitShare(input.userId, m, record.toolName)
-        );
+        return withConversation(await this.commitShare(input.userId, m));
       default: {
         const _exhaustive: never = m;
         return err(
@@ -119,14 +114,12 @@ export class ApproveMutationHandler {
     return ok({
       result: { noteId: note.id, title: note.title, kind: 'create' },
       outcome: `created the note "${note.title}"`,
-      toolName: 'proposeCreateNote',
     });
   }
 
   private async commitUpdate(
     userId: string,
-    m: UpdateProposedMutation,
-    toolName: string
+    m: UpdateProposedMutation
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
     const note = await this.noteRepo.findById(m.targetNoteId);
     if (!note) {
@@ -153,14 +146,12 @@ export class ApproveMutationHandler {
         kind: 'update',
       },
       outcome: `updated the note "${res.value.title}"`,
-      toolName,
     });
   }
 
   private async commitShare(
     userId: string,
-    m: ShareProposedMutation,
-    toolName: string
+    m: ShareProposedMutation
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
     const res = await this.shareHandler.execute({
       noteId: m.targetNoteId,
@@ -179,7 +170,6 @@ export class ApproveMutationHandler {
         kind: 'share',
       },
       outcome: `shared "${note?.title ?? 'Note'}" with ${m.payload.targetEmail} as ${m.payload.permission}`,
-      toolName,
     });
   }
 

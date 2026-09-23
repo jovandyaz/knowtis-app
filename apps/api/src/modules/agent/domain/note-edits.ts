@@ -5,8 +5,7 @@ export interface NoteEdit {
   readonly newText: string;
 }
 
-export const NOTE_EDIT_FAILURES = ['not_found', 'ambiguous'] as const;
-export type NoteEditFailureKind = (typeof NOTE_EDIT_FAILURES)[number];
+export type NoteEditFailureKind = 'not_found' | 'ambiguous';
 
 export interface NoteEditFailure {
   readonly kind: NoteEditFailureKind;

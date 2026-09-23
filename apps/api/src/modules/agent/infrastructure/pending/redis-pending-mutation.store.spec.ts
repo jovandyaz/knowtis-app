@@ -61,7 +61,6 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       mutation: m,
-      toolName: 'proposeCreateNote',
     });
 
     expect(redis.client.set).toHaveBeenCalledWith(
@@ -79,7 +78,6 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       mutation: m,
-      toolName: 'proposeCreateNote',
     });
 
     const taken = await store.take(m.id, 'u1');
@@ -95,7 +93,6 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       mutation: m,
-      toolName: 'proposeCreateNote',
     });
 
     const taken = await store.take(m.id, 'attacker');
@@ -122,7 +119,6 @@ describe('RedisPendingMutationStore', () => {
   it('take returns null when the stored mutation shape is invalid', async () => {
     const corrupt = JSON.stringify({
       userId: 'u1',
-      toolName: 'proposeCreateNote',
       mutation: { id: 'x', kind: 'update', payload: {}, summary: '' },
     });
     const redis = { client: { eval: vi.fn().mockResolvedValue(corrupt) } };
@@ -137,7 +133,6 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       mutation: m,
-      toolName: 'proposeCreateNote',
       conversationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     });
     const taken = await store.take(m.id, 'u1');

@@ -7,7 +7,7 @@ import { FilePlus2, PencilLine, UserPlus, type LucideIcon } from 'lucide-react';
 import { Badge, Button, cn } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
 
-import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
+import { sanitizeProposalHtml } from '../../lib/sanitize-ai-html';
 import { Confirmation, ConfirmationFooter } from '../ai-elements/confirmation';
 import { readProposalPayload } from './proposal-payload';
 import { ProposalActions } from './ProposalActions';
@@ -54,7 +54,7 @@ export function AgentProposalCard({
   const payload = readProposalPayload(proposal.payload);
   const previewHtml =
     proposal.kind !== 'share' && payload.contentHtml
-      ? sanitizeAiHtml(payload.contentHtml)
+      ? sanitizeProposalHtml(payload.contentHtml)
       : null;
 
   return (

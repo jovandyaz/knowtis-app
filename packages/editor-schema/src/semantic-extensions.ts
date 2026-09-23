@@ -1,4 +1,4 @@
-import type { AnyExtension } from '@tiptap/core';
+import type { AnyExtension, Attributes } from '@tiptap/core';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
@@ -12,7 +12,37 @@ import TaskList from '@tiptap/extension-task-list';
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 
+import { AIBlockNode } from './ai-block-node';
+import { ImageNode } from './image-node';
 import { MermaidBlockNode } from './mermaid-block-node';
+
+export const HIGHLIGHT_MARK_NAME = Highlight.name;
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function hexColorOrNull(value: unknown): string | null {
+  return typeof value === 'string' && HEX_COLOR.test(value) ? value : null;
+}
+
+// Tiptap writes the colour unescaped into a `style` attribute, so anything but
+// a hex value would let a note plant CSS, such as a tracking `url()`.
+const HexColorHighlight = Highlight.extend({
+  addAttributes() {
+    const inherited: Attributes = this.parent?.() ?? {};
+    const color = inherited['color'];
+    return {
+      color: {
+        ...color,
+        parseHTML: (element) => hexColorOrNull(color?.parseHTML?.(element)),
+        renderHTML: (attributes) =>
+          color?.renderHTML?.({
+            ...attributes,
+            color: hexColorOrNull(attributes['color']),
+          }) ?? {},
+      },
+    };
+  },
+});
 
 export interface NodeAttributeClasses {
   readonly bulletList?: string;
@@ -87,7 +117,9 @@ export function createSemanticExtensions(
     TableCell,
     Superscript,
     Subscript,
-    Highlight.configure({ multicolor: true }),
+    HexColorHighlight.configure({ multicolor: true }),
     MermaidBlockNode,
+    ImageNode,
+    AIBlockNode,
   ];
 }

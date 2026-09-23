@@ -16,7 +16,6 @@ const KEY_PREFIX = 'agent:proposal:';
 
 interface SerializedRecord {
   userId: string;
-  toolName: string;
   conversationId?: string;
   mutation: {
     id: string;
@@ -53,7 +52,6 @@ return v
   async save(record: PendingMutationRecord): Promise<void> {
     const serialized: SerializedRecord = {
       userId: record.userId,
-      toolName: record.toolName,
       ...(record.conversationId && { conversationId: record.conversationId }),
       mutation: {
         id: record.mutation.id,
@@ -104,7 +102,6 @@ return v
     }
     return {
       userId: parsed.userId,
-      toolName: parsed.toolName,
       ...(parsed.conversationId && { conversationId: parsed.conversationId }),
       mutation: rebuilt.value,
     };

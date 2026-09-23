@@ -467,6 +467,10 @@ We use [Yjs](https://yjs.dev/) for conflict-free real-time collaboration. The se
 
 With `REDIS_URL` set, Hocuspocus adds `@hocuspocus/extension-redis` so several API instances share rooms; without it the server runs single-instance.
 
+### Stored state and the `content` column
+
+`notes.yjs_state` is the note: the editor loads it and every collaborative save writes it. `notes.content` is an HTML projection of that state, rendered on the server with `createSemanticExtensions` (`@knowtis/editor-schema`) and read by `GET /notes/:id`, search, the share page and MCP `get-note`. When the render fails, typically on a node or mark the server schema lacks, the save keeps the state, leaves `content` behind, and logs an error naming the note. `apps/notes/src/components/editor/useEditorExtensions.test.ts` fails the build when the editor persists a type the server schema does not have. `pnpm nx run api:backfill-note-content` lists the notes whose `content` differs from a render of their state (a dry run; it reads `DATABASE_URL`), and `--apply` rewrites those rows' `content` and marks their embeddings stale for the embedding reconcile, leaving `updated_at` and any note saved during the run untouched.
+
 ### Offline and cross-tab
 
 `packages/crdt/src/YjsProvider.tsx` always attaches an `IndexeddbPersistence` (`note-<noteId>`) to each document and relays updates between tabs of the same browser over a `BroadcastChannel`, independent of the server connection.

@@ -10,6 +10,8 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import { UNTRUSTED_MARKDOWN_PROPS } from './untrusted-markdown';
+
 interface AIBlockResultProps {
   content: string;
   onInsert: () => void;
@@ -62,7 +64,9 @@ export function AIBlockResult({
         </div>
       </div>
       <div className="px-4 pb-4">
-        <Streamdown mode="static">{content}</Streamdown>
+        <Streamdown mode="static" {...UNTRUSTED_MARKDOWN_PROPS}>
+          {content}
+        </Streamdown>
       </div>
     </div>
   );

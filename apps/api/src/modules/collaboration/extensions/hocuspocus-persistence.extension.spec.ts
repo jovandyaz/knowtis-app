@@ -1,5 +1,14 @@
+import { Logger } from '@nestjs/common';
 import { ok } from 'neverthrow';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
@@ -82,11 +91,9 @@ describe('HocuspocusPersistenceExtension', () => {
         content: '<h2>Legacy</h2>',
       }),
     } as unknown as NoteRepository;
-    const spy = vi
-      .spyOn(htmlToYjs, 'htmlToYjsState')
-      .mockImplementation(() => {
-        throw new Error('parser exploded');
-      });
+    const spy = vi.spyOn(htmlToYjs, 'htmlToYjsState').mockImplementation(() => {
+      throw new Error('parser exploded');
+    });
 
     const ext = new HocuspocusPersistenceExtension(repo);
     const loaded = await ext.toExtension().onLoadDocument?.({
@@ -163,47 +170,83 @@ describe('HocuspocusPersistenceExtension', () => {
     expect(Buffer.isBuffer(buffer)).toBe(true);
   });
 
-  it('falls back to yjsState-only persist when HTML derivation throws', async () => {
-    vi.spyOn(htmlToYjs, 'yDocToHtml').mockImplementation(() => {
-      throw new Error('boom');
+  describe('when the live document cannot be rendered to HTML', () => {
+    const RENDER_ERROR = 'Unknown node type: aiBlock';
+
+    let logError: MockInstance<Logger['error']>;
+    let logWarn: MockInstance<Logger['warn']>;
+
+    beforeEach(() => {
+      vi.spyOn(htmlToYjs, 'yDocToHtml').mockImplementation(() => {
+        throw new Error(RENDER_ERROR);
+      });
+      logError = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      logWarn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
     });
-    const updateContentWithYjsState = vi.fn();
-    const updateYjsState = vi.fn().mockResolvedValue(
-      ok({
-        id: 'note-1',
-        title: 'Test',
-        content: '',
-        ownerId: 'user-1',
-        generalAccess: 'restricted',
-        generalAccessPermission: 'viewer',
-        shareToken: null,
-        editorsCanShare: false,
-        yjsState: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-    );
-    const repo = {
-      updateContentWithYjsState,
-      updateYjsState,
-    } as unknown as NoteRepository;
 
-    const doc = new Y.Doc();
-    const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
-    const paragraph = new Y.XmlElement('paragraph');
-    paragraph.insert(0, [new Y.XmlText('Stored')]);
-    fragment.insert(0, [paragraph]);
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
 
-    const ext = new HocuspocusPersistenceExtension(repo);
-    await ext.toExtension().onStoreDocument?.({
-      document: doc,
-      documentName: 'note-1',
-    } as never);
+    async function storeUnrenderableDocument() {
+      const updateContentWithYjsState = vi.fn();
+      const updateYjsState = vi.fn().mockResolvedValue(
+        ok({
+          id: 'note-1',
+          title: 'Test',
+          content: '',
+          ownerId: 'user-1',
+          generalAccess: 'restricted',
+          generalAccessPermission: 'viewer',
+          shareToken: null,
+          editorsCanShare: false,
+          yjsState: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      );
+      const repo = {
+        updateContentWithYjsState,
+        updateYjsState,
+      } as unknown as NoteRepository;
 
-    expect(updateContentWithYjsState).not.toHaveBeenCalled();
-    expect(updateYjsState).toHaveBeenCalledTimes(1);
+      const doc = new Y.Doc();
+      const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+      const paragraph = new Y.XmlElement('paragraph');
+      paragraph.insert(0, [new Y.XmlText('Stored')]);
+      fragment.insert(0, [paragraph]);
 
-    vi.restoreAllMocks();
+      const ext = new HocuspocusPersistenceExtension(repo);
+      await ext.toExtension().onStoreDocument?.({
+        document: doc,
+        documentName: 'note-1',
+      } as never);
+
+      return { updateContentWithYjsState, updateYjsState };
+    }
+
+    it('persists the CRDT state alone', async () => {
+      const { updateContentWithYjsState, updateYjsState } =
+        await storeUnrenderableDocument();
+
+      expect(updateContentWithYjsState).not.toHaveBeenCalled();
+      expect(updateYjsState).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs an error naming the note and the cause, never its content', async () => {
+      await storeUnrenderableDocument();
+
+      expect(logError.mock.calls).toEqual([
+        [
+          `Failed to render note note-1 to HTML, persisting yjsState only: ${RENDER_ERROR}`,
+        ],
+      ]);
+      expect(logWarn).not.toHaveBeenCalled();
+    });
   });
 
   it('should skip persistence when live Y.Doc is trivial and stored content is non-trivial', async () => {

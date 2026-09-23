@@ -15,7 +15,6 @@ export interface RejectMutationInput {
 
 export interface RejectMutationOutput {
   readonly outcome: string;
-  readonly toolName: string;
   readonly conversationId?: string;
 }
 
@@ -34,7 +33,6 @@ export class RejectMutationHandler {
     }
     const reason = input.reason?.trim();
     return ok({
-      toolName: record.toolName,
       outcome: `you declined it, so nothing was changed${reason ? ` (reason: "${reason}")` : ''}`,
       ...(record.conversationId
         ? { conversationId: record.conversationId }

@@ -3,7 +3,9 @@ import type { NoteEntity, NoteView } from '../../domain';
 
 type NoteViewRecord = Omit<typeof notes.$inferSelect, 'yjsState' | 'deletedAt'>;
 
-export function mapToNoteEntity(record: typeof notes.$inferSelect): NoteEntity {
+export function mapToNoteEntity(
+  record: Omit<typeof notes.$inferSelect, 'deletedAt'>
+): NoteEntity {
   return {
     ...mapToNoteView(record),
     yjsState: record.yjsState as Buffer | null,

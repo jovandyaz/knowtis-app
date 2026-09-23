@@ -10,11 +10,9 @@ import type * as Y from 'yjs';
 
 import type { CollaborativeUser } from '@knowtis/crdt';
 import {
-  AIBlockNode,
   CollaborativeCursors,
   createBaseExtensions,
   GhostText,
-  ImageNode,
   ImageUpload,
   SuggestionMenu,
 } from '@knowtis/editor';
@@ -41,11 +39,7 @@ export function useEditorExtensions(
     const imageUploadProvider = createImageUploadProvider(() => noteId);
 
     const extensions: AnyExtension[] = [
-      ...createBaseExtensions({ disableHistory: true }),
-      AIBlockNode.configure({
-        provider: aiBlockProvider,
-      }),
-      ImageNode,
+      ...createBaseExtensions({ disableHistory: true, aiBlockProvider }),
       ImageUpload.configure({
         provider: imageUploadProvider,
         onError: (error) => {

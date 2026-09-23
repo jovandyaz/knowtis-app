@@ -8,3 +8,4 @@ export { logger } from './logger';
 export { pickDefined } from './pick-defined';
 export { isMacPlatform } from './platform';
 export { AI_HTML_FORBID_ATTR, AI_HTML_FORBID_TAGS } from './sanitize-config';
+export { isStoredImageUrl } from './stored-image-url';

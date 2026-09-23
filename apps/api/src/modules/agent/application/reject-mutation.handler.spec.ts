@@ -13,7 +13,7 @@ function rec() {
   if (r.isErr()) {
     throw new Error('setup');
   }
-  return { userId: 'u1', toolName: 'proposeCreateNote', mutation: r.value };
+  return { userId: 'u1', mutation: r.value };
 }
 
 describe('RejectMutationHandler', () => {
@@ -27,7 +27,6 @@ describe('RejectMutationHandler', () => {
     });
     expect(r.isOk()).toBe(true);
     if (r.isOk()) {
-      expect(r.value.toolName).toBe('proposeCreateNote');
       expect(r.value.outcome).toContain('declined');
       expect(r.value.outcome).toContain('too long');
     }

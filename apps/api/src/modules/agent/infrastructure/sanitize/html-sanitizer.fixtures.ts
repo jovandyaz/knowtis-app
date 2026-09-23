@@ -5,13 +5,16 @@ import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import {
   htmlToYjsState,
-  yDocToHtml,
+  yjsStateToHtml,
 } from '../../../notes/infrastructure/html-to-yjs';
 
 export interface PMJson {
   readonly type: string;
   readonly attrs?: Record<string, unknown>;
-  readonly marks?: readonly { readonly type: string }[];
+  readonly marks?: readonly {
+    readonly type: string;
+    readonly attrs?: Record<string, unknown>;
+  }[];
   readonly content?: readonly PMJson[];
 }
 
@@ -29,6 +32,8 @@ export const EDITOR_VOCABULARY_MARKDOWN = [
   '- [ ] visa',
   '  - [x] photo',
   '',
+  '![Lake Atitlán](https://knowtis.public.blob.vercel-storage.com/notes/trip/lake.webp)',
+  '',
   'Bring ==sunscreen== and H~2~O for the 30^th^.',
   '',
   '```mermaid',
@@ -37,6 +42,9 @@ export const EDITOR_VOCABULARY_MARKDOWN = [
   '```',
 ].join('\n');
 
+export const AI_BLOCK_HTML =
+  '<div data-ai-block="" topic="Rome" status="done" content="Rome was founded in 753 BC."></div>';
+
 /** The ProseMirror document the collaboration layer would persist for `html`. */
 export function persistedDocument(html: string): PMJson {
   const doc = new Y.Doc();
@@ -44,6 +52,20 @@ export function persistedDocument(html: string): PMJson {
   const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME) as PMJson;
   doc.destroy();
   return json;
+}
+
+export function collectNodesOfType(
+  node: PMJson,
+  type: string,
+  into: PMJson[] = []
+): PMJson[] {
+  if (node.type === type) {
+    into.push(node);
+  }
+  for (const child of node.content ?? []) {
+    collectNodesOfType(child, type, into);
+  }
+  return into;
 }
 
 /** Every node and mark type present in `node`, flattened. */
@@ -63,9 +85,5 @@ export function collectTypes(
 
 /** The HTML the server actually stores for `html`, so a fixture cannot drift from the real shape. */
 export function storedHtml(html: string): string {
-  const doc = new Y.Doc();
-  Y.applyUpdate(doc, htmlToYjsState(html));
-  const stored = yDocToHtml(doc);
-  doc.destroy();
-  return stored;
+  return yjsStateToHtml(htmlToYjsState(html));
 }

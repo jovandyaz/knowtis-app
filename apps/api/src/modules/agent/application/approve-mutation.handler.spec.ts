@@ -53,7 +53,6 @@ function deps(over: Record<string, unknown> = {}) {
     store: {
       take: vi.fn().mockResolvedValue({
         userId: 'u1',
-        toolName: 'proposeCreateNote',
         mutation: createProposal(),
       }),
       save: vi.fn(),
@@ -135,7 +134,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeUpdateNote',
           mutation: updateProposal('2024-02-01T00:00:00.000Z'),
         }),
         save: vi.fn(),
@@ -163,7 +161,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeUpdateNote',
           mutation: updateProposal(),
         }),
         save: vi.fn(),
@@ -200,7 +197,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeUpdateNote',
           mutation: updateProposal(),
         }),
         save: vi.fn(),
@@ -234,7 +230,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeUpdateNote',
           mutation: updateProposal(),
         }),
         save: vi.fn(),
@@ -288,7 +283,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeShareNote',
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -322,7 +316,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeShareNote',
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -341,7 +334,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeShareNote',
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -374,7 +366,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeShareNote',
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -406,7 +397,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeShareNote',
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -444,7 +434,6 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
-          toolName: 'proposeShareNote',
           mutation: shareProposal(),
         }),
         save: vi.fn(),

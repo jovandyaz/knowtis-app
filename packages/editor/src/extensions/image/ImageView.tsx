@@ -6,7 +6,7 @@ import { NodeViewContent, NodeViewWrapper } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { ImageOff, Pencil, Trash2 } from 'lucide-react';
 
-import type { ImageAttributes } from './ImageNode';
+import type { ImageAttributes } from '@knowtis/editor-schema';
 
 function readAttrs(node: ProseMirrorNode): ImageAttributes {
   const src = node.attrs['src'];

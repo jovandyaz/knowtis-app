@@ -5,10 +5,12 @@ import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
+import type { NoteEntity } from '../../../notes/domain/entities/note.entity';
 import {
   NOTE_READ_REPOSITORY,
   type NoteReadRepository,
 } from '../../../notes/domain/ports/note-read.repository';
+import { yjsStateToHtml } from '../../../notes/infrastructure/html-to-yjs';
 import { InjectionGuardService } from '../../application/injection-guard.service';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import {
@@ -76,9 +78,10 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     if (!note) {
       return null;
     }
+    const html = this.currentBody(note, 'getById') ?? note.content;
     return {
       ...toNoteHit(note, userId),
-      ...(await this.toToolContent(note.content, userId, note.id)),
+      ...(await this.toToolContent(html, userId, note.id)),
       createdAt: note.createdAt.toISOString(),
     };
   }
@@ -94,7 +97,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     }
     return {
       title: note.title,
-      html: note.content,
+      html: this.currentBody(note, 'getBody'),
       updatedAt: note.updatedAt.toISOString(),
     };
   }
@@ -120,6 +123,23 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     const { total, owned } =
       await this.noteReadRepository.countAccessibleByUser(branded);
     return { total, owned, sharedWithMe: total - owned };
+  }
+
+  private currentBody(note: NoteEntity, op: string): string | null {
+    if (!note.yjsState || note.yjsState.byteLength === 0) {
+      return note.content;
+    }
+    try {
+      return yjsStateToHtml(note.yjsState);
+    } catch {
+      // ProseMirror errors can quote note text, so only the id is logged.
+      this.logger.error({
+        event: 'agent.retrieval.state_render_failed',
+        noteId: note.id,
+        op,
+      });
+      return null;
+    }
   }
 
   private async toToolContent(

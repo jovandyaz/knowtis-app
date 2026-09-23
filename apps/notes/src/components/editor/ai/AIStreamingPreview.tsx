@@ -12,6 +12,7 @@ import {
 import { Streamdown } from 'streamdown';
 
 import { Button, cn } from '@knowtis/design-system';
+import { UNTRUSTED_MARKDOWN_PROPS } from '@knowtis/editor';
 
 import { aiErrorMessageKey } from './ai-error-messages';
 
@@ -53,6 +54,7 @@ export function AIStreamingPreview({
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-popover/80 via-transparent to-transparent" />
           )}
           <Streamdown
+            {...UNTRUSTED_MARKDOWN_PROPS}
             animated
             isAnimating={status === 'streaming'}
             {...(status === 'done' && { mode: 'static' as const })}
@@ -74,7 +76,6 @@ export function AIStreamingPreview({
         </div>
       )}
 
-      {/* Action buttons — pill-shaped button group */}
       <div
         className={cn(
           'flex items-center gap-2 border-t border-border/30 px-2 py-1.5',

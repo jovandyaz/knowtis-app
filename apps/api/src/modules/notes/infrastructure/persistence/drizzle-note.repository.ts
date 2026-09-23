@@ -22,7 +22,6 @@ import type {
   NotePermissionEntity,
   NoteRepository,
   NoteSummary,
-  NoteView,
   NoteViewWithOwner,
   UpdateNoteContentData,
   UpdateNoteData,
@@ -56,7 +55,7 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.readRepo.findByIdWithOwner(id);
   }
 
-  findByIdForUser(noteId: string, userId: UserId): Promise<NoteView | null> {
+  findByIdForUser(noteId: string, userId: UserId): Promise<NoteEntity | null> {
     return this.readRepo.findByIdForUser(noteId, userId);
   }
 

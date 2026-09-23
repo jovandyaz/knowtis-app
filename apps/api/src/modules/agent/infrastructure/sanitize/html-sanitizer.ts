@@ -1,6 +1,8 @@
 import sanitizeHtml from 'sanitize-html';
 
+import { IMAGE_FIGURE_ATTRIBUTE } from '@knowtis/editor-schema';
 import { markdownToHtml } from '@knowtis/note-markdown';
+import { isStoredImageUrl } from '@knowtis/shared-util';
 
 const MERMAID_BLOCK_ATTR = 'data-mermaid-block';
 const MERMAID_CODE_ATTR = 'data-code';
@@ -35,28 +37,55 @@ const ALLOWED_TAGS = [
   'mark',
   'sub',
   'sup',
+  'figure',
+  'figcaption',
+  'img',
 ];
 
-/** Sanitized note body for the editor: mermaid fences become diagram blocks. */
-export function markdownToNoteHtml(markdown: string): string {
-  if (!markdown.trim()) {
-    return '';
-  }
-  const sanitized = sanitizeHtml(markdownToHtml(markdown), {
+// An image URL the app never stored is an exfiltration channel, so its `src`
+// is emptied and `isOrphanedImageMarkup` drops the tag and its figure.
+function keepStoredImageOnly(
+  tagName: string,
+  attribs: sanitizeHtml.Attributes
+): sanitizeHtml.Tag {
+  return isStoredImageUrl(attribs['src'] ?? '')
+    ? { tagName, attribs }
+    : { tagName, attribs: {} };
+}
+
+function isOrphanedImageMarkup(frame: sanitizeHtml.IFrame): boolean {
+  return (
+    (frame.tag === 'img' && !frame.attribs['src']) ||
+    (frame.tag === 'figure' && frame.mediaChildren.length === 0)
+  );
+}
+
+/** Allowlists HTML already in the editor's dialect; `markdownToNoteHtml` is the usual entry. */
+export function sanitizeNoteHtml(html: string): string {
+  return sanitizeHtml(html, {
     allowedTags: ALLOWED_TAGS,
     allowedAttributes: {
       a: ['href'],
       div: [MERMAID_BLOCK_ATTR, MERMAID_CODE_ATTR],
+      figure: [IMAGE_FIGURE_ATTRIBUTE],
+      img: ['src', 'alt', 'width', 'height'],
       ol: ['start'],
       ul: ['data-type'],
       li: ['data-type', 'data-checked'],
     },
     allowedClasses: { code: ['language-*'] },
     allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: { img: ['https'] },
     allowProtocolRelative: false,
     disallowedTagsMode: 'discard',
-  });
-  return sanitized.trim();
+    transformTags: { img: keepStoredImageOnly },
+    exclusiveFilter: isOrphanedImageMarkup,
+  }).trim();
+}
+
+/** Sanitized note body for the editor: mermaid fences become diagram blocks, images stay only from the blob store. */
+export function markdownToNoteHtml(markdown: string): string {
+  return markdown.trim() ? sanitizeNoteHtml(markdownToHtml(markdown)) : '';
 }
 
 const BLOCK_BOUNDARY_PATTERN =
