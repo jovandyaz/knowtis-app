@@ -217,6 +217,20 @@ describe('ConversationController over HTTP', () => {
     expect(repo.rename).not.toHaveBeenCalled();
   });
 
+  it.each([123, true])(
+    'refuses the non-string title %j the implicit conversion would stringify',
+    async (title) => {
+      const response = await call(
+        'PATCH',
+        `/agent/conversations/${CONVERSATION_ID}`,
+        { title }
+      );
+
+      expect(response.status).toBe(400);
+      expect(repo.rename).not.toHaveBeenCalled();
+    }
+  );
+
   it('accepts a title of exactly 120 code points, emoji included', async () => {
     repo.rename.mockResolvedValue(true);
 
