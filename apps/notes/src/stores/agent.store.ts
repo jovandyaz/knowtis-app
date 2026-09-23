@@ -252,6 +252,16 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     });
   };
 
+  const abandonTurn = () => {
+    get()._streamHandle?.cancel();
+    streamVersion++;
+    buffer.clearInactivityTimer();
+    buffer.discard();
+    thinkingBuffer.discard();
+    activeAssistantId = null;
+    unsentText = null;
+  };
+
   const forgetGoneConversation = (error: AgentErrorPayload) => {
     const returned = unsentText;
     unsentText = null;
@@ -491,14 +501,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       ) {
         return 'unchanged';
       }
-      current._streamHandle?.cancel();
-      streamVersion++;
+      abandonTurn();
       const version = streamVersion;
-      buffer.clearInactivityTimer();
-      buffer.discard();
-      thinkingBuffer.discard();
-      activeAssistantId = null;
-      unsentText = null;
       agentClient.resumeConversation(id);
       const switching = id !== current.conversationId;
       set({
@@ -602,14 +606,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     },
 
     newConversation: () => {
-      get()._streamHandle?.cancel();
+      abandonTurn();
       agentClient.resetConversation();
-      streamVersion++;
-      buffer.clearInactivityTimer();
-      buffer.discard();
-      thinkingBuffer.discard();
-      activeAssistantId = null;
-      unsentText = null;
       set({
         messages: [],
         queue: [],
