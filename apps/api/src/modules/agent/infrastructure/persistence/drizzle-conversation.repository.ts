@@ -1,14 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
   conversationMessages,
   conversations,
   DATABASE_CONNECTION,
+  notes,
   users,
   type Database,
 } from '../../../../database';
+import { readableNoteCondition } from '../../../notes/infrastructure/persistence/readable-note.condition';
 import {
   AGENT_MESSAGE_PARTS_VERSION,
   TOOL_OUTPUT_TYPE,
@@ -59,11 +61,21 @@ export class DrizzleConversationRepository implements ConversationRepository {
       .insert(conversations)
       .values({
         userId: input.userId,
-        ...(input.noteId ? { noteId: input.noteId } : {}),
+        noteId: input.noteId
+          ? this.readableNoteId(input.noteId, input.userId)
+          : null,
         title: input.title,
       })
       .returning({ id: conversations.id });
     return { id: row.id };
+  }
+
+  private readableNoteId(noteId: string, userId: string): SQL {
+    const readable = this.db
+      .select({ id: notes.id })
+      .from(notes)
+      .where(and(eq(notes.id, noteId), readableNoteCondition(userId)));
+    return sql`(${readable})`;
   }
 
   async findByIdForUser(

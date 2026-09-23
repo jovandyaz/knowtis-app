@@ -8,6 +8,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -20,6 +21,8 @@ import {
   conversations,
   DATABASE_CONNECTION,
   DatabaseModule,
+  notePermissions,
+  notes,
   users,
   type Database,
 } from '../../../../database';
@@ -554,6 +557,91 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       message: expect.stringContaining(
         'conversation_messages_stop_reason_check'
       ),
+    });
+  });
+
+  describe('conversation history', () => {
+    const LISTER = '00000000-0000-4000-8000-0000000004b1';
+    const STRANGER = '00000000-0000-4000-8000-0000000004b2';
+
+    const noteOf = async (
+      ownerId: string,
+      title: string,
+      trashed = false
+    ): Promise<string> => {
+      const [row] = await db
+        .insert(notes)
+        .values({
+          ownerId,
+          title,
+          content: '',
+          ...(trashed ? { deletedAt: new Date() } : {}),
+        })
+        .returning({ id: notes.id });
+      return row.id;
+    };
+
+    const storedNoteId = async (id: string): Promise<string | null> => {
+      const [row] = await db
+        .select({ noteId: conversations.noteId })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      return row?.noteId ?? null;
+    };
+
+    beforeAll(async () => {
+      for (const [id, isAnonymous] of [
+        [LISTER, false],
+        [STRANGER, true],
+      ] as const) {
+        await db
+          .insert(users)
+          .values({ id, email: `e-${id}@test.local`, name: 'H', isAnonymous })
+          .onConflictDoNothing();
+      }
+    });
+
+    beforeEach(async () => {
+      await db.delete(conversations).where(eq(conversations.userId, LISTER));
+      await db.delete(conversations).where(eq(conversations.userId, STRANGER));
+      await db.delete(notes).where(eq(notes.ownerId, LISTER));
+      await db.delete(notes).where(eq(notes.ownerId, STRANGER));
+    });
+
+    afterAll(async () => {
+      await db.delete(users).where(eq(users.id, LISTER));
+      await db.delete(users).where(eq(users.id, STRANGER));
+    });
+
+    it('keeps the note a conversation starts from when the user owns it', async () => {
+      const noteId = await noteOf(LISTER, 'Mine');
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBe(noteId);
+    });
+
+    it('keeps a note shared with the user', async () => {
+      const noteId = await noteOf(STRANGER, 'Shared with me');
+      await db
+        .insert(notePermissions)
+        .values({ noteId, userId: LISTER, permission: 'viewer' });
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBe(noteId);
+    });
+
+    it("stores no note when the id names someone else's note", async () => {
+      const noteId = await noteOf(STRANGER, 'Not yours');
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBeNull();
+    });
+
+    it('stores no note when the note is in the trash', async () => {
+      const noteId = await noteOf(LISTER, 'Trashed', true);
+      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+
+      expect(await storedNoteId(id)).toBeNull();
     });
   });
 });
