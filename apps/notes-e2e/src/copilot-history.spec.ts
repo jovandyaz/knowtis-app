@@ -152,7 +152,7 @@ test('a reload resumes the thread the copilot announced', async ({
   expect(messagesSent(agent)[1]?.conversationId).toBe(conversationId);
 });
 
-test('a message sent while the thread loads continues it', async ({
+test('a message sent while the thread loads continues it below its earlier messages', async ({
   sharing,
   conversations,
 }) => {
@@ -202,6 +202,12 @@ test('a message sent while the thread loads continues it', async ({
     expect(messagesSent(agent).map((item) => item.conversationId)).toEqual([
       conversationId,
     ]);
+    const earlier = owner.page.getByText('Respuesta guardada.');
+    await expect(earlier).toBeHidden();
+
+    releaseTranscript();
+
+    await expect(earlier).toBeVisible();
   } finally {
     releaseTranscript();
   }
