@@ -130,13 +130,23 @@ describe('inserting a finished block', () => {
       />
     );
 
-    await user.click(
-      await screen.findByRole('button', { name: 'ai.aiBlock.insert' })
-    );
-
+    const insert = await screen.findByRole('button', {
+      name: 'ai.aiBlock.insert',
+    });
     if (!editor) {
       throw new Error('editor was not created');
     }
+    // Insert focuses the editor, whose next frame scrolls to the caret through
+    // layout APIs jsdom does not implement.
+    vi.spyOn(editor.view, 'coordsAtPos').mockReturnValue({
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+
+    await user.click(insert);
+
     const blocks: [string, string][] = [];
     editor.state.doc.forEach((node) => {
       blocks.push([node.type.name, node.textContent]);
