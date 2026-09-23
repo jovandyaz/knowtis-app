@@ -13,6 +13,7 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AGENT_STOP_REASON,
+  deriveConversationTitle,
   FEATURE_FLAG_KEYS,
   type AgentStopReason,
   type ByokProvider,
@@ -42,6 +43,7 @@ import {
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
+import { AgentErrors } from '../domain/agent-errors';
 import type {
   AgentSource,
   AgentTurnUsage,
@@ -128,8 +130,6 @@ interface PersistenceContext {
   readonly turnId: string;
   readonly userContent?: string;
 }
-
-const CONVERSATION_TITLE_MAX = 120;
 
 interface TurnLoopPolicy {
   readonly onProposal: (
@@ -234,10 +234,7 @@ export class RunAgentTurnHandler {
     }
     const conversation = await this.resolveConversation(input, message);
     if (!conversation) {
-      callbacks.onError({
-        code: 'forbidden',
-        message: 'Conversation not found',
-      });
+      callbacks.onError(AgentErrors.conversationNotFound());
       return;
     }
     const conversationId = conversation.id;
@@ -339,7 +336,7 @@ export class RunAgentTurnHandler {
     const created = await this.conversations.create({
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
-      title: [...message.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
+      title: deriveConversationTitle(message.content),
     });
     return { id: created.id, model: null, created: true };
   }
@@ -454,10 +451,7 @@ export class RunAgentTurnHandler {
         input.userId
       );
       if (!found) {
-        callbacks.onError({
-          code: 'forbidden',
-          message: 'Conversation not found',
-        });
+        callbacks.onError(AgentErrors.conversationNotFound());
         return;
       }
       const { history, knownNotes } = await this.loadConversationContext(
@@ -495,7 +489,7 @@ export class RunAgentTurnHandler {
         { conversationId: input.conversationId, turnId: randomUUID() }
       );
     }
-    callbacks.onError({ code: 'forbidden', message: 'Conversation not found' });
+    callbacks.onError(AgentErrors.conversationNotFound());
   }
 
   private async runLoop(

@@ -3,6 +3,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { AGENT_CONVERSATION_NOT_FOUND_CODE } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../../config/env.config';
 import { validateEnv } from '../../../config/env.config';
 import {
@@ -192,7 +194,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     expect(turn2[turn2.length - 1]).toBe('what is my codeword?');
   });
 
-  it('rejects a conversationId owned by another user with forbidden', async () => {
+  it('rejects a conversationId owned by another user as not found and writes nothing to it', async () => {
     const repo = new DrizzleConversationRepository(db);
     const foreign = await repo.create({ userId: OTHER, title: 'private' });
 
@@ -235,9 +237,10 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     );
 
     expect(onError).toHaveBeenCalledWith({
-      code: 'forbidden',
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
       message: 'Conversation not found',
     });
     expect(onDone).not.toHaveBeenCalled();
+    expect(await repo.loadMessages(foreign.id, 10)).toEqual([]);
   });
 });

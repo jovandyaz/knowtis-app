@@ -26,4 +26,11 @@ describe('AgentErrors', () => {
     expect(e.code).toBe('AGENT_INVALID_PROPOSAL');
     expect(e.message).toContain('summary is required');
   });
+
+  it('builds the conversation-not-found error the client recovers from', () => {
+    expect(AgentErrors.conversationNotFound()).toEqual({
+      code: 'AGENT_CONVERSATION_NOT_FOUND',
+      message: 'Conversation not found',
+    });
+  });
 });
