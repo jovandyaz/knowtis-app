@@ -343,7 +343,7 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
   - **`stripResourceLoads`** removes from the returned SVG the elements that load or navigate by themselves (`object`, `embed`, `iframe`, `frame`, `meta` and SMIL animations), every loading attribute, every reference to another document, and every CSS `url()`, `image-set()` or `@import` that isn't a `#fragment`. Inline `data:image/` on `<image>` stays, because C4 draws its icons with it.
 
-  Some diagram statements carry CSS or an image URL themselves and fire while Mermaid draws, before any of these layers can act. They are left to the `img-src` CSP in `vercel.json`. That CSP ships report-only first and is enforced only after production verification, so until then these statements can still fetch:
+  Some diagram statements carry CSS or an image URL themselves and fire while Mermaid draws, before any of these layers can act. The `img-src` CSP in `vercel.json` blocks what they fetch: it is enforced on its own, ahead of the rest of the policy, which stays report-only until production reports come back clean ([DEPLOYMENT.md](DEPLOYMENT.md#security-headers-and-the-csp-rollout)). These statements are:
   - state `classDef`
   - class `style`
   - block `style` and `classDef`

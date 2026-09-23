@@ -12,16 +12,22 @@ interface VercelHeaderRule {
 
 const VERCEL_CONFIG_PATH = resolve(import.meta.dirname, '../../../vercel.json');
 const ALL_ROUTES_SOURCE = '/(.*)';
-const CSP_HEADER = 'Content-Security-Policy-Report-Only';
+const REPORT_ONLY_CSP_HEADER = 'Content-Security-Policy-Report-Only';
+const ENFORCED_CSP_HEADER = 'Content-Security-Policy';
 const API_HOST = 'api.knowtis.app';
 const CSP_REPORT_URL = `https://${API_HOST}/api/v1/csp-reports`;
 const CSP_REPORT_GROUP = 'csp';
 
-const EXPECTED_CSP_DIRECTIVES: [string, string[]][] = [
+const IMG_SRC_DIRECTIVE: [string, string[]] = [
+  'img-src',
+  ["'self'", 'data:', 'blob:', `https://${STORED_IMAGE_HOST}`],
+];
+
+const EXPECTED_REPORT_ONLY_CSP_DIRECTIVES: [string, string[]][] = [
   ['default-src', ["'self'"]],
   ['script-src', ["'self'"]],
   ['style-src', ["'self'", "'unsafe-inline'"]],
-  ['img-src', ["'self'", 'data:', 'blob:', `https://${STORED_IMAGE_HOST}`]],
+  IMG_SRC_DIRECTIVE,
   ['font-src', ["'self'", 'data:']],
   ['connect-src', ["'self'", `https://${API_HOST}`, `wss://${API_HOST}`]],
   ['frame-src', ["'none'"]],
@@ -41,10 +47,10 @@ function headerRules(): VercelHeaderRule[] | undefined {
   return config.headers;
 }
 
-function cspDirectives(): [string, string[]][] {
+function cspDirectives(header: string): [string, string[]][] {
   const csp = headerRules()
     ?.find(({ source }) => source === ALL_ROUTES_SOURCE)
-    ?.headers.find(({ key }) => key === CSP_HEADER)?.value;
+    ?.headers.find(({ key }) => key === header)?.value;
   return (csp ?? '')
     .split(';')
     .map((directive) => directive.trim().split(/\s+/))
@@ -58,7 +64,8 @@ describe('notes security headers (vercel.json)', () => {
       {
         source: ALL_ROUTES_SOURCE,
         headers: [
-          { key: CSP_HEADER, value: expect.any(String) },
+          { key: ENFORCED_CSP_HEADER, value: expect.any(String) },
+          { key: REPORT_ONLY_CSP_HEADER, value: expect.any(String) },
           {
             key: 'Reporting-Endpoints',
             value: `${CSP_REPORT_GROUP}="${CSP_REPORT_URL}"`,
@@ -75,7 +82,13 @@ describe('notes security headers (vercel.json)', () => {
     ]);
   });
 
-  it('declares every CSP directive once, with exactly these sources', () => {
-    expect(cspDirectives()).toEqual(EXPECTED_CSP_DIRECTIVES);
+  it('declares every report-only CSP directive once, with exactly these sources', () => {
+    expect(cspDirectives(REPORT_ONLY_CSP_HEADER)).toEqual(
+      EXPECTED_REPORT_ONLY_CSP_DIRECTIVES
+    );
+  });
+
+  it('enforces only img-src, with the sources the report-only policy lists', () => {
+    expect(cspDirectives(ENFORCED_CSP_HEADER)).toEqual([IMG_SRC_DIRECTIVE]);
   });
 });
