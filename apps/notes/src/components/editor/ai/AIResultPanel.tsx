@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 
 import { useAIStore } from '@/stores/ai.store';
 import type { Fragment, Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Selection } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
@@ -26,14 +27,28 @@ function replacementContent(editor: Editor, markdown: string): Fragment {
   return onlyBlock?.type.name === PARAGRAPH_NODE ? onlyBlock.content : blocks;
 }
 
-function positionBelow(doc: ProseMirrorNode, from: number, to: number): number {
+function positionAfterBlockAt(selection: Selection): number {
+  const { $to } = selection;
+  return $to.parent.isTextblock ? $to.after() : selection.to;
+}
+
+function positionBelow(
+  doc: ProseMirrorNode,
+  rangeFrom: number,
+  rangeTo: number
+): number {
+  // The range was captured before streaming; the note may have shrunk since.
+  const clamp = (pos: number) => Math.min(Math.max(pos, 0), doc.content.size);
+  const from = clamp(rangeFrom);
+  const to = clamp(rangeTo);
   const $to = doc.resolve(to);
   const block = $to.parent;
   if (!block.isTextblock || block.content.size === 0) {
     return to;
   }
   if ($to.parentOffset === 0 && from < to) {
-    return $to.before();
+    const lastSelected = Selection.findFrom(doc.resolve($to.before()), -1);
+    return lastSelected ? positionAfterBlockAt(lastSelected) : to;
   }
   return $to.after();
 }
