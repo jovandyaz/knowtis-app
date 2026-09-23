@@ -11,6 +11,7 @@ export type {
   GhostTextStreamChunk,
 } from './extensions/ghost-text';
 export type { AIBlockProvider } from './extensions/ai-block/ai-block-provider';
+export { UNTRUSTED_MARKDOWN_PROPS } from './extensions/ai-block/untrusted-markdown';
 export { SuggestionMenu } from './extensions/suggestion-menu';
 export type { SuggestionMenuOptions } from './extensions/suggestion-menu';
 export {
