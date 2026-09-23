@@ -8,11 +8,13 @@ import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import {
   editorSchema,
+  SRC_ATTR,
   yjsStateToHtml,
 } from '../modules/notes/infrastructure/html-to-yjs';
 import { SCAN_BATCH_SIZE } from './id-keyset-scan';
 import {
   auditNoteImages,
+  INCOMPLETE_STATE,
   INVALID_SRC,
   SAME_ORIGIN_SRC,
   type NoteImageState,
@@ -38,6 +40,17 @@ function stateOf(content: JSONContent[]): Buffer {
   const state = Buffer.from(Y.encodeStateAsUpdate(doc));
   doc.destroy();
   return state;
+}
+
+function deltaOnly(change: (fragment: Y.XmlFragment) => void): Buffer {
+  const doc = new Y.Doc();
+  const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+  fragment.insert(0, [new Y.XmlElement('paragraph')]);
+  const before = Y.encodeStateVector(doc);
+  change(fragment);
+  const delta = Buffer.from(Y.encodeStateAsUpdate(doc, before));
+  doc.destroy();
+  return delta;
 }
 
 function img(src: string): string {
@@ -191,6 +204,33 @@ describe('auditNoteImages', () => {
       { id: 'a', inState: [], inContent: [FOREIGN_HOST] },
       { id: 'b', inState: [], inContent: [FOREIGN_HOST] },
     ]);
+  });
+
+  it('reports a CRDT state that depends on updates it does not hold as unreadable, not clean', async () => {
+    const withForeignImage = deltaOnly((fragment) => {
+      const image = new Y.XmlElement(IMAGE_NODE_NAME);
+      fragment.insert(1, [image]);
+      image.setAttribute(SRC_ATTR, FOREIGN_SRC);
+    });
+    const deletingWhatItLacks = deltaOnly((fragment) => fragment.delete(0, 1));
+
+    const report = await auditNoteImages(
+      memoryStore([
+        note('a', { yjsState: withForeignImage }),
+        note('b', { yjsState: deletingWhatItLacks }),
+      ])
+    );
+
+    expect(report).toEqual({
+      scanned: 2,
+      scannedInTrash: 0,
+      foreign: [],
+      foreignInTrash: [],
+      unreadable: [
+        { id: 'a', reason: INCOMPLETE_STATE },
+        { id: 'b', reason: INCOMPLETE_STATE },
+      ],
+    });
   });
 
   it('reads an empty CRDT state as a note without one', async () => {

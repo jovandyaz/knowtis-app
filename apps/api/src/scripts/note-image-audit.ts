@@ -16,6 +16,8 @@ import { scanById, type KeysetSource } from './id-keyset-scan';
 
 export const SAME_ORIGIN_SRC = '(same origin)';
 export const INVALID_SRC = '(invalid URL)';
+export const INCOMPLETE_STATE =
+  'the CRDT state depends on updates it does not hold';
 
 // A reserved TLD no stored src can name, so a src that resolves to it is a
 // relative one, fetched from whichever page renders the note.
@@ -73,6 +75,9 @@ function foreignHosts(srcs: readonly unknown[]): string[] {
 // Rendering omits a foreign src, so the state's attributes are the only record of it.
 function imageSrcsInState(state: Buffer): unknown[] {
   return withYDoc(state, (doc) => {
+    if (doc.store.pendingStructs !== null || doc.store.pendingDs !== null) {
+      throw new Error(INCOMPLETE_STATE);
+    }
     const images = doc
       .getXmlFragment(YJS_XML_FRAGMENT_NAME)
       .createTreeWalker(
