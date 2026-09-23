@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useAIStore } from '@/stores/ai.store';
-import { Fragment } from '@tiptap/pm/model';
-import { createNodeFromContent, type Editor } from '@tiptap/react';
+import type { Fragment } from '@tiptap/pm/model';
+import type { Editor } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
 import { useEscapeDismiss } from '@knowtis/design-system';
-import { renderMarkdownToSanitizedHtml } from '@knowtis/editor';
+import { markdownToFragment } from '@knowtis/editor';
 
 import { AIStreamingPreview } from './AIStreamingPreview';
 
@@ -18,17 +18,8 @@ interface AIResultPanelProps {
   editor: Editor;
 }
 
-function markdownToBlocks(editor: Editor, markdown: string): Fragment {
-  return Fragment.from(
-    createNodeFromContent(
-      renderMarkdownToSanitizedHtml(markdown),
-      editor.schema
-    )
-  );
-}
-
 function replacementContent(editor: Editor, markdown: string): Fragment {
-  const blocks = markdownToBlocks(editor, markdown);
+  const blocks = markdownToFragment(markdown, editor.schema);
   const onlyBlock = blocks.childCount === 1 ? blocks.firstChild : null;
   // Inserted as a block, a one-paragraph answer would split the sentence it
   // replaces, or turn the heading it replaces into a paragraph.
@@ -72,7 +63,7 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
         .chain()
         .focus()
         .setTextSelection(pos)
-        .insertContent(markdownToBlocks(editor, text))
+        .insertContent(markdownToFragment(text, editor.schema))
         .run();
       reset();
     },

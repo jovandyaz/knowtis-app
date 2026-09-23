@@ -12,7 +12,7 @@ export type {
 } from './extensions/ghost-text';
 export type { AIBlockProvider } from './extensions/ai-block/ai-block-provider';
 export { UNTRUSTED_MARKDOWN_PROPS } from './extensions/ai-block/untrusted-markdown';
-export { renderMarkdownToSanitizedHtml } from './extensions/ai-block/markdown-renderer';
+export { markdownToFragment } from './extensions/ai-block/markdown-renderer';
 export { SuggestionMenu } from './extensions/suggestion-menu';
 export type { SuggestionMenuOptions } from './extensions/suggestion-menu';
 export {

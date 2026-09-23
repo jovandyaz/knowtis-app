@@ -1,3 +1,5 @@
+import { createNodeFromContent } from '@tiptap/core';
+import { Fragment, type Schema } from '@tiptap/pm/model';
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 
@@ -57,4 +59,16 @@ export function renderMarkdownToSanitizedHtml(markdown: string): string {
     FORBID_TAGS: AI_HTML_FORBID_TAGS,
     FORBID_ATTR: AI_HTML_FORBID_ATTR,
   });
+}
+
+/**
+ * Parses markdown into editor nodes through
+ * {@link renderMarkdownToSanitizedHtml}. Whitespace collapses as it does in the
+ * rendered preview, so a soft line break reads as a space; code blocks keep
+ * theirs.
+ */
+export function markdownToFragment(markdown: string, schema: Schema): Fragment {
+  return Fragment.from(
+    createNodeFromContent(renderMarkdownToSanitizedHtml(markdown), schema)
+  );
 }

@@ -17,7 +17,7 @@ import { AIBlockError } from './AIBlockError';
 import { AIBlockInputForm } from './AIBlockInputForm';
 import { AIBlockResult } from './AIBlockResult';
 import { AIBlockStreaming } from './AIBlockStreaming';
-import { renderMarkdownToSanitizedHtml } from './markdown-renderer';
+import { markdownToFragment } from './markdown-renderer';
 import { UNTRUSTED_MARKDOWN_PROPS } from './untrusted-markdown';
 import { useAIBlockStream } from './useAIBlockStream';
 
@@ -86,12 +86,11 @@ function EditableAIBlock({
       return;
     }
 
-    const html = renderMarkdownToSanitizedHtml(attrs.content);
     editor
       .chain()
       .focus()
       .deleteRange({ from: pos, to: pos + node.nodeSize })
-      .insertContentAt(pos, html)
+      .insertContentAt(pos, markdownToFragment(attrs.content, editor.schema))
       .run();
   }, [editor, getPos, node.nodeSize, attrs.content]);
 
