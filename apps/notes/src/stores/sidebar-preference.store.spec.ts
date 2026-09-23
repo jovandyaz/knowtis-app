@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { refuseStorageWrites } from '@/test/refuse-storage';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSidebarPreferenceStore } from './sidebar-preference.store';
 
@@ -107,4 +108,18 @@ describe('useSidebarPreferenceStore', () => {
       expect(useSidebarPreferenceStore.getState().preferredWidth).toBe(320);
     }
   );
+
+  describe('when the browser refuses storage', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('still applies the new width', () => {
+      refuseStorageWrites();
+
+      useSidebarPreferenceStore.getState().setPreferredWidth(320);
+
+      expect(useSidebarPreferenceStore.getState().preferredWidth).toBe(320);
+    });
+  });
 });

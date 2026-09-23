@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { refuseStorageWrites } from '@/test/refuse-storage';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDockPreferenceStore } from './dock-preference.store';
 
@@ -103,4 +104,18 @@ describe('useDockPreferenceStore', () => {
       expect(useDockPreferenceStore.getState().preferredWidth).toBe(440);
     }
   );
+
+  describe('when the browser refuses storage', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('still applies the new width', () => {
+      refuseStorageWrites();
+
+      useDockPreferenceStore.getState().setPreferredWidth(440);
+
+      expect(useDockPreferenceStore.getState().preferredWidth).toBe(440);
+    });
+  });
 });

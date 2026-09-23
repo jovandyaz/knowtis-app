@@ -1,4 +1,5 @@
 import { queryClient } from '@/lib/query-client';
+import { refuseStorageWrites } from '@/test/refuse-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClient from '@knowtis/api-client';
@@ -529,5 +530,27 @@ describe('agent.store sending into a conversation deleted elsewhere', () => {
       status: 'error',
       conversationId: 'c1',
     });
+  });
+});
+
+describe('agent.store when the browser refuses storage', () => {
+  beforeEach(() => {
+    refuseStorageWrites();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('still sends the message', () => {
+    useAgentStore.getState().sendMessage('hola');
+
+    expect(agentClient.sendMessage).toHaveBeenCalledWith(
+      'hola',
+      expect.any(Object),
+      undefined,
+      undefined
+    );
+    expect(useAgentStore.getState().status).toBe('streaming');
   });
 });

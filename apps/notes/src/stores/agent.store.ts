@@ -1,7 +1,7 @@
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   agentClient,
@@ -25,7 +25,10 @@ import {
   type AgentStopReason,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
-import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
+import {
+  COPILOT_CONVERSATION_STORAGE_KEY,
+  safeLocalStorage,
+} from '@knowtis/shared-util';
 
 import { createChunkBuffer } from './chunk-buffer';
 import { toChatMessages } from './conversation-transcript';
@@ -703,6 +706,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 export const useAgentStore = create<AgentState>()(
   persist((set, get) => createAgentState(set, get), {
     name: COPILOT_CONVERSATION_STORAGE_KEY,
+    storage: createJSONStorage(() => safeLocalStorage),
     partialize: (state) => ({
       userId: state.userId,
       conversationId: state.conversationId,

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+import { safeLocalStorage } from '@knowtis/shared-util';
 
 interface RightDockStore {
   isOpen: boolean;
@@ -33,6 +35,7 @@ export const useRightDockStore = create<RightDockStore>()(
     }),
     {
       name: 'right-dock',
+      storage: createJSONStorage(() => safeLocalStorage),
       partialize: (s) => ({
         isOpen: s.isOpen,
         hasAutoOpened: s.hasAutoOpened,
