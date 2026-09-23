@@ -4,7 +4,7 @@ Canonical sources: `tsconfig.base.json`, `nx.json`, and the Module Boundaries se
 
 ## Dual namespace — the recurring import trap
 
-**`@knowtis/*`** — 18 workspace entries: `ai-gateway`, `api-client`, `authorization`, `crdt`, `data-access-admin`, `data-access-artifacts`, `data-access-feature-flags`, `data-access-mcp-keys`, `data-access-notes`, `data-access-oauth`, `data-access-users`, `design-system`, `editor`, `editor-schema`, `shared-hooks`, `shared-i18n`, `shared-types`, `shared-util`.
+**`@knowtis/*`** — 20 workspace entries: `ai-gateway`, `api-client`, `authorization`, `crdt`, `data-access-admin`, `data-access-agent`, `data-access-artifacts`, `data-access-feature-flags`, `data-access-mcp-keys`, `data-access-notes`, `data-access-oauth`, `data-access-users`, `design-system`, `editor`, `editor-schema`, `note-markdown`, `shared-hooks`, `shared-i18n`, `shared-types`, `shared-util`.
 
 **`@jovandyaz/*`** — the publishable auth/permissions/email packages: `@jovandyaz/auth` (+ `@jovandyaz/auth/server`), `@jovandyaz/auth-react`, `@jovandyaz/auth-nestjs`, `@jovandyaz/permissions-core`, `@jovandyaz/permissions-react`, `@jovandyaz/permissions-nestjs`, `@jovandyaz/email`, `@jovandyaz/email-nestjs`.
 
