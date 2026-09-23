@@ -15,6 +15,8 @@ const PAUSED_HINT_RE = /resumes the queue|reanuda la cola/i;
 
 const FIRST_QUESTION = 'Resume esta nota';
 const FIRST_ANSWER = 'Primera respuesta en curso.';
+const LATE_ANSWER = 'Respuesta tardía de un turno interrumpido.';
+const LIVE_ANSWER = 'Respuesta del turno que interrumpió.';
 const CONVERSATION_ID = 'queue-conversation';
 const PHONE_VIEWPORT = { width: 390, height: 844 };
 
@@ -45,6 +47,31 @@ function sentTexts(agent: ScriptedAgent): string[] {
 
 function cancelCount(agent: ScriptedAgent): number {
   return agent.sent.filter((item) => item.event === 'agent:cancel').length;
+}
+
+function turnSockets(agent: ScriptedAgent): number[] {
+  return agent.sent
+    .filter((item) => item.event === 'agent:message')
+    .map((item) => item.socket);
+}
+
+// Whether the client cancels a turn depends on the server having acknowledged
+// it yet; the server aborts it on either agent:cancel or its socket closing.
+function abortedTurns(agent: ScriptedAgent): string[] {
+  return agent.sent.flatMap((item, index) => {
+    if (item.event !== 'agent:message') {
+      return [];
+    }
+    const aborted =
+      agent.closedSockets.includes(item.socket) ||
+      agent.sent
+        .slice(index + 1)
+        .some(
+          (later) =>
+            later.socket === item.socket && later.event === 'agent:cancel'
+        );
+    return aborted ? [(item.payload as SentMessage).message.content] : [];
+  });
 }
 
 /** The script streams a chunk and never ends the turn; each test ends it. */
@@ -136,19 +163,33 @@ test('Send now and ⌘+Enter interrupt the live turn instead of queueing behind 
   await expect
     .poll(() => sentTexts(agent))
     .toEqual([FIRST_QUESTION, queuedTexts[1]]);
+  await expect.poll(() => abortedTurns(agent)).toEqual([FIRST_QUESTION]);
   expect(cancelCount(agent)).toBe(1);
   await expect(queued.getByRole('listitem')).toHaveCount(1);
   await expect(queued).toContainText(queuedTexts[0]);
 
-  await composer.fill('Esto va ya mismo');
+  const interruption = 'Esto va ya mismo';
+  await composer.fill(interruption);
   await composer.press('ControlOrMeta+Enter');
 
+  const allSent = [FIRST_QUESTION, queuedTexts[1], interruption];
+  await expect.poll(() => sentTexts(agent)).toEqual(allSent);
   await expect
-    .poll(() => sentTexts(agent))
-    .toEqual([FIRST_QUESTION, queuedTexts[1], 'Esto va ya mismo']);
-  expect(cancelCount(agent)).toBe(2);
+    .poll(() => abortedTurns(agent))
+    .toEqual([FIRST_QUESTION, queuedTexts[1]]);
   await expect(queued.getByRole('listitem')).toHaveCount(1);
   await expect(queued).toContainText(queuedTexts[0]);
+
+  for (const socket of turnSockets(agent).slice(0, -1)) {
+    agent.emit('agent:chunk', { text: LATE_ANSWER }, socket);
+    agent.emit('agent:done', DONE, socket);
+  }
+  agent.emit('agent:chunk', { text: LIVE_ANSWER });
+
+  await expect(owner.page.getByText(LIVE_ANSWER)).toBeVisible();
+  await expect(owner.page.getByText(LATE_ANSWER)).toHaveCount(0);
+  await expect(queued.getByRole('listitem')).toHaveCount(1);
+  expect(sentTexts(agent)).toEqual(allSent);
 });
 
 test('Stop pauses the queue and ↑ takes the newest message back into the composer', async ({

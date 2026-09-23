@@ -345,16 +345,17 @@ export class AgentClient {
     };
   }
 
-  /** A request the server never acknowledged has nothing to cancel: the socket
-   * that swallowed it is dropped instead, so the next send opens a fresh one. */
+  /** Every cancel drops the socket, acknowledged or not: the server aborts the
+   * turn on disconnect regardless, and a socket kept alive would let the next
+   * turn reuse it and adopt this one's late events. An acknowledged turn still
+   * emits agent:cancel first — engine.io defers the actual close until it
+   * drains, so the emit still reaches the server before the socket dies. */
   private abandonPending(): void {
-    if (this.pending && this.pending === this.awaitingReceipt) {
-      this.clearPending();
-      this.teardownSocket();
-      return;
+    if (!(this.pending && this.pending === this.awaitingReceipt)) {
+      this.socket?.emit('agent:cancel');
     }
-    this.socket?.emit('agent:cancel');
     this.clearPending();
+    this.teardownSocket();
   }
 
   private clearPending(): void {
@@ -482,10 +483,10 @@ export class AgentClient {
     );
 
     onCurrentSocket('agent:done', (payload: AgentDonePayload) => {
-      if (payload.conversationId) {
+      const callbacks = this.activeCallbacks;
+      if (callbacks && payload.conversationId) {
         this.conversationId = payload.conversationId;
       }
-      const callbacks = this.activeCallbacks;
       this.clearPending();
       callbacks?.onDone(payload);
     });

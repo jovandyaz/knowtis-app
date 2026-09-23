@@ -336,6 +336,16 @@ export class AgentGateway
     userId: string,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
+    // A disconnect or cancel handled during an earlier await found no slot to
+    // abort, so a turn started now would run to completion for nobody.
+    if (!client.connected) {
+      this.logger.debug({
+        event: 'agent.turn.skipped_disconnected',
+        clientId: client.id,
+        userId,
+      });
+      return;
+    }
     const turnId = randomUUID();
     const controller = new AbortController();
     if (!this.turns.acquire(userId, client.id, turnId, controller)) {

@@ -847,4 +847,104 @@ describe('AgentGateway', () => {
       }
     });
   });
+
+  describe('a client gone before its turn slot is taken', () => {
+    const resumable = { outcome: 'resumed', conversationId: 'conv-1' };
+    const committed = { noteId: 'n1', title: 'GTD', kind: 'create' } as const;
+
+    function setup({
+      disconnectDuringFlagCheck,
+    }: {
+      disconnectDuringFlagCheck: boolean;
+    }) {
+      const client = makeClient('u1');
+      const turn = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        resumeTurn: vi.fn().mockResolvedValue(undefined),
+      };
+      const gateway = makeGateway({
+        handler: turn as Partial<RunAgentTurnHandler>,
+        approve: {
+          execute: vi
+            .fn()
+            .mockResolvedValue(ok({ result: committed, ...resumable })),
+        },
+        reject: { execute: vi.fn().mockResolvedValue(ok(resumable)) },
+        featureFlags: {
+          isEnabled: vi.fn(async () => {
+            if (disconnectDuringFlagCheck) {
+              client.connected = false;
+            }
+            return true;
+          }),
+        },
+      });
+      return { gateway, client, turn };
+    }
+
+    type Harness = ReturnType<typeof setup>;
+
+    const turnStarts = [
+      {
+        request: 'a message',
+        send: ({ gateway, client }: Harness) =>
+          gateway.handleMessage(client as never, {
+            message: { content: 'hi' },
+          }),
+        started: ({ turn }: Harness) => turn.execute,
+      },
+      {
+        request: 'an approval',
+        send: ({ gateway, client }: Harness) =>
+          gateway.handleApprove(client as never, approvePayload()),
+        started: ({ turn }: Harness) => turn.resumeTurn,
+      },
+      {
+        request: 'a rejection',
+        send: ({ gateway, client }: Harness) =>
+          gateway.handleReject(client as never, approvePayload()),
+        started: ({ turn }: Harness) => turn.resumeTurn,
+      },
+    ];
+
+    it.each(turnStarts)(
+      'never starts a turn from $request when its client disconnects during the flag check',
+      async ({ send, started }) => {
+        const harness = setup({ disconnectDuringFlagCheck: true });
+
+        await send(harness);
+
+        expect(started(harness)).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(turnStarts)(
+      'starts a turn from $request while its client stays connected',
+      async ({ send, started }) => {
+        const harness = setup({ disconnectDuringFlagCheck: false });
+
+        await send(harness);
+
+        expect(started(harness)).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('never resumes the turn of an approval whose client disconnects while it commits', async () => {
+      const client = makeClient('u1');
+      const resumeTurn = vi.fn().mockResolvedValue(undefined);
+      const approveExecute = vi.fn(async () => {
+        client.connected = false;
+        return ok({ result: committed, ...resumable });
+      });
+      const gateway = makeGateway({
+        approve: { execute: approveExecute },
+        handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+      });
+
+      await gateway.handleApprove(client as never, approvePayload());
+
+      expect(approveExecute).toHaveBeenCalledTimes(1);
+      expect(resumeTurn).not.toHaveBeenCalled();
+    });
+  });
 });
