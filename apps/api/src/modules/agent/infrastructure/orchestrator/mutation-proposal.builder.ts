@@ -25,6 +25,10 @@ import { restoreStoredAttributes } from '../sanitize/stored-attributes';
 
 const UNRENDERABLE_CONTENT = 'content the server cannot render';
 
+function unrenderableBody(): AgentDomainError {
+  return AgentErrors.editWouldLoseContent([UNRENDERABLE_CONTENT]);
+}
+
 export interface UpdateProposalInput {
   readonly title?: string;
   readonly contentMarkdown?: string;
@@ -91,8 +95,14 @@ export class MutationProposalBuilder {
       note = await this.retrieval.getBody(userId, noteId);
     } else {
       const read = await this.retrieval.getById(userId, noteId);
-      if (read && read.contentStatus !== 'complete') {
-        return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
+      if (read) {
+        if (read.contentStatus !== 'complete') {
+          return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
+        }
+        const body = await this.retrieval.getBody(userId, noteId);
+        if (body?.html === null) {
+          return err(unrenderableBody());
+        }
       }
       note = read;
     }
@@ -146,7 +156,7 @@ export class MutationProposalBuilder {
       return err(AgentErrors.noteNotFound(noteId));
     }
     if (body.html === null) {
-      return err(AgentErrors.editWouldLoseContent([UNRENDERABLE_CONTENT]));
+      return err(unrenderableBody());
     }
     const original = htmlToMarkdown(body.html);
     const edited = applyNoteEdits(original, input.edits);

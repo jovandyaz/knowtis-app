@@ -909,6 +909,34 @@ describe('KeywordRetrievalAdapter', () => {
         ]);
       });
 
+      it('refuses a whole-body update the model built from the content column', async () => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const { adapter } = makeAdapter(unrenderableNote());
+        const builder = new MutationProposalBuilder(adapter);
+
+        const r = await builder.buildUpdate(USER, NOTE_ID, {
+          contentMarkdown: 'Welcome',
+        });
+
+        expect(r._unsafeUnwrapErr()).toEqual(
+          AgentErrors.editWouldLoseContent(['content the server cannot render'])
+        );
+      });
+
+      it('still builds a title-only update', async () => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const { adapter } = makeAdapter(unrenderableNote());
+        const builder = new MutationProposalBuilder(adapter);
+
+        const r = await builder.buildUpdate(USER, NOTE_ID, {
+          title: 'Lake trip',
+        });
+
+        expect(r._unsafeUnwrap().summary).toBe(
+          'Update "Trip": title → "Lake trip"'
+        );
+      });
+
       it('refuses an edit instead of building it on the content column', async () => {
         vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
         const { adapter } = makeAdapter(unrenderableNote());

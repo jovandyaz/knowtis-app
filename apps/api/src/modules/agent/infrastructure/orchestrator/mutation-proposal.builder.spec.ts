@@ -216,6 +216,26 @@ describe('MutationProposalBuilder', () => {
     expect(r._unsafeUnwrapErr().code).toBe('AGENT_NOTE_NOT_FOUND');
   });
 
+  it.each([
+    ['a content update', { contentMarkdown: '## New' }],
+    ['a title-and-content update', { title: 'New', contentMarkdown: '## New' }],
+  ])(
+    'refuses %s on a note whose state does not render',
+    async (_label, input) => {
+      const builder = new MutationProposalBuilder(
+        makeRetrieval({
+          getBody: vi.fn().mockResolvedValue({ ...BODY, html: null }),
+        })
+      );
+
+      const r = await builder.buildUpdate(USER, 'note-1', input);
+
+      expect(r._unsafeUnwrapErr()).toEqual(
+        AgentErrors.editWouldLoseContent(['content the server cannot render'])
+      );
+    }
+  );
+
   it('still renames and shares a note whose state does not render', async () => {
     const builder = new MutationProposalBuilder(
       makeRetrieval({
