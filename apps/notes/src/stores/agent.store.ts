@@ -1,6 +1,7 @@
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 import {
   agentClient,
@@ -9,11 +10,17 @@ import {
   type AgentStreamHandle,
   type WebSource,
 } from '@knowtis/api-client';
+import { invalidateConversations } from '@knowtis/data-access-agent';
 import {
   invalidateNoteCollections,
   notesQueryKeys,
 } from '@knowtis/data-access-notes';
-import type { AgentStopReason, ReasoningEffort } from '@knowtis/shared-types';
+import {
+  deriveConversationTitle,
+  type AgentStopReason,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
+import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
 import { createChunkBuffer } from './chunk-buffer';
 
@@ -109,8 +116,13 @@ interface AgentState {
   thinkingText: string;
   /** Per-conversation reasoning effort for the registered caller; never a stored preference. */
   reasoningEffort: CopilotEffort;
+  userId: string | null;
+  conversationId: string | null;
+  conversationTitle: string | null;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
+  bindUser: (userId: string) => void;
+  setConversationTitle: (title: string) => void;
   markErrorAnswered: () => void;
   sendMessage: (
     text: string,
@@ -130,7 +142,10 @@ interface AgentState {
   rejectProposal: (reason?: string) => void;
 }
 
-export const useAgentStore = create<AgentState>((set, get) => {
+type SetAgentState = StoreApi<AgentState>['setState'];
+type GetAgentState = StoreApi<AgentState>['getState'];
+
+function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let seq = 0;
   const nextId = () => `m${++seq}`;
 
@@ -214,10 +229,23 @@ export const useAgentStore = create<AgentState>((set, get) => {
           buffer.armInactivityTimer();
           thinkingBuffer.push(text);
         },
+        onConversation: (conversationId) => {
+          if (
+            version !== streamVersion ||
+            conversationId === get().conversationId
+          ) {
+            return;
+          }
+          set({
+            conversationId,
+            conversationTitle: deriveConversationTitle(text),
+          });
+        },
         onDone: ({ sources, webSources, stopReason }) => {
           if (version !== streamVersion || get().status !== 'streaming') {
             return;
           }
+          invalidateConversations(queryClient);
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
@@ -356,9 +384,25 @@ export const useAgentStore = create<AgentState>((set, get) => {
     pendingProposal: null,
     thinkingText: '',
     reasoningEffort: 'auto',
+    userId: null,
+    conversationId: null,
+    conversationTitle: null,
     _streamHandle: null,
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
+
+    bindUser: (userId) => {
+      const { userId: boundUserId, conversationId } = get();
+      if (boundUserId === userId) {
+        return;
+      }
+      if (conversationId !== null) {
+        get().newConversation();
+      }
+      set({ userId });
+    },
+
+    setConversationTitle: (title) => set({ conversationTitle: title }),
 
     // Keyed on the failure itself, so a later one is answered again without
     // any of the store's error transitions having to remember to clear this.
@@ -425,6 +469,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
         pendingProposal: null,
         thinkingText: '',
         reasoningEffort: 'auto',
+        conversationId: null,
+        conversationTitle: null,
         _streamHandle: null,
       });
     },
@@ -521,4 +567,14 @@ export const useAgentStore = create<AgentState>((set, get) => {
       buffer.armInactivityTimer();
     },
   };
-});
+}
+
+export const useAgentStore = create<AgentState>()(
+  persist((set, get) => createAgentState(set, get), {
+    name: COPILOT_CONVERSATION_STORAGE_KEY,
+    partialize: (state) => ({
+      userId: state.userId,
+      conversationId: state.conversationId,
+    }),
+  })
+);

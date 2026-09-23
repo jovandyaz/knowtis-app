@@ -1,3 +1,4 @@
+export { COPILOT_CONVERSATION_STORAGE_KEY } from './copilot-storage';
 export { formatRelativeTime } from './format-relative-time';
 export { formatShortcut } from './format-shortcut';
 export { generateId } from './generateId';
