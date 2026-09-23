@@ -37,7 +37,6 @@ function positionBelow(
   rangeFrom: number,
   rangeTo: number
 ): number {
-  // The range was captured before streaming; the note may have shrunk since.
   const clamp = (pos: number) => Math.min(Math.max(pos, 0), doc.content.size);
   const from = clamp(rangeFrom);
   const to = clamp(rangeTo);
