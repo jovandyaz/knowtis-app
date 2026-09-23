@@ -35,6 +35,10 @@
           "value": "nosniff"
         },
         {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
           "key": "Permissions-Policy",
           "value": "camera=(), geolocation=(), microphone=(self)"
         }

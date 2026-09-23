@@ -15,67 +15,59 @@ const ALL_ROUTES_SOURCE = '/(.*)';
 const CSP_HEADER = 'Content-Security-Policy-Report-Only';
 const API_HOST = 'api.knowtis.app';
 
-function allRoutesHeaders(): Map<string, string> {
+const EXPECTED_CSP_DIRECTIVES: [string, string[]][] = [
+  ['default-src', ["'self'"]],
+  ['script-src', ["'self'"]],
+  ['style-src', ["'self'", "'unsafe-inline'"]],
+  ['img-src', ["'self'", 'data:', 'blob:', `https://${STORED_IMAGE_HOST}`]],
+  ['font-src', ["'self'", 'data:']],
+  ['connect-src', ["'self'", `https://${API_HOST}`, `wss://${API_HOST}`]],
+  ['frame-src', ["'none'"]],
+  ['object-src', ["'none'"]],
+  ['base-uri', ["'none'"]],
+  ['form-action', ["'self'"]],
+  ['frame-ancestors', ["'self'"]],
+  ['upgrade-insecure-requests', []],
+];
+
+function headerRules(): VercelHeaderRule[] | undefined {
   const config = JSON.parse(readFileSync(VERCEL_CONFIG_PATH, 'utf8')) as {
     headers?: VercelHeaderRule[];
   };
-  const rule = config.headers?.find(
-    ({ source }) => source === ALL_ROUTES_SOURCE
-  );
-  return new Map(rule?.headers.map(({ key, value }) => [key, value]));
+  return config.headers;
 }
 
 function cspDirectives(): [string, string[]][] {
-  return (allRoutesHeaders().get(CSP_HEADER) ?? '')
+  const csp = headerRules()
+    ?.find(({ source }) => source === ALL_ROUTES_SOURCE)
+    ?.headers.find(({ key }) => key === CSP_HEADER)?.value;
+  return (csp ?? '')
     .split(';')
     .map((directive) => directive.trim().split(/\s+/))
     .filter(([name]) => name !== '')
     .map(([name, ...sources]) => [name, sources]);
 }
 
-function sourcesOf(directive: string): string[] | undefined {
-  return new Map(cspDirectives()).get(directive);
-}
-
 describe('notes security headers (vercel.json)', () => {
-  it('sends the referrer, sniffing and permissions policies on every route', () => {
-    const headers = allRoutesHeaders();
-
-    expect(headers.get('Referrer-Policy')).toBe(
-      'strict-origin-when-cross-origin'
-    );
-    expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
-    expect(headers.get('Permissions-Policy')).toBe(
-      'camera=(), geolocation=(), microphone=(self)'
-    );
-  });
-
-  it('declares each CSP directive once', () => {
-    const names = cspDirectives().map(([name]) => name);
-
-    expect(names.length).toBeGreaterThan(0);
-    expect(new Set(names).size).toBe(names.length);
-  });
-
-  it('loads images only from the app itself and its own blob store', () => {
-    expect(sourcesOf('img-src')).toEqual([
-      "'self'",
-      'data:',
-      'blob:',
-      `https://${STORED_IMAGE_HOST}`,
+  it('sends exactly these headers, on every route, from a single rule', () => {
+    expect(headerRules()).toEqual([
+      {
+        source: ALL_ROUTES_SOURCE,
+        headers: [
+          { key: CSP_HEADER, value: expect.any(String) },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), geolocation=(), microphone=(self)',
+          },
+        ],
+      },
     ]);
   });
 
-  it('runs only same-origin scripts and no plugins', () => {
-    expect(sourcesOf('script-src')).toEqual(["'self'"]);
-    expect(sourcesOf('object-src')).toEqual(["'none'"]);
-  });
-
-  it('connects only to the app itself and the API over HTTPS and WSS', () => {
-    expect(sourcesOf('connect-src')).toEqual([
-      "'self'",
-      `https://${API_HOST}`,
-      `wss://${API_HOST}`,
-    ]);
+  it('declares every CSP directive once, with exactly these sources', () => {
+    expect(cspDirectives()).toEqual(EXPECTED_CSP_DIRECTIVES);
   });
 });
