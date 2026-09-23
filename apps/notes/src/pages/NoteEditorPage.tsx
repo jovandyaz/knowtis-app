@@ -29,6 +29,7 @@ import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { TERMINAL_ACCESS_STATUSES } from '@/lib/access-status';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { hasMeaningfulText } from '@/lib/html-text';
+import { sanitizeAiHtml } from '@/lib/sanitize-ai-html';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useNoteEditorStore } from '@/stores/note-editor.store';
@@ -329,7 +330,7 @@ function NoteEditor({
         .chain()
         .focus()
         .setTextSelection(pos)
-        .insertContent(htmlContent)
+        .insertContent(sanitizeAiHtml(htmlContent))
         .run();
     },
     [insertPosition]
