@@ -24,9 +24,14 @@ export function shouldReloadForStaleChunk(): boolean {
   return !lastReload || Date.now() - Number(lastReload) > DEBOUNCE_MS;
 }
 
+function rememberReload(): boolean {
+  const stamp = String(Date.now());
+  safeSessionStorage.setItem(CHUNK_RELOAD_KEY, stamp);
+  return safeSessionStorage.getItem(CHUNK_RELOAD_KEY) === stamp;
+}
+
 export function reloadIfStaleChunk(): boolean {
-  if (shouldReloadForStaleChunk()) {
-    safeSessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+  if (shouldReloadForStaleChunk() && rememberReload()) {
     window.location.reload();
     return true;
   }

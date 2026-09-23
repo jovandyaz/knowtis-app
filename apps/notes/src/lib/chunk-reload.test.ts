@@ -30,10 +30,21 @@ describe('reloadIfStaleChunk', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('still reloads when the browser refuses session storage', () => {
+  it('does not reload when the browser refuses session storage', () => {
     refuseStorage();
 
-    expect(reloadIfStaleChunk()).toBe(true);
-    expect(reload).toHaveBeenCalledTimes(1);
+    expect(reloadIfStaleChunk()).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('never reloads on repeated chunk failures when the reload stamp does not persist', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+
+    expect([
+      reloadIfStaleChunk(),
+      reloadIfStaleChunk(),
+      reloadIfStaleChunk(),
+    ]).toEqual([false, false, false]);
+    expect(reload).not.toHaveBeenCalled();
   });
 });
