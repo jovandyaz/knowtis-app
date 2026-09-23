@@ -31,6 +31,7 @@ const agentState = vi.hoisted(() => ({
   } | null,
   status: 'idle' as 'idle' | 'streaming',
   draft: '',
+  conversationId: null as string | null,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -45,7 +46,7 @@ const copilotPanel = vi.hoisted(() => ({ effectRuns: 0 }));
 const isUpdateProposal = vi.hoisted(
   () => (p: TestProposal) => p.kind === 'update' && p.targetNoteId !== null
 );
-vi.mock('../copilot', () => ({
+vi.mock('../copilot/AgentCopilotPanel', () => ({
   AgentCopilotPanel: () => {
     const openReview = useRightDockStore((s) => s.openReview);
     const closeReview = useRightDockStore((s) => s.closeReview);
@@ -69,6 +70,9 @@ vi.mock('../copilot', () => ({
     );
   },
 }));
+vi.mock('../copilot/ConversationSwitcher', () => ({
+  ConversationSwitcher: () => <div data-testid="conversation-switcher" />,
+}));
 vi.mock('@/stores/agent.store', () => ({
   useAgentStore: (selector: (state: typeof agentState) => unknown) =>
     selector(agentState),
@@ -84,6 +88,7 @@ describe('RightDock', () => {
     agentState.pendingProposal = null;
     agentState.status = 'idle';
     agentState.draft = '';
+    agentState.conversationId = null;
     copilotPanel.effectRuns = 0;
     useRightDockStore.setState({ isOpen: true, reviewOpen: false });
     useSidebarStore.setState({ visibleWidth: 0 });
@@ -147,6 +152,32 @@ describe('RightDock', () => {
     expect(dockHeader()).toHaveClass('h-12', 'shrink-0', 'px-4');
     expect(dockHeader()).not.toHaveClass('border-b');
     expect(dockHeader()).not.toHaveTextContent('ai.copilot.title');
+  });
+
+  it('puts the conversation switcher before the reset action in the header', () => {
+    render(<RightDock />);
+
+    expect(dockHeader().firstElementChild).toContainElement(
+      screen.getByTestId('conversation-switcher')
+    );
+    expect(dockHeader().lastElementChild).toBe(resetAction());
+  });
+
+  it('keeps the switcher while the conversation is empty', () => {
+    agentState.messages = [];
+
+    render(<RightDock />);
+
+    expect(screen.getByTestId('conversation-switcher')).toBeInTheDocument();
+  });
+
+  it('offers a new conversation while a reopened thread has nothing on screen yet', () => {
+    agentState.messages = [];
+    agentState.conversationId = 'c1';
+
+    render(<RightDock />);
+
+    expect(resetAction()).toBeEnabled();
   });
 
   it('reserves the header row while the conversation is empty', () => {
