@@ -1,7 +1,16 @@
-import { generateHTML, generateJSON, type JSONContent } from '@tiptap/core';
+import {
+  generateHTML,
+  generateJSON,
+  getSchema,
+  type JSONContent,
+} from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 
-import { createSemanticExtensions } from '@knowtis/editor-schema';
+import {
+  AI_BLOCK_NAME,
+  createSemanticExtensions,
+  IMAGE_NODE_NAME,
+} from '@knowtis/editor-schema';
 
 import { sanitizeAiHtml, sanitizeProposalHtml } from './sanitize-ai-html';
 
@@ -305,19 +314,45 @@ const STORED_IMAGE_BLOCK: JSONContent = {
 };
 
 const EXTENSIONS = [...createSemanticExtensions()];
+const SCHEMA = getSchema(EXTENSIONS);
+
+const NOT_IN_AI_HTML: Record<string, string> = {
+  [AI_BLOCK_NAME]: 'an editor-only prompt block the copilot never writes',
+};
+
+function typesHeldBy(blocks: JSONContent[]): string[] {
+  const doc = SCHEMA.nodeFromJSON({ type: 'doc', content: blocks });
+  const types = new Set([doc.type.name]);
+  doc.descendants((node) => {
+    types.add(node.type.name);
+    node.marks.forEach((mark) => types.add(mark.type.name));
+  });
+  return [...types].sort();
+}
+
+function schemaTypesExcept(excluded: readonly string[]): string[] {
+  return [...Object.keys(SCHEMA.nodes), ...Object.keys(SCHEMA.marks)]
+    .filter((type) => !(type in NOT_IN_AI_HTML) && !excluded.includes(type))
+    .sort();
+}
 
 function noteHtml(blocks: JSONContent[]): string {
   return generateHTML({ type: 'doc', content: blocks }, EXTENSIONS);
 }
 
 describe.each([
-  ['sanitizeAiHtml', sanitizeAiHtml, NOTE_BLOCKS],
+  ['sanitizeAiHtml', sanitizeAiHtml, NOTE_BLOCKS, [IMAGE_NODE_NAME]],
   [
     'sanitizeProposalHtml',
     sanitizeProposalHtml,
     [...NOTE_BLOCKS, STORED_IMAGE_BLOCK],
+    [],
   ],
-])('%s', (_name, sanitize, blocks) => {
+])('%s', (_name, sanitize, blocks, notKept) => {
+  it('round-trips a note holding every node and mark the schema defines', () => {
+    expect(typesHeldBy(blocks)).toEqual(schemaTypesExcept(notKept));
+  });
+
   it('keeps the code of a mermaid diagram, arrows included', () => {
     const code = 'graph TD\n  A[Start] --> B\n  B -.-> C';
     const block = document.createElement('div');
