@@ -349,6 +349,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           if (version !== streamVersion) {
             return;
           }
+          invalidateConversations(queryClient);
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
@@ -367,6 +368,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           if (version !== streamVersion) {
             return;
           }
+          invalidateConversations(queryClient);
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();

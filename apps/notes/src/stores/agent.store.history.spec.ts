@@ -143,6 +143,38 @@ describe('agent.store conversation identity', () => {
     ).toBe(true);
   });
 
+  it('refreshes the conversation list when a turn stops on a proposal', () => {
+    queryClient.setQueryData(conversationsQueryKeys.list(SWITCHER_LIMIT), {});
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Crea la nota');
+
+    callbacks().onProposal?.({
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 'Create',
+      payload: {},
+    });
+
+    expect(
+      queryClient.getQueryState(conversationsQueryKeys.list(SWITCHER_LIMIT))
+        ?.isInvalidated
+    ).toBe(true);
+  });
+
+  it('refreshes the conversation list when a turn fails', () => {
+    queryClient.setQueryData(conversationsQueryKeys.list(SWITCHER_LIMIT), {});
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('hola');
+
+    callbacks().onError({ code: 'AI_PROVIDER_ERROR', message: 'down' });
+
+    expect(
+      queryClient.getQueryState(conversationsQueryKeys.list(SWITCHER_LIMIT))
+        ?.isInvalidated
+    ).toBe(true);
+  });
+
   it('forgets the thread on newConversation but remembers whose browser it is', () => {
     useAgentStore.setState({
       userId: 'u1',
