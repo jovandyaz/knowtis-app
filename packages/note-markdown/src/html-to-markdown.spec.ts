@@ -346,39 +346,41 @@ describe('htmlToMarkdown editor-authored tables', () => {
 describe('htmlToMarkdown images', () => {
   // This package cannot import storedHtml() from the API; this is its output.
   const STORED_FIGURE =
-    '<figure data-image=""><img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp" alt="a lake" width="320" height="200"><figcaption>Lake Atitlán</figcaption></figure>';
+    '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp" alt="a lake" width="320" height="200"><figcaption>Lake Atitlán</figcaption></figure>';
 
   it('converts the stored figure to an image with the caption as title', () => {
     expect(htmlToMarkdown(`<p>before</p>${STORED_FIGURE}<p>after</p>`)).toBe(
-      'before\n\n![a lake](https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp "Lake Atitlán")\n\nafter'
+      'before\n\n![a lake](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp "Lake Atitlán")\n\nafter'
     );
   });
 
   it('omits the title when the caption is empty', () => {
     expect(
       htmlToMarkdown(
-        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="a"><figcaption></figcaption></figure>'
+        '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp" alt="a"><figcaption></figcaption></figure>'
       )
-    ).toBe('![a](https://x.public.blob.vercel-storage.com/a.webp)');
+    ).toBe(
+      '![a](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp)'
+    );
   });
 
   it('escapes quotes in the caption and brackets in the alt', () => {
     expect(
       htmlToMarkdown(
-        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="a [b]"><figcaption>say "hi"</figcaption></figure>'
+        '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp" alt="a [b]"><figcaption>say "hi"</figcaption></figure>'
       )
     ).toBe(
-      '![a \\[b\\]](https://x.public.blob.vercel-storage.com/a.webp "say \\"hi\\"")'
+      '![a \\[b\\]](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp "say \\"hi\\"")'
     );
   });
 
   it('escapes the alt and caption so markdown-it reads them back as written', () => {
     expect(
       htmlToMarkdown(
-        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="&amp;copy; \\ `x`"><figcaption>&amp;copy; \\ "q"</figcaption></figure>'
+        '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp" alt="&amp;copy; \\ `x`"><figcaption>&amp;copy; \\ "q"</figcaption></figure>'
       )
     ).toBe(
-      '![\\&copy; \\\\ \\`x\\`](https://x.public.blob.vercel-storage.com/a.webp "\\&copy; \\\\ \\"q\\"")'
+      '![\\&copy; \\\\ \\`x\\`](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp "\\&copy; \\\\ \\"q\\"")'
     );
   });
 
@@ -396,19 +398,19 @@ describe('htmlToMarkdown images', () => {
       .replace(/</g, '&lt;');
     const html = markdownToHtml(
       htmlToMarkdown(
-        `<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="${attribute}"><figcaption>${attribute}</figcaption></figure>`
+        `<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp" alt="${attribute}"><figcaption>${attribute}</figcaption></figure>`
       )
     );
 
     expect(html).toBe(
-      `<figure data-image><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="${attribute}"><figcaption>${attribute}</figcaption></figure>\n`
+      `<figure data-image><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp" alt="${attribute}"><figcaption>${attribute}</figcaption></figure>\n`
     );
   });
 
   it('round-trips the figure through markdownToHtml', () => {
     const md = htmlToMarkdown(STORED_FIGURE);
     expect(markdownToHtml(md)).toContain(
-      '<img src="https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp" alt="a lake">'
+      '<img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp" alt="a lake">'
     );
     expect(markdownToHtml(md)).toContain(
       '<figcaption>Lake Atitlán</figcaption>'
@@ -522,10 +524,10 @@ describe('htmlToMarkdown non-breaking spaces', () => {
   it('keeps a non-breaking space that opens a caption', () => {
     expect(
       htmlToMarkdown(
-        '<figure data-image=""><img src="https://x.public.blob.vercel-storage.com/a.webp" alt="a"><figcaption>\u00a0cap\u00a0</figcaption></figure>'
+        '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp" alt="a"><figcaption>\u00a0cap\u00a0</figcaption></figure>'
       )
     ).toBe(
-      '![a](https://x.public.blob.vercel-storage.com/a.webp "\u00a0cap\u00a0")'
+      '![a](https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/a.webp "\u00a0cap\u00a0")'
     );
   });
 });

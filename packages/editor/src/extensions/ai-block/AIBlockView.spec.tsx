@@ -17,7 +17,7 @@ const GENERATED = 'Rome was founded in 753 BC.';
 const FAILURE = 'The model timed out';
 
 const STORED_IMAGE =
-  'https://knowtis.public.blob.vercel-storage.com/notes/n1/chart.webp';
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/chart.webp';
 const RAW_IMAGE = '<img src="https://attacker.example/raw.png">';
 const RAW_SCRIPT = '<script>window.pwned = true</script>';
 const HOSTILE_CONTENT = [

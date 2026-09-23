@@ -1,7 +1,8 @@
 import { defaultUrlTransform, type UrlTransform } from 'streamdown';
 
+import { isStoredImageUrl } from '@knowtis/shared-util';
+
 const SAFE_LINK_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
-const INERT_IMAGE_SCHEMES = new Set(['data', 'blob']);
 
 function schemeOf(url: string): string | null {
   const colon = url.indexOf(':');
@@ -15,19 +16,18 @@ function schemeOf(url: string): string | null {
   return url.slice(0, colon).toLowerCase();
 }
 
-/** Assistant output is untrusted (injectable via shared notes). Image `src` is
- * allowlisted (relative/data/blob) because even `https:/host` resolves remote and
- * auto-fires an exfiltration GET; links allow only schemes Streamdown won't strip. */
+/** Assistant output is untrusted (injectable via shared notes). Image `src` keeps
+ * only the app's own blob store: any other source auto-fires a GET on render, and a
+ * relative one resolves to the app origin, whose `/t/*` proxies to analytics. Links
+ * allow only schemes Streamdown won't strip. */
 export const hardenAssistantUrl: UrlTransform = (url, key, node) => {
   const sanitized = defaultUrlTransform(url, key, node);
   if (sanitized == null || sanitized === '') {
     return sanitized;
   }
-  const scheme = schemeOf(sanitized);
   if (key === 'src') {
-    const isRelative = scheme === null && !sanitized.startsWith('//');
-    const isInert = scheme != null && INERT_IMAGE_SCHEMES.has(scheme);
-    return isRelative || isInert ? sanitized : '';
+    return isStoredImageUrl(sanitized) ? sanitized : '';
   }
+  const scheme = schemeOf(sanitized);
   return scheme == null || SAFE_LINK_SCHEMES.has(scheme) ? sanitized : '';
 };

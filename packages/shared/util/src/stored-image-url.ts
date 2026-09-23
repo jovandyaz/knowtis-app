@@ -1,4 +1,5 @@
-const STORED_IMAGE_HOST_SUFFIX = '.public.blob.vercel-storage.com';
+export const STORED_IMAGE_HOST =
+  'iy4r311mpkfdcnup.public.blob.vercel-storage.com';
 
 export function isStoredImageUrl(url: string): boolean {
   let parsed: URL;
@@ -7,9 +8,5 @@ export function isStoredImageUrl(url: string): boolean {
   } catch {
     return false;
   }
-  return (
-    parsed.protocol === 'https:' &&
-    parsed.hostname.endsWith(STORED_IMAGE_HOST_SUFFIX) &&
-    parsed.hostname.length > STORED_IMAGE_HOST_SUFFIX.length
-  );
+  return parsed.protocol === 'https:' && parsed.hostname === STORED_IMAGE_HOST;
 }

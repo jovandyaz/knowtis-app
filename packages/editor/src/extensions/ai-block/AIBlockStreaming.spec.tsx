@@ -8,7 +8,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 const STORED_IMAGE =
-  'https://knowtis.public.blob.vercel-storage.com/notes/n1/chart.webp';
+  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/chart.webp';
 const RAW_IMAGE = '<img src="https://attacker.example/raw.png">';
 const LAST_LINE = 'Still writing';
 const STREAMED = [

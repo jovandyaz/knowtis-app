@@ -523,7 +523,7 @@ describe('MutationProposalBuilder.buildEdit', () => {
 
   it('edits a note the copilot wrote with an image mid-sentence', async () => {
     const src =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
     const { builder } = editing(
       storedHtml(markdownToNoteHtml(`See ![map](${src}) here.\n\nOld text.`))
     );
@@ -560,7 +560,7 @@ describe('MutationProposalBuilder.buildEdit', () => {
 
   it('keeps an image and the size the user gave it through an edit to other text', async () => {
     const src =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
     const bodyHtml = storedHtml(
       `<figure data-image=""><img src="${src}" alt="lake" width="320" height="200"><figcaption>Lake</figcaption></figure><p>Old text.</p>`
     );
@@ -597,7 +597,7 @@ describe('MutationProposalBuilder.buildEdit', () => {
 
   it('blanks nothing when the edit removes the only sentence beside an image', async () => {
     const src =
-      'https://knowtis.public.blob.vercel-storage.com/notes/n1/lake.webp';
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
     const bodyHtml = storedHtml(
       `<p>Only sentence.</p><figure data-image=""><img src="${src}" alt="lake"><figcaption></figcaption></figure>`
     );
