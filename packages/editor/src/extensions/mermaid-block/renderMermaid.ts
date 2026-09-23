@@ -18,6 +18,25 @@ const LABEL_SANITIZER_CONFIG = {
   FORBID_ATTR: ['style', 'src', 'srcset', 'poster', 'background'],
 };
 
+// a diagram's front matter or %%{init}%% directive may set any config key not
+// listed as secure (at any depth, mermaid's own defaults included), and each of
+// these reaches the css, fill or stroke of the drawing mermaid measures in the
+// live document. `c4` goes whole: every shape colour lands in a fill or stroke
+const STYLE_CONFIG_KEYS = [
+  'themeCSS',
+  'themeVariables',
+  'fontFamily',
+  'altFontFamily',
+  'c4',
+  'titleColor',
+  'linkColor',
+  'width',
+  'leftMargin',
+  'chartWidth',
+  'marginLeft',
+  'marginRight',
+];
+
 let mermaidInstance: typeof mermaidType | null = null;
 let appliedTheme: MermaidTheme | null = null;
 
@@ -33,6 +52,7 @@ async function getMermaid(theme: MermaidTheme) {
       startOnLoad: false,
       securityLevel: 'strict',
       dompurifyConfig: LABEL_SANITIZER_CONFIG,
+      secure: STYLE_CONFIG_KEYS,
       theme,
     });
     appliedTheme = theme;
