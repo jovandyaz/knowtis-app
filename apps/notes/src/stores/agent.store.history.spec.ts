@@ -424,6 +424,18 @@ describe('agent.store openConversation', () => {
     expect(conversationsApi.transcript).toHaveBeenCalledTimes(1);
   });
 
+  it('does not refetch a thread that is still loading', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const first = useAgentStore.getState().openConversation('c1', 'reload');
+
+    const second = useAgentStore.getState().openConversation('c1', 'reload');
+    pending.resolve(TRANSCRIPT);
+
+    expect([await second, await first]).toEqual(['unchanged', 'opened']);
+    expect(conversationsApi.transcript).toHaveBeenCalledTimes(1);
+  });
+
   it('starts a different thread at the automatic effort', async () => {
     useAgentStore.getState().setReasoningEffort('high');
     vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
