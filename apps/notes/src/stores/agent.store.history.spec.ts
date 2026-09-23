@@ -393,6 +393,20 @@ describe('agent.store openConversation', () => {
     );
   });
 
+  it('keeps a rename saved while the transcript was loading', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    useAgentStore.getState().setConversationTitle('Renamed meanwhile');
+
+    pending.resolve(TRANSCRIPT);
+
+    expect(await opening).toBe('opened');
+    expect(useAgentStore.getState().conversationTitle).toBe(
+      'Renamed meanwhile'
+    );
+  });
+
   it('does not name a different thread from a superseded transcript', async () => {
     const pending = deferred<ConversationTranscript>();
     vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);

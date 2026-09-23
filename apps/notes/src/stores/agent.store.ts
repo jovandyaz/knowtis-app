@@ -198,6 +198,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let streamVersion = 0;
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;
+  let titleEdits = 0;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -492,7 +493,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       set({ userId });
     },
 
-    setConversationTitle: (title) => set({ conversationTitle: title }),
+    setConversationTitle: (title) => {
+      titleEdits++;
+      set({ conversationTitle: title });
+    },
 
     openConversation: async (id, source) => {
       const current = get();
@@ -504,6 +508,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       }
       abandonTurn();
       const version = streamVersion;
+      const titleEditsAtOpen = titleEdits;
       agentClient.resumeConversation(id);
       const switching = id !== current.conversationId;
       set({
@@ -534,7 +539,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         }
         set({
           messages: toChatMessages(transcript.messages, nextId),
-          conversationTitle: transcript.title,
+          ...(titleEdits === titleEditsAtOpen
+            ? { conversationTitle: transcript.title }
+            : {}),
           hasEarlier: transcript.hasEarlier,
           hydration: 'idle',
         });
