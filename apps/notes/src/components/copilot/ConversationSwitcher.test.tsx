@@ -239,6 +239,17 @@ describe('ConversationSwitcher', () => {
     expect(screen.queryByText('ai.copilot.history.empty')).toBeNull();
   });
 
+  it('shows a loading row before the list has loaded', async () => {
+    const user = userEvent.setup();
+    render(<ConversationSwitcher />);
+
+    await openMenu(user, 'ai.copilot.history.recent');
+
+    expect(
+      screen.getByRole('menuitem', { name: 'ai.copilot.history.loadingList' })
+    ).toHaveAttribute('aria-disabled', 'true');
+  });
+
   it('renders a hostile title as text in the trigger and the list', async () => {
     useAgentStore.setState({
       conversationId: 'c1',

@@ -168,6 +168,11 @@ export function ConversationSwitcher() {
           <DropdownMenuLabel className="text-xs uppercase tracking-wide">
             {t('ai.copilot.history.recent')}
           </DropdownMenuLabel>
+          {!data && !isError && (
+            <DropdownMenuItem disabled>
+              {t('ai.copilot.history.loadingList')}
+            </DropdownMenuItem>
+          )}
           {isError && !data && (
             <DropdownMenuItem disabled>
               {t('ai.copilot.history.listFailed')}

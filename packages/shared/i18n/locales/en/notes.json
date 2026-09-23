@@ -453,6 +453,7 @@
         "listFailed": "Couldn't load conversations",
         "loadFailed": "Couldn't load this conversation.",
         "loading": "Loading conversation…",
+        "loadingList": "Loading conversations…",
         "openLabel": "Open conversation {{title}}"
       },
       "thinking": "Thinking…",

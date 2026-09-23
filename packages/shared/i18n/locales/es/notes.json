@@ -453,6 +453,7 @@
         "listFailed": "No se pudieron cargar las conversaciones",
         "loadFailed": "No se pudo cargar esta conversación.",
         "loading": "Cargando conversación…",
+        "loadingList": "Cargando conversaciones…",
         "openLabel": "Abrir la conversación {{title}}"
       },
       "thinking": "Pensando…",
