@@ -424,7 +424,8 @@ export class AgentClient {
       logger.info(`Agent WebSocket disconnected: ${reason}`, {
         context: 'AgentClient',
       });
-      // Our own teardown already decided what happens to the request.
+      // A replaced socket was torn down on purpose and an active one is still
+      // reconnecting, so neither may fail the turn.
       if (this.socket !== socket || socket.active) {
         return;
       }

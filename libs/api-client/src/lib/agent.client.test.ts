@@ -32,7 +32,8 @@ function createFakeSocket() {
       return fakeSocket;
     }),
     emit: vi.fn(() => fakeSocket),
-    // Mirrors socket.io: a manual disconnect emits the event with the socket inactive.
+    // socket.io marks a manually closed socket inactive before emitting
+    // disconnect, and the client relies on that ordering.
     disconnect: vi.fn(() => {
       fakeSocket.connected = false;
       fakeSocket.active = false;

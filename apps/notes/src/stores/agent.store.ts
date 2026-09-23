@@ -195,7 +195,6 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   const nextId = () => `m${++seq}`;
 
   let activeAssistantId: string | null = null;
-  // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;

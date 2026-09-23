@@ -18,8 +18,8 @@ export interface CreateAuthStoreOptions {
 
 const DEFAULT_STORAGE_KEY = 'auth-store';
 
-// Only what the shell reads before the profile refetch lands; the rest of the
-// /auth/me payload stays in memory.
+// Only what the shell reads before the profile refetch lands, so the rest of
+// the /auth/me payload never reaches storage.
 function toPersistedUser(user: AuthUserProfile | null) {
   if (user === null) {
     return null;
