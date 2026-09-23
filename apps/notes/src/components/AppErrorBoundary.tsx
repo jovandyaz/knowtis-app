@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { useTranslation } from 'react-i18next';
 
@@ -16,11 +16,18 @@ import {
 function AppErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   const { t } = useTranslation('errors');
 
-  const willReload = isChunkLoadError(error) && shouldReloadForStaleChunk();
+  const [willReload, setWillReload] = useState(
+    () => isChunkLoadError(error) && shouldReloadForStaleChunk()
+  );
 
   useEffect(() => {
-    if (isChunkLoadError(error)) {
-      reloadIfStaleChunk();
+    if (!isChunkLoadError(error)) {
+      return;
+    }
+    reloadIfStaleChunk();
+    if (shouldReloadForStaleChunk()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- A reload still due after the attempt is one storage could not remember.
+      setWillReload(false);
     }
   }, [error]);
 
