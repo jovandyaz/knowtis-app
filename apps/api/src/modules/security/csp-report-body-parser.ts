@@ -4,7 +4,7 @@ const CSP_REPORT_CONTENT_TYPES = [
   'application/csp-report',
   'application/reports+json',
 ];
-const CSP_REPORT_BODY_LIMIT = '16kb';
+const CSP_REPORT_BODY_LIMIT = '64kb';
 
 /**
  * Parses the JSON bodies browsers deliver violation reports in:

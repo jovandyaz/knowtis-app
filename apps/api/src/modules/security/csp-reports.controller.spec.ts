@@ -1,8 +1,10 @@
+import { JWT_VERIFICATION_KEY_SELECTOR } from '@jovandyaz/auth-nestjs';
 import { Logger, VersioningType } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { JwtModule } from '@nestjs/jwt';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 import {
   afterEach,
@@ -15,7 +17,9 @@ import {
 } from 'vitest';
 
 import { buildCorsOptions } from '../../config/cors-origins';
+import { BearerIdentityResolver } from '../../core/auth/bearer-identity.resolver';
 import { GlobalExceptionFilter } from '../../core/filters/http-exception.filter';
+import { UserScopedThrottlerGuard } from '../../core/throttling/user-scoped-throttler.guard';
 import { applyBodyParsersExcludingOauth } from '../oauth/oidc-mount.middleware';
 import { applyCspReportBodyParser } from './csp-report-body-parser';
 import { SecurityModule } from './security.module';
@@ -25,16 +29,29 @@ const FRONTEND_ORIGIN = 'https://knowtis.app';
 const LEGACY_TYPE = 'application/csp-report';
 const REPORTING_API_TYPE = 'application/reports+json';
 const VIOLATION_EVENT = 'security.csp.violation';
-// Spelled out rather than imported: a budget read from the value under test
+const TRUNCATED_EVENT = 'security.csp.violations_truncated';
+// Spelled out rather than imported: a limit read from the value under test
 // would keep passing wherever that value drifted to.
 const APP_DEFAULT_REQUESTS_PER_MINUTE = 60;
 const REPORT_REQUESTS_PER_MINUTE = 30;
-const OVER_BODY_LIMIT = 17 * 1024;
+const LOGGED_GROUPS_PER_REQUEST = 20;
+const BODY_LIMIT_BYTES = 64 * 1024;
+const LARGE_BATCH_BYTES = 60 * 1024;
+const OVER_BODY_LIMIT_BYTES = 65 * 1024;
+const EDGE_IP = '203.0.113.7';
+const OTHER_EDGE_IP = '203.0.113.8';
 
 const EXFILTRATED = 'd=private-note-text';
 const SHARE_TOKEN = 'a3f9'.repeat(16);
 const NOTE_ID = '5b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d';
 const POLICY = "default-src 'self'; img-src 'self'";
+const IMG_VIOLATION = {
+  event: VIOLATION_EVENT,
+  effectiveDirective: 'img-src',
+  blockedSource: 'https://evil.example',
+  documentPath: '/s/:param',
+  disposition: 'report',
+};
 
 function legacyReport(overrides: Record<string, unknown> = {}) {
   return {
@@ -80,18 +97,38 @@ describe('POST /api/v1/csp-reports', () => {
   let baseUrl: string;
   let warn: MockInstance;
 
-  function post(contentType: string | undefined, body: string) {
+  function post(
+    contentType: string | undefined,
+    body: string,
+    headers: Record<string, string> = {}
+  ) {
     return fetch(`${baseUrl}${REPORTS_PATH}`, {
       method: 'POST',
-      headers: contentType === undefined ? {} : { 'content-type': contentType },
+      headers:
+        contentType === undefined
+          ? headers
+          : { ...headers, 'content-type': contentType },
       body,
     });
   }
 
-  function loggedViolations(): Record<string, unknown>[] {
+  function loggedEvents(event: string): Record<string, unknown>[] {
     return warn.mock.calls
       .map(([entry]) => entry as Record<string, unknown>)
-      .filter((entry) => entry?.['event'] === VIOLATION_EVENT);
+      .filter((entry) => entry?.['event'] === event);
+  }
+
+  function loggedViolations(): Record<string, unknown>[] {
+    return loggedEvents(VIOLATION_EVENT);
+  }
+
+  function imgViolationFrom(token: string) {
+    return cspViolation({
+      blockedURL: `https://evil.example/p.png?d=${token}`,
+      documentURL: `https://knowtis.app/s/${token}`,
+      effectiveDirective: 'img-src',
+      disposition: 'report',
+    });
   }
 
   beforeEach(async () => {
@@ -103,13 +140,20 @@ describe('POST /api/v1/csp-reports', () => {
         ThrottlerModule.forRoot({
           throttlers: [{ ttl: 60_000, limit: APP_DEFAULT_REQUESTS_PER_MINUTE }],
         }),
+        JwtModule.register({}),
         SecurityModule,
       ],
-      providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+      providers: [
+        BearerIdentityResolver,
+        // Reports carry no credentials, so the resolver never asks for a key.
+        { provide: JWT_VERIFICATION_KEY_SELECTOR, useValue: () => null },
+        { provide: APP_GUARD, useClass: UserScopedThrottlerGuard },
+      ],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>({
       bodyParser: false,
     });
+    app.set('trust proxy', 1);
     app.useLogger(false);
     applyBodyParsersExcludingOauth(app);
     applyCspReportBodyParser(app);
@@ -152,6 +196,7 @@ describe('POST /api/v1/csp-reports', () => {
         blockedSource: 'https://evil.example',
         documentPath: '/notes/:param',
         disposition: 'report',
+        count: 1,
       },
     ]);
   });
@@ -189,6 +234,7 @@ describe('POST /api/v1/csp-reports', () => {
         blockedSource: 'https://cdn.evil.example:8443',
         documentPath: '/s/:param',
         disposition: 'report',
+        count: 1,
       },
       {
         event: VIOLATION_EVENT,
@@ -196,7 +242,94 @@ describe('POST /api/v1/csp-reports', () => {
         blockedSource: 'inline',
         documentPath: '/oauth/consent',
         disposition: 'enforce',
+        count: 1,
       },
+    ]);
+  });
+
+  it('logs identical violations once, with how many arrived', async () => {
+    const batch = [
+      imgViolationFrom('a1'),
+      cspViolation({
+        blockedURL: 'eval',
+        documentURL: 'https://knowtis.app/study',
+        effectiveDirective: 'script-src',
+        disposition: 'report',
+      }),
+      imgViolationFrom('b2'),
+      imgViolationFrom('c3'),
+    ];
+
+    const response = await post(REPORTING_API_TYPE, JSON.stringify(batch));
+
+    expect(response.status).toBe(204);
+    expect(loggedViolations()).toEqual([
+      { ...IMG_VIOLATION, count: 3 },
+      {
+        event: VIOLATION_EVENT,
+        effectiveDirective: 'script-src',
+        blockedSource: 'eval',
+        documentPath: '/study',
+        disposition: 'report',
+        count: 1,
+      },
+    ]);
+    expect(loggedEvents(TRUNCATED_EVENT)).toEqual([]);
+  });
+
+  it('logs at most 20 distinct violations per request and one line for the rest', async () => {
+    const distinct = Array.from(
+      { length: LOGGED_GROUPS_PER_REQUEST + 5 },
+      (_, index) =>
+        cspViolation({
+          blockedURL: `https://evil-${index}.example/p.png`,
+          documentURL: 'https://knowtis.app/',
+          effectiveDirective: 'img-src',
+          disposition: 'report',
+        })
+    );
+    const firstAgain = distinct.slice(0, 1);
+    const droppedAgain = distinct.slice(-1);
+    const batch = [
+      ...distinct,
+      ...firstAgain,
+      ...droppedAgain,
+      ...droppedAgain,
+    ];
+
+    const response = await post(REPORTING_API_TYPE, JSON.stringify(batch));
+
+    expect(response.status).toBe(204);
+    const logged = loggedViolations();
+    expect(logged).toHaveLength(LOGGED_GROUPS_PER_REQUEST);
+    expect(logged.map((entry) => entry['blockedSource'])).toEqual(
+      Array.from(
+        { length: LOGGED_GROUPS_PER_REQUEST },
+        (_, index) => `https://evil-${index}.example`
+      )
+    );
+    expect(logged.map((entry) => entry['count'])).toEqual([
+      2,
+      ...Array.from({ length: LOGGED_GROUPS_PER_REQUEST - 1 }, () => 1),
+    ]);
+    expect(loggedEvents(TRUNCATED_EVENT)).toEqual([
+      { event: TRUNCATED_EVENT, droppedViolations: 7 },
+    ]);
+  });
+
+  it('accepts a Reporting API batch close to 64 KB', async () => {
+    const batch = [imgViolationFrom('t0')];
+    while (JSON.stringify(batch).length < LARGE_BATCH_BYTES) {
+      batch.push(imgViolationFrom(`t${batch.length}`));
+    }
+    const body = JSON.stringify(batch);
+
+    const response = await post(REPORTING_API_TYPE, body);
+
+    expect(body.length).toBeLessThan(BODY_LIMIT_BYTES);
+    expect(response.status).toBe(204);
+    expect(loggedViolations()).toEqual([
+      { ...IMG_VIOLATION, count: batch.length },
     ]);
   });
 
@@ -259,7 +392,7 @@ describe('POST /api/v1/csp-reports', () => {
     const [entry] = loggedViolations();
     expect(entry).toBeDefined();
     expect(Object.keys(entry)).not.toContain(field);
-    expect(Object.keys(entry)).toHaveLength(4);
+    expect(Object.keys(entry)).toHaveLength(5);
   });
 
   it.each([
@@ -294,7 +427,9 @@ describe('POST /api/v1/csp-reports', () => {
       const response = await post(
         contentType,
         JSON.stringify(
-          legacyReport({ 'original-policy': 'x'.repeat(OVER_BODY_LIMIT) })
+          legacyReport({
+            'original-policy': 'x'.repeat(OVER_BODY_LIMIT_BYTES),
+          })
         )
       );
 
@@ -312,18 +447,28 @@ describe('POST /api/v1/csp-reports', () => {
     expect(response.status).toBe(415);
   });
 
-  it('spends its own budget, tighter than the app default', async () => {
+  it('spends a budget per edge IP, tighter than the app default, that a rotated X-Forwarded-For does not refill', async () => {
+    const report = JSON.stringify(legacyReport());
     const statuses: number[] = [];
     for (let index = 0; index < REPORT_REQUESTS_PER_MINUTE; index += 1) {
-      statuses.push(
-        (await post(LEGACY_TYPE, JSON.stringify(legacyReport()))).status
-      );
+      const headers = {
+        'x-real-ip': EDGE_IP,
+        'x-forwarded-for': `10.0.0.${index}`,
+      };
+      statuses.push((await post(LEGACY_TYPE, report, headers)).status);
     }
+    const rotated = await post(LEGACY_TYPE, report, {
+      'x-real-ip': EDGE_IP,
+      'x-forwarded-for': '10.0.1.1',
+    });
+    const otherEdge = await post(LEGACY_TYPE, report, {
+      'x-real-ip': OTHER_EDGE_IP,
+      'x-forwarded-for': '10.0.1.1',
+    });
 
     expect(new Set(statuses)).toEqual(new Set([204]));
-    expect(
-      (await post(LEGACY_TYPE, JSON.stringify(legacyReport()))).status
-    ).toBe(429);
+    expect(rotated.status).toBe(429);
+    expect(otherEdge.status).toBe(204);
   });
 
   it('lets the frontend deliver Reporting API batches cross-origin', async () => {

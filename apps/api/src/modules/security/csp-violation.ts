@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const CSP_VIOLATION_REPORT_TYPE = 'csp-violation';
-const MAX_REPORTS_PER_REQUEST = 100;
+const MAX_VIOLATION_GROUPS_PER_REQUEST = 20;
 const MAX_WORD_LENGTH = 32;
 const WORD = /^[a-z]+(?:-[a-z]+)*$/;
 const PATH_PARAMETER = ':param';
@@ -18,6 +18,17 @@ export interface CspViolation {
   disposition?: Disposition;
 }
 
+/** Identical violations folded into one, with how many there were. */
+export interface CspViolationGroup extends CspViolation {
+  count: number;
+}
+
+export interface GroupedCspViolations {
+  groups: CspViolationGroup[];
+  /** Violations past the group cap, which are counted but not kept. */
+  droppedViolations: number;
+}
+
 const legacyReportSchema = z.object({
   'csp-report': z.object({
     'effective-directive': z.string().optional(),
@@ -29,8 +40,7 @@ const legacyReportSchema = z.object({
 
 const reportBatchSchema = z
   .array(z.object({ type: z.string(), body: z.unknown() }))
-  .min(1)
-  .max(MAX_REPORTS_PER_REQUEST);
+  .min(1);
 
 const violationBodySchema = z.object({
   effectiveDirective: z.string().optional(),
@@ -76,6 +86,35 @@ export function readCspViolations(body: unknown): CspViolation[] | null {
     violations.push(toViolation(fields.data));
   }
   return violations;
+}
+
+/**
+ * Folds identical violations into one group with a count, in first-seen
+ * order, and keeps at most MAX_VIOLATION_GROUPS_PER_REQUEST groups: a page
+ * repeats one violation many times, and each group becomes a log line.
+ */
+export function groupCspViolations(
+  violations: CspViolation[]
+): GroupedCspViolations {
+  const groups = new Map<string, CspViolationGroup>();
+  let droppedViolations = 0;
+  for (const violation of violations) {
+    const key = JSON.stringify([
+      violation.effectiveDirective,
+      violation.blockedSource,
+      violation.documentPath,
+      violation.disposition,
+    ]);
+    const group = groups.get(key);
+    if (group !== undefined) {
+      group.count += 1;
+    } else if (groups.size < MAX_VIOLATION_GROUPS_PER_REQUEST) {
+      groups.set(key, { ...violation, count: 1 });
+    } else {
+      droppedViolations += 1;
+    }
+  }
+  return { groups: [...groups.values()], droppedViolations };
 }
 
 function toViolation(fields: ViolationFields): CspViolation {
