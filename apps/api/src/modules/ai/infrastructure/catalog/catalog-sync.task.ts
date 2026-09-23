@@ -10,6 +10,7 @@ import {
   type CatalogSyncSkipReason,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
@@ -41,10 +42,6 @@ const FAILURE_LOG_SAMPLE_SIZE = 10;
 interface WriteFailure {
   target: string;
   reason: string;
-}
-
-function reasonOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {

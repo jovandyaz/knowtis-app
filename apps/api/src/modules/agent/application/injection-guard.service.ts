@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { detectPromptInjection } from '@knowtis/ai-gateway';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../core/errors/reason-of';
 import {
   INJECTION_GRAY_ZONE_MIN,
   InjectionClassifierService,
@@ -54,7 +55,7 @@ export class InjectionGuardService {
     } catch (error) {
       this.logger.warn(
         'Injection classifier flag lookup failed, treating as off',
-        error instanceof Error ? error.message : String(error)
+        reasonOf(error)
       );
       return false;
     }

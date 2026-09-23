@@ -160,6 +160,13 @@
         "cwd": "apps/api"
       }
     },
+    "audit-note-images": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig tsconfig.app.json src/scripts/audit-note-images.ts",
+        "cwd": "apps/api"
+      }
+    },
     "eval": {
       "executor": "nx:run-commands",
       "options": {

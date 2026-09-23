@@ -6,6 +6,7 @@ import { streamWithChain } from '@knowtis/ai-gateway';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import { buildRedactedTelemetry } from '../../../ai/infrastructure/providers/redacted-telemetry';
@@ -204,7 +205,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     } catch (error) {
       this.logger.warn(
         'Prompt caching flag lookup failed, treating as off',
-        error instanceof Error ? error.message : String(error)
+        reasonOf(error)
       );
       return false;
     }

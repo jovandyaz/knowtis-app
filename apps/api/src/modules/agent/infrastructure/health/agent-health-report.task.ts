@@ -6,6 +6,7 @@ import type { Sql } from 'postgres';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { WebhookAlertService } from '../../../ai/infrastructure/alerting/webhook-alert.service';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
@@ -37,7 +38,7 @@ export class AgentHealthReportTask {
     } catch (error) {
       this.logger.error({
         event: 'agent.health.report_failed',
-        reason: error instanceof Error ? error.message : String(error),
+        reason: reasonOf(error),
       });
     }
   }

@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
 import type { Response } from 'express';
 
+import { reasonOf } from '../../../core/errors/reason-of';
+
 const logger = new Logger('CookieUtils');
 
 export const REFRESH_COOKIE_NAMES = {
@@ -51,7 +53,7 @@ export function deriveCookieDomain(frontendUrl: string): string | undefined {
     }
   } catch (error) {
     logger.warn(
-      `deriveCookieDomain: invalid URL "${frontendUrl}": ${error instanceof Error ? error.message : String(error)}`
+      `deriveCookieDomain: invalid URL "${frontendUrl}": ${reasonOf(error)}`
     );
   }
   return undefined;
