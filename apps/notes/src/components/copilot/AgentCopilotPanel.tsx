@@ -148,7 +148,7 @@ export function AgentCopilotPanel() {
         <div className="flex-1 min-h-0 px-4 py-3">
           <AgentStatusIndicator label={t('ai.copilot.history.loading')} />
         </div>
-      ) : messages.length === 0 ? (
+      ) : messages.length === 0 && queueLength === 0 ? (
         <div className="flex-1 min-h-0">
           <AgentEmptyState onSelectSuggestion={send} />
         </div>

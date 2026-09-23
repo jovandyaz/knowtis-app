@@ -1,7 +1,7 @@
 import { useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -280,6 +280,28 @@ describe('AgentCopilotPanel', () => {
     const composer = screen.getByTestId('composer');
     expect(composer).toHaveAttribute('data-draft', 'typing');
     expect(composer).toHaveAttribute('data-queue', '1');
+  });
+
+  it('shows a queue kept after the thread was found deleted instead of the empty state', () => {
+    act(() => {
+      useAgentStore.setState({
+        messages: [],
+        queue: [{ id: 'q1', text: 'Dos' }],
+        error: {
+          code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+          message: 'Conversation not found',
+        },
+      });
+    });
+
+    render(<AgentCopilotPanel />, { wrapper });
+
+    expect(
+      within(screen.getByRole('list', { name: 'ai.copilot.queue' })).getByText(
+        'Dos'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('empty')).toBeNull();
   });
 
   it('queues a composer send, interrupts on send-now, and releases the queued row', async () => {
