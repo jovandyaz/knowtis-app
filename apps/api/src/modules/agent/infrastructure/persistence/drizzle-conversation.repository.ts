@@ -1,8 +1,21 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, count, desc, eq, ne, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  isNotNull,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { ConversationSummary } from '@knowtis/shared-types';
+import type {
+  ConversationSummary,
+  ConversationTranscript,
+} from '@knowtis/shared-types';
 
 import {
   conversationMessages,
@@ -26,6 +39,7 @@ import type {
   CreateConversationInput,
   LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
+import { alignTranscriptWindow } from '../../domain/transcript-window';
 
 const agentMessagePartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
@@ -50,6 +64,17 @@ const persistedPartsSchema = z.object({
 });
 
 const HAS_MESSAGES = sql`EXISTS (SELECT 1 FROM ${conversationMessages} WHERE ${conversationMessages.conversationId} = ${conversations.id})`;
+
+const DISPLAYED_ROW = and(
+  ne(conversationMessages.role, 'tool'),
+  or(
+    ne(conversationMessages.content, ''),
+    and(
+      eq(conversationMessages.role, 'assistant'),
+      isNotNull(conversationMessages.stopReason)
+    )
+  )
+);
 
 @Injectable()
 export class DrizzleConversationRepository implements ConversationRepository {
@@ -260,5 +285,76 @@ export class DrizzleConversationRepository implements ConversationRepository {
       })),
       total: counted[0]?.value ?? 0,
     };
+  }
+
+  async loadTranscriptForUser(
+    conversationId: string,
+    userId: string,
+    limit: number
+  ): Promise<ConversationTranscript | null> {
+    const [header] = await this.db
+      .select({
+        id: conversations.id,
+        title: conversations.title,
+        noteId: notes.id,
+      })
+      .from(conversations)
+      .leftJoin(
+        notes,
+        and(eq(notes.id, conversations.noteId), readableNoteCondition(userId))
+      )
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .limit(1);
+    if (!header) {
+      return null;
+    }
+    const newestFirst = await this.db
+      .select({
+        role: conversationMessages.role,
+        content: conversationMessages.content,
+        sources: conversationMessages.sources,
+        stopReason: conversationMessages.stopReason,
+        turnId: conversationMessages.turnId,
+      })
+      .from(conversationMessages)
+      .innerJoin(
+        conversations,
+        eq(conversations.id, conversationMessages.conversationId)
+      )
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversations.userId, userId),
+          DISPLAYED_ROW
+        )
+      )
+      .orderBy(desc(conversationMessages.seq))
+      .limit(limit + 1);
+    const displayRows = newestFirst
+      .slice(0, limit)
+      .reverse()
+      .flatMap((row) =>
+        row.role === 'tool'
+          ? []
+          : [
+              {
+                turnId: row.turnId ?? null,
+                role: row.role,
+                content: row.content,
+                sources: row.sources ?? [],
+                stopReason: row.stopReason ?? null,
+              },
+            ]
+      );
+    const { rows, hasEarlier } = alignTranscriptWindow(
+      displayRows,
+      newestFirst.length > limit
+    );
+    return { ...header, hasEarlier, messages: rows };
   }
 }

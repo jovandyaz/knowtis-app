@@ -1,5 +1,6 @@
 import type {
   ConversationSummary,
+  ConversationTranscript,
   MessageStopReason,
 } from '@knowtis/shared-types';
 
@@ -69,6 +70,11 @@ export interface ConversationRepository {
     userId: string,
     page: { offset: number; limit: number }
   ): Promise<{ items: ConversationSummary[]; total: number }>;
+  loadTranscriptForUser(
+    conversationId: string,
+    userId: string,
+    limit: number
+  ): Promise<ConversationTranscript | null>;
 }
 
 export const CONVERSATION_REPOSITORY = Symbol('CONVERSATION_REPOSITORY');

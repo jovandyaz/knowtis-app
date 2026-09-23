@@ -782,5 +782,139 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
       expect([item.noteId, item.noteTitle]).toEqual([null, null]);
     });
+
+    it('reads a transcript only for its owner', async () => {
+      const id = await withTurn(LISTER);
+
+      expect(await repo.loadTranscriptForUser(id, STRANGER, 40)).toBeNull();
+      expect(
+        await repo.loadTranscriptForUser(randomUUID(), LISTER, 40)
+      ).toBeNull();
+    });
+
+    it('returns the whole conversation with its header when it fits', async () => {
+      const noteId = await noteOf(LISTER, 'Origin');
+      const id = await withTurn(LISTER, { noteId, title: 'Trip' });
+
+      expect(await repo.loadTranscriptForUser(id, LISTER, 40)).toEqual({
+        id,
+        title: 'Trip',
+        noteId,
+        hasEarlier: false,
+        messages: [
+          {
+            turnId: expect.any(String),
+            role: 'user',
+            content: 'question',
+            sources: [],
+            stopReason: null,
+          },
+          {
+            turnId: expect.any(String),
+            role: 'assistant',
+            content: 'answer',
+            sources: [],
+            stopReason: null,
+          },
+        ],
+      });
+    });
+
+    it('hides a note the user can no longer read from the transcript header', async () => {
+      const noteId = await noteOf(LISTER, 'Trashed later');
+      const id = await withTurn(LISTER, { noteId });
+      await db
+        .update(notes)
+        .set({ deletedAt: new Date() })
+        .where(eq(notes.id, noteId));
+
+      expect(
+        (await repo.loadTranscriptForUser(id, LISTER, 40))?.noteId
+      ).toBeNull();
+    });
+
+    it('keeps the empty terminal row that carries a stop reason and skips tool rows', async () => {
+      const { id } = await repo.create({ userId: LISTER, title: 't' });
+      const turnId = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId,
+        messages: [
+          { role: 'user', content: 'read n1' },
+          {
+            role: 'assistant',
+            content: '',
+            parts: [
+              {
+                type: 'tool-call',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                input: { id: 'n1' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                output: 'body',
+                outputType: 'text',
+              },
+            ],
+          },
+          {
+            role: 'assistant',
+            content: '',
+            sources: [{ id: 'n1', title: 'N1' }],
+            stopReason: 'max_steps',
+          },
+        ],
+      });
+
+      expect(
+        (await repo.loadTranscriptForUser(id, LISTER, 40))?.messages
+      ).toEqual([
+        {
+          turnId,
+          role: 'user',
+          content: 'read n1',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId,
+          role: 'assistant',
+          content: '',
+          sources: [{ id: 'n1', title: 'N1' }],
+          stopReason: 'max_steps',
+        },
+      ]);
+    });
+
+    it('aligns a cut window to a question and says earlier messages exist', async () => {
+      const { id } = await repo.create({ userId: LISTER, title: 't' });
+      for (let turn = 0; turn < 3; turn += 1) {
+        await repo.appendTurn({
+          conversationId: id,
+          turnId: randomUUID(),
+          messages: [
+            { role: 'user', content: `u${turn}` },
+            { role: 'assistant', content: `a${turn}`, sources: [] },
+          ],
+        });
+      }
+
+      const transcript = await repo.loadTranscriptForUser(id, LISTER, 3);
+
+      expect(transcript?.messages.map((message) => message.content)).toEqual([
+        'u2',
+        'a2',
+      ]);
+      expect(transcript?.hasEarlier).toBe(true);
+    });
   });
 });
