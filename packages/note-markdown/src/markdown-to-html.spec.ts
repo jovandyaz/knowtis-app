@@ -43,6 +43,16 @@ describe('markdownToHtml', () => {
     expect(markdownToHtml('~~strike~~')).toContain('<s>strike</s>');
   });
 
+  it('renders ++text++ as the underline the editor parses', () => {
+    expect(markdownToHtml('a ++under++ b')).toBe('<p>a <u>under</u> b</p>\n');
+  });
+
+  it('nests underline with bold, italic and a link', () => {
+    expect(markdownToHtml('++**b**++ _++i++_ [++l++](https://x.test)')).toBe(
+      '<p><u><strong>b</strong></u> <em><u>i</u></em> <a href="https://x.test"><u>l</u></a></p>\n'
+    );
+  });
+
   it('should convert lists', () => {
     const bullet = markdownToHtml('- item 1\n- item 2');
     expect(bullet).toContain('<ul>');
