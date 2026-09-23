@@ -158,16 +158,22 @@ describe('ConversationController over HTTP', () => {
     repo.rename.mockResolvedValue(false);
     repo.deleteForUser.mockResolvedValue(false);
 
+    const notFound = {
+      status: 404,
+      body: {
+        statusCode: 404,
+        error: 'Not Found',
+        message: 'Conversation not found',
+      },
+    };
+
     expect([
-      (await call('GET', `/agent/conversations/${CONVERSATION_ID}/messages`))
-        .status,
-      (
-        await call('PATCH', `/agent/conversations/${CONVERSATION_ID}`, {
-          title: 'x',
-        })
-      ).status,
-      (await call('DELETE', `/agent/conversations/${CONVERSATION_ID}`)).status,
-    ]).toEqual([404, 404, 404]);
+      await call('GET', `/agent/conversations/${CONVERSATION_ID}/messages`),
+      await call('PATCH', `/agent/conversations/${CONVERSATION_ID}`, {
+        title: 'x',
+      }),
+      await call('DELETE', `/agent/conversations/${CONVERSATION_ID}`),
+    ]).toEqual([notFound, notFound, notFound]);
   });
 
   it('answers 400 for an id that is not a UUID and never reaches the repository', async () => {

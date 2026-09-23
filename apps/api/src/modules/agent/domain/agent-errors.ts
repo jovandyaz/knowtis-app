@@ -5,6 +5,8 @@ import {
 
 import type { NoteContentStatus } from './retrieval';
 
+export const CONVERSATION_NOT_FOUND_MESSAGE = 'Conversation not found';
+
 export interface AgentDomainError {
   readonly code: string;
   readonly message: string;
@@ -49,7 +51,7 @@ export const AgentErrors = {
   noteNotFound: (noteId: string) =>
     make('AGENT_NOTE_NOT_FOUND', `Note ${noteId} not found or not accessible`),
   conversationNotFound: () =>
-    make(AGENT_CONVERSATION_NOT_FOUND_CODE, 'Conversation not found'),
+    make(AGENT_CONVERSATION_NOT_FOUND_CODE, CONVERSATION_NOT_FOUND_MESSAGE),
   targetUserNotFound: (email: string) =>
     make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
   editTextNotFound: (position: number, oldText: string) =>

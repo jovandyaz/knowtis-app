@@ -27,14 +27,13 @@ import {
   DEFAULT_LIMIT,
   DEFAULT_PAGE,
 } from '../../core/pagination/pagination.constants';
+import { CONVERSATION_NOT_FOUND_MESSAGE } from './domain/agent-errors';
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
 } from './domain/ports/conversation.repository';
 import { ListConversationsQueryDto } from './dto/list-conversations-query.dto';
 import { RenameConversationDto } from './dto/rename-conversation.dto';
-
-const CONVERSATION_NOT_FOUND = 'Conversation not found';
 
 @UseGuards(JwtAuthGuard)
 @Controller('agent/conversations')
@@ -70,7 +69,7 @@ export class ConversationController {
       this.config.get('AI_AGENT_HISTORY_LIMIT')
     );
     if (!transcript) {
-      throw new NotFoundException(CONVERSATION_NOT_FOUND);
+      throw new NotFoundException(CONVERSATION_NOT_FOUND_MESSAGE);
     }
     return transcript;
   }
@@ -84,7 +83,7 @@ export class ConversationController {
   ): Promise<void> {
     const renamed = await this.conversations.rename(id, user.id, body.title);
     if (!renamed) {
-      throw new NotFoundException(CONVERSATION_NOT_FOUND);
+      throw new NotFoundException(CONVERSATION_NOT_FOUND_MESSAGE);
     }
   }
 
@@ -96,7 +95,7 @@ export class ConversationController {
   ): Promise<void> {
     const deleted = await this.conversations.deleteForUser(id, user.id);
     if (!deleted) {
-      throw new NotFoundException(CONVERSATION_NOT_FOUND);
+      throw new NotFoundException(CONVERSATION_NOT_FOUND_MESSAGE);
     }
   }
 }
