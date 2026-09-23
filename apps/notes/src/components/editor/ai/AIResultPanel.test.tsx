@@ -258,6 +258,31 @@ describe('AIResultPanel inserting a finished result', () => {
     expect(useAIStore.getState().status).toBe('idle');
   });
 
+  it.each([REPLACE, INSERT_BELOW])(
+    '%s leaves an editor torn down under the open panel untouched',
+    (action) => {
+      const live = finishOver(
+        TWO_PARAGRAPHS,
+        FIRST_PARAGRAPH,
+        STRUCTURED_RESULT
+      );
+      live.destroy();
+      const chain = vi.spyOn(live, 'chain');
+      const errors: unknown[] = [];
+      const collect = (event: ErrorEvent) => {
+        event.preventDefault();
+        errors.push(event.error);
+      };
+      window.addEventListener('error', collect);
+
+      choose(action);
+
+      window.removeEventListener('error', collect);
+      expect(errors).toEqual([]);
+      expect(chain).not.toHaveBeenCalled();
+    }
+  );
+
   it('joins a soft line break the way the preview renders it', () => {
     const live = finishOver(
       TWO_PARAGRAPHS,

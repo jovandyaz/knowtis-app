@@ -38,6 +38,9 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
 
   const handleReplace = useCallback(
     (text: string) => {
+      if (editor.isDestroyed) {
+        return;
+      }
       const range = selectionRange;
       const content = replacementContent(editor, text);
       if (range) {
@@ -58,6 +61,9 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
 
   const handleInsertBelow = useCallback(
     (text: string) => {
+      if (editor.isDestroyed) {
+        return;
+      }
       const pos = selectionRange?.to ?? editor.state.selection.to;
       editor
         .chain()
