@@ -24,6 +24,10 @@ import {
 } from '@nestjs/swagger';
 import { I18nService } from 'nestjs-i18n';
 
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_PAGE,
+} from '../../core/pagination/pagination.constants';
 import { AIMetricsService } from '../ai/application/services/ai-metrics.service';
 import type { MetricsPeriod } from '../ai/domain/ports/ai-usage.repository';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
@@ -40,8 +44,6 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
 const VALID_PERIODS: readonly MetricsPeriod[] = ['day', 'week', 'month'];
-const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 25;
 
 function isMetricsPeriod(value: string): value is MetricsPeriod {
   return (VALID_PERIODS as readonly string[]).includes(value);

@@ -39,7 +39,11 @@ import {
   type TagColor,
 } from '@knowtis/shared-types';
 
-import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
+import {
+  DEFAULT_PAGE,
+  MAX_LIMIT,
+  MAX_PAGE,
+} from '../../../core/pagination/pagination.constants';
 import { IsOptionalStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
 import { YJS_STATE_MAX_BYTES } from '../infrastructure/yjs-state-update';
 
@@ -204,7 +208,11 @@ export class ShareNoteDto {
 }
 
 export class NotesQueryDto {
-  @ApiPropertyOptional({ minimum: 1, maximum: MAX_PAGE, default: 1 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: MAX_PAGE,
+    default: DEFAULT_PAGE,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)

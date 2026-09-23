@@ -1,6 +1,11 @@
-import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_EMAIL_NOT_VERIFIED_CODE,
+} from '@knowtis/shared-types';
 
 import type { NoteContentStatus } from './retrieval';
+
+export const CONVERSATION_NOT_FOUND_MESSAGE = 'Conversation not found';
 
 export interface AgentDomainError {
   readonly code: string;
@@ -45,6 +50,8 @@ export const AgentErrors = {
     make('AGENT_SANITIZE_REJECTED', 'Generated content could not be sanitized'),
   noteNotFound: (noteId: string) =>
     make('AGENT_NOTE_NOT_FOUND', `Note ${noteId} not found or not accessible`),
+  conversationNotFound: () =>
+    make(AGENT_CONVERSATION_NOT_FOUND_CODE, CONVERSATION_NOT_FOUND_MESSAGE),
   targetUserNotFound: (email: string) =>
     make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
   editTextNotFound: (position: number, oldText: string) =>

@@ -1,13 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 import {
   DEFAULT_LIMIT,
@@ -16,7 +9,7 @@ import {
   MAX_PAGE,
 } from '../../../core/pagination/pagination.constants';
 
-export class PaginatedCandidatesQueryDto {
+export class ListConversationsQueryDto {
   @ApiPropertyOptional({
     minimum: 1,
     maximum: MAX_PAGE,
@@ -40,13 +33,4 @@ export class PaginatedCandidatesQueryDto {
   @Max(MAX_LIMIT)
   @IsOptional()
   limit?: number;
-
-  @ApiPropertyOptional({
-    maxLength: 200,
-    description: 'Case-insensitive label or model id substring',
-  })
-  @IsString()
-  @MaxLength(200)
-  @IsOptional()
-  search?: string;
 }

@@ -47,6 +47,7 @@ import {
 import { pickDefined } from '@knowtis/shared-util';
 
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
+import { DEFAULT_PAGE } from '../../core/pagination/pagination.constants';
 import {
   ApiAuthErrors,
   ApiBadRequest,
@@ -219,7 +220,7 @@ export class NotesController {
   ) {
     const result = await this.getNotesHandler.execute({
       userId: user.id,
-      page: query.page ?? 1,
+      page: query.page ?? DEFAULT_PAGE,
       limit: query.limit ?? DEFAULT_NOTES_PAGE_SIZE,
       ...(query.search ? { search: query.search } : {}),
       ...(query.bucket ? { bucket: query.bucket } : {}),

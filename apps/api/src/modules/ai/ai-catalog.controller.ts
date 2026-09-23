@@ -31,6 +31,10 @@ import type {
   PaginatedCandidatesDto,
 } from '@knowtis/shared-types';
 
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_PAGE,
+} from '../../core/pagination/pagination.constants';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
@@ -43,9 +47,6 @@ import { UpdateCatalogCopyDto } from './dto/update-catalog-copy.dto';
 
 const AI_DISABLED = 'AI feature is disabled';
 const UNKNOWN_MODEL = 'Unknown model id';
-
-const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 25;
 
 const READ_THROTTLE = { default: { limit: 30, ttl: 60000 } };
 const MUTATION_THROTTLE = { default: { limit: 10, ttl: 60000 } };
