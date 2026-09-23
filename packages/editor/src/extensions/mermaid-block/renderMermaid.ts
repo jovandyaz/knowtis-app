@@ -31,6 +31,7 @@ const STYLE_CONFIG_KEYS = [
   'titleColor',
   'linkColor',
   'width',
+  'useWidth',
   'leftMargin',
   'chartWidth',
   'marginLeft',

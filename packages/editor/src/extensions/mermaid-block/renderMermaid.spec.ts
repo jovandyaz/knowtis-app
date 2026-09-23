@@ -57,6 +57,26 @@ const DIAGRAM_SAMPLES: Record<string, string> = {
   packet: 'packet-beta\n  0-7: "a"',
   block: 'block-beta\n  a b',
   radar: 'radar-beta\n  axis A, B, C\n  curve c{1,2,3}',
+  swimlane: 'swimlane-beta\n  A --> B',
+  ishikawa: 'ishikawa-beta\n  Problem\n    Cause\n      Sub',
+  treeView: 'treeView-beta\n  root\n    child\n      leaf',
+  architecture:
+    'architecture-beta\n  service a(server)[A]\n  service b(database)[B]\n  a:R -- L:b',
+  eventmodeling:
+    'eventmodeling\n\nrf 01 evt Inventory.InventoryChanged\nrf 02 evt External.InventoryChanged',
+  venn: 'venn-beta\n  set A\n  set B\n  union A,B["AB"]',
+  cynefin:
+    'cynefin-beta\n  complex\n    "a"\n  clear\n    "b"\n  complex --> clear : "t"',
+  railroad: 'railroad-ebnf-beta\n  rule = "a" | "b" ;',
+  treemap: 'treemap-beta\n  "A"\n    "B": 1\n    "C": 2',
+};
+
+const UNSAMPLED_CONFIG_SECTIONS: Record<string, string> = {
+  themeVariables: 'secure as a whole, with a vector of its own',
+  dompurifyConfig: 'set by the app, and mermaid drops it from directives',
+  elk: 'settings of the ELK layout engine, which the app never registers',
+  mindmap:
+    'cytoscape lays a mindmap out from real element boxes, which jsdom lacks',
 };
 
 const CONFIG_VECTORS: Record<string, string> = {
@@ -207,28 +227,64 @@ async function renderObservingDocument(id: string, source: string) {
   return { svg, attached };
 }
 
-function isScalar(value: unknown): value is string | number | boolean {
-  return ['string', 'number', 'boolean'].includes(typeof value);
+function isSettable(value: unknown): boolean {
+  return (
+    value === undefined ||
+    ['string', 'number', 'boolean'].includes(typeof value)
+  );
 }
 
-function settableConfigCases(): [object, string][] {
-  const site: Record<string, unknown> = {
-    ...mermaid.mermaidAPI.getSiteConfig(),
+function isSection(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function settablePaths(section: Record<string, unknown>): string[][] {
+  return Object.entries(section).flatMap(([key, value]) =>
+    isSection(value)
+      ? settablePaths(value).map((path) => [key, ...path])
+      : isSettable(value)
+        ? [[key]]
+        : []
+  );
+}
+
+function directiveSetting(path: string[]): object {
+  return path.reduceRight<unknown>(
+    (value, key) => ({ [key]: value }),
+    cssInjection(path.join('.'))
+  ) as object;
+}
+
+function siteConfig(): Record<string, unknown> {
+  return { ...mermaid.mermaidAPI.getSiteConfig() };
+}
+
+interface ConfigCase {
+  key: string;
+  source: string;
+}
+
+function configCase(path: string[], sample: string): ConfigCase {
+  return {
+    key: path.join('.'),
+    source: withDirective(directiveSetting(path), sample),
   };
+}
+
+function settableConfigCases(): ConfigCase[] {
+  const site = siteConfig();
   const topLevel = Object.entries(site)
-    .filter(([, value]) => isScalar(value))
-    .map(([key]): [object, string] => [
-      { [key]: cssInjection(key) },
-      FLOWCHART,
-    ]);
+    .filter(([, value]) => isSettable(value))
+    .map(([key]) => configCase([key], FLOWCHART));
   const perDiagram = Object.entries(DIAGRAM_SAMPLES).flatMap(
-    ([diagram, sample]) =>
-      Object.entries({ ...(site[diagram] as Record<string, unknown>) })
-        .filter(([, value]) => isScalar(value))
-        .map(([key]): [object, string] => [
-          { [diagram]: { [key]: cssInjection(`${diagram}.${key}`) } },
-          sample,
-        ])
+    ([diagram, sample]) => {
+      const section = site[diagram];
+      return isSection(section)
+        ? settablePaths(section).map((path) =>
+            configCase([diagram, ...path], sample)
+          )
+        : [];
+    }
   );
   return [...topLevel, ...perDiagram];
 }
@@ -238,10 +294,21 @@ describe('renderMermaid', () => {
     HTMLImageElement.prototype,
     'complete'
   );
+  const canvasContext = Object.getOwnPropertyDescriptor(
+    HTMLCanvasElement.prototype,
+    'getContext'
+  );
 
-  // jsdom lays nothing out and never settles an image, and mermaid waits on
-  // both while it draws
+  // jsdom lays nothing out, measures no text and never settles an image, and
+  // mermaid needs all three while it draws
   beforeAll(() => {
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: () => ({
+        font: '',
+        measureText: (text: string) => ({ width: text.length * 8 }),
+      }),
+    });
     Object.assign(SVGElement.prototype, {
       getBBox: () => ({ x: 0, y: 0, width: 40, height: 20 }),
       getComputedTextLength: () => 40,
@@ -266,6 +333,39 @@ describe('renderMermaid', () => {
         imageComplete
       );
     }
+    if (canvasContext) {
+      Object.defineProperty(
+        HTMLCanvasElement.prototype,
+        'getContext',
+        canvasContext
+      );
+    }
+  });
+
+  it.each(Object.entries(DIAGRAM_SAMPLES))(
+    'draws the %s sample the config checks run against',
+    async (diagram, sample) => {
+      const svg = await renderMermaid(
+        `sample-${diagram}`,
+        sample,
+        MERMAID_THEME.LIGHT
+      );
+
+      expect(parse(svg).firstElementChild?.localName).toBe('svg');
+    }
+  );
+
+  it('samples every config section mermaid has, or names why not', () => {
+    const unaccounted = Object.entries(siteConfig())
+      .filter(
+        ([key, value]) =>
+          isSection(value) &&
+          !(key in DIAGRAM_SAMPLES) &&
+          !(key in UNSAMPLED_CONFIG_SECTIONS)
+      )
+      .map(([key]) => key);
+
+    expect(unaccounted).toEqual([]);
   });
 
   it.each(Object.entries(LABEL_VECTORS))(
@@ -292,18 +392,17 @@ describe('renderMermaid', () => {
     await renderMermaid('warm', FLOWCHART, MERMAID_THEME.LIGHT);
     const leaks: string[] = [];
 
-    for (const [config, sample] of settableConfigCases()) {
-      leaks.push(
-        ...(await attachedWhile(
-          () =>
-            renderMermaid(
-              'drift',
-              withDirective(config, sample),
-              MERMAID_THEME.LIGHT
-            ).catch(() => undefined),
-          LOADING_SINKS
-        ))
+    for (const { key, source } of settableConfigCases()) {
+      const sinks = await attachedWhile(
+        () =>
+          renderMermaid('drift', source, MERMAID_THEME.LIGHT).catch(
+            () => undefined
+          ),
+        LOADING_SINKS
       );
+      if (sinks.length > 0) {
+        leaks.push(`${key} -> ${[...new Set(sinks)].join(', ')}`);
+      }
     }
 
     expect(leaks).toEqual([]);
@@ -317,6 +416,23 @@ describe('renderMermaid', () => {
       expect(referencesIn(svg)).toEqual([]);
     }
   );
+
+  it('keeps rendering strict when a diagram asks for loose', async () => {
+    const svg = await renderMermaid(
+      'loose',
+      withDirective(
+        { securityLevel: 'loose' },
+        `${FLOWCHART}\n  click A href "javascript:alert(1)"`
+      ),
+      MERMAID_THEME.LIGHT
+    );
+
+    expect(
+      [...parse(svg).querySelectorAll('a')].map((link) =>
+        link.getAttribute('href')
+      )
+    ).toEqual([null]);
+  });
 
   it('drops a stored-host image from a label too', async () => {
     const svg = await renderMermaid(
