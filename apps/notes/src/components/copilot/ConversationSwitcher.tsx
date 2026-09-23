@@ -30,7 +30,8 @@ import {
 } from './ConversationRenameInput';
 import { DeleteConversationDialog } from './DeleteConversationDialog';
 
-export const CONVERSATION_SWITCHER_LIMIT = 25;
+const CONVERSATION_SWITCHER_LIMIT = 25;
+const MENU_COLLISION_PADDING_PX = 8;
 const SUBTITLE_SEPARATOR = ' · ';
 
 interface DeleteTarget {
@@ -132,7 +133,7 @@ export function ConversationSwitcher() {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          collisionPadding={8}
+          collisionPadding={MENU_COLLISION_PADDING_PX}
           className="w-72 max-w-[calc(100vw-2rem)] max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto"
           onCloseAutoFocus={(event) => {
             if (renameTakesFocus.current) {
