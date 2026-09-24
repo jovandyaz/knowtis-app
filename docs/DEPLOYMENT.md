@@ -99,6 +99,8 @@ How reports reach the API:
 
 After a deploy that changes the headers, open the app in Chrome and in Firefox, run `new Image().src = 'https://example.com/csp-check.png'` in the console, and confirm a `security.csp.violation` line with `blockedSource` `https://example.com` arrives from each. Chrome queues its reports and sends them in batches, so its line can take about a minute.
 
+A browser revalidating `index.html` gets a `304` from Vercel that carries none of these headers, and keeps the ones stored with its cached copy. New headers therefore reach a returning visitor only when `index.html` itself changes. The build stamps `GITHUB_SHA` into the bundle (`VITE_APP_VERSION`), so every frontend deploy changes the bundle's file name and with it `index.html`; a local build without `GITHUB_SHA` does not.
+
 ### Backoffice (Vercel) — CI-driven
 
 The admin backoffice deploys the same way through the `deploy-backoffice` job, gated on the `backoffice` app being affected. It targets a **separate Vercel project** (`knowtis-backoffice`, secret `VERCEL_PROJECT_ID_BACKOFFICE`) and passes `--local-config apps/backoffice/vercel.json` to both `vercel build` and `vercel deploy`.
