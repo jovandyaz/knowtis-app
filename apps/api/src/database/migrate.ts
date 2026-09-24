@@ -8,6 +8,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
 import { applyWithLockRetry, MAX_MIGRATION_ATTEMPTS } from './migration-retry';
+import { formatPostgresNotice } from './postgres-notice';
 
 // Stable, app-specific key so concurrent deploys serialize on the same advisory
 // lock instead of racing the drizzle journal.
@@ -16,7 +17,7 @@ const MIGRATION_LOCK_KEY = 4011989;
 const LOCK_TIMEOUT_SECONDS = 5;
 
 async function main(): Promise<void> {
-  loadEnv({ path: ['.env.local', '.env'] });
+  loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
   const databaseUrl = process.env['DATABASE_URL'];
   if (!databaseUrl) {
@@ -24,7 +25,11 @@ async function main(): Promise<void> {
   }
 
   const migrationsFolder = resolve(__dirname, '../../drizzle');
-  const client = postgres(databaseUrl, { max: 1 });
+  const client = postgres(databaseUrl, {
+    max: 1,
+    onnotice: (notice) =>
+      console.log(`[migrate] ${formatPostgresNotice(notice)}`),
+  });
   const db = drizzle(client);
 
   try {
