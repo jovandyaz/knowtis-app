@@ -1,4 +1,9 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
@@ -19,6 +24,8 @@ interface AgentComposerProps {
   queueLength: number;
   status: AgentStatus;
   modelPicker?: ReactNode;
+  /** Lets the dock hand focus back to the input. */
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
 const ICON_BUTTON_CLASS = 'h-8 w-8 shrink-0 p-0';
@@ -33,9 +40,11 @@ export function AgentComposer({
   queueLength,
   status,
   modelPicker,
+  inputRef,
 }: AgentComposerProps) {
   const { t } = useTranslation('notes');
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const ownRef = useRef<HTMLTextAreaElement>(null);
+  const ref = inputRef ?? ownRef;
   useAutoResizeTextarea(ref, draft);
 
   const alive = isTurnAlive(status);

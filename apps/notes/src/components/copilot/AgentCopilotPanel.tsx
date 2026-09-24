@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
@@ -24,6 +24,7 @@ import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
 import { CopilotModelPicker } from './CopilotModelPicker';
+import { HistoryRetryRow } from './HistoryRetryRow';
 import { ProposalPendingRow } from './ProposalPendingRow';
 import { ProposalReview } from './ProposalReview';
 import { RetryBanner } from './RetryBanner';
@@ -38,7 +39,7 @@ export function AgentCopilotPanel() {
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
-  const failedDecision = useAgentStore((s) => s.failedDecision);
+  const retryMode = useAgentStore((s) => s.retryMode);
   const thinkingText = useAgentStore((s) => s.thinkingText);
   const pendingProposal = useAgentStore((s) => s.pendingProposal);
   const approveProposal = useAgentStore((s) => s.approveProposal);
@@ -92,7 +93,22 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
-  const historyFailed = hydration === 'failed';
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const historyRetryRef = useRef<HTMLButtonElement>(null);
+  const [retryingHistory, setRetryingHistory] = useState(false);
+  const showHistoryRetry = hydration === 'failed' || retryingHistory;
+  const retryHistory = async () => {
+    setRetryingHistory(true);
+    await retryHydration();
+    // The row unmounts once the history is back, and the focus on its button
+    // would fall to the page.
+    const focusWasOnRetry = document.activeElement === historyRetryRef.current;
+    setRetryingHistory(false);
+    if (focusWasOnRetry && useAgentStore.getState().hydration !== 'failed') {
+      composerRef.current?.focus();
+    }
+  };
+  const retryTurn = retryMode === 'none' ? {} : { onRetry: retryLast };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
   const conversationWasGone = error?.code === AGENT_CONVERSATION_NOT_FOUND_CODE;
@@ -140,11 +156,11 @@ export function AgentCopilotPanel() {
 
   return (
     <div className="flex h-full flex-col min-h-0">
-      {hydration === 'loading' && messages.length === 0 ? (
+      {hydration === 'loading' && messages.length === 0 && !retryingHistory ? (
         <div className="flex-1 min-h-0 px-4 py-3">
           <AgentStatusIndicator label={t('ai.copilot.history.loading')} />
         </div>
-      ) : messages.length === 0 && queueLength === 0 && !historyFailed ? (
+      ) : messages.length === 0 && queueLength === 0 && !showHistoryRetry ? (
         <div className="flex-1 min-h-0">
           <AgentEmptyState onSelectSuggestion={send} />
         </div>
@@ -155,24 +171,24 @@ export function AgentCopilotPanel() {
             status={status}
             thinkingDetail={thinkingText}
             hasEarlier={hasEarlier}
-            {...(historyFailed
-              ? { onRetryHistory: () => void retryHydration() }
-              : {})}
+            historyNotice={
+              showHistoryRetry && (
+                <HistoryRetryRow
+                  ref={historyRetryRef}
+                  busy={retryingHistory}
+                  onRetry={() => void retryHistory()}
+                />
+              )
+            }
           />
         </div>
       )}
 
       {status === 'error' && (
-        <RetryBanner
-          message={t(errorMessageKey)}
-          {...(failedDecision ? {} : { onRetry: retryLast })}
-        />
+        <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
       )}
       {status === 'timeout' && (
-        <RetryBanner
-          message={t('ai.errors.timeout')}
-          {...(failedDecision ? {} : { onRetry: retryLast })}
-        />
+        <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
       )}
 
       {updateProposal && <ProposalPendingRow onOpen={openReview} />}
@@ -197,6 +213,7 @@ export function AgentCopilotPanel() {
         queueLength={queueLength}
         status={status}
         modelPicker={<CopilotModelPicker />}
+        inputRef={composerRef}
       />
     </div>
   );

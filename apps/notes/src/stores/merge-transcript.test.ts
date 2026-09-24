@@ -24,7 +24,7 @@ function assistant(
 interface MergeCase {
   transcript: AgentChatMessage[];
   live: AgentChatMessage[];
-  streamingTurnId?: string;
+  inProgressTurnIds?: string[];
   shown: string[];
 }
 
@@ -74,14 +74,14 @@ const cases: Record<string, MergeCase> = {
       assistant('h-partial', 't2'),
     ],
     live: [user('l-q2', 't2'), assistant('l-growing', 't2')],
-    streamingTurnId: 't2',
+    inProgressTurnIds: ['t2'],
     shown: ['h-q1', 'h-a1', 'l-q2', 'l-growing'],
   },
   'keeps the live bubbles of a streaming turn the transcript does not have yet':
     {
       transcript: [user('h-q1', 't1'), assistant('h-a1', 't1')],
       live: [user('l-q2', 't2'), assistant('l-a2', 't2')],
-      streamingTurnId: 't2',
+      inProgressTurnIds: ['t2'],
       shown: ['h-q1', 'h-a1', 'l-q2', 'l-a2'],
     },
   'appends the live turns the transcript lacks, in the order they were sent': {
@@ -127,6 +127,76 @@ const cases: Record<string, MergeCase> = {
       ],
       shown: ['h2-legacy-q', 'h2-legacy-a', 'h2-q1', 'h2-a1', 'l-q2', 'l-a2'],
     },
+  'keeps a live turn older than the window where it was, above the transcript':
+    {
+      transcript: [
+        user('h-q1', 't1'),
+        assistant('h-a1', 't1'),
+        user('h-q2', 't2'),
+        assistant('h-a2', 't2'),
+      ],
+      live: [
+        user('l-q0', 't0'),
+        assistant('l-a0', 't0'),
+        user('l-q1', 't1'),
+        assistant('l-a1', 't1'),
+        user('l-q2', 't2'),
+        assistant('l-a2', 't2'),
+      ],
+      shown: ['l-q0', 'l-a0', 'h-q1', 'h-a1', 'h-q2', 'h-a2'],
+    },
+  'keeps a live turn the server never stored between the stored turns around it':
+    {
+      transcript: [
+        user('h-q1', 't1'),
+        assistant('h-a1', 't1'),
+        user('h-q3', 't3'),
+        assistant('h-a3', 't3'),
+      ],
+      live: [
+        user('l-q2', 't2'),
+        assistant('l-a2', 't2'),
+        user('l-q3', 't3'),
+        assistant('l-a3', 't3'),
+      ],
+      shown: ['h-q1', 'h-a1', 'l-q2', 'l-a2', 'h-q3', 'h-a3'],
+    },
+  'places an unstored live turn right after the stored turn it followed on screen':
+    {
+      transcript: [
+        user('h-q1', 't1'),
+        assistant('h-a1', 't1'),
+        user('h-q3', 't3'),
+        assistant('h-a3', 't3'),
+      ],
+      live: [
+        user('l-q1', 't1'),
+        assistant('l-a1', 't1'),
+        user('l-q2', 't2'),
+        user('l-q2b', 't2b'),
+      ],
+      shown: ['h-q1', 'h-a1', 'l-q2', 'l-q2b', 'h-q3', 'h-a3'],
+    },
+  'keeps every turn that was in progress when the fetch started or ended live':
+    {
+      transcript: [
+        user('h-q1', 't1'),
+        assistant('h-a1', 't1'),
+        user('h-q2', 't2'),
+        assistant('h-before', 't2'),
+      ],
+      live: [
+        user('l-q1', 't1'),
+        assistant('l-a1', 't1'),
+        user('l-q2', 't2'),
+        assistant('l-before', 't2'),
+        assistant('l-after', 't2'),
+        user('l-q3', 't3'),
+        assistant('l-a3', 't3'),
+      ],
+      inProgressTurnIds: ['t2', 't3'],
+      shown: ['h-q1', 'h-a1', 'l-q2', 'l-before', 'l-after', 'l-q3', 'l-a3'],
+    },
   'drops the legacy bubbles an earlier transcript left once the window no longer reaches them':
     {
       transcript: [user('h2-q1', 't1'), assistant('h2-a1', 't1')],
@@ -143,9 +213,9 @@ const cases: Record<string, MergeCase> = {
 describe('mergeTranscript', () => {
   it.each(Object.entries(cases))(
     '%s',
-    (_name, { transcript, live, streamingTurnId, shown }) => {
+    (_name, { transcript, live, inProgressTurnIds, shown }) => {
       expect(
-        mergeTranscript(transcript, live, streamingTurnId).map(
+        mergeTranscript(transcript, live, inProgressTurnIds).map(
           (message) => message.id
         )
       ).toEqual(shown);
@@ -161,7 +231,7 @@ describe('mergeTranscript', () => {
       mergeTranscript(
         [user('h-q1', 't1'), assistant('h-a1', 't1')],
         [user('l-q1', 't1'), streaming],
-        't1'
+        ['t1']
       ).at(-1)
     ).toBe(streaming);
   });

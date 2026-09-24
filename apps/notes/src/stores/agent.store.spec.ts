@@ -1024,12 +1024,12 @@ describe('agent.store proposals', () => {
 
           get().onError(refusal);
 
-          const { status, error, failedDecision, pendingProposal, messages } =
+          const { status, error, retryMode, pendingProposal, messages } =
             useAgentStore.getState();
-          expect({ status, error, failedDecision, pendingProposal }).toEqual({
+          expect({ status, error, retryMode, pendingProposal }).toEqual({
             status: 'error',
             error: refusal,
-            failedDecision: true,
+            retryMode: 'none',
             pendingProposal: null,
           });
           expect(
@@ -1061,10 +1061,10 @@ describe('agent.store proposals', () => {
 
     useAgentStore.getState().retryLast();
 
-    const { status, failedDecision } = useAgentStore.getState();
-    expect({ status, failedDecision }).toEqual({
+    const { status, retryMode } = useAgentStore.getState();
+    expect({ status, retryMode }).toEqual({
       status: 'timeout',
-      failedDecision: true,
+      retryMode: 'none',
     });
     expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
   });
@@ -1084,7 +1084,7 @@ describe('agent.store proposals', () => {
 
     useAgentStore.getState().retryLast();
 
-    expect(useAgentStore.getState().failedDecision).toBe(true);
+    expect(useAgentStore.getState().retryMode).toBe('none');
     expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
   });
 
@@ -1096,7 +1096,7 @@ describe('agent.store proposals', () => {
 
     useAgentStore.getState().retryLast();
 
-    expect(useAgentStore.getState().failedDecision).toBe(false);
+    expect(useAgentStore.getState().retryMode).toBe('resend');
     expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
       'next question'
     );

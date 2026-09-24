@@ -7,6 +7,7 @@ import type {
   AIStreamHandle,
 } from '@knowtis/api-client';
 import { aiClient } from '@knowtis/api-client';
+import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
 
 import { STREAM_INACTIVITY_MS, useAIStore } from './ai.store';
 
@@ -228,6 +229,15 @@ describe('aiErrorMessageKey', () => {
     expect(aiErrorMessageKey('PROMPT_INJECTION_DETECTED')).toBe(
       'ai.errors.injection'
     );
+  });
+
+  it.each([
+    [AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, 'ai.errors.turnInProgress'],
+    [AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE, 'ai.errors.turnUnavailable'],
+    [AGENT_TURN_ERROR_CODE.TURN_ID_REUSED, 'ai.errors.turnIdReused'],
+    ['AGENT_ANSWER_UNAVAILABLE', 'ai.errors.answerUnavailable'],
+  ])('names why the copilot turn %s did not show an answer', (code, key) => {
+    expect(aiErrorMessageKey(code)).toBe(key);
   });
 
   it('falls back to the generic key for unknown codes', () => {

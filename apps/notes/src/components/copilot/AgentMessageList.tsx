@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
@@ -10,15 +11,14 @@ import {
 import { AgentMessage } from './AgentMessage';
 import { AgentQueuedMessages } from './AgentQueuedMessages';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
-import { HistoryRetryRow } from './HistoryRetryRow';
 
 interface AgentMessageListProps {
   messages: AgentChatMessage[];
   status: AgentStatus;
   thinkingDetail?: string;
   hasEarlier?: boolean;
-  /** Offered only while the earlier messages of the thread failed to load. */
-  onRetryHistory?: () => void;
+  /** Shown above the thread, where the earlier messages would be. */
+  historyNotice?: ReactNode;
 }
 
 export function AgentMessageList({
@@ -26,7 +26,7 @@ export function AgentMessageList({
   status,
   thinkingDetail,
   hasEarlier = false,
-  onRetryHistory,
+  historyNotice,
 }: AgentMessageListProps) {
   const { t } = useTranslation('notes');
   const lastAssistant = messages.at(-1);
@@ -37,7 +37,7 @@ export function AgentMessageList({
   return (
     <Conversation aria-busy={status === 'streaming'} aria-live="polite">
       <ConversationContent>
-        {onRetryHistory && <HistoryRetryRow onRetry={onRetryHistory} />}
+        {historyNotice}
         {hasEarlier && (
           <p className="text-center text-xs text-muted-foreground">
             {t('ai.copilot.history.earlier')}

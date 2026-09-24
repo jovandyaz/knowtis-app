@@ -930,22 +930,25 @@ describe('agent.store hydration by turn', () => {
     expect(useAgentStore.getState().hydration).toBe('unloaded');
   });
 
-  it('ends a turn the server already settled with the messages it stored', async () => {
+  it('ends a turn the server already settled with the answer it stored', async () => {
     const { callbacks } = capture();
     useAgentStore.getState().sendMessage('new question');
-    vi.mocked(conversationsApi.transcript).mockResolvedValue(
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+
+    callbacks().onConversation?.('c1');
+    callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+    const whileLoading = useAgentStore.getState().status;
+    pending.resolve(
       transcriptWith(
         row(LIVE_TURN_ID, 'user', 'new question'),
         row(LIVE_TURN_ID, 'assistant', 'Stored answer.')
       )
     );
 
-    callbacks().onConversation?.('c1');
-    callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
-
-    expect(useAgentStore.getState().status).toBe('done');
+    expect(whileLoading).toBe('streaming');
     await vi.waitFor(() =>
-      expect(useAgentStore.getState().hydration).toBe('loaded')
+      expect(useAgentStore.getState().status).toBe('done')
     );
     expect(vi.mocked(conversationsApi.transcript).mock.calls).toEqual([['c1']]);
     expect(contents()).toEqual([
@@ -956,20 +959,170 @@ describe('agent.store hydration by turn', () => {
     ]);
   });
 
-  it('sends the queued message once the server settles the turn', () => {
+  it('sends the queued message once the stored answer of the settled turn is shown', async () => {
     const { callbacks } = capture();
     useAgentStore.getState().sendMessage('first');
     useAgentStore.getState().sendMessage('second');
-    vi.mocked(conversationsApi.transcript).mockReturnValue(
-      deferred<ConversationTranscript>().promise
-    );
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
 
     callbacks().onConversation?.('c1');
     callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+    const sentBeforeTheAnswer = vi.mocked(agentClient.sendMessage).mock.calls
+      .length;
+    pending.resolve(transcriptWith(row(LIVE_TURN_ID, 'user', 'first')));
 
-    expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
-      'second'
+    await vi.waitFor(() =>
+      expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
+        'second'
+      )
     );
+    expect(sentBeforeTheAnswer).toBe(1);
+  });
+
+  it.each([
+    ['a thread that had loaded', 'loaded' as const],
+    ['a new conversation', 'unloaded' as const],
+  ])(
+    'keeps %s as it was and offers to reload the answer when the settled refetch fails',
+    async (_label, hydration) => {
+      useAgentStore.setState({ conversationId: 'c1', hydration });
+      const { callbacks } = capture();
+      useAgentStore.getState().sendMessage('new question');
+      vi.mocked(conversationsApi.transcript).mockRejectedValueOnce(
+        new ApiClientError('boom', 500)
+      );
+
+      callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+
+      await vi.waitFor(() =>
+        expect(useAgentStore.getState().status).toBe('error')
+      );
+      const state = useAgentStore.getState();
+      expect({
+        hydration: state.hydration,
+        code: state.error?.code,
+        retryMode: state.retryMode,
+        contents: contents(),
+      }).toEqual({
+        hydration,
+        code: 'AGENT_ANSWER_UNAVAILABLE',
+        retryMode: 'reload',
+        contents: ['new question'],
+      });
+    }
+  );
+
+  it('keeps a loaded thread loaded when the settled refetch finds the conversation gone', async () => {
+    useAgentStore.setState({ conversationId: 'c1', hydration: 'loaded' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('new question');
+    vi.mocked(conversationsApi.transcript).mockRejectedValueOnce(
+      new ApiClientError('Conversation not found', 404)
+    );
+
+    callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+
+    await vi.waitFor(() =>
+      expect(useAgentStore.getState().status).toBe('error')
+    );
+    expect(useAgentStore.getState().hydration).toBe('loaded');
+  });
+
+  it('reloads the stored answer on retry instead of sending the message again', async () => {
+    useAgentStore.setState({ conversationId: 'c1', hydration: 'loaded' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('new question');
+    vi.mocked(conversationsApi.transcript).mockRejectedValueOnce(
+      new ApiClientError('boom', 500)
+    );
+    callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+    await vi.waitFor(() =>
+      expect(useAgentStore.getState().status).toBe('error')
+    );
+    vi.mocked(conversationsApi.transcript).mockResolvedValueOnce(
+      transcriptWith(
+        row(LIVE_TURN_ID, 'user', 'new question'),
+        row(LIVE_TURN_ID, 'assistant', 'Stored answer.')
+      )
+    );
+
+    useAgentStore.getState().retryLast();
+    const whileReloading = [useAgentStore.getState().status, contents()];
+
+    await vi.waitFor(() =>
+      expect(useAgentStore.getState().status).toBe('done')
+    );
+    expect(whileReloading).toEqual(['streaming', ['new question', '']]);
+    expect(contents()).toEqual([
+      'Plan it',
+      'Day one.',
+      'new question',
+      'Stored answer.',
+    ]);
+    expect(agentClient.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a loaded thread loaded when the refetch after a settled proposal fails', async () => {
+    useAgentStore.setState({ conversationId: 'c1', hydration: 'loaded' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Crea la nota');
+    callbacks().onProposal?.({
+      turnId: LIVE_TURN_ID,
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 'Create',
+      payload: {},
+    });
+    vi.mocked(conversationsApi.transcript).mockRejectedValueOnce(
+      new ApiClientError('boom', 500)
+    );
+
+    callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+
+    await vi.waitFor(() =>
+      expect(useAgentStore.getState().hydration).toBe('loaded')
+    );
+    expect(conversationsApi.transcript).toHaveBeenCalledTimes(1);
+    expect(useAgentStore.getState().status).toBe('pendingProposal');
+  });
+
+  it('keeps the answer of a resumed leg that finished while the fetch was out', async () => {
+    useAgentStore.setState({ conversationId: 'c1', hydration: 'loaded' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Crea la nota');
+    callbacks().onChunk({ text: 'Before.' });
+    callbacks().onProposal?.({
+      turnId: LIVE_TURN_ID,
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 'Create',
+      payload: {},
+    });
+    useAgentStore.getState().approveProposal();
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+
+    const retrying = useAgentStore.getState().retryHydration();
+    callbacks().onChunk({ text: 'After.' });
+    callbacks().onDone(DONE);
+    pending.resolve(
+      transcriptWith(
+        row(LIVE_TURN_ID, 'user', 'Crea la nota'),
+        row(LIVE_TURN_ID, 'assistant', 'Before.')
+      )
+    );
+    await retrying;
+
+    expect(contents()).toEqual([
+      'Plan it',
+      'Day one.',
+      'Crea la nota',
+      'Before.',
+      'After.',
+    ]);
   });
 
   it('keeps a proposal of the settled turn the user can still decide on', () => {
