@@ -28,7 +28,7 @@ import {
 import { AgentModule } from '../agent.module';
 import { HybridRetrievalAdapter } from '../infrastructure/retrieval/hybrid-retrieval.adapter';
 
-loadEnv({ path: ['.env.local', '.env'] });
+loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
 const GATE = !!process.env['VOYAGE_API_KEY']?.trim();
 const USER = '00000000-0000-4000-8000-0000000000f1';

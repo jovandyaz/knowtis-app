@@ -1,8 +1,15 @@
-import { Global, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
+import {
+  Global,
+  Inject,
+  Logger,
+  Module,
+  type OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
 
+import { logPostgresNotice } from './postgres-notice';
 import * as schema from './schema';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
@@ -21,6 +28,7 @@ export type Database = PostgresJsDatabase<typeof schema>;
           max: 10,
           idle_timeout: 20,
           connect_timeout: 10,
+          onnotice: logPostgresNotice(new Logger('Database')),
         });
       },
       inject: [ConfigService],

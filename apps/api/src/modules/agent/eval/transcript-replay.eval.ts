@@ -20,8 +20,8 @@ import {
   REPLAY_KNOWN_FAILURES,
 } from './transcript-replay.fixtures';
 
-loadEnv({ path: '.env.local' });
-loadEnv({ path: '.env' });
+loadEnv({ path: '.env.local', quiet: true });
+loadEnv({ path: '.env', quiet: true });
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 
 describe.runIf(evalGateOpen())('transcript replay', () => {
