@@ -34,7 +34,7 @@ interface CommitOutcome {
 
 export interface ApproveMutationOutput extends CommitOutcome {
   readonly turnId: string;
-  readonly conversationId?: string;
+  readonly conversationId: string;
 }
 
 @Injectable()
@@ -65,9 +65,7 @@ export class ApproveMutationHandler {
       res.map((out) => ({
         ...out,
         turnId: record.turnId,
-        ...(record.conversationId
-          ? { conversationId: record.conversationId }
-          : {}),
+        conversationId: record.conversationId,
       }));
 
     switch (m.kind) {

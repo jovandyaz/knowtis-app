@@ -1331,44 +1331,6 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
   });
 
-  it('resume without a conversationId reports not found and never runs the orchestrator', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const conversations = makeConversations();
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      conversations,
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
-    const onError = vi.fn();
-
-    await handler.resumeTurn(
-      {
-        userId: USER,
-        turnId: TURN_ID,
-        resume: { outcome: 'updated the note' },
-      },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError }
-    );
-
-    expect(onError).toHaveBeenCalledWith({
-      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
-      message: 'Conversation not found',
-    });
-    expect(conversations.findByIdForUser).not.toHaveBeenCalled();
-    expect(orchestrator.run).not.toHaveBeenCalled();
-  });
-
   it('resumeTurn denies and never calls the orchestrator when rate-limited', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
       allowed: false,

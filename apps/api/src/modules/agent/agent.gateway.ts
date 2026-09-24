@@ -267,20 +267,7 @@ export class AgentGateway
       proposalId: parsed.data.proposalId,
       result: res.value.result,
     });
-    if (!res.value.conversationId) {
-      client.emit('agent:error', {
-        ...AIErrors.validationError('missing conversation context'),
-        turnId: res.value.turnId,
-      });
-      return;
-    }
-    await this.resumeAfter(
-      client,
-      userId,
-      parsed.data,
-      res.value,
-      res.value.conversationId
-    );
+    await this.resumeAfter(client, userId, parsed.data, res.value);
   }
 
   @SubscribeMessage('agent:reject')
@@ -318,20 +305,7 @@ export class AgentGateway
       });
       return;
     }
-    if (!res.value.conversationId) {
-      client.emit('agent:error', {
-        ...AIErrors.validationError('missing conversation context'),
-        turnId: res.value.turnId,
-      });
-      return;
-    }
-    await this.resumeAfter(
-      client,
-      userId,
-      parsed.data,
-      res.value,
-      res.value.conversationId
-    );
+    await this.resumeAfter(client, userId, parsed.data, res.value);
   }
 
   private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {
@@ -346,15 +320,14 @@ export class AgentGateway
     client: AuthenticatedSocket,
     userId: string,
     data: { noteId?: string | undefined },
-    result: { outcome: string; turnId: string },
-    conversationId: string
+    result: { outcome: string; turnId: string; conversationId: string }
   ): Promise<void> {
     await this.runInTurnSlot(client, userId, result.turnId, (controller) =>
       this.runAgentTurn.resumeTurn(
         {
           userId,
           turnId: result.turnId,
-          conversationId,
+          conversationId: result.conversationId,
           ...(client.data.isAnonymous && { isAnonymous: true }),
           ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
           ...(data.noteId && { noteId: data.noteId }),

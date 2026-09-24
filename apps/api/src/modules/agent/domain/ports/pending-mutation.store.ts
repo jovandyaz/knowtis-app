@@ -5,7 +5,7 @@ export interface PendingMutationRecord {
   /** The turn that proposed it; the turn resumed on approve or reject keeps this id. */
   readonly turnId: string;
   readonly mutation: ProposedMutation;
-  readonly conversationId?: string;
+  readonly conversationId: string;
 }
 
 export interface PendingMutationStore {

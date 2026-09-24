@@ -52,6 +52,7 @@ function makeRedis(initial: Record<string, string> = {}) {
 
 const cfg = { get: () => 600 } as never;
 const TURN = '55555555-5555-4555-8555-555555555555';
+const CONVERSATION = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 describe('RedisPendingMutationStore', () => {
   it('saves with a namespaced key and TTL', async () => {
@@ -62,6 +63,7 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       turnId: TURN,
+      conversationId: CONVERSATION,
       mutation: m,
     });
 
@@ -80,6 +82,7 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       turnId: TURN,
+      conversationId: CONVERSATION,
       mutation: m,
     });
 
@@ -96,6 +99,7 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       turnId: TURN,
+      conversationId: CONVERSATION,
       mutation: m,
     });
 
@@ -137,37 +141,49 @@ describe('RedisPendingMutationStore', () => {
     await store.save({
       userId: 'u1',
       turnId: TURN,
+      conversationId: CONVERSATION,
       mutation: m,
-      conversationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     });
     const taken = await store.take(m.id, 'u1');
-    expect(taken?.conversationId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(taken?.conversationId).toBe(CONVERSATION);
   });
 
   it('round-trips the turn id of the proposing turn through save/take', async () => {
     const redis = makeRedis();
     const store = new RedisPendingMutationStore(redis as never, cfg);
     const m = makeMutation('44444444-4444-4444-8444-444444444444');
-    await store.save({ userId: 'u1', turnId: TURN, mutation: m });
+    await store.save({
+      userId: 'u1',
+      turnId: TURN,
+      conversationId: CONVERSATION,
+      mutation: m,
+    });
 
     const taken = await store.take(m.id, 'u1');
 
     expect(taken?.turnId).toBe(TURN);
   });
 
-  it('take returns null for a stored proposal that names no turn', async () => {
-    const stored = JSON.stringify({
-      userId: 'u1',
-      mutation: {
-        id: 'p1',
-        kind: 'create',
-        payload: { title: 'GTD', contentHtml: '<p>x</p>' },
-        summary: 's',
-      },
-    });
-    const redis = { client: { eval: vi.fn().mockResolvedValue(stored) } };
-    const store = new RedisPendingMutationStore(redis as never, cfg);
+  it.each([
+    ['turn', { conversationId: CONVERSATION }],
+    ['conversation', { turnId: TURN }],
+  ])(
+    'take returns null for a stored proposal that names no %s',
+    async (_missing, ids) => {
+      const stored = JSON.stringify({
+        userId: 'u1',
+        ...ids,
+        mutation: {
+          id: 'p1',
+          kind: 'create',
+          payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+          summary: 's',
+        },
+      });
+      const redis = { client: { eval: vi.fn().mockResolvedValue(stored) } };
+      const store = new RedisPendingMutationStore(redis as never, cfg);
 
-    expect(await store.take('p1', 'u1')).toBeNull();
-  });
+      expect(await store.take('p1', 'u1')).toBeNull();
+    }
+  );
 });

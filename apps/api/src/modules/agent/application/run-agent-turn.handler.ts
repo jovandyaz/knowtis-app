@@ -458,6 +458,7 @@ export class RunAgentTurnHandler {
 
   async resumeTurn(
     input: RunAgentTurnInput & {
+      conversationId: string;
       resume: { outcome: string };
     },
     callbacks: Pick<
@@ -466,54 +467,51 @@ export class RunAgentTurnHandler {
     >,
     signal?: AbortSignal
   ): Promise<void> {
-    if (input.conversationId) {
-      const found = await this.conversations.findByIdForUser(
-        input.conversationId,
-        input.userId
-      );
-      if (!found) {
-        callbacks.onError(AgentErrors.conversationNotFound());
-        return;
-      }
-      const { history, knownNotes } = await this.loadConversationContext(
-        input.conversationId,
-        input.userId
-      );
-      // A resume carries a tool-confirmation outcome, not the user's words, so
-      // memory retrieval embeds the last real user message instead.
-      const latestUserContent =
-        history.findLast((m) => m.role === 'user')?.content ?? '';
-      const userMemories = latestUserContent
-        ? await this.loadUserMemories(
-            input.userId,
-            input.isAnonymous,
-            latestUserContent
-          )
-        : [];
-      const synthInput: RunAgentTurnInput & {
-        resume: { outcome: string };
-      } = {
-        userId: input.userId,
-        turnId: input.turnId,
-        messages: history,
-        knownNotes,
-        ...(input.isAnonymous ? { isAnonymous: true } : {}),
-        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
-        ...(input.noteId ? { noteId: input.noteId } : {}),
-        ...(userMemories.length ? { userMemories } : {}),
-        conversationModel: found.model,
-        resume: input.resume,
-      };
-      return this.runLoop(
-        synthInput,
-        input.resume,
-        callbacks,
-        signal,
-        this.resumePolicy(input.userId, callbacks),
-        { conversationId: input.conversationId, turnId: input.turnId }
-      );
+    const found = await this.conversations.findByIdForUser(
+      input.conversationId,
+      input.userId
+    );
+    if (!found) {
+      callbacks.onError(AgentErrors.conversationNotFound());
+      return;
     }
-    callbacks.onError(AgentErrors.conversationNotFound());
+    const { history, knownNotes } = await this.loadConversationContext(
+      input.conversationId,
+      input.userId
+    );
+    // A resume carries a tool-confirmation outcome, not the user's words, so
+    // memory retrieval embeds the last real user message instead.
+    const latestUserContent =
+      history.findLast((m) => m.role === 'user')?.content ?? '';
+    const userMemories = latestUserContent
+      ? await this.loadUserMemories(
+          input.userId,
+          input.isAnonymous,
+          latestUserContent
+        )
+      : [];
+    const synthInput: RunAgentTurnInput & {
+      resume: { outcome: string };
+    } = {
+      userId: input.userId,
+      turnId: input.turnId,
+      messages: history,
+      knownNotes,
+      ...(input.isAnonymous ? { isAnonymous: true } : {}),
+      ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+      ...(input.noteId ? { noteId: input.noteId } : {}),
+      ...(userMemories.length ? { userMemories } : {}),
+      conversationModel: found.model,
+      resume: input.resume,
+    };
+    return this.runLoop(
+      synthInput,
+      input.resume,
+      callbacks,
+      signal,
+      this.resumePolicy(input.userId, callbacks),
+      { conversationId: input.conversationId, turnId: input.turnId }
+    );
   }
 
   private async runLoop(

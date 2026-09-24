@@ -651,33 +651,6 @@ describe('AgentGateway', () => {
     });
   });
 
-  it('approve emits an error and does not resume when conversationId is missing', async () => {
-    const approveExecute = vi.fn().mockResolvedValue(
-      ok({
-        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
-        outcome: 'created the note "GTD"',
-      })
-    );
-    const resumeTurn = vi.fn().mockResolvedValue(undefined);
-    const gateway = makeGateway({
-      approve: { execute: approveExecute },
-      handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
-    });
-    const client = makeClient('u1');
-
-    await gateway.handleApprove(client as never, approvePayload());
-
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:committed',
-      expect.anything()
-    );
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:error',
-      expect.objectContaining({ code: 'VALIDATION_ERROR' })
-    );
-    expect(resumeTurn).not.toHaveBeenCalled();
-  });
-
   it('approve error neither commits nor resumes', async () => {
     const approveExecute = vi
       .fn()

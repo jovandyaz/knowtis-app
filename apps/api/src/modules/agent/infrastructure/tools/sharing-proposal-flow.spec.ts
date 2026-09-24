@@ -135,6 +135,7 @@ function flow(
       await store.save({
         userId: 'u1',
         turnId: '55555555-5555-4555-8555-555555555555',
+        conversationId: '11111111-1111-4111-8111-111111111111',
         mutation,
       });
       return mutation.id;

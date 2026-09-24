@@ -17,7 +17,7 @@ const KEY_PREFIX = 'agent:proposal:';
 interface SerializedRecord {
   userId: string;
   turnId: string;
-  conversationId?: string;
+  conversationId: string;
   mutation: {
     id: string;
     kind: ProposedMutation['kind'];
@@ -54,7 +54,7 @@ return v
     const serialized: SerializedRecord = {
       userId: record.userId,
       turnId: record.turnId,
-      ...(record.conversationId && { conversationId: record.conversationId }),
+      conversationId: record.conversationId,
       mutation: {
         id: record.mutation.id,
         kind: record.mutation.kind,
@@ -98,7 +98,10 @@ return v
       );
       return null;
     }
-    if (typeof parsed.turnId !== 'string') {
+    if (
+      typeof parsed.turnId !== 'string' ||
+      typeof parsed.conversationId !== 'string'
+    ) {
       return null;
     }
     const rebuilt = ProposedMutation.create(parsed.mutation);
@@ -108,7 +111,7 @@ return v
     return {
       userId: parsed.userId,
       turnId: parsed.turnId,
-      ...(parsed.conversationId && { conversationId: parsed.conversationId }),
+      conversationId: parsed.conversationId,
       mutation: rebuilt.value,
     };
   }
