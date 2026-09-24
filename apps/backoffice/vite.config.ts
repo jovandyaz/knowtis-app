@@ -15,7 +15,13 @@ function stampRelease(release: string | undefined): Plugin {
     name: 'stamp-release',
     transformIndexHtml: () =>
       release
-        ? [{ tag: 'meta', attrs: { name: 'release', content: release } }]
+        ? [
+            {
+              tag: 'meta',
+              attrs: { name: 'release', content: release },
+              injectTo: 'head',
+            },
+          ]
         : [],
   };
 }

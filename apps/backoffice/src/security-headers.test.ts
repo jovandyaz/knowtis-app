@@ -11,6 +11,8 @@ interface VercelHeaderRule {
 }
 
 const VERCEL_CONFIG_PATH = resolve(import.meta.dirname, '../vercel.json');
+const INDEX_HTML_PATH = resolve(import.meta.dirname, '../index.html');
+const BASE_ELEMENT = /<base[\s>]/i;
 const ALL_ROUTES_SOURCE = '/(.*)';
 const REPORT_ONLY_CSP_HEADER = 'Content-Security-Policy-Report-Only';
 const ENFORCED_CSP_HEADER = 'Content-Security-Policy';
@@ -90,6 +92,10 @@ describe('backoffice security headers (apps/backoffice/vercel.json)', () => {
     expect(cspDirectives(REPORT_ONLY_CSP_HEADER)).toEqual(
       EXPECTED_REPORT_ONLY_CSP_DIRECTIVES
     );
+  });
+
+  it('serves an index.html with no <base>, which base-uri none would report on every load', () => {
+    expect(readFileSync(INDEX_HTML_PATH, 'utf8')).not.toMatch(BASE_ELEMENT);
   });
 
   it('enforces img-src, with the sources the report-only policy lists, and upgrade-insecure-requests', () => {
