@@ -189,15 +189,16 @@ describe('POST /ai/voice-note', () => {
     return fetch(`${base}/ai/voice-note`, { method: 'POST', body: form });
   }
 
-  it('hands a recording within the limit to the handler', async () => {
+  it('hands a recording of exactly MAX_VOICE_NOTE_BYTES to the handler', async () => {
     execute.mockResolvedValue(
       ok({ title: 'Note', content: '<p>Hi</p>', transcript: 'Hi' })
     );
 
-    const response = await postRecording(1024);
+    const response = await postRecording(MAX_VOICE_NOTE_BYTES);
 
     expect(response.ok).toBe(true);
     expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0]?.[0].audio.length).toBe(MAX_VOICE_NOTE_BYTES);
   });
 
   it('refuses a recording over MAX_VOICE_NOTE_BYTES with 413 before the handler runs', async () => {

@@ -336,6 +336,16 @@ describe('POST /notes/:id/images', () => {
     });
   });
 
+  it('stores a file of exactly MAX_IMAGE_BYTES', async () => {
+    const atCap = Buffer.alloc(MAX_IMAGE_BYTES);
+    PNG_BYTES.copy(atCap);
+
+    const response = await upload(atCap, 'image/png', 'cap.png');
+
+    expect(response.status).toBe(201);
+    expect(storage.upload.mock.calls[0]?.[0].data.length).toBe(MAX_IMAGE_BYTES);
+  });
+
   it('refuses a file over MAX_IMAGE_BYTES with 413 before the handler runs', async () => {
     const execute = vi.spyOn(app.get(UploadImageHandler), 'execute');
 
@@ -346,6 +356,21 @@ describe('POST /notes/:id/images', () => {
     );
 
     expect(response.status).toBe(413);
+    expect(execute).not.toHaveBeenCalled();
+    execute.mockRestore();
+  });
+
+  it('refuses a form without a file with 400 before the handler runs', async () => {
+    const execute = vi.spyOn(app.get(UploadImageHandler), 'execute');
+    const form = new FormData();
+    form.append('width', '800');
+
+    const response = await fetch(`${base}/notes/${noteEntity.id}/images`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(response.status).toBe(400);
     expect(execute).not.toHaveBeenCalled();
     execute.mockRestore();
   });

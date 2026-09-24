@@ -9,7 +9,6 @@ import {
   Get,
   HttpStatus,
   Inject,
-  MaxFileSizeValidator,
   Param,
   ParseFilePipe,
   Post,
@@ -336,7 +335,6 @@ export class AIController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: MAX_VOICE_NOTE_BYTES }),
           new FileTypeValidator({
             fileType: /^audio\//,
             skipMagicNumbersValidation: true,

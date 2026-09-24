@@ -12,7 +12,6 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  MaxFileSizeValidator,
   Param,
   ParseFilePipe,
   ParseUUIDPipe,
@@ -670,12 +669,7 @@ export class NotesController {
   )
   async uploadImage(
     @Param('id', ParseUUIDPipe) noteId: string,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [new MaxFileSizeValidator({ maxSize: MAX_IMAGE_BYTES })],
-      })
-    )
-    file: Express.Multer.File,
+    @UploadedFile(new ParseFilePipe()) file: Express.Multer.File,
     @Body() dto: UploadImageDto,
     @CurrentUser() user: RequestUser
   ) {
