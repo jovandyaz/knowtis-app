@@ -554,6 +554,16 @@ describe('env.config IMAGE_IMPORT_ALLOWED_IPS', () => {
     ).toEqual(['127.0.0.1', '::1', '10.0.0.0/8', 'fd00::/8']);
   });
 
+  it('canonicalizes IPv6 entries to the text the address filter compares, single IPs and CIDRs alike', () => {
+    expect(
+      validateEnv({
+        ...validEnv,
+        IMAGE_IMPORT_ALLOWED_IPS:
+          '0:0:0:0:0:0:0:1,FD00:0:0:0:0:0:0:0/8,::FFFF:127.0.0.1,2001:DB8:0:0:1:0:0:1/128',
+      }).IMAGE_IMPORT_ALLOWED_IPS
+    ).toEqual(['::1', 'fd00::/8', '::ffff:7f00:1', '2001:db8::1:0:0:1/128']);
+  });
+
   it.each(['localhost', '127.0.0.1/33', '10.0.0'])(
     'rejects %s, which is neither an IP nor a CIDR',
     (entry) => {

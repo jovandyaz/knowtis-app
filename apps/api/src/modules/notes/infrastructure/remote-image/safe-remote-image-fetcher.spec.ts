@@ -51,6 +51,9 @@ function redirectChain(length: number) {
 const allowingLoopback = (timeoutMs = TEST_BUDGET_MS) =>
   new SafeRemoteImageFetcher({ allowedIps: [LOOPBACK], timeoutMs });
 
+const allowing = (...allowedIps: string[]) =>
+  new SafeRemoteImageFetcher({ allowedIps, timeoutMs: TEST_BUDGET_MS });
+
 const openSignal = () => new AbortController().signal;
 
 async function importError(fetcher: SafeRemoteImageFetcher, url: URL) {
@@ -259,7 +262,7 @@ describe('SafeRemoteImageFetcher', () => {
 
   it('refuses a loopback IP that is not on the allow list, without connecting', async () => {
     serve('/image', png);
-    const fetcher = new SafeRemoteImageFetcher({ allowedIps: [] });
+    const fetcher = allowing();
 
     const error = await importError(fetcher, urlOf('/image'));
 
@@ -267,9 +270,47 @@ describe('SafeRemoteImageFetcher', () => {
     expect(pathsReceived()).toEqual([]);
   });
 
+  it.each([
+    '169.254.169.254',
+    '[fd12::1]',
+    '[::ffff:127.0.0.1]',
+    '2130706433',
+    '0.0.0.0',
+    '100.64.0.1',
+    '[fe80::1]',
+  ])('refuses the reserved address %s, without connecting', async (host) => {
+    serve('/image', png);
+
+    const error = await importError(allowing(), urlOf('/image', host));
+
+    expect(error).toEqual(imageImportError('blocked_address'));
+    expect(pathsReceived()).toEqual([]);
+  });
+
+  it.each(['::1', '0:0:0:0:0:0:0:1/128'])(
+    'lets [::1] past the address filter when the allow list holds %s',
+    async (entry) => {
+      const error = await importError(
+        allowing(entry),
+        urlOf('/image', '[::1]')
+      );
+
+      expect(error).toEqual(imageImportError('fetch_failed'));
+    }
+  );
+
+  it('keeps [::1] blocked when a single allowed IP spells it another way, since single IPs match by text', async () => {
+    const error = await importError(
+      allowing('0:0:0:0:0:0:0:1'),
+      urlOf('/image', '[::1]')
+    );
+
+    expect(error).toEqual(imageImportError('blocked_address'));
+  });
+
   it('refuses a hostname that resolves to loopback, without connecting', async () => {
     serve('/image', png);
-    const fetcher = new SafeRemoteImageFetcher({ allowedIps: [] });
+    const fetcher = allowing();
 
     const error = await importError(fetcher, urlOf('/image', 'localhost'));
 
@@ -279,7 +320,7 @@ describe('SafeRemoteImageFetcher', () => {
 
   it('refuses a private address over https too, without connecting', async () => {
     serve('/image', png);
-    const fetcher = new SafeRemoteImageFetcher({ allowedIps: [] });
+    const fetcher = allowing();
 
     const error = await importError(
       fetcher,

@@ -1,10 +1,21 @@
 import { DEFAULT_FROM_ADDRESS } from '@jovandyaz/email-nestjs';
+import { parseCIDR, parse as parseIp } from 'ipaddr.js';
 import { z } from 'zod';
 
 import {
   INVALID_OAUTH_JWKS_MESSAGE,
   parseOauthJwks,
 } from './oauth-public-keys';
+
+// request-filtering-agent compares a single allowed IP with the connecting address as text,
+// so `0:0:0:0:0:0:0:1` would never match `::1` without this re-serialization.
+function canonicalAddress(entry: string): string {
+  if (!entry.includes('/')) {
+    return parseIp(entry).toString();
+  }
+  const [address, prefixLength] = parseCIDR(entry);
+  return `${address.toString()}/${prefixLength}`;
+}
 
 const envSchemaBase = z.object({
   NODE_ENV: z
@@ -98,7 +109,8 @@ const envSchemaBase = z.object({
         .map((entry) => entry.trim())
         .filter((entry) => entry !== '')
     )
-    .pipe(z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()]))),
+    .pipe(z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])))
+    .transform((entries) => entries.map(canonicalAddress)),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_BASE_URL: z.url().default('https://cloud.langfuse.com'),
