@@ -37,6 +37,11 @@ export interface ApproveMutationOutput extends CommitOutcome {
   readonly conversationId: string;
 }
 
+/** Carries the proposing turn once the proposal was taken, so the client can tie the failure to it. */
+export type ApproveMutationError = AgentDomainError & {
+  readonly turnId?: string;
+};
+
 @Injectable()
 export class ApproveMutationHandler {
   private readonly logger = new Logger(ApproveMutationHandler.name);
@@ -53,28 +58,32 @@ export class ApproveMutationHandler {
 
   async execute(
     input: ApproveMutationInput
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<ApproveMutationOutput, ApproveMutationError>> {
     const record = await this.store.take(input.proposalId, input.userId);
     if (!record) {
       return err(AgentErrors.proposalExpired());
     }
-    const m = record.mutation;
-    const withTurn = (
-      res: Result<CommitOutcome, AgentDomainError>
-    ): Result<ApproveMutationOutput, AgentDomainError> =>
-      res.map((out) => ({
+    const committed = await this.commit(input.userId, record.mutation);
+    return committed
+      .map((out) => ({
         ...out,
         turnId: record.turnId,
         conversationId: record.conversationId,
-      }));
+      }))
+      .mapErr((error) => ({ ...error, turnId: record.turnId }));
+  }
 
+  private async commit(
+    userId: string,
+    m: ProposedMutation
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     switch (m.kind) {
       case 'create':
-        return withTurn(await this.commitCreate(input.userId, m));
+        return this.commitCreate(userId, m);
       case 'update':
-        return withTurn(await this.commitUpdate(input.userId, m));
+        return this.commitUpdate(userId, m);
       case 'share':
-        return withTurn(await this.commitShare(input.userId, m));
+        return this.commitShare(userId, m);
       default: {
         const _exhaustive: never = m;
         return err(

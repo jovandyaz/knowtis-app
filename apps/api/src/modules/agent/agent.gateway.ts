@@ -259,6 +259,7 @@ export class AgentGateway
       client.emit('agent:error', {
         code: res.error.code,
         message: res.error.message,
+        ...(res.error.turnId ? { turnId: res.error.turnId } : {}),
       });
       return;
     }

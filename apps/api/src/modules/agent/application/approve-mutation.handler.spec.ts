@@ -127,6 +127,7 @@ describe('ApproveMutationHandler', () => {
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
+      expect(r.error).not.toHaveProperty('turnId');
     }
   });
 
@@ -140,6 +141,7 @@ describe('ApproveMutationHandler', () => {
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_PERMISSION_DENIED');
+      expect(r.error.turnId).toBe(TURN);
     }
   });
 
@@ -297,6 +299,7 @@ describe('ApproveMutationHandler', () => {
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
       expect(r.error.message).toContain('title too long');
+      expect(r.error.turnId).toBe(TURN);
     }
   });
 

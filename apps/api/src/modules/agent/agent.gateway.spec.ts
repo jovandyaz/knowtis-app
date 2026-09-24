@@ -1073,6 +1073,34 @@ describe('AgentGateway', () => {
       });
     });
 
+    it("echoes the proposal's turn id on an approve that fails to commit", async () => {
+      const gateway = makeGateway({
+        approve: {
+          execute: vi.fn().mockResolvedValue(
+            err({
+              code: 'AGENT_COMMIT_FAILED',
+              message: 'Could not apply the change',
+              turnId: PROPOSAL_TURN,
+            })
+          ),
+        },
+      });
+      const client = makeClient('u1');
+
+      await gateway.handleApprove(client as never, approvePayload());
+
+      expect(client.emit.mock.calls).toEqual([
+        [
+          'agent:error',
+          {
+            code: 'AGENT_COMMIT_FAILED',
+            message: 'Could not apply the change',
+            turnId: PROPOSAL_TURN,
+          },
+        ],
+      ]);
+    });
+
     it('mints a turn id for a payload without one, runs it and claims nothing', async () => {
       const redis = createInMemoryClaimRedis();
       const execute = vi.fn<Execute>(completes);
