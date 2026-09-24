@@ -717,6 +717,14 @@ export class RunAgentTurnHandler {
         stopReason
       );
     };
+    if (signal?.aborted) {
+      await this.recordUsageSafe(input.userId, ctx, {
+        inputTokens: 0,
+        outputTokens: 0,
+        model,
+      });
+      return;
+    }
     callbacks.onModelStart?.();
     try {
       for await (const event of this.orchestrator.run({

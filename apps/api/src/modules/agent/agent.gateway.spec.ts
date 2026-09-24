@@ -1380,6 +1380,21 @@ describe('AgentGateway', () => {
       expect(claimOf(redis)).toMatchObject({ status: 'settled' });
     });
 
+    it('settles the claim of a turn whose handler throws after the model started', async () => {
+      const redis = createInMemoryClaimRedis();
+      const execute = vi.fn<Execute>(async (_input, cb) => {
+        cb.onModelStart?.();
+        throw new Error('persistence exploded');
+      });
+      const gateway = makeGateway({ handler: { execute } as never, redis });
+
+      await expect(
+        gateway.handleMessage(makeClient('u1') as never, turn())
+      ).rejects.toThrow('persistence exploded');
+
+      expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+    });
+
     describe('a rejection before the model runs leaves the turn id free, so its replay runs', () => {
       it('an unauthenticated delivery', async () => {
         const execute = vi.fn<Execute>(completes);
@@ -1451,6 +1466,48 @@ describe('AgentGateway', () => {
         expect(
           execute.mock.calls.filter(([input]) => input.turnId === TURN)
         ).toHaveLength(1);
+      });
+
+      it('a turn whose handler throws before the model runs', async () => {
+        const redis = createInMemoryClaimRedis();
+        const execute = vi
+          .fn<Execute>(completes)
+          .mockRejectedValueOnce(new Error('database down'));
+        const gateway = makeGateway({ handler: { execute } as never, redis });
+
+        await expect(
+          gateway.handleMessage(makeClient('u1') as never, turn())
+        ).rejects.toThrow('database down');
+        expect(claimOf(redis)).toBeNull();
+        await gateway.handleMessage(makeClient('u1', 'c2') as never, turn());
+
+        expect(execute).toHaveBeenCalledTimes(2);
+        expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+      });
+
+      it('a turn the client cancels before the model runs', async () => {
+        const redis = createInMemoryClaimRedis();
+        const execute = vi
+          .fn<Execute>(completes)
+          .mockImplementationOnce(
+            (_input, _cb, signal) =>
+              new Promise<void>((resolve) =>
+                signal.addEventListener('abort', () => resolve())
+              )
+          );
+        const gateway = makeGateway({ handler: { execute } as never, redis });
+        const client = makeClient('u1');
+
+        const cancelled = gateway.handleMessage(client as never, turn());
+        await flushAsync();
+        expect(claimOf(redis)).toMatchObject({ status: 'running' });
+        gateway.handleCancel(client as never);
+        await cancelled;
+        expect(claimOf(redis)).toBeNull();
+        await gateway.handleMessage(makeClient('u1', 'c2') as never, turn());
+
+        expect(execute).toHaveBeenCalledTimes(2);
+        expect(claimOf(redis)).toMatchObject({ status: 'settled' });
       });
 
       it('a turn the handler refuses before the model runs', async () => {

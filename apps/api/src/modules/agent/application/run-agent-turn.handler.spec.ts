@@ -5341,7 +5341,14 @@ describe('RunAgentTurnHandler turn identity', () => {
       onConversation: vi.fn(),
       onModelStart: vi.fn(),
     };
-    return { handler, callbacks, conversations, orchestrator, pendingStore };
+    return {
+      handler,
+      callbacks,
+      conversations,
+      orchestrator,
+      pendingStore,
+      rateLimit,
+    };
   }
 
   const proposalEvents = (): AgentEvent[] => [
@@ -5424,6 +5431,28 @@ describe('RunAgentTurnHandler turn identity', () => {
     expect(callbacks.onDone).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: opened })
     );
+  });
+
+  it('refuses a turn aborted before the model runs: no model start, no rows, budget handed back', async () => {
+    const controller = new AbortController();
+    const { handler, callbacks, conversations, orchestrator, rateLimit } =
+      setup();
+    vi.mocked(rateLimit.checkLimit).mockImplementation(async () => {
+      controller.abort();
+      return { allowed: true };
+    });
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks,
+      controller.signal
+    );
+
+    expect(callbacks.onModelStart).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(conversations.appendTurn).not.toHaveBeenCalled();
+    expect(rateLimit.releaseReservation).toHaveBeenCalledOnce();
+    expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
   it('signals the model start once, just before the model runs', async () => {
