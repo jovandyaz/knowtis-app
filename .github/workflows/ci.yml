@@ -229,6 +229,13 @@ jobs:
       - name: Build
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --local-config=apps/backoffice/vercel.json --token="$VERCEL_TOKEN"
 
+      - name: Check the commit is stamped into index.html
+        run: |
+          grep -qF "$GITHUB_SHA" .vercel/output/static/index.html || {
+            echo "::error::GITHUB_SHA is missing from the backoffice index.html, so returning visitors would keep stale headers."
+            exit 1
+          }
+
       - name: Deploy
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --local-config=apps/backoffice/vercel.json --token="$VERCEL_TOKEN"
 
