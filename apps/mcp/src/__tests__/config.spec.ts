@@ -172,6 +172,7 @@ describe('parseConfig', () => {
     const line = JSON.parse(written);
     expect(line).toMatchObject({
       level: 'info',
+      message: 'oauth_config_loaded',
       event: 'oauth_config_loaded',
       issuer: 'https://api.knowtis.app',
       resourceUrl: 'https://mcp.knowtis.app/mcp',

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { generateJSON } from '@tiptap/html/server';
 
 import {
@@ -10,11 +11,14 @@ import { editorSchema } from './html-to-yjs';
 
 const tiptapExtensions = [...createSemanticExtensions()];
 
+const logger = new Logger('TrivialHtml');
+
 function warnParseFailure(stage: string, error: unknown): void {
-  const message = reasonOf(error);
-  console.warn(
-    `isTrivialHtml: ${stage} failed, treating as trivial — ${message}`
-  );
+  logger.warn({
+    event: 'notes.trivial_html.parse_failed',
+    stage,
+    reason: reasonOf(error),
+  });
 }
 
 /**

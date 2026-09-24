@@ -9,6 +9,7 @@ interface LogEntry {
 export function log(entry: LogEntry): void {
   const output = {
     ...entry,
+    message: entry.event,
     timestamp: new Date().toISOString(),
   };
   // MCP servers using stdio MUST NOT write to stdout (corrupts JSON-RPC).
