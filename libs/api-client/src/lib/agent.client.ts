@@ -124,8 +124,16 @@ type DecisionRequest =
   | { kind: 'approve'; proposalId: string }
   | { kind: 'reject'; proposalId: string; reason?: string };
 
+interface AgentMessageBody {
+  turnId: string;
+  conversationId?: string;
+  message: { content: string };
+  noteId?: string;
+  effort?: ReasoningEffort;
+}
+
 type PendingRequest =
-  | { kind: 'message'; content: string; turnId: string }
+  | { kind: 'message'; body: AgentMessageBody }
   | DecisionRequest;
 
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
@@ -141,11 +149,11 @@ const CONNECTION_ERROR: AgentErrorPayload = {
  * socket.io delivers at most once: an event written to a transport that has
  * already died is lost, and nothing replays it after the reconnect. Every
  * request therefore waits for the server's receipt, and one that never comes
- * ends the request instead of leaving the turn open forever. It is not resent
- * on its own: a proposal decision carries no turn id for the server to
- * deduplicate, so a copy reaching it after a reconnect would count as a second
- * decision. The deadline runs from the emit, so it also caps how long a
- * request may wait for the socket to connect.
+ * ends the request instead of leaving the turn open forever. socket.io's own
+ * `retries` stays off because it resends every emit alike, and a proposal
+ * decision carries no turn id for the server to deduplicate. The deadline runs
+ * from the emit, so it also caps how long a request may wait for the socket to
+ * connect.
  */
 const AGENT_ACK_TIMEOUT_MS = 10_000;
 const TURN_RESEND_DELAYS_MS = [1_000, 2_000, 4_000] as const;
@@ -162,7 +170,6 @@ export class AgentClient {
   private awaitingReceipt: PendingRequest | null = null;
   private awaitingDecision = false;
   private pendingNoteId: string | undefined;
-  private pendingEffort: ReasoningEffort | undefined;
   private conversationId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
@@ -217,9 +224,17 @@ export class AgentClient {
     this.activeCallbacks = callbacks;
     this.activeTurnId = turnId;
     this.pendingNoteId = noteId;
-    this.pendingEffort = options?.effort;
 
-    this.dispatch({ kind: 'message', content, turnId }, callbacks);
+    // An idempotency key only holds while the body it names never changes, so
+    // every replay and resend sends this snapshot, not the client's live state.
+    const body: AgentMessageBody = {
+      turnId,
+      ...(this.conversationId ? { conversationId: this.conversationId } : {}),
+      message: { content },
+      ...(noteId ? { noteId } : {}),
+      ...(options?.effort ? { effort: options.effort } : {}),
+    };
+    this.dispatch({ kind: 'message', body }, callbacks);
 
     return {
       turnId,
@@ -233,6 +248,7 @@ export class AgentClient {
 
   private beginAuthRecovery(): void {
     this.recoveringAuth = true;
+    this.cancelTurnResend();
     void this.authPolicy.recover(this.authHandlers());
   }
 
@@ -320,19 +336,7 @@ export class AgentClient {
     const receipt = this.deliveryReceipt(socket, request, callbacks);
     switch (request.kind) {
       case 'message':
-        socket.emit(
-          'agent:message',
-          {
-            turnId: request.turnId,
-            ...(this.conversationId
-              ? { conversationId: this.conversationId }
-              : {}),
-            message: { content: request.content },
-            ...noteId,
-            ...(this.pendingEffort ? { effort: this.pendingEffort } : {}),
-          },
-          receipt
-        );
+        socket.emit('agent:message', request.body, receipt);
         return;
       case 'approve':
         socket.emit(
@@ -419,6 +423,9 @@ export class AgentClient {
     this.turnResends++;
     this.turnResendTimer = setTimeout(() => {
       this.turnResendTimer = undefined;
+      if (this.pending !== request || this.recoveringAuth) {
+        return;
+      }
       this.emitPending(request, callbacks);
     }, delay);
     return true;
@@ -563,6 +570,7 @@ export class AgentClient {
       this.pending = null;
       this.awaitingReceipt = null;
       this.awaitingDecision = true;
+      this.cancelTurnResend();
       this.activeCallbacks?.onProposal?.(payload);
     });
 

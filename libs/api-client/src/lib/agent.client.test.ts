@@ -1488,14 +1488,12 @@ describe('AgentClient – turn identity', () => {
     onCommitted: vi.fn(),
     onTurnSettled: vi.fn(),
   });
-  const sentTurnIds = () =>
+  const sentMessages = () =>
     (fake.socket.emit.mock.calls as unknown[][])
       .filter((call) => call[0] === 'agent:message')
-      .map((call) => (call[1] as { turnId?: string }).turnId);
-  const lastMessage = () =>
-    (fake.socket.emit.mock.calls as unknown[][])
-      .filter((call) => call[0] === 'agent:message')
-      .at(-1)?.[1];
+      .map((call) => call[1] as { turnId?: string });
+  const sentTurnIds = () => sentMessages().map((message) => message.turnId);
+  const lastMessage = () => sentMessages().at(-1);
   const turnError = (
     code: (typeof AGENT_TURN_ERROR_CODE)[keyof typeof AGENT_TURN_ERROR_CODE],
     turnId: string
@@ -1743,6 +1741,103 @@ describe('AgentClient – turn identity', () => {
     vi.runAllTimers();
     expect(sentTurnIds()).toEqual([handle.turnId]);
     expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('lets the auth replay replace a resend scheduled before the token expired', async () => {
+    vi.useFakeTimers();
+    let token = 'stale-token';
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(async () => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, handle.turnId)
+    );
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    await vi.runAllTimersAsync();
+
+    expect(io).toHaveBeenCalledTimes(2);
+    expect(sentTurnIds()).toEqual([handle.turnId, handle.turnId]);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('sends no resend once the turn proposes during the wait', () => {
+    vi.useFakeTimers();
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('create a note', callbacks);
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, handle.turnId)
+    );
+
+    fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.runAllTimers();
+    expect(sentTurnIds()).toEqual([handle.turnId]);
+    expect(callbacks.onProposal).toHaveBeenCalledTimes(1);
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('resends the body frozen at send time even after the turn announced its conversation', () => {
+    vi.useFakeTimers();
+    const handle = client.sendMessage('hi', callbacksOf(), 'note-1', {
+      effort: 'high',
+    });
+    fake.trigger('agent:conversation', {
+      turnId: handle.turnId,
+      conversationId: 'conv-derived',
+    });
+
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, handle.turnId)
+    );
+    vi.advanceTimersByTime(1_000);
+
+    const [first, resent] = sentMessages();
+    expect(first).toEqual({
+      turnId: handle.turnId,
+      message: { content: 'hi' },
+      noteId: 'note-1',
+      effort: 'high',
+    });
+    expect(resent).toEqual(first);
+  });
+
+  it('replays the body frozen at send time after an auth refresh, even after the turn announced its conversation', async () => {
+    let token = 'stale-token';
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(async () => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const handle = client.sendMessage('hi', callbacksOf());
+    fake.trigger('agent:conversation', {
+      turnId: handle.turnId,
+      conversationId: 'conv-derived',
+    });
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    const [first, replayed] = sentMessages();
+    expect(first).toEqual({
+      turnId: handle.turnId,
+      message: { content: 'hi' },
+    });
+    expect(replayed).toEqual(first);
   });
 
   it('gives each new turn the whole backoff again', () => {
