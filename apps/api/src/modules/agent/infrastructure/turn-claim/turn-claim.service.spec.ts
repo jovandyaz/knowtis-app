@@ -3,6 +3,7 @@ import type { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { createUnresponsiveRedis } from '../../../ai/testing/create-unresponsive-redis';
 import { createInMemoryClaimRedis } from '../../testing/create-in-memory-claim-redis';
 import { TurnClaimService, type TurnClaimRequest } from './turn-claim.service';
 
@@ -14,6 +15,7 @@ const KEY = `agent:turn:${USER}:${TURN}`;
 const ONE_DAY_SECONDS = 86_400;
 const AGENT_MAX_MS = 300_000;
 const RUNNING_LEASE_SECONDS = 360;
+const STALLED_CLAIM_BOUND_MS = 3_000;
 
 const REQUEST: TurnClaimRequest = {
   userId: USER,
@@ -160,6 +162,25 @@ describe('TurnClaimService', () => {
         turnId: TURN,
       })
     );
+  });
+
+  it('fails closed, and promptly, when Redis stops answering', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const stalled = await createUnresponsiveRedis();
+    const config = { get: () => AGENT_MAX_MS } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const started = performance.now();
+    try {
+      expect(
+        await new TurnClaimService(stalled.provider, config).claim(REQUEST)
+      ).toBe('unavailable');
+      expect(performance.now() - started).toBeLessThan(STALLED_CLAIM_BOUND_MS);
+    } finally {
+      await stalled.close();
+    }
   });
 
   it('fails closed on a stored claim it cannot read', async () => {
