@@ -4,11 +4,12 @@ import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { ExecutionContext } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { I18nService, I18nValidationPipe } from 'nestjs-i18n';
+import { I18nService } from 'nestjs-i18n';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
+import { createValidationPipe } from '../../../config/validation-pipe';
 import { UsersController } from '../users.controller';
 import { UsersRepository } from '../users.repository';
 import { UsersService } from '../users.service';
@@ -67,14 +68,7 @@ describe('an avatar sent to PATCH /users/profile through the pipe main.ts instal
       })
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
-    app.useGlobalPipes(
-      new I18nValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      })
-    );
+    app.useGlobalPipes(createValidationPipe());
     await app.listen(0);
     baseUrl = await app.getUrl();
   });

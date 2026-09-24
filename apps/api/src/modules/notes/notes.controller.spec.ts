@@ -10,7 +10,6 @@ import {
   type Provider,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { I18nValidationPipe } from 'nestjs-i18n';
 import { err, ok } from 'neverthrow';
 import {
   afterAll,
@@ -26,6 +25,7 @@ import {
 import { SUPERTAGS } from '@knowtis/shared-types';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
+import { createValidationPipe } from '../../config/validation-pipe';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -183,14 +183,7 @@ async function startNotesApp(providers: Provider[]): Promise<INestApplication> {
     .compile();
 
   const app = moduleRef.createNestApplication();
-  app.useGlobalPipes(
-    new I18nValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    })
-  );
+  app.useGlobalPipes(createValidationPipe());
   await app.listen(0);
   return app;
 }
