@@ -88,6 +88,10 @@ function decoded(base64: string): number[] {
   return Array.from(Buffer.from(base64, 'base64'));
 }
 
+// jsdom parses the whole ~14 MB paste, which outlasts the default timeout
+// when the suite shares the machine with other projects' workers.
+const OVERSIZED_PASTE_TIMEOUT_MS = 30_000;
+
 describe('wrapPastedImages', () => {
   it('wraps a bare remote img into an image figure with its src and alt', () => {
     expect(
@@ -239,17 +243,23 @@ describe('wrapPastedImages', () => {
     expect(html).not.toContain('data:');
   });
 
-  it('drops a data URI longer than the cap without decoding it', () => {
-    const atob = vi.spyOn(globalThis, 'atob');
-    const { files, onDataImage } = recordingHook();
-    const oversized = `data:image/png;base64,${'A'.repeat(MAX_DATA_IMAGE_CHARS)}`;
+  it(
+    'drops a data URI longer than the cap without decoding it',
+    { timeout: OVERSIZED_PASTE_TIMEOUT_MS },
+    () => {
+      const atob = vi.spyOn(globalThis, 'atob');
+      const { files, onDataImage } = recordingHook();
+      const oversized = `data:image/png;base64,${'A'.repeat(MAX_DATA_IMAGE_CHARS)}`;
 
-    const html = wrapPastedImages(`<img src="${oversized}">`, { onDataImage });
+      const html = wrapPastedImages(`<img src="${oversized}">`, {
+        onDataImage,
+      });
 
-    expect(figureImages(html)).toEqual([]);
-    expect(files).toEqual([]);
-    expect(atob).not.toHaveBeenCalled();
-  });
+      expect(figureImages(html)).toEqual([]);
+      expect(files).toEqual([]);
+      expect(atob).not.toHaveBeenCalled();
+    }
+  );
 
   it('caps a data URI at the base64 length of 10 MB plus its prefix', () => {
     const tenMegabytes = 10 * 1024 * 1024;
