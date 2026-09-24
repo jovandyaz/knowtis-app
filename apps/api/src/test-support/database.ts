@@ -1,6 +1,6 @@
 import { config as loadEnv } from 'dotenv';
 
-loadEnv({ path: ['.env.local', '.env'] });
+loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
 /**
  * Whether DB-backed specs can reach a real database; gate them with `describe.runIf(DB_AVAILABLE)`.

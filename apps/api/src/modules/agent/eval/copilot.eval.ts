@@ -15,8 +15,8 @@ import {
   writeEvalSummary,
 } from './runtime/eval-runtime';
 
-loadEnv({ path: '.env.local' });
-loadEnv({ path: '.env' });
+loadEnv({ path: '.env.local', quiet: true });
+loadEnv({ path: '.env', quiet: true });
 
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
