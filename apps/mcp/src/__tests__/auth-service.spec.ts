@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AuthService } from '../auth/auth-service.js';
+import { AuthService, TokenExchangeError } from '../auth/auth-service.js';
 
 const EXCHANGE_URL = 'http://localhost:3333/api/v1/auth/token-exchange';
 
@@ -94,7 +94,9 @@ describe('AuthService', () => {
   it('should throw when the token exchange responds non-ok', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
+      status: 401,
       statusText: 'Unauthorized',
+      headers: new Headers(),
       json: async () => ({ message: 'API key revoked' }),
     });
     const service = new AuthService(EXCHANGE_URL);
@@ -107,7 +109,9 @@ describe('AuthService', () => {
   it('should fall back to statusText when the error body is not JSON', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
+      status: 502,
       statusText: 'Bad Gateway',
+      headers: new Headers(),
       json: async () => {
         throw new Error('not json');
       },
@@ -117,6 +121,46 @@ describe('AuthService', () => {
     await expect(service.getToken('knowtis_mcp_live_whatever')).rejects.toThrow(
       'Authentication failed: Bad Gateway'
     );
+  });
+
+  it('should reject with the exchange status and Retry-After', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: new Headers({ 'Retry-After': '42' }),
+      json: async () => ({ message: 'ThrottlerException: Too Many Requests' }),
+    });
+    const service = new AuthService(EXCHANGE_URL);
+
+    const rejection = service.getToken('knowtis_mcp_live_key');
+
+    await expect(rejection).rejects.toBeInstanceOf(TokenExchangeError);
+    await expect(rejection).rejects.toMatchObject({
+      status: 429,
+      retryAfter: '42',
+    });
+  });
+
+  it('should forward the client IP so the API limits the end client', async () => {
+    const service = new AuthService(EXCHANGE_URL);
+
+    await service.getToken('knowtis_mcp_live_key', '203.0.113.7');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toEqual({
+      'Content-Type': 'application/json',
+      'x-real-ip': '203.0.113.7',
+    });
+  });
+
+  it('should send no client IP header when none is known', async () => {
+    const service = new AuthService(EXCHANGE_URL);
+
+    await service.getToken('knowtis_mcp_live_key');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
   });
 
   it('should re-exchange the key after the cached token expires', async () => {

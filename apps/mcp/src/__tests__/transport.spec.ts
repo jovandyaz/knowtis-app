@@ -1,15 +1,18 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
 
+import { TokenExchangeError } from '../auth/auth-service.js';
 import type { OauthVerifier } from '../auth/oauth-verifier.js';
 import type { AppConfig } from '../config.js';
-import { createApp } from '../transport.js';
+import { createApp, type ApiKeyVerifier } from '../transport.js';
 
 function mockVerifier(
   verify: OauthVerifier['verify'] = vi.fn()
 ): OauthVerifier {
   return { verify } as unknown as OauthVerifier;
 }
+
+const acceptKey: ApiKeyVerifier = () => Promise.resolve();
 
 const config: AppConfig = {
   port: 3334,
@@ -63,14 +66,14 @@ const EXPECTED_PROTECTED_RESOURCE_METADATA = {
 
 describe('createApp', () => {
   it('should return 200 on /health without auth', async () => {
-    const app = createApp(makeServer, config);
+    const app = createApp(makeServer, config, acceptKey);
     const res = await app.request('/health');
     expect(res.status).toBe(200);
   });
 
   it('should reject /mcp without a Bearer token with 401 + WWW-Authenticate', async () => {
     const factory = vi.fn(makeServer);
-    const app = createApp(factory, config);
+    const app = createApp(factory, config, acceptKey);
 
     const res = await app.request('/mcp', {
       method: 'POST',
@@ -90,7 +93,7 @@ describe('createApp', () => {
 
   it('should serve an initialize request when a Bearer token is present', async () => {
     const factory = vi.fn(makeServer);
-    const app = createApp(factory, config);
+    const app = createApp(factory, config, acceptKey);
 
     const res = await app.request('/mcp', {
       method: 'POST',
@@ -111,7 +114,7 @@ describe('createApp', () => {
 
   it('should treat any bearer token as an api-key credential when oauth is not configured', async () => {
     const factory = vi.fn(makeServer);
-    const app = createApp(factory, config);
+    const app = createApp(factory, config, acceptKey);
 
     const res = await app.request('/mcp', {
       method: 'POST',
@@ -133,7 +136,12 @@ describe('createApp', () => {
   it('should verify an oauth bearer token and serve the request with an oauth credential', async () => {
     const factory = vi.fn(makeServer);
     const verify = vi.fn().mockResolvedValue({ scopes: ['notes:read'] });
-    const app = createApp(factory, oauthConfig, mockVerifier(verify));
+    const app = createApp(
+      factory,
+      oauthConfig,
+      acceptKey,
+      mockVerifier(verify)
+    );
 
     const res = await app.request('/mcp', {
       method: 'POST',
@@ -154,10 +162,15 @@ describe('createApp', () => {
     });
   });
 
-  it('should pass an api-key bearer through without verification when oauth is configured', async () => {
+  it('should check an api-key bearer with the API, not the oauth verifier, when oauth is configured', async () => {
     const factory = vi.fn(makeServer);
     const verify = vi.fn();
-    const app = createApp(factory, oauthConfig, mockVerifier(verify));
+    const app = createApp(
+      factory,
+      oauthConfig,
+      acceptKey,
+      mockVerifier(verify)
+    );
 
     const res = await app.request('/mcp', {
       method: 'POST',
@@ -180,7 +193,12 @@ describe('createApp', () => {
   it('should reject an invalid oauth token with 401 invalid_token and resource_metadata', async () => {
     const factory = vi.fn(makeServer);
     const verify = vi.fn().mockRejectedValue(new Error('signature mismatch'));
-    const app = createApp(factory, oauthConfig, mockVerifier(verify));
+    const app = createApp(
+      factory,
+      oauthConfig,
+      acceptKey,
+      mockVerifier(verify)
+    );
 
     const res = await app.request('/mcp', {
       method: 'POST',
@@ -203,11 +221,15 @@ describe('createApp', () => {
   });
 
   it('should reject requests with a non-allowlisted Host header', async () => {
-    const app = createApp(makeServer, {
-      ...config,
-      allowedHosts: ['localhost:3334'],
-      enableDnsRebindingProtection: true,
-    });
+    const app = createApp(
+      makeServer,
+      {
+        ...config,
+        allowedHosts: ['localhost:3334'],
+        enableDnsRebindingProtection: true,
+      },
+      acceptKey
+    );
 
     const res = await app.request('http://evil.example.com/mcp', {
       method: 'POST',
@@ -224,11 +246,15 @@ describe('createApp', () => {
   });
 
   it('should serve requests with an allowlisted Host header when protection is on', async () => {
-    const app = createApp(makeServer, {
-      ...config,
-      allowedHosts: ['localhost:3334'],
-      enableDnsRebindingProtection: true,
-    });
+    const app = createApp(
+      makeServer,
+      {
+        ...config,
+        allowedHosts: ['localhost:3334'],
+        enableDnsRebindingProtection: true,
+      },
+      acceptKey
+    );
 
     const res = await app.request('http://localhost:3334/mcp', {
       method: 'POST',
@@ -245,27 +271,27 @@ describe('createApp', () => {
   });
 
   it('should not serve protected resource metadata when oauth is null', async () => {
-    const app = createApp(makeServer, config);
+    const app = createApp(makeServer, config, acceptKey);
     const res = await app.request('/.well-known/oauth-protected-resource');
     expect(res.status).toBe(404);
   });
 
   it('should serve protected resource metadata on the base well-known path', async () => {
-    const app = createApp(makeServer, oauthConfig);
+    const app = createApp(makeServer, oauthConfig, acceptKey);
     const res = await app.request('/.well-known/oauth-protected-resource');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(EXPECTED_PROTECTED_RESOURCE_METADATA);
   });
 
   it('should serve protected resource metadata on the path-inserted variant', async () => {
-    const app = createApp(makeServer, oauthConfig);
+    const app = createApp(makeServer, oauthConfig, acceptKey);
     const res = await app.request('/.well-known/oauth-protected-resource/mcp');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(EXPECTED_PROTECTED_RESOURCE_METADATA);
   });
 
   it('should expose protected resource metadata to browsers via CORS', async () => {
-    const app = createApp(makeServer, oauthConfig);
+    const app = createApp(makeServer, oauthConfig, acceptKey);
     const res = await app.request('/.well-known/oauth-protected-resource', {
       headers: { Origin: 'https://claude.ai' },
     });
@@ -273,7 +299,7 @@ describe('createApp', () => {
   });
 
   it('should challenge with resource_metadata when oauth is configured', async () => {
-    const app = createApp(makeServer, oauthConfig);
+    const app = createApp(makeServer, oauthConfig, acceptKey);
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
@@ -290,7 +316,7 @@ describe('createApp', () => {
   });
 
   it('should advertise write and share scopes so clients do not consent read-only', async () => {
-    const app = createApp(makeServer, oauthConfig);
+    const app = createApp(makeServer, oauthConfig, acceptKey);
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
@@ -311,5 +337,91 @@ describe('createApp', () => {
       'notes:share',
       'offline_access',
     ]);
+  });
+  describe('api-key verification', () => {
+    function postWithKey(app: ReturnType<typeof createApp>, key: string) {
+      return app.request('/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          Authorization: `Bearer ${key}`,
+          'X-Real-IP': '203.0.113.7',
+        },
+        body: INITIALIZE,
+      });
+    }
+
+    it('should check the key with the client IP and pass the IP on in the credential', async () => {
+      const factory = vi.fn(makeServer);
+      const verifyApiKey = vi.fn<ApiKeyVerifier>().mockResolvedValue('jwt');
+      const app = createApp(factory, oauthConfig, verifyApiKey);
+
+      const res = await postWithKey(app, 'knowtis_mcp_live_key');
+
+      expect(res.status).toBe(200);
+      expect(verifyApiKey).toHaveBeenCalledWith(
+        'knowtis_mcp_live_key',
+        '203.0.113.7'
+      );
+      expect(factory).toHaveBeenCalledWith({
+        kind: 'api-key',
+        apiKey: 'knowtis_mcp_live_key',
+        clientIp: '203.0.113.7',
+      });
+    });
+
+    it('should reject a key the API refuses with 401 invalid_token before building a server', async () => {
+      const factory = vi.fn(makeServer);
+      const verifyApiKey = vi
+        .fn<ApiKeyVerifier>()
+        .mockRejectedValue(
+          new TokenExchangeError(401, 'Authentication failed: Invalid API key')
+        );
+      const app = createApp(factory, oauthConfig, verifyApiKey);
+
+      const res = await postWithKey(app, 'knowtis_mcp_invalidprobe');
+
+      expect(res.status).toBe(401);
+      expect(res.headers.get('WWW-Authenticate')).toContain(
+        'error="invalid_token"'
+      );
+      expect((await res.json()).error).toBe('invalid_token');
+      expect(factory).not.toHaveBeenCalled();
+    });
+
+    it('should pass the API rate limit through as 429 with its Retry-After', async () => {
+      const factory = vi.fn(makeServer);
+      const verifyApiKey = vi
+        .fn<ApiKeyVerifier>()
+        .mockRejectedValue(
+          new TokenExchangeError(
+            429,
+            'Authentication failed: Too Many Requests',
+            '42'
+          )
+        );
+      const app = createApp(factory, config, verifyApiKey);
+
+      const res = await postWithKey(app, 'knowtis_mcp_live_key');
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get('Retry-After')).toBe('42');
+      expect(factory).not.toHaveBeenCalled();
+    });
+
+    it('should answer 503 when the API cannot be reached', async () => {
+      const factory = vi.fn(makeServer);
+      const verifyApiKey = vi
+        .fn<ApiKeyVerifier>()
+        .mockRejectedValue(new TypeError('fetch failed'));
+      const app = createApp(factory, config, verifyApiKey);
+
+      const res = await postWithKey(app, 'knowtis_mcp_live_key');
+
+      expect(res.status).toBe(503);
+      expect((await res.json()).error).toBe('temporarily_unavailable');
+      expect(factory).not.toHaveBeenCalled();
+    });
   });
 });

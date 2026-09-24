@@ -19,6 +19,26 @@ const SCOPE_REQUIREMENTS: Record<string, string> = {
 export const NO_CREDENTIAL_MESSAGE =
   'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).';
 
+/**
+ * Header naming the end client's address. The API buckets the token exchange
+ * by it; over the private network nothing else carries the caller's IP, so
+ * every hosted user would otherwise share the MCP instance's one bucket.
+ */
+export const REAL_IP_HEADER = 'x-real-ip';
+
+/** The token exchange answered with a non-2xx `status`. */
+export class TokenExchangeError extends Error {
+  readonly status: number;
+  readonly retryAfter: string | undefined;
+
+  constructor(status: number, message: string, retryAfter?: string) {
+    super(message);
+    this.name = 'TokenExchangeError';
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+
 export class InsufficientScopeError extends Error {
   constructor(message: string) {
     super(message);
@@ -39,7 +59,12 @@ export class AuthService {
     return createHash('sha256').update(apiKey).digest('hex');
   }
 
-  async getToken(apiKey: string): Promise<string> {
+  /**
+   * JWT for `apiKey`, from cache or a fresh exchange. `clientIp` is forwarded
+   * so the API rate-limits the end client, not this server. Throws
+   * `TokenExchangeError` when the API rejects the key or the exchange.
+   */
+  async getToken(apiKey: string, clientIp?: string): Promise<string> {
     const cacheKey = this.cacheKey(apiKey);
 
     const cached = this.tokenCache.get(cacheKey);
@@ -49,14 +74,19 @@ export class AuthService {
 
     const res = await fetch(this.tokenExchangeUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(clientIp ? { [REAL_IP_HEADER]: clientIp } : {}),
+      },
       body: JSON.stringify({ apiKey }),
     });
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(
-        `Authentication failed: ${(body as Record<string, string>).message ?? res.statusText}`
+      throw new TokenExchangeError(
+        res.status,
+        `Authentication failed: ${(body as Record<string, string>).message ?? res.statusText}`,
+        res.headers.get('retry-after') ?? undefined
       );
     }
 
@@ -122,7 +152,10 @@ export async function resolveCredentialToken(
     throw new Error(NO_CREDENTIAL_MESSAGE);
   }
   if (credential.kind === 'api-key') {
-    const token = await authService.getToken(credential.apiKey);
+    const token = await authService.getToken(
+      credential.apiKey,
+      credential.clientIp
+    );
     authService.checkScope(credential.apiKey, action);
     return token;
   }

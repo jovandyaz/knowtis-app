@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 
+import { REAL_IP_HEADER, TokenExchangeError } from './auth/auth-service.js';
 import { classifyBearer, type McpCredential } from './auth/credentials.js';
 import type { OauthVerifier } from './auth/oauth-verifier.js';
 import type { AppConfig, OauthConfig } from './config.js';
@@ -23,9 +24,20 @@ const ADVERTISED_SCOPES = [...SUPPORTED_SCOPES, 'offline_access'] as const;
 
 const CHALLENGE_SCOPE = ADVERTISED_SCOPES.join(' ');
 
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVICE_UNAVAILABLE = 503;
+
+/** Resolves when the API accepts `apiKey`; rejects with `TokenExchangeError` otherwise. */
+export type ApiKeyVerifier = (
+  apiKey: string,
+  clientIp?: string
+) => Promise<unknown>;
+
 export function createApp(
   serverFactory: (credential: McpCredential) => McpServer,
   config: AppConfig,
+  verifyApiKey: ApiKeyVerifier,
   oauthVerifier?: OauthVerifier
 ): Hono {
   const app = new Hono();
@@ -68,7 +80,7 @@ export function createApp(
           message:
             'Provide a Knowtis MCP API key or OAuth access token as a Bearer token. Create an API key in the Knowtis app under Settings > Integrations.',
         },
-        401,
+        HTTP_UNAUTHORIZED,
         { 'WWW-Authenticate': buildChallenge(config.oauth) }
       );
     }
@@ -92,12 +104,22 @@ export function createApp(
             error: 'invalid_token',
             message: 'The access token is invalid or expired.',
           },
-          401,
+          HTTP_UNAUTHORIZED,
           { 'WWW-Authenticate': buildInvalidTokenChallenge(config.oauth) }
         );
       }
     } else {
-      credential = { kind: 'api-key', apiKey: bearer };
+      const clientIp = c.req.header(REAL_IP_HEADER) || undefined;
+      try {
+        await verifyApiKey(bearer, clientIp);
+      } catch (error) {
+        return rejectApiKey(error, config.oauth);
+      }
+      credential = {
+        kind: 'api-key',
+        apiKey: bearer,
+        ...(clientIp ? { clientIp } : {}),
+      };
     }
 
     const server = serverFactory(credential);
@@ -111,6 +133,48 @@ export function createApp(
   });
 
   return app;
+}
+
+function rejectApiKey(error: unknown, oauth: OauthConfig | null): Response {
+  const status = error instanceof TokenExchangeError ? error.status : undefined;
+  log({
+    level: 'warn',
+    event: 'api_key_verify_rejected',
+    status: status ?? 'unreachable',
+  });
+  if (status === HTTP_UNAUTHORIZED) {
+    return Response.json(
+      {
+        error: 'invalid_token',
+        message: 'The API key is invalid, expired or revoked.',
+      },
+      {
+        status: HTTP_UNAUTHORIZED,
+        headers: { 'WWW-Authenticate': buildInvalidTokenChallenge(oauth) },
+      }
+    );
+  }
+  if (status === HTTP_TOO_MANY_REQUESTS) {
+    const retryAfter =
+      error instanceof TokenExchangeError ? error.retryAfter : undefined;
+    return Response.json(
+      {
+        error: 'rate_limited',
+        message: 'Too many API key checks. Retry later.',
+      },
+      {
+        status: HTTP_TOO_MANY_REQUESTS,
+        headers: retryAfter ? { 'Retry-After': retryAfter } : {},
+      }
+    );
+  }
+  return Response.json(
+    {
+      error: 'temporarily_unavailable',
+      message: 'The API key could not be checked. Retry later.',
+    },
+    { status: HTTP_SERVICE_UNAVAILABLE }
+  );
 }
 
 function extractBearerToken(headers: Headers): string | undefined {
