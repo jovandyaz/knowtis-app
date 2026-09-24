@@ -652,7 +652,7 @@ importers:
         specifier: ^3.2.1
         version: 3.2.1
       uuid:
-        specifier: ^14.0.2
+        specifier: '>=11.1.1'
         version: 14.0.2
 
   apps/mcp: {}
