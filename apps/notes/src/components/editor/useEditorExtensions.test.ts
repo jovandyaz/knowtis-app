@@ -145,6 +145,17 @@ describe('pasting images from another site', () => {
     return found;
   }
 
+  function links(current: Editor): string[][] {
+    const found: string[][] = [];
+    current.state.doc.descendants((node) => {
+      const link = node.marks.find((mark) => mark.type.name === 'link');
+      if (node.isText && link) {
+        found.push([node.text ?? '', String(link.attrs['href'])]);
+      }
+    });
+    return found;
+  }
+
   it('copies the image into this note through the API', async () => {
     vi.mocked(imagesApi.import).mockResolvedValue({
       id: 'image-1',
@@ -173,6 +184,10 @@ describe('pasting images from another site', () => {
     );
 
     await vi.waitFor(() => expect(imageSrcs(current)).toEqual([]));
+    expect(links(current)).toEqual([
+      ['Chart', PASTED_URL],
+      ['Diagram', OTHER_PASTED_URL],
+    ]);
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error).toHaveBeenCalledWith(
       "Couldn't copy 2 images into the note"
