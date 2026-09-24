@@ -89,6 +89,16 @@ const envSchemaBase = z.object({
     .max(3600)
     .default(600),
   VERCEL_BLOB_READ_WRITE_TOKEN: z.string().optional(),
+  IMAGE_IMPORT_ALLOWED_IPS: z
+    .string()
+    .default('')
+    .transform((list) =>
+      list
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== '')
+    )
+    .pipe(z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()]))),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_BASE_URL: z.url().default('https://cloud.langfuse.com'),
@@ -210,6 +220,19 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
         'RATE_LIMITING_ENABLED=false is refused in production — the flag exists for disposable test environments, where a single-IP automated client would otherwise spend the login and refresh budgets in a few page loads',
       path: ['RATE_LIMITING_ENABLED'],
       input: data.RATE_LIMITING_ENABLED,
+    });
+  }
+
+  if (
+    data.NODE_ENV === 'production' &&
+    data.IMAGE_IMPORT_ALLOWED_IPS.length > 0
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'IMAGE_IMPORT_ALLOWED_IPS is refused in production — it lets an image import from a URL reach the private addresses it lists, and exists only so a local or E2E harness can import from 127.0.0.1',
+      path: ['IMAGE_IMPORT_ALLOWED_IPS'],
+      input: data.IMAGE_IMPORT_ALLOWED_IPS,
     });
   }
 
