@@ -21,5 +21,6 @@ export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.EMAIL_NOT_VERIFIED]: HttpStatus.FORBIDDEN,
   [NoteErrorCodes.SHARE_TOKEN_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [NoteErrorCodes.CONTENT_OVERWRITE_REFUSED]: HttpStatus.CONFLICT,
+  [NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE]: HttpStatus.UNPROCESSABLE_ENTITY,
   [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };

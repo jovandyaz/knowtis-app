@@ -1,7 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { NoteErrorCodes } from '../../domain';
+import { NoteImageStoreService } from '../services/note-image-store.service';
 import { UploadImageHandler } from './upload-image.handler';
+
+const PNG_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64'
+);
 
 function setup(overrides: { ownerId?: string; hasAccess?: boolean } = {}) {
   const note = { id: 'n1', ownerId: overrides.ownerId ?? 'owner' };
@@ -11,8 +17,8 @@ function setup(overrides: { ownerId?: string; hasAccess?: boolean } = {}) {
   };
   const storage = {
     upload: vi.fn().mockResolvedValue({
-      url: 'https://blob/x.webp',
-      pathname: 'notes/n1/x.webp',
+      url: 'https://blob/x.png',
+      pathname: 'notes/n1/x.png',
     }),
     delete: vi.fn().mockResolvedValue(undefined),
   };
@@ -25,42 +31,79 @@ function setup(overrides: { ownerId?: string; hasAccess?: boolean } = {}) {
   const handler = new UploadImageHandler(
     noteRepo as never,
     permRepo as never,
-    imageRepo as never,
-    storage as never
+    new NoteImageStoreService(storage as never, imageRepo as never)
   );
   return { handler, noteRepo, permRepo, storage, imageRepo };
 }
 
 const input = {
   noteId: 'n1',
-  filename: 'p.webp',
-  data: Buffer.from('x'),
-  contentType: 'image/webp',
-  size: 10,
+  filename: 'p.png',
+  data: PNG_BYTES,
   width: 800,
   height: 600,
 };
 
 describe('UploadImageHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it('uploads and records a row when the user is the owner', async () => {
-    const { handler, storage, imageRepo } = setup({ ownerId: 'owner' });
+    const { handler, imageRepo } = setup({ ownerId: 'owner' });
+
     const result = await handler.execute({ ...input, userId: 'owner' });
+
     expect(result.isOk()).toBe(true);
-    expect(storage.upload).toHaveBeenCalled();
     expect(imageRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         noteId: 'n1',
         userId: 'owner',
-        url: 'https://blob/x.webp',
-        mimeType: 'image/webp',
+        url: 'https://blob/x.png',
+        size: PNG_BYTES.byteLength,
         width: 800,
         height: 600,
       })
     );
+  });
+
+  it('stores the type the bytes carry, not the one the file name claims', async () => {
+    const { handler, storage, imageRepo } = setup({ ownerId: 'owner' });
+
+    await handler.execute({ ...input, filename: 'p.gif', userId: 'owner' });
+
+    expect(storage.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: 'image/png' })
+    );
+    expect(imageRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ mimeType: 'image/png' })
+    );
+  });
+
+  it('records missing dimensions as null', async () => {
+    const { handler, imageRepo } = setup({ ownerId: 'owner' });
+
+    await handler.execute({
+      noteId: 'n1',
+      filename: 'p.png',
+      data: PNG_BYTES,
+      userId: 'owner',
+    });
+
+    expect(imageRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ width: null, height: null })
+    );
+  });
+
+  it.each([
+    ['a text file', Buffer.from('just some text')],
+    ['SVG markup', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>')],
+  ])('refuses %s without uploading it', async (_label, data) => {
+    const { handler, storage, imageRepo } = setup({ ownerId: 'owner' });
+
+    const result = await handler.execute({ ...input, data, userId: 'owner' });
+
+    expect(result.isErr() && result.error.code).toBe(
+      NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE
+    );
+    expect(storage.upload).not.toHaveBeenCalled();
+    expect(imageRepo.create).not.toHaveBeenCalled();
   });
 
   it('allows an editor with access', async () => {
@@ -68,7 +111,9 @@ describe('UploadImageHandler', () => {
       ownerId: 'someone',
       hasAccess: true,
     });
+
     const result = await handler.execute({ ...input, userId: 'editor' });
+
     expect(result.isOk()).toBe(true);
     expect(storage.upload).toHaveBeenCalled();
     expect(imageRepo.create).toHaveBeenCalled();
@@ -79,31 +124,24 @@ describe('UploadImageHandler', () => {
       ownerId: 'someone',
       hasAccess: false,
     });
+
     const result = await handler.execute({ ...input, userId: 'intruder' });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
-    }
+
+    expect(result.isErr() && result.error.code).toBe(
+      NoteErrorCodes.PERMISSION_DENIED
+    );
     expect(storage.upload).not.toHaveBeenCalled();
   });
 
   it('errors when the note does not exist', async () => {
-    const { handler, noteRepo } = setup();
+    const { handler, noteRepo, storage } = setup();
     noteRepo.findById.mockResolvedValue(null);
+
     const result = await handler.execute({ ...input, userId: 'owner' });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe(NoteErrorCodes.NOTE_NOT_FOUND);
-    }
-  });
 
-  it('deletes the uploaded blob when the DB insert fails (no orphan)', async () => {
-    const { handler, storage, imageRepo } = setup({ ownerId: 'owner' });
-    imageRepo.create.mockRejectedValue(new Error('db down'));
-
-    await expect(
-      handler.execute({ ...input, userId: 'owner' })
-    ).rejects.toThrow('db down');
-    expect(storage.delete).toHaveBeenCalledWith(['notes/n1/x.webp']);
+    expect(result.isErr() && result.error.code).toBe(
+      NoteErrorCodes.NOTE_NOT_FOUND
+    );
+    expect(storage.upload).not.toHaveBeenCalled();
   });
 });

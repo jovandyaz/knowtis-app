@@ -19,6 +19,7 @@ import {
 } from './application';
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
+import { NoteImageStoreService } from './application/services/note-image-store.service';
 import {
   NOTE_READ_REPOSITORY,
   NOTE_REPOSITORY,
@@ -90,6 +91,7 @@ import { TagsController } from './tags.controller';
     UpdateTagHandler,
     DeleteTagHandler,
     UploadImageHandler,
+    NoteImageStoreService,
     RotateShareLinkHandler,
     { provide: IMAGE_STORAGE, useClass: VercelBlobStorage },
     { provide: NOTE_IMAGE_REPOSITORY, useClass: DrizzleNoteImageRepository },

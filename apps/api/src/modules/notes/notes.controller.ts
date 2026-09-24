@@ -9,7 +9,6 @@ import {
   Body,
   Controller,
   Delete,
-  FileTypeValidator,
   Get,
   HttpCode,
   HttpStatus,
@@ -73,6 +72,7 @@ import {
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
 import { toNoteView } from './domain';
+import { MAX_IMAGE_BYTES } from './domain/image-type';
 import {
   CreateNoteDto,
   NotesQueryDto,
@@ -620,7 +620,12 @@ export class NotesController {
       },
     },
   })
-  @ApiBadRequest('invalid image file (type or size)')
+  @ApiResponse({
+    status: 422,
+    description:
+      'unsupported_type: the file bytes are not a PNG, JPEG, GIF or WebP image, whatever its Content-Type says',
+  })
+  @ApiBadRequest('missing file, or larger than 10 MB')
   @ApiAuthErrors('insufficient permissions on this note')
   @ApiNotFound('note does not exist')
   @Post(':id/images')
@@ -632,13 +637,7 @@ export class NotesController {
     @Param('id', ParseUUIDPipe) noteId: string,
     @UploadedFile(
       new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
-          new FileTypeValidator({
-            fileType: /^image\/(png|jpe?g|gif|webp)$/,
-            skipMagicNumbersValidation: true,
-          }),
-        ],
+        validators: [new MaxFileSizeValidator({ maxSize: MAX_IMAGE_BYTES })],
       })
     )
     file: Express.Multer.File,
@@ -650,8 +649,6 @@ export class NotesController {
       userId: user.id,
       filename: sanitizeFilename(file.originalname),
       data: file.buffer,
-      contentType: file.mimetype,
-      size: file.size,
       ...(dto.width !== undefined && { width: dto.width }),
       ...(dto.height !== undefined && { height: dto.height }),
     });

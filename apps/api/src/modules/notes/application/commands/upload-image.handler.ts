@@ -11,22 +11,14 @@ import {
   type NoteRepository,
   type PermissionRepository,
 } from '../../domain';
-import {
-  IMAGE_STORAGE,
-  type ImageStorage,
-} from '../../domain/ports/image-storage.port';
-import {
-  NOTE_IMAGE_REPOSITORY,
-  type NoteImageRepository,
-} from '../../domain/ports/note-image.repository';
+import { sniffImageType } from '../../domain/image-type';
+import { NoteImageStoreService } from '../services/note-image-store.service';
 
 export interface UploadImageInput {
   readonly noteId: string;
   readonly userId: string;
   readonly filename: string;
   readonly data: Buffer;
-  readonly contentType: string;
-  readonly size: number;
   readonly width?: number;
   readonly height?: number;
 }
@@ -37,9 +29,7 @@ export class UploadImageHandler {
     @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
     @Inject(PERMISSION_REPOSITORY)
     private readonly permissionRepository: PermissionRepository,
-    @Inject(NOTE_IMAGE_REPOSITORY)
-    private readonly noteImageRepository: NoteImageRepository,
-    @Inject(IMAGE_STORAGE) private readonly imageStorage: ImageStorage
+    private readonly noteImageStore: NoteImageStoreService
   ) {}
 
   async execute(
@@ -62,32 +52,20 @@ export class UploadImageHandler {
       return err(NoteErrors.permissionDenied('No write access to this note'));
     }
 
-    const uploaded = await this.imageStorage.upload({
+    const mimeType = sniffImageType(input.data);
+    if (!mimeType) {
+      return err(NoteErrors.unsupportedImageType());
+    }
+
+    const row = await this.noteImageStore.store({
       noteId: input.noteId,
+      userId: input.userId,
       filename: input.filename,
       data: input.data,
-      contentType: input.contentType,
+      mimeType,
+      width: input.width ?? null,
+      height: input.height ?? null,
     });
-
-    try {
-      const row = await this.noteImageRepository.create({
-        noteId: input.noteId,
-        userId: input.userId,
-        pathname: uploaded.pathname,
-        url: uploaded.url,
-        size: input.size,
-        mimeType: input.contentType,
-        width: input.width ?? null,
-        height: input.height ?? null,
-      });
-      return ok(row);
-    } catch (error) {
-      // Compensate: drop the just-uploaded blob so a failed insert doesn't
-      // orphan it (cleanup-on-delete only knows blobs tracked in note_images).
-      await this.imageStorage
-        .delete([uploaded.pathname])
-        .catch(() => undefined);
-      throw error;
-    }
+    return ok(row);
   }
 }
