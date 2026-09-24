@@ -20,16 +20,20 @@ function createEditor() {
   return editor;
 }
 
-function pastePlainText(text: string) {
+function paste(data: Record<string, string>) {
   const event = new Event('paste', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'clipboardData', {
     value: {
-      getData: (type: string) => (type === 'text/plain' ? text : ''),
-      types: ['text/plain'],
+      getData: (type: string) => data[type] ?? '',
+      types: Object.keys(data),
       files: [],
     },
   });
   editor.view.dom.dispatchEvent(event);
+}
+
+function pastePlainText(text: string) {
+  paste({ 'text/plain': text });
 }
 
 function findNodes(name: string) {
@@ -81,6 +85,18 @@ describe('MarkdownPaste', () => {
     expect(codeBlock).toBeDefined();
     expect(codeBlock?.attrs['language']).toBe('ts');
     expect(findNode(MERMAID_BLOCK_NAME)).toBeUndefined();
+  });
+
+  it('leaves a paste that carries HTML to the native parser', () => {
+    createEditor();
+
+    paste({
+      'text/plain': '# Title\n\n**bold** text',
+      'text/html': '<p>native paste</p>',
+    });
+
+    expect(findNode('heading')).toBeUndefined();
+    expect(editor.state.doc.textContent).toBe('native paste');
   });
 
   it('turns a pasted markdown image into an image node with its src and alt', () => {
