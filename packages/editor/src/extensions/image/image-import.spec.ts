@@ -170,6 +170,37 @@ function links(): string[][] {
   return found;
 }
 
+function sharedImageSrcs(yDoc: Y.Doc): unknown[] {
+  return Array.from(
+    yDoc
+      .getXmlFragment(YJS_FIELD)
+      .createTreeWalker(
+        (node) =>
+          node instanceof Y.XmlElement && node.nodeName === IMAGE_NODE_NAME
+      ),
+    (node) => (node instanceof Y.XmlElement ? node.getAttribute('src') : null)
+  );
+}
+
+function sharedParagraphs(yDoc: Y.Doc): string[] {
+  return Array.from(
+    yDoc
+      .getXmlFragment(YJS_FIELD)
+      .createTreeWalker(
+        (node) => node instanceof Y.XmlElement && node.nodeName === 'paragraph'
+      ),
+    (node) =>
+      node instanceof Y.XmlElement
+        ? node
+            .toArray()
+            .map((child) =>
+              child instanceof Y.XmlText ? child.toString() : ''
+            )
+            .join('')
+        : ''
+  ).filter((text) => text !== '');
+}
+
 function docJson(): string {
   return JSON.stringify(editor.getJSON());
 }
@@ -756,6 +787,60 @@ describe('ImageImport', () => {
 
     expect(signals.map((signal) => signal.aborted)).toEqual([true]);
     expect(onImportFailed).not.toHaveBeenCalled();
+  });
+
+  it('drops the pasted data images still uploading from the shared document when the editor is destroyed', async () => {
+    const onImportFailed = vi.fn();
+    const yDoc = createCollaborativeEditor({
+      importProvider: () => new Promise<UploadedImageResult>(() => undefined),
+      uploadProvider: () => new Promise<UploadedImageResult>(() => undefined),
+      onImportFailed,
+    });
+
+    pasteHtml(
+      [
+        '<p>kept</p>',
+        `<img src="${PNG_DATA_URL}">`,
+        `<figure data-image><img src="${PNG_DATA_URL}"><figcaption>${CAPTION}</figcaption></figure>`,
+        `<img src="${FOREIGN}">`,
+        `<img src="${PNG_DATA_URL}">`,
+      ].join('')
+    );
+    await settle();
+    expect(sharedImageSrcs(yDoc)).toHaveLength(4);
+
+    editor.destroy();
+
+    expect(sharedImageSrcs(yDoc)).toEqual([FOREIGN]);
+    expect(yDoc.getXmlFragment(YJS_FIELD).toString()).not.toContain(
+      PENDING_IMAGE_SCHEME
+    );
+    expect(sharedParagraphs(yDoc)).toEqual(['kept', CAPTION]);
+    expect(onImportFailed.mock.calls).toEqual([[3]]);
+  });
+
+  it('reports the images of an unfinished paste that already failed when the editor is destroyed', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const onImportFailed = vi.fn();
+    const yDoc = createCollaborativeEditor({
+      importProvider: (url) =>
+        url === FOREIGN
+          ? Promise.reject(new Error('422 fetch_failed'))
+          : new Promise<UploadedImageResult>(() => undefined),
+      uploadProvider: () => new Promise<UploadedImageResult>(() => undefined),
+      onImportFailed,
+    });
+
+    pasteHtml(
+      `<img src="${FOREIGN}" alt="Chart"><img src="${OTHER_FOREIGN}"><img src="${PNG_DATA_URL}">`
+    );
+    await settle();
+    expect(onImportFailed).not.toHaveBeenCalled();
+
+    editor.destroy();
+
+    expect(sharedImageSrcs(yDoc)).toEqual([OTHER_FOREIGN]);
+    expect(onImportFailed.mock.calls).toEqual([[2]]);
   });
 
   it('leaves a foreign image as it is without an import provider', async () => {

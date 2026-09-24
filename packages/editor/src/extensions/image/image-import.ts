@@ -269,7 +269,7 @@ function createImporter(
   let known: ReadonlySet<string> = NO_IMPORTS;
   let destroyed = false;
   const queue: ImportJob[] = [];
-  const running = new Set<AbortController>();
+  const running = new Map<AbortController, ImportJob>();
 
   async function request(
     job: ImportJob,
@@ -353,6 +353,28 @@ function createImporter(
     }
   }
 
+  function dropUploadingImages(jobs: readonly ImportJob[]): number {
+    const uploading = jobs.map((job) => job.src).filter(isPendingImage);
+    if (uploading.length === 0 || editor.isDestroyed) {
+      return 0;
+    }
+    try {
+      const tr = editor.state.tr;
+      const dropped = uploading.reduce(
+        (count, src) => count + replaceWithFallback(tr, src),
+        0
+      );
+      editor.view.dispatch(tr.setMeta('addToHistory', false));
+      return dropped;
+    } catch (error) {
+      logger.warn('Could not drop the pasted images still uploading', {
+        context: LOG_CONTEXT,
+        error,
+      });
+      return 0;
+    }
+  }
+
   function pump() {
     while (!destroyed && running.size < MAX_PARALLEL_IMPORTS) {
       const job = queue.shift();
@@ -367,7 +389,7 @@ function createImporter(
           controller.abort(new DOMException(TIMEOUT_ERROR, TIMEOUT_ERROR_NAME)),
         IMPORT_TIMEOUT_MS
       );
-      running.add(controller);
+      running.set(controller, job);
       load(job, controller.signal)
         .finally(() => clearTimeout(timeout))
         .then(
@@ -417,10 +439,20 @@ function createImporter(
     },
     destroy() {
       destroyed = true;
+      const unfinished = [...queue, ...running.values()];
+      const earlierFailures = [
+        ...new Set(unfinished.map((job) => job.batch)),
+      ].reduce((count, batch) => count + batch.failed, 0);
+      const failed = earlierFailures + dropUploadingImages(unfinished);
       queue.length = 0;
-      running.forEach((controller) => controller.abort());
+      for (const controller of running.keys()) {
+        controller.abort();
+      }
       running.clear();
       options.pendingFiles.clear();
+      if (failed > 0) {
+        options.onImportFailed?.(failed);
+      }
     },
   };
 }
