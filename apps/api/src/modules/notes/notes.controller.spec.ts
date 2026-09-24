@@ -23,7 +23,7 @@ import {
 } from 'vitest';
 
 import { SUPERTAGS } from '@knowtis/shared-types';
-import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
+import { MAX_IMAGE_BYTES, STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { createValidationPipe } from '../../config/validation-pipe';
 import {
@@ -48,7 +48,6 @@ import {
   PERMISSION_REPOSITORY,
   type NoteEntity,
 } from './domain';
-import { MAX_IMAGE_BYTES } from './domain/image-type';
 import { IMAGE_STORAGE } from './domain/ports/image-storage.port';
 import { NOTE_IMAGE_REPOSITORY } from './domain/ports/note-image.repository';
 import {

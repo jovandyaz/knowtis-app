@@ -44,7 +44,7 @@ import {
   SUPERTAG_CATALOG,
   SUPERTAGS,
 } from '@knowtis/shared-types';
-import { pickDefined } from '@knowtis/shared-util';
+import { MAX_IMAGE_BYTES, pickDefined } from '@knowtis/shared-util';
 
 import { BYTES_PER_MEGABYTE } from '../../core/http/byte-units';
 import { abortOnClientDisconnect } from '../../core/http/client-disconnect';
@@ -76,7 +76,6 @@ import { ImportImageHandler } from './application/commands/import-image.handler'
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
 import { toNoteView, type NoteDomainError } from './domain';
-import { MAX_IMAGE_BYTES } from './domain/image-type';
 import {
   IMAGE_IMPORT_ERROR_CODES,
   imageImportError,

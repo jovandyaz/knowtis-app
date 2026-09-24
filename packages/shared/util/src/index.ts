@@ -6,6 +6,8 @@ export { getInitials } from './get-initials';
 export { DEFAULT_LOCALE, I18N_STORAGE_KEY, SUPPORTED_LOCALES } from './locale';
 export type { SupportedLocale } from './locale';
 export { logger } from './logger';
+export { IMAGE_MIME_TYPES, MAX_IMAGE_BYTES } from './note-image';
+export type { ImageMimeType } from './note-image';
 export { pickDefined } from './pick-defined';
 export { isMacPlatform } from './platform';
 export { safeLocalStorage, safeSessionStorage } from './safe-storage';

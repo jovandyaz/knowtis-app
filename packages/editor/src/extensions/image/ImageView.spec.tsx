@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Editor } from '@tiptap/core';
+import type { AnyExtension, Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,7 @@ import { IMAGE_NODE_NAME } from '@knowtis/editor-schema';
 
 import { ReadOnlyEditor } from '../../components/ReadOnlyEditor';
 import { createBaseExtensions } from '../base-extensions';
+import type { UploadedImageResult } from './image-upload';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -31,17 +32,33 @@ function figure(src: string): string {
 function EditableNote({
   content,
   onCreate,
+  extensions = createBaseExtensions({ disableHistory: true }),
 }: {
   content: string;
   onCreate: (editor: Editor) => void;
+  extensions?: AnyExtension[];
 }) {
   const editor = useEditor({
-    extensions: createBaseExtensions({ disableHistory: true }),
+    extensions,
     content,
     editable: true,
     onCreate: ({ editor: created }) => onCreate(created),
   });
   return <EditorContent editor={editor} />;
+}
+
+function pasteHtml(editor: Editor, html: string) {
+  const event = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      getData: (type: string) => (type === 'text/html' ? html : ''),
+      types: ['text/html'],
+      files: [],
+    },
+  });
+  act(() => {
+    editor.view.dom.dispatchEvent(event);
+  });
 }
 
 function imageNodes(editor: Editor): string[] {
@@ -105,5 +122,43 @@ describe('ImageView', () => {
 
     expect(imageNodes(live)).toEqual([]);
     expect(live.getText()).toContain('after');
+  });
+
+  it('shows an importing label while a pasted image is imported, then the stored image', async () => {
+    let finishImport: (result: UploadedImageResult) => void = () => undefined;
+    const importProvider = () =>
+      new Promise<UploadedImageResult>((resolve) => {
+        finishImport = resolve;
+      });
+    let editor: Editor | undefined;
+    render(
+      <EditableNote
+        content="<p>before</p>"
+        extensions={createBaseExtensions({
+          disableHistory: true,
+          imageImport: { importProvider },
+        })}
+        onCreate={(created) => {
+          editor = created;
+        }}
+      />
+    );
+    await screen.findByText('before');
+    if (!editor) {
+      throw new Error('editor was not created');
+    }
+    pasteHtml(editor, `<img src="${FOREIGN_IMAGES[0]}" alt="${ALT}">`);
+
+    expect(await screen.findByText('ai.image.importing')).toBeInTheDocument();
+    expect(screen.queryByText('ai.image.unavailable')).toBeNull();
+
+    await act(async () => {
+      finishImport({ src: STORED_IMAGE, width: null, height: null, alt: '' });
+    });
+
+    expect(
+      (await screen.findByRole('img', { name: ALT })).getAttribute('src')
+    ).toBe(STORED_IMAGE);
+    expect(screen.queryByText('ai.image.importing')).toBeNull();
   });
 });

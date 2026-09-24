@@ -8,7 +8,9 @@ limiting is switched off for the two API processes with
 `RATE_LIMITING_ENABLED=false`: one automated client on one IP would otherwise
 spend the ten-per-minute refresh budget in a few page loads. The guard itself is
 pinned by `throttling.module.spec.ts` and the production login budget by the
-post-deploy check in DEPLOYMENT.md.
+post-deploy check in DEPLOYMENT.md. They also run with
+`IMAGE_IMPORT_ALLOWED_IPS=127.0.0.1`, so an image import may fetch from the image
+server a test starts on loopback; production refuses to boot with it set.
 
 ## Run locally
 
@@ -63,6 +65,13 @@ Run the target in an isolated worktree because its production build writes `dist
   reading PostgreSQL. PostgreSQL is separately paused to stall actual authority
   reads; expired sessions cannot revive after the database resumes. New authorized
   sessions must recover.
+- An image pasted from a site on `127.0.0.1` is fetched and type-checked by the
+  real API, identified by its importer `User-Agent`. The harness has no Blob store
+  token, so storing it fails; the browser then receives the answer an API with a
+  Blob store gives, and the note saved by the API must hold the stored URL. An
+  image the API cannot fetch (`fetch_failed`), and a file served as `image/png`
+  whose bytes are not an image (`unsupported_type`), each become a link to their
+  original URL with one toast, with no route stubbed.
 - English desktop and Spanish mobile runs preserve drafts and the mounted editor
   through a temporary access-refetch failure, retry successfully, and check focus,
   dialog bounds and unhandled browser errors.

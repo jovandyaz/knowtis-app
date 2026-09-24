@@ -7,7 +7,8 @@ import {
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { MAX_IMAGE_BYTES } from '../../domain/image-type';
+import { MAX_IMAGE_BYTES } from '@knowtis/shared-util';
+
 import { imageImportError } from '../../domain/ports/remote-image-fetcher.port';
 import { SafeRemoteImageFetcher } from './safe-remote-image-fetcher';
 

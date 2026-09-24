@@ -22,13 +22,16 @@ export type { SuggestionMenuOptions } from './extensions/suggestion-menu';
 export {
   ImageUpload,
   extractImageFiles,
-  ACCEPTED_IMAGE_TYPES,
 } from './extensions/image/image-upload';
 export type {
   ImageUploadProvider,
   ImageUploadOptions,
   UploadedImageResult,
 } from './extensions/image/image-upload';
+export type {
+  ImageImportOptions,
+  ImageImportProvider,
+} from './extensions/image/image-import';
 
 export { CollaborationIndicator } from './components/CollaborationIndicator';
 export { CollaborativeCursors } from './components/CollaborativeCursors';

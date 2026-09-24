@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 import { markdownToHtml } from '@knowtis/note-markdown';
 
+import { IMAGE_INSERT_META } from './image/image-import';
 import {
   wrapPastedImages,
   type PastedImageOptions,
@@ -60,10 +61,13 @@ export const MarkdownPaste = Extension.create<PastedImageOptions>({
             }
 
             event.preventDefault();
-            editor.commands.insertContent(
-              wrapPastedImages(markdownToHtml(text), options),
-              { parseOptions: { preserveWhitespace: false } }
-            );
+            editor
+              .chain()
+              .setMeta(IMAGE_INSERT_META, true)
+              .insertContent(wrapPastedImages(markdownToHtml(text), options), {
+                parseOptions: { preserveWhitespace: false },
+              })
+              .run();
             return true;
           },
         },

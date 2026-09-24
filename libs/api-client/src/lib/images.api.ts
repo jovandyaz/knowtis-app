@@ -16,6 +16,16 @@ export interface UploadImageArgs {
   signal?: AbortSignal;
 }
 
+export type ImportImageResponse = Omit<UploadImageResponse, 'id'> & {
+  id: string | null;
+};
+
+export interface ImportImageArgs {
+  noteId: string;
+  url: string;
+  signal?: AbortSignal;
+}
+
 export const imagesApi = {
   async upload({
     noteId,
@@ -36,6 +46,18 @@ export const imagesApi = {
     return httpClient.post<UploadImageResponse>(
       `/notes/${encodeURIComponent(noteId)}/images`,
       form,
+      signal ? { signal } : undefined
+    );
+  },
+
+  async import({
+    noteId,
+    url,
+    signal,
+  }: ImportImageArgs): Promise<ImportImageResponse> {
+    return httpClient.post<ImportImageResponse>(
+      `/notes/${encodeURIComponent(noteId)}/images/import`,
+      { url },
       signal ? { signal } : undefined
     );
   },
