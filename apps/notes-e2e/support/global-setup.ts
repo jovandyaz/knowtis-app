@@ -78,6 +78,7 @@ export default async function globalSetup() {
     EMAIL_PROVIDER: 'console',
     BCRYPT_ROUNDS: String(BCRYPT_ROUNDS),
     RATE_LIMITING_ENABLED: 'false',
+    IMAGE_IMPORT_ALLOWED_IPS: E2E.host,
     NX_DAEMON: 'false',
     NX_LOAD_DOT_ENV_FILES: 'false',
     NX_ISOLATE_PLUGINS: 'false',

@@ -21,6 +21,7 @@ import { logger } from '@knowtis/shared-util';
 
 import { createAiClientProvider } from './ai/aiClientProvider';
 import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
+import { createImageImportProvider } from './image/createImageImportProvider';
 import { createImageUploadProvider } from './image/createImageUploadProvider';
 import { createTagSuggestion } from './tags/tag-suggestion';
 
@@ -39,7 +40,19 @@ export function useEditorExtensions(
     const imageUploadProvider = createImageUploadProvider(() => noteId);
 
     const extensions: AnyExtension[] = [
-      ...createBaseExtensions({ disableHistory: true, aiBlockProvider }),
+      ...createBaseExtensions({
+        disableHistory: true,
+        aiBlockProvider,
+        imageImport: {
+          importProvider: createImageImportProvider(() => noteId),
+          uploadProvider: imageUploadProvider,
+          onImportFailed: (count) => {
+            toast.error(
+              i18next.t('ai.image.importFailed', { ns: 'notes', count })
+            );
+          },
+        },
+      }),
       ImageUpload.configure({
         provider: imageUploadProvider,
         onError: (error) => {
