@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable && pnpm fetch
 COPY . .
+RUN touch REVISION
 RUN pnpm install --offline --frozen-lockfile
 RUN NODE_ENV=production pnpm nx build api --configuration=production
 RUN pnpm exec esbuild apps/api/src/database/migrate.ts --bundle --platform=node --format=cjs --target=node24 --outfile=apps/api/src/database/migrate.cjs
@@ -16,5 +17,6 @@ WORKDIR /app
 COPY --from=build /app/dist/apps/api dist/apps/api
 COPY --from=build /app/apps/api/src/database/migrate.cjs apps/api/src/database/migrate.cjs
 COPY --from=build /app/apps/api/drizzle apps/api/drizzle
+COPY --from=build /app/REVISION REVISION
 USER node
 CMD ["node", "dist/apps/api/main.js"]

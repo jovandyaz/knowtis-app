@@ -16,6 +16,7 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv } from '../config';
 import type { EnvConfig } from '../config/env.config';
+import { releaseConfig } from '../config/release.config';
 import { ThrottlingModule } from '../core/throttling/throttling.module';
 import { DatabaseModule } from '../database';
 import { AdminModule } from '../modules/admin/admin.module';
@@ -44,6 +45,7 @@ import { AppService } from './app.service';
       isGlobal: true,
       validate: validateEnv,
       envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
+      load: [() => releaseConfig()],
     }),
     ThrottlingModule,
     EventEmitterModule.forRoot(),
