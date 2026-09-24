@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core';
 import Collaboration from '@tiptap/extension-collaboration';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import * as Y from 'yjs';
 
 import { IMAGE_NODE_NAME } from '@knowtis/editor-schema';
@@ -54,6 +54,17 @@ function stored(
   width: number | null = null
 ): UploadedImageResult {
   return { src, width, height: width, alt: 'pasted-image' };
+}
+
+function unapplicable(): UploadedImageResult {
+  return {
+    src: STORED,
+    get width(): number | null {
+      throw new Error('unreadable width');
+    },
+    height: null,
+    alt: '',
+  };
 }
 
 let editor: Editor;
@@ -452,16 +463,8 @@ describe('ImageImport', () => {
   it('settles an import whose result cannot be applied and moves on to the next', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const onImportFailed = vi.fn();
-    const broken: UploadedImageResult = {
-      src: STORED,
-      get width(): number | null {
-        throw new Error('unreadable width');
-      },
-      height: null,
-      alt: '',
-    };
     const importProvider = vi.fn<ImageImportProvider>(async (url) =>
-      url === 'https://x.test/a.png' ? broken : stored()
+      url === 'https://x.test/a.png' ? unapplicable() : stored()
     );
     createEditor({ importProvider, onImportFailed });
 
@@ -487,6 +490,58 @@ describe('ImageImport', () => {
       'Could not apply a pasted image import',
       expect.objectContaining({ context: 'ImageImport' })
     );
+  });
+
+  it('settles an import whose fallback transaction also fails without an unhandled rejection', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    onTestFinished(() => {
+      process.off('unhandledRejection', unhandled);
+    });
+    const pending = deferred<UploadedImageResult>();
+    const importProvider = vi
+      .fn<ImageImportProvider>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(stored());
+    createEditor({ importProvider });
+    const failingListener = () => {
+      throw new Error('a transaction listener failed');
+    };
+
+    pasteHtml(`<img src="${FOREIGN}">`);
+    editor.on('transaction', failingListener);
+    pending.resolve(stored());
+    await settle();
+    await settle();
+
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(isImageImportPending(editor.state, FOREIGN)).toBe(false);
+    expect(warn).toHaveBeenCalledWith(
+      'Could not settle a pasted image import',
+      expect.objectContaining({ context: 'ImageImport' })
+    );
+
+    editor.off('transaction', failingListener);
+    pasteHtml(`<img src="${OTHER_FOREIGN}">`);
+    await settle();
+    expect(imageSrcs()).toEqual([STORED, STORED]);
+  });
+
+  it('does not report an import it cannot apply once the editor view is gone', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const onImportFailed = vi.fn();
+    const pending = deferred<UploadedImageResult>();
+    createEditor({ importProvider: () => pending.promise, onImportFailed });
+
+    pasteHtml(`<img src="${FOREIGN}">`);
+    editor.unmount();
+    pending.resolve(unapplicable());
+    await settle();
+
+    expect(editor.isDestroyed).toBe(true);
+    expect(onImportFailed).not.toHaveBeenCalled();
+    editor.destroy();
   });
 
   it('reports every failed image of one paste in a single call', async () => {

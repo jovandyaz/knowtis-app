@@ -311,9 +311,23 @@ function createImporter(
         context: LOG_CONTEXT,
         error,
       });
-      editor.view.dispatch(markSettled(editor.state.tr, src));
-      return imagesWithSrc(editor.state.doc, src).length;
+      return settleUnapplied(src);
     }
+  }
+
+  function settleUnapplied(src: string): number {
+    if (editor.isDestroyed) {
+      return 0;
+    }
+    try {
+      editor.view.dispatch(markSettled(editor.state.tr, src));
+    } catch (error) {
+      logger.warn('Could not settle a pasted image import', {
+        context: LOG_CONTEXT,
+        error,
+      });
+    }
+    return imagesWithSrc(editor.state.doc, src).length;
   }
 
   function finish(
