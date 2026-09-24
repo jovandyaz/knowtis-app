@@ -28,10 +28,13 @@ import {
   type Database,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
+import type { AgentSource } from '../../domain/agent-event';
 import {
   AGENT_MESSAGE_PARTS_VERSION,
+  type AgentMessagePart,
   type PersistedParts,
 } from '../../domain/agent-message';
+import type { AppendTurnInput } from '../../domain/ports/conversation.repository';
 import { pruneTranscript } from '../../domain/prune-transcript';
 import { buildTurnRows } from '../../domain/turn-transcript';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
@@ -46,6 +49,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   const spyOnWarn = () =>
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+  const ownNote = async (title: string): Promise<string> => {
+    const [row] = await db
+      .insert(notes)
+      .values({ ownerId: USER, title, content: '' })
+      .returning({ id: notes.id });
+    return row.id;
+  };
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -94,13 +105,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         { role: 'assistant', content: 'Noted: BLUE', sources: [] },
       ],
     });
-    const rows = await repo.loadMessages(id, 40);
+    const rows = await repo.loadMessages(id, USER, 40);
     expect(rows.map((r) => r.role)).toEqual(['user', 'assistant']);
     expect(rows[0].content).toBe('remember my codeword is BLUE');
     expect(rows[1].content).toBe('Noted: BLUE');
   });
 
   it('orders the user row before the assistant row within one turn', async () => {
+    const noteId = await ownNote('N1');
     const { id } = await repo.create({ userId: USER, title: 't' });
     await repo.appendTurn({
       conversationId: id,
@@ -110,13 +122,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         {
           role: 'assistant',
           content: 'A',
-          sources: [{ id: 'n1', title: 'N1' }],
+          sources: [{ id: noteId, title: 'N1' }],
         },
       ],
     });
-    const rows = await repo.loadMessages(id, 40);
+    const rows = await repo.loadMessages(id, USER, 40);
     expect(rows.map((r) => r.content)).toEqual(['U', 'A']);
-    expect(rows[1].sources).toEqual([{ id: 'n1', title: 'N1' }]);
+    expect(rows[1].sources).toEqual([{ id: noteId, title: 'N1' }]);
   });
 
   it('returns only the last `limit` messages, oldest→newest', async () => {
@@ -131,7 +143,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         ],
       });
     }
-    const rows = await repo.loadMessages(id, 2);
+    const rows = await repo.loadMessages(id, USER, 2);
     expect(rows.map((r) => r.content)).toEqual(['u2', 'a2']);
   });
 
@@ -167,7 +179,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       turnId: randomUUID(),
       messages: [{ role: 'assistant', content: 'proactive', sources: [] }],
     });
-    const rows = await repo.loadMessages(id, 10);
+    const rows = await repo.loadMessages(id, USER, 10);
     expect(rows).toHaveLength(1);
     expect(rows[0].role).toBe('assistant');
     expect(rows[0].content).toBe('proactive');
@@ -185,7 +197,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       messages: [{ role: 'user', content: 'pregunta perdida' }],
     });
 
-    const rows = await repo.loadMessages(id, 10);
+    const rows = await repo.loadMessages(id, USER, 10);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       role: 'user',
@@ -217,6 +229,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('persists tool activity and turn metadata and loads them back oldest→newest', async () => {
+    const noteId = await ownNote('GTD');
     const { id } = await repo.create({ userId: USER, title: 't' });
     const turnId = randomUUID();
     await repo.appendTurn({
@@ -244,7 +257,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
               type: 'tool-result',
               toolCallId: 'c1',
               toolName: 'searchNotes',
-              output: { hits: [{ id: 'n1', title: 'GTD' }] },
+              output: { hits: [{ id: noteId, title: 'GTD' }] },
               outputType: 'json',
             },
           ],
@@ -252,13 +265,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         {
           role: 'assistant',
           content: 'Your notes describe GTD as…',
-          sources: [{ id: 'n1', title: 'GTD' }],
+          sources: [{ id: noteId, title: 'GTD' }],
           stopReason: 'completed',
         },
       ],
     });
 
-    const rows = await repo.loadMessages(id, 40);
+    const rows = await repo.loadMessages(id, USER, 40);
 
     expect(rows.map((r) => r.role)).toEqual([
       'user',
@@ -285,12 +298,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       null,
       'completed',
     ]);
-    expect(rows[3].sources).toEqual([{ id: 'n1', title: 'GTD' }]);
+    expect(rows[3].sources).toEqual([{ id: noteId, title: 'GTD' }]);
   });
 
   it.each(['max_steps', 'token_budget'] as const)(
     'reloads a %s tool-ending turn with its terminal notice and intact replay pairs',
     async (stopReason) => {
+      const noteId = await ownNote('N1');
       const { id } = await repo.create({ userId: USER, title: 'capped turn' });
       const turnId = randomUUID();
       await repo.appendTurn({
@@ -299,7 +313,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         messages: buildTurnRows({
           userContent: 'read n1',
           assistantText: '',
-          sources: [{ id: 'n1', title: 'N1' }],
+          sources: [{ id: noteId, title: 'N1' }],
           stopReason,
           turnMessages: [
             {
@@ -310,7 +324,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
                   type: 'tool-call',
                   toolCallId: 'c1',
                   toolName: 'getNote',
-                  input: { id: 'n1' },
+                  input: { noteId },
                 },
               ],
             },
@@ -331,7 +345,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         }),
       });
 
-      const rows = await repo.loadMessages(id, 40);
+      const rows = await repo.loadMessages(id, USER, 40);
 
       expect(rows.map((row) => row.role)).toEqual([
         'user',
@@ -356,7 +370,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         role: 'assistant',
         content: '',
         stopReason,
-        sources: [{ id: 'n1', title: 'N1' }],
+        sources: [{ id: noteId, title: 'N1' }],
       });
       const replay = pruneTranscript(rows, { keepToolTurns: 2 });
       expect(replay).toEqual([
@@ -369,7 +383,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
               type: 'tool-call',
               toolCallId: 'c1',
               toolName: 'getNote',
-              input: { id: 'n1' },
+              input: { noteId },
             },
           ],
         },
@@ -387,9 +401,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           ],
         },
       ]);
-      expect(await repo.loadMessages(id, 40, { textOnly: true })).toHaveLength(
-        1
-      );
+      expect(
+        await repo.loadMessages(id, USER, 40, { textOnly: true })
+      ).toHaveLength(1);
     }
   );
 
@@ -414,7 +428,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       parts: unknownVersionParts,
     });
 
-    const rows = await repo.loadMessages(id, 10);
+    const rows = await repo.loadMessages(id, USER, 10);
 
     expect(rows).toHaveLength(1);
     expect(rows[0].content).toBe('unknown version content');
@@ -435,7 +449,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       } as unknown as PersistedParts,
     });
 
-    const rows = await repo.loadMessages(id, 10);
+    const rows = await repo.loadMessages(id, USER, 10);
 
     expect(rows).toHaveLength(1);
     expect(rows[0].content).toBe('malformed envelope content');
@@ -469,7 +483,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       } as unknown as PersistedParts,
     });
 
-    const rows = await repo.loadMessages(id, 10);
+    const rows = await repo.loadMessages(id, USER, 10);
 
     expect(rows).toHaveLength(1);
     expect(rows[0].content).toBe('untyped tool result content');
@@ -518,7 +532,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       ],
     });
 
-    const rows = await repo.loadMessages(id, 40, { textOnly: true });
+    const rows = await repo.loadMessages(id, USER, 40, { textOnly: true });
 
     expect(rows.map((r) => [r.role, r.content])).toEqual([
       ['user', 'U'],
@@ -533,7 +547,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       turnId: randomUUID(),
       messages: [],
     });
-    expect(await repo.loadMessages(id, 40)).toEqual([]);
+    expect(await repo.loadMessages(id, USER, 40)).toEqual([]);
   });
 
   it('rejects a stop reason outside the persisted set', async () => {
@@ -833,6 +847,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     });
 
     it('keeps the empty terminal row that carries a stop reason and skips tool rows', async () => {
+      const noteId = await noteOf(LISTER, 'N1');
       const { id } = await repo.create({ userId: LISTER, title: 't' });
       const turnId = randomUUID();
       await repo.appendTurn({
@@ -848,7 +863,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
                 type: 'tool-call',
                 toolCallId: 'c1',
                 toolName: 'getNote',
-                input: { id: 'n1' },
+                input: { noteId },
               },
             ],
           },
@@ -868,7 +883,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           {
             role: 'assistant',
             content: '',
-            sources: [{ id: 'n1', title: 'N1' }],
+            sources: [{ id: noteId, title: 'N1' }],
             stopReason: 'max_steps',
           },
         ],
@@ -888,7 +903,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           turnId,
           role: 'assistant',
           content: '',
-          sources: [{ id: 'n1', title: 'N1' }],
+          sources: [{ id: noteId, title: 'N1' }],
           stopReason: 'max_steps',
         },
       ]);
@@ -992,6 +1007,408 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         .from(userMemories)
         .where(eq(userMemories.id, memory.id));
       expect(kept).toEqual({ source: null });
+    });
+  });
+
+  describe('turn identity', () => {
+    const userAndAnswer = (conversationId: string, turnId: string) =>
+      ({
+        conversationId,
+        turnId,
+        messages: [
+          { role: 'user', content: 'U' },
+          { role: 'assistant', content: 'A', stopReason: 'completed' },
+        ],
+      }) satisfies AppendTurnInput;
+
+    it('stores a replayed turn once and warns about the replay', async () => {
+      const warnSpy = spyOnWarn();
+      const { id } = await repo.create({ userId: USER, title: 't' });
+      const turnId = randomUUID();
+
+      await repo.appendTurn(userAndAnswer(id, turnId));
+      await repo.appendTurn(userAndAnswer(id, turnId));
+
+      const rows = await repo.loadMessages(id, USER, 40);
+      expect(rows.map((row) => [row.role, row.content, row.turnId])).toEqual([
+        ['user', 'U', turnId],
+        ['assistant', 'A', turnId],
+      ]);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.duplicate_persist',
+          conversationId: id,
+          turnId,
+        })
+      );
+    });
+
+    it('rejects a second user row for the same turn', async () => {
+      const { id } = await repo.create({ userId: USER, title: 't' });
+      const userRow = {
+        conversationId: id,
+        turnId: randomUUID(),
+        role: 'user' as const,
+        content: 'U',
+      };
+      await db.insert(conversationMessages).values(userRow);
+
+      const driverError = await db
+        .insert(conversationMessages)
+        .values(userRow)
+        .then(
+          () => undefined,
+          (error: unknown) => (error instanceof Error ? error.cause : error)
+        );
+
+      expect(driverError).toMatchObject({
+        message: expect.stringContaining(
+          'conversation_messages_turn_user_uniq'
+        ),
+      });
+    });
+
+    it('appends rows without a user row to a turn already stored', async () => {
+      const { id } = await repo.create({ userId: USER, title: 't' });
+      const turnId = randomUUID();
+      await repo.appendTurn(userAndAnswer(id, turnId));
+
+      await repo.appendTurn({
+        conversationId: id,
+        turnId,
+        messages: [
+          { role: 'assistant', content: 'resumed', stopReason: 'completed' },
+        ],
+      });
+
+      const rows = await repo.loadMessages(id, USER, 40);
+      expect(rows.map((row) => [row.content, row.turnId])).toEqual([
+        ['U', turnId],
+        ['A', turnId],
+        ['resumed', turnId],
+      ]);
+    });
+  });
+
+  describe('note access at read time', () => {
+    const READER = '00000000-0000-4000-8000-0000000004d1';
+    const AUTHOR = '00000000-0000-4000-8000-0000000004d2';
+
+    const noteBy = async (ownerId: string, title: string): Promise<string> => {
+      const [row] = await db
+        .insert(notes)
+        .values({ ownerId, title, content: `${title} body` })
+        .returning({ id: notes.id });
+      return row.id;
+    };
+
+    const sharedWithReader = async (title: string): Promise<string> => {
+      const noteId = await noteBy(AUTHOR, title);
+      await db
+        .insert(notePermissions)
+        .values({ noteId, userId: READER, permission: 'viewer' });
+      return noteId;
+    };
+
+    const revokeShare = (noteId: string) =>
+      db
+        .delete(notePermissions)
+        .where(
+          and(
+            eq(notePermissions.noteId, noteId),
+            eq(notePermissions.userId, READER)
+          )
+        );
+    const trash = (noteId: string) =>
+      db
+        .update(notes)
+        .set({ deletedAt: new Date() })
+        .where(eq(notes.id, noteId));
+    const purge = (noteId: string) =>
+      db.delete(notes).where(eq(notes.id, noteId));
+
+    const LOSING_ACCESS = [
+      ['its share is revoked', revokeShare],
+      ['it is in the trash', trash],
+      ['it is deleted for good', purge],
+    ] as const;
+
+    const conversation = async (): Promise<string> =>
+      (await repo.create({ userId: READER, title: 't' })).id;
+
+    const getNoteCall = (noteId: string): AgentMessagePart => ({
+      type: 'tool-call',
+      toolCallId: `call-${noteId}`,
+      toolName: 'getNote',
+      input: { noteId },
+    });
+
+    const getNoteResult = (
+      noteId: string,
+      title: string
+    ): AgentMessagePart => ({
+      type: 'tool-result',
+      toolCallId: `call-${noteId}`,
+      toolName: 'getNote',
+      output: { id: noteId, title, content: `${title} body` },
+      outputType: 'json',
+    });
+
+    const redacted = (
+      toolCallId: string,
+      toolName: string
+    ): AgentMessagePart => ({
+      type: 'tool-result',
+      toolCallId,
+      toolName,
+      output: { error: 'note_unavailable' },
+      outputType: 'json',
+    });
+
+    const readNote = (conversationId: string, noteId: string, title: string) =>
+      repo.appendTurn({
+        conversationId,
+        turnId: randomUUID(),
+        messages: buildTurnRows({
+          userContent: `read ${title}`,
+          assistantText: `${title} says hi`,
+          sources: [{ id: noteId, title }],
+          stopReason: 'completed',
+          turnMessages: [
+            { role: 'assistant', content: '', parts: [getNoteCall(noteId)] },
+            {
+              role: 'tool',
+              content: '',
+              parts: [getNoteResult(noteId, title)],
+            },
+            { role: 'assistant', content: `${title} says hi` },
+          ],
+        }),
+      });
+
+    const citing = (conversationId: string, sources: AgentSource[]) =>
+      repo.appendTurn({
+        conversationId,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'question' },
+          {
+            role: 'assistant',
+            content: 'answer',
+            sources,
+            stopReason: 'completed',
+          },
+        ],
+      });
+
+    const transcriptSources = async (conversationId: string) =>
+      (
+        await repo.loadTranscriptForUser(conversationId, READER, 40)
+      )?.messages.flatMap((message) => message.sources);
+
+    beforeAll(async () => {
+      for (const id of [READER, AUTHOR]) {
+        await db
+          .insert(users)
+          .values({ id, email: `e-${id}@test.local`, name: 'R' })
+          .onConflictDoNothing();
+      }
+    });
+
+    beforeEach(async () => {
+      await db.delete(conversations).where(eq(conversations.userId, READER));
+      await db.delete(notes).where(eq(notes.ownerId, READER));
+      await db.delete(notes).where(eq(notes.ownerId, AUTHOR));
+    });
+
+    afterAll(async () => {
+      await db.delete(users).where(eq(users.id, READER));
+      await db.delete(users).where(eq(users.id, AUTHOR));
+    });
+
+    it.each(LOSING_ACCESS)(
+      'drops a transcript source once %s and keeps the readable ones in order',
+      async (_how, loseAccess) => {
+        const lost = await sharedWithReader('Shared');
+        const kept = await noteBy(READER, 'Mine');
+        const id = await conversation();
+        await citing(id, [
+          { id: lost, title: 'Shared' },
+          { id: kept, title: 'Mine' },
+        ]);
+
+        await loseAccess(lost);
+
+        expect(await transcriptSources(id)).toEqual([
+          { id: kept, title: 'Mine' },
+        ]);
+      }
+    );
+
+    it('names a source by the title its note has now', async () => {
+      const noteId = await noteBy(READER, 'Draft');
+      const id = await conversation();
+      await citing(id, [{ id: noteId, title: 'Draft' }]);
+
+      await db
+        .update(notes)
+        .set({ title: 'Final' })
+        .where(eq(notes.id, noteId));
+
+      expect(await transcriptSources(id)).toEqual([
+        { id: noteId, title: 'Final' },
+      ]);
+      const rows = await repo.loadMessages(id, READER, 40);
+      expect(rows.flatMap((row) => row.sources)).toEqual([
+        { id: noteId, title: 'Final' },
+      ]);
+    });
+
+    it.each(LOSING_ACCESS)(
+      'forgets a note in the model context once %s, redacting its tool result and keeping the pair',
+      async (_how, loseAccess) => {
+        const noteId = await sharedWithReader('Secret');
+        const id = await conversation();
+        await readNote(id, noteId, 'Secret');
+
+        await loseAccess(noteId);
+
+        const rows = await repo.loadMessages(id, READER, 40);
+        expect(rows.flatMap((row) => row.sources)).toEqual([]);
+        expect(rows.map((row) => row.parts)).toEqual([
+          null,
+          [getNoteCall(noteId)],
+          [redacted(`call-${noteId}`, 'getNote')],
+          null,
+        ]);
+        expect(
+          pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => m.parts)
+        ).toEqual([
+          undefined,
+          [getNoteCall(noteId)],
+          [redacted(`call-${noteId}`, 'getNote')],
+          undefined,
+        ]);
+      }
+    );
+
+    it('leaves a note the reader can still open untouched', async () => {
+      const noteId = await sharedWithReader('Open');
+      const id = await conversation();
+      await readNote(id, noteId, 'Open');
+
+      const rows = await repo.loadMessages(id, READER, 40);
+
+      expect(rows.map((row) => row.parts)).toEqual([
+        null,
+        [getNoteCall(noteId)],
+        [getNoteResult(noteId, 'Open')],
+        null,
+      ]);
+      expect(rows.flatMap((row) => row.sources)).toEqual([
+        { id: noteId, title: 'Open' },
+      ]);
+      expect(await transcriptSources(id)).toEqual([
+        { id: noteId, title: 'Open' },
+      ]);
+    });
+
+    it('treats an id that is not a uuid as a note the reader cannot open', async () => {
+      const id = await conversation();
+      await readNote(id, 'not-a-uuid', 'Bogus');
+
+      const rows = await repo.loadMessages(id, READER, 40);
+
+      expect(rows.flatMap((row) => row.sources)).toEqual([]);
+      expect(rows[2].parts).toEqual([redacted('call-not-a-uuid', 'getNote')]);
+      expect(await transcriptSources(id)).toEqual([]);
+    });
+
+    it('redacts only the search result that lists a note the reader lost', async () => {
+      const kept = await noteBy(READER, 'Kept');
+      const lost = await sharedWithReader('Lost');
+      const id = await conversation();
+      const search = (toolCallId: string, hits: AgentSource[]) => ({
+        call: {
+          type: 'tool-call',
+          toolCallId,
+          toolName: 'searchNotes',
+          input: { query: 'plans' },
+        } satisfies AgentMessagePart,
+        result: {
+          type: 'tool-result',
+          toolCallId,
+          toolName: 'searchNotes',
+          output: { hits },
+          outputType: 'json',
+        } satisfies AgentMessagePart,
+      });
+      const onlyKept = search('s1', [{ id: kept, title: 'Kept' }]);
+      const both = search('s2', [
+        { id: kept, title: 'Kept' },
+        { id: lost, title: 'Lost' },
+      ]);
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'find my plans' },
+          {
+            role: 'assistant',
+            content: '',
+            parts: [onlyKept.call, both.call],
+          },
+          { role: 'tool', content: '', parts: [onlyKept.result, both.result] },
+          { role: 'assistant', content: 'Two notes', stopReason: 'completed' },
+        ],
+      });
+
+      await revokeShare(lost);
+
+      const rows = await repo.loadMessages(id, READER, 40);
+      expect(rows[2].parts).toEqual([
+        onlyKept.result,
+        redacted('s2', 'searchNotes'),
+      ]);
+    });
+
+    it('redacts the result of a proposal made against a note the reader lost', async () => {
+      const noteId = await sharedWithReader('Plan');
+      const id = await conversation();
+      const call: AgentMessagePart = {
+        type: 'tool-call',
+        toolCallId: 'p1',
+        toolName: 'proposeEditNote',
+        input: { noteId, appendMarkdown: 'more' },
+      };
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'add more' },
+          { role: 'assistant', content: '', parts: [call] },
+          {
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: 'p1',
+                toolName: 'proposeEditNote',
+                output: { ok: true, proposalId: 'x', summary: 'Edit Plan' },
+                outputType: 'json',
+              },
+            ],
+          },
+          { role: 'assistant', content: 'Proposed', stopReason: 'completed' },
+        ],
+      });
+
+      await trash(noteId);
+
+      const rows = await repo.loadMessages(id, READER, 40);
+      expect(rows[1].parts).toEqual([call]);
+      expect(rows[2].parts).toEqual([redacted('p1', 'proposeEditNote')]);
     });
   });
 });

@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -82,6 +83,9 @@ export const conversationMessages = pgTable(
       table.conversationId,
       table.seq
     ),
+    uniqueIndex('conversation_messages_turn_user_uniq')
+      .on(table.conversationId, table.turnId)
+      .where(sql`${table.role} = 'user' AND ${table.turnId} IS NOT NULL`),
     check(
       'conversation_messages_stop_reason_check',
       sql`${table.stopReason} IS NULL OR ${table.stopReason} IN (${sql.raw(

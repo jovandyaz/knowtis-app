@@ -4518,7 +4518,11 @@ describe('RunAgentTurnHandler', () => {
         }
       );
 
-      expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40);
+      expect(conversations.loadMessages).toHaveBeenCalledWith(
+        'conv-1',
+        USER,
+        40
+      );
     });
 
     it('replays tool activity on the resume path too', async () => {
@@ -4534,7 +4538,11 @@ describe('RunAgentTurnHandler', () => {
         { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
       );
 
-      expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40);
+      expect(conversations.loadMessages).toHaveBeenCalledWith(
+        'conv-1',
+        USER,
+        40
+      );
       const sent = runInput(orchestrator).messages ?? [];
       expect(sent.map((m) => m.role)).toEqual([
         'user',

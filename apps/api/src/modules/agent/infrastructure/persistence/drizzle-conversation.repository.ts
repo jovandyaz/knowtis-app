@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  inArray,
   isNotNull,
   ne,
   or,
@@ -26,6 +27,7 @@ import {
   type Database,
 } from '../../../../database';
 import { readableNoteCondition } from '../../../notes/infrastructure/persistence/readable-note.condition';
+import type { AgentSource } from '../../domain/agent-event';
 import {
   AGENT_MESSAGE_PARTS_VERSION,
   TOOL_OUTPUT_TYPE,
@@ -39,6 +41,10 @@ import type {
   CreateConversationInput,
   LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
+import {
+  noteIdsInToolResults,
+  redactUnreadableToolResults,
+} from '../../domain/tool-result-notes';
 import { alignTranscriptWindow } from '../../domain/transcript-window';
 
 const agentMessagePartSchema = z.discriminatedUnion('type', [
@@ -64,6 +70,28 @@ const persistedPartsSchema = z.object({
 });
 
 const HAS_MESSAGES = sql`EXISTS (SELECT 1 FROM ${conversationMessages} WHERE ${conversationMessages.conversationId} = ${conversations.id})`;
+
+// A stored id that is not a uuid names no note, and casting one would fail the whole load.
+const UUID_TEXT_PATTERN =
+  '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+const UUID_TEXT = new RegExp(UUID_TEXT_PATTERN);
+
+const TURN_USER_ROW = sql`${conversationMessages.role} = 'user' AND ${conversationMessages.turnId} IS NOT NULL`;
+
+function readableSources(userId: string): SQL<AgentSource[]> {
+  return sql<AgentSource[]>`(
+    SELECT coalesce(
+      jsonb_agg(jsonb_build_object('id', ${notes.id}, 'title', ${notes.title}) ORDER BY source.ordinal),
+      '[]'::jsonb
+    )
+    FROM jsonb_array_elements(coalesce(${conversationMessages.sources}, '[]'::jsonb))
+      WITH ORDINALITY AS source(entry, ordinal)
+    JOIN ${notes} ON ${notes.id} = CASE
+      WHEN source.entry ->> 'id' ~ ${UUID_TEXT_PATTERN} THEN (source.entry ->> 'id')::uuid
+    END
+    WHERE ${readableNoteCondition(userId)}
+  )`;
+}
 
 const DISPLAYED_ROW = and(
   ne(conversationMessages.role, 'tool'),
@@ -143,15 +171,16 @@ export class DrizzleConversationRepository implements ConversationRepository {
 
   async loadMessages(
     conversationId: string,
+    userId: string,
     limit: number,
     options: LoadMessagesOptions = {}
   ): Promise<ConversationMessageRow[]> {
     const scope = eq(conversationMessages.conversationId, conversationId);
-    const rows = await this.db
+    const newestFirst = await this.db
       .select({
         role: conversationMessages.role,
         content: conversationMessages.content,
-        sources: conversationMessages.sources,
+        sources: readableSources(userId),
         parts: conversationMessages.parts,
         stopReason: conversationMessages.stopReason,
         turnId: conversationMessages.turnId,
@@ -168,14 +197,34 @@ export class DrizzleConversationRepository implements ConversationRepository {
       )
       .orderBy(desc(conversationMessages.seq))
       .limit(limit);
-    return rows.reverse().map((r) => ({
+    const rows = newestFirst.reverse().map((r) => ({
       role: r.role,
       content: r.content,
-      sources: r.sources ?? [],
+      sources: r.sources,
       parts: this.partsOf(r.parts, conversationId),
       stopReason: r.stopReason ?? null,
       turnId: r.turnId ?? null,
     }));
+    const readable = await this.readableNoteIds(
+      noteIdsInToolResults(rows),
+      userId
+    );
+    return redactUnreadableToolResults(rows, readable);
+  }
+
+  private async readableNoteIds(
+    noteIds: readonly string[],
+    userId: string
+  ): Promise<ReadonlySet<string>> {
+    const candidates = noteIds.filter((id) => UUID_TEXT.test(id));
+    if (candidates.length === 0) {
+      return new Set();
+    }
+    const readable = await this.db
+      .select({ id: notes.id })
+      .from(notes)
+      .where(and(inArray(notes.id, candidates), readableNoteCondition(userId)));
+    return new Set(readable.map((note) => note.id));
   }
 
   private partsOf(
@@ -213,8 +262,34 @@ export class DrizzleConversationRepository implements ConversationRepository {
         : null,
       stopReason: m.stopReason ?? null,
     }));
+    const [first, ...rest] = values;
+    const claimsTurn = first.role === 'user';
     await this.db.transaction(async (tx) => {
-      await tx.insert(conversationMessages).values(values);
+      if (claimsTurn) {
+        const claimed = await tx
+          .insert(conversationMessages)
+          .values(first)
+          .onConflictDoNothing({
+            target: [
+              conversationMessages.conversationId,
+              conversationMessages.turnId,
+            ],
+            where: TURN_USER_ROW,
+          })
+          .returning({ id: conversationMessages.id });
+        if (claimed.length === 0) {
+          this.logger.warn({
+            event: 'agent.turn.duplicate_persist',
+            conversationId: input.conversationId,
+            turnId: input.turnId,
+          });
+          return;
+        }
+      }
+      const unclaimed = claimsTurn ? rest : values;
+      if (unclaimed.length > 0) {
+        await tx.insert(conversationMessages).values(unclaimed);
+      }
       await tx
         .update(conversations)
         .set({ updatedAt: sql`now()` })
@@ -317,7 +392,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
       .select({
         role: conversationMessages.role,
         content: conversationMessages.content,
-        sources: conversationMessages.sources,
+        sources: readableSources(userId),
         stopReason: conversationMessages.stopReason,
         turnId: conversationMessages.turnId,
       })
@@ -346,7 +421,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
                 turnId: row.turnId ?? null,
                 role: row.role,
                 content: row.content,
-                sources: row.sources ?? [],
+                sources: row.sources,
                 stopReason: row.stopReason ?? null,
               },
             ]

@@ -241,8 +241,10 @@ export class RunAgentTurnHandler {
     if (conversation.created) {
       callbacks.onConversation?.(conversationId);
     }
-    const { history, knownNotes } =
-      await this.loadConversationContext(conversationId);
+    const { history, knownNotes } = await this.loadConversationContext(
+      conversationId,
+      input.userId
+    );
     const messages = history;
     const userMemories = await this.loadUserMemories(
       input.userId,
@@ -342,10 +344,15 @@ export class RunAgentTurnHandler {
   }
 
   private async loadConversationContext(
-    conversationId: string
+    conversationId: string,
+    userId: string
   ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
-    const rows = await this.conversations.loadMessages(conversationId, limit);
+    const rows = await this.conversations.loadMessages(
+      conversationId,
+      userId,
+      limit
+    );
     const history = pruneTranscript(rows, {
       keepToolTurns: AGENT_HISTORY_TOOL_TURNS,
     });
@@ -455,7 +462,8 @@ export class RunAgentTurnHandler {
         return;
       }
       const { history, knownNotes } = await this.loadConversationContext(
-        input.conversationId
+        input.conversationId,
+        input.userId
       );
       // A resume carries a tool-confirmation outcome, not the user's words, so
       // memory retrieval embeds the last real user message instead.

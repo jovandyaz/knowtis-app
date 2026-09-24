@@ -53,13 +53,21 @@ export interface ConversationRepository {
     userId: string,
     model: string
   ): Promise<void>;
-  /** Oldest→newest, last `limit` rows. */
+  /**
+   * Oldest→newest, last `limit` rows, as `userId` may read them now: sources keep only the notes
+   * they can still open, under each note's current title, and a tool result that involves any other
+   * note is replaced by `NOTE_UNAVAILABLE_OUTPUT`.
+   */
   loadMessages(
     conversationId: string,
+    userId: string,
     limit: number,
     options?: LoadMessagesOptions
   ): Promise<ConversationMessageRow[]>;
-  /** Single transaction: appends every row of the turn and bumps `conversations.updatedAt`. */
+  /**
+   * Single transaction: appends every row of the turn and bumps `conversations.updatedAt`.
+   * A turn whose user row is already stored is left as it is, so a replayed turn is never stored twice.
+   */
   appendTurn(input: AppendTurnInput): Promise<void>;
   findExtractable(
     quietSeconds: number,
@@ -70,6 +78,7 @@ export interface ConversationRepository {
     userId: string,
     page: { offset: number; limit: number }
   ): Promise<{ items: ConversationSummary[]; total: number }>;
+  /** Sources keep only the notes `userId` can still open, under each note's current title. */
   loadTranscriptForUser(
     conversationId: string,
     userId: string,

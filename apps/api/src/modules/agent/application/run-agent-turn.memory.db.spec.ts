@@ -241,6 +241,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       message: 'Conversation not found',
     });
     expect(onDone).not.toHaveBeenCalled();
-    expect(await repo.loadMessages(foreign.id, 10)).toEqual([]);
+    expect(await repo.loadMessages(foreign.id, OTHER, 10)).toEqual([]);
   });
 });
