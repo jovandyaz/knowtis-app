@@ -16,6 +16,7 @@ const KEY_PREFIX = 'agent:proposal:';
 
 interface SerializedRecord {
   userId: string;
+  turnId: string;
   conversationId?: string;
   mutation: {
     id: string;
@@ -52,6 +53,7 @@ return v
   async save(record: PendingMutationRecord): Promise<void> {
     const serialized: SerializedRecord = {
       userId: record.userId,
+      turnId: record.turnId,
       ...(record.conversationId && { conversationId: record.conversationId }),
       mutation: {
         id: record.mutation.id,
@@ -96,12 +98,16 @@ return v
       );
       return null;
     }
+    if (typeof parsed.turnId !== 'string') {
+      return null;
+    }
     const rebuilt = ProposedMutation.create(parsed.mutation);
     if (rebuilt.isErr()) {
       return null;
     }
     return {
       userId: parsed.userId,
+      turnId: parsed.turnId,
       ...(parsed.conversationId && { conversationId: parsed.conversationId }),
       mutation: rebuilt.value,
     };

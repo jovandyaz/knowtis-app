@@ -13,6 +13,8 @@ import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
+import { TurnClaimService } from './infrastructure/turn-claim/turn-claim.service';
+import { createInMemoryClaimRedis } from './testing/create-in-memory-claim-redis';
 
 const JWT_SECRET = 'agent-gateway-ack-spec';
 const HOST = '127.0.0.1';
@@ -38,6 +40,10 @@ describe('AgentGateway acknowledgements over socket.io', () => {
         { provide: RunAgentTurnHandler, useValue: { execute } },
         { provide: ApproveMutationHandler, useValue: { execute: vi.fn() } },
         { provide: RejectMutationHandler, useValue: { execute: vi.fn() } },
+        {
+          provide: TurnClaimService,
+          useValue: new TurnClaimService(createInMemoryClaimRedis().provider),
+        },
         { provide: JwtService, useValue: jwtService },
         {
           provide: FeatureFlagsService,

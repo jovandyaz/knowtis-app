@@ -6,6 +6,8 @@ import { NoteErrors } from '../../notes/domain/errors/note.errors';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { ApproveMutationHandler } from './approve-mutation.handler';
 
+const TURN = '55555555-5555-4555-8555-555555555555';
+
 function createProposal() {
   const r = ProposedMutation.create({
     id: 'p1',
@@ -53,6 +55,7 @@ function deps(over: Record<string, unknown> = {}) {
     store: {
       take: vi.fn().mockResolvedValue({
         userId: 'u1',
+        turnId: TURN,
         mutation: createProposal(),
       }),
       save: vi.fn(),
@@ -103,6 +106,14 @@ describe('ApproveMutationHandler', () => {
       content: '<p>x</p>',
       ownerId: 'u1',
     });
+  });
+
+  it('returns the turn that proposed the change, so the resume continues it', async () => {
+    const d = deps();
+
+    const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
+
+    expect(r.isOk() && r.value.turnId).toBe(TURN);
   });
 
   it('fails when the proposal is missing/expired', async () => {

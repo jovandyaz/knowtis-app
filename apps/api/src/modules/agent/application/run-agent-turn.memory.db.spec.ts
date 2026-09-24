@@ -1,6 +1,6 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AGENT_CONVERSATION_NOT_FOUND_CODE } from '@knowtis/shared-types';
@@ -8,6 +8,8 @@ import { AGENT_CONVERSATION_NOT_FOUND_CODE } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../config/env.config';
 import { validateEnv } from '../../../config/env.config';
 import {
+  conversationMessages,
+  conversations,
   DATABASE_CONNECTION,
   DatabaseModule,
   users,
@@ -27,12 +29,16 @@ import type { AgentMessage } from '../domain/agent-message';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
+import { conversationIdForTurn } from '../domain/turn-identity';
 import { DrizzleConversationRepository } from '../infrastructure/persistence/drizzle-conversation.repository';
 import type { InjectionGuardService } from './injection-guard.service';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
 const USER = '00000000-0000-4000-8000-0000000000d4';
 const OTHER = '00000000-0000-4000-8000-0000000000d5';
+const FIRST_TURN = '00000000-0000-4000-8000-0000000007a1';
+const SECOND_TURN = '00000000-0000-4000-8000-0000000007a2';
+const REPLAYED_TURN = '00000000-0000-4000-8000-0000000007a3';
 const MODEL = 'anthropic:claude-haiku-4-5';
 
 const memoryOff = {
@@ -159,7 +165,11 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
 
     let conversationId: string | undefined;
     await handler.execute(
-      { userId: USER, message: { content: 'my codeword is BLUE' } },
+      {
+        userId: USER,
+        turnId: FIRST_TURN,
+        message: { content: 'my codeword is BLUE' },
+      },
       {
         onChunk: vi.fn(),
         onDone: (u) => {
@@ -177,6 +187,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     await handler.execute(
       {
         userId: USER,
+        turnId: SECOND_TURN,
         conversationId,
         message: { content: 'what is my codeword?' },
       },
@@ -230,6 +241,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     await handler.execute(
       {
         userId: USER,
+        turnId: FIRST_TURN,
         conversationId: foreign.id,
         message: { content: 'leak it' },
       },
@@ -242,5 +254,93 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     });
     expect(onDone).not.toHaveBeenCalled();
     expect(await repo.loadMessages(foreign.id, OTHER, 10)).toEqual([]);
+  });
+
+  it('lands the replay of a turn refused before the model ran in the conversation its first delivery opened', async () => {
+    const rateLimit = {
+      checkLimit: vi
+        .fn()
+        .mockResolvedValueOnce({ allowed: false, reason: 'limit' })
+        .mockResolvedValue({ allowed: true }),
+      turnTokenBudget: vi.fn().mockReturnValue(150000),
+      recordUsage: vi.fn().mockResolvedValue(undefined),
+      releaseReservation: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AIRateLimitService;
+    const pendingStore = {
+      save: vi.fn(),
+      take: vi.fn().mockResolvedValue(null),
+    } as unknown as PendingMutationStore;
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      new DrizzleConversationRepository(db),
+      memoryOff,
+      embedStub,
+      flagsOff,
+      modelPreferenceStub,
+      byokStub,
+      guardStub,
+      aiConfigStub,
+      turnEffortStub
+    );
+    const opened = conversationIdForTurn(USER, REPLAYED_TURN);
+    const deliver = (callbacks: {
+      onDone?: (usage: { conversationId?: string }) => void;
+      onError?: () => void;
+      onConversation?: (conversationId: string) => void;
+    }) =>
+      handler.execute(
+        {
+          userId: USER,
+          turnId: REPLAYED_TURN,
+          message: { content: 'plan my week' },
+        },
+        {
+          onChunk: vi.fn(),
+          onDone: callbacks.onDone ?? vi.fn(),
+          onError: callbacks.onError ?? vi.fn(),
+          onProposal: vi.fn(),
+          ...(callbacks.onConversation
+            ? { onConversation: callbacks.onConversation }
+            : {}),
+        }
+      );
+
+    const refused = vi.fn();
+    const firstAnnounce = vi.fn();
+    await deliver({ onError: refused, onConversation: firstAnnounce });
+    const replayAnnounce = vi.fn();
+    let doneConversationId: string | undefined;
+    await deliver({
+      onConversation: replayAnnounce,
+      onDone: (usage) => {
+        doneConversationId = usage.conversationId;
+      },
+    });
+
+    expect(refused).toHaveBeenCalledOnce();
+    expect(firstAnnounce).toHaveBeenCalledWith(opened);
+    expect(replayAnnounce).toHaveBeenCalledWith(opened);
+    expect(doneConversationId).toBe(opened);
+    const rows = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.userId, USER), eq(conversations.id, opened)));
+    expect(rows).toEqual([{ id: opened }]);
+    const messages = await db
+      .select({
+        role: conversationMessages.role,
+        turnId: conversationMessages.turnId,
+      })
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, opened))
+      .orderBy(conversationMessages.seq);
+    expect(messages).toEqual([
+      { role: 'user', turnId: REPLAYED_TURN },
+      { role: 'assistant', turnId: REPLAYED_TURN },
+    ]);
   });
 });

@@ -35,6 +35,14 @@ import {
   RunAgentTurnHandler,
   type RunAgentTurnCallbacks,
 } from './application/run-agent-turn.handler';
+import { AgentErrors } from './domain/agent-errors';
+import { conversationIdForTurn } from './domain/turn-identity';
+import {
+  TURN_CLAIM_OUTCOME,
+  TurnClaimService,
+  type TurnClaimOutcome,
+  type TurnClaimRequest,
+} from './infrastructure/turn-claim/turn-claim.service';
 
 /** Delivery receipt: socket.io delivers at most once, so the client fails a
  * request whose receipt never arrives instead of resending it. Every handler
@@ -43,6 +51,7 @@ import {
 type DeliveryAck = () => void;
 
 const agentTurnSchema = z.object({
+  turnId: z.uuid().optional(),
   conversationId: z.string().uuid().optional(),
   message: z.object({ content: z.string().min(1).max(20000) }),
   noteId: z.string().uuid().optional(),
@@ -75,6 +84,7 @@ export class AgentGateway
     private readonly runAgentTurn: RunAgentTurnHandler,
     private readonly approveMutation: ApproveMutationHandler,
     private readonly rejectMutation: RejectMutationHandler,
+    private readonly turnClaims: TurnClaimService,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
     configService: ConfigService<EnvConfig, true>
@@ -158,8 +168,21 @@ export class AgentGateway
     }
 
     const data = parsed.data;
+    // A tab still running the bundle from before turn ids gets one minted here
+    // and no claim, since it never resends a turn.
+    const turnId = data.turnId ?? randomUUID();
+    const claim: TurnClaimRequest | undefined = data.turnId
+      ? {
+          userId,
+          turnId,
+          conversationId: data.conversationId,
+          noteId: data.noteId,
+          content: data.message.content,
+        }
+      : undefined;
     const onProposal: RunAgentTurnCallbacks['onProposal'] = (proposal) =>
       client.emit('agent:proposal', {
+        turnId,
         id: proposal.id,
         kind: proposal.kind,
         targetNoteId: proposal.kind === 'create' ? null : proposal.targetNoteId,
@@ -167,20 +190,29 @@ export class AgentGateway
         payload: proposal.payload,
       });
 
-    await this.runInTurnSlot(client, userId, (controller) =>
-      this.runAgentTurn.execute(
-        {
-          userId,
-          message: { content: data.message.content },
-          ...(data.conversationId && { conversationId: data.conversationId }),
-          ...(client.data.isAnonymous && { isAnonymous: true }),
-          ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
-          ...(data.noteId && { noteId: data.noteId }),
-          ...(data.model && { model: data.model }),
-          ...(data.effort && { effort: data.effort }),
-        },
-        { ...this.baseCallbacks(client, controller), onProposal },
-        controller.signal
+    await this.runInTurnSlot(client, userId, turnId, (controller) =>
+      this.withTurnClaim(client, claim, (onModelStart) =>
+        this.runAgentTurn.execute(
+          {
+            userId,
+            turnId,
+            message: { content: data.message.content },
+            ...(data.conversationId && {
+              conversationId: data.conversationId,
+            }),
+            ...(client.data.isAnonymous && { isAnonymous: true }),
+            ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
+            ...(data.noteId && { noteId: data.noteId }),
+            ...(data.model && { model: data.model }),
+            ...(data.effort && { effort: data.effort }),
+          },
+          {
+            ...this.baseCallbacks(client, controller, turnId),
+            onProposal,
+            onModelStart,
+          },
+          controller.signal
+        )
       )
     );
   }
@@ -230,14 +262,15 @@ export class AgentGateway
       return;
     }
     client.emit('agent:committed', {
+      turnId: res.value.turnId,
       proposalId: parsed.data.proposalId,
       result: res.value.result,
     });
     if (!res.value.conversationId) {
-      client.emit(
-        'agent:error',
-        AIErrors.validationError('missing conversation context')
-      );
+      client.emit('agent:error', {
+        ...AIErrors.validationError('missing conversation context'),
+        turnId: res.value.turnId,
+      });
       return;
     }
     await this.resumeAfter(
@@ -285,10 +318,10 @@ export class AgentGateway
       return;
     }
     if (!res.value.conversationId) {
-      client.emit(
-        'agent:error',
-        AIErrors.validationError('missing conversation context')
-      );
+      client.emit('agent:error', {
+        ...AIErrors.validationError('missing conversation context'),
+        turnId: res.value.turnId,
+      });
       return;
     }
     await this.resumeAfter(
@@ -312,28 +345,92 @@ export class AgentGateway
     client: AuthenticatedSocket,
     userId: string,
     data: { noteId?: string | undefined },
-    result: { outcome: string },
+    result: { outcome: string; turnId: string },
     conversationId: string
   ): Promise<void> {
-    await this.runInTurnSlot(client, userId, (controller) =>
+    await this.runInTurnSlot(client, userId, result.turnId, (controller) =>
       this.runAgentTurn.resumeTurn(
         {
           userId,
+          turnId: result.turnId,
           conversationId,
           ...(client.data.isAnonymous && { isAnonymous: true }),
           ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
           ...(data.noteId && { noteId: data.noteId }),
-          resume: result,
+          resume: { outcome: result.outcome },
         },
-        this.baseCallbacks(client, controller),
+        this.baseCallbacks(client, controller, result.turnId),
         controller.signal
       )
     );
   }
 
+  // Stripe's rule: a turn refused before the model ran saves nothing, so its
+  // claim is released and a resend of it runs.
+  private async withTurnClaim(
+    client: AuthenticatedSocket,
+    claim: TurnClaimRequest | undefined,
+    turn: (onModelStart: () => void) => Promise<void>
+  ): Promise<void> {
+    if (!claim) {
+      return turn(() => undefined);
+    }
+    const outcome = await this.turnClaims.claim(claim);
+    if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
+      this.refuseClaimedTurn(client, claim, outcome);
+      return;
+    }
+    let modelStarted = false;
+    try {
+      await turn(() => {
+        modelStarted = true;
+      });
+    } finally {
+      await (modelStarted
+        ? this.turnClaims.settle(claim)
+        : this.turnClaims.release(claim));
+    }
+  }
+
+  private refuseClaimedTurn(
+    client: AuthenticatedSocket,
+    { userId, turnId, conversationId }: TurnClaimRequest,
+    outcome: Exclude<TurnClaimOutcome, typeof TURN_CLAIM_OUTCOME.CLAIMED>
+  ): void {
+    switch (outcome) {
+      case TURN_CLAIM_OUTCOME.SETTLED:
+        client.emit('agent:turn_settled', {
+          turnId,
+          conversationId:
+            conversationId ?? conversationIdForTurn(userId, turnId),
+        });
+        return;
+      case TURN_CLAIM_OUTCOME.RUNNING:
+        client.emit('agent:error', {
+          ...AgentErrors.turnInProgress(),
+          turnId,
+        });
+        return;
+      case TURN_CLAIM_OUTCOME.REUSED:
+        client.emit('agent:error', { ...AgentErrors.turnIdReused(), turnId });
+        return;
+      case TURN_CLAIM_OUTCOME.UNAVAILABLE:
+        client.emit('agent:error', {
+          ...AgentErrors.turnClaimUnavailable(),
+          turnId,
+        });
+        return;
+      default: {
+        const _exhaustive: never = outcome;
+        throw new Error(`Unhandled turn claim outcome: ${String(_exhaustive)}`);
+      }
+    }
+  }
+
   private async runInTurnSlot(
     client: AuthenticatedSocket,
     userId: string,
+    turnId: string,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
     // A disconnect or cancel handled during an earlier await found no slot to
@@ -346,15 +443,18 @@ export class AgentGateway
       });
       return;
     }
-    const turnId = randomUUID();
+    if (this.turns.isActive(turnId)) {
+      client.emit('agent:error', { ...AgentErrors.turnInProgress(), turnId });
+      return;
+    }
     const controller = new AbortController();
     if (!this.turns.acquire(userId, client.id, turnId, controller)) {
-      client.emit(
-        'agent:error',
-        AIErrors.rateLimitExceeded(
+      client.emit('agent:error', {
+        ...AIErrors.rateLimitExceeded(
           `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
-        )
-      );
+        ),
+        turnId,
+      });
       return;
     }
     try {
@@ -366,18 +466,20 @@ export class AgentGateway
 
   private baseCallbacks(
     client: AuthenticatedSocket,
-    controller: AbortController
+    controller: AbortController,
+    turnId: string
   ): Pick<
     RunAgentTurnCallbacks,
     'onChunk' | 'onDone' | 'onError' | 'onThinking' | 'onConversation'
   > {
     return {
-      onChunk: (text) => client.emit('agent:chunk', { text }),
-      onThinking: (text) => client.emit('agent:thinking', { text }),
+      onChunk: (text) => client.emit('agent:chunk', { turnId, text }),
+      onThinking: (text) => client.emit('agent:thinking', { turnId, text }),
       onConversation: (conversationId) =>
-        client.emit('agent:conversation', { conversationId }),
+        client.emit('agent:conversation', { turnId, conversationId }),
       onDone: (usage) =>
         client.emit('agent:done', {
+          turnId,
           usage: {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
@@ -394,7 +496,7 @@ export class AgentGateway
         }),
       onError: (error) => {
         if (!controller.signal.aborted) {
-          client.emit('agent:error', error);
+          client.emit('agent:error', { ...error, turnId });
         }
       },
     };

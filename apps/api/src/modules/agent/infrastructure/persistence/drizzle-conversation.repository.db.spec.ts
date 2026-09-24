@@ -111,6 +111,18 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(rows[1].content).toBe('Noted: BLUE');
   });
 
+  it('creates a conversation under the id it is given', async () => {
+    const given = '00000000-0000-4000-8000-0000000007a4';
+
+    const { id } = await repo.create({ id: given, userId: USER, title: 't' });
+
+    expect(id).toBe(given);
+    expect(await repo.findByIdForUser(given, USER)).toEqual({
+      id: given,
+      model: null,
+    });
+  });
+
   it('orders the user row before the assistant row within one turn', async () => {
     const noteId = await ownNote('N1');
     const { id } = await repo.create({ userId: USER, title: 't' });

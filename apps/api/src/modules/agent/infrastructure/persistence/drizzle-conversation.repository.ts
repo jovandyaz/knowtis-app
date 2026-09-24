@@ -120,6 +120,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
     const [row] = await this.db
       .insert(conversations)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         userId: input.userId,
         noteId: input.noteId
           ? this.readableNoteId(input.noteId, input.userId)

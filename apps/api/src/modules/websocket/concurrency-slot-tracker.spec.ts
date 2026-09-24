@@ -72,4 +72,15 @@ describe('ConcurrencySlotTracker', () => {
     expect(tracker.hasActiveSlots('c1')).toBe(true);
     expect(tracker.hasActiveSlots('c2')).toBe(false);
   });
+
+  it('reports whether a slot id is held', () => {
+    const tracker = new ConcurrencySlotTracker(2);
+    expect(tracker.isActive('s1')).toBe(false);
+
+    tracker.acquire('u1', 'c1', 's1', new AbortController());
+    expect(tracker.isActive('s1')).toBe(true);
+
+    tracker.release('u1', 'c1', 's1');
+    expect(tracker.isActive('s1')).toBe(false);
+  });
 });

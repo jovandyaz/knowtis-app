@@ -40,6 +40,7 @@ import {
 import { NoteMutateToolGroup } from './infrastructure/tools/note-mutate.tool-group';
 import { NoteReadToolGroup } from './infrastructure/tools/note-read.tool-group';
 import { WebToolGroup } from './infrastructure/tools/web.tool-group';
+import { TurnClaimService } from './infrastructure/turn-claim/turn-claim.service';
 import { MemoryController } from './memory.controller';
 
 @Module({
@@ -91,6 +92,7 @@ import { MemoryController } from './memory.controller';
     ApproveMutationHandler,
     RejectMutationHandler,
     RunAgentTurnHandler,
+    TurnClaimService,
     AgentGateway,
   ],
   exports: [RETRIEVAL_PORT],

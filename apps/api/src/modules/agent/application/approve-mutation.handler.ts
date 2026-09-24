@@ -27,9 +27,13 @@ export interface ApproveMutationInput {
   readonly userId: string;
 }
 
-export interface ApproveMutationOutput {
+interface CommitOutcome {
   readonly result: AgentCommitResult;
   readonly outcome: string;
+}
+
+export interface ApproveMutationOutput extends CommitOutcome {
+  readonly turnId: string;
   readonly conversationId?: string;
 }
 
@@ -55,22 +59,24 @@ export class ApproveMutationHandler {
       return err(AgentErrors.proposalExpired());
     }
     const m = record.mutation;
-    const withConversation = (
-      res: Result<ApproveMutationOutput, AgentDomainError>
+    const withTurn = (
+      res: Result<CommitOutcome, AgentDomainError>
     ): Result<ApproveMutationOutput, AgentDomainError> =>
-      res.map((out) =>
-        record.conversationId
-          ? { ...out, conversationId: record.conversationId }
-          : out
-      );
+      res.map((out) => ({
+        ...out,
+        turnId: record.turnId,
+        ...(record.conversationId
+          ? { conversationId: record.conversationId }
+          : {}),
+      }));
 
     switch (m.kind) {
       case 'create':
-        return withConversation(await this.commitCreate(input.userId, m));
+        return withTurn(await this.commitCreate(input.userId, m));
       case 'update':
-        return withConversation(await this.commitUpdate(input.userId, m));
+        return withTurn(await this.commitUpdate(input.userId, m));
       case 'share':
-        return withConversation(await this.commitShare(input.userId, m));
+        return withTurn(await this.commitShare(input.userId, m));
       default: {
         const _exhaustive: never = m;
         return err(
@@ -98,7 +104,7 @@ export class ApproveMutationHandler {
   private async commitCreate(
     userId: string,
     m: CreateProposedMutation
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     if (!this.canCreate(userId)) {
       return err(AgentErrors.permissionDenied());
     }
@@ -120,7 +126,7 @@ export class ApproveMutationHandler {
   private async commitUpdate(
     userId: string,
     m: UpdateProposedMutation
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     const note = await this.noteRepo.findById(m.targetNoteId);
     if (!note) {
       return err(AgentErrors.noteNotFound(m.targetNoteId));
@@ -152,7 +158,7 @@ export class ApproveMutationHandler {
   private async commitShare(
     userId: string,
     m: ShareProposedMutation
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     const res = await this.shareHandler.execute({
       noteId: m.targetNoteId,
       userId,

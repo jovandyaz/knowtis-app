@@ -215,6 +215,7 @@ export {
 
 export {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_TURN_ERROR_CODE,
   CONVERSATION_TITLE_MAX,
   deriveConversationTitle,
   isValidConversationTitle,

@@ -17,6 +17,8 @@ export interface ConversationMessageRow {
 }
 
 export interface CreateConversationInput {
+  /** Omitted, the database generates one. */
+  readonly id?: string;
   readonly userId: string;
   readonly noteId?: string;
   readonly title: string | null;

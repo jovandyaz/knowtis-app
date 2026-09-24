@@ -2,6 +2,8 @@ import type { ProposedMutation } from '../proposed-mutation';
 
 export interface PendingMutationRecord {
   readonly userId: string;
+  /** The turn that proposed it; the turn resumed on approve or reject keeps this id. */
+  readonly turnId: string;
   readonly mutation: ProposedMutation;
   readonly conversationId?: string;
 }

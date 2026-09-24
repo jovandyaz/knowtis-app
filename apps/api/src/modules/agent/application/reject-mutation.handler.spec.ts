@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { RejectMutationHandler } from './reject-mutation.handler';
 
+const TURN = '55555555-5555-4555-8555-555555555555';
+
 function rec() {
   const r = ProposedMutation.create({
     id: 'p1',
@@ -13,7 +15,7 @@ function rec() {
   if (r.isErr()) {
     throw new Error('setup');
   }
-  return { userId: 'u1', mutation: r.value };
+  return { userId: 'u1', turnId: TURN, mutation: r.value };
 }
 
 describe('RejectMutationHandler', () => {
@@ -29,6 +31,7 @@ describe('RejectMutationHandler', () => {
     if (r.isOk()) {
       expect(r.value.outcome).toContain('declined');
       expect(r.value.outcome).toContain('too long');
+      expect(r.value.turnId).toBe(TURN);
     }
     expect(store.take).toHaveBeenCalledWith('p1', 'u1');
   });

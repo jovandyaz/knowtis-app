@@ -1,6 +1,7 @@
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_TURN_ERROR_CODE,
 } from '@knowtis/shared-types';
 
 import type { NoteContentStatus } from './retrieval';
@@ -52,6 +53,18 @@ export const AgentErrors = {
     make('AGENT_NOTE_NOT_FOUND', `Note ${noteId} not found or not accessible`),
   conversationNotFound: () =>
     make(AGENT_CONVERSATION_NOT_FOUND_CODE, CONVERSATION_NOT_FOUND_MESSAGE),
+  turnIdReused: () =>
+    make(
+      AGENT_TURN_ERROR_CODE.TURN_ID_REUSED,
+      'This turn id was already used for a different message'
+    ),
+  turnInProgress: () =>
+    make(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, 'This turn is still running'),
+  turnClaimUnavailable: () =>
+    make(
+      AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      'The turn could not be started right now; send it again'
+    ),
   targetUserNotFound: (email: string) =>
     make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
   editTextNotFound: (position: number, oldText: string) =>

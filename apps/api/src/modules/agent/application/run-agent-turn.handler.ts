@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -76,11 +74,13 @@ import {
 import type { ProposedMutation } from '../domain/proposed-mutation';
 import { pruneTranscript } from '../domain/prune-transcript';
 import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
+import { conversationIdForTurn } from '../domain/turn-identity';
 import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
 
 interface RunAgentTurnInput {
   readonly userId: string;
+  readonly turnId: string;
   readonly messages?: readonly AgentMessage[];
   readonly isAnonymous?: boolean;
   readonly clientIp?: string;
@@ -110,8 +110,10 @@ export interface RunAgentTurnCallbacks {
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
-  /** Fires once, when this turn had to create the conversation; the id must not wait for `done`. */
+  /** Fires once, when the turn named no conversation, with the one it opened; the id must not wait for `done`. */
   readonly onConversation?: (conversationId: string) => void;
+  /** Fires once, just before the model runs; a turn that ends without it was refused before any model call. */
+  readonly onModelStart?: () => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -200,7 +202,7 @@ export class RunAgentTurnHandler {
   private executePolicy(
     userId: string,
     callbacks: RunAgentTurnCallbacks,
-    conversationId?: string
+    persistence: PersistenceContext
   ): TurnLoopPolicy {
     return {
       onProposal: async (event, ctx) => {
@@ -208,8 +210,9 @@ export class RunAgentTurnHandler {
         ctx.reconciled = true;
         await this.pendingStore.save({
           userId,
+          turnId: persistence.turnId,
           mutation: event.proposal,
-          ...(conversationId ? { conversationId } : {}),
+          conversationId: persistence.conversationId,
         });
         callbacks.onProposal(event.proposal);
         return 'stop';
@@ -238,7 +241,7 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
-    if (conversation.created) {
+    if (conversation.opened) {
       callbacks.onConversation?.(conversationId);
     }
     const { history, knownNotes } = await this.loadConversationContext(
@@ -253,6 +256,7 @@ export class RunAgentTurnHandler {
     );
     const synthInput: RunAgentTurnInput = {
       userId: input.userId,
+      turnId: input.turnId,
       messages,
       message,
       ...(input.isAnonymous ? { isAnonymous: true } : {}),
@@ -264,17 +268,18 @@ export class RunAgentTurnHandler {
       ...(input.effort ? { effort: input.effort } : {}),
       conversationModel: conversation.model,
     };
+    const persistence: PersistenceContext = {
+      conversationId,
+      turnId: input.turnId,
+      userContent: message.content,
+    };
     return this.runLoop(
       synthInput,
       undefined,
       callbacks,
       signal,
-      this.executePolicy(input.userId, callbacks, conversationId),
-      {
-        conversationId,
-        turnId: randomUUID(),
-        userContent: message.content,
-      }
+      this.executePolicy(input.userId, callbacks, persistence),
+      persistence
     );
   }
 
@@ -327,20 +332,26 @@ export class RunAgentTurnHandler {
   private async resolveConversation(
     input: RunAgentTurnInput,
     message: { content: string }
-  ): Promise<{ id: string; model: string | null; created: boolean } | null> {
+  ): Promise<{ id: string; model: string | null; opened: boolean } | null> {
     if (input.conversationId) {
       const existing = await this.conversations.findByIdForUser(
         input.conversationId,
         input.userId
       );
-      return existing ? { ...existing, created: false } : null;
+      return existing ? { ...existing, opened: false } : null;
+    }
+    const id = conversationIdForTurn(input.userId, input.turnId);
+    const replayed = await this.conversations.findByIdForUser(id, input.userId);
+    if (replayed) {
+      return { ...replayed, opened: true };
     }
     const created = await this.conversations.create({
+      id,
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       title: deriveConversationTitle(message.content) || null,
     });
-    return { id: created.id, model: null, created: true };
+    return { id: created.id, model: null, opened: true };
   }
 
   private async loadConversationContext(
@@ -483,6 +494,7 @@ export class RunAgentTurnHandler {
         resume: { outcome: string };
       } = {
         userId: input.userId,
+        turnId: input.turnId,
         messages: history,
         knownNotes,
         ...(input.isAnonymous ? { isAnonymous: true } : {}),
@@ -498,7 +510,7 @@ export class RunAgentTurnHandler {
         callbacks,
         signal,
         this.resumePolicy(input.userId, callbacks),
-        { conversationId: input.conversationId, turnId: randomUUID() }
+        { conversationId: input.conversationId, turnId: input.turnId }
       );
     }
     callbacks.onError(AgentErrors.conversationNotFound());
@@ -509,7 +521,7 @@ export class RunAgentTurnHandler {
     resume: { outcome: string } | undefined,
     callbacks: Pick<
       RunAgentTurnCallbacks,
-      'onChunk' | 'onDone' | 'onError' | 'onThinking'
+      'onChunk' | 'onDone' | 'onError' | 'onThinking' | 'onModelStart'
     >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
@@ -705,6 +717,7 @@ export class RunAgentTurnHandler {
         stopReason
       );
     };
+    callbacks.onModelStart?.();
     try {
       for await (const event of this.orchestrator.run({
         userId: input.userId,
