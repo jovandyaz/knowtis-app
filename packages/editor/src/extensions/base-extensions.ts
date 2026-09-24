@@ -16,6 +16,7 @@ import type {
 import { AIBlockView } from './ai-block/AIBlockView';
 import { CodeBlockView } from './code-block/CodeBlockView';
 import { ImageView } from './image/ImageView';
+import { PastedImages, type DataImageHandler } from './image/pasted-image-html';
 import { MarkdownPaste } from './markdown-paste';
 import { MermaidBlockView } from './mermaid-block/MermaidBlockView';
 
@@ -23,6 +24,7 @@ interface BaseExtensionsOptions {
   openLinksOnClick?: boolean;
   disableHistory?: boolean;
   aiBlockProvider?: AIBlockProvider | null;
+  onDataImage?: DataImageHandler;
 }
 
 const EDITOR_NODE_CLASSES: NodeAttributeClasses = {
@@ -38,7 +40,10 @@ export function createBaseExtensions({
   openLinksOnClick = false,
   disableHistory = false,
   aiBlockProvider = null,
+  onDataImage,
 }: BaseExtensionsOptions = {}) {
+  const pastedImageOptions = onDataImage ? { onDataImage } : {};
+
   const semantic = createSemanticExtensions({
     openLinksOnClick,
     disableHistory,
@@ -95,6 +100,7 @@ export function createBaseExtensions({
       showOnlyWhenEditable: true,
       showOnlyCurrent: true,
     }),
-    MarkdownPaste,
+    PastedImages.configure(pastedImageOptions),
+    MarkdownPaste.configure(pastedImageOptions),
   ];
 }

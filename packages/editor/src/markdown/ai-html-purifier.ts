@@ -1,6 +1,6 @@
 import DOMPurify, { type Config, type DOMPurify as Purifier } from 'dompurify';
 
-import { MERMAID_BLOCK_ATTR, MERMAID_CODE_ATTR } from './mermaid-fence';
+import { MERMAID_BLOCK_ATTR, MERMAID_CODE_ATTR } from '@knowtis/editor-schema';
 
 const NOTE_TAGS = [
   'p',

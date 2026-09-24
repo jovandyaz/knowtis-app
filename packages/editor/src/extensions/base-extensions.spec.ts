@@ -8,6 +8,10 @@ import type {
   AIBlockStorage,
 } from './ai-block/ai-block-provider';
 import { createBaseExtensions } from './base-extensions';
+import {
+  PENDING_IMAGE_SCHEME,
+  type PastedImageOptions,
+} from './image/pasted-image-html';
 
 const PROVIDER: AIBlockProvider = {
   async *stream() {
@@ -42,5 +46,20 @@ describe('createBaseExtensions', () => {
 
   it('leaves the AI block without a provider when its host passes none', () => {
     expect(aiBlockStorage(createBaseExtensions())?.provider).toBeNull();
+  });
+
+  it('hands the data image hook to both the HTML and the Markdown paste paths', () => {
+    const onDataImage = () => `${PENDING_IMAGE_SCHEME}token`;
+
+    expect(
+      createBaseExtensions({ onDataImage })
+        .filter(
+          (extension) =>
+            (extension.options as PastedImageOptions).onDataImage ===
+            onDataImage
+        )
+        .map((extension) => extension.name)
+        .sort()
+    ).toEqual(['markdownPaste', 'pastedImages']);
   });
 });

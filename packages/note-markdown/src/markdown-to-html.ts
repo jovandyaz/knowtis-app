@@ -48,8 +48,8 @@ md.use(markdownItSup);
 md.use(markdownItSub);
 
 // The editor's underline mark parses only <u>, so it would drop the plugin's <ins>.
-md.renderer.rules.ins_open = () => '<u>';
-md.renderer.rules.ins_close = () => '</u>';
+md.renderer.rules['ins_open'] = () => '<u>';
+md.renderer.rules['ins_close'] = () => '</u>';
 
 type Token = ReturnType<MarkdownIt['parse']>[number];
 
@@ -214,7 +214,7 @@ function openingTokenOf(tokens: Token[], closeIdx: number): Token | undefined {
 
 // The editor reads a task item's content from its first <div>; without the
 // wrapper, a diagram inside the item would be read as that content.
-md.renderer.rules.list_item_close = (tokens, idx, options, _env, self) => {
+md.renderer.rules['list_item_close'] = (tokens, idx, options, _env, self) => {
   const close = self.renderToken(tokens, idx, options);
   return isTaskListItem(openingTokenOf(tokens, idx)) ? `</div>${close}` : close;
 };
@@ -243,9 +243,9 @@ md.renderer.rules.image = (tokens, idx) => {
 
 // The editor's image is a block, so a lone image's paragraph would split into
 // two empty ones; a tight list's hidden paragraph ends without a newline.
-md.renderer.rules.paragraph_open = (tokens, idx, options, _env, self) =>
+md.renderer.rules['paragraph_open'] = (tokens, idx, options, _env, self) =>
   isLoneImage(tokens[idx + 1]) ? '' : self.renderToken(tokens, idx, options);
-md.renderer.rules.paragraph_close = (tokens, idx, options, _env, self) => {
+md.renderer.rules['paragraph_close'] = (tokens, idx, options, _env, self) => {
   if (!isLoneImage(tokens[idx - 1])) {
     return self.renderToken(tokens, idx, options);
   }
@@ -260,7 +260,7 @@ function opensWithParagraph(tokens: Token[], itemIdx: number): boolean {
 
 // The editor's list item must open with a paragraph: given any other block
 // first, it lifts that block out of the list and leaves an empty bullet.
-md.renderer.rules.list_item_open = (tokens, idx, options, _env, self) => {
+md.renderer.rules['list_item_open'] = (tokens, idx, options, _env, self) => {
   const open = self.renderToken(tokens, idx, options);
   return opensWithParagraph(tokens, idx) ? open : `${open}${EMPTY_PARAGRAPH}`;
 };

@@ -13,7 +13,9 @@ export {
   type ImageAttributes,
 } from './image-node';
 export {
+  MERMAID_BLOCK_ATTR,
   MERMAID_BLOCK_NAME,
+  MERMAID_CODE_ATTR,
   MERMAID_VIEW_MODE,
   MermaidBlockNode,
   type MermaidViewMode,
