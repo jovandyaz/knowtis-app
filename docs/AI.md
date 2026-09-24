@@ -927,7 +927,7 @@ Custom Tiptap node extension (`aiBlock`) that renders an inline AI content gener
 | `done`      | Rendered markdown. Insert (replaces block with HTML), retry, or discard. |
 | `error`     | Error message with retry and discard buttons.                            |
 
-Inserted via slash command. The block is an atom node (non-editable content), rendered with `ReactNodeViewRenderer`. Markdown is converted to sanitized HTML via `markdown-it` + `DOMPurify` before insertion.
+Inserted via slash command. The block is an atom node (non-editable content), rendered with `ReactNodeViewRenderer`. Markdown is converted to sanitized HTML via `markdownToHtml` from `@knowtis/note-markdown` + `DOMPurify` before insertion.
 
 **Source:** the node is `AIBlockNode` in `@knowtis/editor-schema` (`packages/editor-schema/src/ai-block-node.ts`), part of `createSemanticExtensions`, so the server renders it into a note's `content`: a `div[data-ai-block]` whose generated text lives in its `content` attribute. The view is `packages/editor/src/extensions/ai-block/`, attached by `createBaseExtensions`, which takes the stream provider as `aiBlockProvider`.
 

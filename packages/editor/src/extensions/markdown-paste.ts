@@ -1,14 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import MarkdownIt from 'markdown-it';
 
-import { mermaidFence } from '../markdown/mermaid-fence';
-
-const md = new MarkdownIt('commonmark', {
-  html: false,
-  linkify: true,
-  typographer: false,
-}).use(mermaidFence);
+import { markdownToHtml } from '@knowtis/note-markdown';
 
 const MARKDOWN_INDICATORS = [
   /^#{1,6}\s/m, // headings
@@ -46,7 +39,6 @@ export const MarkdownPaste = Extension.create({
               return false;
             }
 
-            // If there's HTML content, let Tiptap handle it natively
             const html = clipboardData.getData('text/html');
             if (html) {
               return false;
@@ -58,8 +50,7 @@ export const MarkdownPaste = Extension.create({
             }
 
             event.preventDefault();
-            const rendered = md.render(text);
-            editor.commands.insertContent(rendered, {
+            editor.commands.insertContent(markdownToHtml(text), {
               parseOptions: { preserveWhitespace: false },
             });
             return true;

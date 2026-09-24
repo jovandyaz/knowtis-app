@@ -1,8 +1,10 @@
 import { Editor } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createSemanticExtensions,
+  IMAGE_NODE_NAME,
   MERMAID_BLOCK_NAME,
 } from '@knowtis/editor-schema';
 
@@ -30,14 +32,28 @@ function pastePlainText(text: string) {
   editor.view.dom.dispatchEvent(event);
 }
 
-function findNode(name: string) {
-  let found: { attrs: Record<string, unknown> } | undefined;
+function findNodes(name: string) {
+  const found: ProseMirrorNode[] = [];
   editor.state.doc.descendants((node) => {
-    if (node.type.name === name && !found) {
-      found = node;
+    if (node.type.name === name) {
+      found.push(node);
     }
   });
   return found;
+}
+
+function findNode(name: string) {
+  return findNodes(name)[0];
+}
+
+function markedTexts(markName: string) {
+  const texts: string[] = [];
+  editor.state.doc.descendants((node) => {
+    if (node.isText && node.marks.some((mark) => mark.type.name === markName)) {
+      texts.push(node.text ?? '');
+    }
+  });
+  return texts;
 }
 
 afterEach(() => {
@@ -45,14 +61,14 @@ afterEach(() => {
 });
 
 describe('MarkdownPaste', () => {
-  it('turns a pasted mermaid fence into a mermaid block node', () => {
+  it('turns a pasted mermaid fence into a mermaid block without the closing newline', () => {
     createEditor();
 
     pastePlainText('# Diagram\n\n```mermaid\ngraph TD\n  A --> B\n```\n');
 
     const mermaid = findNode(MERMAID_BLOCK_NAME);
     expect(mermaid).toBeDefined();
-    expect(mermaid?.attrs['code']).toBe('graph TD\n  A --> B\n');
+    expect(mermaid?.attrs['code']).toBe('graph TD\n  A --> B');
     expect(findNode('codeBlock')).toBeUndefined();
   });
 
@@ -65,5 +81,46 @@ describe('MarkdownPaste', () => {
     expect(codeBlock).toBeDefined();
     expect(codeBlock?.attrs['language']).toBe('ts');
     expect(findNode(MERMAID_BLOCK_NAME)).toBeUndefined();
+  });
+
+  it('turns a pasted markdown image into an image node with its src and alt', () => {
+    createEditor();
+
+    pastePlainText('# Photo\n\n![alt](https://example.com/a.png)\n');
+
+    expect(
+      findNodes(IMAGE_NODE_NAME).map((node) => [
+        node.attrs['src'],
+        node.attrs['alt'],
+      ])
+    ).toEqual([['https://example.com/a.png', 'alt']]);
+  });
+
+  it('keeps a pasted task list, table and underline', () => {
+    createEditor();
+
+    pastePlainText(
+      [
+        '# Plan',
+        '- [ ] todo\n- [x] done',
+        '| h | k |\n| - | - |\n| 1 | 2 |',
+        'an ++underlined++ word',
+      ].join('\n\n')
+    );
+
+    expect(findNodes('taskList')).toHaveLength(1);
+    expect(
+      findNodes('taskItem').map((node) => [
+        node.textContent,
+        node.attrs['checked'],
+      ])
+    ).toEqual([
+      ['todo', false],
+      ['done', true],
+    ]);
+    expect(findNodes('table').map((node) => node.textContent)).toEqual([
+      'hk12',
+    ]);
+    expect(markedTexts('underline')).toEqual(['underlined']);
   });
 });

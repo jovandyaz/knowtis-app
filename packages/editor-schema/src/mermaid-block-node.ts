@@ -1,6 +1,8 @@
 import { Node } from '@tiptap/core';
 
 export const MERMAID_BLOCK_NAME = 'mermaidBlock' as const;
+export const MERMAID_BLOCK_ATTR = 'data-mermaid-block';
+export const MERMAID_CODE_ATTR = 'data-code';
 
 export const MERMAID_VIEW_MODE = {
   CODE: 'code',
@@ -19,7 +21,7 @@ function isMermaidViewMode(value: unknown): value is MermaidViewMode {
 
 const DEFAULT_MERMAID_CODE = 'graph TD\n  A[Start] --> B[End]';
 
-const MERMAID_BLOCK_TAG = 'div[data-mermaid-block]';
+const MERMAID_BLOCK_TAG = `div[${MERMAID_BLOCK_ATTR}]`;
 
 export const MermaidBlockNode = Node.create({
   name: MERMAID_BLOCK_NAME,
@@ -33,9 +35,9 @@ export const MermaidBlockNode = Node.create({
       code: {
         default: DEFAULT_MERMAID_CODE,
         parseHTML: (element: HTMLElement) =>
-          element.getAttribute('data-code') ?? DEFAULT_MERMAID_CODE,
+          element.getAttribute(MERMAID_CODE_ATTR) ?? DEFAULT_MERMAID_CODE,
         renderHTML: (attributes: { code: string }) => ({
-          'data-code': attributes.code,
+          [MERMAID_CODE_ATTR]: attributes.code,
         }),
       },
       viewMode: {
@@ -56,6 +58,6 @@ export const MermaidBlockNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }: { HTMLAttributes: Record<string, unknown> }) {
-    return ['div', { ...HTMLAttributes, 'data-mermaid-block': '' }];
+    return ['div', { ...HTMLAttributes, [MERMAID_BLOCK_ATTR]: '' }];
   },
 });

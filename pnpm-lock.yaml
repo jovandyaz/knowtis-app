@@ -812,9 +812,6 @@ importers:
       lucide-react:
         specifier: ^0.555.0
         version: 0.555.0(react@19.2.1)
-      markdown-it:
-        specifier: ^14.1.1
-        version: 14.2.0
       mermaid:
         specifier: ^11.15.0
         version: 11.16.1
@@ -831,9 +828,6 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.31.0
         version: 3.31.0
-      '@types/markdown-it':
-        specifier: ^14.1.2
-        version: 14.1.2
       '@types/react':
         specifier: ^19.2.5
         version: 19.2.14
