@@ -23,6 +23,11 @@ const IMG_SRC_DIRECTIVE: [string, string[]] = [
   ["'self'", 'data:', 'blob:', `https://${STORED_IMAGE_HOST}`],
 ];
 
+const UPGRADE_INSECURE_REQUESTS_DIRECTIVE: [string, string[]] = [
+  'upgrade-insecure-requests',
+  [],
+];
+
 const EXPECTED_REPORT_ONLY_CSP_DIRECTIVES: [string, string[]][] = [
   ['default-src', ["'self'"]],
   ['script-src', ["'self'"]],
@@ -35,7 +40,6 @@ const EXPECTED_REPORT_ONLY_CSP_DIRECTIVES: [string, string[]][] = [
   ['base-uri', ["'none'"]],
   ['form-action', ["'self'"]],
   ['frame-ancestors', ["'self'"]],
-  ['upgrade-insecure-requests', []],
   ['report-uri', [CSP_REPORT_URL]],
   ['report-to', [CSP_REPORT_GROUP]],
 ];
@@ -88,7 +92,10 @@ describe('notes security headers (vercel.json)', () => {
     );
   });
 
-  it('enforces only img-src, with the sources the report-only policy lists', () => {
-    expect(cspDirectives(ENFORCED_CSP_HEADER)).toEqual([IMG_SRC_DIRECTIVE]);
+  it('enforces img-src, with the sources the report-only policy lists, and upgrade-insecure-requests, which a report-only policy ignores', () => {
+    expect(cspDirectives(ENFORCED_CSP_HEADER)).toEqual([
+      IMG_SRC_DIRECTIVE,
+      UPGRADE_INSECURE_REQUESTS_DIRECTIVE,
+    ]);
   });
 });
