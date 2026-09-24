@@ -1,7 +1,6 @@
 import { IMAGE_MIME_TYPES, type ImageMimeType } from '@knowtis/shared-util';
 
-/** File extension, without the dot, that names a stored image of each type. */
-export const IMAGE_EXTENSIONS: Readonly<Record<ImageMimeType, string>> = {
+const IMAGE_EXTENSIONS: Readonly<Record<ImageMimeType, string>> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/gif': 'gif',

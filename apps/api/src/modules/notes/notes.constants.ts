@@ -14,15 +14,10 @@ export const IMAGE_IMPORT_THROTTLE = {
   default: { limit: 20, ttl: 60_000 },
 } as const;
 
-/** The image import codes a client can receive. */
-export const CLIENT_IMAGE_IMPORT_ERROR_CODES = [
-  ImageImportErrorCodes.TOO_LARGE,
-  ImageImportErrorCodes.UNSUPPORTED_TYPE,
-  ImageImportErrorCodes.FETCH_FAILED,
-] as const satisfies readonly ImageImportErrorCode[];
-
-export type ClientImageImportErrorCode =
-  (typeof CLIENT_IMAGE_IMPORT_ERROR_CODES)[number];
+type ClientImageImportErrorCode =
+  | typeof ImageImportErrorCodes.TOO_LARGE
+  | typeof ImageImportErrorCodes.UNSUPPORTED_TYPE
+  | typeof ImageImportErrorCodes.FETCH_FAILED;
 
 // OWASP SSRF prevention: an answer that told a blocked address from an
 // unreachable or slow host would let refusals map the server's network, so
