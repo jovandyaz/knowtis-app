@@ -808,7 +808,10 @@
       "altPlaceholder": "Alt text (accessibility)",
       "captionPlaceholder": "Write a caption…",
       "uploadError": "Could not upload the image",
-      "uploading": "Uploading image…"
+      "uploading": "Uploading image…",
+      "importing": "Importing image…",
+      "importFailed_one": "Couldn't import {{count}} image; kept it as a link.",
+      "importFailed_other": "Couldn't import {{count}} images; kept them as links."
     }
   },
   "profile": {

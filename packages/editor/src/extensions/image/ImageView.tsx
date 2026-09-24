@@ -2,12 +2,18 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { NodeViewContent, NodeViewWrapper } from '@tiptap/react';
+import {
+  NodeViewContent,
+  NodeViewWrapper,
+  useEditorState,
+} from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
-import { ImageOff, Pencil, Trash2 } from 'lucide-react';
+import { ImageOff, Loader2, Pencil, Trash2 } from 'lucide-react';
 
 import type { ImageAttributes } from '@knowtis/editor-schema';
 import { isStoredImageUrl } from '@knowtis/shared-util';
+
+import { isImageImportPending } from './image-import';
 
 function readAttrs(node: ProseMirrorNode): ImageAttributes {
   const src = node.attrs['src'];
@@ -23,6 +29,7 @@ function readAttrs(node: ProseMirrorNode): ImageAttributes {
 }
 
 export function ImageView({
+  editor,
   node,
   selected,
   updateAttributes,
@@ -31,6 +38,10 @@ export function ImageView({
   const { t } = useTranslation('notes');
   const { src, alt, width, height } = readAttrs(node);
   const [editingAlt, setEditingAlt] = useState(false);
+  const importing = useEditorState({
+    editor,
+    selector: ({ editor: current }) => isImageImportPending(current.state, src),
+  });
 
   return (
     <NodeViewWrapper className="group relative my-4" data-selected={selected}>
@@ -47,7 +58,16 @@ export function ImageView({
           />
         ) : (
           <div className="flex items-center gap-2 rounded-(--radius) border border-(--border) bg-(--muted) p-4 text-(--muted-foreground)">
-            <ImageOff className="h-4 w-4" /> {t('ai.image.unavailable')}
+            {importing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />{' '}
+                {t('ai.image.importing')}
+              </>
+            ) : (
+              <>
+                <ImageOff className="h-4 w-4" /> {t('ai.image.unavailable')}
+              </>
+            )}
           </div>
         )}
 

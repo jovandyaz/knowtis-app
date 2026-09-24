@@ -29,6 +29,10 @@ export type {
   ImageUploadOptions,
   UploadedImageResult,
 } from './extensions/image/image-upload';
+export type {
+  ImageImportOptions,
+  ImageImportProvider,
+} from './extensions/image/image-import';
 
 export { CollaborationIndicator } from './components/CollaborationIndicator';
 export { CollaborativeCursors } from './components/CollaborativeCursors';
