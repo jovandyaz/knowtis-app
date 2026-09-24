@@ -36,6 +36,12 @@ All product events include `environment`, `app_version`, `actor_type`,
 `is_internal`, and `locale`. `is_internal` is true only for the existing
 `admin` role; do not infer it from an email domain.
 
+`app_version` is the commit the deploy shipped: the notes build stamps
+`GITHUB_SHA`, and the API reads the `REVISION` file the deploy job writes
+before `railway up`. Railway's `RAILWAY_GIT_COMMIT_SHA` exists only for
+GitHub-triggered deploys, and Vercel's system variables do not exist in a
+prebuilt deploy, so neither is used. Local runs report `0.1.0`.
+
 | Event                   | Authority                                                                              | Allowed event properties                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `user signed up`        | API auth event                                                                         | `source=api`                                                                               |
