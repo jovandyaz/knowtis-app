@@ -3,6 +3,11 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 import { markdownToHtml } from '@knowtis/note-markdown';
 
+import {
+  wrapPastedImages,
+  type PastedImageOptions,
+} from './image/pasted-image-html';
+
 const MARKDOWN_INDICATORS = [
   /^#{1,6}\s/m, // headings
   /\*\*.+?\*\*/, // bold
@@ -23,11 +28,16 @@ function looksLikeMarkdown(text: string): boolean {
   return matches.length >= 2;
 }
 
-export const MarkdownPaste = Extension.create({
+export const MarkdownPaste = Extension.create<PastedImageOptions>({
   name: 'markdownPaste',
+
+  addOptions() {
+    return {};
+  },
 
   addProseMirrorPlugins() {
     const editor = this.editor;
+    const options = this.options;
 
     return [
       new Plugin({
@@ -50,9 +60,10 @@ export const MarkdownPaste = Extension.create({
             }
 
             event.preventDefault();
-            editor.commands.insertContent(markdownToHtml(text), {
-              parseOptions: { preserveWhitespace: false },
-            });
+            editor.commands.insertContent(
+              wrapPastedImages(markdownToHtml(text), options),
+              { parseOptions: { preserveWhitespace: false } }
+            );
             return true;
           },
         },

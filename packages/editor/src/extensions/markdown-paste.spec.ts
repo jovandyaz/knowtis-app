@@ -8,13 +8,24 @@ import {
   MERMAID_BLOCK_NAME,
 } from '@knowtis/editor-schema';
 
+import {
+  PENDING_IMAGE_SCHEME,
+  type PastedImageOptions,
+} from './image/pasted-image-html';
 import { MarkdownPaste } from './markdown-paste';
+
+const PNG_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+const TOKEN = `${PENDING_IMAGE_SCHEME}0b6c1a52-2f7e-4d0c-9d43-5d5c8f0e8a11`;
 
 let editor: Editor;
 
-function createEditor() {
+function createEditor(options: PastedImageOptions = {}) {
   editor = new Editor({
-    extensions: [...createSemanticExtensions(), MarkdownPaste],
+    extensions: [
+      ...createSemanticExtensions(),
+      MarkdownPaste.configure(options),
+    ],
     content: '<p></p>',
   });
   return editor;
@@ -110,6 +121,36 @@ describe('MarkdownPaste', () => {
         node.attrs['alt'],
       ])
     ).toEqual([['https://example.com/a.png', 'alt']]);
+  });
+
+  it('stores the hook token instead of a markdown data URI image', () => {
+    const files: File[] = [];
+    createEditor({
+      onDataImage: (file) => {
+        files.push(file);
+        return TOKEN;
+      },
+    });
+
+    pastePlainText(`# Shot\n\n![a](${PNG_DATA_URL})\n`);
+
+    expect(
+      findNodes(IMAGE_NODE_NAME).map((node) => [
+        node.attrs['src'],
+        node.attrs['alt'],
+      ])
+    ).toEqual([[TOKEN, 'a']]);
+    expect(files.map((file) => file.type)).toEqual(['image/png']);
+  });
+
+  it('keeps a markdown data URI image out of the document without a hook', () => {
+    createEditor();
+
+    pastePlainText(`# Shot\n\n![a](${PNG_DATA_URL})\n`);
+
+    expect(findNodes(IMAGE_NODE_NAME)).toEqual([]);
+    expect(JSON.stringify(editor.getJSON())).not.toContain('data:');
+    expect(editor.state.doc.textContent).toBe('Shot');
   });
 
   it('keeps a pasted task list, table and underline', () => {
