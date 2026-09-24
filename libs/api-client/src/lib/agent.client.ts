@@ -1,6 +1,10 @@
 import { io, type Socket } from 'socket.io-client';
 
-import type { AgentStopReason, ReasoningEffort } from '@knowtis/shared-types';
+import {
+  AGENT_TURN_ERROR_CODE,
+  type AgentStopReason,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import type { TokenProvider } from './http-client';
@@ -78,6 +82,11 @@ export interface AgentCommittedPayload {
   };
 }
 
+export interface AgentTurnSettledPayload {
+  turnId: string;
+  conversationId: string;
+}
+
 interface AgentStreamCallbacks {
   onChunk: (payload: AgentChunkPayload) => void;
   onThinking?: (payload: AgentThinkingPayload) => void;
@@ -86,9 +95,11 @@ interface AgentStreamCallbacks {
   onError: (payload: AgentErrorPayload) => void;
   onProposal?: (payload: AgentProposalPayload) => void;
   onCommitted?: (payload: AgentCommittedPayload) => void;
+  onTurnSettled: (payload: AgentTurnSettledPayload) => void;
 }
 
 export interface AgentStreamHandle {
+  turnId: string;
   cancel: () => void;
 }
 
@@ -101,19 +112,35 @@ export interface AgentSendOptions {
    * resolved model declares and the caller's audience may spend.
    */
   effort?: ReasoningEffort;
+  /**
+   * Resends a turn the server may already hold, under its original id, so the
+   * server's claim runs it at most once. Omitted, the turn gets a fresh id.
+   * Only a turn `canResendTurn` offers may be resent.
+   */
+  turnId?: string;
 }
 
 export type AuthRefreshHandler = () => Promise<RefreshOutcome>;
 
 /**
- * The turn leg the client replays when it has to open a fresh socket — the
- * opening message, or the decision that resumes a turn suspended on a proposal.
+ * The turn leg the client replays — the opening message, or the decision that
+ * resumes a turn suspended on a proposal.
  */
 type DecisionRequest =
   | { kind: 'approve'; proposalId: string }
   | { kind: 'reject'; proposalId: string; reason?: string };
 
-type PendingRequest = { kind: 'message'; content: string } | DecisionRequest;
+interface AgentMessageBody {
+  turnId: string;
+  conversationId?: string;
+  message: { content: string };
+  noteId?: string;
+  effort?: ReasoningEffort;
+}
+
+type PendingRequest =
+  | { kind: 'message'; body: AgentMessageBody }
+  | DecisionRequest;
 
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
 const AUTH_ERROR: AgentErrorPayload = {
@@ -128,24 +155,35 @@ const CONNECTION_ERROR: AgentErrorPayload = {
  * socket.io delivers at most once: an event written to a transport that has
  * already died is lost, and nothing replays it after the reconnect. Every
  * request therefore waits for the server's receipt, and one that never comes
- * ends the request instead of leaving the turn open forever. It is not resent
- * on its own: starting a turn is not idempotent, and a copy reaching the
- * server after a reconnect would run twice. The deadline runs from the emit,
- * so it also caps how long a request may wait for the socket to connect.
+ * ends the request instead of leaving the turn open forever. socket.io's own
+ * `retries` stays off because it resends every emit alike, and a proposal
+ * decision carries no turn id for the server to deduplicate. The deadline runs
+ * from the emit, so it also caps how long a request may wait for the socket to
+ * connect.
  */
 const AGENT_ACK_TIMEOUT_MS = 10_000;
+const TURN_RESEND_DELAYS_MS = [1_000, 2_000, 4_000] as const;
+const RESENDABLE_TURN_ERROR_CODES: ReadonlySet<string> = new Set([
+  AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+  AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+]);
 
 export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
+  private activeTurnId: string | undefined;
   private pending: PendingRequest | null = null;
   private awaitingReceipt: PendingRequest | null = null;
   private awaitingDecision = false;
   private pendingNoteId: string | undefined;
-  private pendingEffort: ReasoningEffort | undefined;
   private conversationId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
+  private turnResends = 0;
+  private turnResendTimer: ReturnType<typeof setTimeout> | undefined;
+  private unfinishedTurnId: string | undefined;
+  private reconnectResend: PendingRequest | undefined;
+  private resentOnReconnect = false;
   private readonly wsUrl: string | undefined;
   private readonly authPolicy: TokenRefreshPolicy = createTokenRefreshPolicy();
   private tokenProvider: TokenProvider = {
@@ -191,13 +229,25 @@ export class AgentClient {
       this.abandonPending();
     }
 
+    const turnId = options?.turnId ?? crypto.randomUUID();
+    this.unfinishedTurnId = turnId;
     this.activeCallbacks = callbacks;
+    this.activeTurnId = turnId;
     this.pendingNoteId = noteId;
-    this.pendingEffort = options?.effort;
 
-    this.dispatch({ kind: 'message', content }, callbacks);
+    // An idempotency key only holds while the body it names never changes, so
+    // every replay and resend sends this snapshot, not the client's live state.
+    const body: AgentMessageBody = {
+      turnId,
+      ...(this.conversationId ? { conversationId: this.conversationId } : {}),
+      message: { content },
+      ...(noteId ? { noteId } : {}),
+      ...(options?.effort ? { effort: options.effort } : {}),
+    };
+    this.dispatch({ kind: 'message', body }, callbacks);
 
     return {
+      turnId,
       cancel: () => {
         if (this.activeCallbacks === callbacks) {
           this.abandonPending();
@@ -208,6 +258,7 @@ export class AgentClient {
 
   private beginAuthRecovery(): void {
     this.recoveringAuth = true;
+    this.cancelTurnResend();
     void this.authPolicy.recover(this.authHandlers());
   }
 
@@ -267,6 +318,10 @@ export class AgentClient {
     this.pending = request;
     this.awaitingDecision = false;
     this.reconnectAttempts = 0;
+    this.turnResends = 0;
+    this.resentOnReconnect = false;
+    this.reconnectResend = undefined;
+    this.cancelTurnResend();
     this.authPolicy.reset();
 
     if (this.tokenProvider.getAccessToken()) {
@@ -293,18 +348,7 @@ export class AgentClient {
     const receipt = this.deliveryReceipt(socket, request, callbacks);
     switch (request.kind) {
       case 'message':
-        socket.emit(
-          'agent:message',
-          {
-            ...(this.conversationId
-              ? { conversationId: this.conversationId }
-              : {}),
-            message: { content: request.content },
-            ...noteId,
-            ...(this.pendingEffort ? { effort: this.pendingEffort } : {}),
-          },
-          receipt
-        );
+        socket.emit('agent:message', request.body, receipt);
         return;
       case 'approve':
         socket.emit(
@@ -368,9 +412,41 @@ export class AgentClient {
 
   private clearPending(): void {
     this.activeCallbacks = null;
+    this.activeTurnId = undefined;
     this.pending = null;
     this.awaitingReceipt = null;
     this.awaitingDecision = false;
+    this.reconnectResend = undefined;
+    this.cancelTurnResend();
+  }
+
+  private scheduleTurnResend(
+    error: AgentErrorPayload,
+    callbacks: AgentStreamCallbacks
+  ): boolean {
+    const request = this.pending;
+    const delay = TURN_RESEND_DELAYS_MS[this.turnResends];
+    if (
+      request?.kind !== 'message' ||
+      !RESENDABLE_TURN_ERROR_CODES.has(error.code) ||
+      delay === undefined
+    ) {
+      return false;
+    }
+    this.turnResends++;
+    this.turnResendTimer = setTimeout(() => {
+      this.turnResendTimer = undefined;
+      if (this.pending !== request || this.recoveringAuth) {
+        return;
+      }
+      this.emitPending(request, callbacks);
+    }, delay);
+    return true;
+  }
+
+  private cancelTurnResend(): void {
+    clearTimeout(this.turnResendTimer);
+    this.turnResendTimer = undefined;
   }
 
   private failRequest(
@@ -381,6 +457,38 @@ export class AgentClient {
     if (this.activeCallbacks === callbacks) {
       this.clearPending();
     }
+  }
+
+  // The server aborts a turn whose socket drops, and nothing it sends reaches
+  // the new connection, so without a resend the dock would wait for the
+  // watchdog. The same id makes the server answer for the turn, not rerun it,
+  // and this resend replaces any backoff resend so only one goes out.
+  private holdForReconnect(): void {
+    const request = this.pending;
+    if (
+      request?.kind === 'message' &&
+      this.awaitingReceipt !== request &&
+      !this.resentOnReconnect
+    ) {
+      this.reconnectResend = request;
+      this.cancelTurnResend();
+    }
+  }
+
+  private resendAfterReconnect(): void {
+    const request = this.reconnectResend;
+    const callbacks = this.activeCallbacks;
+    this.reconnectResend = undefined;
+    if (
+      !request ||
+      request !== this.pending ||
+      !callbacks ||
+      this.recoveringAuth
+    ) {
+      return;
+    }
+    this.resentOnReconnect = true;
+    this.emitPending(request, callbacks);
   }
 
   private getWsUrl(): string {
@@ -414,10 +522,15 @@ export class AgentClient {
     this.setupEventListeners(this.socket);
   }
 
-  /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
+  /**
+   * Detaches the socket before closing it, so its `disconnect` event is
+   * recognisable as ours. A closed socket never reconnects, so a resend held
+   * for its reconnect goes with it.
+   */
   private teardownSocket(): void {
     const socket = this.socket;
     this.socket = null;
+    this.reconnectResend = undefined;
     socket?.disconnect();
   }
 
@@ -425,6 +538,7 @@ export class AgentClient {
     socket.on('connect', () => {
       this.reconnectAttempts = 0;
       logger.info('Agent WebSocket connected', { context: 'AgentClient' });
+      this.resendAfterReconnect();
     });
 
     socket.on('disconnect', (reason) => {
@@ -433,7 +547,11 @@ export class AgentClient {
       });
       // A replaced socket was torn down on purpose and an active one is still
       // reconnecting, so neither may fail the turn.
-      if (this.socket !== socket || socket.active) {
+      if (this.socket !== socket) {
+        return;
+      }
+      if (socket.active) {
+        this.holdForReconnect();
         return;
       }
       // A server-forced close never reconnects, so a later emit would sit in
@@ -461,12 +579,12 @@ export class AgentClient {
     // A socket the client has already replaced can still deliver buffered
     // events, and every handler below reads or writes the LIVE turn's state —
     // so each one runs only while its own socket is still the current one.
-    const onCurrentSocket = <T>(
+    const onCurrentSocket = <T extends { turnId?: string }>(
       event: string,
       handle: (payload: T) => void
     ) => {
       socket.on(event, (payload: T) => {
-        if (this.socket !== socket) {
+        if (this.socket !== socket || this.isForeignTurn(payload)) {
           return;
         }
         handle(payload);
@@ -495,6 +613,9 @@ export class AgentClient {
 
     onCurrentSocket('agent:done', (payload: AgentDonePayload) => {
       const callbacks = this.activeCallbacks;
+      if (callbacks) {
+        this.unfinishedTurnId = undefined;
+      }
       if (callbacks && payload.conversationId) {
         this.conversationId = payload.conversationId;
         callbacks.onConversation?.(payload.conversationId);
@@ -507,6 +628,8 @@ export class AgentClient {
       this.pending = null;
       this.awaitingReceipt = null;
       this.awaitingDecision = true;
+      this.unfinishedTurnId = undefined;
+      this.cancelTurnResend();
       this.activeCallbacks?.onProposal?.(payload);
     });
 
@@ -514,20 +637,49 @@ export class AgentClient {
       this.activeCallbacks?.onCommitted?.(payload);
     });
 
+    onCurrentSocket(
+      'agent:turn_settled',
+      (payload: AgentTurnSettledPayload) => {
+        const callbacks = this.activeCallbacks;
+        if (!callbacks) {
+          return;
+        }
+        this.conversationId = payload.conversationId;
+        this.unfinishedTurnId = undefined;
+        callbacks.onConversation?.(payload.conversationId);
+        // A turn suspended on its proposal still owes the user a decision.
+        if (!this.awaitingDecision) {
+          this.clearPending();
+        }
+        callbacks.onTurnSettled(payload);
+      }
+    );
+
     onCurrentSocket('agent:error', (payload: AgentErrorPayload) => {
+      const callbacks = this.activeCallbacks;
+      if (!callbacks) {
+        return;
+      }
       // A turn suspended on a proposal has no request in flight, but its
       // decision still needs a live token: `getAccessToken` keeps returning the
       // expired one, so without refreshing here the decision would emit with
       // the very token the server just rejected.
-      if (this.activeCallbacks && this.canRecoverFromAuthError(payload)) {
+      if (this.canRecoverFromAuthError(payload)) {
         this.beginAuthRecovery();
         return;
       }
-
-      if (this.activeCallbacks) {
-        this.failRequest(this.activeCallbacks, payload);
+      if (this.scheduleTurnResend(payload, callbacks)) {
+        return;
       }
+      if (!RESENDABLE_TURN_ERROR_CODES.has(payload.code)) {
+        this.unfinishedTurnId = undefined;
+      }
+      this.failRequest(callbacks, payload);
     });
+  }
+
+  private isForeignTurn(payload: { turnId?: string }): boolean {
+    return payload.turnId !== undefined && payload.turnId !== this.activeTurnId;
   }
 
   /**
@@ -561,13 +713,25 @@ export class AgentClient {
     this.dispatch(request, callbacks);
   }
 
+  /**
+   * True while the server has not reported how `turnId` ended (done, settled,
+   * a proposal, or an error of its own), so a retry must pass it as
+   * `AgentSendOptions.turnId` and the server runs it at most once. A retry of
+   * a turn the server ended is a new turn.
+   */
+  canResendTurn(turnId: string): boolean {
+    return turnId === this.unfinishedTurnId;
+  }
+
   /** Starts a fresh server conversation on the next send. */
   resetConversation(): void {
     this.conversationId = undefined;
+    this.unfinishedTurnId = undefined;
   }
 
   resumeConversation(conversationId: string): void {
     this.conversationId = conversationId;
+    this.unfinishedTurnId = undefined;
   }
 
   private canRecoverFromAuthError(payload: AgentErrorPayload): boolean {

@@ -40,6 +40,7 @@ export type {
   AgentStreamHandle,
   AgentProposalPayload,
   AgentCommittedPayload,
+  AgentTurnSettledPayload,
 } from './lib/agent.client';
 
 export { deriveWsBaseUrl } from './lib/ws-url';

@@ -120,8 +120,9 @@ describe('AgentCopilotPanel', () => {
       userId: null,
       conversationId: null,
       conversationTitle: null,
-      hydration: 'idle',
+      hydration: 'unloaded',
       hasEarlier: false,
+      retryMode: 'resend',
     });
     vi.mocked(conversationsApi.transcript).mockReset();
     vi.mocked(agentClient.resumeConversation).mockClear();
@@ -187,6 +188,25 @@ describe('AgentCopilotPanel', () => {
     failWith(AGENT_EMAIL_NOT_VERIFIED_CODE);
 
     expect(useVerifyEmailStore.getState().isOpen).toBe(true);
+  });
+
+  it('offers no resend of the message when a proposal decision failed', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: { code: 'AI_RATE_LIMIT_EXCEEDED', message: 'busy' },
+        retryMode: 'none',
+      });
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.rateLimited'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'ai.preview.retry' })
+    ).not.toBeInTheDocument();
   });
 
   it('leaves any other copilot failure alone', () => {
@@ -371,7 +391,7 @@ describe('AgentCopilotPanel', () => {
 
       expect(await screen.findByText('Day one.')).toBeInTheDocument();
       expect(vi.mocked(conversationsApi.transcript).mock.calls).toEqual([
-        ['c1'],
+        ['c1', undefined],
       ]);
     });
 
@@ -443,14 +463,125 @@ describe('AgentCopilotPanel', () => {
       const user = userEvent.setup();
 
       render(<AgentCopilotPanel />, { wrapper });
-      await screen.findByText('ai.copilot.history.loadFailed');
+      await screen.findByText('ai.copilot.history.earlierFailed');
+      expect(screen.queryByTestId('empty')).toBeNull();
+      vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
       await user.click(
-        screen.getByRole('button', { name: 'ai.preview.retry' })
+        screen.getByRole('button', { name: 'ai.copilot.history.retry' })
       );
 
-      await waitFor(() =>
-        expect(conversationsApi.transcript).toHaveBeenCalledTimes(2)
+      expect(await screen.findByText('Day one.')).toBeInTheDocument();
+      expect(conversationsApi.transcript).toHaveBeenCalledTimes(2);
+      expect(
+        screen.queryByText('ai.copilot.history.earlierFailed')
+      ).not.toBeInTheDocument();
+    });
+
+    function showFailedHistoryUnderALiveTurn() {
+      useAgentStore.setState({
+        userId: HARNESS_PROFILE.id,
+        conversationId: 'c1',
+        status: 'streaming',
+        hydration: 'failed',
+        messages: [
+          { id: 'm1', turnId: 'turn-1', role: 'user', content: 'Mientras' },
+          { id: 'm2', turnId: 'turn-1', role: 'assistant', content: 'Sigo' },
+        ],
+      });
+    }
+
+    it('offers the history retry above a message that outlived a failed load', async () => {
+      showFailedHistoryUnderALiveTurn();
+      vi.mocked(conversationsApi.transcript).mockResolvedValue(TRANSCRIPT);
+      const user = userEvent.setup();
+
+      render(<AgentCopilotPanel />, { wrapper });
+      const retry = screen.getByRole('button', {
+        name: 'ai.copilot.history.retry',
+      });
+      expect(
+        retry.compareDocumentPosition(screen.getByText('Mientras')) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      await user.click(retry);
+
+      expect(await screen.findByText('Day one.')).toBeInTheDocument();
+      expect(screen.getByText('Sigo')).toBeInTheDocument();
+      expect(useAgentStore.getState().status).toBe('streaming');
+    });
+
+    it('keeps focus on the retry while the history reloads, then hands it to the thread', async () => {
+      showFailedHistoryUnderALiveTurn();
+      let restore: (transcript: ConversationTranscript) => void = () =>
+        undefined;
+      vi.mocked(conversationsApi.transcript).mockReturnValue(
+        new Promise((resolve) => {
+          restore = resolve;
+        })
       );
+      const user = userEvent.setup();
+      render(<AgentCopilotPanel />, { wrapper });
+
+      screen.getByRole('button', { name: 'ai.copilot.history.retry' }).focus();
+      await user.keyboard('{Enter}');
+      const busy = screen.getByRole('button', { name: 'states.loading' });
+      expect(busy).toHaveFocus();
+      expect(busy).toHaveAttribute('aria-busy', 'true');
+
+      await act(async () => {
+        restore(TRANSCRIPT);
+      });
+
+      expect(await screen.findByText('Day one.')).toBeInTheDocument();
+      expect(
+        screen.queryByText('ai.copilot.history.earlierFailed')
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('log', { name: 'ai.copilot.history.thread' })
+      ).toHaveFocus();
+    });
+
+    it('leaves the focus where the user moved it while the history reloaded', async () => {
+      showFailedHistoryUnderALiveTurn();
+      let restore: (transcript: ConversationTranscript) => void = () =>
+        undefined;
+      vi.mocked(conversationsApi.transcript).mockReturnValue(
+        new Promise((resolve) => {
+          restore = resolve;
+        })
+      );
+      const user = userEvent.setup();
+      render(<AgentCopilotPanel />, { wrapper });
+      screen.getByRole('button', { name: 'ai.copilot.history.retry' }).focus();
+      await user.keyboard('{Enter}');
+
+      const elsewhere = screen.getByRole('button', { name: 'send-now' });
+      elsewhere.focus();
+      await act(async () => {
+        restore(TRANSCRIPT);
+      });
+
+      expect(await screen.findByText('Day one.')).toBeInTheDocument();
+      expect(elsewhere).toHaveFocus();
+    });
+
+    it('leaves focus on the retry when the history fails to load again', async () => {
+      showFailedHistoryUnderALiveTurn();
+      vi.mocked(conversationsApi.transcript).mockRejectedValue(
+        new ApiClientError('boom', 500)
+      );
+      const user = userEvent.setup();
+      render(<AgentCopilotPanel />, { wrapper });
+
+      screen.getByRole('button', { name: 'ai.copilot.history.retry' }).focus();
+      await user.keyboard('{Enter}');
+
+      const retry = await screen.findByRole('button', {
+        name: 'ai.copilot.history.retry',
+      });
+      expect(retry).toHaveFocus();
+      expect(retry).not.toHaveAttribute('aria-busy', 'true');
+      expect(conversationsApi.transcript).toHaveBeenCalledTimes(1);
     });
 
     it('opens the earlier-messages note when the thread was cut', async () => {

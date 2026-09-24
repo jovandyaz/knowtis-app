@@ -1,5 +1,6 @@
 import {
   AGENT_STOP_REASON,
+  MESSAGE_STOP_REASON,
   type AgentStopReason,
   type ConversationTranscriptMessage,
 } from '@knowtis/shared-types';
@@ -10,6 +11,10 @@ const ASSISTANT_ROLE = 'assistant' satisfies AgentChatMessage['role'];
 
 const DISPLAYED_STOP_REASONS: readonly string[] =
   Object.values(AGENT_STOP_REASON);
+
+const INTERRUPTED_STOP_REASONS: readonly string[] = MESSAGE_STOP_REASON.filter(
+  (reason) => !DISPLAYED_STOP_REASONS.includes(reason)
+);
 
 function isDisplayedStopReason(
   reason: string | null
@@ -33,11 +38,19 @@ function continuesTurn(
   );
 }
 
+function turnOf(row: ConversationTranscriptMessage) {
+  return row.turnId !== null ? { turnId: row.turnId } : {};
+}
+
 function assistantDetails(row: ConversationTranscriptMessage) {
   return {
     sources: row.sources,
     ...(isDisplayedStopReason(row.stopReason)
       ? { stopReason: row.stopReason }
+      : {}),
+    ...(row.stopReason !== null &&
+    INTERRUPTED_STOP_REASONS.includes(row.stopReason)
+      ? { interrupted: true }
       : {}),
   };
 }
@@ -62,6 +75,7 @@ export function toChatMessages(
     if (last && continuesTurn(previous, row)) {
       messages[messages.length - 1] = {
         id: last.id,
+        ...turnOf(row),
         role: last.role,
         content: last.content + row.content,
         ...assistantDetails(row),
@@ -69,12 +83,18 @@ export function toChatMessages(
     } else if (row.role === ASSISTANT_ROLE) {
       messages.push({
         id: nextId(),
+        ...turnOf(row),
         role: row.role,
         content: row.content,
         ...assistantDetails(row),
       });
     } else {
-      messages.push({ id: nextId(), role: row.role, content: row.content });
+      messages.push({
+        id: nextId(),
+        ...turnOf(row),
+        role: row.role,
+        content: row.content,
+      });
     }
     previous = row;
   }

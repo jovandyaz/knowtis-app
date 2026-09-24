@@ -26,9 +26,13 @@ export const conversationsApi = {
     );
   },
 
-  transcript(id: string): Promise<ConversationTranscript> {
+  transcript(
+    id: string,
+    signal?: AbortSignal
+  ): Promise<ConversationTranscript> {
     return httpClient.get<ConversationTranscript>(
-      `${conversationPath(id)}/messages`
+      `${conversationPath(id)}/messages`,
+      signal ? { signal } : undefined
     );
   },
 
