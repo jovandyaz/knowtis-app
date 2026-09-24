@@ -3,6 +3,7 @@ import type { Notice } from 'postgres';
 
 const WARNING_SEVERITY = 'WARNING';
 const DEFAULT_SEVERITY = 'NOTICE';
+const LINE_BREAKS = /\s*[\r\n]+\s*/g;
 
 /**
  * `onnotice` handler that writes each server notice as one structured log
@@ -36,5 +37,6 @@ export function formatPostgresNotice({
   const label = [severity ?? DEFAULT_SEVERITY, code].filter(Boolean).join(' ');
   return [`${label}: ${message ?? ''}`, hint && `(hint: ${hint})`]
     .filter(Boolean)
-    .join(' ');
+    .join(' ')
+    .replace(LINE_BREAKS, ' ');
 }

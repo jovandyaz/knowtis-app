@@ -86,6 +86,16 @@ describe('formatPostgresNotice', () => {
     );
   });
 
+  it('keeps a multi-line RAISE message on one line', () => {
+    expect(
+      formatPostgresNotice({
+        severity: 'NOTICE',
+        code: '00000',
+        message: 'backfill done\n  rows: 12',
+      })
+    ).toBe('NOTICE 00000: backfill done rows: 12');
+  });
+
   it('falls back to NOTICE and leaves out a missing code', () => {
     expect(formatPostgresNotice({ message: 'something happened' })).toBe(
       'NOTICE: something happened'
