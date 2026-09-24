@@ -4,7 +4,9 @@ import { request as httpsRequest } from 'node:https';
 import { err, ok, type Result } from 'neverthrow';
 import { useAgent } from 'request-filtering-agent';
 
-import { MAX_IMAGE_BYTES, sniffImageType } from '../../domain/image-type';
+import { MAX_IMAGE_BYTES } from '@knowtis/shared-util';
+
+import { sniffImageType } from '../../domain/image-type';
 import {
   imageImportError,
   type FetchedImage,

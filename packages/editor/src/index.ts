@@ -22,7 +22,6 @@ export type { SuggestionMenuOptions } from './extensions/suggestion-menu';
 export {
   ImageUpload,
   extractImageFiles,
-  ACCEPTED_IMAGE_TYPES,
 } from './extensions/image/image-upload';
 export type {
   ImageUploadProvider,

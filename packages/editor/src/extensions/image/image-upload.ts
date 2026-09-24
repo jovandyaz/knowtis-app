@@ -4,12 +4,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import i18next from 'i18next';
 
-export const ACCEPTED_IMAGE_TYPES = [
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-] as const;
+import { IMAGE_MIME_TYPES } from '@knowtis/shared-util';
 
 export interface UploadedImageResult {
   src: string;
@@ -38,7 +33,7 @@ declare module '@tiptap/core' {
 
 export function extractImageFiles(files: ArrayLike<File>): File[] {
   return Array.from(files).filter((file) =>
-    (ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)
+    (IMAGE_MIME_TYPES as readonly string[]).includes(file.type)
   );
 }
 

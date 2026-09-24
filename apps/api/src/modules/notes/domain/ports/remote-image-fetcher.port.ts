@@ -1,7 +1,8 @@
 import type { Result } from 'neverthrow';
 
+import type { ImageMimeType } from '@knowtis/shared-util';
+
 import { NoteErrorCodes } from '../errors/note.errors';
-import type { ImageMimeType } from '../image-type';
 
 export const ImageImportErrorCodes = {
   BLOCKED_ADDRESS: 'blocked_address',

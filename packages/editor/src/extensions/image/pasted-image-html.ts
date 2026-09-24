@@ -2,14 +2,15 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 import { IMAGE_FIGURE_ATTRIBUTE } from '@knowtis/editor-schema';
-import { logger } from '@knowtis/shared-util';
-
-import { ACCEPTED_IMAGE_TYPES } from './image-upload';
+import {
+  IMAGE_MIME_TYPES,
+  logger,
+  MAX_IMAGE_BYTES,
+} from '@knowtis/shared-util';
 
 const PASTED_IMAGE_SCHEMES: readonly string[] = ['http:', 'https:'];
 export const PENDING_IMAGE_SCHEME = 'pending:';
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const BASE64_CHARS_PER_GROUP = 4;
 const BYTES_PER_BASE64_GROUP = 3;
 const DATA_URL_PREFIX_ALLOWANCE = 64;
@@ -46,7 +47,7 @@ function decodeDataImage(src: string): File | null {
     return null;
   }
   const header = src.slice(DATA_SCHEME.length, comma).toLowerCase();
-  const type = ACCEPTED_IMAGE_TYPES.find(
+  const type = IMAGE_MIME_TYPES.find(
     (accepted) => header === `${accepted}${BASE64_MARKER}`
   );
   if (!type) {
