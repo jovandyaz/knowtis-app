@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core';
 import { Extension, getChangedRanges } from '@tiptap/core';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import {
   Plugin,
   PluginKey,
@@ -26,10 +26,18 @@ export const IMAGE_INSERT_META = 'imageInsert';
 
 export const MAX_PARALLEL_IMPORTS = 3;
 
+/** Client-side cap on one import; above the API's 10 s cap on its own fetch. */
+export const IMPORT_TIMEOUT_MS = 15_000;
+
 const INSERT_UI_EVENTS: readonly unknown[] = ['paste', 'drop'];
 const LINK_MARK_NAME = 'link';
 const PARAGRAPH_NODE_NAME = 'paragraph';
+const CAPTION_SEPARATOR = ' ';
+const LOG_CONTEXT = 'ImageImport';
 const MISSING_FILE_ERROR = 'The pasted image file is no longer available';
+const UNSTORED_RESULT_ERROR = 'The image was not stored in the note';
+const TIMEOUT_ERROR = 'The image import timed out';
+const TIMEOUT_ERROR_NAME = 'TimeoutError';
 
 export type ImageImportProvider = (
   url: string,
@@ -203,34 +211,53 @@ function swapInStoredImage(
   return images.length;
 }
 
-function linkParagraph(
+function fallbackContent(
   tr: Transaction,
   node: ProseMirrorNode,
-  url: string
-): ProseMirrorNode | undefined {
+  src: string
+): Fragment {
+  const caption = node.content;
+  if (isPendingImage(src)) {
+    return caption;
+  }
   const { schema } = tr.doc.type;
   const alt = node.attrs['alt'];
-  const label = (typeof alt === 'string' && alt.trim()) || url;
+  const label = (typeof alt === 'string' && alt.trim()) || src;
   const link = schema.marks[LINK_MARK_NAME];
-  return schema.nodes[PARAGRAPH_NODE_NAME]?.create(
-    null,
-    schema.text(label, link ? [link.create({ href: url })] : [])
+  const linked = Fragment.from(
+    schema.text(label, link ? [link.create({ href: src })] : [])
   );
+  return caption.size > 0
+    ? linked
+        .append(Fragment.from(schema.text(CAPTION_SEPARATOR)))
+        .append(caption)
+    : linked;
 }
 
 function replaceWithFallback(tr: Transaction, src: string): number {
+  const paragraph = tr.doc.type.schema.nodes[PARAGRAPH_NODE_NAME];
   const images = imagesWithSrc(tr.doc, src).reverse();
   for (const { node, pos } of images) {
-    const paragraph = isPendingImage(src)
-      ? undefined
-      : linkParagraph(tr, node, src);
-    if (paragraph) {
-      tr.replaceWith(pos, pos + node.nodeSize, paragraph);
+    const content = fallbackContent(tr, node, src);
+    if (paragraph && content.size > 0) {
+      tr.replaceWith(pos, pos + node.nodeSize, paragraph.create(null, content));
     } else {
       tr.delete(pos, pos + node.nodeSize);
     }
   }
   return images.length;
+}
+
+function rejectOnAbort(signal: AbortSignal): Promise<never> {
+  return new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), {
+      once: true,
+    });
+  });
+}
+
+function markSettled(tr: Transaction, src: string): Transaction {
+  return tr.setMeta(imageImportKey, src).setMeta('addToHistory', false);
 }
 
 function createImporter(
@@ -242,7 +269,7 @@ function createImporter(
   const queue: ImportJob[] = [];
   const running = new Set<AbortController>();
 
-  async function load(
+  async function request(
     job: ImportJob,
     signal: AbortSignal
   ): Promise<UploadedImageResult> {
@@ -255,6 +282,40 @@ function createImporter(
     throw new Error(MISSING_FILE_ERROR);
   }
 
+  async function load(
+    job: ImportJob,
+    signal: AbortSignal
+  ): Promise<UploadedImageResult> {
+    const result = await Promise.race([
+      request(job, signal),
+      rejectOnAbort(signal),
+    ]);
+    if (!isStoredImageUrl(result.src)) {
+      throw new Error(UNSTORED_RESULT_ERROR);
+    }
+    return result;
+  }
+
+  function settle(
+    src: string,
+    outcome: (tr: Transaction) => number,
+    failed: boolean
+  ): number {
+    try {
+      const tr = editor.state.tr;
+      const affected = outcome(tr);
+      editor.view.dispatch(markSettled(tr, src));
+      return failed ? affected : 0;
+    } catch (error) {
+      logger.warn('Could not apply a pasted image import', {
+        context: LOG_CONTEXT,
+        error,
+      });
+      editor.view.dispatch(markSettled(editor.state.tr, src));
+      return imagesWithSrc(editor.state.doc, src).length;
+    }
+  }
+
   function finish(
     job: ImportJob,
     controller: AbortController,
@@ -265,19 +326,15 @@ function createImporter(
     if (destroyed) {
       return;
     }
-    const tr = editor.state.tr;
-    const affected = outcome(tr);
-    editor.view.dispatch(
-      tr.setMeta(imageImportKey, job.src).setMeta('addToHistory', false)
-    );
-    job.batch.remaining -= 1;
-    if (failed) {
-      job.batch.failed += affected;
+    try {
+      job.batch.failed += settle(job.src, outcome, failed);
+    } finally {
+      job.batch.remaining -= 1;
+      if (job.batch.remaining === 0 && job.batch.failed > 0) {
+        options.onImportFailed?.(job.batch.failed);
+      }
+      pump();
     }
-    if (job.batch.remaining === 0 && job.batch.failed > 0) {
-      options.onImportFailed?.(job.batch.failed);
-    }
-    pump();
   }
 
   function pump() {
@@ -287,30 +344,39 @@ function createImporter(
         return;
       }
       const controller = new AbortController();
-      running.add(controller);
-      load(job, controller.signal).then(
-        (result) =>
-          finish(
-            job,
-            controller,
-            (tr) => swapInStoredImage(tr, job.src, result),
-            false
-          ),
-        (error: unknown) => {
-          if (!destroyed) {
-            logger.warn('Could not import a pasted image', {
-              context: 'ImageImport',
-              error,
-            });
-          }
-          finish(
-            job,
-            controller,
-            (tr) => replaceWithFallback(tr, job.src),
-            true
-          );
-        }
+      // AbortSignal.timeout runs on a clock fake timers cannot drive, so the
+      // job's own controller carries the timeout.
+      const timeout = setTimeout(
+        () =>
+          controller.abort(new DOMException(TIMEOUT_ERROR, TIMEOUT_ERROR_NAME)),
+        IMPORT_TIMEOUT_MS
       );
+      running.add(controller);
+      load(job, controller.signal)
+        .finally(() => clearTimeout(timeout))
+        .then(
+          (result) =>
+            finish(
+              job,
+              controller,
+              (tr) => swapInStoredImage(tr, job.src, result),
+              false
+            ),
+          (error: unknown) => {
+            if (!destroyed) {
+              logger.warn('Could not import a pasted image', {
+                context: LOG_CONTEXT,
+                error,
+              });
+            }
+            finish(
+              job,
+              controller,
+              (tr) => replaceWithFallback(tr, job.src),
+              true
+            );
+          }
+        );
     }
   }
 

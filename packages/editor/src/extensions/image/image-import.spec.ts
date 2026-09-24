@@ -10,6 +10,7 @@ import { logger, STORED_IMAGE_HOST } from '@knowtis/shared-util';
 import { createBaseExtensions } from '../base-extensions';
 import {
   IMAGE_INSERT_META,
+  IMPORT_TIMEOUT_MS,
   isImageImportPending,
   MAX_PARALLEL_IMPORTS,
   type ImageImportOptions,
@@ -30,6 +31,7 @@ const PNG_DATA_URL =
 const UUID = '0b6c1a52-2f7e-4d0c-9d43-5d5c8f0e8a11';
 const YJS_FIELD = 'default';
 const IMPORT_DURATION_MS = 1_000;
+const CAPTION = 'Q3 revenue';
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -68,6 +70,38 @@ function createEditor(
     content,
   });
   return editor;
+}
+
+function createCollaborativeEditor(imageImport: ImageImportOptions): Y.Doc {
+  const yDoc = new Y.Doc();
+  editor = new Editor({
+    extensions: [
+      ...createBaseExtensions({ disableHistory: true, imageImport }),
+      Collaboration.configure({ document: yDoc, field: YJS_FIELD }),
+    ],
+  });
+  return yDoc;
+}
+
+// Yjs merges edits closer than its capture timeout into one undo step; an
+// import outlasts that window, so the test closes the step explicitly.
+function undoManagerOf(state: unknown): Y.UndoManager | null {
+  return state &&
+    typeof state === 'object' &&
+    'undoManager' in state &&
+    state.undoManager instanceof Y.UndoManager
+    ? state.undoManager
+    : null;
+}
+
+function closeUndoStep() {
+  const undoManager = editor.state.plugins
+    .map((plugin) => undoManagerOf(plugin.getState(editor.state)))
+    .find((manager) => manager !== null);
+  if (!undoManager) {
+    throw new Error('the collaborative undo plugin is not installed');
+  }
+  undoManager.stopCapturing();
 }
 
 function paste(data: Record<string, string>, files: File[] = []) {
@@ -203,16 +237,7 @@ describe('ImageImport', () => {
 
   it('does not import an image a collaborator inserted', async () => {
     const importProvider = vi.fn().mockResolvedValue(stored());
-    const yDoc = new Y.Doc();
-    editor = new Editor({
-      extensions: [
-        ...createBaseExtensions({
-          disableHistory: true,
-          imageImport: { importProvider },
-        }),
-        Collaboration.configure({ document: yDoc, field: YJS_FIELD }),
-      ],
-    });
+    const yDoc = createCollaborativeEditor({ importProvider });
 
     const image = new Y.XmlElement(IMAGE_NODE_NAME);
     image.setAttribute('src', FOREIGN);
@@ -279,6 +304,40 @@ describe('ImageImport', () => {
     expect(docJson()).not.toContain(FOREIGN);
   });
 
+  it('undoes an imported paste in a collaborative note without restoring the foreign src', async () => {
+    const pending = deferred<UploadedImageResult>();
+    createCollaborativeEditor({ importProvider: () => pending.promise });
+
+    pasteHtml(`<p>text</p><img src="${FOREIGN}" alt="Chart">`);
+    closeUndoStep();
+    pending.resolve(stored());
+    await settle();
+    expect(imageSrcs()).toEqual([STORED]);
+
+    editor.commands.undo();
+    expect(imageSrcs()).toEqual([]);
+    expect(docJson()).not.toContain(FOREIGN);
+
+    editor.commands.redo();
+    expect(imageSrcs()).toEqual([STORED]);
+  });
+
+  it('keeps the fallback link when a failed paste is undone in a collaborative note', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const pending = deferred<UploadedImageResult>();
+    createCollaborativeEditor({ importProvider: () => pending.promise });
+
+    pasteHtml(`<p>text</p><img src="${FOREIGN}" alt="Chart">`);
+    closeUndoStep();
+    pending.reject(new Error('422 fetch_failed'));
+    await settle();
+
+    editor.commands.undo();
+
+    expect(nonEmptyBlocks()).toEqual([['paragraph', 'Chart']]);
+    expect(links()).toEqual([['Chart', FOREIGN]]);
+  });
+
   it('turns an image that fails to import into a link and reports it once', async () => {
     vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const onImportFailed = vi.fn();
@@ -310,6 +369,124 @@ describe('ImageImport', () => {
     await settle();
 
     expect(links()).toEqual([[FOREIGN, FOREIGN]]);
+  });
+
+  it('keeps the caption of an image that fails to import after its link', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    createEditor({
+      importProvider: () => Promise.reject(new Error('422 fetch_failed')),
+    });
+
+    pasteHtml(
+      `<figure data-image><img src="${FOREIGN}" alt="Chart"><figcaption>${CAPTION}</figcaption></figure>`
+    );
+    await settle();
+
+    expect(imageNodes()).toEqual([]);
+    expect(nonEmptyBlocks()).toEqual([['paragraph', `Chart ${CAPTION}`]]);
+    expect(links()).toEqual([['Chart', FOREIGN]]);
+  });
+
+  it('treats an import that answers with a src outside the store as a failure', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const onImportFailed = vi.fn();
+    createEditor({
+      importProvider: async () => stored(OTHER_FOREIGN),
+      onImportFailed,
+    });
+
+    pasteHtml(`<img src="${FOREIGN}" alt="Chart">`);
+    await settle();
+
+    expect(imageNodes()).toEqual([]);
+    expect(links()).toEqual([['Chart', FOREIGN]]);
+    expect(docJson()).not.toContain(OTHER_FOREIGN);
+    expect(onImportFailed).toHaveBeenCalledWith(1);
+  });
+
+  it('gives up on an import that stalls and frees its slot', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const signals: AbortSignal[] = [];
+    const onImportFailed = vi.fn();
+    const importProvider = vi.fn<ImageImportProvider>((_url, signal) => {
+      signals.push(signal);
+      return new Promise<UploadedImageResult>(() => undefined);
+    });
+    const importedUrls = () => importProvider.mock.calls.map(([url]) => url);
+    createEditor({ importProvider, onImportFailed });
+
+    pasteHtml(
+      ['a', 'b', 'c', 'd']
+        .map((name) => `<img src="https://x.test/${name}.png">`)
+        .join('')
+    );
+    await vi.advanceTimersByTimeAsync(IMPORT_TIMEOUT_MS - 1);
+    expect(importedUrls()).toHaveLength(MAX_PARALLEL_IMPORTS);
+    expect(links()).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(importedUrls()).toEqual([
+      'https://x.test/a.png',
+      'https://x.test/b.png',
+      'https://x.test/c.png',
+      'https://x.test/d.png',
+    ]);
+    expect(links().map(([, href]) => href)).toEqual([
+      'https://x.test/a.png',
+      'https://x.test/b.png',
+      'https://x.test/c.png',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(IMPORT_TIMEOUT_MS);
+    expect(signals.map((signal) => signal.aborted)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(imageNodes()).toEqual([]);
+    expect(onImportFailed.mock.calls).toEqual([[4]]);
+  });
+
+  it('settles an import whose result cannot be applied and moves on to the next', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const onImportFailed = vi.fn();
+    const broken: UploadedImageResult = {
+      src: STORED,
+      get width(): number | null {
+        throw new Error('unreadable width');
+      },
+      height: null,
+      alt: '',
+    };
+    const importProvider = vi.fn<ImageImportProvider>(async (url) =>
+      url === 'https://x.test/a.png' ? broken : stored()
+    );
+    createEditor({ importProvider, onImportFailed });
+
+    pasteHtml(
+      ['a', 'b', 'c', 'd']
+        .map((name) => `<img src="https://x.test/${name}.png">`)
+        .join('')
+    );
+    await settle();
+
+    expect(importProvider).toHaveBeenCalledTimes(4);
+    expect(isImageImportPending(editor.state, 'https://x.test/a.png')).toBe(
+      false
+    );
+    expect(imageSrcs()).toEqual([
+      'https://x.test/a.png',
+      STORED,
+      STORED,
+      STORED,
+    ]);
+    expect(onImportFailed.mock.calls).toEqual([[1]]);
+    expect(warn).toHaveBeenCalledWith(
+      'Could not apply a pasted image import',
+      expect.objectContaining({ context: 'ImageImport' })
+    );
   });
 
   it('reports every failed image of one paste in a single call', async () => {
@@ -370,6 +547,22 @@ describe('ImageImport', () => {
     expect(imageNodes()).toEqual([]);
     expect(nonEmptyBlocks()).toEqual([['paragraph', 'kept']]);
     expect(onImportFailed).toHaveBeenCalledWith(1);
+  });
+
+  it('keeps the caption of a pasted data URI image whose upload fails', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    createEditor({
+      uploadProvider: () => Promise.reject(new Error('413')),
+    });
+
+    pasteHtml(
+      `<figure data-image><img src="${PNG_DATA_URL}"><figcaption>${CAPTION}</figcaption></figure>`
+    );
+    await settle();
+
+    expect(imageNodes()).toEqual([]);
+    expect(nonEmptyBlocks()).toEqual([['paragraph', CAPTION]]);
+    expect(links()).toEqual([]);
   });
 
   it('forgets a data image the clipboard also carried as a file', async () => {
