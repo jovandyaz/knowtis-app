@@ -1,14 +1,12 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import MarkdownIt from 'markdown-it';
 
-import { mermaidFence } from '../markdown/mermaid-fence';
+import { markdownToHtml } from '@knowtis/note-markdown';
 
-const md = new MarkdownIt('commonmark', {
-  html: false,
-  linkify: true,
-  typographer: false,
-}).use(mermaidFence);
+import {
+  wrapPastedImages,
+  type PastedImageOptions,
+} from './image/pasted-image-html';
 
 const MARKDOWN_INDICATORS = [
   /^#{1,6}\s/m, // headings
@@ -30,11 +28,16 @@ function looksLikeMarkdown(text: string): boolean {
   return matches.length >= 2;
 }
 
-export const MarkdownPaste = Extension.create({
+export const MarkdownPaste = Extension.create<PastedImageOptions>({
   name: 'markdownPaste',
+
+  addOptions() {
+    return {};
+  },
 
   addProseMirrorPlugins() {
     const editor = this.editor;
+    const options = this.options;
 
     return [
       new Plugin({
@@ -46,7 +49,6 @@ export const MarkdownPaste = Extension.create({
               return false;
             }
 
-            // If there's HTML content, let Tiptap handle it natively
             const html = clipboardData.getData('text/html');
             if (html) {
               return false;
@@ -58,10 +60,10 @@ export const MarkdownPaste = Extension.create({
             }
 
             event.preventDefault();
-            const rendered = md.render(text);
-            editor.commands.insertContent(rendered, {
-              parseOptions: { preserveWhitespace: false },
-            });
+            editor.commands.insertContent(
+              wrapPastedImages(markdownToHtml(text), options),
+              { parseOptions: { preserveWhitespace: false } }
+            );
             return true;
           },
         },

@@ -78,6 +78,10 @@ export default defineConfig({
         __dirname,
         '../../packages/editor-schema/src/index.ts'
       ),
+      '@knowtis/note-markdown': resolve(
+        __dirname,
+        '../../packages/note-markdown/src/index.ts'
+      ),
       '@knowtis/editor': resolve(
         __dirname,
         '../../packages/editor/src/index.ts'

@@ -15,14 +15,28 @@ describe('markdownToFragment', () => {
     ]);
   });
 
-  it('turns a mermaid fence into a mermaid block holding its whole code', () => {
-    const code = 'graph TD\n  A[Start<br/>here] --> B\n';
+  it('drops a captioned image together with its caption', () => {
+    expect(
+      markdownToFragment(
+        '![x](https://evil.example/x "a caption") after',
+        SCHEMA
+      ).toJSON()
+    ).toEqual([
+      { type: 'paragraph', content: [{ type: 'text', text: 'after' }] },
+    ]);
+  });
 
-    const fragment = markdownToFragment('```mermaid\n' + code + '```', SCHEMA);
+  it('turns a mermaid fence into a mermaid block holding its whole code without the closing newline', () => {
+    const fragment = markdownToFragment(
+      '```mermaid\ngraph TD\n  A[Start<br/>here] --> B\n```',
+      SCHEMA
+    );
 
     expect(fragment.childCount).toBe(1);
     expect(fragment.child(0).type.name).toBe('mermaidBlock');
-    expect(fragment.child(0).attrs['code']).toBe(code.trim());
+    expect(fragment.child(0).attrs['code']).toBe(
+      'graph TD\n  A[Start<br/>here] --> B'
+    );
   });
 
   it('keeps a non-mermaid fence as a code block with its language', () => {
@@ -63,7 +77,7 @@ describe('markdownToFragment', () => {
     });
     expect(blocks).toEqual([
       ['paragraph', 'line one line two'],
-      ['codeBlock', 'const a = 1;\n\n  b();\n'],
+      ['codeBlock', 'const a = 1;\n\n  b();'],
     ]);
   });
 
@@ -80,6 +94,8 @@ describe('markdownToFragment', () => {
         '---',
         '| h | k |\n| - | - |\n| 1 | 2 |',
         '```mermaid\ngraph TD\n  A --> B\n```',
+        '- [ ] t',
+        '++u++',
       ].join('\n\n'),
       SCHEMA
     );
@@ -103,6 +119,8 @@ describe('markdownToFragment', () => {
       'horizontalRule',
       'table',
       'mermaidBlock',
+      'taskList',
+      'paragraph',
     ]);
     expect([...marks].sort()).toEqual([
       'bold',
@@ -110,6 +128,7 @@ describe('markdownToFragment', () => {
       'italic',
       'link',
       'strike',
+      'underline',
     ]);
   });
 });
