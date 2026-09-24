@@ -185,7 +185,7 @@ describe('ImportImageHandler', () => {
 
     const result = await handler.execute({
       ...input,
-      url: 'http://xn--a.com/',
+      url: 'http://exa mple.com/',
     });
 
     expect(result._unsafeUnwrapErr().code).toBe('fetch_failed');

@@ -596,7 +596,11 @@ describe('POST /notes/:id/images/import', () => {
   });
 
   it('answers a URL the validator accepts but WHATWG rejects with 422 fetch_failed', async () => {
-    const response = await importImage({ url: 'http://xn--a.com/' });
+    const privateUseCodePoint = '\u{E000}';
+
+    const response = await importImage({
+      url: `http://a${privateUseCodePoint}.com/`,
+    });
 
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({ code: 'fetch_failed' });
