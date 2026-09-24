@@ -21,7 +21,7 @@ import {
   type AgentOrchestrator,
 } from '../domain/ports/agent-orchestrator.port';
 
-loadEnv({ path: ['.env.local', '.env'] });
+loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
 const GATE =
   !!process.env['TAVILY_API_KEY']?.trim() &&
