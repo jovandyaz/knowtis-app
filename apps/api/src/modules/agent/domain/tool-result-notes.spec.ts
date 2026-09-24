@@ -47,6 +47,11 @@ const row = (
   turnId,
 });
 
+const legEnd = (turnId: string): ConversationMessageRow => ({
+  ...row('assistant', null, turnId),
+  stopReason: 'completed',
+});
+
 const rowsOf = (
   calls: AgentMessagePart[],
   results: AgentMessagePart[],
@@ -174,5 +179,22 @@ describe('redactUnreadableToolResults', () => {
     expect(
       redactUnreadableToolResults(rows, new Set(['kept']))[2].parts
     ).toEqual([redacted('dup', 'getNote')]);
+  });
+
+  it('pairs a call id reused by the resumed leg of a turn only with the call of its own leg', () => {
+    const rows = [
+      row('user', null, 't1'),
+      row('assistant', [call('tool_0', 'getNote', { noteId: 'lost' })], 't1'),
+      row('tool', [result('tool_0', 'getNote', { error: 'gone' })], 't1'),
+      legEnd('t1'),
+      row('assistant', [call('tool_0', 'getNote', { noteId: 'kept' })], 't1'),
+      row('tool', [result('tool_0', 'getNote', note('kept'))], 't1'),
+      legEnd('t1'),
+    ];
+
+    const redactedRows = redactUnreadableToolResults(rows, new Set(['kept']));
+
+    expect(redactedRows[2].parts).toEqual([redacted('tool_0', 'getNote')]);
+    expect(redactedRows[5].parts).toEqual(rows[5].parts);
   });
 });

@@ -1,9 +1,15 @@
 import type { AgentSource } from './agent-event';
-import type { AgentMessagePart, AgentToolResultPart } from './agent-message';
+import type {
+  AgentMessagePart,
+  AgentRole,
+  AgentToolResultPart,
+} from './agent-message';
 import type { ConversationMessageRow } from './ports/conversation.repository';
 
 /** What a replayed tool result becomes once it involves a note its reader can no longer open. */
 export const NOTE_UNAVAILABLE_OUTPUT = { error: 'note_unavailable' } as const;
+
+const ASSISTANT_ROLE: AgentRole = 'assistant';
 
 export function isSourceNote(value: unknown): value is AgentSource {
   return (
@@ -61,39 +67,54 @@ function normalizedNoteId(noteId: string): string {
   return noteId.toLowerCase();
 }
 
-function callKey(row: ConversationMessageRow, toolCallId: string): string {
-  return `${row.turnId ?? ''}/${toolCallId}`;
+// Keyed by leg because some providers number calls per request (`tool_0`) and a
+// turn resumed after a proposal makes one request per leg; a leg ends at the
+// only row that carries a stop reason.
+function legKeysOf(rows: readonly ConversationMessageRow[]): string[] {
+  const legsByTurn = new Map<string, number>();
+  return rows.map((row) => {
+    const turn = row.turnId ?? '';
+    const leg = legsByTurn.get(turn) ?? 0;
+    if (row.role === ASSISTANT_ROLE && row.stopReason !== null) {
+      legsByTurn.set(turn, leg + 1);
+    }
+    return `${turn}/${leg}`;
+  });
 }
 
-// Scoped to the turn because some providers number calls per turn (`tool_0`);
-// inside one turn a shared id is checked against every call that used it, so a
-// collision can only over-redact.
+function callKey(legKey: string, toolCallId: string): string {
+  return `${legKey}/${toolCallId}`;
+}
+
+// Inside one leg a shared call id is checked against every call that used it,
+// so a collision can only over-redact.
 function noteIdArgumentsByCall(
-  rows: readonly ConversationMessageRow[]
+  rows: readonly ConversationMessageRow[],
+  legKeys: readonly string[]
 ): Map<string, string[]> {
   const byCall = new Map<string, string[]>();
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     for (const part of partsOf(row)) {
       if (part.type !== 'tool-call') {
         continue;
       }
       const noteId = noteIdArgument(part.input);
       if (noteId !== undefined) {
-        const key = callKey(row, part.toolCallId);
+        const key = callKey(legKeys[index], part.toolCallId);
         byCall.set(key, [...(byCall.get(key) ?? []), normalizedNoteId(noteId)]);
       }
     }
-  }
+  });
   return byCall;
 }
 
 function noteIdsOfResult(
-  row: ConversationMessageRow,
+  legKey: string,
   result: AgentToolResultPart,
   argumentsByCall: ReadonlyMap<string, readonly string[]>
 ): string[] {
   return [
-    ...(argumentsByCall.get(callKey(row, result.toolCallId)) ?? []),
+    ...(argumentsByCall.get(callKey(legKey, result.toolCallId)) ?? []),
     ...notesInToolOutput(result.output).map((note) =>
       normalizedNoteId(note.id)
     ),
@@ -104,11 +125,14 @@ function noteIdsOfResult(
 export function noteIdsInToolResults(
   rows: readonly ConversationMessageRow[]
 ): string[] {
-  const argumentsByCall = noteIdArgumentsByCall(rows);
-  const ids = rows.flatMap((row) =>
+  const legKeys = legKeysOf(rows);
+  const argumentsByCall = noteIdArgumentsByCall(rows, legKeys);
+  const ids = rows.flatMap((row, index) =>
     partsOf(row)
       .filter(isToolResult)
-      .flatMap((result) => noteIdsOfResult(row, result, argumentsByCall))
+      .flatMap((result) =>
+        noteIdsOfResult(legKeys[index], result, argumentsByCall)
+      )
   );
   return [...new Set(ids)];
 }
@@ -118,22 +142,23 @@ export function redactUnreadableToolResults(
   rows: readonly ConversationMessageRow[],
   readable: ReadonlySet<string>
 ): ConversationMessageRow[] {
-  const argumentsByCall = noteIdArgumentsByCall(rows);
+  const legKeys = legKeysOf(rows);
+  const argumentsByCall = noteIdArgumentsByCall(rows, legKeys);
   const readableIds = new Set([...readable].map(normalizedNoteId));
   const unavailable = (
-    row: ConversationMessageRow,
+    legKey: string,
     part: AgentMessagePart
   ): part is AgentToolResultPart =>
     isToolResult(part) &&
-    noteIdsOfResult(row, part, argumentsByCall).some(
+    noteIdsOfResult(legKey, part, argumentsByCall).some(
       (noteId) => !readableIds.has(noteId)
     );
-  return rows.map((row) =>
+  return rows.map((row, index) =>
     row.parts
       ? {
           ...row,
           parts: row.parts.map((part) =>
-            unavailable(row, part)
+            unavailable(legKeys[index], part)
               ? { ...part, output: NOTE_UNAVAILABLE_OUTPUT, outputType: 'json' }
               : part
           ),
