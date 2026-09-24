@@ -6,6 +6,8 @@ import { config as loadEnv } from 'dotenv';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
 
+import { formatPostgresNotice } from './postgres-notice';
+
 interface BaselineMigration {
   hash: string;
   folderMillis: number;
@@ -46,7 +48,7 @@ function resolveCutoffMillis(
 }
 
 async function main(): Promise<void> {
-  loadEnv({ path: ['.env.local', '.env'] });
+  loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
   const databaseUrl = process.env['DATABASE_URL'];
   if (!databaseUrl) {
@@ -62,7 +64,11 @@ async function main(): Promise<void> {
     folderMillis: m.folderMillis,
   }));
 
-  const sql = postgres(databaseUrl, { max: 1 });
+  const sql = postgres(databaseUrl, {
+    max: 1,
+    onnotice: (notice) =>
+      console.log(`[baseline] ${formatPostgresNotice(notice)}`),
+  });
   try {
     await sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`;
     await sql`CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (

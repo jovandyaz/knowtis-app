@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
+import { logPostgresNotice } from '../../../../database/postgres-notice';
 import * as schema from '../../../../database/schema';
 
 export const ACCESS_DATABASE_CONNECTION = Symbol('ACCESS_DATABASE_CONNECTION');
@@ -24,6 +25,7 @@ export class AccessDatabase implements OnModuleDestroy {
       connect_timeout: 1,
       idle_timeout: 20,
       target_session_attrs: 'read-write',
+      onnotice: logPostgresNotice(this.logger),
       connection: {
         statement_timeout: 900,
         application_name: 'knowtis-access-authority',
