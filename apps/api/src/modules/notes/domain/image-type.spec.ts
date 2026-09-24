@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   IMAGE_MIME_TYPES,
+  imageFilename,
   sniffImageType,
   type ImageMimeType,
 } from './image-type';
@@ -69,4 +70,19 @@ describe('sniffImageType', () => {
 
     expect(recognised).toEqual(new Set(IMAGE_MIME_TYPES));
   });
+});
+
+describe('imageFilename', () => {
+  it.each([
+    ['photo.gif', 'image/png', 'photo.png'],
+    ['scan.jpeg', 'image/jpeg', 'scan.jpg'],
+    ['diagram.png', 'image/webp', 'diagram.webp'],
+    ['imported', 'image/gif', 'imported.gif'],
+    ['archive.tar.gz', 'image/png', 'archive.tar.png'],
+  ] as const)(
+    'names %s holding %s as %s',
+    (filename, type: ImageMimeType, expected) => {
+      expect(imageFilename(filename, type)).toBe(expected);
+    }
+  );
 });

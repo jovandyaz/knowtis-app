@@ -63,13 +63,13 @@ describe('UploadImageHandler', () => {
     );
   });
 
-  it('stores the type the bytes carry, not the one the file name claims', async () => {
+  it('stores and names the file by the type its bytes carry, not the one its name claims', async () => {
     const { handler, storage, imageRepo } = setup({ ownerId: 'owner' });
 
     await handler.execute({ ...input, filename: 'p.gif', userId: 'owner' });
 
     expect(storage.upload).toHaveBeenCalledWith(
-      expect.objectContaining({ contentType: 'image/png' })
+      expect.objectContaining({ filename: 'p.png', contentType: 'image/png' })
     );
     expect(imageRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ mimeType: 'image/png' })

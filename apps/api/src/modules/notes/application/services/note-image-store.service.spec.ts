@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteImageStoreService } from './note-image-store.service';
 
@@ -36,6 +37,10 @@ const input = {
 } as const;
 
 describe('NoteImageStoreService', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('uploads the bytes under the given type and records what was stored', async () => {
     const { service, storage, imageRepo } = setup();
 
@@ -68,12 +73,28 @@ describe('NoteImageStoreService', () => {
     expect(storage.delete).toHaveBeenCalledWith([UPLOADED.pathname]);
   });
 
-  it('still reports the insert failure when the compensating delete fails too', async () => {
+  it('logs the failed compensating delete and still reports the insert failure', async () => {
     const { service, storage, imageRepo } = setup();
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     imageRepo.create.mockRejectedValue(new Error('db down'));
     storage.delete.mockRejectedValue(new Error('blob down'));
 
     await expect(service.store(input)).rejects.toThrow('db down');
+    expect(warn).toHaveBeenCalledWith(
+      `Could not delete blob ${UPLOADED.pathname} of note n1 after its note_images insert failed: blob down`
+    );
+  });
+
+  it('names the stored blob by the verified type, not the extension it came with', async () => {
+    const { service, storage } = setup();
+
+    await service.store({ ...input, filename: 'photo.gif' });
+
+    expect(storage.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: 'photo.png' })
+    );
   });
 
   it('records nothing when the upload fails', async () => {

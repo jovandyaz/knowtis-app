@@ -8,6 +8,14 @@ export const IMAGE_MIME_TYPES = [
 
 export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number];
 
+/** File extension, without the dot, that names a stored image of each type. */
+export const IMAGE_EXTENSIONS: Readonly<Record<ImageMimeType, string>> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
 /** Largest image a note stores, in bytes. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -44,4 +52,14 @@ export function sniffImageType(data: Uint8Array): ImageMimeType | null {
       IMAGE_SIGNATURES[type].some((signature) => matches(data, signature))
     ) ?? null
   );
+}
+
+/**
+ * Gives `filename` the extension of `type`, replacing whatever extension it had
+ * (`photo.gif` holding PNG bytes becomes `photo.png`) or appending one when it had none.
+ */
+export function imageFilename(filename: string, type: ImageMimeType): string {
+  const dot = filename.lastIndexOf('.');
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  return `${stem}.${IMAGE_EXTENSIONS[type]}`;
 }

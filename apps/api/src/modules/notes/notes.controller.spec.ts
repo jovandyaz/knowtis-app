@@ -281,13 +281,16 @@ describe('POST /notes/:id/images', () => {
   }
 
   it.each(['image/gif', 'application/octet-stream'])(
-    'stores a PNG labelled %s as image/png',
+    'stores a PNG sent as photo.gif and labelled %s as photo.png, image/png',
     async (label) => {
       const response = await upload(PNG_BYTES, label, 'photo.gif');
 
       expect(response.status).toBe(201);
       expect(storage.upload).toHaveBeenCalledWith(
-        expect.objectContaining({ contentType: 'image/png' })
+        expect.objectContaining({
+          filename: 'photo.png',
+          contentType: 'image/png',
+        })
       );
       expect(imageRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ mimeType: 'image/png' })

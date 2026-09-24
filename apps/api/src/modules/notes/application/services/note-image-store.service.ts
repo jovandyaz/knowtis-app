@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import type { NoteImage } from '../../../../database/schema';
-import type { ImageMimeType } from '../../domain/image-type';
+import { imageFilename, type ImageMimeType } from '../../domain/image-type';
 import {
   IMAGE_STORAGE,
   type ImageStorage,
@@ -34,12 +34,13 @@ export class NoteImageStoreService {
 
   /**
    * Uploads image bytes whose type the caller already verified, and records them in `note_images`.
+   * The blob is named with the extension of `mimeType`, whatever extension `filename` carries.
    * Callers own the note and access checks.
    */
   async store(input: StoreNoteImageInput): Promise<NoteImage> {
     const uploaded = await this.imageStorage.upload({
       noteId: input.noteId,
-      filename: input.filename,
+      filename: imageFilename(input.filename, input.mimeType),
       data: input.data,
       contentType: input.mimeType,
     });
