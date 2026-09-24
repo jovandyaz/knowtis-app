@@ -56,8 +56,8 @@ export interface ConversationRepository {
   ): Promise<void>;
   /**
    * Oldest→newest, last `limit` rows, as `userId` may read them now: sources keep only the notes
-   * they can still open, under each note's current title, and a tool result that involves any other
-   * note is replaced by `NOTE_UNAVAILABLE_OUTPUT`.
+   * they can still open, under each note's current title; a tool call on any other note has its input
+   * replaced by `NOTE_UNAVAILABLE_INPUT`, and a tool result that involves one by `NOTE_UNAVAILABLE_OUTPUT`.
    */
   loadMessages(
     conversationId: string,

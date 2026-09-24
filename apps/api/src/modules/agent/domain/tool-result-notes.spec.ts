@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { AgentMessagePart, AgentRole } from './agent-message';
 import type { ConversationMessageRow } from './ports/conversation.repository';
 import {
+  NOTE_UNAVAILABLE_INPUT,
   NOTE_UNAVAILABLE_OUTPUT,
-  noteIdsInToolResults,
-  redactUnreadableToolResults,
+  noteIdsInToolParts,
+  redactUnreadableToolParts,
 } from './tool-result-notes';
 
 const call = (
@@ -25,6 +26,9 @@ const result = (
   output,
   outputType: 'json',
 });
+
+const redactedCall = (toolCallId: string, toolName: string): AgentMessagePart =>
+  call(toolCallId, toolName, NOTE_UNAVAILABLE_INPUT);
 
 const redacted = (toolCallId: string, toolName: string): AgentMessagePart => ({
   type: 'tool-result',
@@ -64,7 +68,7 @@ const rowsOf = (
 
 const note = (id: string) => ({ id, title: `title-${id}` });
 
-describe('noteIdsInToolResults', () => {
+describe('noteIdsInToolParts', () => {
   it('names the notes a result depends on through its call argument and its output, once each', () => {
     const rows = rowsOf(
       [
@@ -82,7 +86,7 @@ describe('noteIdsInToolResults', () => {
       ]
     );
 
-    expect(noteIdsInToolResults(rows)).toEqual(['a', 'b', 'c']);
+    expect(noteIdsInToolParts(rows)).toEqual(['a', 'b', 'c']);
   });
 
   it('names every note in lowercase, however the id was written', () => {
@@ -91,26 +95,26 @@ describe('noteIdsInToolResults', () => {
       [result('c1', 'getNote', { id: 'ABC', title: 'Upper' })]
     );
 
-    expect(noteIdsInToolResults(rows)).toEqual(['abc']);
+    expect(noteIdsInToolParts(rows)).toEqual(['abc']);
   });
 
-  it('ignores a call whose result is not in the window', () => {
+  it('names the note a call was given even when its result is not in the window, so its input can be redacted', () => {
     const rows = rowsOf([call('c1', 'getNote', { noteId: 'a' })], []);
 
-    expect(noteIdsInToolResults(rows)).toEqual([]);
+    expect(noteIdsInToolParts(rows)).toEqual(['a']);
   });
 });
 
-describe('redactUnreadableToolResults', () => {
+describe('redactUnreadableToolParts', () => {
   it('redacts a getNote result by the note its call asked for', () => {
     const rows = rowsOf(
       [call('c1', 'getNote', { noteId: 'a' })],
       [result('c1', 'getNote', { error: 'Note not found or not accessible.' })]
     );
 
-    const redactedRows = redactUnreadableToolResults(rows, new Set());
+    const redactedRows = redactUnreadableToolParts(rows, new Set());
 
-    expect(redactedRows[1].parts).toEqual(rows[1].parts);
+    expect(redactedRows[1].parts).toEqual([redactedCall('c1', 'getNote')]);
     expect(redactedRows[2].parts).toEqual([redacted('c1', 'getNote')]);
   });
 
@@ -120,11 +124,11 @@ describe('redactUnreadableToolResults', () => {
       [result('c1', 'listRecentNotes', [note('a'), note('b')])]
     );
 
-    expect(redactUnreadableToolResults(rows, new Set(['a']))[2].parts).toEqual([
+    expect(redactUnreadableToolParts(rows, new Set(['a']))[2].parts).toEqual([
       redacted('c1', 'listRecentNotes'),
     ]);
     expect(
-      redactUnreadableToolResults(rows, new Set(['a', 'b']))[2].parts
+      redactUnreadableToolParts(rows, new Set(['a', 'b']))[2].parts
     ).toEqual(rows[2].parts);
   });
 
@@ -134,7 +138,7 @@ describe('redactUnreadableToolResults', () => {
       [result('c1', 'getNotesOverview', { total: 3, owned: 3 })]
     );
 
-    expect(redactUnreadableToolResults(rows, new Set())).toEqual(rows);
+    expect(redactUnreadableToolParts(rows, new Set())).toEqual(rows);
   });
 
   it('matches note ids without regard to case', () => {
@@ -143,8 +147,8 @@ describe('redactUnreadableToolResults', () => {
       [result('c1', 'getNote', { id: 'ABC', title: 'Upper' })]
     );
 
-    expect(redactUnreadableToolResults(rows, new Set(['abc']))).toEqual(rows);
-    expect(redactUnreadableToolResults(rows, new Set(['ABC']))).toEqual(rows);
+    expect(redactUnreadableToolParts(rows, new Set(['abc']))).toEqual(rows);
+    expect(redactUnreadableToolParts(rows, new Set(['ABC']))).toEqual(rows);
   });
 
   it('pairs a reused call id only with the call of its own turn', () => {
@@ -161,7 +165,7 @@ describe('redactUnreadableToolResults', () => {
       ),
     ];
 
-    const redactedRows = redactUnreadableToolResults(rows, new Set(['kept']));
+    const redactedRows = redactUnreadableToolParts(rows, new Set(['kept']));
 
     expect(redactedRows[2].parts).toEqual([redacted('tool_0', 'getNote')]);
     expect(redactedRows[5].parts).toEqual(rows[5].parts);
@@ -176,9 +180,39 @@ describe('redactUnreadableToolResults', () => {
       [result('dup', 'getNote', note('kept'))]
     );
 
-    expect(
-      redactUnreadableToolResults(rows, new Set(['kept']))[2].parts
-    ).toEqual([redacted('dup', 'getNote')]);
+    expect(redactUnreadableToolParts(rows, new Set(['kept']))[2].parts).toEqual(
+      [redacted('dup', 'getNote')]
+    );
+  });
+
+  it('replaces the input of a call on an unreadable note, which may quote it, and keeps the call paired with its result', () => {
+    const rows = rowsOf(
+      [
+        call('c1', 'proposeEditNote', {
+          noteId: 'lost',
+          edits: [{ oldText: 'the secret paragraph', newText: 'x' }],
+        }),
+        call('c2', 'proposeUpdateNote', {
+          noteId: 'kept',
+          contentMarkdown: 'the whole body',
+        }),
+      ],
+      [
+        result('c1', 'proposeEditNote', { ok: true }),
+        result('c2', 'proposeUpdateNote', { ok: true }),
+      ]
+    );
+
+    const redactedRows = redactUnreadableToolParts(rows, new Set(['kept']));
+
+    expect(redactedRows[1].parts).toEqual([
+      redactedCall('c1', 'proposeEditNote'),
+      rows[1].parts?.[1],
+    ]);
+    expect(redactedRows[2].parts).toEqual([
+      redacted('c1', 'proposeEditNote'),
+      rows[2].parts?.[1],
+    ]);
   });
 
   it('pairs a call id reused by the resumed leg of a turn only with the call of its own leg', () => {
@@ -192,9 +226,10 @@ describe('redactUnreadableToolResults', () => {
       legEnd('t1'),
     ];
 
-    const redactedRows = redactUnreadableToolResults(rows, new Set(['kept']));
+    const redactedRows = redactUnreadableToolParts(rows, new Set(['kept']));
 
     expect(redactedRows[2].parts).toEqual([redacted('tool_0', 'getNote')]);
+    expect(redactedRows[4].parts).toEqual(rows[4].parts);
     expect(redactedRows[5].parts).toEqual(rows[5].parts);
   });
 });

@@ -42,8 +42,8 @@ import type {
   LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
 import {
-  noteIdsInToolResults,
-  redactUnreadableToolResults,
+  noteIdsInToolParts,
+  redactUnreadableToolParts,
 } from '../../domain/tool-result-notes';
 import { alignTranscriptWindow } from '../../domain/transcript-window';
 
@@ -210,10 +210,10 @@ export class DrizzleConversationRepository implements ConversationRepository {
       turnId: r.turnId ?? null,
     }));
     const readable = await this.readableNoteIds(
-      noteIdsInToolResults(rows),
+      noteIdsInToolParts(rows),
       userId
     );
-    return redactUnreadableToolResults(rows, readable);
+    return redactUnreadableToolParts(rows, readable);
   }
 
   private async readableNoteIds(

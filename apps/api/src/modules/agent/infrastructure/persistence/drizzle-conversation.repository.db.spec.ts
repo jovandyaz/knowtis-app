@@ -1307,6 +1307,16 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       outputType: 'json',
     });
 
+    const redactedCall = (
+      toolCallId: string,
+      toolName: string
+    ): AgentMessagePart => ({
+      type: 'tool-call',
+      toolCallId,
+      toolName,
+      input: { note: 'unavailable' },
+    });
+
     const redacted = (
       toolCallId: string,
       toolName: string
@@ -1418,7 +1428,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     });
 
     it.each(LOSING_ACCESS)(
-      'forgets a note in the model context once %s, redacting its tool result and keeping the pair',
+      'forgets a note in the model context once %s, redacting its tool call and result and keeping the pair',
       async (_how, loseAccess) => {
         const noteId = await sharedWithReader('Secret');
         const id = await conversation();
@@ -1430,7 +1440,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         expect(rows.flatMap((row) => row.sources)).toEqual([]);
         expect(rows.map((row) => row.parts)).toEqual([
           null,
-          [getNoteCall(noteId)],
+          [redactedCall(`call-${noteId}`, 'getNote')],
           [redacted(`call-${noteId}`, 'getNote')],
           null,
         ]);
@@ -1438,7 +1448,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => m.parts)
         ).toEqual([
           undefined,
-          [getNoteCall(noteId)],
+          [redactedCall(`call-${noteId}`, 'getNote')],
           [redacted(`call-${noteId}`, 'getNote')],
           undefined,
         ]);
@@ -1608,7 +1618,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       ]);
     });
 
-    it('redacts the result of a proposal made against a note the reader lost', async () => {
+    it('redacts the call and the result of a proposal made against a note the reader lost', async () => {
       const noteId = await sharedWithReader('Plan');
       const id = await conversation();
       const call: AgentMessagePart = {
@@ -1643,7 +1653,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       await trash(noteId);
 
       const rows = await repo.loadMessages(id, READER, 40);
-      expect(rows[1].parts).toEqual([call]);
+      expect(rows[1].parts).toEqual([redactedCall('p1', 'proposeEditNote')]);
       expect(rows[2].parts).toEqual([redacted('p1', 'proposeEditNote')]);
     });
   });
