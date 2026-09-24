@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { EnvConfig } from '../../../../config/env.config';
 import { createInMemoryClaimRedis } from '../../testing/create-in-memory-claim-redis';
 import { TurnClaimService, type TurnClaimRequest } from './turn-claim.service';
 
@@ -10,6 +12,8 @@ const CONVERSATION = '11111111-1111-4111-8111-111111111111';
 const NOTE = '22222222-2222-4222-8222-222222222222';
 const KEY = `agent:turn:${USER}:${TURN}`;
 const ONE_DAY_SECONDS = 86_400;
+const AGENT_MAX_MS = 300_000;
+const RUNNING_LEASE_SECONDS = 360;
 
 const REQUEST: TurnClaimRequest = {
   userId: USER,
@@ -19,9 +23,13 @@ const REQUEST: TurnClaimRequest = {
   content: 'summarize my notes',
 };
 
-function setup() {
+function setup(agentMaxMs = AGENT_MAX_MS) {
   const redis = createInMemoryClaimRedis();
-  return { redis, claims: new TurnClaimService(redis.provider) };
+  const config = { get: () => agentMaxMs } as unknown as ConfigService<
+    EnvConfig,
+    true
+  >;
+  return { redis, claims: new TurnClaimService(redis.provider, config) };
 }
 
 function stored(redis: ReturnType<typeof createInMemoryClaimRedis>) {
@@ -37,18 +45,26 @@ describe('TurnClaimService', () => {
     vi.restoreAllMocks();
   });
 
-  it('claims a new turn with a running marker that expires after a day', async () => {
+  it('claims a new turn with a running lease that outlives the turn by a minute', async () => {
     const { redis, claims } = setup();
 
     expect(await claims.claim(REQUEST)).toBe('claimed');
 
     expect(stored(redis)).toEqual({
-      ttlSeconds: ONE_DAY_SECONDS,
+      ttlSeconds: RUNNING_LEASE_SECONDS,
       value: {
         status: 'running',
         fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
       },
     });
+  });
+
+  it('derives the running lease from the agent turn timeout', async () => {
+    const { redis, claims } = setup(120_000);
+
+    await claims.claim(REQUEST);
+
+    expect(stored(redis).ttlSeconds).toBe(180);
   });
 
   it('reports a second delivery of a running turn as running', async () => {

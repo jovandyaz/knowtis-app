@@ -49,7 +49,7 @@ function makeGateway({
     { execute: vi.fn(), ...handler } as unknown as RunAgentTurnHandler,
     { execute: vi.fn(), ...approve } as unknown as ApproveMutationHandler,
     { execute: vi.fn(), ...reject } as unknown as RejectMutationHandler,
-    new TurnClaimService(redis.provider),
+    new TurnClaimService(redis.provider, config),
     jwt as unknown as JwtService,
     (featureFlags ?? {
       isEnabled: vi.fn().mockResolvedValue(true),

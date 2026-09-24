@@ -1,14 +1,18 @@
 import { createHash } from 'node:crypto';
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
+import type { EnvConfig } from '../../../../config/env.config';
 import {
   AI_REDIS,
   AIRedisProvider,
 } from '../../../ai/infrastructure/redis/ai-redis.provider';
 
 const TURN_CLAIM_TTL_SECONDS = 86_400;
+const MS_PER_SECOND = 1_000;
+const RUNNING_LEASE_MARGIN_SECONDS = 60;
 
 /**
  * `RUNNING` also covers a claim released while it was being read, since the retry
@@ -51,14 +55,25 @@ const storedClaimSchema = z.object({
 
 /**
  * Claims a client turn id in Redis so a resent turn never runs twice, following the
- * IETF Idempotency-Key draft: a claim lives for a day, and a fingerprint of the
- * request tells a resend from an id reused for another message.
+ * IETF Idempotency-Key draft: a fingerprint of the request tells a resend from an
+ * id reused for another message. A running claim is a lease that outlives the turn,
+ * so one orphaned by a lost settle or a shutdown frees itself: `AI_AGENT_MAX_MS`
+ * caps the model, and a minute covers the history, memory, guard and persistence
+ * work around it. A settled claim is kept for a day, like Stripe's stored outcomes.
  */
 @Injectable()
 export class TurnClaimService {
   private readonly logger = new Logger(TurnClaimService.name);
+  private readonly runningLeaseSeconds: number;
 
-  constructor(@Inject(AI_REDIS) private readonly redis: AIRedisProvider) {}
+  constructor(
+    @Inject(AI_REDIS) private readonly redis: AIRedisProvider,
+    configService: ConfigService<EnvConfig, true>
+  ) {
+    this.runningLeaseSeconds =
+      Math.ceil(configService.get('AI_AGENT_MAX_MS') / MS_PER_SECOND) +
+      RUNNING_LEASE_MARGIN_SECONDS;
+  }
 
   async claim(request: TurnClaimRequest): Promise<TurnClaimOutcome> {
     const fingerprint = fingerprintOf(request);
@@ -67,7 +82,7 @@ export class TurnClaimService {
         keyOf(request),
         serialize(TURN_CLAIM_OUTCOME.RUNNING, fingerprint),
         'EX',
-        TURN_CLAIM_TTL_SECONDS,
+        this.runningLeaseSeconds,
         'NX'
       );
       if (set === 'OK') {
