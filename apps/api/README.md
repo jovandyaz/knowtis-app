@@ -52,8 +52,8 @@ apps/api/src/
 ├── app/            # AppModule, AppController
 ├── assets/         # Static assets copied into the build
 ├── config/         # env.config.ts — Zod schema for environment variables
-├── core/           # Cross-cutting: auth, domain, exceptions, filters, http,
-│                   # interceptors, logging (Pino), pagination, swagger, throttling
+├── core/           # Cross-cutting: auth, domain, errors, filters, http,
+│                   # interceptors, pagination, swagger, throttling, validation
 ├── database/       # Drizzle schema (27 tables), migrate.ts, baseline, module
 ├── i18n/           # Validation messages (en, es)
 ├── modules/        # Feature modules (below)

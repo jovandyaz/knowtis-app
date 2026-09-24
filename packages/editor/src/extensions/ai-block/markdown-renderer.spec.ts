@@ -2,49 +2,59 @@ import { getSchema } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 
 import { createBaseExtensions } from '../base-extensions';
-import {
-  markdownToFragment,
-  renderMarkdownToSanitizedHtml,
-} from './markdown-renderer';
+import { markdownToFragment } from './markdown-renderer';
 
-describe('renderMarkdownToSanitizedHtml', () => {
-  it('strips images produced by markdown image syntax', () => {
-    const result = renderMarkdownToSanitizedHtml(
-      '![x](https://evil.example/x)'
-    );
-    expect(result).not.toContain('<img');
+const SCHEMA = getSchema(createBaseExtensions());
+
+describe('markdownToFragment', () => {
+  it('drops an image written in markdown image syntax', () => {
+    expect(
+      markdownToFragment('![x](https://evil.example/x) after', SCHEMA).toJSON()
+    ).toEqual([
+      { type: 'paragraph', content: [{ type: 'text', text: 'after' }] },
+    ]);
   });
 
-  it('renders a mermaid fence as the mermaid block element with its code', () => {
+  it('turns a mermaid fence into a mermaid block holding its whole code', () => {
     const code = 'graph TD\n  A[Start<br/>here] --> B\n';
-    const result = renderMarkdownToSanitizedHtml('```mermaid\n' + code + '```');
 
-    const doc = new DOMParser().parseFromString(result, 'text/html');
-    const block = doc.querySelector('div[data-mermaid-block]');
-    expect(block?.getAttribute('data-code')).toBe(code.trim());
-    expect(doc.querySelector('pre')).toBeNull();
+    const fragment = markdownToFragment('```mermaid\n' + code + '```', SCHEMA);
+
+    expect(fragment.childCount).toBe(1);
+    expect(fragment.child(0).type.name).toBe('mermaidBlock');
+    expect(fragment.child(0).attrs['code']).toBe(code.trim());
   });
 
-  it('keeps a non-mermaid fence as a code block', () => {
-    const result = renderMarkdownToSanitizedHtml('```ts\nconst a = 1;\n```');
-    expect(result).toContain('<pre><code class="language-ts">');
-    expect(result).not.toContain('data-mermaid-block');
+  it('keeps a non-mermaid fence as a code block with its language', () => {
+    const fragment = markdownToFragment('```ts\nconst a = 1;\n```', SCHEMA);
+
+    expect(fragment.childCount).toBe(1);
+    expect(fragment.child(0).type.name).toBe('codeBlock');
+    expect(fragment.child(0).attrs['language']).toBe('ts');
   });
 
   it('keeps stripping arrow-bearing attributes outside the mermaid block', () => {
-    const result = renderMarkdownToSanitizedHtml(
-      '[x](https://a.example "see -->")'
+    const fragment = markdownToFragment(
+      '[x](https://a.example "see -->") [y](https://b.example "plain")',
+      SCHEMA
     );
-    expect(result).toContain('<a href="https://a.example"');
-    expect(result).not.toContain('title=');
-  });
-});
 
-describe('markdownToFragment', () => {
+    const links: unknown[] = [];
+    fragment.descendants((node) => {
+      node.marks.forEach((mark) =>
+        links.push([mark.attrs['href'], mark.attrs['title']])
+      );
+    });
+    expect(links).toEqual([
+      ['https://a.example', null],
+      ['https://b.example', 'plain'],
+    ]);
+  });
+
   it("reads a soft line break as a space and keeps a code block's whitespace", () => {
     const fragment = markdownToFragment(
       'line one\nline two\n\n```ts\nconst a = 1;\n\n  b();\n```',
-      getSchema(createBaseExtensions())
+      SCHEMA
     );
 
     const blocks: [string, string][] = [];
@@ -71,7 +81,7 @@ describe('markdownToFragment', () => {
         '| h | k |\n| - | - |\n| 1 | 2 |',
         '```mermaid\ngraph TD\n  A --> B\n```',
       ].join('\n\n'),
-      getSchema(createBaseExtensions())
+      SCHEMA
     );
 
     const blocks: string[] = [];

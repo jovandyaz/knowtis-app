@@ -11,6 +11,12 @@ declare module 'markdown-it-task-lists' {
   export default taskLists;
 }
 
+declare module 'markdown-it-ins' {
+  import type { PluginSimple } from 'markdown-it';
+  const ins: PluginSimple;
+  export default ins;
+}
+
 declare module 'markdown-it-mark' {
   import type { PluginSimple } from 'markdown-it';
   const mark: PluginSimple;

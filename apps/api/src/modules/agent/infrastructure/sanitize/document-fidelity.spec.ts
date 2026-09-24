@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { htmlToMarkdown } from '@knowtis/note-markdown';
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { nodesLostBetween } from './document-fidelity';
 import { markdownToNoteHtml } from './html-sanitizer';
+
+const STORED_SRC = `https://${STORED_IMAGE_HOST}/notes/n1/a.webp`;
+const FOREIGN_SRC = 'https://attacker.example/x.png';
 
 const roundTripped = (html: string): string =>
   markdownToNoteHtml(htmlToMarkdown(html));
@@ -61,6 +65,48 @@ describe('nodesLostBetween', () => {
     expect(
       nodesLostBetween('<p>a</p><p>&nbsp;b</p>', '<p>a</p><p></p>')
     ).toStrictEqual(['text']);
+  });
+
+  it('names a mark the second document no longer carries', () => {
+    expect(nodesLostBetween('<p><u>all</u></p>', '<p>all</p>')).toStrictEqual([
+      'underline',
+    ]);
+  });
+
+  it('reports nothing when a mark only moves off the space at its edge', () => {
+    expect(
+      nodesLostBetween(
+        '<p><strong>a </strong>b</p>',
+        '<p><strong>a</strong> b</p>'
+      )
+    ).toStrictEqual([]);
+  });
+
+  it('does not count an image the app never stored, nor its caption', () => {
+    expect(
+      nodesLostBetween(
+        `<p>a</p><figure data-image=""><img src="${FOREIGN_SRC}" alt="x"><figcaption>cap</figcaption></figure>`,
+        '<p>a</p>'
+      )
+    ).toStrictEqual([]);
+  });
+
+  it('does not count a figure whose foreign src the schema already omitted', () => {
+    expect(
+      nodesLostBetween(
+        '<p>a</p><figure data-image=""><img alt="x"><figcaption></figcaption></figure>',
+        '<p>a</p>'
+      )
+    ).toStrictEqual([]);
+  });
+
+  it('still counts an image the app stored', () => {
+    expect(
+      nodesLostBetween(
+        `<p>a</p><figure data-image=""><img src="${STORED_SRC}" alt="x"><figcaption></figcaption></figure>`,
+        '<p>a</p>'
+      )
+    ).toStrictEqual(['image']);
   });
 
   it('treats an unreadable document as no evidence of loss', () => {
