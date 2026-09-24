@@ -39,6 +39,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const isDevelopment = configService.get('NODE_ENV') === 'development';
   app.useLogger(isDevelopment ? new ConsoleLogger() : new JsonConsoleLogger());
+  // An HTTP app only flushes buffered logs once listen() succeeds, so a failed
+  // start would exit without printing its init logs or the error.
+  app.flushLogs();
 
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
@@ -124,6 +127,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error: unknown) => {
+  Logger.flush();
   Logger.error(
     'API bootstrap failed',
     error instanceof Error ? error.stack : String(error),
