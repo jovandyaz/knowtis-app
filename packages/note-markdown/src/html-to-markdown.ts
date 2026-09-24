@@ -419,6 +419,11 @@ turndown.addRule('editorImage', {
   replacement: (_content, node) => imageMarkdown(node as HTMLElement),
 });
 
+turndown.addRule('underline', {
+  filter: 'u',
+  replacement: (content) => `++${content}++`,
+});
+
 turndown.addRule('highlight', {
   filter: 'mark',
   replacement: (content) => `==${content}==`,
@@ -441,7 +446,7 @@ turndown.addRule('strikethrough', {
 });
 
 // turndown runs escape only on text nodes (nodeType 3), never on rule output, so escaping literal
-// '~ ^ ==' here keeps them literal across the markdownToHtml round-trip (else markdown-it-sub/sup/mark
+// '~ ^ == ++' here keeps them literal across the markdownToHtml round-trip (else markdown-it-sub/sup/mark/ins
 // re-parses them); the lookbehind skips delimiters default escape already backslashed to avoid a leaked '\'.
 // An '&' that opens an entity reference is escaped too, or markdown-it would decode text the user typed.
 const defaultEscape = turndown.escape.bind(turndown);
@@ -449,14 +454,16 @@ turndown.escape = (text) =>
   defaultEscape(text)
     .replace(/(?<!\\)[~^]/g, '\\$&')
     .replace(/(?<!\\)={2,}/g, (run) => run.replace(/=/g, '\\='))
+    .replace(/(?<!\\)\+{2,}/g, (run) => run.replace(/\+/g, '\\+'))
     .replace(ENTITY_REFERENCE_START, '\\&');
 
 /**
  * Converts Tiptap-produced HTML to Markdown, inverting `markdownToHtml`:
- * task lists, `==mark==`, `~sub~`, `^sup^`, `~~del~~`, mermaid, images and GFM
- * tables survive a round-trip. Intended marks (emitted by rules) round-trip
- * unescaped; literal `~`, `^`, and `==` in text are backslash-escaped so they
- * survive as literals rather than re-parsing into marks via `markdownToHtml`.
+ * task lists, `++underline++`, `==mark==`, `~sub~`, `^sup^`, `~~del~~`,
+ * mermaid, images and GFM tables survive a round-trip. Intended marks (emitted
+ * by rules) round-trip unescaped; literal `~`, `^`, `==` and `++` in text are
+ * backslash-escaped so they survive as literals rather than re-parsing into
+ * marks via `markdownToHtml`.
  */
 export function htmlToMarkdown(html: string): string {
   return turndown.turndown(html);

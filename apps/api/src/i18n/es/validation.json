@@ -11,5 +11,6 @@
   "INVALID_CODE": "Formato de código de verificación inválido",
   "INVALID_LENGTH": "Formato de token inválido",
   "IS_IN": "{property} debe ser uno de: {constraints.0}",
+  "IS_STORED_IMAGE_URL": "{property} debe ser una imagen subida a Knowtis",
   "USER_NOT_FOUND": "Usuario no encontrado"
 }

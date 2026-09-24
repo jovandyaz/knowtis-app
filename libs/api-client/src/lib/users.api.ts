@@ -6,7 +6,6 @@ export type { UserProfile };
 
 export interface UpdateProfileInput {
   name?: string | undefined;
-  avatarUrl?: string | undefined;
   locale?: string | undefined;
 }
 

@@ -17,7 +17,8 @@ export const noteSchemaExtensions = [...createSemanticExtensions()];
 
 export const editorSchema = getSchema(noteSchemaExtensions);
 
-function isForeignImage(node: JSONContent): boolean {
+/** An image node whose `src` the app never stored: never content any write keeps. */
+export function isForeignImage(node: JSONContent): boolean {
   if (node.type !== IMAGE_NODE_NAME) {
     return false;
   }

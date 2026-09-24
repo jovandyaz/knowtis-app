@@ -24,6 +24,7 @@ const ALLOWED_TAGS = [
   'code',
   'strong',
   'em',
+  'u',
   's',
   'a',
   'hr',

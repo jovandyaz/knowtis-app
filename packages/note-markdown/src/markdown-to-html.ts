@@ -1,5 +1,6 @@
 /// <reference path="./types/markdown-it-plugins.d.ts" />
 import MarkdownIt from 'markdown-it';
+import markdownItIns from 'markdown-it-ins';
 import markdownItMark from 'markdown-it-mark';
 import markdownItSub from 'markdown-it-sub';
 import markdownItSup from 'markdown-it-sup';
@@ -41,9 +42,14 @@ const md = new MarkdownIt({
 });
 
 md.use(markdownItTaskLists, { enabled: true, label: true });
+md.use(markdownItIns);
 md.use(markdownItMark);
 md.use(markdownItSup);
 md.use(markdownItSub);
+
+// The editor's underline mark parses only <u>, so it would drop the plugin's <ins>.
+md.renderer.rules.ins_open = () => '<u>';
+md.renderer.rules.ins_close = () => '</u>';
 
 type Token = ReturnType<MarkdownIt['parse']>[number];
 
@@ -419,6 +425,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
  *
  * Supports CommonMark + GFM tables plus:
  * - Task lists: `- [ ] todo` / `- [x] done`
+ * - Underline: `++text++` → `<u>text</u>`
  * - Highlight: `==text==` → `<mark>text</mark>`
  * - Superscript: `^text^` → `<sup>text</sup>`
  * - Subscript: `~text~` → `<sub>text</sub>`

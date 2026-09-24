@@ -165,7 +165,7 @@ export function registerNotesTools(
     {
       title: 'Create Note',
       description:
-        'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (```mermaid ... ```).',
+        'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), underline (++text++), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (```mermaid ... ```).',
       inputSchema: {
         title: z.string().min(1).describe('Title of the new note'),
         content: z
@@ -198,7 +198,7 @@ export function registerNotesTools(
     {
       title: 'Update Note',
       description:
-        'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, highlight, super/subscript, Mermaid diagrams).',
+        'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, underline, highlight, super/subscript, Mermaid diagrams).',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to update'),
         title: z.string().optional().describe('New title'),

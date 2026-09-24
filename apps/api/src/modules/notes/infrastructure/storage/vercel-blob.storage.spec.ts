@@ -1,5 +1,6 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
@@ -40,6 +41,10 @@ describe('VercelBlobStorage', () => {
   beforeEach(() => {
     put.mockReset();
     del.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('uploads to a note-scoped public path and returns url + pathname', async () => {
@@ -91,10 +96,33 @@ describe('VercelBlobStorage', () => {
       pathname: 'notes/n1/x-abc.webp',
     });
     del.mockRejectedValue(new Error('network down'));
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     const storage = makeStorage('vercel_blob_token');
 
     await expect(storage.upload(UPLOAD)).rejects.toThrow(
       /VERCEL_BLOB_READ_WRITE_TOKEN/
+    );
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[0]).toEqual(
+      expect.stringContaining('notes/n1/x-abc.webp')
+    );
+    expect(warn.mock.calls[0]?.[0]).toEqual(
+      expect.stringContaining('network down')
+    );
+  });
+
+  it('reports the store mismatch when the returned url does not parse', async () => {
+    put.mockResolvedValue({
+      url: 'not a url',
+      pathname: 'notes/n1/x-abc.webp',
+    });
+    del.mockResolvedValue(undefined);
+    const storage = makeStorage('vercel_blob_token');
+
+    await expect(storage.upload(UPLOAD)).rejects.toThrow(
+      /not a url.*VERCEL_BLOB_READ_WRITE_TOKEN belongs to another Blob store/
     );
   });
 

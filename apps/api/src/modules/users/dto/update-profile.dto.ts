@@ -8,7 +8,9 @@ import {
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
-import { SUPPORTED_LOCALES } from '@knowtis/shared-util';
+import { STORED_IMAGE_HOST, SUPPORTED_LOCALES } from '@knowtis/shared-util';
+
+import { IsStoredImageUrl } from './is-stored-image-url.validator';
 
 export class UpdateProfileDto {
   @ApiProperty({
@@ -25,15 +27,20 @@ export class UpdateProfileDto {
   name?: string;
 
   @ApiProperty({
-    description: 'URL to user avatar image',
-    example: 'https://example.com/avatar.jpg',
+    description:
+      "URL of an avatar image in the app's blob store; null clears the avatar",
+    example: `https://${STORED_IMAGE_HOST}/avatars/avatar.png`,
     required: false,
+    nullable: true,
     maxLength: 500,
   })
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   @MaxLength(500, { message: i18nValidationMessage('validation.MAX_LENGTH') })
-  avatarUrl?: string;
+  @IsStoredImageUrl({
+    message: i18nValidationMessage('validation.IS_STORED_IMAGE_URL'),
+  })
+  avatarUrl?: string | null;
 
   @ApiProperty({
     description: 'Preferred locale for the user',

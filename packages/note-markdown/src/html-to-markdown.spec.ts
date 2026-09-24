@@ -33,6 +33,16 @@ describe('htmlToMarkdown', () => {
     expect(md).toContain('x^2^');
   });
 
+  it('writes underline as ++text++, which markdownToHtml reads back', () => {
+    const md = htmlToMarkdown('<p>a <u>under</u> b</p>');
+    expect(md).toBe('a ++under++ b');
+    expect(markdownToHtml(md)).toBe('<p>a <u>under</u> b</p>\n');
+  });
+
+  it('moves a space at the edge of an underline just outside it', () => {
+    expect(htmlToMarkdown('<p><u>a </u>b</p>')).toBe('++a++ b');
+  });
+
   it('should convert mermaid blocks back to fenced code', () => {
     const md = htmlToMarkdown(
       '<div data-mermaid-block data-code="graph TD;&#10;A--&gt;B"></div>'
@@ -72,6 +82,8 @@ describe('htmlToMarkdown', () => {
       { text: 'H~2~O', visible: 'H~2~O' },
       { text: '2^3^', visible: '2^3^' },
       { text: 'a~~b~~c', visible: 'a~~b~~c' },
+      { text: 'a ++b++ c', visible: 'a ++b++ c' },
+      { text: 'C++ and C++17', visible: 'C++ and C++17' },
     ];
     for (const { text, visible } of cases) {
       const html = markdownToHtml(htmlToMarkdown(`<p>${text}</p>`));
@@ -79,6 +91,7 @@ describe('htmlToMarkdown', () => {
       expect(html).not.toContain('<sub>');
       expect(html).not.toContain('<sup>');
       expect(html).not.toContain('<s>');
+      expect(html).not.toContain('<u>');
       expect(html).toContain(visible);
     }
   });
@@ -113,6 +126,7 @@ describe('htmlToMarkdown', () => {
     expect(htmlToMarkdown('<p>H<sub>2</sub>O</p>')).toContain('~2~');
     expect(htmlToMarkdown('<p>x<sup>3</sup></p>')).toContain('^3^');
     expect(htmlToMarkdown('<p><s>gone</s></p>')).toContain('~~gone~~');
+    expect(htmlToMarkdown('<p><u>kept</u></p>')).toBe('++kept++');
   });
 
   it('should round-trip a document co-locating sup, table, strike, mermaid and sub', () => {

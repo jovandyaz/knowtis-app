@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useAIStore } from '@/stores/ai.store';
-import type { Fragment } from '@tiptap/pm/model';
+import type { Fragment, Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Selection } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
@@ -24,6 +25,31 @@ function replacementContent(editor: Editor, markdown: string): Fragment {
   // Inserted as a block, a one-paragraph answer would split the sentence it
   // replaces, or turn the heading it replaces into a paragraph.
   return onlyBlock?.type.name === PARAGRAPH_NODE ? onlyBlock.content : blocks;
+}
+
+function positionAfterBlockAt(selection: Selection): number {
+  const { $to } = selection;
+  return $to.parent.isTextblock ? $to.after() : selection.to;
+}
+
+function positionBelow(
+  doc: ProseMirrorNode,
+  rangeFrom: number,
+  rangeTo: number
+): number {
+  const clamp = (pos: number) => Math.min(Math.max(pos, 0), doc.content.size);
+  const from = clamp(rangeFrom);
+  const to = clamp(rangeTo);
+  const $to = doc.resolve(to);
+  const block = $to.parent;
+  if (!block.isTextblock || block.content.size === 0) {
+    return to;
+  }
+  if ($to.parentOffset === 0 && from < to) {
+    const lastSelected = Selection.findFrom(doc.resolve($to.before()), -1);
+    return lastSelected ? positionAfterBlockAt(lastSelected) : to;
+  }
+  return $to.after();
 }
 
 export function AIResultPanel({ editor }: AIResultPanelProps) {
@@ -64,12 +90,14 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       if (editor.isDestroyed) {
         return;
       }
-      const pos = selectionRange?.to ?? editor.state.selection.to;
+      const { from, to } = selectionRange ?? editor.state.selection;
       editor
         .chain()
         .focus()
-        .setTextSelection(pos)
-        .insertContent(markdownToFragment(text, editor.schema))
+        .insertContentAt(
+          positionBelow(editor.state.doc, from, to),
+          markdownToFragment(text, editor.schema)
+        )
         .run();
       reset();
     },

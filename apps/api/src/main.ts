@@ -11,7 +11,8 @@ import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
 import { buildAllowedOrigins, buildCorsOptions } from './config/cors-origins';
 import { SHUTDOWN_OPTIONS } from './config/shutdown-options';
-import { GlobalExceptionFilter, LoggingInterceptor } from './core';
+import { GlobalExceptionFilter } from './core/filters/http-exception.filter';
+import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
 import { createOauthRateLimit } from './modules/oauth/oauth-rate-limit.middleware';
 import {
   applyBodyParsersExcludingOauth,
