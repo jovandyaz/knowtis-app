@@ -84,7 +84,10 @@ function readableSources(userId: string): SQL<AgentSource[]> {
       jsonb_agg(jsonb_build_object('id', ${notes.id}, 'title', ${notes.title}) ORDER BY source.ordinal),
       '[]'::jsonb
     )
-    FROM jsonb_array_elements(coalesce(${conversationMessages.sources}, '[]'::jsonb))
+    FROM jsonb_array_elements(CASE
+      WHEN jsonb_typeof(${conversationMessages.sources}) = 'array' THEN ${conversationMessages.sources}
+      ELSE '[]'::jsonb
+    END)
       WITH ORDINALITY AS source(entry, ordinal)
     JOIN ${notes} ON ${notes.id} = CASE
       WHEN source.entry ->> 'id' ~ ${UUID_TEXT_PATTERN} THEN (source.entry ->> 'id')::uuid
@@ -244,9 +247,9 @@ export class DrizzleConversationRepository implements ConversationRepository {
     return stored.parts;
   }
 
-  async appendTurn(input: AppendTurnInput): Promise<void> {
+  async appendTurn(input: AppendTurnInput): Promise<boolean> {
     if (input.messages.length === 0) {
-      return;
+      return false;
     }
     const values = input.messages.map((m) => ({
       conversationId: input.conversationId,
@@ -264,7 +267,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
     }));
     const [first, ...rest] = values;
     const claimsTurn = first.role === 'user';
-    await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       if (claimsTurn) {
         const claimed = await tx
           .insert(conversationMessages)
@@ -283,7 +286,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
             conversationId: input.conversationId,
             turnId: input.turnId,
           });
-          return;
+          return false;
         }
       }
       const unclaimed = claimsTurn ? rest : values;
@@ -294,6 +297,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         .update(conversations)
         .set({ updatedAt: sql`now()` })
         .where(eq(conversations.id, input.conversationId));
+      return true;
     });
   }
 

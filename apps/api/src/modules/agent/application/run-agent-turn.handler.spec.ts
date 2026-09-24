@@ -130,7 +130,7 @@ function makeConversations(history: ConversationMessageRow[] = []) {
     findByIdForUser: vi.fn().mockResolvedValue({ id: 'conv-1', model: null }),
     setModel: vi.fn().mockResolvedValue(undefined),
     loadMessages: vi.fn().mockResolvedValue(history),
-    appendTurn: vi.fn().mockResolvedValue(undefined),
+    appendTurn: vi.fn().mockResolvedValue(true),
   } as unknown as ConversationRepository;
 }
 
@@ -4720,6 +4720,21 @@ describe('RunAgentTurnHandler', () => {
           toolRows: 1,
           stopReason: 'completed',
         })
+      );
+    });
+
+    it('logs no persisted rows when the turn was already stored', async () => {
+      const logSpy = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const { conversations, execute } = completedRun();
+      vi.mocked(conversations.appendTurn).mockResolvedValue(false);
+
+      await execute();
+
+      expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+      expect(logSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'agent.conversation.persisted' })
       );
     });
 

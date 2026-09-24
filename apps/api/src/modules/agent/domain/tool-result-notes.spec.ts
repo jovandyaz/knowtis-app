@@ -36,23 +36,25 @@ const redacted = (toolCallId: string, toolName: string): AgentMessagePart => ({
 
 const row = (
   role: AgentRole,
-  parts: AgentMessagePart[] | null
+  parts: AgentMessagePart[] | null,
+  turnId: string
 ): ConversationMessageRow => ({
   role,
   content: '',
   sources: [],
   parts,
   stopReason: null,
-  turnId: 't1',
+  turnId,
 });
 
 const rowsOf = (
   calls: AgentMessagePart[],
-  results: AgentMessagePart[]
+  results: AgentMessagePart[],
+  turnId = 't1'
 ): ConversationMessageRow[] => [
-  row('user', null),
-  row('assistant', calls),
-  row('tool', results),
+  row('user', null, turnId),
+  row('assistant', calls, turnId),
+  row('tool', results, turnId),
 ];
 
 const note = (id: string) => ({ id, title: `title-${id}` });
@@ -76,6 +78,15 @@ describe('noteIdsInToolResults', () => {
     );
 
     expect(noteIdsInToolResults(rows)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('names every note in lowercase, however the id was written', () => {
+    const rows = rowsOf(
+      [call('c1', 'getNote', { noteId: 'ABC' })],
+      [result('c1', 'getNote', { id: 'ABC', title: 'Upper' })]
+    );
+
+    expect(noteIdsInToolResults(rows)).toEqual(['abc']);
   });
 
   it('ignores a call whose result is not in the window', () => {
@@ -121,7 +132,37 @@ describe('redactUnreadableToolResults', () => {
     expect(redactUnreadableToolResults(rows, new Set())).toEqual(rows);
   });
 
-  it('checks each result against every call that shares its id, so a collision over-redacts', () => {
+  it('matches note ids without regard to case', () => {
+    const rows = rowsOf(
+      [call('c1', 'getNote', { noteId: 'ABC' })],
+      [result('c1', 'getNote', { id: 'ABC', title: 'Upper' })]
+    );
+
+    expect(redactUnreadableToolResults(rows, new Set(['abc']))).toEqual(rows);
+    expect(redactUnreadableToolResults(rows, new Set(['ABC']))).toEqual(rows);
+  });
+
+  it('pairs a reused call id only with the call of its own turn', () => {
+    const rows = [
+      ...rowsOf(
+        [call('tool_0', 'getNote', { noteId: 'lost' })],
+        [result('tool_0', 'getNote', { error: 'gone' })],
+        't1'
+      ),
+      ...rowsOf(
+        [call('tool_0', 'listRecentNotes', { limit: 5 })],
+        [result('tool_0', 'listRecentNotes', [note('kept')])],
+        't3'
+      ),
+    ];
+
+    const redactedRows = redactUnreadableToolResults(rows, new Set(['kept']));
+
+    expect(redactedRows[2].parts).toEqual([redacted('tool_0', 'getNote')]);
+    expect(redactedRows[5].parts).toEqual(rows[5].parts);
+  });
+
+  it('checks each result against every call of its turn that shares its id, so a collision over-redacts', () => {
     const rows = rowsOf(
       [
         call('dup', 'getNote', { noteId: 'lost' }),

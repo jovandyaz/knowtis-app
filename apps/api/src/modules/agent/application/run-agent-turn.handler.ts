@@ -388,11 +388,14 @@ export class RunAgentTurnHandler {
       return;
     }
     try {
-      await this.conversations.appendTurn({
+      const persisted = await this.conversations.appendTurn({
         conversationId: persistence.conversationId,
         turnId: persistence.turnId,
         messages,
       });
+      if (!persisted) {
+        return;
+      }
       this.logger.log({
         event: 'agent.conversation.persisted',
         conversationId: persistence.conversationId,

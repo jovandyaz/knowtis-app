@@ -407,6 +407,31 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     }
   );
 
+  it.each([
+    ['an object', { id: 'x', title: 'X' }],
+    ['a string', 'x'],
+  ])(
+    'loads a row whose stored sources are %s as citing nothing',
+    async (_what, stored) => {
+      const { id } = await repo.create({ userId: USER, title: 't' });
+      await db.insert(conversationMessages).values({
+        conversationId: id,
+        turnId: randomUUID(),
+        role: 'assistant',
+        content: 'malformed sources',
+        sources: stored as unknown as AgentSource[],
+      });
+
+      const rows = await repo.loadMessages(id, USER, 10);
+      const transcript = await repo.loadTranscriptForUser(id, USER, 10);
+
+      expect(rows.map((row) => row.sources)).toEqual([[]]);
+      expect(transcript?.messages.map((message) => message.sources)).toEqual([
+        [],
+      ]);
+    }
+  );
+
   it('returns parts: null for a row persisted under an unknown parts version', async () => {
     const { id } = await repo.create({ userId: USER, title: 't' });
     const unknownVersionParts = {
@@ -542,11 +567,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   it('is a no-op for an empty turn', async () => {
     const { id } = await repo.create({ userId: USER, title: 't' });
-    await repo.appendTurn({
+    const persisted = await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
       messages: [],
     });
+    expect(persisted).toBe(false);
     expect(await repo.loadMessages(id, USER, 40)).toEqual([]);
   });
 
@@ -1026,9 +1052,10 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       const { id } = await repo.create({ userId: USER, title: 't' });
       const turnId = randomUUID();
 
-      await repo.appendTurn(userAndAnswer(id, turnId));
-      await repo.appendTurn(userAndAnswer(id, turnId));
+      const first = await repo.appendTurn(userAndAnswer(id, turnId));
+      const replay = await repo.appendTurn(userAndAnswer(id, turnId));
 
+      expect([first, replay]).toEqual([true, false]);
       const rows = await repo.loadMessages(id, USER, 40);
       expect(rows.map((row) => [row.role, row.content, row.turnId])).toEqual([
         ['user', 'U', turnId],
@@ -1322,6 +1349,89 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       expect(rows.flatMap((row) => row.sources)).toEqual([]);
       expect(rows[2].parts).toEqual([redacted('call-not-a-uuid', 'getNote')]);
       expect(await transcriptSources(id)).toEqual([]);
+    });
+
+    it('matches a note id written in uppercase to the readable note', async () => {
+      const noteId = await sharedWithReader('Open');
+      const upper = noteId.toUpperCase();
+      const id = await conversation();
+      await readNote(id, upper, 'Open');
+
+      const rows = await repo.loadMessages(id, READER, 40);
+
+      expect(rows[2].parts).toEqual([getNoteResult(upper, 'Open')]);
+      expect(rows.flatMap((row) => row.sources)).toEqual([
+        { id: noteId, title: 'Open' },
+      ]);
+    });
+
+    it('pairs a reused tool call id only with the call of its own turn', async () => {
+      const lost = await sharedWithReader('Lost');
+      const kept = await noteBy(READER, 'Kept');
+      const id = await conversation();
+      const REUSED_CALL_ID = 'tool_0';
+      const turnCalling = (
+        toolName: string,
+        input: unknown,
+        output: unknown
+      ): AppendTurnInput => ({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: toolName },
+          {
+            role: 'assistant',
+            content: '',
+            parts: [
+              {
+                type: 'tool-call',
+                toolCallId: REUSED_CALL_ID,
+                toolName,
+                input,
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: REUSED_CALL_ID,
+                toolName,
+                output,
+                outputType: 'json',
+              },
+            ],
+          },
+          { role: 'assistant', content: 'done', stopReason: 'completed' },
+        ],
+      });
+      const recent = [{ id: kept, title: 'Kept' }];
+      await repo.appendTurn(
+        turnCalling('getNote', { noteId: lost }, { error: 'gone' })
+      );
+      await repo.appendTurn(
+        turnCalling('listRecentNotes', { limit: 5 }, recent)
+      );
+
+      await revokeShare(lost);
+
+      const results = (await repo.loadMessages(id, READER, 40))
+        .filter((row) => row.role === 'tool')
+        .map((row) => row.parts);
+      expect(results).toEqual([
+        [redacted(REUSED_CALL_ID, 'getNote')],
+        [
+          {
+            type: 'tool-result',
+            toolCallId: REUSED_CALL_ID,
+            toolName: 'listRecentNotes',
+            output: recent,
+            outputType: 'json',
+          },
+        ],
+      ]);
     });
 
     it('redacts only the search result that lists a note the reader lost', async () => {

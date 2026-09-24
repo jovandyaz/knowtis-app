@@ -67,8 +67,9 @@ export interface ConversationRepository {
   /**
    * Single transaction: appends every row of the turn and bumps `conversations.updatedAt`.
    * A turn whose user row is already stored is left as it is, so a replayed turn is never stored twice.
+   * Resolves whether rows were stored: `false` for an empty turn or a replay.
    */
-  appendTurn(input: AppendTurnInput): Promise<void>;
+  appendTurn(input: AppendTurnInput): Promise<boolean>;
   findExtractable(
     quietSeconds: number,
     limit: number
