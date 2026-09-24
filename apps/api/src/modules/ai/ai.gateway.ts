@@ -124,7 +124,22 @@ export class AIGateway
       client.emit('ai:error', AIErrors.tokenExpired());
       return;
     }
+    await this.tokenExpiry.track(client, () =>
+      this.complete(client, userId, payload)
+    );
+  }
 
+  @SubscribeMessage('ai:cancel')
+  handleCancel(@ConnectedSocket() client: AuthenticatedSocket): void {
+    this.streams.abortAllForClient(client.id);
+    this.logger.debug(`Client ${client.id} cancelled AI stream(s)`);
+  }
+
+  private async complete(
+    client: AuthenticatedSocket,
+    userId: string,
+    payload: unknown
+  ): Promise<void> {
     if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
       client.emit('ai:error', AIErrors.featureDisabled());
       return;
@@ -195,11 +210,5 @@ export class AIGateway
       this.streams.release(userId, client.id, streamId);
       this.tokenExpiry.afterSlotRelease(client);
     }
-  }
-
-  @SubscribeMessage('ai:cancel')
-  handleCancel(@ConnectedSocket() client: AuthenticatedSocket): void {
-    this.streams.abortAllForClient(client.id);
-    this.logger.debug(`Client ${client.id} cancelled AI stream(s)`);
   }
 }

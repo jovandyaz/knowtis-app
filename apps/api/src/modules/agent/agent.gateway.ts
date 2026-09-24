@@ -157,10 +157,66 @@ export class AgentGateway
     @Ack() ack?: DeliveryAck
   ): Promise<void> {
     ack?.();
-    const userId = this.authorizedUser(client);
+    await this.whileAuthorized(client, (userId) =>
+      this.startTurn(client, userId, payload)
+    );
+  }
+
+  @SubscribeMessage('agent:cancel')
+  handleCancel(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @Ack() ack?: DeliveryAck
+  ): void {
+    ack?.();
+    this.turns.abortAllForClient(client.id);
+    this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
+  }
+
+  @SubscribeMessage('agent:approve')
+  async handleApprove(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+    @Ack() ack?: DeliveryAck
+  ): Promise<void> {
+    ack?.();
+    await this.whileAuthorized(client, (userId) =>
+      this.approveAndResume(client, userId, payload)
+    );
+  }
+
+  @SubscribeMessage('agent:reject')
+  async handleReject(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+    @Ack() ack?: DeliveryAck
+  ): Promise<void> {
+    ack?.();
+    await this.whileAuthorized(client, (userId) =>
+      this.rejectAndResume(client, userId, payload)
+    );
+  }
+
+  private async whileAuthorized(
+    client: AuthenticatedSocket,
+    request: (userId: string) => Promise<void>
+  ): Promise<void> {
+    const userId = client.data?.userId;
     if (!userId) {
+      client.emit('agent:error', AIErrors.authRequired());
       return;
     }
+    if (this.tokenExpiry.isExpired(client)) {
+      client.emit('agent:error', AIErrors.tokenExpired());
+      return;
+    }
+    await this.tokenExpiry.track(client, () => request(userId));
+  }
+
+  private async startTurn(
+    client: AuthenticatedSocket,
+    userId: string,
+    payload: unknown
+  ): Promise<void> {
     if (!(await this.ensureAiEnabled(client))) {
       return;
     }
@@ -233,27 +289,11 @@ export class AgentGateway
     );
   }
 
-  @SubscribeMessage('agent:cancel')
-  handleCancel(
-    @ConnectedSocket() client: AuthenticatedSocket,
-    @Ack() ack?: DeliveryAck
-  ): void {
-    ack?.();
-    this.turns.abortAllForClient(client.id);
-    this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
-  }
-
-  @SubscribeMessage('agent:approve')
-  async handleApprove(
-    @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: unknown,
-    @Ack() ack?: DeliveryAck
+  private async approveAndResume(
+    client: AuthenticatedSocket,
+    userId: string,
+    payload: unknown
   ): Promise<void> {
-    ack?.();
-    const userId = this.authorizedUser(client);
-    if (!userId) {
-      return;
-    }
     if (!(await this.ensureAiEnabled(client))) {
       return;
     }
@@ -285,17 +325,11 @@ export class AgentGateway
     await this.resumeAfter(client, userId, parsed.data, res.value);
   }
 
-  @SubscribeMessage('agent:reject')
-  async handleReject(
-    @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: unknown,
-    @Ack() ack?: DeliveryAck
+  private async rejectAndResume(
+    client: AuthenticatedSocket,
+    userId: string,
+    payload: unknown
   ): Promise<void> {
-    ack?.();
-    const userId = this.authorizedUser(client);
-    if (!userId) {
-      return;
-    }
     if (!(await this.ensureAiEnabled(client))) {
       return;
     }
@@ -320,19 +354,6 @@ export class AgentGateway
       return;
     }
     await this.resumeAfter(client, userId, parsed.data, res.value);
-  }
-
-  private authorizedUser(client: AuthenticatedSocket): string | undefined {
-    const userId = client.data?.userId;
-    if (!userId) {
-      client.emit('agent:error', AIErrors.authRequired());
-      return undefined;
-    }
-    if (this.tokenExpiry.isExpired(client)) {
-      client.emit('agent:error', AIErrors.tokenExpired());
-      return undefined;
-    }
-    return userId;
   }
 
   private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {

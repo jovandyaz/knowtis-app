@@ -163,4 +163,63 @@ describe('SocketTokenExpiry', () => {
     expect(expiry.isExpired(client)).toBe(false);
     expect(endSession).not.toHaveBeenCalled();
   });
+
+  function gated() {
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return { done, finish };
+  }
+
+  it('waits for a request in flight that holds no slot yet, then ends the session once', async () => {
+    const { endSession, expiry, client } = setup();
+    const request = gated();
+    expiry.arm(client, Date.now() + 1_000);
+
+    const tracked = expiry.track(client, () => request.done);
+    vi.advanceTimersByTime(PAST_EXPIRY_MS);
+
+    expect(endSession).not.toHaveBeenCalled();
+    expect(expiry.isExpired(client)).toBe(true);
+
+    request.finish();
+    await tracked;
+
+    expect(endSession).toHaveBeenCalledOnce();
+  });
+
+  it('ends the session only when both the requests in flight and the slots are done', async () => {
+    const { slots, endSession, expiry, client } = setup();
+    const request = gated();
+    slots.acquire('user-1', 'client-1', 's1', new AbortController());
+    expiry.arm(client, Date.now() + 1_000);
+    const tracked = expiry.track(client, () => request.done);
+    vi.advanceTimersByTime(PAST_EXPIRY_MS);
+
+    slots.release('user-1', 'client-1', 's1');
+    expiry.afterSlotRelease(client);
+    expect(endSession).not.toHaveBeenCalled();
+
+    request.finish();
+    await tracked;
+    expect(endSession).toHaveBeenCalledOnce();
+  });
+
+  it('counts a failed request as finished and passes its error on', async () => {
+    const { endSession, expiry, client } = setup();
+    const failure = new Error('commit failed');
+    let fail!: (error: Error) => void;
+    const request = new Promise<void>((_resolve, reject) => {
+      fail = reject;
+    });
+    expiry.arm(client, Date.now() + 1_000);
+    const tracked = expiry.track(client, () => request);
+    vi.advanceTimersByTime(PAST_EXPIRY_MS);
+
+    fail(failure);
+
+    await expect(tracked).rejects.toBe(failure);
+    expect(endSession).toHaveBeenCalledOnce();
+  });
 });

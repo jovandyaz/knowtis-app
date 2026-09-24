@@ -11,6 +11,7 @@ import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AgentGateway } from './agent.gateway';
 import type { ApproveMutationHandler } from './application/approve-mutation.handler';
 import type { RejectMutationHandler } from './application/reject-mutation.handler';
@@ -1591,7 +1592,7 @@ describe('AgentGateway', () => {
 
   describe('a socket whose token expires', () => {
     const TOKEN_LIFETIME_MS = 60_000;
-    const PAST_EXPIRY_MS = TOKEN_LIFETIME_MS + 5_000 + 1_000;
+    const PAST_EXPIRY_MS = TOKEN_LIFETIME_MS + TOKEN_EXPIRY_GRACE_MS + 1_000;
     const TURN = '99999999-9999-4999-8999-999999999999';
     const doneUsage = {
       inputTokens: 1,
@@ -1612,11 +1613,12 @@ describe('AgentGateway', () => {
 
     async function connectedGateway(
       handler: Partial<RunAgentTurnHandler>,
-      approve: Partial<ApproveMutationHandler> = {}
+      approve: Partial<ApproveMutationHandler> = {},
+      redis = createInMemoryClaimRedis()
     ) {
       const exp = Math.floor((Date.now() + TOKEN_LIFETIME_MS) / 1000);
       const jwt = { verify: vi.fn().mockReturnValue({ sub: 'u1', exp }) };
-      const gateway = makeGateway({ jwt, handler, approve });
+      const gateway = makeGateway({ jwt, handler, approve, redis });
       const client = makeClient(undefined, 'c1', 'valid-token');
       await gateway.handleConnection(client as never);
       return { gateway, client };
@@ -1659,11 +1661,39 @@ describe('AgentGateway', () => {
       vi.useRealTimers();
     });
 
-    it('lets the running turn finish, then asks for a fresh token and disconnects', async () => {
+    function gated<T>(value: T) {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { release, wait: async () => (await gate, value) };
+    }
+
+    const committed = ok({
+      result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+      outcome: 'created the note "GTD"',
+      conversationId: 'conv-1',
+      turnId: TURN,
+    });
+
+    it('lets the running turn finish and settle its claim, then asks for a fresh token and disconnects', async () => {
+      const redis = createInMemoryClaimRedis();
       const turn = streamingTurn();
-      const { gateway, client } = await connectedGateway({
-        execute: turn.execute,
-      } as never);
+      const { gateway, client } = await connectedGateway(
+        { execute: turn.execute } as never,
+        {},
+        redis
+      );
+      let claimAtAuthRequired: unknown;
+      client.emit.mockImplementation((event: string, payload: unknown) => {
+        if (
+          event === 'agent:error' &&
+          (payload as { code: string }).code === 'AUTH_REQUIRED'
+        ) {
+          const entry = redis.entries.get(`agent:turn:u1:${TURN}`);
+          claimAtAuthRequired = entry && JSON.parse(entry.value);
+        }
+      });
 
       const running = gateway.handleMessage(client as never, {
         turnId: TURN,
@@ -1681,6 +1711,104 @@ describe('AgentGateway', () => {
         'agent:chunk',
         'agent:chunk',
         'agent:done',
+        'agent:error:AUTH_REQUIRED',
+      ]);
+      expect(claimAtAuthRequired).toMatchObject({ status: 'settled' });
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('lets an approval that started before expiry commit and resume, then disconnects', async () => {
+      const approval = gated(committed);
+      const resumeTurn = vi.fn<Execute>(async (_input, cb) => {
+        cb.onChunk('Done.');
+        cb.onDone(doneUsage);
+      });
+      const { gateway, client } = await connectedGateway(
+        { resumeTurn } as never,
+        { execute: vi.fn(approval.wait) } as never
+      );
+
+      const approving = gateway.handleApprove(
+        client as never,
+        approvePayload()
+      );
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+
+      approval.release();
+      await approving;
+
+      expect(emitted(client)).toEqual([
+        'agent:committed',
+        'agent:chunk',
+        'agent:done',
+        'agent:error:AUTH_REQUIRED',
+      ]);
+      expect(resumeTurn).toHaveBeenCalledOnce();
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('lets a resumed turn that started before expiry finish, then disconnects', async () => {
+      const resume = streamingTurn();
+      const { gateway, client } = await connectedGateway(
+        { resumeTurn: resume.execute } as never,
+        { execute: vi.fn().mockResolvedValue(committed) }
+      );
+
+      const approving = gateway.handleApprove(
+        client as never,
+        approvePayload()
+      );
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+
+      resume.finish();
+      await approving;
+
+      expect(emitted(client)).toEqual([
+        'agent:committed',
+        'agent:chunk',
+        'agent:chunk',
+        'agent:done',
+        'agent:error:AUTH_REQUIRED',
+      ]);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('ends the session once a turn stops on a proposal, since the proposal waits for the user', async () => {
+      const decided = gated(undefined);
+      const execute = vi.fn<Execute>(async (_input, cb) => {
+        cb.onModelStart?.();
+        cb.onChunk('I will create it.');
+        await decided.wait();
+        cb.onProposal(
+          ProposedMutation.create({
+            id: '77777777-7777-4777-8777-777777777777',
+            kind: 'create',
+            payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+            summary: 'Create GTD',
+          })._unsafeUnwrap()
+        );
+      });
+      const { gateway, client } = await connectedGateway({
+        execute,
+      } as never);
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'create GTD' },
+      });
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+      expect(client.disconnect).not.toHaveBeenCalled();
+
+      decided.release();
+      await running;
+
+      expect(emitted(client)).toEqual([
+        'agent:chunk',
+        'agent:proposal',
         'agent:error:AUTH_REQUIRED',
       ]);
       expect(client.disconnect).toHaveBeenCalledWith(true);

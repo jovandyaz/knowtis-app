@@ -49,13 +49,16 @@ interface SocketTokenExpiryOptions {
 
 /**
  * Token expiry for a socket that streams work. Authorization is checked when a
- * request starts, as with an HTTP response whose token expires mid-body: work that
- * began under a valid token runs to its end, bounded by its own timeout, while new
- * requests on the socket are refused. The session ends once the last slot is released.
+ * request starts, as with an HTTP response whose token expires mid-body: a request
+ * authorized before expiry runs to its end, while new requests on the socket are
+ * refused. The session ends once no authorized request is in flight and no slot is held.
+ * The overstay is bounded by the work's own timeouts: the model stream's cap
+ * (`AI_AGENT_MAX_MS` for a copilot turn) plus the bounded steps before and after it.
  */
 export class SocketTokenExpiry {
   private readonly timers = new SocketExpiryTimers();
   private readonly expired = new Set<string>();
+  private readonly inFlight = new Map<string, number>();
 
   constructor(private readonly options: SocketTokenExpiryOptions) {}
 
@@ -67,14 +70,28 @@ export class SocketTokenExpiry {
     return this.expired.has(client.id);
   }
 
+  /** Counts an authorized request as in flight until it settles, so an expiry meanwhile waits for it. */
+  async track(
+    client: AuthenticatedSocket,
+    request: () => Promise<void>
+  ): Promise<void> {
+    this.inFlight.set(client.id, (this.inFlight.get(client.id) ?? 0) + 1);
+    try {
+      await request();
+    } finally {
+      const left = (this.inFlight.get(client.id) ?? 1) - 1;
+      if (left > 0) {
+        this.inFlight.set(client.id, left);
+      } else {
+        this.inFlight.delete(client.id);
+      }
+      this.endIfIdle(client);
+    }
+  }
+
   /** Call after every slot release, so an expired socket closes once its last work ends. */
   afterSlotRelease(client: AuthenticatedSocket): void {
-    if (
-      this.expired.has(client.id) &&
-      !this.options.slots.hasActiveSlots(client.id)
-    ) {
-      this.end(client);
-    }
+    this.endIfIdle(client);
   }
 
   clear(client: AuthenticatedSocket): void {
@@ -82,8 +99,21 @@ export class SocketTokenExpiry {
     this.expired.delete(client.id);
   }
 
+  private isIdle(client: AuthenticatedSocket): boolean {
+    return (
+      !this.inFlight.has(client.id) &&
+      !this.options.slots.hasActiveSlots(client.id)
+    );
+  }
+
+  private endIfIdle(client: AuthenticatedSocket): void {
+    if (this.expired.has(client.id) && this.isIdle(client)) {
+      this.end(client);
+    }
+  }
+
   private expire(client: AuthenticatedSocket): void {
-    if (!this.options.slots.hasActiveSlots(client.id)) {
+    if (this.isIdle(client)) {
       this.end(client);
       return;
     }

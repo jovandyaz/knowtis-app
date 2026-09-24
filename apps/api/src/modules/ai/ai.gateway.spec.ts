@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AIGateway } from './ai.gateway';
 import type { StreamTextCallbacks } from './application/commands/stream-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
@@ -690,7 +691,7 @@ describe('AIGateway', () => {
 
   describe('a socket whose token expires', () => {
     const TOKEN_LIFETIME_MS = 60_000;
-    const PAST_EXPIRY_MS = TOKEN_LIFETIME_MS + 5_000 + 1_000;
+    const PAST_EXPIRY_MS = TOKEN_LIFETIME_MS + TOKEN_EXPIRY_GRACE_MS + 1_000;
     const USAGE = { inputTokens: 1, outputTokens: 1 };
 
     function streamingCompletion() {
@@ -780,6 +781,38 @@ describe('AIGateway', () => {
 
       expect(emitted(client)).toEqual([
         'ai:chunk',
+        'ai:chunk',
+        'ai:done',
+        'ai:error:AUTH_REQUIRED',
+      ]);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('lets a completion that started before expiry run even when expiry lands before its slot', async () => {
+      let flagRead!: () => void;
+      const flagGate = new Promise<void>((resolve) => {
+        flagRead = resolve;
+      });
+      const execute = vi.fn(
+        async (_input: unknown, callbacks: StreamTextCallbacks) => {
+          callbacks.onChunk('A summary.');
+          callbacks.onDone(USAGE as never);
+        }
+      );
+      const { gw, client } = await connected(execute as never);
+      vi.mocked(mockFeatureFlags.isEnabled).mockImplementationOnce(
+        async () => (await flagGate, true)
+      );
+
+      const running = complete(gw, client);
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+      expect(client.disconnect).not.toHaveBeenCalled();
+
+      flagRead();
+      await running;
+
+      expect(execute).toHaveBeenCalledOnce();
+      expect(emitted(client)).toEqual([
         'ai:chunk',
         'ai:done',
         'ai:error:AUTH_REQUIRED',
