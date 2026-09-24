@@ -34,7 +34,8 @@ export function useEditorExtensions(
   yXmlFragment: Y.XmlFragment,
   awareness: Awareness | null,
   currentUser: CollaborativeUser,
-  canTag: boolean
+  canTag: boolean,
+  canImportImages: boolean
 ): AnyExtension[] {
   return useMemo(() => {
     const imageUploadProvider = createImageUploadProvider(() => noteId);
@@ -43,15 +44,17 @@ export function useEditorExtensions(
       ...createBaseExtensions({
         disableHistory: true,
         aiBlockProvider,
-        imageImport: {
-          importProvider: createImageImportProvider(() => noteId),
-          uploadProvider: imageUploadProvider,
-          onImportFailed: (count) => {
-            toast.error(
-              i18next.t('ai.image.importFailed', { ns: 'notes', count })
-            );
+        ...(canImportImages && {
+          imageImport: {
+            importProvider: createImageImportProvider(() => noteId),
+            uploadProvider: imageUploadProvider,
+            onImportFailed: (count) => {
+              toast.error(
+                i18next.t('ai.image.importFailed', { ns: 'notes', count })
+              );
+            },
           },
-        },
+        }),
       }),
       ImageUpload.configure({
         provider: imageUploadProvider,
@@ -113,5 +116,6 @@ export function useEditorExtensions(
     currentUser.name,
     currentUser.color,
     canTag,
+    canImportImages,
   ]);
 }

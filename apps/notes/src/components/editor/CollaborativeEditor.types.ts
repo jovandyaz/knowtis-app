@@ -52,6 +52,7 @@ export interface InternalEditorProps {
   editable: boolean;
   isSynced: boolean;
   canTag: boolean;
+  canImportImages: boolean;
 
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;
