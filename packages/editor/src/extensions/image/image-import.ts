@@ -13,8 +13,8 @@ import { generateId, isStoredImageUrl, logger } from '@knowtis/shared-util';
 
 import type { ImageUploadProvider, UploadedImageResult } from './image-upload';
 import {
-  PASTED_IMAGE_SCHEMES,
   PENDING_IMAGE_SCHEME,
+  remoteImageUrl,
   type DataImageHandler,
 } from './pasted-image-html';
 
@@ -93,16 +93,6 @@ export function isImageImportPending(state: EditorState, src: string): boolean {
   return imageImportKey.getState(state)?.has(src) ?? false;
 }
 
-function isRemoteImageUrl(src: string): boolean {
-  try {
-    return (PASTED_IMAGE_SCHEMES as readonly string[]).includes(
-      new URL(src).protocol
-    );
-  } catch {
-    return false;
-  }
-}
-
 function isPendingImage(src: string): boolean {
   return src.startsWith(PENDING_IMAGE_SCHEME);
 }
@@ -164,7 +154,7 @@ function createImportStatePlugin(
     isPendingImage(src)
       ? options.uploadProvider !== undefined
       : options.importProvider !== undefined &&
-        isRemoteImageUrl(src) &&
+        remoteImageUrl(src) !== null &&
         !isStoredImageUrl(src);
 
   return new Plugin<ReadonlySet<string>>({

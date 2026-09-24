@@ -87,7 +87,7 @@ function dataImageToken(
   }
 }
 
-function remoteImageUrl(src: string): string | null {
+export function remoteImageUrl(src: string): string | null {
   try {
     const url = new URL(src);
     const allowedScheme = PASTED_IMAGE_SCHEMES.includes(url.protocol);
