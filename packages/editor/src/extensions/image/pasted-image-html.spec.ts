@@ -10,7 +10,6 @@ import { logger } from '@knowtis/shared-util';
 
 import {
   MAX_DATA_IMAGE_CHARS,
-  PASTED_IMAGE_SCHEMES,
   PastedImages,
   PENDING_IMAGE_SCHEME,
   wrapPastedImages,
@@ -102,7 +101,6 @@ describe('wrapPastedImages', () => {
   });
 
   it('keeps http and https sources', () => {
-    expect(PASTED_IMAGE_SCHEMES).toEqual(['http:', 'https:']);
     expect(
       figureImages(
         wrapPastedImages(
@@ -288,6 +286,7 @@ describe('wrapPastedImages', () => {
     ['a javascript: URL', 'javascript:alert(1)'],
     ['a blob: URL', 'blob:https://x.test/0b6c1a52'],
     ['a file: URL', 'file:///C:/a.png'],
+    ['an ftp: URL', 'ftp://x.test/a.png'],
     ['a relative src', 'images/a.png'],
     ['a pending token', TOKEN],
     ['an empty src', ''],
@@ -379,6 +378,53 @@ describe('wrapPastedImages', () => {
       { src: 'https://x.test/a.png', alt: 'A', width: null, height: null },
     ]);
     expect(parse(html).querySelectorAll('figure')).toHaveLength(1);
+  });
+
+  it('removes the whole image figure, caption included, when its src is rejected', () => {
+    const html = wrapPastedImages(
+      '<p>text</p><figure data-image><img src="javascript:alert(1)" alt="A"><figcaption>cap</figcaption></figure>'
+    );
+
+    expect(topLevel(html)).toEqual([['p', 'text']]);
+  });
+
+  it('drops out-of-range and malformed dimensions from an img inside an image figure', () => {
+    expect(
+      figureImages(
+        wrapPastedImages(
+          '<figure data-image><img src="https://x.test/a.png" alt="A" width="10001" height="1e3"><figcaption></figcaption></figure>'
+        )
+      )
+    ).toEqual([
+      { src: 'https://x.test/a.png', alt: 'A', width: null, height: null },
+    ]);
+  });
+
+  it('keeps only the allowed attributes on an img inside an image figure', () => {
+    const html = wrapPastedImages(
+      '<figure data-image><img src="https://x.test/a.png" alt="A" class="c" srcset="https://x.test/b.png 2x" width="640" style="height: 480px"><figcaption>cap</figcaption></figure>'
+    );
+
+    expect(figureImages(html)).toEqual([
+      { src: 'https://x.test/a.png', alt: 'A', width: '640', height: '480' },
+    ]);
+    expect(parse(html).querySelector('img')?.getAttributeNames()).toEqual([
+      'src',
+      'alt',
+      'width',
+      'height',
+    ]);
+    expect(topLevel(html)).toEqual([['figure', 'cap']]);
+  });
+
+  it('applies the dimension cap to a figure copied without a stored src', () => {
+    expect(
+      figureImages(
+        wrapPastedImages(
+          '<figure data-image><img alt="A" width="10001" height="480"><figcaption></figcaption></figure>'
+        )
+      )
+    ).toEqual([{ src: null, alt: 'A', width: null, height: '480' }]);
   });
 
   it('keeps a figure copied from the editor whose image has no stored src', () => {

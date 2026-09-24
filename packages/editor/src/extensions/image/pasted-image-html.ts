@@ -6,7 +6,7 @@ import { logger } from '@knowtis/shared-util';
 
 import { ACCEPTED_IMAGE_TYPES } from './image-upload';
 
-export const PASTED_IMAGE_SCHEMES = ['http:', 'https:'] as const;
+const PASTED_IMAGE_SCHEMES: readonly string[] = ['http:', 'https:'];
 export const PENDING_IMAGE_SCHEME = 'pending:';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -89,9 +89,7 @@ function dataImageToken(
 function remoteImageUrl(src: string): string | null {
   try {
     const url = new URL(src);
-    const allowedScheme = (PASTED_IMAGE_SCHEMES as readonly string[]).includes(
-      url.protocol
-    );
+    const allowedScheme = PASTED_IMAGE_SCHEMES.includes(url.protocol);
     const hasCredentials = url.username !== '' || url.password !== '';
     return allowedScheme && !hasCredentials ? url.href : null;
   } catch {
@@ -125,13 +123,12 @@ function pixelDimension(
   );
 }
 
-function imageFigure(img: HTMLImageElement, src: string): HTMLElement {
+function allowedImage(img: HTMLImageElement, src: string): HTMLImageElement {
   // The inert template's document, so setting the src fetches nothing.
-  const doc = img.ownerDocument;
-  const figure = doc.createElement('figure');
-  figure.setAttribute(IMAGE_FIGURE_ATTRIBUTE, '');
-  const image = figure.appendChild(doc.createElement('img'));
-  image.setAttribute('src', src);
+  const image = img.ownerDocument.createElement('img');
+  if (src !== '') {
+    image.setAttribute('src', src);
+  }
   image.setAttribute('alt', img.getAttribute('alt') ?? '');
   for (const name of DIMENSIONS) {
     const value = pixelDimension(img, name);
@@ -139,6 +136,13 @@ function imageFigure(img: HTMLImageElement, src: string): HTMLElement {
       image.setAttribute(name, String(value));
     }
   }
+  return image;
+}
+
+function imageFigure(image: HTMLImageElement): HTMLElement {
+  const figure = image.ownerDocument.createElement('figure');
+  figure.setAttribute(IMAGE_FIGURE_ATTRIBUTE, '');
+  figure.appendChild(image);
   return figure;
 }
 
@@ -172,9 +176,10 @@ function replaceWithLiftedFigure(
 
 /**
  * Rewrites pasted HTML so every allowed `<img>` parses as the editor's image
- * node (`figure[data-image]`), lifted out of its paragraph. `http(s)` srcs are
- * kept, a `data:` image becomes the `onDataImage` token or is dropped, and any
- * other src is removed.
+ * node (`figure[data-image]`), lifted out of its paragraph and stripped to its
+ * src, alt and capped pixel size. `http(s)` srcs are kept, a `data:` image
+ * becomes the `onDataImage` token or is dropped, and any other src removes the
+ * image along with its image figure.
  */
 export function wrapPastedImages(
   html: string,
@@ -187,20 +192,17 @@ export function wrapPastedImages(
     return html;
   }
   for (const img of images) {
-    const inFigure = img.closest(IMAGE_FIGURE_SELECTOR) !== null;
+    const figure = img.closest(IMAGE_FIGURE_SELECTOR);
     const src = img.getAttribute('src') ?? '';
     // The schema renders no src for an image whose src is not stored, so a
     // figure copied from this editor may carry none; it pastes as it always has.
-    if (inFigure && src === '') {
-      continue;
-    }
-    const resolved = resolveSrc(src, options);
+    const resolved = figure && src === '' ? src : resolveSrc(src, options);
     if (resolved === null) {
-      img.remove();
-    } else if (inFigure) {
-      img.setAttribute('src', resolved);
+      (figure ?? img).remove();
+    } else if (figure) {
+      img.replaceWith(allowedImage(img, resolved));
     } else {
-      replaceWithLiftedFigure(img, imageFigure(img, resolved));
+      replaceWithLiftedFigure(img, imageFigure(allowedImage(img, resolved)));
     }
   }
   return template.innerHTML;
