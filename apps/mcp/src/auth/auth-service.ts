@@ -26,6 +26,8 @@ export const NO_CREDENTIAL_MESSAGE =
  */
 export const REAL_IP_HEADER = 'x-real-ip';
 
+const EXCHANGE_TIMEOUT_MS = 5_000;
+
 /** The token exchange answered with a non-2xx `status`. */
 export class TokenExchangeError extends Error {
   readonly status: number;
@@ -79,6 +81,7 @@ export class AuthService {
         ...(clientIp ? { [REAL_IP_HEADER]: clientIp } : {}),
       },
       body: JSON.stringify({ apiKey }),
+      signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -109,7 +112,7 @@ export class AuthService {
     const cached = this.tokenCache.get(this.cacheKey(apiKey));
     if (!cached) {
       return;
-    } // Will fail at token exchange
+    }
 
     const required = SCOPE_REQUIREMENTS[toolName];
     if (!required) {

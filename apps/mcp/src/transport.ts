@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
@@ -26,6 +28,8 @@ const CHALLENGE_SCOPE = ADVERTISED_SCOPES.join(' ');
 
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_CLIENT_ERROR_MIN = 400;
+const HTTP_SERVER_ERROR_MIN = 500;
 const HTTP_SERVICE_UNAVAILABLE = 503;
 
 /** Resolves when the API accepts `apiKey`; rejects with `TokenExchangeError` otherwise. */
@@ -109,7 +113,7 @@ export function createApp(
         );
       }
     } else {
-      const clientIp = c.req.header(REAL_IP_HEADER) || undefined;
+      const clientIp = realClientIp(c.req.header(REAL_IP_HEADER));
       try {
         await verifyApiKey(bearer, clientIp);
       } catch (error) {
@@ -136,13 +140,31 @@ export function createApp(
 }
 
 function rejectApiKey(error: unknown, oauth: OauthConfig | null): Response {
-  const status = error instanceof TokenExchangeError ? error.status : undefined;
+  const refusal = error instanceof TokenExchangeError ? error : undefined;
   log({
     level: 'warn',
     event: 'api_key_verify_rejected',
-    status: status ?? 'unreachable',
+    status: refusal?.status ?? 'unreachable',
   });
-  if (status === HTTP_UNAUTHORIZED) {
+  if (refusal?.status === HTTP_TOO_MANY_REQUESTS) {
+    return Response.json(
+      {
+        error: 'rate_limited',
+        message: 'Too many API key checks. Retry later.',
+      },
+      {
+        status: HTTP_TOO_MANY_REQUESTS,
+        headers: refusal.retryAfter
+          ? { 'Retry-After': refusal.retryAfter }
+          : {},
+      }
+    );
+  }
+  if (
+    refusal &&
+    refusal.status >= HTTP_CLIENT_ERROR_MIN &&
+    refusal.status < HTTP_SERVER_ERROR_MIN
+  ) {
     return Response.json(
       {
         error: 'invalid_token',
@@ -154,20 +176,6 @@ function rejectApiKey(error: unknown, oauth: OauthConfig | null): Response {
       }
     );
   }
-  if (status === HTTP_TOO_MANY_REQUESTS) {
-    const retryAfter =
-      error instanceof TokenExchangeError ? error.retryAfter : undefined;
-    return Response.json(
-      {
-        error: 'rate_limited',
-        message: 'Too many API key checks. Retry later.',
-      },
-      {
-        status: HTTP_TOO_MANY_REQUESTS,
-        headers: retryAfter ? { 'Retry-After': retryAfter } : {},
-      }
-    );
-  }
   return Response.json(
     {
       error: 'temporarily_unavailable',
@@ -175,6 +183,10 @@ function rejectApiKey(error: unknown, oauth: OauthConfig | null): Response {
     },
     { status: HTTP_SERVICE_UNAVAILABLE }
   );
+}
+
+function realClientIp(header: string | undefined): string | undefined {
+  return header && isIP(header) ? header : undefined;
 }
 
 function extractBearerToken(headers: Headers): string | undefined {

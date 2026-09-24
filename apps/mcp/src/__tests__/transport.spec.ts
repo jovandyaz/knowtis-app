@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TokenExchangeError } from '../auth/auth-service.js';
 import type { OauthVerifier } from '../auth/oauth-verifier.js';
@@ -12,7 +12,7 @@ function mockVerifier(
   return { verify } as unknown as OauthVerifier;
 }
 
-const acceptKey: ApiKeyVerifier = () => Promise.resolve();
+const acceptKey = vi.fn<ApiKeyVerifier>().mockResolvedValue(undefined);
 
 const config: AppConfig = {
   port: 3334,
@@ -65,6 +65,10 @@ const EXPECTED_PROTECTED_RESOURCE_METADATA = {
 };
 
 describe('createApp', () => {
+  beforeEach(() => {
+    acceptKey.mockClear();
+  });
+
   it('should return 200 on /health without auth', async () => {
     const app = createApp(makeServer, config, acceptKey);
     const res = await app.request('/health');
@@ -106,6 +110,7 @@ describe('createApp', () => {
     });
 
     expect(res.status).toBe(200);
+    expect(acceptKey).toHaveBeenCalledWith('knowtis_mcp_test_key', undefined);
     expect(factory).toHaveBeenCalledWith({
       kind: 'api-key',
       apiKey: 'knowtis_mcp_test_key',
@@ -127,6 +132,10 @@ describe('createApp', () => {
     });
 
     expect(res.status).toBe(200);
+    expect(acceptKey).toHaveBeenCalledWith(
+      'some-opaque-oauth-looking-token',
+      undefined
+    );
     expect(factory).toHaveBeenCalledWith({
       kind: 'api-key',
       apiKey: 'some-opaque-oauth-looking-token',
@@ -155,6 +164,7 @@ describe('createApp', () => {
 
     expect(res.status).toBe(200);
     expect(verify).toHaveBeenCalledWith('valid.oauth.jwt');
+    expect(acceptKey).not.toHaveBeenCalled();
     expect(factory).toHaveBeenCalledWith({
       kind: 'oauth',
       jwt: 'valid.oauth.jwt',
@@ -184,6 +194,7 @@ describe('createApp', () => {
 
     expect(res.status).toBe(200);
     expect(verify).not.toHaveBeenCalled();
+    expect(acceptKey).toHaveBeenCalledWith('knowtis_mcp_live_key', undefined);
     expect(factory).toHaveBeenCalledWith({
       kind: 'api-key',
       apiKey: 'knowtis_mcp_live_key',
@@ -388,6 +399,44 @@ describe('createApp', () => {
       );
       expect((await res.json()).error).toBe('invalid_token');
       expect(factory).not.toHaveBeenCalled();
+    });
+
+    it('should answer a key the API refuses as malformed (400) with 401, not a retry', async () => {
+      const factory = vi.fn(makeServer);
+      const verifyApiKey = vi
+        .fn<ApiKeyVerifier>()
+        .mockRejectedValue(
+          new TokenExchangeError(400, 'Authentication failed: Bad Request')
+        );
+      const app = createApp(factory, config, verifyApiKey);
+
+      const res = await postWithKey(app, 'knowtis_mcp_short');
+
+      expect(res.status).toBe(401);
+      expect((await res.json()).error).toBe('invalid_token');
+      expect(factory).not.toHaveBeenCalled();
+    });
+
+    it('should forward no client IP when the header is not an IP address', async () => {
+      const factory = vi.fn(makeServer);
+      const verifyApiKey = vi.fn<ApiKeyVerifier>().mockResolvedValue('jwt');
+      const app = createApp(factory, config, verifyApiKey);
+
+      await app.request('/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          Authorization: 'Bearer knowtis_mcp_live_key',
+          'X-Real-IP': 'rotating-bucket-1',
+        },
+        body: INITIALIZE,
+      });
+
+      expect(verifyApiKey).toHaveBeenCalledWith(
+        'knowtis_mcp_live_key',
+        undefined
+      );
     });
 
     it('should pass the API rate limit through as 429 with its Retry-After', async () => {
