@@ -1155,6 +1155,36 @@ describe('AgentGateway', () => {
       await first;
     });
 
+    it('resumes an approved proposal while the turn that proposed it still holds its slot', async () => {
+      const held = heldTurns();
+      const resumeTurn = vi.fn<Execute>(async (_input, cb) => {
+        cb.onChunk('done');
+      });
+      const gateway = makeGateway({
+        handler: { execute: held.execute, resumeTurn } as never,
+        approve: {
+          execute: vi.fn().mockResolvedValue(
+            ok({
+              result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+              outcome: 'created the note "GTD"',
+              conversationId: CONVERSATION,
+              turnId: TURN,
+            })
+          ),
+        },
+      });
+      const client = makeClient('u1');
+
+      const proposing = gateway.handleMessage(client as never, turn());
+      await flushAsync();
+      await gateway.handleApprove(client as never, approvePayload());
+
+      expect(turnErrors(client)).toEqual([]);
+      expect(resumeTurn).toHaveBeenCalledOnce();
+      held.release();
+      await proposing;
+    });
+
     it("never refuses a turn because another user's turn holds the same id", async () => {
       const { execute, release } = heldTurns();
       const gateway = makeGateway({ handler: { execute } as never });

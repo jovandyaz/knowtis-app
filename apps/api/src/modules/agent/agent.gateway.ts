@@ -68,6 +68,11 @@ const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
   reason: z.string().max(1000).optional(),
 });
 
+/** The legs of a turn hold separate slots: a resume can start while the leg that proposed is still settling its claim. */
+const TURN_LEG = { MESSAGE: 'message', RESUME: 'resume' } as const;
+
+type TurnLeg = (typeof TURN_LEG)[keyof typeof TURN_LEG];
+
 @WebSocketGateway({ namespace: '/agent' })
 export class AgentGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -189,30 +194,37 @@ export class AgentGateway
         payload: proposal.payload,
       });
 
-    await this.runInTurnSlot(client, userId, turnId, (controller) =>
-      this.withTurnClaim(client, claim, (onModelStart) =>
-        this.runAgentTurn.execute(
-          {
-            userId,
-            turnId,
-            message: { content: data.message.content },
-            ...(data.conversationId && {
-              conversationId: data.conversationId,
-            }),
-            ...(client.data.isAnonymous && { isAnonymous: true }),
-            ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
-            ...(data.noteId && { noteId: data.noteId }),
-            ...(data.model && { model: data.model }),
-            ...(data.effort && { effort: data.effort }),
-          },
-          {
-            ...this.baseCallbacks(client, controller, turnId),
-            onProposal,
-            onModelStart,
-          },
-          controller.signal
+    await this.runInTurnSlot(
+      client,
+      userId,
+      turnId,
+      TURN_LEG.MESSAGE,
+      (controller) =>
+        this.withTurnClaim(client, claim, (onModelStart) =>
+          this.runAgentTurn.execute(
+            {
+              userId,
+              turnId,
+              message: { content: data.message.content },
+              ...(data.conversationId && {
+                conversationId: data.conversationId,
+              }),
+              ...(client.data.isAnonymous && { isAnonymous: true }),
+              ...(client.data.clientIp
+                ? { clientIp: client.data.clientIp }
+                : {}),
+              ...(data.noteId && { noteId: data.noteId }),
+              ...(data.model && { model: data.model }),
+              ...(data.effort && { effort: data.effort }),
+            },
+            {
+              ...this.baseCallbacks(client, controller, turnId),
+              onProposal,
+              onModelStart,
+            },
+            controller.signal
+          )
         )
-      )
     );
   }
 
@@ -321,20 +333,25 @@ export class AgentGateway
     data: { noteId?: string | undefined },
     result: { outcome: string; turnId: string; conversationId: string }
   ): Promise<void> {
-    await this.runInTurnSlot(client, userId, result.turnId, (controller) =>
-      this.runAgentTurn.resumeTurn(
-        {
-          userId,
-          turnId: result.turnId,
-          conversationId: result.conversationId,
-          ...(client.data.isAnonymous && { isAnonymous: true }),
-          ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
-          ...(data.noteId && { noteId: data.noteId }),
-          resume: { outcome: result.outcome },
-        },
-        this.baseCallbacks(client, controller, result.turnId),
-        controller.signal
-      )
+    await this.runInTurnSlot(
+      client,
+      userId,
+      result.turnId,
+      TURN_LEG.RESUME,
+      (controller) =>
+        this.runAgentTurn.resumeTurn(
+          {
+            userId,
+            turnId: result.turnId,
+            conversationId: result.conversationId,
+            ...(client.data.isAnonymous && { isAnonymous: true }),
+            ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
+            ...(data.noteId && { noteId: data.noteId }),
+            resume: { outcome: result.outcome },
+          },
+          this.baseCallbacks(client, controller, result.turnId),
+          controller.signal
+        )
     );
   }
 
@@ -400,6 +417,7 @@ export class AgentGateway
     client: AuthenticatedSocket,
     userId: string,
     turnId: string,
+    leg: TurnLeg,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
     // A disconnect or cancel handled during an earlier await found no slot to
@@ -412,7 +430,7 @@ export class AgentGateway
       });
       return;
     }
-    const slotId = `${userId}:${turnId}`;
+    const slotId = `${userId}:${turnId}:${leg}`;
     if (this.turns.isActive(slotId)) {
       client.emit('agent:error', { ...AgentErrors.turnInProgress(), turnId });
       return;
