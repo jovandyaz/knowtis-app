@@ -168,8 +168,6 @@ export class AgentGateway
     }
 
     const data = parsed.data;
-    // A tab still running the bundle from before turn ids gets one minted here
-    // and no claim, since it never resends a turn.
     const turnId = data.turnId ?? randomUUID();
     const claim: TurnClaimRequest | undefined = data.turnId
       ? {
@@ -414,12 +412,13 @@ export class AgentGateway
       });
       return;
     }
-    if (this.turns.isActive(turnId)) {
+    const slotId = `${userId}:${turnId}`;
+    if (this.turns.isActive(slotId)) {
       client.emit('agent:error', { ...AgentErrors.turnInProgress(), turnId });
       return;
     }
     const controller = new AbortController();
-    if (!this.turns.acquire(userId, client.id, turnId, controller)) {
+    if (!this.turns.acquire(userId, client.id, slotId, controller)) {
       client.emit('agent:error', {
         ...AIErrors.rateLimitExceeded(
           `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
@@ -431,7 +430,7 @@ export class AgentGateway
     try {
       await body(controller);
     } finally {
-      this.turns.release(userId, client.id, turnId);
+      this.turns.release(userId, client.id, slotId);
     }
   }
 

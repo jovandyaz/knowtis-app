@@ -1155,6 +1155,22 @@ describe('AgentGateway', () => {
       await first;
     });
 
+    it("never refuses a turn because another user's turn holds the same id", async () => {
+      const { execute, release } = heldTurns();
+      const gateway = makeGateway({ handler: { execute } as never });
+
+      const first = gateway.handleMessage(makeClient('u1') as never, turn());
+      await flushAsync();
+      const otherUser = makeClient('u2', 'c2');
+      const second = gateway.handleMessage(otherUser as never, turn());
+      await flushAsync();
+
+      expect(turnErrors(otherUser)).toEqual([]);
+      expect(execute).toHaveBeenCalledTimes(2);
+      release();
+      await Promise.all([first, second]);
+    });
+
     it('answers a duplicate running on another API instance with TURN_IN_PROGRESS', async () => {
       const redis = createInMemoryClaimRedis();
       const { execute, release } = heldTurns();
