@@ -1,5 +1,3 @@
-import type { RefObject } from 'react';
-
 import { useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
@@ -41,14 +39,12 @@ vi.mock('./AgentComposer', () => ({
     queueLength: number;
     onSend: (text: string) => void;
     onSendNow: (text: string) => void;
-    inputRef?: RefObject<HTMLTextAreaElement | null>;
   }) => (
     <div
       data-testid="composer"
       data-draft={props.draft}
       data-queue={props.queueLength}
     >
-      <textarea aria-label="composer-input" ref={props.inputRef} />
       <button type="button" onClick={() => props.onSend('later')}>
         send
       </button>
@@ -395,7 +391,7 @@ describe('AgentCopilotPanel', () => {
 
       expect(await screen.findByText('Day one.')).toBeInTheDocument();
       expect(vi.mocked(conversationsApi.transcript).mock.calls).toEqual([
-        ['c1'],
+        ['c1', undefined],
       ]);
     });
 
@@ -514,7 +510,7 @@ describe('AgentCopilotPanel', () => {
       expect(useAgentStore.getState().status).toBe('streaming');
     });
 
-    it('keeps focus on the retry while the history reloads, then hands it to the composer', async () => {
+    it('keeps focus on the retry while the history reloads, then hands it to the thread', async () => {
       showFailedHistoryUnderALiveTurn();
       let restore: (transcript: ConversationTranscript) => void = () =>
         undefined;
@@ -540,7 +536,7 @@ describe('AgentCopilotPanel', () => {
       expect(
         screen.queryByText('ai.copilot.history.earlierFailed')
       ).not.toBeInTheDocument();
-      expect(screen.getByLabelText('composer-input')).toHaveFocus();
+      expect(screen.getByTestId('copilot-thread')).toHaveFocus();
     });
 
     it('leaves the focus where the user moved it while the history reloaded', async () => {

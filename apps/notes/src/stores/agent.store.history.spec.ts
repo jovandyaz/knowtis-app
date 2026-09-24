@@ -21,7 +21,7 @@ import {
 } from '@knowtis/shared-types';
 import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
-import { useAgentStore } from './agent.store';
+import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
 
 const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
@@ -950,7 +950,9 @@ describe('agent.store hydration by turn', () => {
     await vi.waitFor(() =>
       expect(useAgentStore.getState().status).toBe('done')
     );
-    expect(vi.mocked(conversationsApi.transcript).mock.calls).toEqual([['c1']]);
+    expect(vi.mocked(conversationsApi.transcript).mock.calls).toEqual([
+      ['c1', expect.any(AbortSignal)],
+    ]);
     expect(contents()).toEqual([
       'Plan it',
       'Day one.',
@@ -1027,6 +1029,50 @@ describe('agent.store hydration by turn', () => {
       expect(useAgentStore.getState().status).toBe('error')
     );
     expect(useAgentStore.getState().hydration).toBe('loaded');
+  });
+
+  it('gives up on a stored answer that never arrives and offers to reload it', async () => {
+    vi.useFakeTimers();
+    try {
+      useAgentStore.setState({ conversationId: 'c1', hydration: 'loaded' });
+      const { callbacks } = capture();
+      useAgentStore.getState().sendMessage('new question');
+      useAgentStore.getState().sendMessage('queued');
+      vi.mocked(conversationsApi.transcript).mockImplementation(
+        (_id, signal) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () =>
+              reject(new ApiClientError('Request was cancelled', 0, 'ABORTED'))
+            );
+          })
+      );
+
+      callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+      await vi.advanceTimersByTimeAsync(AGENT_STREAM_INACTIVITY_MS);
+
+      const state = useAgentStore.getState();
+      expect({
+        status: state.status,
+        code: state.error?.code,
+        retryMode: state.retryMode,
+        hydration: state.hydration,
+        contents: contents(),
+        queue: state.queue.map((item) => item.text),
+      }).toEqual({
+        status: 'error',
+        code: 'AGENT_ANSWER_UNAVAILABLE',
+        retryMode: 'reload',
+        hydration: 'loaded',
+        contents: ['new question'],
+        queue: ['queued'],
+      });
+      useAgentStore.getState().sendMessage('next');
+      expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
+        'next'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reloads the stored answer on retry instead of sending the message again', async () => {
@@ -1149,7 +1195,7 @@ describe('agent.store hydration by turn', () => {
       status: 'pendingProposal',
       pendingProposal: proposal,
     });
-    expect(conversationsApi.transcript).toHaveBeenCalledWith('c1');
+    expect(conversationsApi.transcript).toHaveBeenCalledWith('c1', undefined);
   });
 });
 

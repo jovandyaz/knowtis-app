@@ -33,11 +33,11 @@ function append(
  * Places the thread the server stored next to the messages already on screen.
  * The transcript is authoritative for every turn it holds: its bubbles replace
  * all the live bubbles of that turn, except the turns in progress, whose live
- * bubbles are newer. Every other live turn keeps its place on screen: right
- * after the stored turn it followed, or right before the stored turn it
- * preceded when none came before it, or at the end when it touches none. A
- * live message without a turn id can only have come from an earlier
- * transcript, which this one supersedes.
+ * bubbles are newer and always come last. Every other live turn keeps its
+ * place on screen: right after the stored turn it followed, or right before
+ * the stored turn it preceded when none came before it, or at the end when it
+ * touches none. A live message without a turn id can only have come from an
+ * earlier transcript, which this one supersedes.
  */
 export function mergeTranscript(
   transcript: readonly AgentChatMessage[],
@@ -71,8 +71,13 @@ export function mergeTranscript(
   const before = new Map<string, AgentChatMessage[]>();
   const after = new Map<string, AgentChatMessage[]>();
   const tail: AgentChatMessage[] = [];
+  const inProgressTail: AgentChatMessage[] = [];
   turns.forEach((turn, index) => {
     if (storedTurns.has(turn.turnId)) {
+      return;
+    }
+    if (inProgress.has(turn.turnId)) {
+      inProgressTail.push(...turn.messages);
       return;
     }
     const anchorAfter = previousStored[index];
@@ -105,5 +110,5 @@ export function mergeTranscript(
       merged.push(...(after.get(turnId) ?? []));
     }
   });
-  return [...merged, ...tail];
+  return [...merged, ...tail, ...inProgressTail];
 }

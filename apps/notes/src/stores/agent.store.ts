@@ -225,6 +225,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let streamVersion = 0;
   let threadVersion = 0;
   let hydrationRequest = 0;
+  let storedAnswerWait: { version: number; abort: AbortController } | undefined;
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;
   let titleEdits = 0;
@@ -244,6 +245,11 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       }));
     },
     onInactivity: () => {
+      // A stored answer that never arrives must end like one that failed to load.
+      if (storedAnswerWait?.version === streamVersion) {
+        storedAnswerWait.abort.abort();
+        return;
+      }
       get()._streamHandle?.cancel();
       thinkingBuffer.discard();
       set({
@@ -532,7 +538,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
   const hydrate = async (
     id: string,
-    failedState: ConversationHydration = 'failed'
+    failedState: ConversationHydration = 'failed',
+    signal?: AbortSignal
   ): Promise<HydrationOutcome> => {
     const thread = threadVersion;
     const request = ++hydrationRequest;
@@ -544,7 +551,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       thread !== threadVersion || request !== hydrationRequest;
     set({ hydration: 'loading' });
     try {
-      const transcript = await conversationsApi.transcript(id);
+      const transcript = await conversationsApi.transcript(id, signal);
       if (superseded()) {
         return 'superseded';
       }
@@ -577,13 +584,15 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   };
 
   /** A refetch the user did not ask for: when it fails, the thread stays as it was shown. */
-  const refreshThread = async (): Promise<HydrationOutcome> => {
+  const refreshThread = async (
+    signal?: AbortSignal
+  ): Promise<HydrationOutcome> => {
     const { conversationId, hydration } = get();
     if (!conversationId) {
       return 'failed';
     }
     const shown = hydration === 'loading' ? 'failed' : hydration;
-    const outcome = await hydrate(conversationId, shown);
+    const outcome = await hydrate(conversationId, shown, signal);
     if (outcome === 'gone') {
       set({ hydration: shown });
     }
@@ -594,10 +603,15 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     // The stored answer replaces this turn's live bubbles, so it must not win the merge.
     liveTurnId = undefined;
     const version = streamVersion;
-    const outcome = await refreshThread();
+    const abort = new AbortController();
+    storedAnswerWait = { version, abort };
+    buffer.armInactivityTimer();
+    const outcome = await refreshThread(abort.signal);
     if (version !== streamVersion) {
       return;
     }
+    buffer.clearInactivityTimer();
+    storedAnswerWait = undefined;
     if (outcome === 'loaded' || outcome === 'superseded') {
       set({ status: 'done' });
       drainQueue();

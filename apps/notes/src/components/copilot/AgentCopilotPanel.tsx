@@ -93,7 +93,7 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
-  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const historyRetryRef = useRef<HTMLButtonElement>(null);
   const [retryingHistory, setRetryingHistory] = useState(false);
   const showHistoryRetry = hydration === 'failed' || retryingHistory;
@@ -105,7 +105,7 @@ export function AgentCopilotPanel() {
     const focusWasOnRetry = document.activeElement === historyRetryRef.current;
     setRetryingHistory(false);
     if (focusWasOnRetry && useAgentStore.getState().hydration !== 'failed') {
-      composerRef.current?.focus();
+      threadRef.current?.focus();
     }
   };
   const retryTurn = retryMode === 'none' ? {} : { onRetry: retryLast };
@@ -165,7 +165,12 @@ export function AgentCopilotPanel() {
           <AgentEmptyState onSelectSuggestion={send} />
         </div>
       ) : (
-        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+        <div
+          ref={threadRef}
+          tabIndex={-1}
+          data-testid="copilot-thread"
+          className="flex flex-1 flex-col min-h-0 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--ring)"
+        >
           <AgentMessageList
             messages={messages}
             status={status}
@@ -213,7 +218,6 @@ export function AgentCopilotPanel() {
         queueLength={queueLength}
         status={status}
         modelPicker={<CopilotModelPicker />}
-        inputRef={composerRef}
       />
     </div>
   );

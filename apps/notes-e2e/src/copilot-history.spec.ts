@@ -272,7 +272,7 @@ test('a thread whose earlier messages failed to load shows them on retry, above 
 
   await expect(earlier).toBeVisible();
   await expect(failedRow).toBeHidden();
-  await expect(composer).toBeFocused();
+  await expect(owner.page.getByTestId('copilot-thread')).toBeFocused();
   await expect(live).toBeVisible();
   const [earlierBox, liveBox] = await Promise.all([
     earlier.boundingBox(),

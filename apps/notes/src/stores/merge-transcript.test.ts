@@ -197,6 +197,23 @@ const cases: Record<string, MergeCase> = {
       inProgressTurnIds: ['t2', 't3'],
       shown: ['h-q1', 'h-a1', 'l-q2', 'l-before', 'l-after', 'l-q3', 'l-a3'],
     },
+  'keeps the turn in progress last, below stored turns this screen never showed':
+    {
+      transcript: [
+        user('h-q4', 't4'),
+        assistant('h-a4', 't4'),
+        user('h-qX', 'tX'),
+        assistant('h-aX', 'tX'),
+      ],
+      live: [
+        user('l-q4', 't4'),
+        assistant('l-a4', 't4'),
+        user('l-q5', 't5'),
+        assistant('l-a5', 't5'),
+      ],
+      inProgressTurnIds: ['t5'],
+      shown: ['h-q4', 'h-a4', 'h-qX', 'h-aX', 'l-q5', 'l-a5'],
+    },
   'drops the legacy bubbles an earlier transcript left once the window no longer reaches them':
     {
       transcript: [user('h2-q1', 't1'), assistant('h2-a1', 't1')],
