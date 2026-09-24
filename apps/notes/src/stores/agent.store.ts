@@ -32,13 +32,20 @@ import {
 
 import { createChunkBuffer } from './chunk-buffer';
 import { toChatMessages } from './conversation-transcript';
+import { mergeTranscript } from './merge-transcript';
 
 /** 'auto' leaves the reasoning budget to the server. */
 export type CopilotEffort = 'auto' | ReasoningEffort;
 
-export type ConversationHydration = 'idle' | 'loading' | 'failed';
+export type ConversationHydration =
+  | 'unloaded'
+  | 'loading'
+  | 'loaded'
+  | 'failed';
 
 export type ConversationOpenSource = 'switcher' | 'reload';
+
+type HydrationOutcome = 'loaded' | 'gone' | 'failed' | 'superseded';
 
 export type ConversationOpenOutcome =
   | 'opened'
@@ -57,6 +64,7 @@ export type AgentStatus =
 
 export interface PendingProposal {
   id: string;
+  turnId?: string;
   kind: 'create' | 'update' | 'share';
   targetNoteId: string | null;
   payload: Record<string, unknown>;
@@ -73,6 +81,8 @@ export function isUpdateProposal(p: PendingProposal): p is UpdateProposal {
 
 export interface AgentChatMessage {
   id: string;
+  /** Absent only on history written before turns had ids. */
+  turnId?: string;
   role: 'user' | 'assistant';
   content: string;
   stopReason?: AgentStopReason;
@@ -142,6 +152,11 @@ interface AgentState {
   conversationTitle: string | null;
   hydration: ConversationHydration;
   hasEarlier: boolean;
+  /**
+   * The failure shown ended the leg a proposal decision resumed. That turn's
+   * message already ran, so `retryLast` has nothing it may resend.
+   */
+  failedDecision: boolean;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
   bindUser: (userId: string) => void;
@@ -150,6 +165,8 @@ interface AgentState {
     id: string,
     source: ConversationOpenSource
   ) => Promise<ConversationOpenOutcome>;
+  /** Re-fetches the open conversation and merges it; never clears messages or the running turn. */
+  retryHydration: () => Promise<void>;
   markErrorAnswered: () => void;
   sendMessage: (
     text: string,
@@ -195,8 +212,11 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   const nextId = () => `m${++seq}`;
 
   let activeAssistantId: string | null = null;
+  let liveTurnId: string | undefined;
+  let resumingDecision = false;
   let streamVersion = 0;
   let threadVersion = 0;
+  let hydrationRequest = 0;
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;
   let titleEdits = 0;
@@ -218,7 +238,12 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     onInactivity: () => {
       get()._streamHandle?.cancel();
       thinkingBuffer.discard();
-      set({ status: 'timeout', _streamHandle: null, thinkingText: '' });
+      set({
+        status: 'timeout',
+        failedDecision: resumingDecision,
+        _streamHandle: null,
+        thinkingText: '',
+      });
     },
   });
 
@@ -232,8 +257,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
   const beginResumedTurn = (): AgentChatMessage => {
     unsentText = null;
+    resumingDecision = true;
     const assistant: AgentChatMessage = {
       id: nextId(),
+      ...(liveTurnId ? { turnId: liveTurnId } : {}),
       role: 'assistant',
       content: '',
     };
@@ -247,6 +274,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     set({
       status: 'error',
       error: RESUME_UNAVAILABLE_ERROR,
+      failedDecision: true,
       pendingProposal: null,
       thinkingText: '',
       _streamHandle: null,
@@ -278,7 +306,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       _streamHandle: null,
       conversationId: null,
       conversationTitle: null,
-      hydration: 'idle',
+      hydration: 'unloaded',
       hasEarlier: false,
       draft: [returned, s.draft]
         .filter(
@@ -288,11 +316,20 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     }));
   };
 
-  const run = (text: string, assistantId: string, noteId?: string) => {
+  const run = (
+    text: string,
+    assistantId: string,
+    noteId?: string,
+    resentTurnId?: string
+  ): AgentStreamHandle => {
     activeAssistantId = assistantId;
     const version = streamVersion;
     const storeEffort = get().reasoningEffort;
     const effort = storeEffort === 'auto' ? undefined : storeEffort;
+    const options = {
+      ...(effort ? { effort } : {}),
+      ...(resentTurnId ? { turnId: resentTurnId } : {}),
+    };
     const handle = agentClient.sendMessage(
       text,
       {
@@ -362,6 +399,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           set({
             status: 'error',
             error,
+            failedDecision: resumingDecision,
             _streamHandle: null,
             thinkingText: '',
           });
@@ -409,18 +447,36 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             ),
           }));
         },
+        onTurnSettled: ({ turnId }) => {
+          if (version !== streamVersion) {
+            return;
+          }
+          invalidateConversations(queryClient);
+          // The transcript carries no pending proposal, so a card of this
+          // turn the user can still decide on must outlive the refetch.
+          if (get().pendingProposal?.turnId === turnId) {
+            void get().retryHydration();
+            return;
+          }
+          buffer.clearInactivityTimer();
+          buffer.flush();
+          thinkingBuffer.discard();
+          set({ status: 'done', _streamHandle: null, thinkingText: '' });
+          void get().retryHydration();
+          drainQueue();
+        },
       },
       noteId,
-      effort ? { effort } : undefined
+      options
     );
-    if (get().status !== 'streaming') {
-      return;
+    if (get().status === 'streaming') {
+      buffer.armInactivityTimer();
+      set({ _streamHandle: handle });
     }
-    buffer.armInactivityTimer();
-    set({ _streamHandle: handle });
+    return handle;
   };
 
-  const startTurn = (text: string, noteId?: string) => {
+  const startTurn = (text: string, noteId?: string, resentTurnId?: string) => {
     const current = get();
     if (current.status === 'streaming' && current._streamHandle) {
       current._streamHandle.cancel();
@@ -428,6 +484,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     streamVersion++;
     lastNoteId = noteId;
     unsentText = text;
+    resumingDecision = false;
     buffer.clearInactivityTimer();
     buffer.discard();
     thinkingBuffer.discard();
@@ -450,10 +507,54 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       pendingProposal: null,
       thinkingText: '',
       _streamHandle: null,
-      hydration: 'idle',
     });
 
-    run(text, assistantMessage.id, noteId);
+    const { turnId } = run(text, assistantMessage.id, noteId, resentTurnId);
+    liveTurnId = turnId;
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === userMessage.id || m.id === assistantMessage.id
+          ? { ...m, turnId }
+          : m
+      ),
+    }));
+  };
+
+  const hydrate = async (id: string): Promise<HydrationOutcome> => {
+    const thread = threadVersion;
+    const request = ++hydrationRequest;
+    const titleEditsAtRequest = titleEdits;
+    const superseded = () =>
+      thread !== threadVersion || request !== hydrationRequest;
+    set({ hydration: 'loading' });
+    try {
+      const transcript = await conversationsApi.transcript(id);
+      if (superseded()) {
+        return 'superseded';
+      }
+      set((s) => ({
+        messages: mergeTranscript(
+          toChatMessages(transcript.messages, nextId),
+          s.messages,
+          isTurnAlive(s.status) ? liveTurnId : undefined
+        ),
+        ...(titleEdits === titleEditsAtRequest
+          ? { conversationTitle: transcript.title }
+          : {}),
+        hasEarlier: transcript.hasEarlier,
+        hydration: 'loaded',
+      }));
+      return 'loaded';
+    } catch (error) {
+      if (superseded()) {
+        return 'superseded';
+      }
+      if (isConversationGone(error)) {
+        return 'gone';
+      }
+      set({ hydration: 'failed' });
+      return 'failed';
+    }
   };
 
   const drainQueue = () => {
@@ -478,8 +579,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     userId: null,
     conversationId: null,
     conversationTitle: null,
-    hydration: 'idle',
+    hydration: 'unloaded',
     hasEarlier: false,
+    failedDecision: false,
     _streamHandle: null,
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
@@ -510,8 +612,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       }
       abandonTurn();
       const version = streamVersion;
-      const thread = ++threadVersion;
-      const titleEditsAtOpen = titleEdits;
+      threadVersion++;
       agentClient.resumeConversation(id);
       const switching = id !== current.conversationId;
       set({
@@ -521,6 +622,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         queue: [],
         status: 'idle',
         error: null,
+        failedDecision: false,
         pendingProposal: null,
         thinkingText: '',
         _streamHandle: null,
@@ -528,39 +630,42 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         hasEarlier: false,
         ...(switching ? { reasoningEffort: 'auto' as const } : {}),
       });
-      try {
-        const transcript = await conversationsApi.transcript(id);
-        if (thread !== threadVersion) {
-          return 'superseded';
-        }
-        set((s) => ({
-          messages: [
-            ...toChatMessages(transcript.messages, nextId),
-            ...s.messages,
-          ],
-          ...(titleEdits === titleEditsAtOpen
-            ? { conversationTitle: transcript.title }
-            : {}),
-          hasEarlier: transcript.hasEarlier,
-          hydration: 'idle',
-        }));
-        captureProductEvent('ai conversation opened', { source });
-        return 'opened';
-      } catch (error) {
-        if (thread !== threadVersion || version !== streamVersion) {
-          return 'superseded';
-        }
-        if (isConversationGone(error)) {
+      const outcome = await hydrate(id);
+      switch (outcome) {
+        case 'loaded':
+          captureProductEvent('ai conversation opened', { source });
+          return 'opened';
+        case 'gone':
+          // Forgetting the thread here would strand the turn sent meanwhile:
+          // its own not-found error is what gives its text back to the draft.
+          if (version !== streamVersion) {
+            set({ hydration: 'unloaded' });
+            return 'superseded';
+          }
           agentClient.resetConversation();
           set({
             conversationId: null,
             conversationTitle: null,
-            hydration: 'idle',
+            hydration: 'unloaded',
           });
           return 'gone';
+        case 'failed':
+        case 'superseded':
+          return outcome;
+        default: {
+          const exhaustive: never = outcome;
+          throw new Error(`Unhandled hydration outcome: ${String(exhaustive)}`);
         }
-        set({ hydration: 'failed' });
-        return 'failed';
+      }
+    },
+
+    retryHydration: async () => {
+      const { conversationId } = get();
+      if (!conversationId) {
+        return;
+      }
+      if ((await hydrate(conversationId)) === 'gone') {
+        set({ hydration: 'unloaded' });
       }
     },
 
@@ -622,12 +727,13 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         draft: '',
         status: 'idle',
         error: null,
+        failedDecision: false,
         pendingProposal: null,
         thinkingText: '',
         reasoningEffort: 'auto',
         conversationId: null,
         conversationTitle: null,
-        hydration: 'idle',
+        hydration: 'unloaded',
         hasEarlier: false,
         _streamHandle: null,
       });
@@ -649,7 +755,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     },
 
     retryLast: () => {
-      const { messages } = get();
+      const { messages, failedDecision } = get();
+      if (failedDecision) {
+        return;
+      }
       let lastUserIdx = -1;
       for (let i = messages.length - 1; i >= 0; i--) {
         if (messages[i].role === 'user') {
@@ -660,9 +769,13 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       if (lastUserIdx === -1) {
         return;
       }
-      const text = messages[lastUserIdx].content;
+      const failed = messages[lastUserIdx];
+      const resentTurnId =
+        failed.turnId !== undefined && agentClient.canResendTurn(failed.turnId)
+          ? failed.turnId
+          : undefined;
       set({ messages: messages.slice(0, lastUserIdx) });
-      get().sendMessage(text, lastNoteId);
+      startTurn(failed.content, lastNoteId, resentTurnId);
     },
 
     approveProposal: () => {

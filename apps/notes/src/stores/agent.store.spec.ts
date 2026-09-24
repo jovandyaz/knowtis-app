@@ -12,6 +12,7 @@ import type {
   AgentThinkingPayload,
 } from '@knowtis/api-client';
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
+import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
@@ -28,6 +29,7 @@ vi.mock('@knowtis/api-client', () => ({
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
     canResume: vi.fn(() => true),
+    canResendTurn: vi.fn(() => false),
     approve: vi.fn(),
     reject: vi.fn(),
     resetConversation: vi.fn(),
@@ -134,8 +136,8 @@ describe('useAgentStore', () => {
   it('sends no effort while the conversation effort is auto', () => {
     capture();
     useAgentStore.getState().sendMessage('hola');
-    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
-      undefined
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual(
+      {}
     );
   });
 
@@ -165,8 +167,8 @@ describe('useAgentStore', () => {
     useAgentStore.getState().newConversation();
     useAgentStore.getState().sendMessage('hola');
     expect(useAgentStore.getState().reasoningEffort).toBe('auto');
-    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
-      undefined
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual(
+      {}
     );
   });
 
@@ -979,6 +981,125 @@ describe('agent.store proposals', () => {
 
     vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
     expect(useAgentStore.getState().status).toBe('error');
+  });
+
+  const DECISION_REFUSAL_CODES = [
+    AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+    'AI_RATE_LIMIT_EXCEEDED',
+  ];
+
+  function proposeThenDecide(decision: 'approve' | 'reject') {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.({
+      turnId: 'turn-1',
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 's',
+      payload: {},
+    });
+    if (decision === 'approve') {
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        turnId: 'turn-1',
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'Trip', kind: 'create' },
+      });
+    } else {
+      useAgentStore.getState().rejectProposal();
+    }
+    return get;
+  }
+
+  describe.each(DECISION_REFUSAL_CODES)(
+    'when the server refuses the resumed leg with %s',
+    (code) => {
+      const refusal = { code, message: 'refused', turnId: 'turn-1' };
+
+      it.each(['approve', 'reject'] as const)(
+        'shows the %s decision as failed, resolved as the server left it',
+        (decision) => {
+          const get = proposeThenDecide(decision);
+
+          get().onError(refusal);
+
+          const { status, error, failedDecision, pendingProposal, messages } =
+            useAgentStore.getState();
+          expect({ status, error, failedDecision, pendingProposal }).toEqual({
+            status: 'error',
+            error: refusal,
+            failedDecision: true,
+            pendingProposal: null,
+          });
+          expect(
+            messages.some((m) =>
+              decision === 'approve' ? m.committed : m.discarded
+            )
+          ).toBe(true);
+        }
+      );
+
+      it.each(['approve', 'reject'] as const)(
+        'never answers a failed %s decision by resending the message',
+        (decision) => {
+          const get = proposeThenDecide(decision);
+          get().onError(refusal);
+
+          useAgentStore.getState().retryLast();
+
+          expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+          expect(useAgentStore.getState().status).toBe('error');
+        }
+      );
+    }
+  );
+
+  it('never resends the message after the resumed leg times out', () => {
+    proposeThenDecide('approve');
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+
+    useAgentStore.getState().retryLast();
+
+    const { status, failedDecision } = useAgentStore.getState();
+    expect({ status, failedDecision }).toEqual({
+      status: 'timeout',
+      failedDecision: true,
+    });
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+  });
+
+  it('never resends the message after a decision the client could not deliver', () => {
+    vi.mocked(agentClient.canResume).mockReturnValue(false);
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.({
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 's',
+      payload: {},
+    });
+    useAgentStore.getState().approveProposal();
+
+    useAgentStore.getState().retryLast();
+
+    expect(useAgentStore.getState().failedDecision).toBe(true);
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the failure of a turn sent after a failed decision', () => {
+    const get = proposeThenDecide('approve');
+    get().onError({ code: 'AI_RATE_LIMIT_EXCEEDED', message: 'busy' });
+    useAgentStore.getState().sendMessage('next question');
+    get().onError({ code: 'AI_PROVIDER_ERROR', message: 'down' });
+
+    useAgentStore.getState().retryLast();
+
+    expect(useAgentStore.getState().failedDecision).toBe(false);
+    expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
+      'next question'
+    );
   });
 
   it('approveProposal is a no-op without a pending proposal', () => {

@@ -10,12 +10,15 @@ import {
 import { AgentMessage } from './AgentMessage';
 import { AgentQueuedMessages } from './AgentQueuedMessages';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
+import { HistoryRetryRow } from './HistoryRetryRow';
 
 interface AgentMessageListProps {
   messages: AgentChatMessage[];
   status: AgentStatus;
   thinkingDetail?: string;
   hasEarlier?: boolean;
+  /** Offered only while the earlier messages of the thread failed to load. */
+  onRetryHistory?: () => void;
 }
 
 export function AgentMessageList({
@@ -23,6 +26,7 @@ export function AgentMessageList({
   status,
   thinkingDetail,
   hasEarlier = false,
+  onRetryHistory,
 }: AgentMessageListProps) {
   const { t } = useTranslation('notes');
   const lastAssistant = messages.at(-1);
@@ -33,6 +37,7 @@ export function AgentMessageList({
   return (
     <Conversation aria-busy={status === 'streaming'} aria-live="polite">
       <ConversationContent>
+        {onRetryHistory && <HistoryRetryRow onRetry={onRetryHistory} />}
         {hasEarlier && (
           <p className="text-center text-xs text-muted-foreground">
             {t('ai.copilot.history.earlier')}

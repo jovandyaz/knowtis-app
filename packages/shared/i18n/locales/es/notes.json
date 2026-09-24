@@ -451,7 +451,8 @@
         "deleted": "Conversación eliminada",
         "gone": "Esa conversación ya no existe",
         "listFailed": "No se pudieron cargar las conversaciones",
-        "loadFailed": "No se pudo cargar esta conversación.",
+        "earlierFailed": "No se pudieron cargar los mensajes anteriores",
+        "retry": "Reintentar",
         "loading": "Cargando conversación…",
         "loadingList": "Cargando conversaciones…",
         "openLabel": "Abrir la conversación {{title}}"

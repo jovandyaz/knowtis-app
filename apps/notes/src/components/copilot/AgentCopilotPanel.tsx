@@ -38,6 +38,7 @@ export function AgentCopilotPanel() {
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
+  const failedDecision = useAgentStore((s) => s.failedDecision);
   const thinkingText = useAgentStore((s) => s.thinkingText);
   const pendingProposal = useAgentStore((s) => s.pendingProposal);
   const approveProposal = useAgentStore((s) => s.approveProposal);
@@ -46,10 +47,9 @@ export function AgentCopilotPanel() {
   const draft = useAgentStore((s) => s.draft);
   const setDraft = useAgentStore((s) => s.setDraft);
   const takeBackQueued = useAgentStore((s) => s.takeBackQueued);
-  const conversationId = useAgentStore((s) => s.conversationId);
   const hydration = useAgentStore((s) => s.hydration);
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
-  const openConversation = useAgentStore((s) => s.openConversation);
+  const retryHydration = useAgentStore((s) => s.retryHydration);
   const userId = useAuthUser()?.id ?? null;
   // Not the editor's activeNoteId: that stays null until the lazy editor chunk
   // mounts, and a message sent in that window would lose its note.
@@ -92,11 +92,7 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
-  const retryHydration = () => {
-    if (conversationId) {
-      void openConversation(conversationId, 'reload');
-    }
-  };
+  const historyFailed = hydration === 'failed';
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
   const conversationWasGone = error?.code === AGENT_CONVERSATION_NOT_FOUND_CODE;
@@ -144,11 +140,11 @@ export function AgentCopilotPanel() {
 
   return (
     <div className="flex h-full flex-col min-h-0">
-      {hydration === 'loading' ? (
+      {hydration === 'loading' && messages.length === 0 ? (
         <div className="flex-1 min-h-0 px-4 py-3">
           <AgentStatusIndicator label={t('ai.copilot.history.loading')} />
         </div>
-      ) : messages.length === 0 && queueLength === 0 ? (
+      ) : messages.length === 0 && queueLength === 0 && !historyFailed ? (
         <div className="flex-1 min-h-0">
           <AgentEmptyState onSelectSuggestion={send} />
         </div>
@@ -159,21 +155,24 @@ export function AgentCopilotPanel() {
             status={status}
             thinkingDetail={thinkingText}
             hasEarlier={hasEarlier}
+            {...(historyFailed
+              ? { onRetryHistory: () => void retryHydration() }
+              : {})}
           />
         </div>
       )}
 
-      {hydration === 'failed' && (
+      {status === 'error' && (
         <RetryBanner
-          message={t('ai.copilot.history.loadFailed')}
-          onRetry={retryHydration}
+          message={t(errorMessageKey)}
+          {...(failedDecision ? {} : { onRetry: retryLast })}
         />
       )}
-      {status === 'error' && (
-        <RetryBanner message={t(errorMessageKey)} onRetry={retryLast} />
-      )}
       {status === 'timeout' && (
-        <RetryBanner message={t('ai.errors.timeout')} onRetry={retryLast} />
+        <RetryBanner
+          message={t('ai.errors.timeout')}
+          {...(failedDecision ? {} : { onRetry: retryLast })}
+        />
       )}
 
       {updateProposal && <ProposalPendingRow onOpen={openReview} />}

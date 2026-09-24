@@ -38,9 +38,10 @@ describe('toChatMessages', () => {
         nextId
       )
     ).toEqual([
-      { id: 'h1', role: 'user', content: 'Q' },
+      { id: 'h1', turnId: 't1', role: 'user', content: 'Q' },
       {
         id: 'h2',
+        turnId: 't1',
         role: 'assistant',
         content: 'Let me look. Found it.',
         sources: [N1],
@@ -66,9 +67,10 @@ describe('toChatMessages', () => {
         nextId
       )
     ).toEqual([
-      { id: 'h1', role: 'user', content: 'Q' },
+      { id: 'h1', turnId: 't1', role: 'user', content: 'Q' },
       {
         id: 'h2',
+        turnId: 't1',
         role: 'assistant',
         content: 'Partial',
         sources: [N1],
@@ -92,9 +94,10 @@ describe('toChatMessages', () => {
         nextId
       )
     ).toEqual([
-      { id: 'h1', role: 'user', content: 'Q' },
+      { id: 'h1', turnId: 't1', role: 'user', content: 'Q' },
       {
         id: 'h2',
+        turnId: 't1',
         role: 'assistant',
         content: '',
         sources: [],
@@ -118,8 +121,14 @@ describe('toChatMessages', () => {
         nextId
       )
     ).toEqual([
-      { id: 'h1', role: 'user', content: 'Q' },
-      { id: 'h2', role: 'assistant', content: 'Half', sources: [] },
+      { id: 'h1', turnId: 't1', role: 'user', content: 'Q' },
+      {
+        id: 'h2',
+        turnId: 't1',
+        role: 'assistant',
+        content: 'Half',
+        sources: [],
+      },
     ]);
   });
 
@@ -137,7 +146,22 @@ describe('toChatMessages', () => {
         ],
         nextId
       )
-    ).toEqual([{ id: 'h1', role: 'user', content: 'Q' }]);
+    ).toEqual([{ id: 'h1', turnId: 't1', role: 'user', content: 'Q' }]);
+  });
+
+  it('leaves history written before turns had ids without a turn id', () => {
+    expect(
+      toChatMessages(
+        [
+          row({ role: 'user', content: 'Q' }),
+          row({ role: 'assistant', content: 'A' }),
+        ],
+        nextId
+      )
+    ).toEqual([
+      { id: 'h1', role: 'user', content: 'Q' },
+      { id: 'h2', role: 'assistant', content: 'A', sources: [] },
+    ]);
   });
 
   it('never merges history written before turns had ids', () => {

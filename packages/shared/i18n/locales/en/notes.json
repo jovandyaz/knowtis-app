@@ -451,7 +451,8 @@
         "deleted": "Conversation deleted",
         "gone": "That conversation no longer exists",
         "listFailed": "Couldn't load conversations",
-        "loadFailed": "Couldn't load this conversation.",
+        "earlierFailed": "Couldn't load earlier messages",
+        "retry": "Retry",
         "loading": "Loading conversation…",
         "loadingList": "Loading conversations…",
         "openLabel": "Open conversation {{title}}"

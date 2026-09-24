@@ -33,6 +33,10 @@ function continuesTurn(
   );
 }
 
+function turnOf(row: ConversationTranscriptMessage) {
+  return row.turnId !== null ? { turnId: row.turnId } : {};
+}
+
 function assistantDetails(row: ConversationTranscriptMessage) {
   return {
     sources: row.sources,
@@ -62,6 +66,7 @@ export function toChatMessages(
     if (last && continuesTurn(previous, row)) {
       messages[messages.length - 1] = {
         id: last.id,
+        ...turnOf(row),
         role: last.role,
         content: last.content + row.content,
         ...assistantDetails(row),
@@ -69,12 +74,18 @@ export function toChatMessages(
     } else if (row.role === ASSISTANT_ROLE) {
       messages.push({
         id: nextId(),
+        ...turnOf(row),
         role: row.role,
         content: row.content,
         ...assistantDetails(row),
       });
     } else {
-      messages.push({ id: nextId(), role: row.role, content: row.content });
+      messages.push({
+        id: nextId(),
+        ...turnOf(row),
+        role: row.role,
+        content: row.content,
+      });
     }
     previous = row;
   }

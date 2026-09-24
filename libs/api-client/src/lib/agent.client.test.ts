@@ -102,6 +102,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     expect(emit).toHaveBeenCalledWith(
       'agent:message',
@@ -118,6 +119,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
@@ -130,6 +132,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     expect(emit).toHaveBeenCalledWith(
       'agent:message',
@@ -143,7 +146,12 @@ describe('AgentClient', () => {
 
   it('adopts the conversation id announced mid-turn and sends it on the next message', () => {
     const client = makeClient();
-    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onTurnSettled: vi.fn(),
+    };
     client.sendMessage('hi', callbacks);
     handlers.get('agent:conversation')?.({ conversationId: 'conv-1' });
     handlers.get('agent:done')?.({
@@ -161,7 +169,12 @@ describe('AgentClient', () => {
 
   it('keeps the id of a first turn the user cancelled', () => {
     const client = makeClient();
-    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onTurnSettled: vi.fn(),
+    };
     const handle = client.sendMessage('hi', callbacks);
     handlers.get('agent:conversation')?.({ conversationId: 'conv-1' });
     handle.cancel();
@@ -175,7 +188,12 @@ describe('AgentClient', () => {
 
   it('ignores an announcement that arrives after the turn was cancelled', () => {
     const client = makeClient();
-    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onTurnSettled: vi.fn(),
+    };
     const handle = client.sendMessage('hi', callbacks);
     handle.cancel();
     handlers.get('agent:conversation')?.({ conversationId: 'conv-late' });
@@ -189,7 +207,12 @@ describe('AgentClient', () => {
 
   it("does not re-attach a cancelled turn's thread when its agent:done lands late", () => {
     const client = makeClient();
-    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onTurnSettled: vi.fn(),
+    };
     const handle = client.sendMessage('hi', callbacks);
     const receipt = emit.mock.calls.at(-1)?.[2] as (
       error: Error | null
@@ -222,6 +245,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
@@ -235,6 +259,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     expect(emit).toHaveBeenCalledWith(
       'agent:message',
@@ -247,10 +272,16 @@ describe('AgentClient', () => {
 
   it('lets onDone start the next turn without cancelling it or losing its chunks', () => {
     const client = makeClient();
-    const next = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const next = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onTurnSettled: vi.fn(),
+    };
     client.sendMessage('first', {
       onChunk: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onDone: () => {
         expect(client.canResume()).toBe(false);
         client.sendMessage('second', next);
@@ -283,6 +314,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone,
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
 
     handlers.get('agent:done')?.({
@@ -305,6 +337,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     const receipt = emit.mock.calls.at(-1)?.at(-1) as (err: null) => void;
     receipt(null);
@@ -316,7 +349,12 @@ describe('AgentClient', () => {
     const client = makeClient();
     client.sendMessage(
       'hi',
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onTurnSettled: vi.fn(),
+      },
       'note-123'
     );
     expect(emit).toHaveBeenCalledWith(
@@ -333,7 +371,12 @@ describe('AgentClient', () => {
     const client = makeClient();
     client.sendMessage(
       'hola',
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onTurnSettled: vi.fn(),
+      },
       undefined,
       { effort: 'high' }
     );
@@ -351,7 +394,12 @@ describe('AgentClient', () => {
     const client = makeClient();
     client.sendMessage(
       'boost',
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onTurnSettled: vi.fn(),
+      },
       undefined,
       { effort: 'high' }
     );
@@ -365,6 +413,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     expect(emit).toHaveBeenCalledWith(
       'agent:message',
@@ -381,6 +430,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     expect(client.canResume()).toBe(true);
     client.approve('p1');
@@ -399,6 +449,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
@@ -417,6 +468,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
     handle.cancel();
     emit.mockClear();
@@ -432,6 +484,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onConversation,
     });
 
@@ -446,6 +499,7 @@ describe('AgentClient', () => {
     client.sendMessage('hi', {
       onChunk: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onConversation: (id) => order.push(`conversation:${id}`),
       onDone: () => order.push('done'),
     });
@@ -469,6 +523,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onConversation,
     });
     const receipt = emit.mock.calls.at(-1)?.[2] as (
@@ -482,6 +537,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
 
     expect(onConversation).not.toHaveBeenCalled();
@@ -500,6 +556,7 @@ describe('AgentClient', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     });
 
     expect(emit).toHaveBeenLastCalledWith(
@@ -534,6 +591,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => null,
@@ -557,6 +615,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => token,
@@ -590,6 +649,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'stale-token',
@@ -615,6 +675,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'stale-token',
@@ -642,6 +703,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -677,6 +739,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'valid-token',
@@ -701,6 +764,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'valid-token',
@@ -722,6 +786,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'valid-token',
@@ -754,6 +819,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'valid-token',
@@ -778,6 +844,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => 'valid-token',
@@ -815,6 +882,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => token,
@@ -845,6 +913,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -869,6 +938,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -903,6 +973,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -938,6 +1009,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -972,6 +1044,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -1010,6 +1083,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -1037,6 +1111,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -1070,6 +1145,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => token,
@@ -1105,6 +1181,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -1149,6 +1226,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -1180,6 +1258,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
     };
     client.setTokenProvider({
       getAccessToken: () => token,
@@ -1215,6 +1294,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
+      onTurnSettled: vi.fn(),
       onProposal: vi.fn(),
     };
     client.setTokenProvider({
@@ -1247,6 +1327,7 @@ describe('AgentClient – delivery receipts', () => {
     onChunk: vi.fn(),
     onDone: vi.fn(),
     onError: vi.fn(),
+    onTurnSettled: vi.fn(),
   });
   const receiptOf = (call: unknown[] | undefined) =>
     call?.at(-1) as (err: Error | null) => void;
@@ -1336,6 +1417,7 @@ describe('AgentClient – abandoning an unacknowledged request', () => {
     onChunk: vi.fn(),
     onDone: vi.fn(),
     onError: vi.fn(),
+    onTurnSettled: vi.fn(),
   });
   const receiptOf = (call: unknown[] | undefined) =>
     call?.at(-1) as (err: Error | null) => void;
@@ -1933,4 +2015,159 @@ describe('AgentClient – turn identity', () => {
       ).toEqual(['agent:message', `agent:${decision}`]);
     }
   );
+});
+
+describe('AgentClient – resending a failed turn', () => {
+  let fake: ReturnType<typeof createFakeSocket>;
+  let client: AgentClient;
+
+  const RESENT_TURN_ID = '11111111-1111-4111-8111-111111111111';
+  const LAST_RESEND_DELAY_MS = 4_000;
+  const callbacksOf = () => ({
+    onChunk: vi.fn(),
+    onDone: vi.fn(),
+    onConversation: vi.fn(),
+    onError: vi.fn(),
+    onProposal: vi.fn(),
+    onTurnSettled: vi.fn(),
+  });
+  const receiptOf = (call: unknown[] | undefined) =>
+    call?.at(-1) as (err: Error | null) => void;
+  const lastEmit = () => fake.socket.emit.mock.calls.at(-1) as unknown[];
+  const sentTurnIds = () =>
+    (fake.socket.emit.mock.calls as unknown[][])
+      .filter((call) => call[0] === 'agent:message')
+      .map((call) => (call[1] as { turnId: string }).turnId);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client = new AgentClient('http://test.local/agent');
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends the turn id the caller resends instead of minting one', () => {
+    const handle = client.sendMessage('hi', callbacksOf(), undefined, {
+      turnId: RESENT_TURN_ID,
+    });
+
+    expect(handle.turnId).toBe(RESENT_TURN_ID);
+    expect(sentTurnIds()).toEqual([RESENT_TURN_ID]);
+  });
+
+  it('offers a turn for a resend when its message was never acknowledged', () => {
+    const handle = client.sendMessage('hi', callbacksOf());
+
+    receiptOf(lastEmit())(new Error('operation has timed out'));
+
+    expect(client.canResendTurn(handle.turnId)).toBe(true);
+  });
+
+  it.each([
+    AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+    AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+  ])('offers a turn for a resend when %s outlasts the backoff', (code) => {
+    vi.useFakeTimers();
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    receiptOf(lastEmit())(null);
+    const refused = { code, message: code, turnId: handle.turnId };
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      fake.trigger('agent:error', refused);
+      vi.advanceTimersByTime(LAST_RESEND_DELAY_MS);
+      receiptOf(lastEmit())(null);
+    }
+    fake.trigger('agent:error', refused);
+
+    expect(callbacks.onError).toHaveBeenCalledWith(refused);
+    expect(client.canResendTurn(handle.turnId)).toBe(true);
+  });
+
+  it('does not offer a turn the server acknowledged and then failed', () => {
+    const handle = client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(null);
+
+    fake.trigger('agent:error', {
+      code: 'AI_PROVIDER_ERROR',
+      message: 'down',
+      turnId: handle.turnId,
+    });
+
+    expect(client.canResendTurn(handle.turnId)).toBe(false);
+  });
+
+  it('does not offer a turn whose socket the server closed after acknowledging it', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    receiptOf(lastEmit())(null);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(client.canResendTurn(handle.turnId)).toBe(false);
+  });
+
+  it('does not offer a turn whose proposal decision was never acknowledged', () => {
+    const handle = client.sendMessage('create a note', callbacksOf());
+    receiptOf(lastEmit())(null);
+    fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+    client.approve('p1');
+
+    receiptOf(lastEmit())(new Error('operation has timed out'));
+
+    expect(client.canResendTurn(handle.turnId)).toBe(false);
+  });
+
+  it('forgets the failed turn once the next message goes out', () => {
+    const failed = client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(new Error('operation has timed out'));
+
+    client.sendMessage('something else', callbacksOf());
+
+    expect(client.canResendTurn(failed.turnId)).toBe(false);
+  });
+
+  it.each([
+    ['a new conversation', (c: AgentClient) => c.resetConversation()],
+    ['another conversation', (c: AgentClient) => c.resumeConversation('c2')],
+  ])('forgets the failed turn when the user moves to %s', (_label, move) => {
+    const failed = client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(new Error('operation has timed out'));
+
+    move(client);
+
+    expect(client.canResendTurn(failed.turnId)).toBe(false);
+  });
+
+  it('keeps a turn suspended on its proposal open for the decision when a reply reports it settled', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('create a note', callbacks);
+    receiptOf(lastEmit())(null);
+    fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+
+    fake.trigger('agent:turn_settled', {
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+    client.approve('p1');
+
+    expect(callbacks.onTurnSettled).toHaveBeenCalledWith({
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+    expect(lastEmit()[0]).toBe('agent:approve');
+  });
 });
