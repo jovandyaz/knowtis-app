@@ -539,3 +539,62 @@ describe('env.config RATE_LIMITING_ENABLED', () => {
     ).toBe(false);
   });
 });
+
+describe('env.config IMAGE_IMPORT_ALLOWED_IPS', () => {
+  it('defaults to allowing no private address', () => {
+    expect(validateEnv(validEnv).IMAGE_IMPORT_ALLOWED_IPS).toEqual([]);
+  });
+
+  it('parses a comma-separated list of IPs and CIDRs, ignoring spaces and empty entries', () => {
+    expect(
+      validateEnv({
+        ...validEnv,
+        IMAGE_IMPORT_ALLOWED_IPS: '127.0.0.1, ::1,10.0.0.0/8 ,,fd00::/8',
+      }).IMAGE_IMPORT_ALLOWED_IPS
+    ).toEqual(['127.0.0.1', '::1', '10.0.0.0/8', 'fd00::/8']);
+  });
+
+  it('canonicalizes IPv6 entries to the text the address filter compares, single IPs and CIDRs alike', () => {
+    expect(
+      validateEnv({
+        ...validEnv,
+        IMAGE_IMPORT_ALLOWED_IPS:
+          '0:0:0:0:0:0:0:1,FD00:0:0:0:0:0:0:0/8,::FFFF:127.0.0.1,2001:DB8:0:0:1:0:0:1/128',
+      }).IMAGE_IMPORT_ALLOWED_IPS
+    ).toEqual(['::1', 'fd00::/8', '::ffff:7f00:1', '2001:db8::1:0:0:1/128']);
+  });
+
+  it.each(['localhost', '127.0.0.1/33', '10.0.0'])(
+    'rejects %s, which is neither an IP nor a CIDR',
+    (entry) => {
+      expect(() =>
+        validateEnv({
+          ...validEnv,
+          IMAGE_IMPORT_ALLOWED_IPS: `127.0.0.1,${entry}`,
+        })
+      ).toThrow(/IMAGE_IMPORT_ALLOWED_IPS/);
+    }
+  );
+
+  it('refuses a production boot that lets image imports reach private addresses', () => {
+    expect(() =>
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+        IMAGE_IMPORT_ALLOWED_IPS: '127.0.0.1',
+      })
+    ).toThrow(/IMAGE_IMPORT_ALLOWED_IPS is refused in production/);
+  });
+
+  it('boots production when the list is left empty', () => {
+    expect(
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+        IMAGE_IMPORT_ALLOWED_IPS: '',
+      }).IMAGE_IMPORT_ALLOWED_IPS
+    ).toEqual([]);
+  });
+});

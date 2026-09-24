@@ -4,6 +4,8 @@
   "private": true,
   "type": "commonjs",
   "dependencies": {
-    "@vercel/blob": "^2.4.0"
+    "@vercel/blob": "^2.4.0",
+    "ipaddr.js": "^2.3.0",
+    "request-filtering-agent": "^3.2.1"
   }
 }

@@ -5,7 +5,6 @@ import type { ExecutionContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { I18nValidationPipe } from 'nestjs-i18n';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -13,6 +12,7 @@ import type {
   ConversationTranscript,
 } from '@knowtis/shared-types';
 
+import { createValidationPipe } from '../../config/validation-pipe';
 import { ConversationController } from './conversation.controller';
 import { CONVERSATION_REPOSITORY } from './domain/ports/conversation.repository';
 
@@ -87,14 +87,7 @@ describe('ConversationController over HTTP', () => {
       })
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
-    app.useGlobalPipes(
-      new I18nValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      })
-    );
+    app.useGlobalPipes(createValidationPipe());
     await app.listen(0);
     baseUrl = await app.getUrl();
   });

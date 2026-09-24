@@ -1,7 +1,6 @@
 import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import {
   UnauthorizedException,
-  ValidationPipe,
   VersioningType,
   type ExecutionContext,
 } from '@nestjs/common';
@@ -9,6 +8,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createValidationPipe } from '../../../config/validation-pipe';
 import { DATABASE_CONNECTION } from '../../../database';
 import { FeatureFlagsService } from '../../feature-flags';
 import { OauthInteractionController } from '../oauth-interaction.controller';
@@ -125,7 +125,7 @@ async function buildHarness(
     defaultVersion: '1',
     prefix: 'v',
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(createValidationPipe());
   await app.listen(0, '127.0.0.1');
   return {
     app,

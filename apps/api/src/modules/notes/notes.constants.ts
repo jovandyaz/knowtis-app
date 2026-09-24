@@ -1,10 +1,42 @@
 import { HttpStatus } from '@nestjs/common';
 
 import { NoteErrorCodes } from './domain';
+import {
+  ImageImportErrorCodes,
+  type ImageImportErrorCode,
+} from './domain/ports/remote-image-fetcher.port';
 
 export const NOTE_UPDATE_THROTTLE = {
   default: { limit: 30, ttl: 60_000 },
 } as const;
+
+export const IMAGE_IMPORT_THROTTLE = {
+  default: { limit: 20, ttl: 60_000 },
+} as const;
+
+/** The image import codes a client can receive. */
+export const CLIENT_IMAGE_IMPORT_ERROR_CODES = [
+  ImageImportErrorCodes.TOO_LARGE,
+  ImageImportErrorCodes.UNSUPPORTED_TYPE,
+  ImageImportErrorCodes.FETCH_FAILED,
+] as const satisfies readonly ImageImportErrorCode[];
+
+export type ClientImageImportErrorCode =
+  (typeof CLIENT_IMAGE_IMPORT_ERROR_CODES)[number];
+
+// OWASP SSRF prevention: an answer that told a blocked address from an
+// unreachable or slow host would let refusals map the server's network, so
+// those fold into one code. The rejection log keeps the precise one.
+export const CLIENT_IMAGE_IMPORT_ERROR_CODE: Readonly<
+  Record<ImageImportErrorCode, ClientImageImportErrorCode>
+> = {
+  [ImageImportErrorCodes.BLOCKED_ADDRESS]: ImageImportErrorCodes.FETCH_FAILED,
+  [ImageImportErrorCodes.FETCH_FAILED]: ImageImportErrorCodes.FETCH_FAILED,
+  [ImageImportErrorCodes.TIMEOUT]: ImageImportErrorCodes.FETCH_FAILED,
+  [ImageImportErrorCodes.TOO_LARGE]: ImageImportErrorCodes.TOO_LARGE,
+  [ImageImportErrorCodes.UNSUPPORTED_TYPE]:
+    ImageImportErrorCodes.UNSUPPORTED_TYPE,
+};
 
 export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.SHARE_LINK_CONFLICT]: HttpStatus.CONFLICT,
@@ -21,5 +53,8 @@ export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.EMAIL_NOT_VERIFIED]: HttpStatus.FORBIDDEN,
   [NoteErrorCodes.SHARE_TOKEN_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [NoteErrorCodes.CONTENT_OVERWRITE_REFUSED]: HttpStatus.CONFLICT,
+  [NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ImageImportErrorCodes.TOO_LARGE]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ImageImportErrorCodes.FETCH_FAILED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };

@@ -5,12 +5,13 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
+import { I18nValidationExceptionFilter } from 'nestjs-i18n';
 
 import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
 import { buildAllowedOrigins, buildCorsOptions } from './config/cors-origins';
 import { SHUTDOWN_OPTIONS } from './config/shutdown-options';
+import { createValidationPipe } from './config/validation-pipe';
 import { GlobalExceptionFilter } from './core/filters/http-exception.filter';
 import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
 import { JsonConsoleLogger } from './core/logging/json-console-logger';
@@ -85,16 +86,7 @@ async function bootstrap() {
     app.useGlobalInterceptors(new LoggingInterceptor());
   }
 
-  app.useGlobalPipes(
-    new I18nValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    })
-  );
+  app.useGlobalPipes(createValidationPipe());
 
   if (isDevelopment) {
     const swaggerConfig = new DocumentBuilder()
