@@ -26,8 +26,10 @@ export const IMAGE_INSERT_META = 'imageInsert';
 
 export const MAX_PARALLEL_IMPORTS = 3;
 
-/** Client-side cap on one import; above the API's 10 s cap on its own fetch. */
-export const IMPORT_TIMEOUT_MS = 15_000;
+const API_FETCH_TIMEOUT_MS = 10_000;
+const BLOB_UPLOAD_ALLOWANCE_MS = 15_000;
+// Giving up before the API is done still stores the image, which the note never uses.
+const IMPORT_TIMEOUT_MS = API_FETCH_TIMEOUT_MS + BLOB_UPLOAD_ALLOWANCE_MS;
 
 const INSERT_UI_EVENTS: readonly unknown[] = ['paste', 'drop'];
 const LINK_MARK_NAME = 'link';

@@ -10,7 +10,6 @@ import { logger, STORED_IMAGE_HOST } from '@knowtis/shared-util';
 import { createBaseExtensions } from '../base-extensions';
 import {
   IMAGE_INSERT_META,
-  IMPORT_TIMEOUT_MS,
   isImageImportPending,
   MAX_PARALLEL_IMPORTS,
   type ImageImportOptions,
@@ -31,6 +30,7 @@ const PNG_DATA_URL =
 const UUID = '0b6c1a52-2f7e-4d0c-9d43-5d5c8f0e8a11';
 const YJS_FIELD = 'default';
 const IMPORT_DURATION_MS = 1_000;
+const IMPORT_GIVE_UP_MS = 25_000;
 const CAPTION = 'Q3 revenue';
 
 interface Deferred<T> {
@@ -432,7 +432,7 @@ describe('ImageImport', () => {
         .map((name) => `<img src="https://x.test/${name}.png">`)
         .join('')
     );
-    await vi.advanceTimersByTimeAsync(IMPORT_TIMEOUT_MS - 1);
+    await vi.advanceTimersByTimeAsync(IMPORT_GIVE_UP_MS - 1);
     expect(importedUrls()).toHaveLength(MAX_PARALLEL_IMPORTS);
     expect(links()).toEqual([]);
 
@@ -449,7 +449,7 @@ describe('ImageImport', () => {
       'https://x.test/c.png',
     ]);
 
-    await vi.advanceTimersByTimeAsync(IMPORT_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(IMPORT_GIVE_UP_MS);
     expect(signals.map((signal) => signal.aborted)).toEqual([
       true,
       true,
