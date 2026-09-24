@@ -27,6 +27,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     ...SHUTDOWN_OPTIONS,
     bodyParser: false,
+    // NODE_ENV is only known once create() has loaded the env files, so a
+    // failed module init, such as a rejected env, is still printed as JSON.
+    logger: new JsonConsoleLogger(),
     bufferLogs: true,
   });
   // Railway terminates TLS at a proxy; without this, req.ip, the fallback
