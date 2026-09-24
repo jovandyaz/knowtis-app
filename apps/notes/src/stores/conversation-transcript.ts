@@ -1,5 +1,6 @@
 import {
   AGENT_STOP_REASON,
+  MESSAGE_STOP_REASON,
   type AgentStopReason,
   type ConversationTranscriptMessage,
 } from '@knowtis/shared-types';
@@ -10,6 +11,10 @@ const ASSISTANT_ROLE = 'assistant' satisfies AgentChatMessage['role'];
 
 const DISPLAYED_STOP_REASONS: readonly string[] =
   Object.values(AGENT_STOP_REASON);
+
+const INTERRUPTED_STOP_REASONS: readonly string[] = MESSAGE_STOP_REASON.filter(
+  (reason) => !DISPLAYED_STOP_REASONS.includes(reason)
+);
 
 function isDisplayedStopReason(
   reason: string | null
@@ -42,6 +47,10 @@ function assistantDetails(row: ConversationTranscriptMessage) {
     sources: row.sources,
     ...(isDisplayedStopReason(row.stopReason)
       ? { stopReason: row.stopReason }
+      : {}),
+    ...(row.stopReason !== null &&
+    INTERRUPTED_STOP_REASONS.includes(row.stopReason)
+      ? { interrupted: true }
       : {}),
   };
 }

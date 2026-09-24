@@ -98,6 +98,8 @@ export interface AgentChatMessage {
   proposal?: { kind: PendingProposal['kind'] };
   committed?: { kind: PendingProposal['kind']; title: string };
   discarded?: boolean;
+  /** The stored leg this bubble shows was cut off by an abort or an error. */
+  interrupted?: boolean;
 }
 
 export interface QueuedMessage {
@@ -142,6 +144,11 @@ const RESUME_UNAVAILABLE_ERROR: AgentErrorPayload = {
 const ANSWER_UNAVAILABLE_ERROR: AgentErrorPayload = {
   code: 'AGENT_ANSWER_UNAVAILABLE',
   message: 'The stored answer could not be loaded',
+};
+
+const TURN_INTERRUPTED_ERROR: AgentErrorPayload = {
+  code: 'AGENT_TURN_INTERRUPTED',
+  message: 'The stored answer was cut off',
 };
 
 interface AgentState {
@@ -476,7 +483,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           buffer.flush();
           thinkingBuffer.discard();
           set({ _streamHandle: null, thinkingText: '' });
-          void showStoredAnswer();
+          void showStoredAnswer(turnId);
         },
       },
       noteId,
@@ -599,7 +606,17 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     return outcome;
   };
 
-  const showStoredAnswer = async () => {
+  const hasStoredAnswer = (turnId: string | undefined): boolean => {
+    const answer = get().messages.findLast(
+      (m) =>
+        m.turnId === turnId &&
+        m.role === 'assistant' &&
+        (m.content.length > 0 || m.stopReason !== undefined)
+    );
+    return answer !== undefined && answer.interrupted !== true;
+  };
+
+  const showStoredAnswer = async (turnId: string | undefined) => {
     // The stored answer replaces this turn's live bubbles, so it must not win the merge.
     liveTurnId = undefined;
     const version = streamVersion;
@@ -612,16 +629,22 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     }
     buffer.clearInactivityTimer();
     storedAnswerWait = undefined;
-    if (outcome === 'loaded' || outcome === 'superseded') {
+    if (
+      outcome === 'superseded' ||
+      (outcome === 'loaded' && hasStoredAnswer(turnId))
+    ) {
       set({ status: 'done' });
       drainQueue();
       return;
     }
+    // Shown as done, a turn stored cut off or without an answer would pass for
+    // a whole reply. The server has ended it, so its retry is a new turn.
+    const loaded = outcome === 'loaded';
     const waitingId = activeAssistantId;
     set((s) => ({
       status: 'error',
-      error: ANSWER_UNAVAILABLE_ERROR,
-      retryMode: 'reload',
+      error: loaded ? TURN_INTERRUPTED_ERROR : ANSWER_UNAVAILABLE_ERROR,
+      retryMode: loaded ? 'resend' : 'reload',
       messages: s.messages.filter(
         (m) => m.id !== waitingId || m.content.length > 0
       ),
@@ -854,7 +877,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           error: null,
           messages: [...s.messages, waiting],
         }));
-        void showStoredAnswer();
+        void showStoredAnswer(failed.turnId);
         return;
       }
       const resentTurnId =

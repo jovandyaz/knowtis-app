@@ -972,7 +972,12 @@ describe('agent.store hydration by turn', () => {
     callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
     const sentBeforeTheAnswer = vi.mocked(agentClient.sendMessage).mock.calls
       .length;
-    pending.resolve(transcriptWith(row(LIVE_TURN_ID, 'user', 'first')));
+    pending.resolve(
+      transcriptWith(
+        row(LIVE_TURN_ID, 'user', 'first'),
+        row(LIVE_TURN_ID, 'assistant', 'Stored answer.')
+      )
+    );
 
     await vi.waitFor(() =>
       expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
@@ -1073,6 +1078,68 @@ describe('agent.store hydration by turn', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  function storedTurn(
+    answer: string,
+    stopReason: 'aborted' | 'error'
+  ): ConversationTranscript['messages'] {
+    return [
+      row(LIVE_TURN_ID, 'user', 'new question'),
+      { ...row(LIVE_TURN_ID, 'assistant', answer), stopReason },
+    ];
+  }
+
+  async function settleWith(messages: ConversationTranscript['messages']) {
+    useAgentStore.setState({ conversationId: 'c1', hydration: 'loaded' });
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('new question');
+    useAgentStore.getState().sendMessage('queued');
+    vi.mocked(conversationsApi.transcript).mockResolvedValueOnce(
+      transcriptWith(...messages)
+    );
+    callbacks().onTurnSettled({ turnId: LIVE_TURN_ID, conversationId: 'c1' });
+    await vi.waitFor(() =>
+      expect(useAgentStore.getState().status).not.toBe('streaming')
+    );
+  }
+
+  it.each([
+    ['cut off mid-answer', 'Half an ans', 'aborted' as const, ['Half an ans']],
+    ['that failed before any text', '', 'error' as const, []],
+  ])(
+    'offers a new try for a settled turn %s, keeping what it stored and the queue',
+    async (_label, answer, stopReason, shownAnswer) => {
+      await settleWith(storedTurn(answer, stopReason));
+
+      const state = useAgentStore.getState();
+      expect({
+        status: state.status,
+        code: state.error?.code,
+        retryMode: state.retryMode,
+        contents: contents(),
+        queue: state.queue.map((item) => item.text),
+      }).toEqual({
+        status: 'error',
+        code: 'AGENT_TURN_INTERRUPTED',
+        retryMode: 'resend',
+        contents: ['Plan it', 'Day one.', 'new question', ...shownAnswer],
+        queue: ['queued'],
+      });
+      expect(agentClient.sendMessage).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('retries an interrupted settled turn as a new turn', async () => {
+    await settleWith(storedTurn('Half an ans', 'aborted'));
+
+    useAgentStore.getState().retryLast();
+
+    expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[0]).toBe(
+      'new question'
+    );
+    expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[3]).toEqual({});
+    expect(contents()).toEqual(['Plan it', 'Day one.', 'new question', '']);
   });
 
   it('reloads the stored answer on retry instead of sending the message again', async () => {

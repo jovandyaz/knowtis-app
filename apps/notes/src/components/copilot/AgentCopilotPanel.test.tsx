@@ -536,7 +536,9 @@ describe('AgentCopilotPanel', () => {
       expect(
         screen.queryByText('ai.copilot.history.earlierFailed')
       ).not.toBeInTheDocument();
-      expect(screen.getByTestId('copilot-thread')).toHaveFocus();
+      expect(
+        screen.getByRole('log', { name: 'ai.copilot.history.thread' })
+      ).toHaveFocus();
     });
 
     it('leaves the focus where the user moved it while the history reloaded', async () => {

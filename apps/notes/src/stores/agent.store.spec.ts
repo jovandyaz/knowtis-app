@@ -406,6 +406,21 @@ describe('useAgentStore', () => {
     expect(sent).toBe('hello');
   });
 
+  it('retries a turn that timed out under its own id', () => {
+    capture();
+    useAgentStore.getState().sendMessage('hello');
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+    vi.mocked(agentClient.canResendTurn).mockImplementationOnce(
+      (turnId) => turnId === 'turn-1'
+    );
+
+    useAgentStore.getState().retryLast();
+
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
+      turnId: 'turn-1',
+    });
+  });
+
   describe('queue', () => {
     const DONE = {
       usage: USAGE,

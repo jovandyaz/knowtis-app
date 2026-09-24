@@ -236,6 +236,7 @@ describe('aiErrorMessageKey', () => {
     [AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE, 'ai.errors.turnUnavailable'],
     [AGENT_TURN_ERROR_CODE.TURN_ID_REUSED, 'ai.errors.turnIdReused'],
     ['AGENT_ANSWER_UNAVAILABLE', 'ai.errors.answerUnavailable'],
+    ['AGENT_TURN_INTERRUPTED', 'ai.errors.turnInterrupted'],
   ])('names why the copilot turn %s did not show an answer', (code, key) => {
     expect(aiErrorMessageKey(code)).toBe(key);
   });

@@ -8,6 +8,7 @@ import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
+import type { StickToBottomContext } from 'use-stick-to-bottom';
 
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
@@ -93,7 +94,7 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
-  const threadRef = useRef<HTMLDivElement>(null);
+  const conversationRef = useRef<StickToBottomContext>(null);
   const historyRetryRef = useRef<HTMLButtonElement>(null);
   const [retryingHistory, setRetryingHistory] = useState(false);
   const showHistoryRetry = hydration === 'failed' || retryingHistory;
@@ -105,7 +106,7 @@ export function AgentCopilotPanel() {
     const focusWasOnRetry = document.activeElement === historyRetryRef.current;
     setRetryingHistory(false);
     if (focusWasOnRetry && useAgentStore.getState().hydration !== 'failed') {
-      threadRef.current?.focus();
+      conversationRef.current?.scrollRef.current?.focus();
     }
   };
   const retryTurn = retryMode === 'none' ? {} : { onRetry: retryLast };
@@ -165,13 +166,9 @@ export function AgentCopilotPanel() {
           <AgentEmptyState onSelectSuggestion={send} />
         </div>
       ) : (
-        <div
-          ref={threadRef}
-          tabIndex={-1}
-          data-testid="copilot-thread"
-          className="flex flex-1 flex-col min-h-0 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--ring)"
-        >
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
           <AgentMessageList
+            conversationRef={conversationRef}
             messages={messages}
             status={status}
             thinkingDetail={thinkingText}

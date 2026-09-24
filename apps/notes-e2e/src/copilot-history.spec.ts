@@ -15,6 +15,7 @@ const TRANSCRIPT_ROUTE_RE = /\/agent\/conversations\/[^/]+\/messages$/;
 const EARLIER_FAILED_RE =
   /^(couldn't load earlier messages|no se pudieron cargar los mensajes anteriores)$/i;
 const RETRY_RE = /^(retry|reintentar)$/i;
+const THREAD_RE = /^(conversation|conversación)$/i;
 
 const NOTE_TITLE = 'Viaje a Oaxaca';
 const TITLE = 'Itinerario de cinco días';
@@ -272,7 +273,7 @@ test('a thread whose earlier messages failed to load shows them on retry, above 
 
   await expect(earlier).toBeVisible();
   await expect(failedRow).toBeHidden();
-  await expect(owner.page.getByTestId('copilot-thread')).toBeFocused();
+  await expect(owner.page.getByRole('log', { name: THREAD_RE })).toBeFocused();
   await expect(live).toBeVisible();
   const [earlierBox, liveBox] = await Promise.all([
     earlier.boundingBox(),

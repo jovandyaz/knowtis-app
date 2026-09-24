@@ -2105,7 +2105,7 @@ describe('AgentClient – resending a failed turn', () => {
     expect(client.canResendTurn(handle.turnId)).toBe(false);
   });
 
-  it('does not offer a turn whose socket the server closed after acknowledging it', () => {
+  it('offers a turn whose socket closed before the server reported its end', () => {
     const callbacks = callbacksOf();
     const handle = client.sendMessage('hi', callbacks);
     receiptOf(lastEmit())(null);
@@ -2117,6 +2117,35 @@ describe('AgentClient – resending a failed turn', () => {
     expect(callbacks.onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'CONNECTION_FAILED' })
     );
+    expect(client.canResendTurn(handle.turnId)).toBe(true);
+  });
+
+  it('offers a turn the caller cancelled before the server reported its end', () => {
+    const handle = client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(null);
+
+    handle.cancel();
+
+    expect(client.canResendTurn(handle.turnId)).toBe(true);
+  });
+
+  it.each([
+    ['finished', 'agent:done'],
+    ['settled', 'agent:turn_settled'],
+  ])('does not offer a turn the server reported %s', (_label, event) => {
+    const handle = client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(null);
+
+    fake.trigger(event, {
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+
     expect(client.canResendTurn(handle.turnId)).toBe(false);
   });
 
@@ -2169,5 +2198,95 @@ describe('AgentClient – resending a failed turn', () => {
       conversationId: 'conv-7',
     });
     expect(lastEmit()[0]).toBe('agent:approve');
+  });
+});
+
+describe('AgentClient – resending a turn after the transport drops', () => {
+  let fake: ReturnType<typeof createFakeSocket>;
+  let client: AgentClient;
+
+  const callbacksOf = () => ({
+    onChunk: vi.fn(),
+    onDone: vi.fn(),
+    onError: vi.fn(),
+    onProposal: vi.fn(),
+    onTurnSettled: vi.fn(),
+  });
+  const receiptOf = (call: unknown[] | undefined) =>
+    call?.at(-1) as (err: Error | null) => void;
+  const lastEmit = () => fake.socket.emit.mock.calls.at(-1) as unknown[];
+  const sentMessages = () =>
+    (fake.socket.emit.mock.calls as unknown[][])
+      .filter((call) => call[0] === 'agent:message')
+      .map((call) => call[1]);
+  const dropAndReconnect = () => {
+    fake.socket.connected = false;
+    fake.trigger('disconnect', 'transport close');
+    fake.socket.connected = true;
+    fake.trigger('connect');
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client = new AgentClient('http://test.local/agent');
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
+    });
+  });
+
+  it('resends an acknowledged turn once, with its frozen body, when the socket reconnects', () => {
+    const callbacks = callbacksOf();
+    client.sendMessage('hi', callbacks, 'note-1', { effort: 'high' });
+    receiptOf(lastEmit())(null);
+
+    dropAndReconnect();
+    receiptOf(lastEmit())(null);
+    dropAndReconnect();
+
+    const [first, ...resent] = sentMessages();
+    expect(resent).toEqual([first]);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('leaves an unacknowledged message to its receipt deadline', () => {
+    client.sendMessage('hi', callbacksOf());
+
+    dropAndReconnect();
+
+    expect(sentMessages()).toHaveLength(1);
+  });
+
+  it('never resends a proposal decision on reconnect', () => {
+    client.sendMessage('create a note', callbacksOf());
+    receiptOf(lastEmit())(null);
+    fake.trigger('agent:proposal', PROPOSAL);
+    client.approve('p1');
+    receiptOf(lastEmit())(null);
+
+    dropAndReconnect();
+
+    expect(
+      (fake.socket.emit.mock.calls as unknown[][]).map((call) => call[0])
+    ).toEqual(['agent:message', 'agent:approve']);
+  });
+
+  it('resends nothing for a turn that already ended', () => {
+    client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(null);
+    fake.trigger('agent:done', {
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    });
+
+    dropAndReconnect();
+
+    expect(sentMessages()).toHaveLength(1);
   });
 });

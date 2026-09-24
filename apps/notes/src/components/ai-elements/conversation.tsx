@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, HTMLAttributes } from 'react';
 import { useCallback } from 'react';
 
 import { ArrowDownIcon } from 'lucide-react';
@@ -13,24 +13,40 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
     className={cn('relative flex-1 overflow-y-auto', className)}
     initial="smooth"
     resize="smooth"
-    role="log"
     {...props}
   />
 );
 
-export type ConversationContentProps = ComponentProps<
-  typeof StickToBottom.Content
->;
+export type ConversationContentProps = HTMLAttributes<HTMLDivElement> & {
+  /** Attributes of the element that scrolls, which is also the log. */
+  logProps?: HTMLAttributes<HTMLDivElement>;
+};
 
+const SCROLLER_STYLE = {
+  height: '100%',
+  width: '100%',
+  scrollbarGutter: 'stable both-edges',
+} as const;
+
+// `StickToBottom.Content` renders the same two elements but takes no
+// attributes for the one that scrolls, which has to carry the log's role,
+// name and focus.
 export const ConversationContent = ({
   className,
+  logProps,
   ...props
-}: ConversationContentProps) => (
-  <StickToBottom.Content
-    className={cn('flex flex-col gap-5 p-3', className)}
-    {...props}
-  />
-);
+}: ConversationContentProps) => {
+  const { scrollRef, contentRef } = useStickToBottomContext();
+  return (
+    <div role="log" {...logProps} ref={scrollRef} style={SCROLLER_STYLE}>
+      <div
+        {...props}
+        ref={contentRef}
+        className={cn('flex flex-col gap-5 p-3', className)}
+      />
+    </div>
+  );
+};
 
 export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 

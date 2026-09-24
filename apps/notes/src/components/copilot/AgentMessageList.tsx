@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
+import type { StickToBottomContext } from 'use-stick-to-bottom';
 
 import {
   Conversation,
@@ -19,7 +20,12 @@ interface AgentMessageListProps {
   hasEarlier?: boolean;
   /** Shown above the thread, where the earlier messages would be. */
   historyNotice?: ReactNode;
+  /** Reaches the log that scrolls, for instance to hand it focus. */
+  conversationRef?: Ref<StickToBottomContext>;
 }
+
+const LOG_FOCUS_CLASS =
+  'outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--ring)';
 
 export function AgentMessageList({
   messages,
@@ -27,6 +33,7 @@ export function AgentMessageList({
   thinkingDetail,
   hasEarlier = false,
   historyNotice,
+  conversationRef,
 }: AgentMessageListProps) {
   const { t } = useTranslation('notes');
   const lastAssistant = messages.at(-1);
@@ -35,8 +42,16 @@ export function AgentMessageList({
   const answering = isAssistantTurn && lastAssistant.content.length > 0;
 
   return (
-    <Conversation aria-busy={status === 'streaming'} aria-live="polite">
-      <ConversationContent>
+    <Conversation {...(conversationRef ? { contextRef: conversationRef } : {})}>
+      <ConversationContent
+        logProps={{
+          'aria-label': t('ai.copilot.history.thread'),
+          'aria-busy': status === 'streaming',
+          'aria-live': 'polite',
+          tabIndex: -1,
+          className: LOG_FOCUS_CLASS,
+        }}
+      >
         {historyNotice}
         {hasEarlier && (
           <p className="text-center text-xs text-muted-foreground">

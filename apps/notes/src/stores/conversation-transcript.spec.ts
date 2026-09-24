@@ -128,8 +128,47 @@ describe('toChatMessages', () => {
         role: 'assistant',
         content: 'Half',
         sources: [],
+        interrupted: true,
       },
     ]);
+  });
+
+  it.each(['aborted', 'error'] as const)(
+    'marks the bubble of a leg stored as %s as interrupted',
+    (stopReason) => {
+      expect(
+        toChatMessages(
+          [
+            row({ turnId: 't1', role: 'user', content: 'Q' }),
+            row({ turnId: 't1', role: 'assistant', content: 'Looking. ' }),
+            row({
+              turnId: 't1',
+              role: 'assistant',
+              content: 'Hal',
+              stopReason,
+            }),
+          ],
+          nextId
+        ).at(-1)
+      ).toMatchObject({ content: 'Looking. Hal', interrupted: true });
+    }
+  );
+
+  it('does not mark a leg that completed as interrupted', () => {
+    expect(
+      toChatMessages(
+        [
+          row({ turnId: 't1', role: 'user', content: 'Q' }),
+          row({
+            turnId: 't1',
+            role: 'assistant',
+            content: 'A',
+            stopReason: 'completed',
+          }),
+        ],
+        nextId
+      ).at(-1)
+    ).not.toHaveProperty('interrupted');
   });
 
   it('drops an assistant bubble left with nothing to show', () => {
