@@ -30,7 +30,20 @@ describe('conversationsApi', () => {
     await conversationsApi.transcript(ID);
 
     expect(httpClient.get).toHaveBeenCalledWith(
-      `/agent/conversations/${ID}/messages`
+      `/agent/conversations/${ID}/messages`,
+      undefined
+    );
+  });
+
+  it('lets the caller abort a transcript read', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({});
+    const { signal } = new AbortController();
+
+    await conversationsApi.transcript(ID, signal);
+
+    expect(httpClient.get).toHaveBeenCalledWith(
+      `/agent/conversations/${ID}/messages`,
+      { signal }
     );
   });
 
@@ -63,7 +76,8 @@ describe('conversationsApi', () => {
     await conversationsApi.transcript('../admin?x=1');
 
     expect(httpClient.get).toHaveBeenCalledWith(
-      '/agent/conversations/..%2Fadmin%3Fx%3D1/messages'
+      '/agent/conversations/..%2Fadmin%3Fx%3D1/messages',
+      undefined
     );
   });
 });

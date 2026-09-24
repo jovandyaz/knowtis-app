@@ -12,6 +12,10 @@ const RENAME_RE = /^(rename|cambiar nombre)$/i;
 const DELETE_RE = /^(delete|eliminar)$/i;
 const TITLE_FIELD_RE = /^(conversation title|título de la conversación)$/i;
 const TRANSCRIPT_ROUTE_RE = /\/agent\/conversations\/[^/]+\/messages$/;
+const EARLIER_FAILED_RE =
+  /^(couldn't load earlier messages|no se pudieron cargar los mensajes anteriores)$/i;
+const RETRY_RE = /^(retry|reintentar)$/i;
+const THREAD_RE = /^(conversation|conversación)$/i;
 
 const NOTE_TITLE = 'Viaje a Oaxaca';
 const TITLE = 'Itinerario de cinco días';
@@ -211,4 +215,70 @@ test('a message sent while the thread loads continues it below its earlier messa
   } finally {
     releaseTranscript();
   }
+});
+
+test('a thread whose earlier messages failed to load shows them on retry, above a turn sent meanwhile', async ({
+  sharing,
+  conversations,
+}) => {
+  const { owner } = sharing;
+  const title = 'Pregunta que no carga';
+  const note = await owner.createNote('Hilo que falla al cargar');
+  const conversationId = await conversations.seed({
+    userId: owner.id,
+    noteId: note.id,
+    title,
+    messages: [
+      { role: 'user', content: title },
+      { role: 'assistant', content: 'Respuesta que no cargó.' },
+    ],
+  });
+  await scriptAgent(owner.page, {
+    onMessage: [
+      ['agent:chunk', { text: 'Respuesta en vivo.' }],
+      ['agent:done', { ...DONE, conversationId }],
+    ],
+  });
+  await owner.page.goto(`/notes/${note.id}`);
+  await openCopilotDock(owner.page);
+  await owner.page.getByRole('button', { name: RECENT_RE }).click();
+  await owner.page
+    .getByRole('menuitemradio', { name: openLabel(title) })
+    .click();
+  const earlier = owner.page.getByText('Respuesta que no cargó.');
+  await expect(earlier).toBeVisible();
+
+  let transcriptFailures = 0;
+  await owner.page.route(TRANSCRIPT_ROUTE_RE, async (route) => {
+    if (transcriptFailures === 0) {
+      transcriptFailures++;
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+  await owner.page.reload();
+  const composer = await openCopilotDock(owner.page);
+  const failedRow = owner.page.getByText(EARLIER_FAILED_RE);
+  await expect(failedRow).toBeVisible();
+  await expect(earlier).toBeHidden();
+
+  await composer.fill('Mientras falla');
+  await owner.page.keyboard.press('Enter');
+  const live = owner.page.getByText('Respuesta en vivo.');
+  await expect(live).toBeVisible();
+  await expect(failedRow).toBeVisible();
+
+  await owner.page.getByRole('button', { name: RETRY_RE }).click();
+
+  await expect(earlier).toBeVisible();
+  await expect(failedRow).toBeHidden();
+  await expect(owner.page.getByRole('log', { name: THREAD_RE })).toBeFocused();
+  await expect(live).toBeVisible();
+  const [earlierBox, liveBox] = await Promise.all([
+    earlier.boundingBox(),
+    live.boundingBox(),
+  ]);
+  expect(earlierBox?.y).toBeLessThan(liveBox?.y ?? Number.NEGATIVE_INFINITY);
+  expect(transcriptFailures).toBe(1);
 });

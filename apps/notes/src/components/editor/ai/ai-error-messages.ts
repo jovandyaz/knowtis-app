@@ -1,4 +1,7 @@
-import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_TURN_ERROR_CODE,
+} from '@knowtis/shared-types';
 
 type AIErrorMessageKey =
   | 'ai.errors.generic'
@@ -15,6 +18,11 @@ type AIErrorMessageKey =
   | 'ai.errors.staleNote'
   | 'ai.errors.proposalExpired'
   | 'ai.errors.resumeUnavailable'
+  | 'ai.errors.turnInProgress'
+  | 'ai.errors.turnUnavailable'
+  | 'ai.errors.turnIdReused'
+  | 'ai.errors.answerUnavailable'
+  | 'ai.errors.turnInterrupted'
   | 'ai.errors.permissionDenied'
   | 'ai.errors.sanitizeRejected'
   | 'ai.errors.targetUserNotFound'
@@ -41,6 +49,11 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AGENT_STALE_NOTE: 'ai.errors.staleNote',
   AGENT_PROPOSAL_EXPIRED: 'ai.errors.proposalExpired',
   AGENT_RESUME_UNAVAILABLE: 'ai.errors.resumeUnavailable',
+  [AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS]: 'ai.errors.turnInProgress',
+  [AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE]: 'ai.errors.turnUnavailable',
+  [AGENT_TURN_ERROR_CODE.TURN_ID_REUSED]: 'ai.errors.turnIdReused',
+  AGENT_ANSWER_UNAVAILABLE: 'ai.errors.answerUnavailable',
+  AGENT_TURN_INTERRUPTED: 'ai.errors.turnInterrupted',
   AGENT_PERMISSION_DENIED: 'ai.errors.permissionDenied',
   AGENT_SANITIZE_REJECTED: 'ai.errors.sanitizeRejected',
   AGENT_TARGET_USER_NOT_FOUND: 'ai.errors.targetUserNotFound',

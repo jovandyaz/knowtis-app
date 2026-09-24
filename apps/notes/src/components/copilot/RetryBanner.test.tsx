@@ -24,4 +24,11 @@ describe('RetryBanner', () => {
 
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it('only reports when there is nothing to retry', () => {
+    render(<RetryBanner message="Something failed" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Something failed');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
 });

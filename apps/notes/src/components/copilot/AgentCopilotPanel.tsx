@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
@@ -8,6 +8,7 @@ import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
+import type { StickToBottomContext } from 'use-stick-to-bottom';
 
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
@@ -24,6 +25,7 @@ import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
 import { CopilotModelPicker } from './CopilotModelPicker';
+import { HistoryRetryRow } from './HistoryRetryRow';
 import { ProposalPendingRow } from './ProposalPendingRow';
 import { ProposalReview } from './ProposalReview';
 import { RetryBanner } from './RetryBanner';
@@ -38,6 +40,7 @@ export function AgentCopilotPanel() {
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
+  const retryMode = useAgentStore((s) => s.retryMode);
   const thinkingText = useAgentStore((s) => s.thinkingText);
   const pendingProposal = useAgentStore((s) => s.pendingProposal);
   const approveProposal = useAgentStore((s) => s.approveProposal);
@@ -46,10 +49,9 @@ export function AgentCopilotPanel() {
   const draft = useAgentStore((s) => s.draft);
   const setDraft = useAgentStore((s) => s.setDraft);
   const takeBackQueued = useAgentStore((s) => s.takeBackQueued);
-  const conversationId = useAgentStore((s) => s.conversationId);
   const hydration = useAgentStore((s) => s.hydration);
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
-  const openConversation = useAgentStore((s) => s.openConversation);
+  const retryHydration = useAgentStore((s) => s.retryHydration);
   const userId = useAuthUser()?.id ?? null;
   // Not the editor's activeNoteId: that stays null until the lazy editor chunk
   // mounts, and a message sent in that window would lose its note.
@@ -92,11 +94,22 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
-  const retryHydration = () => {
-    if (conversationId) {
-      void openConversation(conversationId, 'reload');
+  const conversationRef = useRef<StickToBottomContext>(null);
+  const historyRetryRef = useRef<HTMLButtonElement>(null);
+  const [retryingHistory, setRetryingHistory] = useState(false);
+  const showHistoryRetry = hydration === 'failed' || retryingHistory;
+  const retryHistory = async () => {
+    setRetryingHistory(true);
+    await retryHydration();
+    // The row unmounts once the history is back, and the focus on its button
+    // would fall to the page.
+    const focusWasOnRetry = document.activeElement === historyRetryRef.current;
+    setRetryingHistory(false);
+    if (focusWasOnRetry && useAgentStore.getState().hydration !== 'failed') {
+      conversationRef.current?.scrollRef.current?.focus();
     }
   };
+  const retryTurn = retryMode === 'none' ? {} : { onRetry: retryLast };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
   const conversationWasGone = error?.code === AGENT_CONVERSATION_NOT_FOUND_CODE;
@@ -144,36 +157,40 @@ export function AgentCopilotPanel() {
 
   return (
     <div className="flex h-full flex-col min-h-0">
-      {hydration === 'loading' ? (
+      {hydration === 'loading' && messages.length === 0 && !retryingHistory ? (
         <div className="flex-1 min-h-0 px-4 py-3">
           <AgentStatusIndicator label={t('ai.copilot.history.loading')} />
         </div>
-      ) : messages.length === 0 && queueLength === 0 ? (
+      ) : messages.length === 0 && queueLength === 0 && !showHistoryRetry ? (
         <div className="flex-1 min-h-0">
           <AgentEmptyState onSelectSuggestion={send} />
         </div>
       ) : (
         <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
           <AgentMessageList
+            conversationRef={conversationRef}
             messages={messages}
             status={status}
             thinkingDetail={thinkingText}
             hasEarlier={hasEarlier}
+            historyNotice={
+              showHistoryRetry && (
+                <HistoryRetryRow
+                  ref={historyRetryRef}
+                  busy={retryingHistory}
+                  onRetry={() => void retryHistory()}
+                />
+              )
+            }
           />
         </div>
       )}
 
-      {hydration === 'failed' && (
-        <RetryBanner
-          message={t('ai.copilot.history.loadFailed')}
-          onRetry={retryHydration}
-        />
-      )}
       {status === 'error' && (
-        <RetryBanner message={t(errorMessageKey)} onRetry={retryLast} />
+        <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
       )}
       {status === 'timeout' && (
-        <RetryBanner message={t('ai.errors.timeout')} onRetry={retryLast} />
+        <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
       )}
 
       {updateProposal && <ProposalPendingRow onOpen={openReview} />}
