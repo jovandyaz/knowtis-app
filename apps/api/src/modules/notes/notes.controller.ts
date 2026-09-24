@@ -45,6 +45,7 @@ import {
 } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
+import { BYTES_PER_MEGABYTE } from '../../core/http/byte-units';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { DEFAULT_PAGE } from '../../core/pagination/pagination.constants';
 import {
@@ -625,14 +626,20 @@ export class NotesController {
     description:
       'unsupported_type: the file bytes are not a PNG, JPEG, GIF or WebP image, whatever its Content-Type says',
   })
-  @ApiBadRequest('missing file, or larger than 10 MB')
+  @ApiResponse({
+    status: 413,
+    description: `Payload too large — file larger than ${MAX_IMAGE_BYTES / BYTES_PER_MEGABYTE} MB, refused before it is buffered`,
+  })
+  @ApiBadRequest('missing file')
   @ApiAuthErrors('insufficient permissions on this note')
   @ApiNotFound('note does not exist')
   @Post(':id/images')
   @Throttle(NOTE_UPDATE_THROTTLE)
   @RequirePermission('update', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.WRITE)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_BYTES } })
+  )
   async uploadImage(
     @Param('id', ParseUUIDPipe) noteId: string,
     @UploadedFile(

@@ -41,6 +41,7 @@ import {
   PERMISSION_REPOSITORY,
   type NoteEntity,
 } from './domain';
+import { MAX_IMAGE_BYTES } from './domain/image-type';
 import { IMAGE_STORAGE } from './domain/ports/image-storage.port';
 import { NOTE_IMAGE_REPOSITORY } from './domain/ports/note-image.repository';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
@@ -293,6 +294,20 @@ describe('POST /notes/:id/images', () => {
       );
     }
   );
+
+  it('refuses a file over MAX_IMAGE_BYTES with 413 before the handler runs', async () => {
+    const execute = vi.spyOn(app.get(UploadImageHandler), 'execute');
+
+    const response = await upload(
+      new Uint8Array(MAX_IMAGE_BYTES + 1),
+      'image/png',
+      'huge.png'
+    );
+
+    expect(response.status).toBe(413);
+    expect(execute).not.toHaveBeenCalled();
+    execute.mockRestore();
+  });
 
   it('answers a text file labelled image/png with 422 unsupported_type', async () => {
     const response = await upload(
