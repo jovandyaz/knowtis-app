@@ -40,7 +40,8 @@ All product events include `environment`, `app_version`, `actor_type`,
 `GITHUB_SHA`, and the API reads the `REVISION` file the deploy job writes
 before `railway up`. Railway's `RAILWAY_GIT_COMMIT_SHA` exists only for
 GitHub-triggered deploys, and Vercel's system variables do not exist in a
-prebuilt deploy, so neither is used. Local runs report `0.1.0`.
+prebuilt deploy, so neither is used. A non-empty `REVISION` wins over a `RELEASE_SHA`
+environment variable. Local runs report `0.1.0`.
 
 | Event                   | Authority                                                                              | Allowed event properties                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |

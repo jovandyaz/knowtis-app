@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-/** File the deploy writes the released commit into, relative to the working directory. */
-export const REVISION_FILE = 'REVISION';
+const REVISION_FILE = 'REVISION';
 
 /**
  * The commit this build was deployed from, as the deploy wrote it into
@@ -16,7 +15,9 @@ export function readRevision(path: string = REVISION_FILE): string | undefined {
 }
 
 /** `ConfigModule` loader exposing the deployed commit as `RELEASE_SHA`. */
-export function releaseConfig(): { RELEASE_SHA?: string } {
-  const revision = readRevision();
+export function releaseConfig(path: string = REVISION_FILE): {
+  RELEASE_SHA?: string;
+} {
+  const revision = readRevision(path);
   return revision ? { RELEASE_SHA: revision } : {};
 }

@@ -129,7 +129,7 @@ Both services build from multi-stage Dockerfiles, [`apps/api/Dockerfile`](../app
 
 Each image ships its `dist/apps/<app>` output plus a production install of exactly the packages the built bundles `require` or `import`: [`tools/prune-runtime-deps.mjs`](../tools/prune-runtime-deps.mjs) reads them from the output with esbuild, fails the build on any `require` or `import` it cannot resolve to a package name, and writes a `package.json` and a lockfile pruned from the root one, so versions match CI. The graph-derived `package.json` from the API's `generatePackageJson` is not enough: it misses externals that bundled third-party code pulls in (`prettier` from `@react-email/render`). The API image also carries `apps/api/drizzle/` and `apps/api/src/database/migrate.cjs`, the migrator bundled by esbuild into one file so the pre-deploy command needs no toolchain.
 
-`railway up` uploads the working tree minus `.gitignore`/`.railwayignore` entries, `.git` and `node_modules`; the root `.dockerignore` then trims what the build context copies.
+`railway up` uploads the working tree minus `.gitignore`/`.railwayignore` entries, `.git` and `node_modules`; the root `.dockerignore` then trims what the build context copies. The API deploy job writes the commit into `REVISION` at the repo root before `railway up`, and the image carries it as the release the API stamps on analytics and logs at boot (`@event:api.started`). Keep `REVISION` out of all three ignore files: once ignored, the image silently falls back to an empty file and reports `release: null`.
 
 ### Database Migrations (pre-deploy)
 

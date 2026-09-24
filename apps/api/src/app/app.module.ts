@@ -45,7 +45,7 @@ import { AppService } from './app.service';
       isGlobal: true,
       validate: validateEnv,
       envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
-      load: [releaseConfig],
+      load: [() => releaseConfig()],
     }),
     ThrottlingModule,
     EventEmitterModule.forRoot(),
