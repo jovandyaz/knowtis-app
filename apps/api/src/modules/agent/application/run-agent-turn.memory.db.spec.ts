@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { and, eq } from 'drizzle-orm';
@@ -207,7 +209,11 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
 
   it('rejects a conversationId owned by another user as not found and writes nothing to it', async () => {
     const repo = new DrizzleConversationRepository(db);
-    const foreign = await repo.create({ userId: OTHER, title: 'private' });
+    const foreign = await repo.create({
+      id: randomUUID(),
+      userId: OTHER,
+      title: 'private',
+    });
 
     const rateLimit = {
       checkLimit: vi.fn().mockResolvedValue({ allowed: true }),

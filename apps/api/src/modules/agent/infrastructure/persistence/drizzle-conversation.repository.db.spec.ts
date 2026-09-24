@@ -96,7 +96,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('creates a conversation and loads its turns oldest→newest', async () => {
-    const { id } = await repo.create({ userId: USER, title: 'first message' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 'first message',
+    });
     await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
@@ -125,7 +129,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   it('orders the user row before the assistant row within one turn', async () => {
     const noteId = await ownNote('N1');
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
@@ -144,7 +152,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('returns only the last `limit` messages, oldest→newest', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     for (let i = 0; i < 3; i += 1) {
       await repo.appendTurn({
         conversationId: id,
@@ -160,13 +172,21 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('scopes findByIdForUser to the owner', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     expect(await repo.findByIdForUser(id, USER)).toMatchObject({ id });
     expect(await repo.findByIdForUser(id, OTHER)).toBeNull();
   });
 
   it('bumps updatedAt on appendTurn', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
@@ -185,7 +205,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('appends an assistant-only turn when the user row is absent', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
@@ -199,6 +223,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   it('appends a user-only turn when the assistant produced nothing', async () => {
     const { id } = await repo.create({
+      id: randomUUID(),
       userId: USER,
       title: 'turno abortado',
     });
@@ -218,7 +243,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('setModel persists, findByIdForUser returns it (scoped to owner)', async () => {
-    const { id } = await repo.create({ userId: USER, title: 'model-test' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 'model-test',
+    });
     await repo.setModel(id, USER, 'openai:gpt-4o-mini');
     const found = await repo.findByIdForUser(id, USER);
     expect(found?.model).toBe('openai:gpt-4o-mini');
@@ -226,7 +255,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('scopes markExtracted to the owner', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     const extractedAt = async () => {
       const [row] = await db
         .select({ at: conversations.memoriesExtractedAt })
@@ -242,7 +275,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   it('persists tool activity and turn metadata and loads them back oldest→newest', async () => {
     const noteId = await ownNote('GTD');
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     const turnId = randomUUID();
     await repo.appendTurn({
       conversationId: id,
@@ -317,7 +354,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     'reloads a %s tool-ending turn with its terminal notice and intact replay pairs',
     async (stopReason) => {
       const noteId = await ownNote('N1');
-      const { id } = await repo.create({ userId: USER, title: 'capped turn' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 'capped turn',
+      });
       const turnId = randomUUID();
       await repo.appendTurn({
         conversationId: id,
@@ -425,7 +466,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   ])(
     'loads a row whose stored sources are %s as citing nothing',
     async (_what, stored) => {
-      const { id } = await repo.create({ userId: USER, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
       await db.insert(conversationMessages).values({
         conversationId: id,
         turnId: randomUUID(),
@@ -445,7 +490,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   );
 
   it('returns parts: null for a row persisted under an unknown parts version', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     const unknownVersionParts = {
       v: AGENT_MESSAGE_PARTS_VERSION + 1,
       parts: [
@@ -474,7 +523,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   it('returns parts: null when the stored payload is not an array of parts', async () => {
     const warnSpy = spyOnWarn();
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     await db.insert(conversationMessages).values({
       conversationId: id,
       turnId: randomUUID(),
@@ -501,7 +554,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
   it('returns parts: null when a tool-result part has no output type', async () => {
     const warnSpy = spyOnWarn();
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     await db.insert(conversationMessages).values({
       conversationId: id,
       turnId: randomUUID(),
@@ -534,7 +591,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('loads text-only rows when asked, skipping tool rows and empty assistant rows', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
@@ -578,7 +639,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('is a no-op for an empty turn', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
     const persisted = await repo.appendTurn({
       conversationId: id,
       turnId: randomUUID(),
@@ -589,7 +654,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   it('rejects a stop reason outside the persisted set', async () => {
-    const { id } = await repo.create({ userId: USER, title: 't' });
+    const { id } = await repo.create({
+      id: randomUUID(),
+      userId: USER,
+      title: 't',
+    });
 
     const driverError = await repo
       .appendTurn({
@@ -655,6 +724,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       extra: { noteId?: string; title?: string } = {}
     ): Promise<string> => {
       const { id } = await repo.create({
+        id: randomUUID(),
         userId,
         title: extra.title ?? 'title',
         ...(extra.noteId ? { noteId: extra.noteId } : {}),
@@ -695,7 +765,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
     it('keeps the note a conversation starts from when the user owns it', async () => {
       const noteId = await noteOf(LISTER, 'Mine');
-      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        noteId,
+        title: 't',
+      });
 
       expect(await storedNoteId(id)).toBe(noteId);
     });
@@ -705,21 +780,36 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       await db
         .insert(notePermissions)
         .values({ noteId, userId: LISTER, permission: 'viewer' });
-      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        noteId,
+        title: 't',
+      });
 
       expect(await storedNoteId(id)).toBe(noteId);
     });
 
     it("stores no note when the id names someone else's note", async () => {
       const noteId = await noteOf(STRANGER, 'Not yours');
-      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        noteId,
+        title: 't',
+      });
 
       expect(await storedNoteId(id)).toBeNull();
     });
 
     it('stores no note when the note is in the trash', async () => {
       const noteId = await noteOf(LISTER, 'Trashed', true);
-      const { id } = await repo.create({ userId: LISTER, noteId, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        noteId,
+        title: 't',
+      });
 
       expect(await storedNoteId(id)).toBeNull();
     });
@@ -727,7 +817,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     it('lists the owner conversations newest first and hides the empty ones', async () => {
       const older = await withTurn(LISTER);
       const newer = await withTurn(LISTER);
-      await repo.create({ userId: LISTER, title: 'never answered' });
+      await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        title: 'never answered',
+      });
       await touch(older, new Date('2026-09-01T10:00:00.000Z'));
       await touch(newer, new Date('2026-09-02T10:00:00.000Z'));
 
@@ -886,7 +980,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
     it('keeps the empty terminal row that carries a stop reason and skips tool rows', async () => {
       const noteId = await noteOf(LISTER, 'N1');
-      const { id } = await repo.create({ userId: LISTER, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        title: 't',
+      });
       const turnId = randomUUID();
       await repo.appendTurn({
         conversationId: id,
@@ -948,7 +1046,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     });
 
     it('aligns a cut window to a question and says earlier messages exist', async () => {
-      const { id } = await repo.create({ userId: LISTER, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        title: 't',
+      });
       for (let turn = 0; turn < 3; turn += 1) {
         await repo.appendTurn({
           conversationId: id,
@@ -1061,7 +1163,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
     it('stores a replayed turn once and warns about the replay', async () => {
       const warnSpy = spyOnWarn();
-      const { id } = await repo.create({ userId: USER, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
       const turnId = randomUUID();
 
       const first = await repo.appendTurn(userAndAnswer(id, turnId));
@@ -1083,7 +1189,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     });
 
     it('rejects a second user row for the same turn', async () => {
-      const { id } = await repo.create({ userId: USER, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
       const userRow = {
         conversationId: id,
         turnId: randomUUID(),
@@ -1108,7 +1218,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     });
 
     it('appends rows without a user row to a turn already stored', async () => {
-      const { id } = await repo.create({ userId: USER, title: 't' });
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
       const turnId = randomUUID();
       await repo.appendTurn(userAndAnswer(id, turnId));
 
@@ -1173,7 +1287,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     ] as const;
 
     const conversation = async (): Promise<string> =>
-      (await repo.create({ userId: READER, title: 't' })).id;
+      (await repo.create({ id: randomUUID(), userId: READER, title: 't' })).id;
 
     const getNoteCall = (noteId: string): AgentMessagePart => ({
       type: 'tool-call',
