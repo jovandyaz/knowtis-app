@@ -264,6 +264,22 @@ describe('AIGateway', () => {
   });
 
   describe('handleComplete', () => {
+    it('never starts a completion for a client that left during the flag check', async () => {
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+      vi.mocked(mockFeatureFlags.isEnabled).mockImplementationOnce(async () => {
+        (client as unknown as { connected: boolean }).connected = false;
+        return true;
+      });
+
+      await gateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+
+      expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+    });
+
     it('should call streamTextHandler with valid payload', async () => {
       const client = createMockAISocket();
       client.data.userId = 'user-123';

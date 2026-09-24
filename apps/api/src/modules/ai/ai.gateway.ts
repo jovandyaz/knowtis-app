@@ -161,6 +161,11 @@ export class AIGateway
     const { action, content, selection, suffix, targetLanguage, targetTone } =
       parsed.data;
 
+    // A disconnect handled during the flag read found no stream to abort, so a
+    // stream started now would be billed and sent to nobody.
+    if (!client.connected) {
+      return;
+    }
     const streamId = randomUUID();
     const controller = new AbortController();
     if (!this.streams.acquire(userId, client.id, streamId, controller)) {
