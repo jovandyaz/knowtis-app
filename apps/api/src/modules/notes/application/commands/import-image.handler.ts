@@ -30,6 +30,8 @@ export interface ImportImageInput {
   readonly noteId: string;
   readonly userId: string;
   readonly url: string;
+  /** Aborted when the caller no longer wants the image, which stops the fetch. */
+  readonly signal: AbortSignal;
 }
 
 /**
@@ -75,10 +77,7 @@ export class ImportImageHandler {
       return this.reject(input, ImageImportErrorCodes.FETCH_FAILED, null);
     }
 
-    const fetched = await this.remoteImageFetcher.fetch(
-      url,
-      new AbortController().signal
-    );
+    const fetched = await this.remoteImageFetcher.fetch(url, input.signal);
     if (fetched.isErr()) {
       return this.reject(input, fetched.error.code, url);
     }
@@ -106,6 +105,7 @@ export class ImportImageHandler {
       host: url === null ? null : registrableHostOf(url.hostname),
       noteId: input.noteId,
       userId: input.userId,
+      clientDisconnected: input.signal.aborted,
     });
     return err(imageImportError(code));
   }

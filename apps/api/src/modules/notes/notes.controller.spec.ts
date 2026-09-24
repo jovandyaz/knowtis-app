@@ -439,11 +439,12 @@ describe('POST /notes/:id/images/import', () => {
     vi.restoreAllMocks();
   });
 
-  function importImage(body: unknown) {
+  function importImage(body: unknown, signal?: AbortSignal) {
     return fetch(`${base}/notes/${noteEntity.id}/images/import`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      ...(signal && { signal }),
     });
   }
 
@@ -469,6 +470,34 @@ describe('POST /notes/:id/images/import', () => {
         contentType: 'image/png',
       })
     );
+    expect(fetcher.fetch.mock.calls[0]?.[1].aborted).toBe(false);
+  });
+
+  it('stops the fetch when the client disconnects before the answer', async () => {
+    fetcher.fetch.mockImplementation(
+      (_url, signal) =>
+        new Promise((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => resolve(err(imageImportError('timeout'))),
+            { once: true }
+          );
+        })
+    );
+    const client = new AbortController();
+
+    const pending = importImage(
+      { url: 'https://images.example.org/cat.png' },
+      client.signal
+    ).catch(() => undefined);
+    await vi.waitFor(() => expect(fetcher.fetch).toHaveBeenCalled());
+    const serverSignal = fetcher.fetch.mock.calls[0]?.[1];
+    expect(serverSignal?.aborted).toBe(false);
+    client.abort();
+    await pending;
+
+    await vi.waitFor(() => expect(serverSignal?.aborted).toBe(true));
+    expect(storage.upload).not.toHaveBeenCalled();
   });
 
   it('answers a URL already in the blob store with a null id, fetching nothing', async () => {

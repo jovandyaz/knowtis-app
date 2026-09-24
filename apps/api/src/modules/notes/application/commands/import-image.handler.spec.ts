@@ -80,7 +80,12 @@ function setup(
   return { handler, noteRepo, fetcher, storage, imageRepo };
 }
 
-const input = { noteId: 'n1', userId: 'owner', url: REMOTE_URL };
+const input = {
+  noteId: 'n1',
+  userId: 'owner',
+  url: REMOTE_URL,
+  signal: new AbortController().signal,
+};
 
 function spyOnWarnings() {
   return vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -104,7 +109,7 @@ describe('ImportImageHandler', () => {
     });
     expect(fetcher.fetch).toHaveBeenCalledWith(
       new URL(REMOTE_URL),
-      expect.any(AbortSignal)
+      input.signal
     );
     expect(storage.upload).toHaveBeenCalledWith({
       noteId: 'n1',
@@ -168,6 +173,7 @@ describe('ImportImageHandler', () => {
         host: '*.example.org',
         noteId: 'n1',
         userId: 'owner',
+        clientDisconnected: false,
       });
       expect(storage.upload).not.toHaveBeenCalled();
     }
@@ -190,7 +196,28 @@ describe('ImportImageHandler', () => {
       host: null,
       noteId: 'n1',
       userId: 'owner',
+      clientDisconnected: false,
     });
+  });
+
+  it('logs a fetch cut short by the client leaving as a disconnect', async () => {
+    const warn = spyOnWarnings();
+    const client = new AbortController();
+    const { handler } = setup({
+      fetcher: {
+        fetch: (_url, signal) =>
+          Promise.resolve(
+            err(imageImportError(signal.aborted ? 'timeout' : 'fetch_failed'))
+          ),
+      },
+    });
+    client.abort();
+
+    await handler.execute({ ...input, signal: client.signal });
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'timeout', clientDisconnected: true })
+    );
   });
 
   it('denies a user without write access before fetching', async () => {

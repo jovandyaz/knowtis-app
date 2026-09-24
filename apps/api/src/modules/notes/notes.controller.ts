@@ -19,6 +19,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -35,6 +36,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 
 import { SUBJECTS } from '@knowtis/authorization';
 import {
@@ -46,6 +48,7 @@ import {
 import { pickDefined } from '@knowtis/shared-util';
 
 import { BYTES_PER_MEGABYTE } from '../../core/http/byte-units';
+import { abortOnClientDisconnect } from '../../core/http/client-disconnect';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { DEFAULT_PAGE } from '../../core/pagination/pagination.constants';
 import {
@@ -730,12 +733,14 @@ export class NotesController {
   async importImage(
     @Param('id', ParseUUIDPipe) noteId: string,
     @Body() dto: ImportImageDto,
-    @CurrentUser() user: RequestUser
+    @CurrentUser() user: RequestUser,
+    @Res({ passthrough: true }) response: Response
   ) {
     const result = await this.importImageHandler.execute({
       noteId,
       userId: user.id,
       url: dto.url,
+      signal: abortOnClientDisconnect(response),
     });
     return unwrapOrThrow(
       result.mapErr(toClientImportError),
