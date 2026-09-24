@@ -1,6 +1,7 @@
+import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
@@ -398,13 +399,11 @@ describe('AIGateway', () => {
       const client2 = createMockAISocket({ id: 'socket-2' });
       client2.data.userId = 'user-123';
 
-      // Start first stream (hangs until resolved)
       const p1 = singleStreamGateway.handleComplete(client1, {
         action: AI_ACTION.SUMMARIZE,
         content: 'First request',
       });
 
-      // Second request should be rejected (slot occupied)
       await singleStreamGateway.handleComplete(client2, {
         action: AI_ACTION.SUMMARIZE,
         content: 'Second request',
@@ -482,7 +481,6 @@ describe('AIGateway', () => {
         content: 'Should succeed after slot freed',
       });
 
-      // Both execute calls should have been made (second wasn't blocked)
       expect(
         singleStreamGateway['streamTextHandler'].execute
       ).toHaveBeenCalledTimes(2);
@@ -685,9 +683,157 @@ describe('AIGateway', () => {
       );
       expect(blocking.fn).toHaveBeenCalledTimes(3);
 
-      // Cleanup
       blocking.resolveAll();
       await Promise.all([p2, p3]);
+    });
+  });
+
+  describe('a socket whose token expires', () => {
+    const TOKEN_LIFETIME_MS = 60_000;
+    const PAST_EXPIRY_MS = TOKEN_LIFETIME_MS + 5_000 + 1_000;
+    const USAGE = { inputTokens: 1, outputTokens: 1 };
+
+    function streamingCompletion() {
+      let finish!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const execute = vi.fn(
+        async (
+          _input: unknown,
+          callbacks: StreamTextCallbacks,
+          signal?: AbortSignal
+        ) => {
+          callbacks.onChunk('Half a ');
+          await Promise.race([
+            gate,
+            new Promise<void>((resolve) =>
+              signal?.addEventListener('abort', () => resolve())
+            ),
+          ]);
+          if (!signal?.aborted) {
+            callbacks.onChunk('summary.');
+            callbacks.onDone(USAGE as never);
+          }
+        }
+      );
+      return { execute, finish };
+    }
+
+    async function connected(execute: StreamTextHandler['execute']) {
+      const exp = Math.floor((Date.now() + TOKEN_LIFETIME_MS) / 1000);
+      vi.spyOn(mockJwtService, 'verify').mockReturnValue({
+        sub: 'user-123',
+        exp,
+      } as never);
+      const gw = new AIGateway(
+        { execute } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService()
+      );
+      const client = createMockAISocket({
+        handshake: { auth: { token: 'valid-jwt' }, headers: {} },
+      });
+      await gw.handleConnection(client);
+      return { gw, client };
+    }
+
+    const complete = (
+      gw: AIGateway,
+      client: ReturnType<typeof createMockAISocket>
+    ) =>
+      gw.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+
+    const emitted = (client: ReturnType<typeof createMockAISocket>) =>
+      vi
+        .mocked(client.emit)
+        .mock.calls.map(([event, payload]) =>
+          event === 'ai:error'
+            ? `${event}:${(payload as { code: string }).code}`
+            : event
+        );
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('lets the running completion finish, then asks for a fresh token and disconnects', async () => {
+      const completion = streamingCompletion();
+      const { gw, client } = await connected(completion.execute as never);
+
+      const running = complete(gw, client);
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+      expect(emitted(client)).toEqual(['ai:chunk']);
+
+      completion.finish();
+      await running;
+
+      expect(emitted(client)).toEqual([
+        'ai:chunk',
+        'ai:chunk',
+        'ai:done',
+        'ai:error:AUTH_REQUIRED',
+      ]);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('logs the deferred expiry', async () => {
+      const log = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const completion = streamingCompletion();
+      const { gw, client } = await connected(completion.execute as never);
+
+      const running = complete(gw, client);
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'ai.client.expiry_deferred',
+          clientId: 'socket-1',
+          userId: 'user-123',
+        })
+      );
+      completion.finish();
+      await running;
+      log.mockRestore();
+    });
+
+    it('refuses a new completion on the expired socket without running it', async () => {
+      const completion = streamingCompletion();
+      const { gw, client } = await connected(completion.execute as never);
+      const running = complete(gw, client);
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      await complete(gw, client);
+
+      expect(emitted(client)).toEqual(['ai:chunk', 'ai:error:AUTH_REQUIRED']);
+      expect(completion.execute).toHaveBeenCalledOnce();
+      completion.finish();
+      await running;
+    });
+
+    it('still lets the user stop the running completion, and then disconnects', async () => {
+      const completion = streamingCompletion();
+      const { gw, client } = await connected(completion.execute as never);
+      const running = complete(gw, client);
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      gw.handleCancel(client);
+      await running;
+
+      expect(emitted(client)).toEqual(['ai:chunk', 'ai:error:AUTH_REQUIRED']);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
     });
   });
 });

@@ -28,7 +28,7 @@ import {
   socketAuthFailureMessage,
   type AuthenticatedSocket,
 } from '../websocket/socket-auth';
-import { SocketExpiryTimers } from '../websocket/socket-expiry';
+import { SocketTokenExpiry } from '../websocket/socket-expiry';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import {
@@ -79,8 +79,7 @@ export class AgentGateway
 {
   private readonly logger = new Logger(AgentGateway.name);
   private readonly turns: ConcurrencySlotTracker;
-  private readonly expiryTimers = new SocketExpiryTimers();
-  private readonly expiredClients = new Set<string>();
+  private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentTurns: number;
 
   @WebSocketServer()
@@ -97,6 +96,15 @@ export class AgentGateway
   ) {
     this.maxConcurrentTurns = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.turns = new ConcurrencySlotTracker(this.maxConcurrentTurns);
+    this.tokenExpiry = new SocketTokenExpiry({
+      slots: this.turns,
+      logger: this.logger,
+      deferredEvent: 'agent.client.expiry_deferred',
+      endSession: (client) => {
+        client.emit('agent:error', AIErrors.tokenExpired());
+        client.disconnect(true);
+      },
+    });
   }
 
   afterInit(): void {
@@ -126,15 +134,12 @@ export class AgentGateway
     }
 
     if (client.connected && auth.tokenExpiresAtMs !== undefined) {
-      this.expiryTimers.arm(client.id, auth.tokenExpiresAtMs, () =>
-        this.expireToken(client)
-      );
+      this.tokenExpiry.arm(client, auth.tokenExpiresAtMs);
     }
   }
 
   handleDisconnect(client: AuthenticatedSocket): void {
-    this.expiryTimers.clear(client.id);
-    this.expiredClients.delete(client.id);
+    this.tokenExpiry.clear(client);
     const hadActiveTurns = this.turns.hasActiveSlots(client.id);
     this.turns.abortAllForClient(client.id);
     this.logger.log({
@@ -317,36 +322,14 @@ export class AgentGateway
     await this.resumeAfter(client, userId, parsed.data, res.value);
   }
 
-  // Cutting a turn the token authorized would lose a half-streamed answer; like an
-  // HTTP response whose token expires mid-body it finishes, AI_AGENT_MAX_MS bounds
-  // the overstay, and only new requests on the socket are refused.
-  private expireToken(client: AuthenticatedSocket): void {
-    if (!this.turns.hasActiveSlots(client.id)) {
-      this.endExpiredSession(client);
-      return;
-    }
-    this.expiredClients.add(client.id);
-    this.logger.log({
-      event: 'agent.client.expiry_deferred',
-      clientId: client.id,
-      userId: client.data?.userId,
-    });
-  }
-
-  private endExpiredSession(client: AuthenticatedSocket): void {
-    this.expiredClients.delete(client.id);
-    client.emit('agent:error', AIErrors.authRequired('Token expired'));
-    client.disconnect(true);
-  }
-
   private authorizedUser(client: AuthenticatedSocket): string | undefined {
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('agent:error', AIErrors.authRequired());
       return undefined;
     }
-    if (this.expiredClients.has(client.id)) {
-      client.emit('agent:error', AIErrors.authRequired('Token expired'));
+    if (this.tokenExpiry.isExpired(client)) {
+      client.emit('agent:error', AIErrors.tokenExpired());
       return undefined;
     }
     return userId;
@@ -482,12 +465,7 @@ export class AgentGateway
       await body(controller);
     } finally {
       this.turns.release(userId, client.id, slotId);
-      if (
-        this.expiredClients.has(client.id) &&
-        !this.turns.hasActiveSlots(client.id)
-      ) {
-        this.endExpiredSession(client);
-      }
+      this.tokenExpiry.afterSlotRelease(client);
     }
   }
 

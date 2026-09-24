@@ -26,7 +26,7 @@ import {
   socketAuthFailureMessage,
   type AuthenticatedSocket,
 } from '../websocket/socket-auth';
-import { SocketExpiryTimers } from '../websocket/socket-expiry';
+import { SocketTokenExpiry } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
 import { COMPLETION_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
@@ -46,7 +46,7 @@ export class AIGateway
 {
   private readonly logger = new Logger(AIGateway.name);
   private readonly streams: ConcurrencySlotTracker;
-  private readonly expiryTimers = new SocketExpiryTimers();
+  private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentStreams: number;
 
   @WebSocketServer()
@@ -60,6 +60,15 @@ export class AIGateway
   ) {
     this.maxConcurrentStreams = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.streams = new ConcurrencySlotTracker(this.maxConcurrentStreams);
+    this.tokenExpiry = new SocketTokenExpiry({
+      slots: this.streams,
+      logger: this.logger,
+      deferredEvent: 'ai.client.expiry_deferred',
+      endSession: (client) => {
+        client.emit('ai:error', AIErrors.tokenExpired());
+        client.disconnect(true);
+      },
+    });
   }
 
   afterInit(): void {
@@ -84,15 +93,12 @@ export class AIGateway
     }
 
     if (client.connected && auth.tokenExpiresAtMs !== undefined) {
-      this.expiryTimers.arm(client.id, auth.tokenExpiresAtMs, () => {
-        client.emit('ai:error', AIErrors.authRequired('Token expired'));
-        client.disconnect(true);
-      });
+      this.tokenExpiry.arm(client, auth.tokenExpiresAtMs);
     }
   }
 
   handleDisconnect(client: AuthenticatedSocket): void {
-    this.expiryTimers.clear(client.id);
+    this.tokenExpiry.clear(client);
     const hadActiveStreams = this.streams.hasActiveSlots(client.id);
     this.streams.abortAllForClient(client.id);
 
@@ -112,6 +118,10 @@ export class AIGateway
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('ai:error', AIErrors.authRequired());
+      return;
+    }
+    if (this.tokenExpiry.isExpired(client)) {
+      client.emit('ai:error', AIErrors.tokenExpired());
       return;
     }
 
@@ -183,6 +193,7 @@ export class AIGateway
       }
     } finally {
       this.streams.release(userId, client.id, streamId);
+      this.tokenExpiry.afterSlotRelease(client);
     }
   }
 

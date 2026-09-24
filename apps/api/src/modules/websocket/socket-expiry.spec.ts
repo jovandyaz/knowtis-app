@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SocketExpiryTimers, TOKEN_EXPIRY_GRACE_MS } from './socket-expiry';
+import { ConcurrencySlotTracker } from './concurrency-slot-tracker';
+import type { AuthenticatedSocket } from './socket-auth';
+import {
+  SocketExpiryTimers,
+  SocketTokenExpiry,
+  TOKEN_EXPIRY_GRACE_MS,
+} from './socket-expiry';
 
 describe('SocketExpiryTimers', () => {
   beforeEach(() => {
@@ -65,5 +71,96 @@ describe('SocketExpiryTimers', () => {
     timers.arm('client-1', Date.now() + 40 * 24 * 60 * 60 * 1000, onExpire);
 
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('SocketTokenExpiry', () => {
+  const PAST_EXPIRY_MS = 1_000 + TOKEN_EXPIRY_GRACE_MS;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setup() {
+    const slots = new ConcurrencySlotTracker(2);
+    const endSession = vi.fn();
+    const logger = { log: vi.fn() };
+    const expiry = new SocketTokenExpiry({
+      slots,
+      logger,
+      deferredEvent: 'test.client.expiry_deferred',
+      endSession,
+    });
+    const client = {
+      id: 'client-1',
+      data: { userId: 'user-1' },
+    } as unknown as AuthenticatedSocket;
+    return { slots, endSession, logger, expiry, client };
+  }
+
+  it('ends the session at expiry when the socket runs nothing', () => {
+    const { endSession, expiry, client } = setup();
+
+    expiry.arm(client, Date.now() + 1_000);
+    vi.advanceTimersByTime(PAST_EXPIRY_MS);
+
+    expect(endSession).toHaveBeenCalledOnce();
+    expect(endSession).toHaveBeenCalledWith(client);
+    expect(expiry.isExpired(client)).toBe(false);
+  });
+
+  it('lets running work finish, refuses new work, and ends the session once the last slot is released', () => {
+    const { slots, endSession, logger, expiry, client } = setup();
+    slots.acquire('user-1', 'client-1', 's1', new AbortController());
+    slots.acquire('user-1', 'client-1', 's2', new AbortController());
+
+    expiry.arm(client, Date.now() + 1_000);
+    vi.advanceTimersByTime(PAST_EXPIRY_MS);
+
+    expect(endSession).not.toHaveBeenCalled();
+    expect(expiry.isExpired(client)).toBe(true);
+    expect(logger.log).toHaveBeenCalledWith({
+      event: 'test.client.expiry_deferred',
+      clientId: 'client-1',
+      userId: 'user-1',
+    });
+
+    slots.release('user-1', 'client-1', 's1');
+    expiry.afterSlotRelease(client);
+    expect(endSession).not.toHaveBeenCalled();
+
+    slots.release('user-1', 'client-1', 's2');
+    expiry.afterSlotRelease(client);
+    expect(endSession).toHaveBeenCalledOnce();
+    expect(expiry.isExpired(client)).toBe(false);
+  });
+
+  it('never ends the session of a socket whose token has not expired', () => {
+    const { slots, endSession, expiry, client } = setup();
+    slots.acquire('user-1', 'client-1', 's1', new AbortController());
+    expiry.arm(client, Date.now() + 60_000);
+
+    slots.release('user-1', 'client-1', 's1');
+    expiry.afterSlotRelease(client);
+
+    expect(endSession).not.toHaveBeenCalled();
+  });
+
+  it('forgets the timer and the expiry of a cleared socket', () => {
+    const { slots, endSession, expiry, client } = setup();
+    slots.acquire('user-1', 'client-1', 's1', new AbortController());
+    expiry.arm(client, Date.now() + 1_000);
+    vi.advanceTimersByTime(PAST_EXPIRY_MS);
+
+    expiry.clear(client);
+    slots.release('user-1', 'client-1', 's1');
+    expiry.afterSlotRelease(client);
+
+    expect(expiry.isExpired(client)).toBe(false);
+    expect(endSession).not.toHaveBeenCalled();
   });
 });
