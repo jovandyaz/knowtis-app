@@ -75,7 +75,10 @@ describe('TurnClaimService', () => {
   it.each([
     ['message', { content: 'something else' }],
     ['note', { noteId: undefined }],
-    ['conversation', { conversationId: undefined }],
+    [
+      'conversation',
+      { conversationId: '44444444-4444-4444-8444-444444444444' },
+    ],
   ])(
     'reports a turn id reused for another %s as reused, running or settled',
     async (_field, change) => {
@@ -89,24 +92,25 @@ describe('TurnClaimService', () => {
     }
   );
 
-  it('keeps the fields apart, so an id moved from one field to another is another message', async () => {
+  it('keeps the fields apart, so text that runs into the next field is another message', async () => {
     const { claims } = setup();
-    const asConversation: TurnClaimRequest = {
+    const noteInText: TurnClaimRequest = {
       userId: USER,
       turnId: TURN,
       conversationId: CONVERSATION,
-      content: 'hi',
+      content: `${NOTE}hi`,
     };
-    const asNote: TurnClaimRequest = {
+    const noteAsField: TurnClaimRequest = {
       userId: USER,
       turnId: TURN,
-      noteId: CONVERSATION,
+      conversationId: CONVERSATION,
+      noteId: NOTE,
       content: 'hi',
     };
 
-    await claims.claim(asConversation);
+    await claims.claim(noteInText);
 
-    expect(await claims.claim(asNote)).toBe('reused');
+    expect(await claims.claim(noteAsField)).toBe('reused');
   });
 
   it('frees a released turn for its next delivery', async () => {

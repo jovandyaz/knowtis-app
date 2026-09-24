@@ -175,7 +175,8 @@ export class AgentGateway
       ? {
           userId,
           turnId,
-          conversationId: data.conversationId,
+          conversationId:
+            data.conversationId ?? conversationIdForTurn(userId, turnId),
           noteId: data.noteId,
           content: data.message.content,
         }
@@ -394,16 +395,12 @@ export class AgentGateway
 
   private refuseClaimedTurn(
     client: AuthenticatedSocket,
-    { userId, turnId, conversationId }: TurnClaimRequest,
+    { turnId, conversationId }: TurnClaimRequest,
     outcome: Exclude<TurnClaimOutcome, typeof TURN_CLAIM_OUTCOME.CLAIMED>
   ): void {
     switch (outcome) {
       case TURN_CLAIM_OUTCOME.SETTLED:
-        client.emit('agent:turn_settled', {
-          turnId,
-          conversationId:
-            conversationId ?? conversationIdForTurn(userId, turnId),
-        });
+        client.emit('agent:turn_settled', { turnId, conversationId });
         return;
       case TURN_CLAIM_OUTCOME.RUNNING:
         client.emit('agent:error', {

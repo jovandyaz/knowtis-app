@@ -1203,6 +1203,55 @@ describe('AgentGateway', () => {
       });
     });
 
+    describe('a resend that names the conversation its turn opened, as the client learns it from agent:conversation', () => {
+      const opened = uuidv5(`u1:${TURN}`, KNOWTIS_CONVERSATION_NAMESPACE);
+
+      it('is the same turn once settled', async () => {
+        const execute = vi.fn<Execute>(completes);
+        const gateway = makeGateway({ handler: { execute } as never });
+        await gateway.handleMessage(
+          makeClient('u1') as never,
+          turn({ conversationId: undefined })
+        );
+        const resent = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(
+          resent as never,
+          turn({ conversationId: opened })
+        );
+
+        expect(resent.emit.mock.calls).toEqual([
+          ['agent:turn_settled', { turnId: TURN, conversationId: opened }],
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+      });
+
+      it('is the same turn while it runs on another API instance', async () => {
+        const redis = createInMemoryClaimRedis();
+        const { execute, release } = heldTurns();
+        const instanceA = makeGateway({ handler: { execute } as never, redis });
+        const instanceB = makeGateway({ handler: { execute } as never, redis });
+
+        const first = instanceA.handleMessage(
+          makeClient('u1') as never,
+          turn({ conversationId: undefined })
+        );
+        await flushAsync();
+        const resent = makeClient('u1', 'c2');
+        await instanceB.handleMessage(
+          resent as never,
+          turn({ conversationId: opened })
+        );
+
+        expect(turnErrors(resent)).toEqual([
+          expect.objectContaining({ code: 'TURN_IN_PROGRESS', turnId: TURN }),
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+        release();
+        await first;
+      });
+    });
+
     it.each([
       ['message', { message: { content: 'something else' } }],
       ['note', { noteId: '88888888-8888-4888-8888-888888888888' }],

@@ -38,7 +38,8 @@ type ClaimStatus = (typeof CLAIM_STATUSES)[number];
 export interface TurnClaimRequest {
   readonly userId: string;
   readonly turnId: string;
-  readonly conversationId?: string | undefined;
+  /** The conversation the turn runs in: the one it names, or the one derived for a turn that names none. */
+  readonly conversationId: string;
   readonly noteId?: string | undefined;
   readonly content: string;
 }
@@ -125,7 +126,7 @@ function fingerprintOf(request: TurnClaimRequest): string {
   return createHash('sha256')
     .update(
       JSON.stringify([
-        request.conversationId ?? '',
+        request.conversationId,
         request.noteId ?? '',
         request.content,
       ])
