@@ -810,8 +810,8 @@
       "uploadError": "Could not upload the image",
       "uploading": "Uploading image…",
       "importing": "Importing image…",
-      "importFailed_one": "Couldn't import {{count}} image; kept it as a link.",
-      "importFailed_other": "Couldn't import {{count}} images; kept them as links."
+      "importFailed_one": "Couldn't copy {{count}} image into the note",
+      "importFailed_other": "Couldn't copy {{count}} images into the note"
     }
   },
   "profile": {

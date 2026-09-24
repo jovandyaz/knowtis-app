@@ -25,13 +25,13 @@ const REVIEWED_OF_CASES = [
 const IMAGE_IMPORT_FAILED_CASES = [
   {
     locale: 'en',
-    singular: "Couldn't import 1 image; kept it as a link.",
-    plural: "Couldn't import 2 images; kept them as links.",
+    singular: "Couldn't copy 1 image into the note",
+    plural: "Couldn't copy 2 images into the note",
   },
   {
     locale: 'es',
-    singular: 'No se pudo importar 1 imagen; se conservó como enlace.',
-    plural: 'No se pudieron importar 2 imágenes; se conservaron como enlaces.',
+    singular: 'No se pudo copiar 1 imagen a la nota',
+    plural: 'No se pudieron copiar 2 imágenes a la nota',
   },
 ] as const;
 
@@ -98,7 +98,7 @@ describe('plural forms', () => {
   );
 
   it.each(IMAGE_IMPORT_FAILED_CASES)(
-    'counts images that could not be imported with the right plural in $locale',
+    'counts images that could not be copied into the note with the right plural in $locale',
     async ({ locale, singular, plural }) => {
       const i18n = await translatorFor(locale);
 

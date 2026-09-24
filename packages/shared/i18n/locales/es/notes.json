@@ -810,8 +810,8 @@
       "uploadError": "No se pudo subir la imagen",
       "uploading": "Subiendo imagen…",
       "importing": "Importando imagen…",
-      "importFailed_one": "No se pudo importar {{count}} imagen; se conservó como enlace.",
-      "importFailed_other": "No se pudieron importar {{count}} imágenes; se conservaron como enlaces."
+      "importFailed_one": "No se pudo copiar {{count}} imagen a la nota",
+      "importFailed_other": "No se pudieron copiar {{count}} imágenes a la nota"
     }
   },
   "profile": {
