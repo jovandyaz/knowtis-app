@@ -27,11 +27,20 @@ export interface ApproveMutationInput {
   readonly userId: string;
 }
 
-export interface ApproveMutationOutput {
+interface CommitOutcome {
   readonly result: AgentCommitResult;
   readonly outcome: string;
-  readonly conversationId?: string;
 }
+
+export interface ApproveMutationOutput extends CommitOutcome {
+  readonly turnId: string;
+  readonly conversationId: string;
+}
+
+/** Carries the proposing turn once the proposal was taken, so the client can tie the failure to it. */
+export type ApproveMutationError = AgentDomainError & {
+  readonly turnId?: string;
+};
 
 @Injectable()
 export class ApproveMutationHandler {
@@ -49,28 +58,32 @@ export class ApproveMutationHandler {
 
   async execute(
     input: ApproveMutationInput
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<ApproveMutationOutput, ApproveMutationError>> {
     const record = await this.store.take(input.proposalId, input.userId);
     if (!record) {
       return err(AgentErrors.proposalExpired());
     }
-    const m = record.mutation;
-    const withConversation = (
-      res: Result<ApproveMutationOutput, AgentDomainError>
-    ): Result<ApproveMutationOutput, AgentDomainError> =>
-      res.map((out) =>
-        record.conversationId
-          ? { ...out, conversationId: record.conversationId }
-          : out
-      );
+    const committed = await this.commit(input.userId, record.mutation);
+    return committed
+      .map((out) => ({
+        ...out,
+        turnId: record.turnId,
+        conversationId: record.conversationId,
+      }))
+      .mapErr((error) => ({ ...error, turnId: record.turnId }));
+  }
 
+  private async commit(
+    userId: string,
+    m: ProposedMutation
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     switch (m.kind) {
       case 'create':
-        return withConversation(await this.commitCreate(input.userId, m));
+        return this.commitCreate(userId, m);
       case 'update':
-        return withConversation(await this.commitUpdate(input.userId, m));
+        return this.commitUpdate(userId, m);
       case 'share':
-        return withConversation(await this.commitShare(input.userId, m));
+        return this.commitShare(userId, m);
       default: {
         const _exhaustive: never = m;
         return err(
@@ -98,7 +111,7 @@ export class ApproveMutationHandler {
   private async commitCreate(
     userId: string,
     m: CreateProposedMutation
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     if (!this.canCreate(userId)) {
       return err(AgentErrors.permissionDenied());
     }
@@ -120,7 +133,7 @@ export class ApproveMutationHandler {
   private async commitUpdate(
     userId: string,
     m: UpdateProposedMutation
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     const note = await this.noteRepo.findById(m.targetNoteId);
     if (!note) {
       return err(AgentErrors.noteNotFound(m.targetNoteId));
@@ -152,7 +165,7 @@ export class ApproveMutationHandler {
   private async commitShare(
     userId: string,
     m: ShareProposedMutation
-  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+  ): Promise<Result<CommitOutcome, AgentDomainError>> {
     const res = await this.shareHandler.execute({
       noteId: m.targetNoteId,
       userId,

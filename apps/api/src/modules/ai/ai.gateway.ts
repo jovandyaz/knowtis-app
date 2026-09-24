@@ -26,7 +26,7 @@ import {
   socketAuthFailureMessage,
   type AuthenticatedSocket,
 } from '../websocket/socket-auth';
-import { SocketExpiryTimers } from '../websocket/socket-expiry';
+import { SocketTokenExpiry } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
 import { COMPLETION_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
@@ -46,7 +46,7 @@ export class AIGateway
 {
   private readonly logger = new Logger(AIGateway.name);
   private readonly streams: ConcurrencySlotTracker;
-  private readonly expiryTimers = new SocketExpiryTimers();
+  private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentStreams: number;
 
   @WebSocketServer()
@@ -60,6 +60,15 @@ export class AIGateway
   ) {
     this.maxConcurrentStreams = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.streams = new ConcurrencySlotTracker(this.maxConcurrentStreams);
+    this.tokenExpiry = new SocketTokenExpiry({
+      slots: this.streams,
+      logger: this.logger,
+      deferredEvent: 'ai.client.expiry_deferred',
+      endSession: (client) => {
+        client.emit('ai:error', AIErrors.tokenExpired());
+        client.disconnect(true);
+      },
+    });
   }
 
   afterInit(): void {
@@ -84,15 +93,12 @@ export class AIGateway
     }
 
     if (client.connected && auth.tokenExpiresAtMs !== undefined) {
-      this.expiryTimers.arm(client.id, auth.tokenExpiresAtMs, () => {
-        client.emit('ai:error', AIErrors.authRequired('Token expired'));
-        client.disconnect(true);
-      });
+      this.tokenExpiry.arm(client, auth.tokenExpiresAtMs);
     }
   }
 
   handleDisconnect(client: AuthenticatedSocket): void {
-    this.expiryTimers.clear(client.id);
+    this.tokenExpiry.clear(client);
     const hadActiveStreams = this.streams.hasActiveSlots(client.id);
     this.streams.abortAllForClient(client.id);
 
@@ -114,7 +120,26 @@ export class AIGateway
       client.emit('ai:error', AIErrors.authRequired());
       return;
     }
+    if (this.tokenExpiry.isExpired(client)) {
+      client.emit('ai:error', AIErrors.tokenExpired());
+      return;
+    }
+    await this.tokenExpiry.track(client, () =>
+      this.complete(client, userId, payload)
+    );
+  }
 
+  @SubscribeMessage('ai:cancel')
+  handleCancel(@ConnectedSocket() client: AuthenticatedSocket): void {
+    this.streams.abortAllForClient(client.id);
+    this.logger.debug(`Client ${client.id} cancelled AI stream(s)`);
+  }
+
+  private async complete(
+    client: AuthenticatedSocket,
+    userId: string,
+    payload: unknown
+  ): Promise<void> {
     if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
       client.emit('ai:error', AIErrors.featureDisabled());
       return;
@@ -136,6 +161,11 @@ export class AIGateway
     const { action, content, selection, suffix, targetLanguage, targetTone } =
       parsed.data;
 
+    // A disconnect handled during the flag read found no stream to abort, so a
+    // stream started now would be billed and sent to nobody.
+    if (!client.connected) {
+      return;
+    }
     const streamId = randomUUID();
     const controller = new AbortController();
     if (!this.streams.acquire(userId, client.id, streamId, controller)) {
@@ -183,12 +213,7 @@ export class AIGateway
       }
     } finally {
       this.streams.release(userId, client.id, streamId);
+      this.tokenExpiry.afterSlotRelease(client);
     }
-  }
-
-  @SubscribeMessage('ai:cancel')
-  handleCancel(@ConnectedSocket() client: AuthenticatedSocket): void {
-    this.streams.abortAllForClient(client.id);
-    this.logger.debug(`Client ${client.id} cancelled AI stream(s)`);
   }
 }

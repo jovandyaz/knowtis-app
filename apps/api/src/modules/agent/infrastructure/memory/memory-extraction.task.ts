@@ -122,6 +122,7 @@ export class MemoryExtractionTask {
     const max = this.config.get('AI_MEMORY_MAX_PER_USER');
     const messages = await this.conversations.loadMessages(
       conversationId,
+      userId,
       TRANSCRIPT_MESSAGES,
       { textOnly: true }
     );

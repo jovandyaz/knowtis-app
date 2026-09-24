@@ -74,6 +74,9 @@ export const AIErrors = {
   authRequired: (message = 'Authentication required') =>
     createAIError(AIErrorCodes.AUTH_REQUIRED, message),
 
+  tokenExpired: () =>
+    createAIError(AIErrorCodes.AUTH_REQUIRED, 'Token expired'),
+
   validationError: (message: string) =>
     createAIError(AIErrorCodes.VALIDATION_ERROR, message),
 } as const;

@@ -22,10 +22,12 @@ export interface WebSource {
 }
 
 export interface AgentChunkPayload {
+  turnId?: string;
   text: string;
 }
 
 export interface AgentThinkingPayload {
+  turnId?: string;
   text: string;
 }
 
@@ -37,10 +39,12 @@ interface AgentUsagePayload {
 }
 
 export interface AgentConversationPayload {
+  turnId?: string;
   conversationId: string;
 }
 
 export interface AgentDonePayload {
+  turnId?: string;
   usage: AgentUsagePayload;
   sources: AgentSource[];
   knownNotes: AgentSource[];
@@ -52,9 +56,11 @@ export interface AgentDonePayload {
 export interface AgentErrorPayload {
   code: string;
   message: string;
+  turnId?: string;
 }
 
 export interface AgentProposalPayload {
+  turnId?: string;
   id: string;
   kind: 'create' | 'update' | 'share';
   targetNoteId: string | null;
@@ -63,6 +69,7 @@ export interface AgentProposalPayload {
 }
 
 export interface AgentCommittedPayload {
+  turnId?: string;
   proposalId: string;
   result: {
     noteId: string;

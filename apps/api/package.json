@@ -6,6 +6,7 @@
   "dependencies": {
     "@vercel/blob": "^2.4.0",
     "ipaddr.js": "^2.3.0",
-    "request-filtering-agent": "^3.2.1"
+    "request-filtering-agent": "^3.2.1",
+    "uuid": "^14.0.2"
   }
 }

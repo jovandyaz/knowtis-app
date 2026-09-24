@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { RejectMutationHandler } from './reject-mutation.handler';
 
+const TURN = '55555555-5555-4555-8555-555555555555';
+const CONVERSATION = '11111111-1111-4111-8111-111111111111';
+
 function rec() {
   const r = ProposedMutation.create({
     id: 'p1',
@@ -13,7 +16,12 @@ function rec() {
   if (r.isErr()) {
     throw new Error('setup');
   }
-  return { userId: 'u1', mutation: r.value };
+  return {
+    userId: 'u1',
+    turnId: TURN,
+    conversationId: CONVERSATION,
+    mutation: r.value,
+  };
 }
 
 describe('RejectMutationHandler', () => {
@@ -29,6 +37,8 @@ describe('RejectMutationHandler', () => {
     if (r.isOk()) {
       expect(r.value.outcome).toContain('declined');
       expect(r.value.outcome).toContain('too long');
+      expect(r.value.turnId).toBe(TURN);
+      expect(r.value.conversationId).toBe(CONVERSATION);
     }
     expect(store.take).toHaveBeenCalledWith('p1', 'u1');
   });

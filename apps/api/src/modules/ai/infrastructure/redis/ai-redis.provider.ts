@@ -12,6 +12,9 @@ import { FeatureFlagsService } from '../../../feature-flags/feature-flags.servic
 
 export const AI_REDIS = Symbol('AI_REDIS');
 
+/** A healthy Redis answers in milliseconds; past this a command fails, so rate limits fall back to Postgres and turn claims fail closed instead of stalling the request. */
+const COMMAND_TIMEOUT_MS = 2_000;
+
 @Injectable()
 export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AIRedisProvider.name);
@@ -24,6 +27,7 @@ export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
     this.client = new Redis(configService.get('REDIS_URL'), {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      commandTimeout: COMMAND_TIMEOUT_MS,
     });
 
     this.client.on('error', (err) => {
