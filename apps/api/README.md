@@ -79,7 +79,7 @@ apps/api/src/
 | `feature-flags` | Service                | DB-backed flags with an in-process `CacheModule` cache (30s TTL)                                                                                    |
 | `health`        | Service                | Terminus health endpoints                                                                                                                           |
 | `mcp`           | Service                | MCP API keys and API-key → JWT token exchange                                                                                                       |
-| `notes`         | DDD                    | Notes CRUD with soft delete/restore, sharing, tags, image upload                                                                                    |
+| `notes`         | DDD                    | Notes CRUD with soft delete/restore, sharing, tags, image upload and import from a URL                                                              |
 | `oauth`         | Service                | OAuth 2.1 authorization server (`oidc-provider`) for MCP clients: interactions, grants, Drizzle adapter                                             |
 | `observability` | Service                | Langfuse OpenTelemetry tracing for AI paths                                                                                                         |
 | `organization`  | DDD                    | AI suggestions for note buckets and tags                                                                                                            |

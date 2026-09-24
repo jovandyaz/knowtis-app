@@ -5,7 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
+import { I18nValidationExceptionFilter } from 'nestjs-i18n';
 import {
   afterEach,
   beforeEach,
@@ -17,6 +17,7 @@ import {
 } from 'vitest';
 
 import { buildCorsOptions } from '../../config/cors-origins';
+import { createValidationPipe } from '../../config/validation-pipe';
 import { BearerIdentityResolver } from '../../core/auth/bearer-identity.resolver';
 import { GlobalExceptionFilter } from '../../core/filters/http-exception.filter';
 import { UserScopedThrottlerGuard } from '../../core/throttling/user-scoped-throttler.guard';
@@ -169,14 +170,7 @@ describe('POST /api/v1/csp-reports', () => {
       new GlobalExceptionFilter(),
       new I18nValidationExceptionFilter({ detailedErrors: false })
     );
-    app.useGlobalPipes(
-      new I18nValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      })
-    );
+    app.useGlobalPipes(createValidationPipe());
     await app.listen(0, '127.0.0.1');
     baseUrl = await app.getUrl();
   });

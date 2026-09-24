@@ -3,9 +3,9 @@ import 'reflect-metadata';
 import { Body, Controller, Module, Put } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { I18nValidationPipe } from 'nestjs-i18n';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { createValidationPipe } from '../../config/validation-pipe';
 import { UpsertFeatureFlagDto } from '../../modules/feature-flags/dto/feature-flags.dto';
 
 @Controller('flags')
@@ -40,14 +40,7 @@ describe('a boolean flag sent through the same pipe main.ts installs', () => {
       imports: [ProbeModule],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
-    app.useGlobalPipes(
-      new I18nValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      })
-    );
+    app.useGlobalPipes(createValidationPipe());
     await app.listen(0);
     baseUrl = await app.getUrl();
   });

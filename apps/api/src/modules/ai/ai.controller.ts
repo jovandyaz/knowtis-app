@@ -9,7 +9,6 @@ import {
   Get,
   HttpStatus,
   Inject,
-  MaxFileSizeValidator,
   Param,
   ParseFilePipe,
   Post,
@@ -35,6 +34,7 @@ import type { Request } from 'express';
 
 import { AI_CONFIG_SOURCES } from '@knowtis/shared-types';
 
+import { BYTES_PER_MEGABYTE } from '../../core/http/byte-units';
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
@@ -74,6 +74,9 @@ const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
 };
 
 const VALID_PERIODS: readonly MetricsPeriod[] = ['day', 'week', 'month'];
+
+/** Largest voice-note recording `POST /ai/voice-note` accepts, in bytes. */
+export const MAX_VOICE_NOTE_BYTES = 10 * BYTES_PER_MEGABYTE;
 
 const completionResultSchema = {
   type: 'object' as const,
@@ -317,16 +320,21 @@ export class AIController {
       },
     },
   })
+  @ApiResponse({
+    status: 413,
+    description: `Payload too large — audio file larger than ${MAX_VOICE_NOTE_BYTES / BYTES_PER_MEGABYTE} MB, refused before it is buffered`,
+  })
   @ApiBadRequest('invalid audio file or mode')
   @ApiAuthErrors('AI or voice-notes feature is disabled')
   @RequireFeatureFlag('voice_notes_enabled')
   @Post('voice-note')
-  @UseInterceptors(FileInterceptor('audio'))
+  @UseInterceptors(
+    FileInterceptor('audio', { limits: { fileSize: MAX_VOICE_NOTE_BYTES } })
+  )
   async voiceNote(
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
           new FileTypeValidator({
             fileType: /^audio\//,
             skipMagicNumbersValidation: true,

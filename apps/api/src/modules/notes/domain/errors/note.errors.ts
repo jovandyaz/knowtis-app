@@ -20,6 +20,8 @@ export const NoteErrorCodes = {
   EMAIL_NOT_VERIFIED: EMAIL_NOT_VERIFIED_CODE,
   SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
   CONTENT_OVERWRITE_REFUSED: 'CONTENT_OVERWRITE_REFUSED',
+  // Same wire code the URL image import answers, so clients handle both alike.
+  UNSUPPORTED_IMAGE_TYPE: 'unsupported_type',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -111,6 +113,12 @@ export const NoteErrors = {
     createNoteError(
       NoteErrorCodes.CONTENT_OVERWRITE_REFUSED,
       'Refusing to overwrite non-trivial content with an empty document; pass force: true to override'
+    ),
+
+  unsupportedImageType: () =>
+    createNoteError(
+      NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE,
+      'The file is not a PNG, JPEG, GIF or WebP image'
     ),
 
   internalError: (message: string) =>

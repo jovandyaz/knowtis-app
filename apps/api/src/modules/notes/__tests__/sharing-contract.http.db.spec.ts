@@ -6,7 +6,7 @@ import {
   JWT_AUDIENCE_ACCESS,
   JWT_ISSUER,
 } from '@jovandyaz/auth-nestjs';
-import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
@@ -25,6 +25,7 @@ import {
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { createValidationPipe } from '../../../config/validation-pipe';
 import { DatabaseModule } from '../../../database/database.module';
 import { featureFlags } from '../../../database/schema/feature-flags.schema';
 import { notePermissions, notes } from '../../../database/schema/notes.schema';
@@ -65,7 +66,11 @@ describe.runIf(DB_AVAILABLE)(
       const secret = 's1-http-contract-local-secret-32-characters';
       const moduleRef = await Test.createTestingModule({
         imports: [
-          ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+          ConfigModule.forRoot({
+            isGlobal: true,
+            ignoreEnvFile: true,
+            load: [() => ({ IMAGE_IMPORT_ALLOWED_IPS: [] })],
+          }),
           DatabaseModule,
           EventEmitterModule.forRoot(),
           I18nModule.forRoot({
@@ -97,13 +102,7 @@ describe.runIf(DB_AVAILABLE)(
         ],
       }).compile();
       app = moduleRef.createNestApplication({ logger: false });
-      app.useGlobalPipes(
-        new ValidationPipe({
-          whitelist: true,
-          forbidNonWhitelisted: true,
-          transform: true,
-        })
-      );
+      app.useGlobalPipes(createValidationPipe());
       app.setGlobalPrefix('api/v1');
       await app.listen(0, '127.0.0.1');
       base = await app.getUrl();
