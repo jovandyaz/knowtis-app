@@ -1,4 +1,4 @@
-import { Logger, VersioningType } from '@nestjs/common';
+import { ConsoleLogger, Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -13,6 +13,7 @@ import { buildAllowedOrigins, buildCorsOptions } from './config/cors-origins';
 import { SHUTDOWN_OPTIONS } from './config/shutdown-options';
 import { GlobalExceptionFilter } from './core/filters/http-exception.filter';
 import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
+import { JsonConsoleLogger } from './core/logging/json-console-logger';
 import { createOauthRateLimit } from './modules/oauth/oauth-rate-limit.middleware';
 import {
   applyBodyParsersExcludingOauth,
@@ -26,6 +27,10 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     ...SHUTDOWN_OPTIONS,
     bodyParser: false,
+    // NODE_ENV is only known once create() has loaded the env files, so a
+    // failed module init, such as a rejected env, is still printed as JSON.
+    logger: new JsonConsoleLogger(),
+    bufferLogs: true,
   });
   // Railway terminates TLS at a proxy; without this, req.ip, the fallback
   // client-ip key when no edge stamps X-Real-IP, is the proxy address.
@@ -36,6 +41,10 @@ async function bootstrap() {
   applyCspReportBodyParser(app);
   const configService = app.get(ConfigService);
   const isDevelopment = configService.get('NODE_ENV') === 'development';
+  app.useLogger(isDevelopment ? new ConsoleLogger() : new JsonConsoleLogger());
+  // An HTTP app only flushes buffered logs once listen() succeeds, so a failed
+  // start would exit without printing its init logs or the error.
+  app.flushLogs();
 
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
@@ -121,6 +130,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error: unknown) => {
+  Logger.flush();
   Logger.error(
     'API bootstrap failed',
     error instanceof Error ? error.stack : String(error),
