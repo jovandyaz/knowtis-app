@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  IMAGE_MIME_TYPES,
-  imageFilename,
-  sniffImageType,
-  type ImageMimeType,
-} from './image-type';
+import { IMAGE_MIME_TYPES, type ImageMimeType } from '@knowtis/shared-util';
+
+import { imageFilename, sniffImageType } from './image-type';
 
 const fromBase64 = (data: string) => Buffer.from(data, 'base64');
 const fromText = (text: string) => Buffer.from(text, 'latin1');

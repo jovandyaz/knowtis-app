@@ -131,6 +131,7 @@ function InternalEditor({
   editable,
   isSynced,
   canTag,
+  canImportImages,
   autoFocus,
   onEditorReady,
   onVoiceNote,
@@ -169,7 +170,8 @@ function InternalEditor({
     yXmlFragment,
     awareness,
     currentUser,
-    canTag
+    canTag,
+    canImportImages
   );
 
   const editor = useEditor({
@@ -442,6 +444,7 @@ export function CollaborativeEditor({
           }
           isSynced={!wsEnabled || isSynced}
           canTag={canTag}
+          canImportImages={!shareToken}
           autoFocus={autoFocus}
           onEditorReady={onEditorReady}
           onVoiceNote={onVoiceNote}

@@ -8,10 +8,12 @@ import type {
   AIBlockStorage,
 } from './ai-block/ai-block-provider';
 import { createBaseExtensions } from './base-extensions';
-import {
-  PENDING_IMAGE_SCHEME,
-  type PastedImageOptions,
-} from './image/pasted-image-html';
+import type { ImageImportProvider } from './image/image-import';
+import type {
+  ImageUploadProvider,
+  UploadedImageResult,
+} from './image/image-upload';
+import type { PastedImageOptions } from './image/pasted-image-html';
 
 const PROVIDER: AIBlockProvider = {
   async *stream() {
@@ -19,7 +21,33 @@ const PROVIDER: AIBlockProvider = {
   },
 };
 
+const STORED_IMAGE: UploadedImageResult = {
+  src: 'https://store.test/a.png',
+  width: null,
+  height: null,
+  alt: '',
+};
+const UPLOAD_PROVIDER: ImageUploadProvider = async () => STORED_IMAGE;
+const IMPORT_PROVIDER: ImageImportProvider = async () => STORED_IMAGE;
+
 let editor: Editor;
+
+function extensionNames(extensions: AnyExtension[]): string[] {
+  return extensions.map((extension) => extension.name);
+}
+
+function pasteHooks(extensions: AnyExtension[]) {
+  const hookOf = (name: string) =>
+    (
+      extensions.find((extension) => extension.name === name)?.options as
+        | PastedImageOptions
+        | undefined
+    )?.onDataImage;
+  return {
+    pastedImages: hookOf('pastedImages'),
+    markdownPaste: hookOf('markdownPaste'),
+  };
+}
 
 function aiBlockStorage(
   extensions: AnyExtension[]
@@ -48,18 +76,36 @@ describe('createBaseExtensions', () => {
     expect(aiBlockStorage(createBaseExtensions())?.provider).toBeNull();
   });
 
-  it('hands the data image hook to both the HTML and the Markdown paste paths', () => {
-    const onDataImage = () => `${PENDING_IMAGE_SCHEME}token`;
+  it('hands one data image hook to both paste paths when pasted images can be uploaded', () => {
+    const extensions = createBaseExtensions({
+      imageImport: { uploadProvider: UPLOAD_PROVIDER },
+    });
 
-    expect(
-      createBaseExtensions({ onDataImage })
-        .filter(
-          (extension) =>
-            (extension.options as PastedImageOptions).onDataImage ===
-            onDataImage
-        )
-        .map((extension) => extension.name)
-        .sort()
-    ).toEqual(['markdownPaste', 'pastedImages']);
+    const hooks = pasteHooks(extensions);
+    expect(typeof hooks.pastedImages).toBe('function');
+    expect(hooks.markdownPaste).toBe(hooks.pastedImages);
+    expect(extensionNames(extensions)).toContain('imageImport');
+  });
+
+  it('installs no data image hook without an upload provider', () => {
+    const extensions = createBaseExtensions({
+      imageImport: { importProvider: IMPORT_PROVIDER },
+    });
+
+    expect(pasteHooks(extensions)).toEqual({
+      pastedImages: undefined,
+      markdownPaste: undefined,
+    });
+    expect(extensionNames(extensions)).toContain('imageImport');
+  });
+
+  it('registers no image import when its host passes no import options', () => {
+    const extensions = createBaseExtensions();
+
+    expect(pasteHooks(extensions)).toEqual({
+      pastedImages: undefined,
+      markdownPaste: undefined,
+    });
+    expect(extensionNames(extensions)).not.toContain('imageImport');
   });
 });

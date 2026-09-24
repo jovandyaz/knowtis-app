@@ -2,14 +2,15 @@ import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
-  NOTE_REPOSITORY,
   NoteErrors,
-  PERMISSION_REPOSITORY,
   type NoteDomainError,
-  type NoteRepository,
-  type PermissionRepository,
-} from '../../domain';
+} from '../../domain/errors/note.errors';
 import { sniffImageType } from '../../domain/image-type';
+import { NOTE_REPOSITORY, type NoteRepository } from '../../domain/ports';
+import {
+  PERMISSION_REPOSITORY,
+  type PermissionRepository,
+} from '../../domain/ports/permission.repository';
 import { authorizeNoteWrite } from '../authorize-note-write';
 import { toNoteImageView, type NoteImageView } from '../note-image-view';
 import { NoteImageStoreService } from '../services/note-image-store.service';

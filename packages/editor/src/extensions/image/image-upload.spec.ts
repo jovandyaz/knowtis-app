@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { ACCEPTED_IMAGE_TYPES, extractImageFiles } from './image-upload';
+import { IMAGE_MIME_TYPES } from '@knowtis/shared-util';
+
+import { extractImageFiles } from './image-upload';
 
 function fileOfType(type: string): File {
   return new File([new Uint8Array([1, 2, 3])], `x.${type.split('/')[1]}`, {
@@ -30,17 +32,8 @@ describe('extractImageFiles', () => {
   });
 
   it('accepts every type in the allowlist', () => {
-    for (const type of ACCEPTED_IMAGE_TYPES) {
+    for (const type of IMAGE_MIME_TYPES) {
       expect(extractImageFiles([fileOfType(type)])).toHaveLength(1);
     }
-  });
-
-  it('exposes png, jpeg, gif and webp for the file picker', () => {
-    expect([...ACCEPTED_IMAGE_TYPES].sort()).toEqual([
-      'image/gif',
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-    ]);
   });
 });

@@ -1,3 +1,4 @@
+import type { AnyExtension } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 
@@ -15,8 +16,12 @@ import type {
 } from './ai-block/ai-block-provider';
 import { AIBlockView } from './ai-block/AIBlockView';
 import { CodeBlockView } from './code-block/CodeBlockView';
+import {
+  createImageImport,
+  type ImageImportOptions,
+} from './image/image-import';
 import { ImageView } from './image/ImageView';
-import { PastedImages, type DataImageHandler } from './image/pasted-image-html';
+import { PastedImages } from './image/pasted-image-html';
 import { MarkdownPaste } from './markdown-paste';
 import { MermaidBlockView } from './mermaid-block/MermaidBlockView';
 
@@ -24,7 +29,7 @@ interface BaseExtensionsOptions {
   openLinksOnClick?: boolean;
   disableHistory?: boolean;
   aiBlockProvider?: AIBlockProvider | null;
-  onDataImage?: DataImageHandler;
+  imageImport?: ImageImportOptions;
 }
 
 const EDITOR_NODE_CLASSES: NodeAttributeClasses = {
@@ -40,9 +45,12 @@ export function createBaseExtensions({
   openLinksOnClick = false,
   disableHistory = false,
   aiBlockProvider = null,
-  onDataImage,
-}: BaseExtensionsOptions = {}) {
-  const pastedImageOptions = onDataImage ? { onDataImage } : {};
+  imageImport,
+}: BaseExtensionsOptions = {}): AnyExtension[] {
+  const importer = imageImport ? createImageImport(imageImport) : null;
+  const pastedImageOptions = importer?.onDataImage
+    ? { onDataImage: importer.onDataImage }
+    : {};
 
   const semantic = createSemanticExtensions({
     openLinksOnClick,
@@ -102,5 +110,6 @@ export function createBaseExtensions({
     }),
     PastedImages.configure(pastedImageOptions),
     MarkdownPaste.configure(pastedImageOptions),
+    ...(importer ? [importer.extension] : []),
   ];
 }

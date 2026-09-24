@@ -5,6 +5,7 @@ import esNotes from '../locales/es/notes.json';
 
 const NOTES_NAMESPACE = 'notes';
 const REVIEWED_OF_KEY = 'ai.artifacts.flashcards.reviewedOf';
+const IMAGE_IMPORT_FAILED_KEY = 'ai.image.importFailed';
 
 const BUNDLES = { en: enNotes, es: esNotes };
 
@@ -18,6 +19,19 @@ const REVIEWED_OF_CASES = [
     locale: 'es',
     singular: '1 de 1 tarjeta repasada',
     plural: '1 de 2 tarjetas repasadas',
+  },
+] as const;
+
+const IMAGE_IMPORT_FAILED_CASES = [
+  {
+    locale: 'en',
+    singular: "Couldn't copy 1 image into the note",
+    plural: "Couldn't copy 2 images into the note",
+  },
+  {
+    locale: 'es',
+    singular: 'No se pudo copiar 1 imagen a la nota',
+    plural: 'No se pudieron copiar 2 imágenes a la nota',
   },
 ] as const;
 
@@ -80,6 +94,16 @@ describe('plural forms', () => {
 
       expect(i18n.t(REVIEWED_OF_KEY, { reviewed: 1, count: 1 })).toBe(singular);
       expect(i18n.t(REVIEWED_OF_KEY, { reviewed: 1, count: 2 })).toBe(plural);
+    }
+  );
+
+  it.each(IMAGE_IMPORT_FAILED_CASES)(
+    'counts images that could not be copied into the note with the right plural in $locale',
+    async ({ locale, singular, plural }) => {
+      const i18n = await translatorFor(locale);
+
+      expect(i18n.t(IMAGE_IMPORT_FAILED_KEY, { count: 1 })).toBe(singular);
+      expect(i18n.t(IMAGE_IMPORT_FAILED_KEY, { count: 2 })).toBe(plural);
     }
   );
 });

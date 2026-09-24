@@ -1,8 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import type { ImageMimeType } from '@knowtis/shared-util';
+
 import { reasonOf } from '../../../../core/errors/reason-of';
 import type { NoteImage } from '../../../../database/schema';
-import { imageFilename, type ImageMimeType } from '../../domain/image-type';
+import { imageFilename } from '../../domain/image-type';
 import {
   IMAGE_STORAGE,
   type ImageStorage,
