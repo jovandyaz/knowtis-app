@@ -50,7 +50,12 @@ describe('UploadImageHandler', () => {
 
     const result = await handler.execute({ ...input, userId: 'owner' });
 
-    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual({
+      id: 'img1',
+      url: 'https://blob/x.png',
+      width: 800,
+      height: 600,
+    });
     expect(imageRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         noteId: 'n1',

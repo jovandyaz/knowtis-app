@@ -13,12 +13,14 @@ import {
 } from '../../domain';
 import {
   imageImportError,
+  ImageImportErrorCodes,
   REMOTE_IMAGE_FETCHER,
   type ImageImportError,
   type ImageImportErrorCode,
   type RemoteImageFetcher,
 } from '../../domain/ports/remote-image-fetcher.port';
 import { authorizeNoteWrite } from '../authorize-note-write';
+import { toNoteImageView, type NoteImageView } from '../note-image-view';
 import { NoteImageStoreService } from '../services/note-image-store.service';
 
 const IMAGE_IMPORT_REJECTED_EVENT = 'notes.image_import.rejected';
@@ -34,11 +36,8 @@ export interface ImportImageInput {
  * The note's copy of an imported image. `id` is null when the URL was already
  * in the app's blob store, so nothing was stored.
  */
-export interface ImportedImage {
+export interface ImportedImage extends Omit<NoteImageView, 'id'> {
   readonly id: string | null;
-  readonly url: string;
-  readonly width: number | null;
-  readonly height: number | null;
 }
 
 @Injectable()
@@ -73,7 +72,7 @@ export class ImportImageHandler {
 
     const url = URL.parse(input.url);
     if (url === null) {
-      return this.reject(input, 'fetch_failed', null);
+      return this.reject(input, ImageImportErrorCodes.FETCH_FAILED, null);
     }
 
     const fetched = await this.remoteImageFetcher.fetch(
@@ -93,12 +92,7 @@ export class ImportImageHandler {
       width: null,
       height: null,
     });
-    return ok({
-      id: row.id,
-      url: row.url,
-      width: row.width,
-      height: row.height,
-    });
+    return ok(toNoteImageView(row));
   }
 
   private reject(

@@ -7,10 +7,9 @@ const HOST_WILDCARD = '*';
 const IPV6_BRACKETS = /^\[|\]$/g;
 
 /**
- * Reduces a URL hostname to what is safe to log. Subdomain labels can carry
- * exfiltrated data, so only the last two labels are kept and deeper ones fold
- * into `*.`; an IP address is kept whole. The URL parser enforces no label
- * length, so a result longer than 64 characters becomes `*`.
+ * Reduces a hostname to what is safe to log, since subdomain labels can carry
+ * data: the last two labels, deeper ones folded into `*.`, an IP whole, and
+ * `*` past 64 characters (the URL parser caps no label length).
  */
 export function registrableHostOf(hostname: string): string {
   const labels =

@@ -323,6 +323,26 @@ describe('POST /notes/:id/images', () => {
     }
   );
 
+  it('answers only the documented id, url and dimensions of the stored image', async () => {
+    const form = new FormData();
+    form.append('file', new Blob([PNG_BYTES], { type: 'image/png' }), 'p.png');
+    form.append('width', '800');
+    form.append('height', '600');
+
+    const response = await fetch(`${base}/notes/${noteEntity.id}/images`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: 'img1',
+      url: 'https://blob/notes/n1/photo-abc.png',
+      width: 800,
+      height: 600,
+    });
+  });
+
   it('refuses a file over MAX_IMAGE_BYTES with 413 before the handler runs', async () => {
     const execute = vi.spyOn(app.get(UploadImageHandler), 'execute');
 

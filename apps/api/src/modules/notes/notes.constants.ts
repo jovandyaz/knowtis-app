@@ -1,7 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
 
 import { NoteErrorCodes } from './domain';
-import type { ImageImportErrorCode } from './domain/ports/remote-image-fetcher.port';
+import {
+  ImageImportErrorCodes,
+  type ImageImportErrorCode,
+} from './domain/ports/remote-image-fetcher.port';
 
 export const NOTE_UPDATE_THROTTLE = {
   default: { limit: 30, ttl: 60_000 },
@@ -13,9 +16,9 @@ export const IMAGE_IMPORT_THROTTLE = {
 
 /** The image import codes a client can receive. */
 export const CLIENT_IMAGE_IMPORT_ERROR_CODES = [
-  'too_large',
-  NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE,
-  'fetch_failed',
+  ImageImportErrorCodes.TOO_LARGE,
+  ImageImportErrorCodes.UNSUPPORTED_TYPE,
+  ImageImportErrorCodes.FETCH_FAILED,
 ] as const satisfies readonly ImageImportErrorCode[];
 
 export type ClientImageImportErrorCode =
@@ -27,12 +30,12 @@ export type ClientImageImportErrorCode =
 export const CLIENT_IMAGE_IMPORT_ERROR_CODE: Readonly<
   Record<ImageImportErrorCode, ClientImageImportErrorCode>
 > = {
-  blocked_address: 'fetch_failed',
-  fetch_failed: 'fetch_failed',
-  timeout: 'fetch_failed',
-  too_large: 'too_large',
-  [NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE]:
-    NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE,
+  [ImageImportErrorCodes.BLOCKED_ADDRESS]: ImageImportErrorCodes.FETCH_FAILED,
+  [ImageImportErrorCodes.FETCH_FAILED]: ImageImportErrorCodes.FETCH_FAILED,
+  [ImageImportErrorCodes.TIMEOUT]: ImageImportErrorCodes.FETCH_FAILED,
+  [ImageImportErrorCodes.TOO_LARGE]: ImageImportErrorCodes.TOO_LARGE,
+  [ImageImportErrorCodes.UNSUPPORTED_TYPE]:
+    ImageImportErrorCodes.UNSUPPORTED_TYPE,
 };
 
 export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
@@ -51,7 +54,7 @@ export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.SHARE_TOKEN_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [NoteErrorCodes.CONTENT_OVERWRITE_REFUSED]: HttpStatus.CONFLICT,
   [NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE]: HttpStatus.UNPROCESSABLE_ENTITY,
-  too_large: HttpStatus.UNPROCESSABLE_ENTITY,
-  fetch_failed: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ImageImportErrorCodes.TOO_LARGE]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ImageImportErrorCodes.FETCH_FAILED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };

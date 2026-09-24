@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import type { NoteImage } from '../../../../database/schema';
 import {
   NOTE_REPOSITORY,
   NoteErrors,
@@ -12,6 +11,7 @@ import {
 } from '../../domain';
 import { sniffImageType } from '../../domain/image-type';
 import { authorizeNoteWrite } from '../authorize-note-write';
+import { toNoteImageView, type NoteImageView } from '../note-image-view';
 import { NoteImageStoreService } from '../services/note-image-store.service';
 
 export interface UploadImageInput {
@@ -34,7 +34,7 @@ export class UploadImageHandler {
 
   async execute(
     input: UploadImageInput
-  ): Promise<Result<NoteImage, NoteDomainError>> {
+  ): Promise<Result<NoteImageView, NoteDomainError>> {
     const access = await authorizeNoteWrite(
       this.noteRepository,
       this.permissionRepository,
@@ -59,6 +59,6 @@ export class UploadImageHandler {
       width: input.width ?? null,
       height: input.height ?? null,
     });
-    return ok(row);
+    return ok(toNoteImageView(row));
   }
 }

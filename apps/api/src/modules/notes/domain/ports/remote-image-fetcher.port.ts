@@ -3,13 +3,21 @@ import type { Result } from 'neverthrow';
 import { NoteErrorCodes } from '../errors/note.errors';
 import type { ImageMimeType } from '../image-type';
 
+export const ImageImportErrorCodes = {
+  BLOCKED_ADDRESS: 'blocked_address',
+  TOO_LARGE: 'too_large',
+  UNSUPPORTED_TYPE: NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE,
+  FETCH_FAILED: 'fetch_failed',
+  TIMEOUT: 'timeout',
+} as const;
+
 /** Every way an image import from a URL fails. The API answers 422, folding the network-level codes into `fetch_failed`. */
 export const IMAGE_IMPORT_ERROR_CODES = [
-  'blocked_address',
-  'too_large',
-  NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE,
-  'fetch_failed',
-  'timeout',
+  ImageImportErrorCodes.BLOCKED_ADDRESS,
+  ImageImportErrorCodes.TOO_LARGE,
+  ImageImportErrorCodes.UNSUPPORTED_TYPE,
+  ImageImportErrorCodes.FETCH_FAILED,
+  ImageImportErrorCodes.TIMEOUT,
 ] as const;
 
 export type ImageImportErrorCode = (typeof IMAGE_IMPORT_ERROR_CODES)[number];
@@ -22,13 +30,13 @@ export interface ImageImportError {
 const IMAGE_IMPORT_ERROR_MESSAGES: Readonly<
   Record<ImageImportErrorCode, string>
 > = {
-  blocked_address:
+  [ImageImportErrorCodes.BLOCKED_ADDRESS]:
     'The image URL points to an address the server does not fetch from',
-  too_large: 'The image is larger than a note accepts',
-  [NoteErrorCodes.UNSUPPORTED_IMAGE_TYPE]:
+  [ImageImportErrorCodes.TOO_LARGE]: 'The image is larger than a note accepts',
+  [ImageImportErrorCodes.UNSUPPORTED_TYPE]:
     'The URL does not serve a PNG, JPEG, GIF or WebP image',
-  fetch_failed: 'The image could not be fetched',
-  timeout: 'The image took too long to fetch',
+  [ImageImportErrorCodes.FETCH_FAILED]: 'The image could not be fetched',
+  [ImageImportErrorCodes.TIMEOUT]: 'The image took too long to fetch',
 };
 
 /**
