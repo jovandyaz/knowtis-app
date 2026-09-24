@@ -165,4 +165,63 @@ describe('toChatMessages', () => {
       ).map((message) => message.content)
     ).toEqual(['Q1', 'A1', 'Q2', 'A2']);
   });
+
+  it.each([
+    {
+      shape: 'a plain turn',
+      rows: [
+        row({ turnId: 't1', role: 'user', content: 'Q' }),
+        row({
+          turnId: 't1',
+          role: 'assistant',
+          content: 'A',
+          stopReason: 'completed',
+        }),
+      ],
+      bubbles: ['Q', 'A'],
+    },
+    {
+      shape:
+        'a turn resumed after a proposal, one bubble per leg as it streamed',
+      rows: [
+        row({ turnId: 't1', role: 'user', content: 'Create a note' }),
+        row({
+          turnId: 't1',
+          role: 'assistant',
+          content: 'I will create the note.',
+          stopReason: 'completed',
+        }),
+        row({
+          turnId: 't1',
+          role: 'assistant',
+          content: 'Done, I created it.',
+          stopReason: 'completed',
+        }),
+      ],
+      bubbles: [
+        'Create a note',
+        'I will create the note.',
+        'Done, I created it.',
+      ],
+    },
+    {
+      shape: 'a multi-step turn, all its steps in one bubble',
+      rows: [
+        row({ turnId: 't1', role: 'user', content: 'Q' }),
+        row({ turnId: 't1', role: 'assistant', content: 'Looking. ' }),
+        row({ turnId: 't1', role: 'assistant', content: 'Still looking. ' }),
+        row({
+          turnId: 't1',
+          role: 'assistant',
+          content: 'Found it.',
+          stopReason: 'completed',
+        }),
+      ],
+      bubbles: ['Q', 'Looking. Still looking. Found it.'],
+    },
+  ])('renders $shape', ({ rows, bubbles }) => {
+    expect(
+      toChatMessages(rows, nextId).map((message) => message.content)
+    ).toEqual(bubbles);
+  });
 });
