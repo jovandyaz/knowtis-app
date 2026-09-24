@@ -86,8 +86,10 @@ export class JsonConsoleLogger extends ConsoleLogger {
       if (isPlainObject(message)) {
         Object.assign(fields, message);
       } else if (message instanceof Error) {
-        error ??= message;
-        fields.error = errorFields(message);
+        if (!error) {
+          error = message;
+          fields.error = errorFields(message);
+        }
       } else if (message !== undefined) {
         texts.push(String(message));
       }

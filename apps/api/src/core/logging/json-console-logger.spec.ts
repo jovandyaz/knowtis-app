@@ -179,6 +179,21 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
     });
   });
 
+  it('describes the first of several errors in both the error field and the stack', () => {
+    const first = new Error('first failure');
+
+    new Logger('Probe').warn(
+      'two failures',
+      first,
+      new Error('second failure')
+    );
+
+    expect(onlyEntry(stdout)).toMatchObject({
+      error: { message: 'first failure' },
+      stack: first.stack,
+    });
+  });
+
   it('keeps extra text arguments as details', () => {
     new Logger('Probe').warn('first', 'second', 42);
 
