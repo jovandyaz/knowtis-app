@@ -6,6 +6,7 @@ import {
   createSemanticExtensions,
   IMAGE_NODE_NAME,
 } from '@knowtis/editor-schema';
+import { logger } from '@knowtis/shared-util';
 
 import {
   MAX_DATA_IMAGE_CHARS,
@@ -19,6 +20,8 @@ import {
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 const GIF_BASE64 = 'R0lGODlhAQABAAAAADs=';
+const JPEG_BASE64 = '/9j/4AAQ';
+const WEBP_BASE64 = 'UklGRg==';
 const PNG_DATA_URL = `data:image/png;base64,${PNG_BASE64}`;
 const TOKEN = `${PENDING_IMAGE_SCHEME}0b6c1a52-2f7e-4d0c-9d43-5d5c8f0e8a11`;
 
@@ -86,10 +89,6 @@ function decoded(base64: string): number[] {
 }
 
 describe('wrapPastedImages', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('wraps a bare remote img into an image figure with its src and alt', () => {
     expect(
       figureImages(wrapPastedImages('<img src="https://x.test/a.png" alt="A">'))
@@ -161,6 +160,8 @@ describe('wrapPastedImages', () => {
   it.each([
     ['image/png', PNG_BASE64, 'png'],
     ['image/gif', GIF_BASE64, 'gif'],
+    ['image/jpeg', JPEG_BASE64, 'jpeg'],
+    ['image/webp', WEBP_BASE64, 'webp'],
   ])(
     'hands a %s data URI to the hook as a file and uses the token it returns',
     async (type, base64, extension) => {
@@ -180,6 +181,45 @@ describe('wrapPastedImages', () => {
       expect(await bytesOf(files[0])).toEqual(decoded(base64));
     }
   );
+
+  it('accepts a data URI whose scheme, type and encoding are upper case', () => {
+    const { files, onDataImage } = recordingHook();
+
+    const html = wrapPastedImages(
+      `<img src="DATA:image/PNG;BASE64,${PNG_BASE64}">`,
+      { onDataImage }
+    );
+
+    expect(figureImages(html).map((image) => image.src)).toEqual([TOKEN]);
+    expect(files.map((file) => file.type)).toEqual(['image/png']);
+  });
+
+  it('drops only the image whose data hook throws, and logs why', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const failure = new Error('upload registry unavailable');
+    const onDataImage = (): string => {
+      throw failure;
+    };
+
+    const html = wrapPastedImages(
+      `<p>kept</p><img src="${PNG_DATA_URL}"><img src="https://x.test/a.png">`,
+      { onDataImage }
+    );
+
+    expect(topLevel(html)).toEqual([
+      ['p', 'kept'],
+      ['figure', ''],
+    ]);
+    expect(figureImages(html).map((image) => image.src)).toEqual([
+      'https://x.test/a.png',
+    ]);
+    expect(warn.mock.calls).toEqual([
+      [
+        'Dropped a pasted image its data hook rejected',
+        { context: 'PastedImages', error: failure },
+      ],
+    ]);
+  });
 
   it('drops a data URI when no hook is given', () => {
     const html = wrapPastedImages(`<p>x</p><img src="${PNG_DATA_URL}">`);
@@ -241,6 +281,8 @@ describe('wrapPastedImages', () => {
     ['a relative src', 'images/a.png'],
     ['a pending token', TOKEN],
     ['an empty src', ''],
+    ['a URL carrying a username and password', 'https://u:p@x.test/a.png'],
+    ['a URL carrying a username', 'https://u@x.test/a.png'],
   ])('removes an img with %s', (_label, src) => {
     const { files, onDataImage } = recordingHook();
 
@@ -286,6 +328,35 @@ describe('wrapPastedImages', () => {
       )
     ).toEqual([
       { src: 'https://x.test/a.png', alt: '', width: null, height: null },
+    ]);
+  });
+
+  it.each([
+    ['hexadecimal', '0x10'],
+    ['exponent', '1e3'],
+    ['signed', '+640'],
+    ['beyond the pixel cap', '10001'],
+  ])('ignores a %s dimension', (_label, value) => {
+    expect(
+      figureImages(
+        wrapPastedImages(
+          `<img src="https://x.test/a.png" width="${value}" height="${value}">`
+        )
+      )
+    ).toEqual([
+      { src: 'https://x.test/a.png', alt: '', width: null, height: null },
+    ]);
+  });
+
+  it('keeps a dimension at the pixel cap', () => {
+    expect(
+      figureImages(
+        wrapPastedImages(
+          '<img src="https://x.test/a.png" width="10000" style="height: 10000px">'
+        )
+      )
+    ).toEqual([
+      { src: 'https://x.test/a.png', alt: '', width: '10000', height: '10000' },
     ]);
   });
 
@@ -386,6 +457,7 @@ function blocks(): string[][] {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   editor?.destroy();
 });
 
@@ -453,6 +525,52 @@ describe('PastedImages', () => {
 
     expect(imageAttrs().map((attrs) => attrs['src'])).toEqual([TOKEN]);
     expect(files.map((file) => file.type)).toEqual(['image/png']);
+  });
+
+  it('keeps the rest of the paste when the data hook throws', () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    createEditor({
+      onDataImage: () => {
+        throw new Error('upload registry unavailable');
+      },
+    });
+
+    pasteHtml(`<p>kept</p><img src="${PNG_DATA_URL}">`);
+
+    expect(images()).toEqual([]);
+    expect(editor.state.doc.textContent).toBe('kept');
+  });
+
+  it('closes a heading at a pasted image and keeps the text after it as a paragraph', () => {
+    createEditor();
+
+    pasteHtml('<h1>Title <img src="https://x.test/a.png"> more</h1>');
+
+    expect(blocks()).toEqual([
+      ['heading', 'Title'],
+      [IMAGE_NODE_NAME, ''],
+      ['paragraph', ' more'],
+    ]);
+  });
+
+  it('keeps an image and the text around it inside a list item without a paragraph', () => {
+    createEditor();
+
+    pasteHtml('<ul><li>one <img src="https://x.test/a.png"> two</li></ul>');
+
+    const itemChildren: string[][] = [];
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'listItem') {
+        node.forEach((child) => {
+          itemChildren.push([child.type.name, child.textContent]);
+        });
+      }
+    });
+    expect(itemChildren).toEqual([
+      ['paragraph', 'one'],
+      [IMAGE_NODE_NAME, ''],
+      ['paragraph', ' two'],
+    ]);
   });
 
   it('keeps a pasted data URI out of the document without a hook', () => {

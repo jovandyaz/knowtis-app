@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 import { IMAGE_FIGURE_ATTRIBUTE } from '@knowtis/editor-schema';
+import { logger } from '@knowtis/shared-util';
 
 import { ACCEPTED_IMAGE_TYPES } from './image-upload';
 
@@ -26,6 +27,8 @@ const IMAGE_FIGURE_SELECTOR = `figure[${IMAGE_FIGURE_ATTRIBUTE}]`;
 const PARAGRAPH_SELECTOR = 'p';
 const DIMENSIONS = ['width', 'height'] as const;
 const PX_SUFFIX = 'px';
+const MAX_IMAGE_DIMENSION_PX = 10_000;
+const DECIMAL_DIGITS = /^\d+$/;
 
 export type DataImageHandler = (file: File) => string;
 
@@ -68,16 +71,29 @@ function dataImageToken(
     return null;
   }
   const file = decodeDataImage(src);
-  const token = file ? onDataImage(file) : null;
-  return token?.startsWith(PENDING_IMAGE_SCHEME) ? token : null;
+  if (!file) {
+    return null;
+  }
+  try {
+    const token = onDataImage(file);
+    return token.startsWith(PENDING_IMAGE_SCHEME) ? token : null;
+  } catch (error) {
+    logger.warn('Dropped a pasted image its data hook rejected', {
+      context: 'PastedImages',
+      error,
+    });
+    return null;
+  }
 }
 
 function remoteImageUrl(src: string): string | null {
   try {
     const url = new URL(src);
-    return (PASTED_IMAGE_SCHEMES as readonly string[]).includes(url.protocol)
-      ? url.href
-      : null;
+    const allowedScheme = (PASTED_IMAGE_SCHEMES as readonly string[]).includes(
+      url.protocol
+    );
+    const hasCredentials = url.username !== '' || url.password !== '';
+    return allowedScheme && !hasCredentials ? url.href : null;
   } catch {
     return null;
   }
@@ -91,8 +107,9 @@ function resolveSrc(raw: string, options: PastedImageOptions): string | null {
 }
 
 function positiveInteger(value: string | null): number | null {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  const digits = value?.trim() ?? '';
+  const parsed = DECIMAL_DIGITS.test(digits) ? Number(digits) : 0;
+  return parsed > 0 && parsed <= MAX_IMAGE_DIMENSION_PX ? parsed : null;
 }
 
 function pixelDimension(
