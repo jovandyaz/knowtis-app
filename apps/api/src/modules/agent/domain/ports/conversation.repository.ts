@@ -17,6 +17,7 @@ export interface ConversationMessageRow {
 }
 
 export interface CreateConversationInput {
+  readonly id: string;
   readonly userId: string;
   readonly noteId?: string;
   readonly title: string | null;
@@ -53,14 +54,23 @@ export interface ConversationRepository {
     userId: string,
     model: string
   ): Promise<void>;
-  /** Oldest→newest, last `limit` rows. */
+  /**
+   * Oldest→newest, last `limit` rows, as `userId` may read them now: sources keep only the notes
+   * they can still open, under each note's current title; a tool call on any other note has its input
+   * replaced by `NOTE_UNAVAILABLE_INPUT`, and a tool result that involves one by `NOTE_UNAVAILABLE_OUTPUT`.
+   */
   loadMessages(
     conversationId: string,
+    userId: string,
     limit: number,
     options?: LoadMessagesOptions
   ): Promise<ConversationMessageRow[]>;
-  /** Single transaction: appends every row of the turn and bumps `conversations.updatedAt`. */
-  appendTurn(input: AppendTurnInput): Promise<void>;
+  /**
+   * Single transaction: appends every row of the turn and bumps `conversations.updatedAt`.
+   * A turn whose user row is already stored is left as it is, so a replayed turn is never stored twice.
+   * Resolves whether rows were stored: `false` for an empty turn or a replay.
+   */
+  appendTurn(input: AppendTurnInput): Promise<boolean>;
   findExtractable(
     quietSeconds: number,
     limit: number
@@ -70,6 +80,7 @@ export interface ConversationRepository {
     userId: string,
     page: { offset: number; limit: number }
   ): Promise<{ items: ConversationSummary[]; total: number }>;
+  /** Sources keep only the notes `userId` can still open, under each note's current title. */
   loadTranscriptForUser(
     conversationId: string,
     userId: string,

@@ -147,7 +147,7 @@ describe('MemoryExtractionTask', () => {
   it('loads text-only rows for the transcript', async () => {
     const { task, conversations } = make();
     await task.reconcile();
-    expect(conversations.loadMessages).toHaveBeenCalledWith('c1', 40, {
+    expect(conversations.loadMessages).toHaveBeenCalledWith('c1', 'u1', 40, {
       textOnly: true,
     });
   });

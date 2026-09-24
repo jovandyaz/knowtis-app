@@ -38,4 +38,11 @@ describe('AIErrors', () => {
     expect(error.code).toBe(AIErrorCodes.EMPTY_COMPLETION);
     expect(error.message.length).toBeGreaterThan(0);
   });
+
+  it('should create a token-expired error the client refreshes on', () => {
+    expect(AIErrors.tokenExpired()).toEqual({
+      code: AIErrorCodes.AUTH_REQUIRED,
+      message: 'Token expired',
+    });
+  });
 });

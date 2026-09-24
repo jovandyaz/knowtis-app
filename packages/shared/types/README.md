@@ -18,18 +18,18 @@ import {
 
 Each domain lives in its own `src/lib/*.types.ts`:
 
-| File                     | Covers                                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `user.types.ts`          | `User`, `UserProfile`, `CreateUserInput`, `UpdateUserInput`, `EMAIL_NOT_VERIFIED_CODE`, `AGENT_EMAIL_NOT_VERIFIED_CODE`         |
-| `note.types.ts`          | `Note`, `NoteWithOwner`, create/update/share inputs, permission types                                                           |
-| `organization.types.ts`  | PARA buckets, bucket filters, list views, tag path rules, supertags and their field catalog, notes pagination                   |
-| `collaboration.types.ts` | `HANDSHAKE_FAILURE` — the reasons the API refuses a Hocuspocus handshake — and collaboration user/payload types                 |
-| `ai.types.ts`            | AI actions, languages, tones, model tiers, BYOK providers/secrets                                                               |
-| `artifact.types.ts`      | Flashcards, quizzes, summaries, mind maps, SM-2 study progress                                                                  |
-| `feature-flags.types.ts` | Feature flag keys and DTO                                                                                                       |
-| `anonymous.types.ts`     | Anonymous-user limits                                                                                                           |
-| `catalog.types.ts`       | Open-tier catalog model/alert statuses and DTOs                                                                                 |
-| `conversation.types.ts`  | Copilot conversation list/transcript shapes, `CONVERSATION_TITLE_MAX`, title normalization, `AGENT_CONVERSATION_NOT_FOUND_CODE` |
+| File                     | Covers                                                                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user.types.ts`          | `User`, `UserProfile`, `CreateUserInput`, `UpdateUserInput`, `EMAIL_NOT_VERIFIED_CODE`, `AGENT_EMAIL_NOT_VERIFIED_CODE`                                  |
+| `note.types.ts`          | `Note`, `NoteWithOwner`, create/update/share inputs, permission types                                                                                    |
+| `organization.types.ts`  | PARA buckets, bucket filters, list views, tag path rules, supertags and their field catalog, notes pagination                                            |
+| `collaboration.types.ts` | `HANDSHAKE_FAILURE` — the reasons the API refuses a Hocuspocus handshake — and collaboration user/payload types                                          |
+| `ai.types.ts`            | AI actions, languages, tones, model tiers, BYOK providers/secrets                                                                                        |
+| `artifact.types.ts`      | Flashcards, quizzes, summaries, mind maps, SM-2 study progress                                                                                           |
+| `feature-flags.types.ts` | Feature flag keys and DTO                                                                                                                                |
+| `anonymous.types.ts`     | Anonymous-user limits                                                                                                                                    |
+| `catalog.types.ts`       | Open-tier catalog model/alert statuses and DTOs                                                                                                          |
+| `conversation.types.ts`  | Copilot conversation list/transcript shapes, `CONVERSATION_TITLE_MAX`, title normalization, `AGENT_CONVERSATION_NOT_FOUND_CODE`, `AGENT_TURN_ERROR_CODE` |
 
 ## Constants & enums
 

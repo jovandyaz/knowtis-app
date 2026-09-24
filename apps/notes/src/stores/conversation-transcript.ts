@@ -17,12 +17,16 @@ function isDisplayedStopReason(
   return reason !== null && DISPLAYED_STOP_REASONS.includes(reason);
 }
 
+// Each stored leg of a turn ends with the only row that carries a stop reason:
+// the reply before a proposal and the reply after the decision share the turn
+// id but streamed as separate bubbles.
 function continuesTurn(
   previous: ConversationTranscriptMessage | undefined,
   row: ConversationTranscriptMessage
 ): boolean {
   return (
     previous?.role === ASSISTANT_ROLE &&
+    previous.stopReason === null &&
     row.role === ASSISTANT_ROLE &&
     row.turnId !== null &&
     row.turnId === previous.turnId

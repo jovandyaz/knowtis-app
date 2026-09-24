@@ -33,4 +33,12 @@ describe('AgentErrors', () => {
       message: 'Conversation not found',
     });
   });
+
+  it('builds the turn errors under the codes the client matches', () => {
+    expect(AgentErrors.turnIdReused().code).toBe('TURN_ID_REUSED');
+    expect(AgentErrors.turnInProgress().code).toBe('TURN_IN_PROGRESS');
+    expect(AgentErrors.turnClaimUnavailable().code).toBe(
+      'TURN_CLAIM_UNAVAILABLE'
+    );
+  });
 });

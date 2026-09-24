@@ -61,6 +61,10 @@ export class ConcurrencySlotTracker {
     }
   }
 
+  isActive(slotId: string): boolean {
+    return this.controllers.has(slotId);
+  }
+
   hasActiveSlots(clientId: string): boolean {
     return (this.clientSlots.get(clientId)?.size ?? 0) > 0;
   }

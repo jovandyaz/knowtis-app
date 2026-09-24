@@ -8,11 +8,14 @@ import { Test } from '@nestjs/testing';
 import { io, type Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { EnvConfig } from '../../config/env.config';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
+import { TurnClaimService } from './infrastructure/turn-claim/turn-claim.service';
+import { createInMemoryClaimRedis } from './testing/create-in-memory-claim-redis';
 
 const JWT_SECRET = 'agent-gateway-ack-spec';
 const HOST = '127.0.0.1';
@@ -38,6 +41,12 @@ describe('AgentGateway acknowledgements over socket.io', () => {
         { provide: RunAgentTurnHandler, useValue: { execute } },
         { provide: ApproveMutationHandler, useValue: { execute: vi.fn() } },
         { provide: RejectMutationHandler, useValue: { execute: vi.fn() } },
+        {
+          provide: TurnClaimService,
+          useFactory: (config: ConfigService<EnvConfig, true>) =>
+            new TurnClaimService(createInMemoryClaimRedis().provider, config),
+          inject: [ConfigService],
+        },
         { provide: JwtService, useValue: jwtService },
         {
           provide: FeatureFlagsService,

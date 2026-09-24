@@ -6,6 +6,9 @@ import { NoteErrors } from '../../notes/domain/errors/note.errors';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { ApproveMutationHandler } from './approve-mutation.handler';
 
+const TURN = '55555555-5555-4555-8555-555555555555';
+const CONVERSATION = '11111111-1111-4111-8111-111111111111';
+
 function createProposal() {
   const r = ProposedMutation.create({
     id: 'p1',
@@ -53,6 +56,8 @@ function deps(over: Record<string, unknown> = {}) {
     store: {
       take: vi.fn().mockResolvedValue({
         userId: 'u1',
+        turnId: TURN,
+        conversationId: CONVERSATION,
         mutation: createProposal(),
       }),
       save: vi.fn(),
@@ -105,6 +110,15 @@ describe('ApproveMutationHandler', () => {
     });
   });
 
+  it('returns the turn and conversation that proposed the change, so the resume continues them', async () => {
+    const d = deps();
+
+    const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
+
+    expect(r.isOk() && r.value.turnId).toBe(TURN);
+    expect(r.isOk() && r.value.conversationId).toBe(CONVERSATION);
+  });
+
   it('fails when the proposal is missing/expired', async () => {
     const d = deps({
       store: { take: vi.fn().mockResolvedValue(null), save: vi.fn() },
@@ -113,6 +127,7 @@ describe('ApproveMutationHandler', () => {
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
+      expect(r.error).not.toHaveProperty('turnId');
     }
   });
 
@@ -126,6 +141,7 @@ describe('ApproveMutationHandler', () => {
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_PERMISSION_DENIED');
+      expect(r.error.turnId).toBe(TURN);
     }
   });
 
@@ -134,6 +150,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: updateProposal('2024-02-01T00:00:00.000Z'),
         }),
         save: vi.fn(),
@@ -161,6 +179,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: updateProposal(),
         }),
         save: vi.fn(),
@@ -197,6 +217,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: updateProposal(),
         }),
         save: vi.fn(),
@@ -230,6 +252,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: updateProposal(),
         }),
         save: vi.fn(),
@@ -275,6 +299,7 @@ describe('ApproveMutationHandler', () => {
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
       expect(r.error.message).toContain('title too long');
+      expect(r.error.turnId).toBe(TURN);
     }
   });
 
@@ -283,6 +308,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -316,6 +343,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -334,6 +363,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -366,6 +397,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -397,6 +430,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: shareProposal(),
         }),
         save: vi.fn(),
@@ -434,6 +469,8 @@ describe('ApproveMutationHandler', () => {
       store: {
         take: vi.fn().mockResolvedValue({
           userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
           mutation: shareProposal(),
         }),
         save: vi.fn(),

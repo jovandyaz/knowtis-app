@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "conversation_messages_turn_user_uniq" ON "conversation_messages" USING btree ("conversation_id","turn_id") WHERE "conversation_messages"."role" = 'user' AND "conversation_messages"."turn_id" IS NOT NULL;
