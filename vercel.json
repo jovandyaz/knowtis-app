@@ -24,11 +24,11 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "img-src 'self' data: blob: https://iy4r311mpkfdcnup.public.blob.vercel-storage.com"
+          "value": "img-src 'self' data: blob: https://iy4r311mpkfdcnup.public.blob.vercel-storage.com; upgrade-insecure-requests"
         },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://iy4r311mpkfdcnup.public.blob.vercel-storage.com; font-src 'self' data:; connect-src 'self' https://api.knowtis.app wss://api.knowtis.app; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests; report-uri https://api.knowtis.app/api/v1/csp-reports; report-to csp"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://iy4r311mpkfdcnup.public.blob.vercel-storage.com; font-src 'self' data:; connect-src 'self' https://api.knowtis.app wss://api.knowtis.app; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'; report-uri https://api.knowtis.app/api/v1/csp-reports; report-to csp"
         },
         {
           "key": "Reporting-Endpoints",
