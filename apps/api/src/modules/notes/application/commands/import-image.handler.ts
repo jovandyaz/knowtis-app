@@ -4,13 +4,12 @@ import { err, ok, type Result } from 'neverthrow';
 import { isStoredImageUrl } from '@knowtis/shared-util';
 
 import { registrableHostOf } from '../../../../core/logging/registrable-host';
+import type { NoteDomainError } from '../../domain/errors/note.errors';
+import { NOTE_REPOSITORY, type NoteRepository } from '../../domain/ports';
 import {
-  NOTE_REPOSITORY,
   PERMISSION_REPOSITORY,
-  type NoteDomainError,
-  type NoteRepository,
   type PermissionRepository,
-} from '../../domain';
+} from '../../domain/ports/permission.repository';
 import {
   imageImportError,
   ImageImportErrorCodes,
