@@ -250,6 +250,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Stamp the release
+        run: printf '%s\n' "$GITHUB_SHA" > REVISION
+
       - name: Deploy to Railway
         run: sh .github/scripts/railway-deploy.sh "$RAILWAY_API_SERVICE_ID"
 

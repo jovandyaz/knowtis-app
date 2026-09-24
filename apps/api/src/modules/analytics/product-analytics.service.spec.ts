@@ -61,7 +61,7 @@ describe('ProductAnalytics', () => {
       NODE_ENV: 'production',
       POSTHOG_PROJECT_TOKEN: 'project-token',
       POSTHOG_HOST: 'https://us.i.posthog.com',
-      RAILWAY_GIT_COMMIT_SHA: 'sha-123',
+      RELEASE_SHA: 'sha-123',
     });
 
     analytics.capture({
@@ -106,7 +106,7 @@ describe('ProductAnalytics', () => {
       NODE_ENV: 'production',
       POSTHOG_PROJECT_TOKEN: 'project-token',
       POSTHOG_HOST: 'https://us.i.posthog.com',
-      RAILWAY_GIT_COMMIT_SHA: 'sha-allowlist',
+      RELEASE_SHA: 'sha-allowlist',
     });
     const properties = {
       source: 'api' as const,

@@ -356,12 +356,12 @@ describe('validateEnv', () => {
       ...baseEnv,
       POSTHOG_PROJECT_TOKEN: 'phc_project_token',
       POSTHOG_HOST: 'https://eu.i.posthog.com',
-      RAILWAY_GIT_COMMIT_SHA: 'sha-123',
+      RELEASE_SHA: 'sha-123',
     });
 
     expect(env.POSTHOG_PROJECT_TOKEN).toBe('phc_project_token');
     expect(env.POSTHOG_HOST).toBe('https://eu.i.posthog.com');
-    expect(env.RAILWAY_GIT_COMMIT_SHA).toBe('sha-123');
+    expect(env.RELEASE_SHA).toBe('sha-123');
   });
 
   it('rejects a plain-HTTP PostHog host so the project token never travels in cleartext', () => {

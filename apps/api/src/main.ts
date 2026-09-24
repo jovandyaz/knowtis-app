@@ -121,6 +121,13 @@ async function bootstrap() {
     `🔌 WebSocket available at: ws://localhost:${port}/collaboration`,
     'Bootstrap'
   );
+  Logger.log(
+    {
+      event: 'api.started',
+      release: configService.get<string>('RELEASE_SHA') ?? null,
+    },
+    'Bootstrap'
+  );
   if (isDevelopment) {
     Logger.log(
       `📚 Swagger docs at: http://localhost:${port}/api/docs`,

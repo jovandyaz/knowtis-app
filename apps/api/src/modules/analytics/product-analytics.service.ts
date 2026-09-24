@@ -37,7 +37,7 @@ const PERSON_PROPERTY_KEYS = [
   'is_internal',
 ] as const satisfies readonly (keyof ServerPersonProperties)[];
 
-/** Build stamp when Railway does not inject a commit SHA (local runs). */
+/** Build stamp when the deploy wrote no `REVISION` (local runs). */
 const UNKNOWN_APP_VERSION = '0.1.0';
 
 @Injectable()
@@ -50,8 +50,7 @@ export class ProductAnalytics implements OnApplicationShutdown {
   ) {
     this.commonProperties = {
       environment: configService.get('NODE_ENV'),
-      app_version:
-        configService.get('RAILWAY_GIT_COMMIT_SHA') ?? UNKNOWN_APP_VERSION,
+      app_version: configService.get('RELEASE_SHA') ?? UNKNOWN_APP_VERSION,
     };
   }
 

@@ -96,7 +96,7 @@ const envSchemaBase = z.object({
   POSTHOG_HOST: z
     .url({ protocol: /^https$/ })
     .default('https://us.i.posthog.com'),
-  RAILWAY_GIT_COMMIT_SHA: z.string().optional(),
+  RELEASE_SHA: z.string().optional(),
   BYOK_ENCRYPTION_KEY: z
     .string()
     .refine(
