@@ -2252,6 +2252,60 @@ describe('AgentClient – resending a turn after the transport drops', () => {
     expect(client.canResume()).toBe(true);
   });
 
+  it('sends one message on the fresh socket when the auth replay races the reconnect resend', async () => {
+    let token = 'stale-token';
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(async () => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+    const fresh = createFakeSocket();
+    vi.mocked(io)
+      .mockReturnValueOnce(fake.socket as never)
+      .mockReturnValue(fresh.socket as never);
+    client.sendMessage('hi', callbacksOf());
+    receiptOf(lastEmit())(null);
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    fake.socket.connected = false;
+    fake.trigger('disconnect', 'transport close');
+    await flush();
+    fresh.socket.connected = true;
+    fresh.trigger('connect');
+
+    expect(
+      (fresh.socket.emit.mock.calls as unknown[][]).filter(
+        (call) => call[0] === 'agent:message'
+      )
+    ).toHaveLength(1);
+  });
+
+  it('sends one message after the reconnect when a backoff resend was waiting', () => {
+    vi.useFakeTimers();
+    try {
+      const handle = client.sendMessage('hi', callbacksOf());
+      receiptOf(lastEmit())(null);
+      fake.trigger('agent:error', {
+        code: AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+        message: 'still running',
+        turnId: handle.turnId,
+      });
+
+      fake.socket.connected = false;
+      fake.trigger('disconnect', 'transport close');
+      vi.advanceTimersByTime(1_000);
+      fake.socket.connected = true;
+      fake.trigger('connect');
+
+      expect(sentMessages()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('leaves an unacknowledged message to its receipt deadline', () => {
     client.sendMessage('hi', callbacksOf());
 

@@ -28,9 +28,9 @@ const SCROLLER_STYLE = {
   scrollbarGutter: 'stable both-edges',
 } as const;
 
-// `StickToBottom.Content` renders the same two elements but takes no
-// attributes for the one that scrolls, which has to carry the log's role,
-// name and focus.
+// `StickToBottom.Content` renders the same two elements, but it takes only a
+// class name for the one that scrolls, and that element has to carry the
+// log's role, name and focus.
 export const ConversationContent = ({
   className,
   logProps,

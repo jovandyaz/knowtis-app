@@ -461,7 +461,8 @@ export class AgentClient {
 
   // The server aborts a turn whose socket drops, and nothing it sends reaches
   // the new connection, so without a resend the dock would wait for the
-  // watchdog. The same id makes the server answer for the turn, not rerun it.
+  // watchdog. The same id makes the server answer for the turn, not rerun it,
+  // and this resend replaces any backoff resend so only one goes out.
   private holdForReconnect(): void {
     const request = this.pending;
     if (
@@ -470,6 +471,7 @@ export class AgentClient {
       !this.resentOnReconnect
     ) {
       this.reconnectResend = request;
+      this.cancelTurnResend();
     }
   }
 
@@ -520,10 +522,15 @@ export class AgentClient {
     this.setupEventListeners(this.socket);
   }
 
-  /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
+  /**
+   * Detaches the socket before closing it, so its `disconnect` event is
+   * recognisable as ours. A closed socket never reconnects, so a resend held
+   * for its reconnect goes with it.
+   */
   private teardownSocket(): void {
     const socket = this.socket;
     this.socket = null;
+    this.reconnectResend = undefined;
     socket?.disconnect();
   }
 
