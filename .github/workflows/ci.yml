@@ -188,6 +188,13 @@ jobs:
       - name: Build
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
 
+      - name: Check the commit is stamped into the bundle
+        run: |
+          grep -rqF "$GITHUB_SHA" .vercel/output/static/assets || {
+            echo "::error::GITHUB_SHA is missing from the notes bundle, so index.html would not change and returning visitors would keep stale headers."
+            exit 1
+          }
+
       - name: Deploy
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
