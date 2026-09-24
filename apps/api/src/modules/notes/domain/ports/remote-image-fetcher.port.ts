@@ -3,7 +3,7 @@ import type { Result } from 'neverthrow';
 import { NoteErrorCodes } from '../errors/note.errors';
 import type { ImageMimeType } from '../image-type';
 
-/** Every way an image import from a URL fails; the API answers each with 422 and the code. */
+/** Every way an image import from a URL fails. The API answers 422, folding the network-level codes into `fetch_failed`. */
 export const IMAGE_IMPORT_ERROR_CODES = [
   'blocked_address',
   'too_large',

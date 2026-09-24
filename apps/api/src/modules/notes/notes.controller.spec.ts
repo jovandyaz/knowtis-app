@@ -1,15 +1,20 @@
+import { createServer, type Server } from 'node:http';
+
 import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
 import { PoliciesGuard } from '@jovandyaz/permissions-nestjs';
-import type {
-  ExecutionContext,
-  INestApplication,
-  Provider,
+import {
+  Logger,
+  type ExecutionContext,
+  type INestApplication,
+  type Provider,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { ok } from 'neverthrow';
+import { I18nValidationPipe } from 'nestjs-i18n';
+import { err, ok } from 'neverthrow';
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -19,6 +24,7 @@ import {
 } from 'vitest';
 
 import { SUPERTAGS } from '@knowtis/shared-types';
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import {
   CreateNoteHandler,
@@ -33,6 +39,7 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { ImportImageHandler } from './application/commands/import-image.handler';
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
 import { NoteImageStoreService } from './application/services/note-image-store.service';
@@ -44,7 +51,15 @@ import {
 import { MAX_IMAGE_BYTES } from './domain/image-type';
 import { IMAGE_STORAGE } from './domain/ports/image-storage.port';
 import { NOTE_IMAGE_REPOSITORY } from './domain/ports/note-image.repository';
+import {
+  imageImportError,
+  REMOTE_IMAGE_FETCHER,
+  type ImageImportErrorCode,
+  type RemoteImageFetcher,
+} from './domain/ports/remote-image-fetcher.port';
+import { IMPORT_URL_MAX_LENGTH } from './dto/import-image.dto';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
+import { SafeRemoteImageFetcher } from './infrastructure/remote-image/safe-remote-image-fetcher';
 import { NotesController } from './notes.controller';
 
 const noteEntity: NoteEntity = {
@@ -74,6 +89,7 @@ function createController(overrides: Partial<Record<string, unknown>> = {}) {
     handler() as never,
     handler() as never,
     (overrides['update'] ?? handler()) as never,
+    handler() as never,
     handler() as never,
     handler() as never,
     handler() as never,
@@ -134,6 +150,7 @@ const CONTROLLER_HANDLERS = [
   GetCollaboratorsHandler,
   GetNoteByTokenHandler,
   UploadImageHandler,
+  ImportImageHandler,
   RotateShareLinkHandler,
 ];
 
@@ -166,6 +183,14 @@ async function startNotesApp(providers: Provider[]): Promise<INestApplication> {
     .compile();
 
   const app = moduleRef.createNestApplication();
+  app.useGlobalPipes(
+    new I18nValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    })
+  );
   await app.listen(0);
   return app;
 }
@@ -322,5 +347,223 @@ describe('POST /notes/:id/images', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({ code: 'unsupported_type' });
     expect(storage.upload).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /notes/:id/images/import', () => {
+  const LOOPBACK = '127.0.0.1';
+  const BLOB = {
+    url: `https://${STORED_IMAGE_HOST}/notes/n1/imported-abc.png`,
+    pathname: 'notes/n1/imported-abc.png',
+  };
+  let app: INestApplication;
+  let base: string;
+  let imageServer: Server;
+  let imageBase: string;
+  let imageRequests = 0;
+  const storage = { upload: vi.fn(), delete: vi.fn() };
+  const imageRepo = {
+    create: vi
+      .fn()
+      .mockImplementation((row) => Promise.resolve({ id: 'img1', ...row })),
+    findPathnamesByNote: vi.fn(),
+  };
+  const safeFetcher: RemoteImageFetcher = new SafeRemoteImageFetcher({
+    allowedIps: [LOOPBACK],
+    timeoutMs: 3_000,
+  });
+  const fetcher = { fetch: vi.fn<RemoteImageFetcher['fetch']>() };
+
+  beforeAll(async () => {
+    imageServer = createServer((request, response) => {
+      imageRequests += 1;
+      const body = request.url?.startsWith('/cat.png')
+        ? PNG_BYTES
+        : 'not an image';
+      response.writeHead(200, { 'Content-Type': 'image/png' }).end(body);
+    });
+    await new Promise<void>((resolve) =>
+      imageServer.listen(0, LOOPBACK, resolve)
+    );
+    const address = imageServer.address();
+    imageBase = `http://${LOOPBACK}:${typeof address === 'object' && address ? address.port : 0}`;
+
+    app = await startNotesApp([
+      ImportImageHandler,
+      NoteImageStoreService,
+      {
+        provide: NOTE_REPOSITORY,
+        useValue: {
+          findById: vi
+            .fn()
+            .mockResolvedValue({ id: noteEntity.id, ownerId: signedInUser.id }),
+        },
+      },
+      { provide: PERMISSION_REPOSITORY, useValue: { hasAccess: vi.fn() } },
+      { provide: IMAGE_STORAGE, useValue: storage },
+      { provide: NOTE_IMAGE_REPOSITORY, useValue: imageRepo },
+      { provide: REMOTE_IMAGE_FETCHER, useValue: fetcher },
+    ]);
+    base = await app.getUrl();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await new Promise((resolve) => imageServer.close(resolve));
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    imageRequests = 0;
+    storage.upload.mockResolvedValue(BLOB);
+    fetcher.fetch.mockImplementation((url, signal) =>
+      safeFetcher.fetch(url, signal)
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function importImage(body: unknown) {
+    return fetch(`${base}/notes/${noteEntity.id}/images/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function longUrl(length: number) {
+    const prefix = `${imageBase}/cat.png?pad=`;
+    return prefix + 'a'.repeat(length - prefix.length);
+  }
+
+  it('copies the image into the blob store and answers only its id, url and dimensions', async () => {
+    const response = await importImage({ url: `${imageBase}/cat.png` });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: 'img1',
+      url: BLOB.url,
+      width: null,
+      height: null,
+    });
+    expect(imageRequests).toBe(1);
+    expect(storage.upload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: 'imported.png',
+        contentType: 'image/png',
+      })
+    );
+  });
+
+  it('answers a URL already in the blob store with a null id, fetching nothing', async () => {
+    const stored = `https://${STORED_IMAGE_HOST}/notes/n1/photo-abc.png`;
+
+    const response = await importImage({ url: stored });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: null,
+      url: stored,
+      width: null,
+      height: null,
+    });
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an ftp URL', 'ftp://images.example.org/cat.png'],
+    ['a javascript URL', 'javascript:alert(1)'],
+    ['a relative URL', '/cat.png'],
+    ['a URL without a scheme', 'images.example.org/cat.png'],
+    ['a host without a top-level domain', 'http://localhost/cat.png'],
+    ['text that is no URL', 'not a url'],
+  ])('refuses %s with 400 before the handler runs', async (_label, url) => {
+    const response = await importImage({ url });
+
+    expect(response.status).toBe(400);
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body without a url with 400', async () => {
+    const response = await importImage({});
+
+    expect(response.status).toBe(400);
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+  });
+
+  it(`refuses a URL longer than ${IMPORT_URL_MAX_LENGTH} characters with 400`, async () => {
+    const response = await importImage({
+      url: longUrl(IMPORT_URL_MAX_LENGTH + 1),
+    });
+
+    expect(response.status).toBe(400);
+    expect(fetcher.fetch).not.toHaveBeenCalled();
+  });
+
+  it(`imports from a URL of exactly ${IMPORT_URL_MAX_LENGTH} characters`, async () => {
+    const response = await importImage({ url: longUrl(IMPORT_URL_MAX_LENGTH) });
+
+    expect(response.status).toBe(201);
+  });
+
+  it.each<[ImageImportErrorCode, ImageImportErrorCode]>([
+    ['blocked_address', 'fetch_failed'],
+    ['timeout', 'fetch_failed'],
+    ['fetch_failed', 'fetch_failed'],
+    ['too_large', 'too_large'],
+    ['unsupported_type', 'unsupported_type'],
+  ])(
+    'answers the refusal %s with 422 %s and that code’s fixed message',
+    async (refusal, answered) => {
+      fetcher.fetch.mockResolvedValue(err(imageImportError(refusal)));
+
+      const response = await importImage({
+        url: 'https://images.example.org/cat.png',
+      });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        statusCode: 422,
+        error: answered,
+        code: answered,
+        message: imageImportError(answered).message,
+      });
+      expect(storage.upload).not.toHaveBeenCalled();
+    }
+  );
+
+  it('answers a URL carrying credentials with 422 fetch_failed, never connecting', async () => {
+    const url = `${imageBase}/cat.png`.replace('://', '://user:pass@');
+
+    const response = await importImage({ url });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: 'fetch_failed' });
+    expect(imageRequests).toBe(0);
+  });
+
+  it('answers bytes that are not an image, whatever their label, with 422 unsupported_type', async () => {
+    const response = await importImage({ url: `${imageBase}/text.png` });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: 'unsupported_type' });
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it('answers a URL the validator accepts but WHATWG rejects with 422 fetch_failed', async () => {
+    const response = await importImage({ url: 'http://xn--a.com/' });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: 'fetch_failed' });
+  });
+
+  it('allows 20 imports per user per minute', () => {
+    const route = NotesController.prototype.importImage;
+
+    expect(Reflect.getMetadata('THROTTLER:LIMITdefault', route)).toBe(20);
+    expect(Reflect.getMetadata('THROTTLER:TTLdefault', route)).toBe(60_000);
   });
 });

@@ -1,4 +1,3 @@
-import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -12,6 +11,7 @@ import {
   type PermissionRepository,
 } from '../../domain';
 import { sniffImageType } from '../../domain/image-type';
+import { authorizeNoteWrite } from '../authorize-note-write';
 import { NoteImageStoreService } from '../services/note-image-store.service';
 
 export interface UploadImageInput {
@@ -35,21 +35,14 @@ export class UploadImageHandler {
   async execute(
     input: UploadImageInput
   ): Promise<Result<NoteImage, NoteDomainError>> {
-    const note = await this.noteRepository.findById(input.noteId);
-    if (!note) {
-      return err(NoteErrors.noteNotFound(input.noteId));
-    }
-
-    const userId = UserId.fromTrusted(input.userId);
-    const canWrite =
-      note.ownerId === input.userId ||
-      (await this.permissionRepository.hasAccess(
-        input.noteId,
-        userId,
-        'editor'
-      ));
-    if (!canWrite) {
-      return err(NoteErrors.permissionDenied('No write access to this note'));
+    const access = await authorizeNoteWrite(
+      this.noteRepository,
+      this.permissionRepository,
+      input.noteId,
+      input.userId
+    );
+    if (access.isErr()) {
+      return err(access.error);
     }
 
     const mimeType = sniffImageType(input.data);

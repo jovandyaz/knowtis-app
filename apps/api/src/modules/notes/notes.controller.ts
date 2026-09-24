@@ -70,20 +70,33 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { ImportImageHandler } from './application/commands/import-image.handler';
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
-import { toNoteView } from './domain';
+import { toNoteView, type NoteDomainError } from './domain';
 import { MAX_IMAGE_BYTES } from './domain/image-type';
+import {
+  IMAGE_IMPORT_ERROR_CODES,
+  imageImportError,
+  type ImageImportError,
+  type ImageImportErrorCode,
+} from './domain/ports/remote-image-fetcher.port';
 import {
   CreateNoteDto,
   NotesQueryDto,
   ShareNoteDto,
   UpdateNoteDto,
 } from './dto';
+import { IMPORT_URL_MAX_LENGTH, ImportImageDto } from './dto/import-image.dto';
 import { UploadImageDto } from './dto/upload-image.dto';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
 import { sanitizeFilename } from './infrastructure/filename.util';
-import { NOTE_ERROR_STATUS_MAP, NOTE_UPDATE_THROTTLE } from './notes.constants';
+import {
+  CLIENT_IMAGE_IMPORT_ERROR_CODE,
+  IMAGE_IMPORT_THROTTLE,
+  NOTE_ERROR_STATUS_MAP,
+  NOTE_UPDATE_THROTTLE,
+} from './notes.constants';
 
 const notePersonSchema = {
   type: 'object' as const,
@@ -138,6 +151,29 @@ const noteProperties = {
 
 const noteSchema = { type: 'object' as const, properties: noteProperties };
 
+const noteImageProperties = {
+  id: { type: 'string', format: 'uuid' },
+  url: {
+    type: 'string',
+    example:
+      'https://<store>.public.blob.vercel-storage.com/notes/<id>/photo-abc.webp',
+  },
+  width: { type: 'integer', nullable: true },
+  height: { type: 'integer', nullable: true },
+};
+
+function isImageImportErrorCode(code: string): code is ImageImportErrorCode {
+  return IMAGE_IMPORT_ERROR_CODES.some((known) => known === code);
+}
+
+function toClientImportError(
+  error: NoteDomainError | ImageImportError
+): NoteDomainError | ImageImportError {
+  return isImageImportErrorCode(error.code)
+    ? imageImportError(CLIENT_IMAGE_IMPORT_ERROR_CODE[error.code])
+    : error;
+}
+
 const noteWithOwnerSchema = {
   type: 'object' as const,
   properties: {
@@ -178,6 +214,7 @@ export class NotesController {
     private readonly getCollaboratorsHandler: GetCollaboratorsHandler,
     private readonly getNoteByTokenHandler: GetNoteByTokenHandler,
     private readonly uploadImageHandler: UploadImageHandler,
+    private readonly importImageHandler: ImportImageHandler,
     private readonly rotateShareLinkHandler: RotateShareLinkHandler
   ) {}
 
@@ -607,19 +644,7 @@ export class NotesController {
   @ApiResponse({
     status: 201,
     description: 'Uploaded image metadata',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        url: {
-          type: 'string',
-          example:
-            'https://<store>.public.blob.vercel-storage.com/notes/<id>/photo-abc.webp',
-        },
-        width: { type: 'integer', nullable: true },
-        height: { type: 'integer', nullable: true },
-      },
-    },
+    schema: { type: 'object', properties: noteImageProperties },
   })
   @ApiResponse({
     status: 422,
@@ -660,6 +685,62 @@ export class NotesController {
       ...(dto.height !== undefined && { height: dto.height }),
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+  }
+
+  @ApiOperation({
+    summary: 'Import an image into a note from a URL',
+    description: `Copies the image at an http(s) URL into the note's blob store and answers with the stored copy, as the upload does. The server sends no cookie or credential, refuses private, loopback and reserved addresses at every hop, follows at most 3 redirects, gives up after 10 s or past ${MAX_IMAGE_BYTES / BYTES_PER_MEGABYTE} MB, and types the image by its bytes. A URL already in the app's blob store is answered as it is, with a null id, and nothing is fetched.`,
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note',
+  })
+  @ApiBody({ type: ImportImageDto })
+  @ApiResponse({
+    status: 201,
+    description:
+      'The stored copy; `id` is null when the URL was already in the app blob store',
+    schema: {
+      type: 'object',
+      properties: {
+        ...noteImageProperties,
+        id: { type: 'string', format: 'uuid', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 422,
+    description: `too_large: the image is larger than ${MAX_IMAGE_BYTES / BYTES_PER_MEGABYTE} MB · unsupported_type: the URL does not serve a PNG, JPEG, GIF or WebP image · fetch_failed: the image could not be fetched, whether the address is refused, unreachable, answers other than 200 or too slowly`,
+  })
+  @ApiResponse({
+    status: 429,
+    description: `More than ${IMAGE_IMPORT_THROTTLE.default.limit} imports per minute`,
+  })
+  @ApiBadRequest(
+    `url missing, not an absolute http(s) URL, or longer than ${IMPORT_URL_MAX_LENGTH} characters`
+  )
+  @ApiAuthErrors('insufficient permissions on this note')
+  @ApiNotFound('note does not exist')
+  @Post(':id/images/import')
+  @Throttle(IMAGE_IMPORT_THROTTLE)
+  @RequirePermission('update', SUBJECTS.Note)
+  @RequireMcpScope(MCP_SCOPES.WRITE)
+  async importImage(
+    @Param('id', ParseUUIDPipe) noteId: string,
+    @Body() dto: ImportImageDto,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.importImageHandler.execute({
+      noteId,
+      userId: user.id,
+      url: dto.url,
+    });
+    return unwrapOrThrow(
+      result.mapErr(toClientImportError),
+      NOTE_ERROR_STATUS_MAP
+    );
   }
 
   @ApiOperation({

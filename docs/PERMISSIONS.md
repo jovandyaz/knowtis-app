@@ -253,17 +253,27 @@ All endpoints are under `POST|GET|PATCH|DELETE /notes/...` and require `JwtAuthG
 
 ### Note CRUD
 
-| Method   | Path                 | Auth | `@RequirePermission` | Description                                                                                        |
-| -------- | -------------------- | ---- | -------------------- | -------------------------------------------------------------------------------------------------- |
-| `GET`    | `/notes`             | JWT  | `read`               | List accessible notes (owned + shared)                                                             |
-| `GET`    | `/notes/supertags`   | JWT  | `read`               | Static note-type catalog (field descriptors per supertag)                                          |
-| `GET`    | `/notes/counts`      | JWT  | `read`               | Accessible note counts per PARA bucket and supertag                                                |
-| `GET`    | `/notes/:id`         | JWT  | `read`               | Get single note with access level                                                                  |
-| `POST`   | `/notes`             | JWT  | `create`             | Create note (also passes `AnonymousNoteLimitGuard`)                                                |
-| `PATCH`  | `/notes/:id`         | JWT  | `update`             | Update note (owner: all fields; editor: title+content only)                                        |
-| `DELETE` | `/notes/:id`         | JWT  | `delete`             | **Soft-delete** note (owner only): sets `deleted_at`, `204`                                        |
-| `POST`   | `/notes/:id/restore` | JWT  | `delete`             | Restore a soft-deleted note (owner only)                                                           |
-| `POST`   | `/notes/:id/images`  | JWT  | `update`             | Upload an image (`multipart/form-data`, ≤ 10 MB, png/jpeg/gif/webp); needs edit access to the note |
+| Method   | Path                       | Auth | `@RequirePermission` | Description                                                                                                                                                                                                                                                                                                                       |
+| -------- | -------------------------- | ---- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/notes`                   | JWT  | `read`               | List accessible notes (owned + shared)                                                                                                                                                                                                                                                                                            |
+| `GET`    | `/notes/supertags`         | JWT  | `read`               | Static note-type catalog (field descriptors per supertag)                                                                                                                                                                                                                                                                         |
+| `GET`    | `/notes/counts`            | JWT  | `read`               | Accessible note counts per PARA bucket and supertag                                                                                                                                                                                                                                                                               |
+| `GET`    | `/notes/:id`               | JWT  | `read`               | Get single note with access level                                                                                                                                                                                                                                                                                                 |
+| `POST`   | `/notes`                   | JWT  | `create`             | Create note (also passes `AnonymousNoteLimitGuard`)                                                                                                                                                                                                                                                                               |
+| `PATCH`  | `/notes/:id`               | JWT  | `update`             | Update note (owner: all fields; editor: title+content only)                                                                                                                                                                                                                                                                       |
+| `DELETE` | `/notes/:id`               | JWT  | `delete`             | **Soft-delete** note (owner only): sets `deleted_at`, `204`                                                                                                                                                                                                                                                                       |
+| `POST`   | `/notes/:id/restore`       | JWT  | `delete`             | Restore a soft-deleted note (owner only)                                                                                                                                                                                                                                                                                          |
+| `POST`   | `/notes/:id/images`        | JWT  | `update`             | Upload an image (`multipart/form-data`, ≤ 10 MB, png/jpeg/gif/webp); needs edit access to the note                                                                                                                                                                                                                                |
+| `POST`   | `/notes/:id/images/import` | JWT  | `update`             | Copy the image at an http(s) URL (`{ url }`, ≤ 2048 chars) into the note's blob store; needs edit access to the note, 20 per minute. Same answer as the upload; a URL already in the blob store comes back as it is with `id: null`. Refusals are `422` with `code` `too_large`, `unsupported_type` or `fetch_failed` (see below) |
+
+#### Importing an image from a URL
+
+`POST /notes/:id/images/import` makes the server fetch a URL the caller chose, so it is built against server-side request forgery ([OWASP SSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)):
+
+- `request-filtering-agent` checks the address every hop resolves to when its socket connects, which also defeats DNS rebinding, and refuses private, loopback, link-local, reserved and cloud-metadata addresses. `IMAGE_IMPORT_ALLOWED_IPS` lets listed addresses through for a local or E2E harness; production refuses to boot with it set.
+- At most 3 redirects, each back through the same check; http(s) only; no URL credentials; no cookie or auth header sent. One 10 s budget for the whole import, and the body stops at 10 MB.
+- The type comes from the bytes (PNG, JPEG, GIF or WebP; never SVG), never from the remote `Content-Type`. Nothing of the response reaches the client but the stored copy's URL, so the route is no proxy for reading.
+- Refusals stay generic: a blocked address, a network error, a non-200 answer and a timeout all answer `fetch_failed`, so the answers cannot map the server's network. The API logs each refusal as a WARN `notes.image_import.rejected` with the precise code (`blocked_address`, `fetch_failed`, `timeout`, `too_large`, `unsupported_type`), the host reduced to its last two labels, the note and the user, never the full URL. Filter them in Railway with `@event:notes.image_import.rejected`.
 
 #### Update Note Fields
 
@@ -450,15 +460,16 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Infrastructure
 
-| File                                                                                     | Description                                                                       |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note.repository.ts`       | `NoteRepository` facade; delegates to the read, write and permission repositories |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-read.repository.ts`  | Queries: `findById`, `findAccessibleByUser`, `findByShareToken`, counts, search   |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-write.repository.ts` | `create`, `update`, soft `delete`, owner-only `restore`                           |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-permission.repository.ts` | `note_permissions` CRUD and `hasAccess()`                                         |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-tag.repository.ts`        | Tags                                                                              |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-image.repository.ts` | Note image rows (`POST /notes/:id/images`)                                        |
-| `apps/api/src/database/schema/notes.schema.ts`                                           | Database schema (notes, permissions)                                              |
+| File                                                                                     | Description                                                                                              |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note.repository.ts`       | `NoteRepository` facade; delegates to the read, write and permission repositories                        |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-read.repository.ts`  | Queries: `findById`, `findAccessibleByUser`, `findByShareToken`, counts, search                          |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-write.repository.ts` | `create`, `update`, soft `delete`, owner-only `restore`                                                  |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-permission.repository.ts` | `note_permissions` CRUD and `hasAccess()`                                                                |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-tag.repository.ts`        | Tags                                                                                                     |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-image.repository.ts` | Note image rows (`POST /notes/:id/images` and `/images/import`)                                          |
+| `apps/api/src/modules/notes/infrastructure/remote-image/safe-remote-image-fetcher.ts`    | Fetches an image to import (`POST /notes/:id/images/import`), refusing private addresses at connect time |
+| `apps/api/src/database/schema/notes.schema.ts`                                           | Database schema (notes, permissions)                                                                     |
 
 ### Application (Handlers)
 

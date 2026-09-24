@@ -65,7 +65,11 @@ describe.runIf(DB_AVAILABLE)(
       const secret = 's1-http-contract-local-secret-32-characters';
       const moduleRef = await Test.createTestingModule({
         imports: [
-          ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+          ConfigModule.forRoot({
+            isGlobal: true,
+            ignoreEnvFile: true,
+            load: [() => ({ IMAGE_IMPORT_ALLOWED_IPS: [] })],
+          }),
           DatabaseModule,
           EventEmitterModule.forRoot(),
           I18nModule.forRoot({
