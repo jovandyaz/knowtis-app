@@ -17,6 +17,8 @@ const PNG = Buffer.from(
 );
 const IMAGE_PATH = '/chart.png';
 const MISSING_IMAGE_PATH = '/missing.png';
+const MISLABELLED_IMAGE_PATH = '/not-an-image.png';
+const NOT_AN_IMAGE = Buffer.from('<html><body>Not an image</body></html>');
 const IMPORTER_USER_AGENT_RE = /^Knowtis-ImageImport\//;
 const PASTED_ALT = 'Quarterly chart';
 const IMPORTED_IMAGE_ID = '6f1d2c3b-4a59-4e8f-9d0c-1b2a3c4d5e6f';
@@ -28,6 +30,29 @@ const IMPORT_FAILED_TOAST_RE =
 
 const noteContentSchema = z.object({ content: z.string() });
 const refusalSchema = z.object({ code: z.string() });
+
+interface RefusedImage {
+  title: string;
+  noteTitle: string;
+  path: string;
+  code: string;
+}
+
+const REFUSED_IMAGES: readonly RefusedImage[] = [
+  {
+    title: 'keeps an image it cannot copy as a link to where it came from',
+    noteTitle: 'Pasted image fallback',
+    path: MISSING_IMAGE_PATH,
+    code: 'fetch_failed',
+  },
+  {
+    title:
+      'keeps a file served as a PNG that is not an image as a link to where it came from',
+    noteTitle: 'Pasted mislabelled image',
+    path: MISLABELLED_IMAGE_PATH,
+    code: 'unsupported_type',
+  },
+];
 
 interface ImageFetch {
   path: string | undefined;
@@ -50,6 +75,10 @@ const test = sharingTest.extend<{ imageOrigin: ImageOrigin }>({
       });
       if (request.url === IMAGE_PATH) {
         response.writeHead(200, { 'content-type': 'image/png' }).end(PNG);
+      } else if (request.url === MISLABELLED_IMAGE_PATH) {
+        response
+          .writeHead(200, { 'content-type': 'image/png' })
+          .end(NOT_AN_IMAGE);
       } else {
         response.writeHead(404).end();
       }
@@ -168,31 +197,30 @@ test.describe('pasted image import', () => {
     }
   });
 
-  test('keeps an image it cannot copy as a link to where it came from', async ({
-    sharing,
-    imageOrigin,
-  }) => {
-    const { owner } = sharing;
-    const note = await owner.createNote('Pasted image fallback');
-    const pastedUrl = imageOrigin.url(MISSING_IMAGE_PATH);
-    const editor = await openNote(owner, note.id);
-    const refusal = owner.page.waitForResponse(
-      (response) =>
-        response.url() === importRoute(note.id) &&
-        response.request().method() === 'POST'
-    );
+  for (const refused of REFUSED_IMAGES) {
+    test(refused.title, async ({ sharing, imageOrigin }) => {
+      const { owner } = sharing;
+      const note = await owner.createNote(refused.noteTitle);
+      const pastedUrl = imageOrigin.url(refused.path);
+      const editor = await openNote(owner, note.id);
+      const refusal = owner.page.waitForResponse(
+        (response) =>
+          response.url() === importRoute(note.id) &&
+          response.request().method() === 'POST'
+      );
 
-    await pasteHtml(editor, `<img src="${pastedUrl}" alt="${PASTED_ALT}">`);
+      await pasteHtml(editor, `<img src="${pastedUrl}" alt="${PASTED_ALT}">`);
 
-    const response = await refusal;
-    expect(response.status()).toBe(REFUSED_STATUS);
-    expect(refusalSchema.parse(await response.json())).toEqual({
-      code: 'fetch_failed',
+      const response = await refusal;
+      expect(response.status()).toBe(REFUSED_STATUS);
+      expect(refusalSchema.parse(await response.json())).toEqual({
+        code: refused.code,
+      });
+      expect(imageOrigin.fetchesByApi(refused.path)).toBe(1);
+      await expect(
+        editor.getByRole('link', { name: PASTED_ALT })
+      ).toHaveAttribute('href', pastedUrl);
+      await expect(owner.page.getByText(IMPORT_FAILED_TOAST_RE)).toBeVisible();
     });
-    expect(imageOrigin.fetchesByApi(MISSING_IMAGE_PATH)).toBe(1);
-    await expect(
-      editor.getByRole('link', { name: PASTED_ALT })
-    ).toHaveAttribute('href', pastedUrl);
-    await expect(owner.page.getByText(IMPORT_FAILED_TOAST_RE)).toBeVisible();
-  });
+  }
 });

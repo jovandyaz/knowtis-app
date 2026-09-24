@@ -69,7 +69,9 @@ Run the target in an isolated worktree because its production build writes `dist
   real API, identified by its importer `User-Agent`. The harness has no Blob store
   token, so storing it fails; the browser then receives the answer an API with a
   Blob store gives, and the note saved by the API must hold the stored URL. An
-  image the API cannot fetch becomes a link to its original URL with one toast.
+  image the API cannot fetch (`fetch_failed`), and a file served as `image/png`
+  whose bytes are not an image (`unsupported_type`), each become a link to their
+  original URL with one toast, with no route stubbed.
 - English desktop and Spanish mobile runs preserve drafts and the mounted editor
   through a temporary access-refetch failure, retry successfully, and check focus,
   dialog bounds and unhandled browser errors.
