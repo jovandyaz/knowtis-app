@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
+
 import { AgentClient } from './agent.client';
 import type { RefreshOutcome } from './token-refresh-policy';
 
@@ -208,7 +210,7 @@ describe('AgentClient', () => {
 
     expect(emit).toHaveBeenLastCalledWith(
       'agent:message',
-      { message: { content: 'fresh' } },
+      { turnId: expect.any(String), message: { content: 'fresh' } },
       expect.any(Function)
     );
     expect(callbacks.onDone).not.toHaveBeenCalled();
@@ -485,7 +487,7 @@ describe('AgentClient', () => {
     expect(onConversation).not.toHaveBeenCalled();
     expect(emit).toHaveBeenLastCalledWith(
       'agent:message',
-      { message: { content: 'again' } },
+      { turnId: expect.any(String), message: { content: 'again' } },
       expect.any(Function)
     );
   });
@@ -502,7 +504,11 @@ describe('AgentClient', () => {
 
     expect(emit).toHaveBeenLastCalledWith(
       'agent:message',
-      { conversationId: 'conv-9', message: { content: 'again' } },
+      {
+        turnId: expect.any(String),
+        conversationId: 'conv-9',
+        message: { content: 'again' },
+      },
       expect.any(Function)
     );
   });
@@ -1371,7 +1377,10 @@ describe('AgentClient – abandoning an unacknowledged request', () => {
     const sentMessage = (second.socket.emit.mock.calls as unknown[][]).find(
       (call) => call[0] === 'agent:message'
     );
-    expect(sentMessage?.[1]).toEqual({ message: { content: 'fresh' } });
+    expect(sentMessage?.[1]).toEqual({
+      turnId: expect.any(String),
+      message: { content: 'fresh' },
+    });
 
     fake.trigger('agent:done', {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
@@ -1451,4 +1460,382 @@ describe('AgentClient – abandoning an unacknowledged request', () => {
       expect.any(Function)
     );
   });
+});
+
+describe('AgentClient – turn identity', () => {
+  let fake: ReturnType<typeof createFakeSocket>;
+  let client: AgentClient;
+
+  const UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const FOREIGN_TURN_ID = '00000000-0000-4000-8000-000000000000';
+  const RESEND_DELAYS_MS = [1_000, 2_000, 4_000];
+  const DONE = {
+    usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'completed',
+  };
+
+  const callbacksOf = () => ({
+    onChunk: vi.fn(),
+    onThinking: vi.fn(),
+    onDone: vi.fn(),
+    onConversation: vi.fn(),
+    onError: vi.fn(),
+    onProposal: vi.fn(),
+    onCommitted: vi.fn(),
+    onTurnSettled: vi.fn(),
+  });
+  const sentTurnIds = () =>
+    (fake.socket.emit.mock.calls as unknown[][])
+      .filter((call) => call[0] === 'agent:message')
+      .map((call) => (call[1] as { turnId?: string }).turnId);
+  const lastMessage = () =>
+    (fake.socket.emit.mock.calls as unknown[][])
+      .filter((call) => call[0] === 'agent:message')
+      .at(-1)?.[1];
+  const turnError = (
+    code: (typeof AGENT_TURN_ERROR_CODE)[keyof typeof AGENT_TURN_ERROR_CODE],
+    turnId: string
+  ) => ({ code, message: code, turnId });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client = new AgentClient('http://test.local/agent');
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends a fresh uuid turn id with every message and exposes it on the handle', () => {
+    const first = client.sendMessage('one', callbacksOf());
+    fake.trigger('agent:done', { ...DONE, turnId: first.turnId });
+    const second = client.sendMessage('two', callbacksOf());
+
+    expect(first.turnId).toMatch(UUID);
+    expect(second.turnId).toMatch(UUID);
+    expect(second.turnId).not.toBe(first.turnId);
+    expect(sentTurnIds()).toEqual([first.turnId, second.turnId]);
+  });
+
+  it('replays the same turn id after an auth refresh', async () => {
+    let token = 'stale-token';
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(async () => {
+      token = 'fresh-token';
+      return 'refreshed';
+    });
+
+    const handle = client.sendMessage('hi', callbacksOf());
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(sentTurnIds()).toEqual([handle.turnId, handle.turnId]);
+  });
+
+  it('delivers events of the active turn and events that name no turn', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+
+    fake.trigger('agent:chunk', { turnId: handle.turnId, text: 'mine' });
+    fake.trigger('agent:chunk', { text: 'unnamed' });
+
+    expect(callbacks.onChunk.mock.calls).toEqual([
+      [{ turnId: handle.turnId, text: 'mine' }],
+      [{ text: 'unnamed' }],
+    ]);
+  });
+
+  it.each([
+    ['agent:chunk', { text: 'x' }, 'onChunk'],
+    ['agent:thinking', { text: 'x' }, 'onThinking'],
+    ['agent:conversation', { conversationId: 'conv-x' }, 'onConversation'],
+    ['agent:done', DONE, 'onDone'],
+    ['agent:error', { code: 'AI_ERROR', message: 'x' }, 'onError'],
+    ['agent:proposal', PROPOSAL, 'onProposal'],
+    [
+      'agent:committed',
+      {
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'T', kind: 'create' },
+      },
+      'onCommitted',
+    ],
+    ['agent:turn_settled', { conversationId: 'conv-x' }, 'onTurnSettled'],
+  ] as const)('drops %s of another turn', (event, payload, callback) => {
+    const callbacks = callbacksOf();
+    client.sendMessage('hi', callbacks);
+
+    fake.trigger(event, { ...payload, turnId: FOREIGN_TURN_ID });
+
+    expect(callbacks[callback]).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('drops a late error of the previous turn on the socket the next turn reuses', () => {
+    const first = client.sendMessage('one', callbacksOf());
+    fake.trigger('agent:done', { ...DONE, turnId: first.turnId });
+    const next = callbacksOf();
+    client.sendMessage('two', next);
+
+    fake.trigger('agent:error', {
+      code: 'AI_ERROR',
+      message: 'late',
+      turnId: first.turnId,
+    });
+
+    expect(io).toHaveBeenCalledTimes(1);
+    expect(next.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('ends a turn the server already settled through onTurnSettled', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+
+    fake.trigger('agent:turn_settled', {
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+
+    expect(callbacks.onConversation).toHaveBeenCalledWith('conv-7');
+    expect(callbacks.onTurnSettled).toHaveBeenCalledWith({
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(false);
+  });
+
+  it('ignores replies of a settled turn that arrive after it', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    fake.trigger('agent:turn_settled', {
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, handle.turnId)
+    );
+    fake.trigger('agent:done', { ...DONE, turnId: handle.turnId });
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+    expect(callbacks.onTurnSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues the settled conversation on the next message', () => {
+    const handle = client.sendMessage('hi', callbacksOf());
+    fake.trigger('agent:turn_settled', {
+      turnId: handle.turnId,
+      conversationId: 'conv-7',
+    });
+
+    client.sendMessage('again', callbacksOf());
+
+    expect(lastMessage()).toEqual(
+      expect.objectContaining({ conversationId: 'conv-7' })
+    );
+  });
+
+  it('resends a turn still in progress with the same id after 1 s, 2 s and 4 s, then fails it', () => {
+    vi.useFakeTimers();
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    const inProgress = turnError(
+      AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+      handle.turnId
+    );
+
+    for (const [attempt, delay] of RESEND_DELAYS_MS.entries()) {
+      fake.trigger('agent:error', inProgress);
+      vi.advanceTimersByTime(delay - 1);
+      expect(sentTurnIds()).toHaveLength(attempt + 1);
+      vi.advanceTimersByTime(1);
+      expect(sentTurnIds()).toHaveLength(attempt + 2);
+    }
+    expect(callbacks.onError).not.toHaveBeenCalled();
+
+    fake.trigger('agent:error', inProgress);
+
+    expect(callbacks.onError).toHaveBeenCalledWith(inProgress);
+    expect(client.canResume()).toBe(false);
+    vi.runAllTimers();
+    expect(sentTurnIds()).toEqual([
+      handle.turnId,
+      handle.turnId,
+      handle.turnId,
+      handle.turnId,
+    ]);
+  });
+
+  it('resends a turn whose claim was unavailable and streams the resend', () => {
+    vi.useFakeTimers();
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks, 'note-1', {
+      effort: 'high',
+    });
+
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE, handle.turnId)
+    );
+    vi.advanceTimersByTime(1_000);
+    fake.trigger('agent:chunk', { turnId: handle.turnId, text: 'hello' });
+
+    expect(sentTurnIds()).toEqual([handle.turnId, handle.turnId]);
+    expect(lastMessage()).toEqual({
+      turnId: handle.turnId,
+      message: { content: 'hi' },
+      noteId: 'note-1',
+      effort: 'high',
+    });
+    expect(callbacks.onChunk).toHaveBeenCalledWith({
+      turnId: handle.turnId,
+      text: 'hello',
+    });
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('fails a turn whose id was reused without resending it', () => {
+    vi.useFakeTimers();
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    const reused = turnError(
+      AGENT_TURN_ERROR_CODE.TURN_ID_REUSED,
+      handle.turnId
+    );
+
+    fake.trigger('agent:error', reused);
+    vi.runAllTimers();
+
+    expect(callbacks.onError).toHaveBeenCalledWith(reused);
+    expect(sentTurnIds()).toEqual([handle.turnId]);
+  });
+
+  it('drops the pending resend when the turn is cancelled during the wait', () => {
+    vi.useFakeTimers();
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('hi', callbacks);
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, handle.turnId)
+    );
+
+    handle.cancel();
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.runAllTimers();
+    expect(sentTurnIds()).toEqual([handle.turnId]);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('gives each new turn the whole backoff again', () => {
+    vi.useFakeTimers();
+    const first = client.sendMessage('one', callbacksOf());
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, first.turnId)
+    );
+    vi.advanceTimersByTime(1_000);
+    fake.trigger('agent:done', { ...DONE, turnId: first.turnId });
+
+    const second = client.sendMessage('two', callbacksOf());
+    fake.trigger(
+      'agent:error',
+      turnError(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, second.turnId)
+    );
+    vi.advanceTimersByTime(1_000);
+
+    expect(sentTurnIds()).toEqual([
+      first.turnId,
+      first.turnId,
+      second.turnId,
+      second.turnId,
+    ]);
+  });
+
+  it.each(['approve', 'reject'] as const)(
+    'streams the turn resumed by %s under the proposing turn id and drops other turns',
+    (decision) => {
+      const callbacks = callbacksOf();
+      const handle = client.sendMessage('create a note', callbacks);
+      fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+
+      client[decision]('p1');
+      fake.trigger('agent:chunk', { turnId: handle.turnId, text: 'resumed' });
+      fake.trigger('agent:chunk', { turnId: FOREIGN_TURN_ID, text: 'other' });
+      fake.trigger('agent:done', { ...DONE, turnId: handle.turnId });
+
+      expect(callbacks.onProposal).toHaveBeenCalledTimes(1);
+      expect(callbacks.onChunk.mock.calls).toEqual([
+        [{ turnId: handle.turnId, text: 'resumed' }],
+      ]);
+      expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+      expect(client.canResume()).toBe(false);
+    }
+  );
+
+  it('keeps the proposing turn id on the fresh socket a decision opens', () => {
+    const callbacks = callbacksOf();
+    const handle = client.sendMessage('create a note', callbacks);
+    fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    client.approve('p1');
+    fake.trigger('agent:committed', {
+      turnId: handle.turnId,
+      proposalId: 'p1',
+      result: { noteId: 'n1', title: 'T', kind: 'create' },
+    });
+    fake.trigger('agent:chunk', { turnId: handle.turnId, text: 'resumed' });
+
+    expect(io).toHaveBeenCalledTimes(2);
+    expect(callbacks.onCommitted).toHaveBeenCalledTimes(1);
+    expect(callbacks.onChunk).toHaveBeenCalledWith({
+      turnId: handle.turnId,
+      text: 'resumed',
+    });
+  });
+
+  it.each(['approve', 'reject'] as const)(
+    'fails the %s decision the server reports in progress without resending anything',
+    (decision) => {
+      vi.useFakeTimers();
+      const callbacks = callbacksOf();
+      const handle = client.sendMessage('create a note', callbacks);
+      fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+      client[decision]('p1');
+      const inProgress = turnError(
+        AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+        handle.turnId
+      );
+
+      fake.trigger('agent:error', inProgress);
+      vi.runAllTimers();
+
+      expect(callbacks.onError).toHaveBeenCalledWith(inProgress);
+      expect(client.canResume()).toBe(false);
+      expect(
+        (fake.socket.emit.mock.calls as unknown[][]).map((call) => call[0])
+      ).toEqual(['agent:message', `agent:${decision}`]);
+    }
+  );
 });

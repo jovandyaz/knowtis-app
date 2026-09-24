@@ -12,7 +12,6 @@ import type {
   AgentDonePayload,
   AgentErrorPayload,
   AgentProposalPayload,
-  AgentStreamHandle,
 } from '@knowtis/api-client';
 import { conversationsQueryKeys } from '@knowtis/data-access-agent';
 import {
@@ -58,7 +57,7 @@ function capture() {
   let captured: Callbacks | null = null;
   vi.mocked(agentClient.sendMessage).mockImplementation((_text, callbacks) => {
     captured = callbacks as Callbacks;
-    return { cancel } as AgentStreamHandle;
+    return { turnId: 'turn-1', cancel };
   });
   return {
     cancel,
