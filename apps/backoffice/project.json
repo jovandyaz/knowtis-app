@@ -17,7 +17,8 @@
         "production",
         "^production",
         { "env": "VITE_API_URL" },
-        { "env": "VITE_WS_URL" }
+        { "env": "VITE_WS_URL" },
+        { "env": "GITHUB_SHA" }
       ],
       "defaultConfiguration": "production",
       "options": {

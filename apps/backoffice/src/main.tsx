@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 
+import './lib/zod-config';
 import './index.css';
 
 import { LoadingState } from '@knowtis/design-system';
