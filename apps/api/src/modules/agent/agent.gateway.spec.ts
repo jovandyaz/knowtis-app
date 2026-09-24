@@ -1,10 +1,11 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MetadataScanner } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { GatewayMetadataExplorer } from '@nestjs/websockets/gateway-metadata-explorer';
 import { err, ok } from 'neverthrow';
 import { v5 as uuidv5 } from 'uuid';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 
@@ -1585,6 +1586,181 @@ describe('AgentGateway', () => {
         );
         expect(claimOf(redis)).toMatchObject({ status: 'settled' });
       });
+    });
+  });
+
+  describe('a socket whose token expires', () => {
+    const TOKEN_LIFETIME_MS = 60_000;
+    const PAST_EXPIRY_MS = TOKEN_LIFETIME_MS + 5_000 + 1_000;
+    const TURN = '99999999-9999-4999-8999-999999999999';
+    const doneUsage = {
+      inputTokens: 1,
+      outputTokens: 1,
+      model: 'm',
+      costUsd: 0,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed' as const,
+    };
+
+    type Execute = (
+      input: unknown,
+      callbacks: RunAgentTurnCallbacks,
+      signal: AbortSignal
+    ) => Promise<void>;
+
+    async function connectedGateway(
+      handler: Partial<RunAgentTurnHandler>,
+      approve: Partial<ApproveMutationHandler> = {}
+    ) {
+      const exp = Math.floor((Date.now() + TOKEN_LIFETIME_MS) / 1000);
+      const jwt = { verify: vi.fn().mockReturnValue({ sub: 'u1', exp }) };
+      const gateway = makeGateway({ jwt, handler, approve });
+      const client = makeClient(undefined, 'c1', 'valid-token');
+      await gateway.handleConnection(client as never);
+      return { gateway, client };
+    }
+
+    function streamingTurn() {
+      let finish!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const execute = vi.fn<Execute>(async (_input, cb, signal) => {
+        cb.onModelStart?.();
+        cb.onChunk('Half an ');
+        await Promise.race([
+          gate,
+          new Promise<void>((resolve) =>
+            signal.addEventListener('abort', () => resolve())
+          ),
+        ]);
+        if (!signal.aborted) {
+          cb.onChunk('answer.');
+          cb.onDone(doneUsage);
+        }
+      });
+      return { execute, finish };
+    }
+
+    const emitted = (client: ReturnType<typeof makeClient>) =>
+      client.emit.mock.calls.map(([event, payload]) =>
+        event === 'agent:error'
+          ? `${event}:${(payload as { code: string }).code}`
+          : event
+      );
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('lets the running turn finish, then asks for a fresh token and disconnects', async () => {
+      const turn = streamingTurn();
+      const { gateway, client } = await connectedGateway({
+        execute: turn.execute,
+      } as never);
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'hi' },
+      });
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+      expect(emitted(client)).toEqual(['agent:chunk']);
+
+      turn.finish();
+      await running;
+
+      expect(emitted(client)).toEqual([
+        'agent:chunk',
+        'agent:chunk',
+        'agent:done',
+        'agent:error:AUTH_REQUIRED',
+      ]);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('logs the deferred expiry', async () => {
+      const log = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const turn = streamingTurn();
+      const { gateway, client } = await connectedGateway({
+        execute: turn.execute,
+      } as never);
+
+      const running = gateway.handleMessage(client as never, {
+        message: { content: 'hi' },
+      });
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.client.expiry_deferred',
+          clientId: 'c1',
+          userId: 'u1',
+        })
+      );
+      turn.finish();
+      await running;
+      log.mockRestore();
+    });
+
+    it('refuses a new message, approval or rejection on the expired socket without running anything', async () => {
+      const turn = streamingTurn();
+      const approveExecute = vi.fn();
+      const { gateway, client } = await connectedGateway(
+        { execute: turn.execute } as never,
+        { execute: approveExecute }
+      );
+      const running = gateway.handleMessage(client as never, {
+        message: { content: 'first' },
+      });
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      await gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'second' },
+      });
+      await gateway.handleApprove(client as never, approvePayload());
+      await gateway.handleReject(client as never, approvePayload());
+
+      expect(emitted(client)).toEqual([
+        'agent:chunk',
+        'agent:error:AUTH_REQUIRED',
+        'agent:error:AUTH_REQUIRED',
+        'agent:error:AUTH_REQUIRED',
+      ]);
+      expect(turn.execute).toHaveBeenCalledOnce();
+      expect(approveExecute).not.toHaveBeenCalled();
+      turn.finish();
+      await running;
+    });
+
+    it('still lets the user stop the running turn, and then disconnects', async () => {
+      const turn = streamingTurn();
+      const { gateway, client } = await connectedGateway({
+        execute: turn.execute,
+      } as never);
+      const running = gateway.handleMessage(client as never, {
+        message: { content: 'hi' },
+      });
+      await vi.advanceTimersByTimeAsync(PAST_EXPIRY_MS);
+
+      gateway.handleCancel(client as never);
+      await running;
+
+      expect(emitted(client)).toEqual([
+        'agent:chunk',
+        'agent:error:AUTH_REQUIRED',
+      ]);
+      expect(client.disconnect).toHaveBeenCalledWith(true);
     });
   });
 });
