@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
+import { afterAll, vi } from 'vitest';
+
 // jsdom ships no ResizeObserver, and @knowtis/design-system's TabsList constructs one on mount.
 class ResizeObserverPolyfill implements ResizeObserver {
   observe() {}
@@ -67,3 +69,14 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
     } as unknown as MediaQueryList;
   };
 }
+
+// @tiptap/react destroys an unmounted editor from a setTimeout; let it run before
+// the file's jsdom environment is torn down, or it throws "window is not defined".
+const TIPTAP_SCHEDULED_DESTROY_MS = 1;
+
+afterAll(async () => {
+  vi.useRealTimers();
+  await new Promise((resolve) =>
+    setTimeout(resolve, TIPTAP_SCHEDULED_DESTROY_MS + 1)
+  );
+});
