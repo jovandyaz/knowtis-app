@@ -22,9 +22,11 @@ function createMockAuthService(
 }
 
 const TEST_API_KEY = 'knowtis_mcp_test_abcdefghijklmnopqrstuvwxyz';
+const TEST_CLIENT_IP = '203.0.113.7';
 const API_KEY_CRED: McpCredential = {
   kind: 'api-key',
   apiKey: TEST_API_KEY,
+  clientIp: TEST_CLIENT_IP,
 };
 
 describe('wrapToolHandler', () => {
@@ -76,7 +78,10 @@ describe('wrapToolHandler', () => {
       TEST_API_KEY,
       'list-notes'
     );
-    expect(authService.getToken).toHaveBeenCalledWith(TEST_API_KEY);
+    expect(authService.getToken).toHaveBeenCalledWith(
+      TEST_API_KEY,
+      TEST_CLIENT_IP
+    );
   });
 
   it('should use the oauth JWT directly without a token exchange', async () => {

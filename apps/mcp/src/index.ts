@@ -23,6 +23,7 @@ const oauthVerifier = config.oauth
 const app = createApp(
   (credential) => createMcpServer({ config, authService, credential }),
   config,
+  (apiKey, clientIp) => authService.getToken(apiKey, clientIp),
   oauthVerifier
 );
 
