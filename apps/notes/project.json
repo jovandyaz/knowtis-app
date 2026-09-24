@@ -25,7 +25,7 @@
         { "env": "VITE_MCP_URL" },
         { "env": "VITE_PUBLIC_POSTHOG_KEY" },
         { "env": "VITE_PUBLIC_POSTHOG_HOST" },
-        { "env": "VERCEL_GIT_COMMIT_SHA" }
+        { "env": "GITHUB_SHA" }
       ],
       "defaultConfiguration": "production",
       "options": {

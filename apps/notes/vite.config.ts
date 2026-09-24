@@ -12,8 +12,11 @@ export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/notes',
   define: {
+    // Deploys are prebuilt in GitHub Actions, where Vercel's system variables
+    // do not exist; a per-commit stamp also changes index.html on every deploy,
+    // so browsers revalidating it pick up new response headers.
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(
-      process.env.VERCEL_GIT_COMMIT_SHA ?? '0.1.0'
+      process.env.GITHUB_SHA ?? ''
     ),
   },
   plugins: [
