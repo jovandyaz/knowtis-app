@@ -445,6 +445,30 @@ describe('registerNotesTools', () => {
       expect(description).toContain('Image sizes, highlight colours');
     });
 
+    it('should reject a write-only token up front, naming the missing scope, before reading the note', async () => {
+      notesApi = createMockNotesApi();
+      const { server, tools } = createFakeServer();
+      registerNotesTools(
+        server,
+        notesApi,
+        searchApi,
+        new AuthService('http://localhost:3333/api/v1/auth/token-exchange'),
+        { kind: 'oauth', jwt: 'oauth.jwt.value', scopes: ['notes:write'] }
+      );
+
+      const result = await getTool(tools, 'update-note').cb({
+        noteId: 'note-3',
+        content: 'New text.',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toBe(
+        "Access token does not have 'notes:read' scope required for tool 'update-note'."
+      );
+      expect(notesApi.get).not.toHaveBeenCalled();
+      expect(notesApi.update).not.toHaveBeenCalled();
+    });
+
     it('should still rename a note holding an AI block without reading it', async () => {
       const tool = updateTool(storedNote(`<p>Old text.</p>${AI_BLOCK}`));
 

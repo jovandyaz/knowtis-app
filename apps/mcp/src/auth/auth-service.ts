@@ -3,17 +3,18 @@ import { createHash } from 'node:crypto';
 import type { McpCredential } from './credentials.js';
 import { TokenCache } from './token-cache.js';
 
-const SCOPE_REQUIREMENTS: Record<string, string> = {
-  'list-notes': 'notes:read',
-  'get-note': 'notes:read',
-  'search-notes': 'notes:read',
-  'get-collaborators': 'notes:read',
-  'create-note': 'notes:write',
-  'update-note': 'notes:write',
-  'delete-note': 'notes:write',
-  'restore-note': 'notes:write',
-  'share-note': 'notes:share',
-  'note-resource': 'notes:read',
+const SCOPE_REQUIREMENTS: Record<string, readonly string[]> = {
+  'list-notes': ['notes:read'],
+  'get-note': ['notes:read'],
+  'search-notes': ['notes:read'],
+  'get-collaborators': ['notes:read'],
+  'create-note': ['notes:write'],
+  // A content update reads the stored note first, so it never drops what Markdown cannot show.
+  'update-note': ['notes:read', 'notes:write'],
+  'delete-note': ['notes:write'],
+  'restore-note': ['notes:write'],
+  'share-note': ['notes:share'],
+  'note-resource': ['notes:read'],
 };
 
 export const NO_CREDENTIAL_MESSAGE =
@@ -45,6 +46,23 @@ export class InsufficientScopeError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'InsufficientScopeError';
+  }
+}
+
+function assertScopes(
+  granted: readonly string[],
+  toolName: string,
+  holder: string
+): void {
+  const missing = (SCOPE_REQUIREMENTS[toolName] ?? []).filter(
+    (scope) => !granted.includes(scope)
+  );
+  if (missing.length > 0) {
+    const named = missing.map((scope) => `'${scope}'`).join(' and ');
+    const noun = missing.length === 1 ? 'scope' : 'scopes';
+    throw new InsufficientScopeError(
+      `${holder} does not have ${named} ${noun} required for tool '${toolName}'.`
+    );
   }
 }
 
@@ -113,30 +131,11 @@ export class AuthService {
     if (!cached) {
       return;
     }
-
-    const required = SCOPE_REQUIREMENTS[toolName];
-    if (!required) {
-      return;
-    }
-
-    const scopes = cached.scopes.split(',');
-    if (!scopes.includes(required)) {
-      throw new InsufficientScopeError(
-        `API key does not have '${required}' scope required for tool '${toolName}'.`
-      );
-    }
+    assertScopes(cached.scopes.split(','), toolName, 'API key');
   }
 
   checkScopes(scopes: string[], toolName: string): void {
-    const required = SCOPE_REQUIREMENTS[toolName];
-    if (!required) {
-      return;
-    }
-    if (!scopes.includes(required)) {
-      throw new InsufficientScopeError(
-        `Access token does not have '${required}' scope required for tool '${toolName}'.`
-      );
-    }
+    assertScopes(scopes, toolName, 'Access token');
   }
 }
 
