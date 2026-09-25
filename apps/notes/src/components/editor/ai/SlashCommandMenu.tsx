@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import type { Editor, Range } from '@tiptap/react';
-import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
+import type { SuggestionProps } from '@tiptap/suggestion';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
@@ -19,6 +19,7 @@ import {
   CommandMenuGroup,
   CommandMenuItem,
 } from '@knowtis/design-system';
+import type { SuggestionMenuOptions } from '@knowtis/editor';
 
 import { filterSlashCommands } from './slash-commands.config';
 import type { SlashCommandItem } from './slash-commands.config';
@@ -149,10 +150,7 @@ SlashCommandMenu.displayName = 'SlashCommandMenu';
  * ReactRenderer + tippy.js, and keyboard navigation delegation. Register it
  * through `SuggestionMenu.extend({ name })`.
  */
-export const slashCommandsSuggestion: Omit<
-  SuggestionOptions<SlashCommandItem>,
-  'editor'
-> = {
+export const slashCommandsSuggestion: SuggestionMenuOptions['suggestion'] = {
   char: '/',
   pluginKey: SLASH_COMMANDS_PLUGIN_KEY,
   allowSpaces: false,
