@@ -44,6 +44,54 @@ describe('notesApi', () => {
     });
   });
 
+  describe('getPeople', () => {
+    it('reads collaborators without request options when no signal is given', async () => {
+      vi.mocked(httpClient.get).mockResolvedValue([]);
+
+      await notesApi.getPeople('note');
+
+      expect(httpClient.get).toHaveBeenCalledWith(
+        '/notes/note/collaborators',
+        undefined
+      );
+    });
+
+    it('lets the caller abort a collaborators read', async () => {
+      vi.mocked(httpClient.get).mockResolvedValue([]);
+      const { signal } = new AbortController();
+
+      await notesApi.getPeople('note', signal);
+
+      expect(httpClient.get).toHaveBeenCalledWith('/notes/note/collaborators', {
+        signal,
+      });
+    });
+  });
+
+  describe('getNoteByToken', () => {
+    it('reads a shared note without auth when no signal is given', async () => {
+      vi.mocked(httpClient.get).mockResolvedValue({});
+
+      await notesApi.getNoteByToken('tok');
+
+      expect(httpClient.get).toHaveBeenCalledWith('/notes/shared/tok', {
+        skipAuth: true,
+      });
+    });
+
+    it('lets the caller abort a shared note read', async () => {
+      vi.mocked(httpClient.get).mockResolvedValue({});
+      const { signal } = new AbortController();
+
+      await notesApi.getNoteByToken('tok', signal);
+
+      expect(httpClient.get).toHaveBeenCalledWith('/notes/shared/tok', {
+        skipAuth: true,
+        signal,
+      });
+    });
+  });
+
   describe('update', () => {
     it('sends the CRDT state in the body when provided', async () => {
       vi.mocked(httpClient.patch).mockResolvedValue({});

@@ -237,7 +237,7 @@ export function useRestoreNote() {
 export function useNoteByToken(token: string) {
   return useQuery({
     queryKey: notesQueryKeys.sharedNote(token),
-    queryFn: () => notesApi.getNoteByToken(token),
+    queryFn: ({ signal }) => notesApi.getNoteByToken(token, signal),
     enabled: !!token,
     retry: false,
   });

@@ -41,8 +41,8 @@ async function refreshAccess(client: QueryClient, noteId: string) {
 export function usePeople(noteId: string, enabled: boolean) {
   return useQuery({
     queryKey: notesQueryKeys.people(noteId),
-    queryFn: async () =>
-      NotePeopleSchema.parse(await notesApi.getPeople(noteId)),
+    queryFn: async ({ signal }) =>
+      NotePeopleSchema.parse(await notesApi.getPeople(noteId, signal)),
     enabled,
     retry: false,
     staleTime: 0,
@@ -54,8 +54,8 @@ export function usePeople(noteId: string, enabled: boolean) {
 export function useSharingAuthority(noteId: string, enabled: boolean) {
   return useQuery({
     queryKey: notesQueryKeys.sharingAuthority(noteId),
-    queryFn: async () => {
-      const note = await notesApi.getById(noteId);
+    queryFn: async ({ signal }) => {
+      const note = await notesApi.getById(noteId, signal);
       SharingAuthoritySchema.parse(note);
       return note;
     },

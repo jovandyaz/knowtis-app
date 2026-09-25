@@ -114,8 +114,11 @@ export const notesApi = {
   ): Promise<NotePerson> {
     return httpClient.post<NotePerson>(`/notes/${noteId}/share`, input);
   },
-  async getPeople(noteId: string): Promise<NotePerson[]> {
-    return httpClient.get<NotePerson[]>(`/notes/${noteId}/collaborators`);
+  async getPeople(noteId: string, signal?: AbortSignal): Promise<NotePerson[]> {
+    return httpClient.get<NotePerson[]>(
+      `/notes/${noteId}/collaborators`,
+      signal ? { signal } : undefined
+    );
   },
   async revokePerson(noteId: string, userId: string): Promise<void> {
     await httpClient.delete<unknown>(`/notes/${noteId}/share/${userId}`);
@@ -125,11 +128,12 @@ export const notesApi = {
    * Get a note by share token (public, no auth required)
    */
   async getNoteByToken(
-    token: string
+    token: string,
+    signal?: AbortSignal
   ): Promise<NoteWithOwner & { accessLevel: NoteAccessLevel }> {
     return httpClient.get<NoteWithOwner & { accessLevel: NoteAccessLevel }>(
       `/notes/shared/${token}`,
-      { skipAuth: true }
+      { skipAuth: true, ...(signal && { signal }) }
     );
   },
 };

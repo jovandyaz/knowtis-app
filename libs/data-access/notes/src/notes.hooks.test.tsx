@@ -19,6 +19,7 @@ import {
   useCreateNote,
   useDeleteNote,
   useNote,
+  useNoteByToken,
   useNoteCounts,
   useNotes,
   useRestoreNote,
@@ -35,6 +36,7 @@ vi.mock('@knowtis/api-client', () => ({
     update: vi.fn(),
     delete: vi.fn(),
     restore: vi.fn(),
+    getNoteByToken: vi.fn(),
   },
 }));
 
@@ -393,6 +395,28 @@ describe('Notes Hooks', () => {
       expect(
         queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
       ).toEqual(OPEN_NOTE);
+    });
+  });
+
+  describe('useNoteByToken', () => {
+    it('lets a cancel abort the shared note read in flight', async () => {
+      let inFlightRead: AbortSignal | undefined;
+      vi.mocked(notesApi.getNoteByToken).mockImplementation(
+        (_token, signal) => {
+          inFlightRead = signal;
+          return new Promise(() => undefined);
+        }
+      );
+      renderHook(() => useNoteByToken('tok'), { wrapper });
+      await waitFor(() => expect(inFlightRead).toBeDefined());
+
+      await act(() =>
+        queryClient.cancelQueries({
+          queryKey: notesQueryKeys.sharedNote('tok'),
+        })
+      );
+
+      expect(inFlightRead?.aborted).toBe(true);
     });
   });
 
