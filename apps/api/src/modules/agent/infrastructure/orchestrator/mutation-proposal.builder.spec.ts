@@ -8,6 +8,7 @@ import {
   IMAGE_NODE_NAME,
 } from '@knowtis/editor-schema';
 import {
+  NODES_WITHOUT_MARKDOWN,
   nodesLostBetween,
   noteSchemaExtensions,
 } from '@knowtis/editor-schema/server';
@@ -292,6 +293,78 @@ function contentHtmlOf(proposal: ProposedMutation): string {
   }
   return contentHtml;
 }
+
+const STORED_SRC = `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`;
+
+describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
+  it('refuses to rewrite a note holding an AI block the model was never shown', async () => {
+    const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
+
+    const r = await builder.buildUpdate(USER, 'note-1', {
+      contentMarkdown: 'New text.',
+    });
+
+    const error = r._unsafeUnwrapErr();
+    expect(error).toEqual(AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME]));
+    expect(error.code).toBe('AGENT_EDIT_WOULD_LOSE_CONTENT');
+    expect(error.message).toContain('insert or discard the AI block');
+  });
+
+  it.each([
+    ['clears the note', { contentMarkdown: '' }],
+    ['also renames it', { title: 'New', contentMarkdown: 'New text.' }],
+  ])(
+    'refuses a rewrite that %s while it holds an AI block',
+    async (_label, input) => {
+      const { builder } = editing(
+        storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`)
+      );
+
+      const r = await builder.buildUpdate(USER, 'note-1', input);
+
+      expect(r._unsafeUnwrapErr()).toEqual(
+        AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME])
+      );
+    }
+  );
+
+  it('still renames a note holding an AI block', async () => {
+    const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
+
+    const r = await builder.buildUpdate(USER, 'note-1', { title: 'New' });
+
+    expect(r._unsafeUnwrap().summary).toBe('Update "Old": title → "New"');
+  });
+
+  it('rewrites a note without one, dropping whatever the rewrite leaves out', async () => {
+    const { builder } = editing(
+      storedHtml(markdownToNoteHtml('# Trip\n\n| Day |\n| --- |\n| 1 |'))
+    );
+
+    const r = await builder.buildUpdate(USER, 'note-1', {
+      contentMarkdown: '## New',
+    });
+
+    expect(contentHtmlOf(r._unsafeUnwrap())).toBe(markdownToNoteHtml('## New'));
+  });
+
+  it('keeps an image size, a highlight colour and a diagram view mode the rewrite carries over', async () => {
+    const bodyHtml = storedHtml(
+      `<figure data-image=""><img src="${STORED_SRC}" alt="lake" width="320" height="200"><figcaption>Lake</figcaption></figure>` +
+        '<p>Bring <mark data-color="#ffc078" style="background-color: #ffc078; color: inherit">sunscreen</mark>.</p>' +
+        '<div data-mermaid-block="" data-code="flowchart LR" data-view-mode="code"></div>'
+    );
+    const { builder } = editing(bodyHtml);
+
+    const r = await builder.buildUpdate(USER, 'note-1', {
+      contentMarkdown: `${htmlToMarkdown(bodyHtml)}\n\nNew text.`,
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      `${bodyHtml}<p>New text.</p>`
+    );
+  });
+});
 
 describe('MutationProposalBuilder.buildEdit', () => {
   it('replaces only the targeted text and keeps the read timestamp as the base version', async () => {
@@ -821,8 +894,7 @@ const EVERY_CARRIED_CONSTRUCT: JSONContent[] = [
   },
 ];
 
-// Markdown has no form for these, so an edit to a note holding one is refused.
-const REFUSED_CONSTRUCTS: Record<string, JSONContent> = {
+const BLOCKS_WITHOUT_MARKDOWN: Record<string, JSONContent> = {
   [AI_BLOCK_NAME]: {
     type: AI_BLOCK_NAME,
     attrs: { topic: 'Rome', status: AI_BLOCK_STATUS.DONE, content: 'Rome.' },
@@ -856,15 +928,22 @@ function noteHtml(blocks: JSONContent[]): string {
 
 describe('a copilot edit over every construct the note schema defines', () => {
   it('covers every node and mark the schema defines', () => {
+    expect(Object.keys(BLOCKS_WITHOUT_MARKDOWN).sort()).toEqual(
+      [...NODES_WITHOUT_MARKDOWN].sort()
+    );
     expect(
       typesHeldBy([
         ...EVERY_CARRIED_CONSTRUCT,
-        ...Object.values(REFUSED_CONSTRUCTS),
+        ...Object.values(BLOCKS_WITHOUT_MARKDOWN),
       ])
     ).toEqual(schemaTypesExcept([]));
     expect(typesHeldBy(EVERY_CARRIED_CONSTRUCT)).toEqual(
-      schemaTypesExcept(Object.keys(REFUSED_CONSTRUCTS))
+      schemaTypesExcept(NODES_WITHOUT_MARKDOWN)
     );
+  });
+
+  it('lacks a Markdown form only for the AI block, which the refusal message explains', () => {
+    expect(NODES_WITHOUT_MARKDOWN).toEqual([AI_BLOCK_NAME]);
   });
 
   it('keeps every other construct, attributes included, through an edit to one paragraph', async () => {
@@ -883,7 +962,24 @@ describe('a copilot edit over every construct the note schema defines', () => {
     );
   });
 
-  it.each(Object.entries(REFUSED_CONSTRUCTS))(
+  it.each(Object.entries(BLOCKS_WITHOUT_MARKDOWN))(
+    'refuses a rewrite of a note holding %s',
+    async (type, block) => {
+      const { builder } = editing(
+        noteHtml([block, paragraph(text('Old text.'))])
+      );
+
+      const r = await builder.buildUpdate(USER, 'note-1', {
+        contentMarkdown: 'New text.',
+      });
+
+      expect(r._unsafeUnwrapErr()).toEqual(
+        AgentErrors.aiBlockWouldBeLost([type])
+      );
+    }
+  );
+
+  it.each(Object.entries(BLOCKS_WITHOUT_MARKDOWN))(
     'refuses an edit to a note holding %s',
     async (type, block) => {
       const { builder } = editing(

@@ -3,8 +3,12 @@ import { generateJSON } from '@tiptap/html/server';
 
 import { BLANK_TEXT } from '@knowtis/note-markdown';
 
+import { AI_BLOCK_NAME } from './ai-block-node';
 import { isForeignImage } from './image-node';
 import { noteSchemaExtensions } from './note-schema';
+
+/** Node types the Markdown view of a note has no form for, so a writer that reads Markdown never sees them. */
+export const NODES_WITHOUT_MARKDOWN: readonly string[] = [AI_BLOCK_NAME];
 
 // `<p>&nbsp;</p>` reads back as an empty paragraph that looks the same, so
 // counting its text would refuse an edit that loses nothing.
@@ -58,4 +62,21 @@ export function nodesLostBetween(before: string, after: string): string[] {
     .filter(([type, count]) => (to.get(type) ?? 0) < count)
     .map(([type]) => type)
     .sort();
+}
+
+/** The types in `types` that Markdown has no form for. */
+export function nodesWithoutMarkdown(types: readonly string[]): string[] {
+  return types.filter((type) => NODES_WITHOUT_MARKDOWN.includes(type));
+}
+
+/**
+ * The Markdown-less node types `after` holds fewer of than `before`. A rewrite
+ * from Markdown may drop anything its writer read; these it never read, so
+ * losing one is never what the writer asked for.
+ */
+export function nodesWithoutMarkdownLostBetween(
+  before: string,
+  after: string
+): string[] {
+  return nodesWithoutMarkdown(nodesLostBetween(before, after));
 }
