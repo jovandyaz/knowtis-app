@@ -27,7 +27,7 @@ import {
   unlessNoteDeleted,
 } from './note-deletion';
 import { invalidateNoteCollections } from './note-invalidation';
-import { notesMutationKeys, notesQueryKeys } from './query-keys';
+import { notesQueryKeys } from './query-keys';
 
 const LIST_STALE_TIME_MS = 1000 * 60;
 const COUNTS_STALE_TIME_MS = 1000 * 30;
@@ -180,7 +180,6 @@ export function useDeleteNote() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationKey: notesMutationKeys.delete(),
     mutationFn: (id: string) => notesApi.delete(id),
     onMutate: async (id) => {
       stopNoteQueries(queryClient, id);

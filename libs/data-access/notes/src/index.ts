@@ -12,10 +12,7 @@ export {
 } from './notes.hooks';
 
 export { notesQueryKeys, tagsQueryKeys } from './query-keys';
-export {
-  invalidateNoteCollections,
-  reconcileNoteAccess,
-} from './note-invalidation';
+export { invalidateNoteCollections } from './note-invalidation';
 
 export {
   dropLoadedNote,

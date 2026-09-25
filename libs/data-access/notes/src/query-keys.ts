@@ -27,10 +27,6 @@ export const notesQueryKeys = {
     [...notesQueryKeys.all, 'shared', token] as const,
 } as const;
 
-export const notesMutationKeys = {
-  delete: () => [...notesQueryKeys.all, 'delete'] as const,
-} as const;
-
 export const tagsQueryKeys = {
   all: ['tags'] as const,
   tree: () => [...tagsQueryKeys.all, 'tree'] as const,

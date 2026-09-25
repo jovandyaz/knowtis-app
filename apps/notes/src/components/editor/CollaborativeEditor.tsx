@@ -29,7 +29,7 @@ import { useAIStore } from '@/stores/ai.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
-import { reconcileNoteAccess } from '@knowtis/data-access-notes';
+import { notesQueryKeys } from '@knowtis/data-access-notes';
 import { cn, DocumentSkeleton, ErrorState } from '@knowtis/design-system';
 import {
   CollaborationIndicator,
@@ -377,8 +377,8 @@ export function CollaborativeEditor({
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
   const reconcileAccess = useCallback(() => {
-    reconcileNoteAccess(queryClient, noteId);
-  }, [noteId]);
+    void queryClient.invalidateQueries({ queryKey: notesQueryKeys.all });
+  }, []);
 
   const { status, isConnected, isSynced, readOnly } =
     useHocuspocusCollaboration({

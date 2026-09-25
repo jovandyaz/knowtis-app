@@ -14,7 +14,6 @@ import {
 } from '@knowtis/api-client';
 import { DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
-import { reconcileNoteAccess } from './note-invalidation';
 import {
   useCreateNote,
   useDeleteNote,
@@ -301,6 +300,11 @@ describe('Notes Hooks', () => {
       return page;
     }
 
+    const changeAccess = () =>
+      act(() =>
+        queryClient.invalidateQueries({ queryKey: notesQueryKeys.all })
+      );
+
     const noteReads = () => [
       vi.mocked(notesApi.getById).mock.calls.length,
       vi.mocked(notesApi.getPeople).mock.calls.length,
@@ -314,9 +318,7 @@ describe('Notes Hooks', () => {
 
       await act(() => result.current.mutateAsync(OPEN_NOTE.id));
       page.rerender(<OpenNoteWithSharing noteId={OPEN_NOTE.id} />);
-      await act(() =>
-        queryClient.invalidateQueries({ queryKey: notesQueryKeys.all })
-      );
+      await changeAccess();
 
       expect(noteReads()).toEqual(readsBeforeDelete);
     });
@@ -338,13 +340,13 @@ describe('Notes Hooks', () => {
       ).toEqual([undefined, undefined, undefined]);
     });
 
-    it('never refetches the note when its access is reconciled after the delete', async () => {
+    it('never refetches the note when an access change lands after the delete', async () => {
       await openNote();
       vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
       const { result } = renderHook(() => useDeleteNote(), { wrapper });
 
       await act(() => result.current.mutateAsync(OPEN_NOTE.id));
-      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+      await changeAccess();
 
       expect(notesApi.getById).toHaveBeenCalledTimes(1);
     });
@@ -376,7 +378,7 @@ describe('Notes Hooks', () => {
       ]);
     });
 
-    it('never refetches the note when its access is reconciled mid-delete', async () => {
+    it('never refetches the note when an access change lands mid-delete', async () => {
       await openNote();
       let settleDelete: (value: { success: boolean }) => void = () => undefined;
       vi.mocked(notesApi.delete).mockReturnValue(
@@ -388,24 +390,50 @@ describe('Notes Hooks', () => {
 
       act(() => result.current.mutate(OPEN_NOTE.id));
       await waitFor(() => expect(result.current.isPending).toBe(true));
-      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+      await changeAccess();
       await act(async () => settleDelete({ success: true }));
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+      await changeAccess();
 
       expect(notesApi.getById).toHaveBeenCalledTimes(1);
     });
 
-    it('still reconciles a note other than the one being deleted', async () => {
+    it('still refreshes a note other than the one being deleted', async () => {
       await openNote();
       vi.mocked(notesApi.delete).mockReturnValue(new Promise(() => undefined));
       const { result } = renderHook(() => useDeleteNote(), { wrapper });
 
       act(() => result.current.mutate('another-note'));
       await waitFor(() => expect(result.current.isPending).toBe(true));
-      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+      await changeAccess();
 
       await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+    });
+
+    it('leaves every query an access change touched mid-delete refreshed when the delete fails', async () => {
+      await openNote();
+      queryClient.setQueryData(notesQueryKeys.sharedNote('tok'), OPEN_NOTE);
+      let failDelete: (error: Error) => void = () => undefined;
+      vi.mocked(notesApi.delete).mockReturnValue(
+        new Promise((_resolve, reject) => {
+          failDelete = reject;
+        })
+      );
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate(OPEN_NOTE.id));
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      await changeAccess();
+      await act(async () => failDelete(new Error('refused')));
+
+      await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+      expect(
+        queryClient.getQueryState(notesQueryKeys.sharedNote('tok'))
+          ?.isInvalidated
+      ).toBe(true);
+      expect(
+        queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+      ).toEqual(OPEN_NOTE);
     });
 
     it('drops every query scoped to the deleted note and no other note', async () => {

@@ -8,7 +8,11 @@ import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notesApi } from '@knowtis/api-client';
-import { notesQueryKeys, useDeleteNote } from '@knowtis/data-access-notes';
+import {
+  notesQueryKeys,
+  useDeleteNote,
+  useNote,
+} from '@knowtis/data-access-notes';
 
 import { CollaborativeEditor } from './CollaborativeEditor';
 
@@ -112,30 +116,40 @@ describe('CollaborativeEditor session expiry', () => {
     ).toBe(true);
   });
 
-  it('leaves a note it is deleting to that delete when access changes', async () => {
+  it('refreshes every notes query but never fetches a note it is deleting when access changes', async () => {
     vi.spyOn(notesApi, 'delete').mockReturnValue(new Promise(() => undefined));
+    const noteRead = vi
+      .spyOn(notesApi, 'getById')
+      .mockReturnValue(new Promise(() => undefined));
     queryClient.setQueryData(notesQueryKeys.detail('n1'), {
+      permission: 'editor',
+    });
+    queryClient.setQueryData(notesQueryKeys.sharedNote('tok'), {
       permission: 'editor',
     });
     render(
       <CollaborativeEditor noteId="n1" initialContent="" onUpdate={vi.fn()} />
     );
-    const { result } = renderHook(() => useDeleteNote(), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      ),
-    });
-    act(() => result.current.mutate('n1'));
-    await waitFor(() => expect(result.current.isPending).toBe(true));
+    const { result } = renderHook(
+      () => ({ note: useNote('n1'), deleteNote: useDeleteNote() }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        ),
+      }
+    );
+    act(() => result.current.deleteNote.mutate('n1'));
+    await waitFor(() => expect(result.current.deleteNote.isPending).toBe(true));
     expect(accessChanged).toBeDefined();
 
     accessChanged?.();
 
     expect(
-      queryClient.getQueryState(notesQueryKeys.detail('n1'))?.isInvalidated
-    ).toBe(false);
+      queryClient.getQueryState(notesQueryKeys.sharedNote('tok'))?.isInvalidated
+    ).toBe(true);
+    expect(noteRead).not.toHaveBeenCalled();
   });
 
   it('sends a signed-in user to the login page', () => {
