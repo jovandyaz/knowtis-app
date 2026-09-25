@@ -1,7 +1,7 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Editor } from '@tiptap/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
 import { TooltipProvider } from '@knowtis/design-system';
@@ -10,16 +10,24 @@ import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { CollaborativeEditor } from './CollaborativeEditor';
 
 const TOGGLE_LABEL = 'editor.toolbar.autocomplete';
+const SUGGESTION = ' over the lazy dog';
+const PAST_GHOST_TEXT_DEBOUNCE_MS = 1000;
+const TYPED_SENTENCE = 'The quick brown fox jumps';
 
 let aiEnabled = true;
 let isAnonymous = false;
 let preferences: { ghostTextEnabled: boolean } | undefined;
 let preferencesFailed: boolean;
 let preferencesQueryEnabled: unknown;
+let transportReadOnly = false;
 let doc: Y.Doc;
 let editor: Editor | null = null;
 
 const updateAISettings = vi.fn();
+
+const { streamSuggestion } = vi.hoisted(() => ({
+  streamSuggestion: vi.fn<() => AsyncIterable<{ text: string }>>(),
+}));
 
 vi.mock('@/auth', () => ({
   authStore: { getState: () => ({}) },
@@ -40,7 +48,7 @@ vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
     status: 'connected',
     isConnected: true,
     isSynced: true,
-    readOnly: false,
+    readOnly: transportReadOnly,
   }),
 }));
 vi.mock('@/hooks', () => ({
@@ -65,29 +73,48 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/stores/ai.store', () => {
   const useAIStore = (selector?: (s: object) => unknown) =>
     selector ? selector({ aiEnabled }) : aiEnabled;
-  useAIStore.getState = () => ({ aiEnabled });
+  useAIStore.getState = () => ({ aiEnabled, status: 'idle' });
   return { useAIStore };
 });
+vi.mock('./ai/aiClientProvider', () => ({
+  createAiClientProvider: () => ({ stream: streamSuggestion }),
+}));
 vi.mock('@/stores/ai-menu.store', () => ({
   useAIMenuStore: (selector?: (s: object) => unknown) =>
     selector ? selector({ open: vi.fn() }) : undefined,
 }));
 
-async function mount(editable = true) {
+function editorElement(editable: boolean) {
+  return (
+    <TooltipProvider>
+      <CollaborativeEditor
+        noteId="n1"
+        initialContent=""
+        onUpdate={vi.fn()}
+        editable={editable}
+        onEditorReady={(ready) => {
+          editor = ready;
+        }}
+      />
+    </TooltipProvider>
+  );
+}
+
+async function mount(editable = true): Promise<RenderResult> {
+  let view: RenderResult | undefined;
   await act(async () => {
-    render(
-      <TooltipProvider>
-        <CollaborativeEditor
-          noteId="n1"
-          initialContent=""
-          onUpdate={vi.fn()}
-          editable={editable}
-          onEditorReady={(ready) => {
-            editor = ready;
-          }}
-        />
-      </TooltipProvider>
-    );
+    view = render(editorElement(editable));
+    await Promise.resolve();
+  });
+  if (!view) {
+    throw new Error('render did not produce a view');
+  }
+  return view;
+}
+
+async function rerender(view: RenderResult) {
+  await act(async () => {
+    view.rerender(editorElement(true));
     await Promise.resolve();
   });
 }
@@ -210,5 +237,88 @@ describe('CollaborativeEditor autocomplete extension', () => {
     await mount();
 
     expect(ghostTextEnabled()).toBe(true);
+  });
+});
+
+describe('CollaborativeEditor autocomplete suggestion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    doc = new Y.Doc();
+    editor = null;
+    aiEnabled = true;
+    isAnonymous = false;
+    preferences = { ghostTextEnabled: true };
+    preferencesFailed = false;
+    transportReadOnly = false;
+    streamSuggestion.mockImplementation(async function* () {
+      yield { text: SUGGESTION };
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function liveEditor(): Editor {
+    if (!editor) {
+      throw new Error('editor is not ready');
+    }
+    return editor;
+  }
+
+  function visibleSuggestion(): string | null {
+    return (
+      document.querySelector('.ghost-text-suggestion')?.textContent ?? null
+    );
+  }
+
+  async function typeAndWaitForSuggestion(text: string) {
+    const typing = liveEditor();
+    vi.spyOn(typing.view, 'hasFocus').mockReturnValue(true);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    act(() => {
+      typing.commands.insertContent(text);
+    });
+    await act(() => vi.advanceTimersByTimeAsync(PAST_GHOST_TEXT_DEBOUNCE_MS));
+    vi.useRealTimers();
+  }
+
+  async function mountWithSuggestion(): Promise<RenderResult> {
+    const view = await mount();
+    await typeAndWaitForSuggestion(TYPED_SENTENCE);
+    expect(visibleSuggestion()).toBe(SUGGESTION);
+    return view;
+  }
+
+  it('clears a visible suggestion when the editor turns read-only', async () => {
+    const view = await mountWithSuggestion();
+
+    transportReadOnly = true;
+    await rerender(view);
+
+    expect(liveEditor().isEditable).toBe(false);
+    expect(visibleSuggestion()).toBeNull();
+  });
+
+  it('keeps the suggestion across a render that leaves the editor editable', async () => {
+    const view = await mountWithSuggestion();
+
+    await rerender(view);
+
+    expect(visibleSuggestion()).toBe(SUGGESTION);
+    expect(streamSuggestion).toHaveBeenCalledTimes(1);
+  });
+
+  it('suggests again once the editor is editable again', async () => {
+    const view = await mountWithSuggestion();
+    transportReadOnly = true;
+    await rerender(view);
+
+    transportReadOnly = false;
+    await rerender(view);
+    await typeAndWaitForSuggestion(' again');
+
+    expect(visibleSuggestion()).toBe(SUGGESTION);
+    expect(streamSuggestion).toHaveBeenCalledTimes(2);
   });
 });

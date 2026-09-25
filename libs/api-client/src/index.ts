@@ -2,6 +2,7 @@ export {
   ApiClientError,
   HttpClient,
   httpClient,
+  isClientError,
   isEmailNotVerifiedError,
   retryAfterMsOf,
   type FieldError,

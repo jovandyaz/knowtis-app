@@ -129,6 +129,32 @@ describe('useRotateShareLink', () => {
       client.getQueryData(notesQueryKeys.sharedNote('old'))
     ).toBeUndefined();
   });
+  it('lets a cancel abort the authority read that reconciles a lost response', async () => {
+    const readSignals: (AbortSignal | null | undefined)[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (init.method === 'POST') {
+          throw new TypeError('Response lost after commit');
+        }
+        readSignals.push(init.signal);
+        return new Response(JSON.stringify(after), { status: 200 });
+      })
+    );
+    const { result } = renderHook(() => useRotateShareLink('note'), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync()).rejects.toThrow(
+        'Response lost'
+      );
+    });
+
+    expect(readSignals.map((signal) => signal instanceof AbortSignal)).toEqual([
+      true,
+    ]);
+  });
   it('prevents a read started before commit from restoring the old token after success', async () => {
     const response = Promise.withResolvers<Response>();
     vi.stubGlobal(

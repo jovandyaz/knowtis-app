@@ -8,6 +8,7 @@ import {
 import { notesApi } from '@knowtis/api-client';
 import type { ShareNoteInput } from '@knowtis/shared-types';
 
+import { unlessNoteDeleted } from './note-deletion';
 import {
   NotePeopleSchema,
   NotePersonSchema,
@@ -41,9 +42,9 @@ async function refreshAccess(client: QueryClient, noteId: string) {
 export function usePeople(noteId: string, enabled: boolean) {
   return useQuery({
     queryKey: notesQueryKeys.people(noteId),
-    queryFn: async () =>
-      NotePeopleSchema.parse(await notesApi.getPeople(noteId)),
-    enabled,
+    queryFn: async ({ signal }) =>
+      NotePeopleSchema.parse(await notesApi.getPeople(noteId, signal)),
+    enabled: unlessNoteDeleted(enabled),
     retry: false,
     staleTime: 0,
     refetchOnMount: 'always',
@@ -54,12 +55,12 @@ export function usePeople(noteId: string, enabled: boolean) {
 export function useSharingAuthority(noteId: string, enabled: boolean) {
   return useQuery({
     queryKey: notesQueryKeys.sharingAuthority(noteId),
-    queryFn: async () => {
-      const note = await notesApi.getById(noteId);
+    queryFn: async ({ signal }) => {
+      const note = await notesApi.getById(noteId, signal);
       SharingAuthoritySchema.parse(note);
       return note;
     },
-    enabled,
+    enabled: unlessNoteDeleted(enabled),
     retry: false,
     staleTime: 0,
     refetchOnMount: 'always',

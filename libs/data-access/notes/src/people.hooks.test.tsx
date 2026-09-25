@@ -169,6 +169,40 @@ describe('People hooks', () => {
     expect(client.getQueryData(notesQueryKeys.people('two'))).toBeUndefined();
   });
 
+  it('lets a cancel abort the People read in flight', async () => {
+    let inFlightRead: AbortSignal | undefined;
+    vi.mocked(notesApi.getPeople).mockImplementation((_noteId, signal) => {
+      inFlightRead = signal;
+      return new Promise(() => undefined);
+    });
+    renderHook(() => usePeople('one', true), { wrapper });
+    await waitFor(() => expect(inFlightRead).toBeDefined());
+
+    await act(() =>
+      client.cancelQueries({ queryKey: notesQueryKeys.people('one') })
+    );
+
+    expect(inFlightRead?.aborted).toBe(true);
+  });
+
+  it('lets a cancel abort the sharing authority read in flight', async () => {
+    let inFlightRead: AbortSignal | undefined;
+    vi.mocked(notesApi.getById).mockImplementation((_noteId, signal) => {
+      inFlightRead = signal;
+      return new Promise(() => undefined);
+    });
+    renderHook(() => useSharingAuthority('one', true), { wrapper });
+    await waitFor(() => expect(inFlightRead).toBeDefined());
+
+    await act(() =>
+      client.cancelQueries({
+        queryKey: notesQueryKeys.sharingAuthority('one'),
+      })
+    );
+
+    expect(inFlightRead?.aborted).toBe(true);
+  });
+
   it('does not query a closed dialog', () => {
     renderHook(() => usePeople('one', false), { wrapper });
     expect(notesApi.getPeople).not.toHaveBeenCalled();

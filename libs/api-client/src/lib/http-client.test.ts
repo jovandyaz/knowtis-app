@@ -5,11 +5,11 @@ import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 import {
   ApiClientError,
   HttpClient,
+  isClientError,
   isEmailNotVerifiedError,
   retryAfterMsOf,
 } from './http-client';
 
-// Mock fetch globally
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as typeof fetch;
 
@@ -156,7 +156,6 @@ describe('HttpClient', () => {
       client.setRefreshTokenCallback(refreshCallback);
       tokenProvider.getAccessToken.mockReturnValue('expired-token');
 
-      // First call returns 401, second succeeds
       mockFetch
         .mockResolvedValueOnce(errorResponse(401, { message: 'Unauthorized' }))
         .mockResolvedValueOnce({
@@ -320,5 +319,31 @@ describe('isEmailNotVerifiedError', () => {
     expect(isEmailNotVerifiedError(new Error('boom'))).toBe(false);
     expect(isEmailNotVerifiedError(null)).toBe(false);
     expect(isEmailNotVerifiedError(undefined)).toBe(false);
+  });
+});
+
+describe('isClientError', () => {
+  it.each([400, 401, 403, 404, 409, 422, 429, 499])(
+    'recognizes a %i the API answered with',
+    (status) => {
+      expect(isClientError(new ApiClientError('Rejected', status))).toBe(true);
+    }
+  );
+
+  it.each([
+    ['a 500', new ApiClientError('Server error', 500)],
+    ['a 503', new ApiClientError('Unavailable', 503)],
+    [
+      'a network failure',
+      new ApiClientError('Failed to fetch', 0, 'NETWORK_ERROR'),
+    ],
+    [
+      'an aborted request',
+      new ApiClientError('Request was cancelled', 0, 'ABORTED'),
+    ],
+    ['a plain error', new Error('boom')],
+    ['a look-alike', { status: 404 }],
+  ])('rejects %s', (_label, error) => {
+    expect(isClientError(error)).toBe(false);
   });
 });
