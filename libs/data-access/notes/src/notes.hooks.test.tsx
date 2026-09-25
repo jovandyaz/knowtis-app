@@ -436,6 +436,51 @@ describe('Notes Hooks', () => {
       ).toEqual(OPEN_NOTE);
     });
 
+    it.each([
+      ['after the first one succeeds', ['succeed', 'fail']],
+      ['while the first one is still pending', ['fail', 'succeed']],
+    ] as const)(
+      'keeps the note stopped when a duplicate delete fails %s',
+      async (_label, order) => {
+        await openNote();
+        let succeed: (value: { success: boolean }) => void = () => undefined;
+        let fail: (error: Error) => void = () => undefined;
+        vi.mocked(notesApi.delete)
+          .mockReturnValueOnce(
+            new Promise((resolve) => {
+              succeed = resolve;
+            })
+          )
+          .mockReturnValueOnce(
+            new Promise((_resolve, reject) => {
+              fail = reject;
+            })
+          );
+        const first = renderHook(() => useDeleteNote(), { wrapper });
+        const duplicate = renderHook(() => useDeleteNote(), { wrapper });
+
+        act(() => first.result.current.mutate(OPEN_NOTE.id));
+        act(() => duplicate.result.current.mutate(OPEN_NOTE.id));
+        await waitFor(() => expect(notesApi.delete).toHaveBeenCalledTimes(2));
+        for (const step of order) {
+          await act(async () =>
+            step === 'succeed'
+              ? succeed({ success: true })
+              : fail(new Error('Note not found'))
+          );
+        }
+        await waitFor(() =>
+          expect([
+            first.result.current.isSuccess,
+            duplicate.result.current.isError,
+          ]).toEqual([true, true])
+        );
+        await changeAccess();
+
+        expect(notesApi.getById).toHaveBeenCalledTimes(1);
+      }
+    );
+
     it('drops every query scoped to the deleted note and no other note', async () => {
       const scopedToDeleted = [
         notesQueryKeys.detail('n1'),
