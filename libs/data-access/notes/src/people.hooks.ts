@@ -8,6 +8,7 @@ import {
 import { notesApi } from '@knowtis/api-client';
 import type { ShareNoteInput } from '@knowtis/shared-types';
 
+import { unlessNoteDeleted } from './note-deletion';
 import {
   NotePeopleSchema,
   NotePersonSchema,
@@ -43,7 +44,7 @@ export function usePeople(noteId: string, enabled: boolean) {
     queryKey: notesQueryKeys.people(noteId),
     queryFn: async ({ signal }) =>
       NotePeopleSchema.parse(await notesApi.getPeople(noteId, signal)),
-    enabled,
+    enabled: unlessNoteDeleted(enabled),
     retry: false,
     staleTime: 0,
     refetchOnMount: 'always',
@@ -59,7 +60,7 @@ export function useSharingAuthority(noteId: string, enabled: boolean) {
       SharingAuthoritySchema.parse(note);
       return note;
     },
-    enabled,
+    enabled: unlessNoteDeleted(enabled),
     retry: false,
     staleTime: 0,
     refetchOnMount: 'always',

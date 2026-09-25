@@ -25,6 +25,7 @@ import {
   useRestoreNote,
   useUpdateNote,
 } from './notes.hooks';
+import { usePeople, useSharingAuthority } from './people.hooks';
 import { notesQueryKeys, tagsQueryKeys } from './query-keys';
 
 vi.mock('@knowtis/api-client', () => ({
@@ -37,6 +38,7 @@ vi.mock('@knowtis/api-client', () => ({
     delete: vi.fn(),
     restore: vi.fn(),
     getNoteByToken: vi.fn(),
+    getPeople: vi.fn(),
   },
 }));
 
@@ -232,13 +234,19 @@ describe('Notes Hooks', () => {
 
   describe('useDeleteNote', () => {
     const RECENT_LIMIT = 5;
+    const OWNER = {
+      id: '10000000-0000-4000-8000-000000000001',
+      name: 'Owner',
+      email: 'owner@example.com',
+      avatarUrl: null,
+    };
     const OPEN_NOTE: NoteDetail = {
       id: 'n1',
       title: 'Open note',
       content: '',
       accessLevel: 'owner',
-      ownerId: 'user-1',
-      owner: { id: 'user-1', name: 'Owner', avatarUrl: null },
+      ownerId: OWNER.id,
+      owner: { id: OWNER.id, name: OWNER.name, avatarUrl: null },
       generalAccess: 'restricted',
       generalAccessPermission: 'viewer',
       shareToken: null,
@@ -265,6 +273,70 @@ describe('Notes Hooks', () => {
         ).toEqual(OPEN_NOTE)
       );
     }
+
+    function OpenNoteWithSharing({ noteId }: { noteId: string }) {
+      useNote(noteId);
+      usePeople(noteId, true);
+      useSharingAuthority(noteId, true);
+      return null;
+    }
+
+    async function openNoteWithSharing() {
+      vi.mocked(notesApi.getById).mockResolvedValue(OPEN_NOTE);
+      vi.mocked(notesApi.getPeople).mockResolvedValue([
+        { user: OWNER, permission: 'owner' },
+      ]);
+      const page = render(<OpenNoteWithSharing noteId={OPEN_NOTE.id} />, {
+        wrapper,
+      });
+      await waitFor(() =>
+        expect(
+          [
+            notesQueryKeys.detail(OPEN_NOTE.id),
+            notesQueryKeys.people(OPEN_NOTE.id),
+            notesQueryKeys.sharingAuthority(OPEN_NOTE.id),
+          ].map((key) => queryClient.getQueryState(key)?.status)
+        ).toEqual(['success', 'success', 'success'])
+      );
+      return page;
+    }
+
+    const noteReads = () => [
+      vi.mocked(notesApi.getById).mock.calls.length,
+      vi.mocked(notesApi.getPeople).mock.calls.length,
+    ];
+
+    it('never fetches the deleted note when its open page re-renders before navigating away', async () => {
+      const page = await openNoteWithSharing();
+      const readsBeforeDelete = noteReads();
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync(OPEN_NOTE.id));
+      page.rerender(<OpenNoteWithSharing noteId={OPEN_NOTE.id} />);
+      await act(() =>
+        queryClient.invalidateQueries({ queryKey: notesQueryKeys.all })
+      );
+
+      expect(noteReads()).toEqual(readsBeforeDelete);
+    });
+
+    it("drops the deleted note's queries once its page unmounts", async () => {
+      const page = await openNoteWithSharing();
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+      await act(() => result.current.mutateAsync(OPEN_NOTE.id));
+
+      page.unmount();
+
+      expect(
+        [
+          notesQueryKeys.detail(OPEN_NOTE.id),
+          notesQueryKeys.people(OPEN_NOTE.id),
+          notesQueryKeys.sharingAuthority(OPEN_NOTE.id),
+        ].map((key) => queryClient.getQueryState(key))
+      ).toEqual([undefined, undefined, undefined]);
+    });
 
     it('never refetches the note when its access is reconciled after the delete', async () => {
       await openNote();

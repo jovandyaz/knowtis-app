@@ -19,6 +19,13 @@ import {
   mapLoadedNotes,
   type NoteListPages,
 } from './note-cache';
+import {
+  dropNoteQueries,
+  resumeNoteQueries,
+  singleNoteQueryKeys,
+  stopNoteQueries,
+  unlessNoteDeleted,
+} from './note-deletion';
 import { invalidateNoteCollections } from './note-invalidation';
 import { notesMutationKeys, notesQueryKeys } from './query-keys';
 
@@ -78,7 +85,7 @@ export function useNote(noteId: string | undefined) {
       }
       return notesApi.getById(noteId, signal);
     },
-    enabled: !!noteId,
+    enabled: unlessNoteDeleted(!!noteId),
     staleTime: DETAIL_STALE_TIME_MS,
   });
 }
@@ -164,18 +171,10 @@ export function useUpdateNote() {
   });
 }
 
-function singleNoteQueryKeys(id: string) {
-  return [
-    notesQueryKeys.detail(id),
-    notesQueryKeys.people(id),
-    notesQueryKeys.sharingAuthority(id),
-  ];
-}
-
 /**
- * Removes the deleted note's own queries instead of invalidating them: its
- * page stays mounted until navigation lands, and any refresh in that window
- * would ask the server for a note that no longer exists.
+ * Stops the note's own queries while the delete runs and removes them once
+ * nothing shows them: its page stays mounted until navigation lands, and any
+ * fetch in that window would ask the server for a note that no longer exists.
  */
 export function useDeleteNote() {
   const queryClient = useQueryClient();
@@ -184,6 +183,7 @@ export function useDeleteNote() {
     mutationKey: notesMutationKeys.delete(),
     mutationFn: (id: string) => notesApi.delete(id),
     onMutate: async (id) => {
+      stopNoteQueries(queryClient, id);
       await Promise.all(
         [notesQueryKeys.lists(), ...singleNoteQueryKeys(id)].map((queryKey) =>
           queryClient.cancelQueries({ queryKey })
@@ -202,9 +202,7 @@ export function useDeleteNote() {
       return { previousLists };
     },
     onSuccess: (_result, id) => {
-      for (const queryKey of singleNoteQueryKeys(id)) {
-        queryClient.removeQueries({ queryKey });
-      }
+      dropNoteQueries(queryClient, id);
     },
     onError: (_err, id, context) => {
       if (context?.previousLists) {
@@ -212,9 +210,7 @@ export function useDeleteNote() {
           queryClient.setQueryData(queryKey, data);
         }
       }
-      for (const queryKey of singleNoteQueryKeys(id)) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+      resumeNoteQueries(queryClient, id);
     },
     onSettled: () => {
       invalidateNoteCollections(queryClient);
