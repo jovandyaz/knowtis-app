@@ -2,16 +2,17 @@ import { asc, gt } from 'drizzle-orm';
 import sanitizeHtml from 'sanitize-html';
 import * as Y from 'yjs';
 
-import { IMAGE_NODE_NAME, YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import {
+  IMAGE_NODE_NAME,
+  IMAGE_SRC_ATTR,
+  YJS_XML_FRAGMENT_NAME,
+} from '@knowtis/editor-schema';
 import { isStoredImageUrl } from '@knowtis/shared-util';
 
 import { reasonOf } from '../core/errors/reason-of';
 import type { Database } from '../database/database.module';
 import { notes } from '../database/schema/notes.schema';
-import {
-  SRC_ATTR,
-  withYDoc,
-} from '../modules/notes/infrastructure/html-to-yjs';
+import { withYDoc } from '../modules/notes/infrastructure/html-to-yjs';
 import { scanById, type KeysetSource } from './id-keyset-scan';
 
 const RELATIVE_SRC = 'relative';
@@ -85,7 +86,7 @@ function imageSrcsInState(state: Buffer): unknown[] {
           node instanceof Y.XmlElement && node.nodeName === IMAGE_NODE_NAME
       );
     return [...images].flatMap((image) =>
-      image instanceof Y.XmlElement ? [image.getAttribute(SRC_ATTR)] : []
+      image instanceof Y.XmlElement ? [image.getAttribute(IMAGE_SRC_ATTR)] : []
     );
   });
 }
@@ -97,7 +98,7 @@ function imageSrcsInHtml(html: string): unknown[] {
     allowedAttributes: {},
     onOpenTag: (tag, attribs) => {
       if (tag === 'img') {
-        srcs.push(attribs[SRC_ATTR]);
+        srcs.push(attribs[IMAGE_SRC_ATTR]);
       }
     },
   });

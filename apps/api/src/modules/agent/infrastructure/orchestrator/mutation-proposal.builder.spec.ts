@@ -7,13 +7,14 @@ import {
   AI_BLOCK_STATUS,
   IMAGE_NODE_NAME,
 } from '@knowtis/editor-schema';
+import {
+  nodesLostBetween,
+  noteSchemaExtensions,
+} from '@knowtis/editor-schema/server';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
-import {
-  editorSchema,
-  noteSchemaExtensions,
-} from '../../../notes/infrastructure/html-to-yjs';
+import { editorSchema } from '../../../notes/infrastructure/html-to-yjs';
 import { AgentErrors } from '../../domain/agent-errors';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
@@ -22,7 +23,6 @@ import type {
   NoteBody,
   NoteContentStatus,
 } from '../../domain/retrieval';
-import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 import {
   AI_BLOCK_HTML,
@@ -35,9 +35,9 @@ import {
 } from '../sanitize/html-sanitizer.fixtures';
 import { MutationProposalBuilder } from './mutation-proposal.builder';
 
-vi.mock('../sanitize/document-fidelity', async (importOriginal) => {
+vi.mock('@knowtis/editor-schema/server', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../sanitize/document-fidelity')>();
+    await importOriginal<typeof import('@knowtis/editor-schema/server')>();
   return { ...actual, nodesLostBetween: vi.fn(actual.nodesLostBetween) };
 });
 

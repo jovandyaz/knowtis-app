@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { htmlToMarkdown } from '@knowtis/note-markdown';
+import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { nodesLostBetween } from './document-fidelity';
-import { markdownToNoteHtml } from './html-sanitizer';
 
 const STORED_SRC = `https://${STORED_IMAGE_HOST}/notes/n1/a.webp`;
 const FOREIGN_SRC = 'https://attacker.example/x.png';
 
 const roundTripped = (html: string): string =>
-  markdownToNoteHtml(htmlToMarkdown(html));
+  markdownToHtml(htmlToMarkdown(html));
 
 const NESTED_TASK_LIST =
   '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><div><p>book</p>' +

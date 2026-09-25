@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { err, type Result } from 'neverthrow';
 
+import {
+  nodesLostBetween,
+  restoreStoredAttributes,
+} from '@knowtis/editor-schema/server';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
 import { AgentErrors, type AgentDomainError } from '../../domain/agent-errors';
@@ -19,9 +23,7 @@ import {
   ProposedMutation,
   type UpdateMutationPayload,
 } from '../../domain/proposed-mutation';
-import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
-import { restoreStoredAttributes } from '../sanitize/stored-attributes';
 
 const UNRENDERABLE_CONTENT = 'content the server cannot render';
 

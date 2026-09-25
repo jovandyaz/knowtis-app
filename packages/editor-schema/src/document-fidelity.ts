@@ -3,10 +3,8 @@ import { generateJSON } from '@tiptap/html/server';
 
 import { BLANK_TEXT } from '@knowtis/note-markdown';
 
-import {
-  isForeignImage,
-  noteSchemaExtensions,
-} from '../../../notes/infrastructure/html-to-yjs';
+import { isForeignImage } from './image-node';
+import { noteSchemaExtensions } from './note-schema';
 
 // `<p>&nbsp;</p>` reads back as an empty paragraph that looks the same, so
 // counting its text would refuse an edit that loses nothing.
