@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import type { Editor, Range } from '@tiptap/react';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
@@ -21,6 +22,8 @@ import {
 
 import { filterSlashCommands } from './slash-commands.config';
 import type { SlashCommandItem } from './slash-commands.config';
+
+const SLASH_COMMANDS_PLUGIN_KEY = new PluginKey('slashCommands');
 
 interface SlashCommandMenuProps {
   items: SlashCommandItem[];
@@ -142,14 +145,19 @@ const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
 SlashCommandMenu.displayName = 'SlashCommandMenu';
 
 /**
- * Suggestion configuration for the SlashCommands extension.
- * Handles item filtering, rendering via ReactRenderer + tippy.js,
- * and keyboard navigation delegation.
+ * Suggestion config for the `/` menu: item filtering, rendering via
+ * ReactRenderer + tippy.js, and keyboard navigation delegation. Register it
+ * through `SuggestionMenu.extend({ name })`.
  */
 export const slashCommandsSuggestion: Omit<
   SuggestionOptions<SlashCommandItem>,
   'editor'
 > = {
+  char: '/',
+  pluginKey: SLASH_COMMANDS_PLUGIN_KEY,
+  allowSpaces: false,
+  startOfLine: false,
+
   items: ({ query }) => filterSlashCommands(query),
 
   render: () => {
