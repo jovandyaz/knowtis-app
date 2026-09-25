@@ -5,6 +5,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import {
   nodesLostBetween,
+  nodesWithoutMarkdown,
   nodesWithoutMarkdownLostBetween,
   restoreStoredAttributes,
 } from '@knowtis/editor-schema/server';
@@ -210,7 +211,11 @@ export class MutationProposalBuilder {
     }
     const lost = nodesLostBetween(body.html, markdownToNoteHtml(original));
     if (lost.length > 0) {
-      return err(AgentErrors.editWouldLoseContent(lost));
+      return err(
+        nodesWithoutMarkdown(lost).length === lost.length
+          ? AgentErrors.aiBlockWouldBeLost(lost)
+          : AgentErrors.editWouldLoseContent(lost)
+      );
     }
     const restoredHtml = restoreStoredAttributes(body.html, contentHtml);
     const changes = input.edits.length + (appendMarkdown === undefined ? 0 : 1);

@@ -725,7 +725,7 @@ describe('MutationProposalBuilder.buildEdit', () => {
     }
   );
 
-  it('refuses an edit to a note holding an AI block, which Markdown has no form for', async () => {
+  it('refuses an edit to a note holding an AI block, asking for it to be inserted or discarded', async () => {
     const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
 
     const r = await builder.buildEdit(USER, 'note-1', {
@@ -733,7 +733,24 @@ describe('MutationProposalBuilder.buildEdit', () => {
     });
 
     expect(r._unsafeUnwrapErr()).toEqual(
-      AgentErrors.editWouldLoseContent([AI_BLOCK_NAME])
+      AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME])
+    );
+  });
+
+  it('says the note must be edited by hand when resolving the AI block would not be enough', async () => {
+    const bodyHtml = storedHtml(`<p>Text.</p>${AI_BLOCK_HTML}`);
+    const { builder } = editing(bodyHtml);
+    vi.mocked(nodesLostBetween).mockReturnValueOnce([
+      AI_BLOCK_NAME,
+      'taskList',
+    ]);
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Text.', newText: 'Other.' }],
+    });
+
+    expect(r._unsafeUnwrapErr()).toEqual(
+      AgentErrors.editWouldLoseContent([AI_BLOCK_NAME, 'taskList'])
     );
   });
 
@@ -991,7 +1008,7 @@ describe('a copilot edit over every construct the note schema defines', () => {
       });
 
       expect(r._unsafeUnwrapErr()).toEqual(
-        AgentErrors.editWouldLoseContent([type])
+        AgentErrors.aiBlockWouldBeLost([type])
       );
     }
   );
