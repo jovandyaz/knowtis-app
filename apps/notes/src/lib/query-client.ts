@@ -2,7 +2,9 @@ import { QueryCache, QueryClient } from '@tanstack/react-query';
 
 import { authStore, redirectToLoginWithReload } from '@/auth';
 
-import { ApiClientError } from '@knowtis/api-client';
+import { ApiClientError, isClientError } from '@knowtis/api-client';
+
+const MAX_QUERY_RETRIES = 1;
 
 function handleAuthFailure(): void {
   const user = authStore.getState().user;
@@ -25,12 +27,8 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60,
-      retry: (failureCount, error) => {
-        if (ApiClientError.isApiClientError(error) && error.status === 401) {
-          return false;
-        }
-        return failureCount < 1;
-      },
+      retry: (failureCount, error) =>
+        !isClientError(error) && failureCount < MAX_QUERY_RETRIES,
     },
   },
 });

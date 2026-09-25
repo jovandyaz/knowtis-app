@@ -59,7 +59,7 @@ export function useRotateShareLink(noteId: string) {
       await queryClient
         .fetchQuery({
           queryKey: detailKey,
-          queryFn: () => notesApi.getById(noteId),
+          queryFn: ({ signal }) => notesApi.getById(noteId, signal),
           retry: false,
           staleTime: 0,
         })

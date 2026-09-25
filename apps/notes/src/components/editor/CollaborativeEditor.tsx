@@ -229,12 +229,14 @@ function InternalEditor({
     [updateAISettings, autocompleteEnabled]
   );
 
+  // ProseMirror stops routing keys to a non-editable view, so a suggestion left
+  // up across a read-only flip could no longer be accepted or dismissed.
   useEffect(() => {
     if (!editor || editor.isDestroyed || autocompletePreference === undefined) {
       return;
     }
-    editor.commands.setGhostTextEnabled(autocompletePreference);
-  }, [editor, autocompletePreference]);
+    editor.commands.setGhostTextEnabled(autocompletePreference && editable);
+  }, [editor, autocompletePreference, editable]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || !yXmlFragment || !initialContent) {

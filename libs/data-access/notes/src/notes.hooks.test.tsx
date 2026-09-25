@@ -3,24 +3,29 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   notesApi,
   type NoteCounts,
+  type NoteDetail,
   type NoteWithAccess,
 } from '@knowtis/api-client';
 import { DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
 import {
   useCreateNote,
+  useDeleteNote,
+  useNote,
+  useNoteByToken,
   useNoteCounts,
   useNotes,
   useRestoreNote,
   useUpdateNote,
 } from './notes.hooks';
-import { notesQueryKeys } from './query-keys';
+import { usePeople, useSharingAuthority } from './people.hooks';
+import { notesQueryKeys, tagsQueryKeys } from './query-keys';
 
 vi.mock('@knowtis/api-client', () => ({
   notesApi: {
@@ -31,6 +36,8 @@ vi.mock('@knowtis/api-client', () => ({
     update: vi.fn(),
     delete: vi.fn(),
     restore: vi.fn(),
+    getNoteByToken: vi.fn(),
+    getPeople: vi.fn(),
   },
 }));
 
@@ -221,6 +228,370 @@ describe('Notes Hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(spy).toHaveBeenCalledWith({ queryKey: ['notes', 'counts'] });
+    });
+  });
+
+  describe('useDeleteNote', () => {
+    const RECENT_LIMIT = 5;
+    const OWNER = {
+      id: '10000000-0000-4000-8000-000000000001',
+      name: 'Owner',
+      email: 'owner@example.com',
+      avatarUrl: null,
+    };
+    const OPEN_NOTE: NoteDetail = {
+      id: 'n1',
+      title: 'Open note',
+      content: '',
+      accessLevel: 'owner',
+      ownerId: OWNER.id,
+      owner: { id: OWNER.id, name: OWNER.name, avatarUrl: null },
+      generalAccess: 'restricted',
+      generalAccessPermission: 'viewer',
+      shareToken: null,
+      editorsCanShare: false,
+      bucket: null,
+      tags: [],
+      supertag: null,
+      supertagFields: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    function OpenNotePage({ noteId }: { noteId: string }) {
+      useNote(noteId);
+      return null;
+    }
+
+    async function openNote() {
+      vi.mocked(notesApi.getById).mockResolvedValue(OPEN_NOTE);
+      render(<OpenNotePage noteId={OPEN_NOTE.id} />, { wrapper });
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+        ).toEqual(OPEN_NOTE)
+      );
+    }
+
+    function OpenNoteWithSharing({ noteId }: { noteId: string }) {
+      useNote(noteId);
+      usePeople(noteId, true);
+      useSharingAuthority(noteId, true);
+      return null;
+    }
+
+    async function openNoteWithSharing() {
+      vi.mocked(notesApi.getById).mockResolvedValue(OPEN_NOTE);
+      vi.mocked(notesApi.getPeople).mockResolvedValue([
+        { user: OWNER, permission: 'owner' },
+      ]);
+      const page = render(<OpenNoteWithSharing noteId={OPEN_NOTE.id} />, {
+        wrapper,
+      });
+      await waitFor(() =>
+        expect(
+          [
+            notesQueryKeys.detail(OPEN_NOTE.id),
+            notesQueryKeys.people(OPEN_NOTE.id),
+            notesQueryKeys.sharingAuthority(OPEN_NOTE.id),
+          ].map((key) => queryClient.getQueryState(key)?.status)
+        ).toEqual(['success', 'success', 'success'])
+      );
+      return page;
+    }
+
+    const changeAccess = () =>
+      act(() =>
+        queryClient.invalidateQueries({ queryKey: notesQueryKeys.all })
+      );
+
+    const noteReads = () => [
+      vi.mocked(notesApi.getById).mock.calls.length,
+      vi.mocked(notesApi.getPeople).mock.calls.length,
+    ];
+
+    it('never fetches the deleted note when its open page re-renders before navigating away', async () => {
+      const page = await openNoteWithSharing();
+      const readsBeforeDelete = noteReads();
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync(OPEN_NOTE.id));
+      page.rerender(<OpenNoteWithSharing noteId={OPEN_NOTE.id} />);
+      await changeAccess();
+
+      expect(noteReads()).toEqual(readsBeforeDelete);
+    });
+
+    it("drops the deleted note's queries once its page unmounts", async () => {
+      const page = await openNoteWithSharing();
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+      await act(() => result.current.mutateAsync(OPEN_NOTE.id));
+
+      page.unmount();
+
+      expect(
+        [
+          notesQueryKeys.detail(OPEN_NOTE.id),
+          notesQueryKeys.people(OPEN_NOTE.id),
+          notesQueryKeys.sharingAuthority(OPEN_NOTE.id),
+        ].map((key) => queryClient.getQueryState(key))
+      ).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('never refetches the note when an access change lands after the delete', async () => {
+      await openNote();
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync(OPEN_NOTE.id));
+      await changeAccess();
+
+      expect(notesApi.getById).toHaveBeenCalledTimes(1);
+    });
+
+    it('aborts a read of the note still in flight when the delete starts', async () => {
+      await openNote();
+      let inFlightRead: AbortSignal | undefined;
+      vi.mocked(notesApi.getById).mockImplementationOnce((_id, signal) => {
+        inFlightRead = signal;
+        return new Promise(() => undefined);
+      });
+      void queryClient.refetchQueries({
+        queryKey: notesQueryKeys.detail(OPEN_NOTE.id),
+      });
+      await waitFor(() => expect(inFlightRead).toBeDefined());
+      vi.mocked(notesApi.delete).mockReturnValue(new Promise(() => undefined));
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate(OPEN_NOTE.id));
+
+      await waitFor(() => expect(inFlightRead?.aborted).toBe(true));
+      const detail = queryClient.getQueryState(
+        notesQueryKeys.detail(OPEN_NOTE.id)
+      );
+      expect([result.current.isPending, detail?.status, detail?.data]).toEqual([
+        true,
+        'success',
+        OPEN_NOTE,
+      ]);
+    });
+
+    it('never refetches the note when an access change lands mid-delete', async () => {
+      await openNote();
+      let settleDelete: (value: { success: boolean }) => void = () => undefined;
+      vi.mocked(notesApi.delete).mockReturnValue(
+        new Promise((resolve) => {
+          settleDelete = resolve;
+        })
+      );
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate(OPEN_NOTE.id));
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      await changeAccess();
+      await act(async () => settleDelete({ success: true }));
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      await changeAccess();
+
+      expect(notesApi.getById).toHaveBeenCalledTimes(1);
+    });
+
+    it('still refreshes a note other than the one being deleted', async () => {
+      await openNote();
+      vi.mocked(notesApi.delete).mockReturnValue(new Promise(() => undefined));
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate('another-note'));
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      await changeAccess();
+
+      await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+    });
+
+    it('leaves every query an access change touched mid-delete refreshed when the delete fails', async () => {
+      await openNote();
+      queryClient.setQueryData(notesQueryKeys.sharedNote('tok'), OPEN_NOTE);
+      let failDelete: (error: Error) => void = () => undefined;
+      vi.mocked(notesApi.delete).mockReturnValue(
+        new Promise((_resolve, reject) => {
+          failDelete = reject;
+        })
+      );
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate(OPEN_NOTE.id));
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      await changeAccess();
+      await act(async () => failDelete(new Error('refused')));
+
+      await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+      expect(
+        queryClient.getQueryState(notesQueryKeys.sharedNote('tok'))
+          ?.isInvalidated
+      ).toBe(true);
+      expect(
+        queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+      ).toEqual(OPEN_NOTE);
+    });
+
+    it.each([
+      ['after the first one succeeds', ['succeed', 'fail']],
+      ['while the first one is still pending', ['fail', 'succeed']],
+    ] as const)(
+      'keeps the note stopped when a duplicate delete fails %s',
+      async (_label, order) => {
+        await openNote();
+        let succeed: (value: { success: boolean }) => void = () => undefined;
+        let fail: (error: Error) => void = () => undefined;
+        vi.mocked(notesApi.delete)
+          .mockReturnValueOnce(
+            new Promise((resolve) => {
+              succeed = resolve;
+            })
+          )
+          .mockReturnValueOnce(
+            new Promise((_resolve, reject) => {
+              fail = reject;
+            })
+          );
+        const first = renderHook(() => useDeleteNote(), { wrapper });
+        const duplicate = renderHook(() => useDeleteNote(), { wrapper });
+
+        act(() => first.result.current.mutate(OPEN_NOTE.id));
+        act(() => duplicate.result.current.mutate(OPEN_NOTE.id));
+        await waitFor(() => expect(notesApi.delete).toHaveBeenCalledTimes(2));
+        for (const step of order) {
+          await act(async () =>
+            step === 'succeed'
+              ? succeed({ success: true })
+              : fail(new Error('Note not found'))
+          );
+        }
+        await waitFor(() =>
+          expect([
+            first.result.current.isSuccess,
+            duplicate.result.current.isError,
+          ]).toEqual([true, true])
+        );
+        await changeAccess();
+
+        expect(notesApi.getById).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('refreshes the still-open note once an undo restores it', async () => {
+      vi.mocked(notesApi.getById).mockResolvedValue(OPEN_NOTE);
+      const page = render(<OpenNotePage noteId={OPEN_NOTE.id} />, { wrapper });
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+        ).toEqual(OPEN_NOTE)
+      );
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const deletion = renderHook(() => useDeleteNote(), { wrapper });
+      await act(() => deletion.result.current.mutateAsync(OPEN_NOTE.id));
+      const restored = { ...OPEN_NOTE, title: 'Restored' };
+      vi.mocked(notesApi.getById).mockResolvedValue(restored);
+      vi.mocked(notesApi.restore).mockResolvedValue(restored);
+      const restore = renderHook(() => useRestoreNote(), { wrapper });
+
+      await act(() => restore.result.current.mutateAsync(OPEN_NOTE.id));
+
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+        ).toEqual(restored)
+      );
+      expect(notesApi.getById).toHaveBeenCalledTimes(2);
+      page.unmount();
+      expect(
+        queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+      ).toEqual(restored);
+    });
+
+    it('drops every query scoped to the deleted note and no other note', async () => {
+      const scopedToDeleted = [
+        notesQueryKeys.detail('n1'),
+        notesQueryKeys.people('n1'),
+        notesQueryKeys.sharingAuthority('n1'),
+      ];
+      const otherNote = notesQueryKeys.detail('n10');
+      for (const key of [...scopedToDeleted, otherNote]) {
+        queryClient.setQueryData(key, {});
+      }
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync('n1'));
+
+      expect(
+        scopedToDeleted.map((key) => queryClient.getQueryState(key))
+      ).toEqual([undefined, undefined, undefined]);
+      expect(queryClient.getQueryData(otherNote)).toEqual({});
+    });
+
+    it('marks the collections that listed the note stale', async () => {
+      const aggregates = [
+        notesQueryKeys.recent(RECENT_LIMIT),
+        notesQueryKeys.counts(),
+        tagsQueryKeys.tree(),
+      ];
+      queryClient.setQueryData(notesQueryKeys.list(), {
+        pages: [],
+        pageParams: [],
+      });
+      for (const key of aggregates) {
+        queryClient.setQueryData(key, {});
+      }
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync('n1'));
+
+      expect(
+        [notesQueryKeys.list(), ...aggregates].map(
+          (key) => queryClient.getQueryState(key)?.isInvalidated
+        )
+      ).toEqual([true, true, true, true]);
+    });
+
+    it('keeps and refreshes a note it failed to delete', async () => {
+      await openNote();
+      vi.mocked(notesApi.delete).mockRejectedValue(new Error('refused'));
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() =>
+        result.current.mutateAsync(OPEN_NOTE.id).catch(() => undefined)
+      );
+
+      await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+      expect(
+        queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+      ).toEqual(OPEN_NOTE);
+    });
+  });
+
+  describe('useNoteByToken', () => {
+    it('lets a cancel abort the shared note read in flight', async () => {
+      let inFlightRead: AbortSignal | undefined;
+      vi.mocked(notesApi.getNoteByToken).mockImplementation(
+        (_token, signal) => {
+          inFlightRead = signal;
+          return new Promise(() => undefined);
+        }
+      );
+      renderHook(() => useNoteByToken('tok'), { wrapper });
+      await waitFor(() => expect(inFlightRead).toBeDefined());
+
+      await act(() =>
+        queryClient.cancelQueries({
+          queryKey: notesQueryKeys.sharedNote('tok'),
+        })
+      );
+
+      expect(inFlightRead?.aborted).toBe(true);
     });
   });
 

@@ -3,7 +3,9 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { authStore, performLogout } from '@/auth/setup';
 import { toast } from 'sonner';
 
-import { ApiClientError } from '@knowtis/api-client';
+import { ApiClientError, isClientError } from '@knowtis/api-client';
+
+const MAX_QUERY_RETRIES = 1;
 
 // Only end sessions that exist: a 401 from the login mutation itself must not
 // trigger a logout redirect that reloads the page and wipes the form error.
@@ -42,8 +44,7 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60,
       retry: (failureCount, error) =>
-        !(ApiClientError.isApiClientError(error) && error.status === 401) &&
-        failureCount < 1,
+        !isClientError(error) && failureCount < MAX_QUERY_RETRIES,
     },
   },
 });

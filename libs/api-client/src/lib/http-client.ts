@@ -60,6 +60,22 @@ export function retryAfterMsOf(error: unknown): number | undefined {
 }
 
 const EMAIL_NOT_VERIFIED_STATUS = 403;
+const CLIENT_ERROR_STATUS_MIN = 400;
+const SERVER_ERROR_STATUS_MIN = 500;
+
+/**
+ * True when the API rejected the request itself (4xx). An immediate retry
+ * would not help: this API answers the same request with the same 4xx, and its
+ * 429 comes from a 60 s throttle window that a 1 s retry cannot clear. A
+ * timeout or network failure arrives as status 0, so it is not a client error.
+ */
+export function isClientError(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.status >= CLIENT_ERROR_STATUS_MIN &&
+    error.status < SERVER_ERROR_STATUS_MIN
+  );
+}
 
 /**
  * True when the API refused an action because the account's email is still

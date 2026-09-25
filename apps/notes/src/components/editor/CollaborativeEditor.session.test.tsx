@@ -1,9 +1,18 @@
+import type { ReactNode } from 'react';
+
+import { QueryClientProvider } from '@tanstack/react-query';
+
 import { ROUTES } from '@/config';
 import { queryClient } from '@/lib/query-client';
-import { render } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { notesQueryKeys } from '@knowtis/data-access-notes';
+import { notesApi } from '@knowtis/api-client';
+import {
+  notesQueryKeys,
+  useDeleteNote,
+  useNote,
+} from '@knowtis/data-access-notes';
 
 import { CollaborativeEditor } from './CollaborativeEditor';
 
@@ -59,6 +68,12 @@ describe('CollaborativeEditor session expiry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     expireSession = undefined;
+    accessChanged = undefined;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    queryClient.clear();
   });
 
   it('invalidates both detail and share-route permission snapshots after access changes', () => {
@@ -99,7 +114,42 @@ describe('CollaborativeEditor session expiry', () => {
         'n1',
       ])?.isInvalidated
     ).toBe(true);
-    queryClient.clear();
+  });
+
+  it('refreshes every notes query but never fetches a note it is deleting when access changes', async () => {
+    vi.spyOn(notesApi, 'delete').mockReturnValue(new Promise(() => undefined));
+    const noteRead = vi
+      .spyOn(notesApi, 'getById')
+      .mockReturnValue(new Promise(() => undefined));
+    queryClient.setQueryData(notesQueryKeys.detail('n1'), {
+      permission: 'editor',
+    });
+    queryClient.setQueryData(notesQueryKeys.sharedNote('tok'), {
+      permission: 'editor',
+    });
+    render(
+      <CollaborativeEditor noteId="n1" initialContent="" onUpdate={vi.fn()} />
+    );
+    const { result } = renderHook(
+      () => ({ note: useNote('n1'), deleteNote: useDeleteNote() }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        ),
+      }
+    );
+    act(() => result.current.deleteNote.mutate('n1'));
+    await waitFor(() => expect(result.current.deleteNote.isPending).toBe(true));
+    expect(accessChanged).toBeDefined();
+
+    accessChanged?.();
+
+    expect(
+      queryClient.getQueryState(notesQueryKeys.sharedNote('tok'))?.isInvalidated
+    ).toBe(true);
+    expect(noteRead).not.toHaveBeenCalled();
   });
 
   it('sends a signed-in user to the login page', () => {
