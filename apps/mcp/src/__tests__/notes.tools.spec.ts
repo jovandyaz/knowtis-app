@@ -377,6 +377,7 @@ describe('registerNotesTools', () => {
       updatedAt: '2026-01-02T00:00:00.000Z',
     };
     notesApi = createMockNotesApi({
+      get: vi.fn().mockResolvedValue({ ...updatedNote, content: '<p>a</p>' }),
       update: vi.fn().mockResolvedValue(updatedNote),
     });
     const { server, tools } = createFakeServer();
@@ -390,6 +391,97 @@ describe('registerNotesTools', () => {
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({
       note: { ...updatedNote, content: '## T\n\nb' },
+    });
+  });
+
+  describe('update-note over a note holding what Markdown cannot show', () => {
+    const AI_BLOCK =
+      '<div data-ai-block="" topic="Rome" status="done" content="Rome was founded in 753 BC."></div>';
+    const STORED_SRC =
+      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
+
+    const storedNote = (content: string): NoteResponse => ({
+      id: 'note-3',
+      title: 'T',
+      content,
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    function updateTool(stored: NoteResponse) {
+      notesApi = createMockNotesApi({
+        get: vi.fn().mockResolvedValue(stored),
+        update: vi.fn().mockResolvedValue(stored),
+      });
+      const { server, tools } = createFakeServer();
+      registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+      return getTool(tools, 'update-note');
+    }
+
+    it.each([
+      ['a rewrite', 'New text.'],
+      ['clearing the note', ''],
+    ])(
+      'should refuse %s that would delete an AI block, and write nothing',
+      async (_label, content) => {
+        const tool = updateTool(storedNote(`<p>Old text.</p>${AI_BLOCK}`));
+
+        const result = await tool.cb({ noteId: 'note-3', title: 'N', content });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain(
+          'insert or discard the AI block'
+        );
+        expect(notesApi.get).toHaveBeenCalledWith('jwt-token-123', 'note-3');
+        expect(notesApi.update).not.toHaveBeenCalled();
+      }
+    );
+
+    it('should tell clients about the refusal and the kept attributes', () => {
+      const { description } = updateTool(storedNote('<p>a</p>')).config;
+
+      expect(description).toContain('refused while the note holds an AI block');
+      expect(description).toContain('Image sizes, highlight colours');
+    });
+
+    it('should still rename a note holding an AI block without reading it', async () => {
+      const tool = updateTool(storedNote(`<p>Old text.</p>${AI_BLOCK}`));
+
+      const result = await tool.cb({ noteId: 'note-3', title: 'N' });
+
+      expect(result.isError).toBeUndefined();
+      expect(notesApi.get).not.toHaveBeenCalled();
+      expect(notesApi.update).toHaveBeenCalledWith('jwt-token-123', 'note-3', {
+        title: 'N',
+      });
+    });
+
+    it('should keep an image size, a highlight colour and a diagram view mode the rewrite carries over', async () => {
+      const tool = updateTool(
+        storedNote(
+          `<figure data-image=""><img src="${STORED_SRC}" alt="lake" width="320" height="200"><figcaption>Lake</figcaption></figure>` +
+            '<p>Bring <mark data-color="#ffc078" style="background-color: #ffc078; color: inherit;">sunscreen</mark>.</p>' +
+            '<div data-code="flowchart LR" data-view-mode="code" data-mermaid-block=""></div>'
+        )
+      );
+
+      const result = await tool.cb({
+        noteId: 'note-3',
+        content: [
+          `![lake](${STORED_SRC} "Lake")`,
+          'Bring ==sunscreen==.',
+          '```mermaid\nflowchart LR\n```',
+          'New text.',
+        ].join('\n\n'),
+      });
+
+      expect(result.isError).toBeUndefined();
+      const [, , data] = vi.mocked(notesApi.update).mock.calls[0] ?? [];
+      expect(data?.content).toContain('width="320" height="200"');
+      expect(data?.content).toContain('data-color="#ffc078"');
+      expect(data?.content).toContain('data-view-mode="code"');
+      expect(data?.content).toContain('<p>New text.</p>');
     });
   });
 

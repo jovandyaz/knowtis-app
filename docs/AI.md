@@ -1407,7 +1407,7 @@ What still changes on an edit:
 
 Refused with `AGENT_EDIT_WOULD_LOSE_CONTENT` instead of changed, because Markdown has no form for them: a line break inside a heading or a table cell, a table cell holding more than one paragraph, two lists of the same kind directly after each other, and an AI block the user has not inserted or discarded yet.
 
-A whole-body rewrite (`proposeUpdateNote`) replaces the note with what the model wrote, and restores the same attributes by the same keys. It may remove anything the model read, but not what the Markdown never showed it: while the note holds an AI block the user has not inserted or discarded (`NODES_WITHOUT_MARKDOWN`, `@knowtis/editor-schema/server`), a rewrite that would drop the block is refused with `AGENT_EDIT_WOULD_LOSE_CONTENT`, and the message tells the model to ask the user to insert or discard it first. A title-only update is unaffected.
+A whole-body rewrite (`proposeUpdateNote`) replaces the note with what the model wrote, and restores the same attributes by the same keys. It may remove anything the model read, but not what the Markdown never showed it: while the note holds an AI block the user has not inserted or discarded (`NODES_WITHOUT_MARKDOWN`, `@knowtis/editor-schema/server`), a rewrite that would drop the block is refused with `AGENT_EDIT_WOULD_LOSE_CONTENT`, and the message tells the model to ask the user to insert or discard it first. A title-only update is unaffected. MCP `update-note` applies the same guard and restore ([MCP](./MCP.md)).
 
 ### Human-in-the-loop
 

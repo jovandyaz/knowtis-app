@@ -331,6 +331,13 @@ All 9 tools are registered via `registerTool` and return a **dual result**: a `s
 
 `create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting — and converts back on read: the `content` in `get-note`, `create-note`, `update-note`, and `restore-note` results is always Markdown, never the stored HTML.
 
+`update-note` with `content` replaces the whole note, so it first reads the stored note (`GET /api/v1/notes/:id`, which needs `notes:read` as well) and applies two rules shared with the copilot's `proposeUpdateNote` (`@knowtis/editor-schema/server`):
+
+- **Refused while the note holds an AI block** the user has not inserted or discarded. Markdown has no form for it, so `get-note` never shows it and the rewrite would delete it. The tool returns an error asking the user to insert or discard the block in Knowtis, and writes nothing, the title included. A title-only update is unaffected.
+- **Attributes Markdown drops are kept**: an image's width and height (by its `src`), a highlight's colour (by its text) and a diagram's view mode (by its code) come back from the stored note.
+
+The read and the write are two requests with no version check between them, so an AI block added to the note in between is still overwritten.
+
 `list-notes` orders by recency and paginates with an **opaque cursor**: when more notes remain, the result carries a `nextCursor` to pass to the next call. An invalid or missing cursor starts from the first page.
 
 `search-notes` delegates to the API's hybrid retrieval endpoint (`GET /api/v1/search` — full-text + semantic ranking server-side) and returns the most relevant notes the user can access. Use it to find notes by meaning, then `get-note` to read one.

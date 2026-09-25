@@ -31,12 +31,12 @@ import {
 
 Helpers that parse or render a stored note's HTML through `@tiptap/html/server`, which needs `happy-dom`. Only Node code imports this entry (`apps/api`, `apps/mcp`); the browser never loads it.
 
-| Export                                                                              | Purpose                                                                                                                                                                           |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `noteSchemaExtensions`                                                              | The extensions every server-side reader and writer parses and renders a stored note with                                                                                          |
-| `nodesLostBetween`                                                                  | Node and mark types a document would hold fewer of after `after` replaces `before`: the fidelity guard for writes rebuilt from Markdown                                           |
-| `NODES_WITHOUT_MARKDOWN`, `nodesWithoutMarkdown`, `nodesWithoutMarkdownLostBetween` | The node types Markdown has no form for (today the AI block), and the ones among them a rewrite from Markdown would drop: its writer never saw them, so such a rewrite is refused |
-| `restoreStoredAttributes`                                                           | Copies the attributes Markdown drops (image `width`/`height`, highlight `color`, diagram `viewMode`) from the stored HTML onto HTML rebuilt from Markdown, keyed by content       |
+| Export                                                                              | Purpose                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noteSchemaExtensions`                                                              | The extensions every server-side reader and writer parses and renders a stored note with                                                                                                          |
+| `nodesLostBetween`                                                                  | Node and mark types a document would hold fewer of after `after` replaces `before`: the fidelity guard for writes rebuilt from Markdown                                                           |
+| `NODES_WITHOUT_MARKDOWN`, `nodesWithoutMarkdown`, `nodesWithoutMarkdownLostBetween` | The node types Markdown has no form for (today the AI block), and the ones among them a rewrite from Markdown would drop: its writer never saw them, so the copilot and MCP refuse such a rewrite |
+| `restoreStoredAttributes`                                                           | Copies the attributes Markdown drops (image `width`/`height`, highlight `color`, diagram `viewMode`) from the stored HTML onto HTML rebuilt from Markdown, keyed by content                       |
 
 ## `YJS_XML_FRAGMENT_NAME` — CRDT invariant
 
