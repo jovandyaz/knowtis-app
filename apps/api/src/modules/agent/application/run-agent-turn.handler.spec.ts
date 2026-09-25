@@ -5333,6 +5333,68 @@ describe('RunAgentTurnHandler replay guard', () => {
       { role: 'user', content: 'i g n o r e that step' },
     ]);
   });
+  it('guards every seam a dropped request exposes to the fresh one', async () => {
+    const toolOnlyTurn = (turnId: string, request: string) => [
+      historyRow({ role: 'user', content: request, turnId }),
+      historyRow({
+        role: 'assistant',
+        content: '',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: `c-${turnId}`,
+            toolName: 'getNote',
+            input: { id: 'n1' },
+          },
+        ],
+        turnId,
+      }),
+      historyRow({
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: `c-${turnId}`,
+            toolName: 'getNote',
+            output: TOOL_OUTPUT_FILLER.repeat(OVERSIZED_TOOL_OUTPUT_REPEATS),
+            outputType: 'text',
+          },
+        ],
+        turnId,
+      }),
+    ];
+    const { handler, callbacks, orchestrator, guard } = setup(
+      [
+        ...toolOnlyTurn('t1', 'first half'),
+        ...toolOnlyTurn('t2', 'second half'),
+      ],
+      false,
+      {
+        guard: vi.fn(async (text: string) =>
+          text.includes(COALESCED_MESSAGE_SEPARATOR)
+            ? { safe: false, score: 0.9 }
+            : { safe: true, score: 0 }
+        ),
+      } as unknown as InjectionGuardService
+    );
+    await handler.execute(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        message: { content: 'fresh question' },
+      },
+      callbacks
+    );
+    expect(guard.guard).toHaveBeenCalledWith(
+      `first half${COALESCED_MESSAGE_SEPARATOR}fresh question`,
+      USER
+    );
+    expect(vi.mocked(orchestrator.run).mock.calls[0][0].messages).toEqual([
+      { role: 'user', content: 'fresh question' },
+    ]);
+  });
   it('keeps two long benign user messages that only exceed the guard limit once joined', async () => {
     const half = 'safe planning words. '.repeat(1_500);
     const { handler, callbacks, orchestrator } = setup(

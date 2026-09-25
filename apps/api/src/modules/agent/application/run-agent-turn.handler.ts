@@ -558,16 +558,8 @@ export class RunAgentTurnHandler {
     const sanitized = sanitizeReplayHistory(inputMessages, {
       enforceAssistantAndTool: enforced,
     });
-    const withFresh = (history: readonly AgentMessage[]) =>
-      freshUserMessage ? [...history, freshUserMessage] : [...history];
-    // Fit before guarding: dropping a turn's tool rows can leave its request
-    // beside the fresh one, and the guard must scan the seam actually sent.
-    const fitted = fitHistoryToBudget(
-      withFresh(sanitized.messages),
-      AGENT_HISTORY_TOKEN_BUDGET
-    );
-    const guarded = await this.guardReplayedUserTurn(
-      freshUserMessage ? fitted.slice(0, -1) : fitted,
+    const fitted = await this.fitGuardedHistory(
+      sanitized.messages,
       freshUserMessage,
       input.userId
     );
@@ -583,16 +575,9 @@ export class RunAgentTurnHandler {
         userId: input.userId,
         ...(persistence ? { conversationId: persistence.conversationId } : {}),
       },
-      guarded.dropped
+      fitted.dropped
     );
-    const messages = coalesceMessages(
-      guarded.dropped
-        ? fitHistoryToBudget(
-            withFresh(guarded.messages),
-            AGENT_HISTORY_TOKEN_BUDGET
-          )
-        : withFresh(guarded.messages)
-    );
+    const messages = fitted.messages;
     const estimatedTokens = this.estimateTokens(messages);
 
     // Resolve the model and the BYOK key BEFORE the budget gate: a BYOK turn
@@ -1020,6 +1005,43 @@ export class RunAgentTurnHandler {
         : {}),
     });
     return tokenUsage.costUsd;
+  }
+
+  // Fit before guarding: dropping a turn's tool rows can leave its request
+  // beside the fresh one, and each drop can expose another such request.
+  // Resume has no fresh message to merge with, so it guards one row as before.
+  private async fitGuardedHistory(
+    history: readonly AgentMessage[],
+    fresh: AgentMessage | undefined,
+    userId: string
+  ): Promise<{ messages: AgentMessage[]; dropped?: DroppedUserTurn }> {
+    const withFresh = (messages: readonly AgentMessage[]) =>
+      fresh ? [...messages, fresh] : [...messages];
+    let replay = history;
+    let firstDrop: DroppedUserTurn | undefined;
+    for (;;) {
+      const fitted = fitHistoryToBudget(
+        withFresh(replay),
+        AGENT_HISTORY_TOKEN_BUDGET
+      );
+      const guarded = await this.guardReplayedUserTurn(
+        fresh ? fitted.slice(0, -1) : fitted,
+        fresh,
+        userId
+      );
+      firstDrop ??= guarded.dropped;
+      if (guarded.dropped && fresh) {
+        replay = guarded.messages;
+        continue;
+      }
+      const settled = guarded.dropped
+        ? fitHistoryToBudget(guarded.messages, AGENT_HISTORY_TOKEN_BUDGET)
+        : fitted;
+      return {
+        messages: coalesceMessages(settled),
+        ...(firstDrop ? { dropped: firstDrop } : {}),
+      };
+    }
   }
 
   // The provider is handed consecutive user rows merged into one, so a pair that
