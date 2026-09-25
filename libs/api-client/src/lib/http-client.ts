@@ -60,6 +60,20 @@ export function retryAfterMsOf(error: unknown): number | undefined {
 }
 
 const EMAIL_NOT_VERIFIED_STATUS = 403;
+const CLIENT_ERROR_STATUS_MIN = 400;
+const SERVER_ERROR_STATUS_MIN = 500;
+
+/**
+ * True when the API rejected the request itself (4xx), so sending it again
+ * unchanged cannot succeed. Network failures and 5xx are not client errors.
+ */
+export function isClientError(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.status >= CLIENT_ERROR_STATUS_MIN &&
+    error.status < SERVER_ERROR_STATUS_MIN
+  );
+}
 
 /**
  * True when the API refused an action because the account's email is still
