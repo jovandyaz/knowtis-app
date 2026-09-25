@@ -82,6 +82,7 @@ const envSchemaBase = z.object({
   AI_RPM_LIMIT: z.coerce.number().default(15),
   AI_MAX_CONCURRENT_STREAMS: z.coerce.number().default(2),
   AI_AGENT_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(8),
+  AI_AGENT_BYOK_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(20),
   AI_AGENT_MAX_MS: z.coerce.number().int().min(1000).default(300000),
   AI_AGENT_STALL_MS: z.coerce.number().int().min(5000).default(60000),
   AI_AGENT_TTFT_MS: z.coerce.number().int().min(1000).default(30000),

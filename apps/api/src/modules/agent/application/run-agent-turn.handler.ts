@@ -660,10 +660,10 @@ export class RunAgentTurnHandler {
     // Resolve turn settings BEFORE reserving quota: a settings-store failure
     // must escape before any reservation exists, else the held reservation
     // leaks with no client-facing error (the gateway turn slot has no catch).
-    const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    const maxTurnTokens = this.rateLimit.turnTokenBudget(
-      input.isAnonymous ?? false
-    );
+    const { maxSteps, maxTurnTokens } = this.rateLimit.turnLimits({
+      isAnonymous: input.isAnonymous ?? false,
+      isByok,
+    });
     const [openrouterProviderOrder, openrouterIgnoredProviders] =
       await Promise.all([
         this.aiConfig.getOpenRouterProviderOrder(),

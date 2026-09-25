@@ -31,6 +31,11 @@ interface RateLimitResult {
   readonly reservedIpSubject?: string;
 }
 
+interface TurnLimits {
+  readonly maxSteps: number;
+  readonly maxTurnTokens: number;
+}
+
 const PG_RPM_SWEEP_THRESHOLD = 1000;
 const BUDGET_WARNING_THRESHOLD = 0.8;
 
@@ -395,14 +400,28 @@ export class AIRateLimitService {
   }
 
   /**
-   * Per-turn token ceiling for the agent loop: the configured budget, clamped to
-   * the anonymous daily allowance so one anonymous turn can never exceed a day's quota.
+   * Per-turn ceilings for the agent loop. A BYOK turn bills the user's own key,
+   * so it has no token budget and gets the wider BYOK step cap; otherwise the
+   * configured budget applies, clamped to the anonymous daily allowance so one
+   * anonymous turn can never exceed a day's quota.
    */
-  turnTokenBudget(isAnonymous: boolean): number {
+  turnLimits(params: {
+    readonly isAnonymous: boolean;
+    readonly isByok: boolean;
+  }): TurnLimits {
+    if (params.isByok) {
+      return {
+        maxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
+        maxTurnTokens: Number.POSITIVE_INFINITY,
+      };
+    }
     const budget = this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET');
-    return isAnonymous
-      ? Math.min(budget, this.effectiveLimits(true).tokenLimit)
-      : budget;
+    return {
+      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
+      maxTurnTokens: params.isAnonymous
+        ? Math.min(budget, this.effectiveLimits(true).tokenLimit)
+        : budget,
+    };
   }
 
   private effectiveLimits(isAnonymous: boolean): RateLimits {

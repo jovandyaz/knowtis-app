@@ -127,6 +127,19 @@ describe('env.config agent vars', () => {
     ).toThrow();
   });
 
+  it('defaults AI_AGENT_BYOK_MAX_STEPS to 20', () => {
+    expect(validateEnv(baseEnv).AI_AGENT_BYOK_MAX_STEPS).toBe(20);
+  });
+
+  it.each(['0', '21', 'abc'])(
+    'rejects AI_AGENT_BYOK_MAX_STEPS of %s',
+    (value) => {
+      expect(() =>
+        validateEnv({ ...baseEnv, AI_AGENT_BYOK_MAX_STEPS: value })
+      ).toThrow();
+    }
+  );
+
   it('coerces AI_AGENT_MAX_MS from a numeric string', () => {
     const env = validateEnv({ ...baseEnv, AI_AGENT_MAX_MS: '90000' });
     expect(env.AI_AGENT_MAX_MS).toBe(90000);
