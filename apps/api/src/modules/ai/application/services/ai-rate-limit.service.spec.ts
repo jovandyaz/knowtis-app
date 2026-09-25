@@ -51,8 +51,18 @@ describe('AIRateLimitService', () => {
     expect(anonymous.allowed).toBe(false);
   });
 
-  it('returns the configured turn token budget for authenticated users', () => {
-    expect(service.turnTokenBudget(false)).toBe(150000);
+  it('returns the configured turn limits for authenticated users', () => {
+    expect(service.turnLimits({ isAnonymous: false, isByok: false })).toEqual({
+      maxSteps: 8,
+      maxTurnTokens: 150000,
+    });
+  });
+
+  it('lifts the token budget and uses the BYOK step cap when the turn bills the user key', () => {
+    expect(service.turnLimits({ isAnonymous: false, isByok: true })).toEqual({
+      maxSteps: 20,
+      maxTurnTokens: Number.POSITIVE_INFINITY,
+    });
   });
 
   it.each([
@@ -71,7 +81,9 @@ describe('AIRateLimitService', () => {
           AI_AGENT_TURN_TOKEN_BUDGET: budget,
         })
       );
-      expect(anonymous.turnTokenBudget(true)).toBe(expected);
+      expect(
+        anonymous.turnLimits({ isAnonymous: true, isByok: false })
+      ).toEqual({ maxSteps: 8, maxTurnTokens: expected });
     }
   );
 

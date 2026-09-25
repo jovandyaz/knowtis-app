@@ -78,21 +78,19 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordUsage: vi.fn().mockResolvedValue(undefined),
     releaseReservation: vi.fn().mockResolvedValue(undefined),
     recordSideCost: vi.fn().mockResolvedValue(undefined),
-    turnTokenBudget: vi.fn().mockReturnValue(150000),
+    turnLimits: vi.fn().mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
   } as unknown as AIRateLimitService;
   const config = {
     get: vi.fn((k: string) =>
-      k === 'AI_AGENT_MAX_STEPS'
-        ? 8
-        : k === 'AI_AGENT_MAX_MS'
-          ? 120000
-          : k === 'AI_AGENT_HISTORY_LIMIT'
-            ? 40
-            : k === 'AI_MEMORY_RETRIEVAL_K'
-              ? 6
-              : k === 'AI_MEMORY_SIMILARITY_MIN'
-                ? 0.2
-                : 0
+      k === 'AI_AGENT_MAX_MS'
+        ? 120000
+        : k === 'AI_AGENT_HISTORY_LIMIT'
+          ? 40
+          : k === 'AI_MEMORY_RETRIEVAL_K'
+            ? 6
+            : k === 'AI_MEMORY_SIMILARITY_MIN'
+              ? 0.2
+              : 0
     ),
   } as unknown as ConfigService<EnvConfig, true>;
   const orchestrator = orchestratorYielding(
@@ -1859,9 +1857,12 @@ describe('RunAgentTurnHandler', () => {
     expect(appended.messages).toEqual([{ role: 'user', content: 'hola' }]);
   });
 
-  it('forwards the anonymous turn token budget from the rate limiter to the orchestrator', async () => {
+  it('forwards the anonymous turn limits from the rate limiter to the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    vi.mocked(rateLimit.turnTokenBudget).mockReturnValue(33000);
+    vi.mocked(rateLimit.turnLimits).mockReturnValue({
+      maxSteps: 8,
+      maxTurnTokens: 33000,
+    });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -1894,13 +1895,16 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(rateLimit.turnTokenBudget).toHaveBeenCalledWith(true);
+    expect(rateLimit.turnLimits).toHaveBeenCalledWith({
+      isAnonymous: true,
+      isByok: false,
+    });
     expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ maxTurnTokens: 33000 })
+      expect.objectContaining({ maxSteps: 8, maxTurnTokens: 33000 })
     );
   });
 
-  it('forwards the registered turn token budget from the rate limiter to the orchestrator', async () => {
+  it('forwards the registered turn limits from the rate limiter to the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
@@ -1929,9 +1933,68 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(rateLimit.turnTokenBudget).toHaveBeenCalledWith(false);
+    expect(rateLimit.turnLimits).toHaveBeenCalledWith({
+      isAnonymous: false,
+      isByok: false,
+    });
     expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ maxTurnTokens: 150000 })
+      expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
+    );
+  });
+
+  it('forwards the BYOK turn limits when the turn bills the user key', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    vi.mocked(rateLimit.turnLimits).mockReturnValue({
+      maxSteps: 20,
+      maxTurnTokens: Number.POSITIVE_INFINITY,
+    });
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set(['google'])
+    );
+    const byok = makeByok();
+    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      byok,
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        message: { content: 'hi' },
+        model: 'google:gemini-2.0-flash',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(rateLimit.turnLimits).toHaveBeenCalledWith({
+      isAnonymous: false,
+      isByok: true,
+    });
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxSteps: 20,
+        maxTurnTokens: Number.POSITIVE_INFINITY,
+      })
     );
   });
 
