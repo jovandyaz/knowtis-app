@@ -72,7 +72,10 @@ import {
   type PendingMutationStore,
 } from '../domain/ports/pending-mutation.store';
 import type { ProposedMutation } from '../domain/proposed-mutation';
-import { pruneTranscript } from '../domain/prune-transcript';
+import {
+  fitHistoryToBudget,
+  pruneTranscript,
+} from '../domain/prune-transcript';
 import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import { buildTurnRows } from '../domain/turn-transcript';
@@ -555,7 +558,7 @@ export class RunAgentTurnHandler {
     const sanitized = sanitizeReplayHistory(inputMessages, {
       enforceAssistantAndTool: enforced,
     });
-    const guarded = await this.guardReplayedUserTurn(
+    const fitted = await this.fitGuardedHistory(
       sanitized.messages,
       freshUserMessage,
       input.userId
@@ -572,14 +575,9 @@ export class RunAgentTurnHandler {
         userId: input.userId,
         ...(persistence ? { conversationId: persistence.conversationId } : {}),
       },
-      guarded.dropped
+      fitted.dropped
     );
-    const history = guarded.messages;
-    const messages = this.trimHistory(
-      coalesceMessages(
-        freshUserMessage ? [...history, freshUserMessage] : history
-      )
-    );
+    const messages = fitted.messages;
     const estimatedTokens = this.estimateTokens(messages);
 
     // Resolve the model and the BYOK key BEFORE the budget gate: a BYOK turn
@@ -1009,6 +1007,43 @@ export class RunAgentTurnHandler {
     return tokenUsage.costUsd;
   }
 
+  // Fit before guarding: dropping a turn's tool rows can leave its request
+  // beside the fresh one, and each drop can expose another such request.
+  // Resume has no fresh message to merge with, so it guards one row as before.
+  private async fitGuardedHistory(
+    history: readonly AgentMessage[],
+    fresh: AgentMessage | undefined,
+    userId: string
+  ): Promise<{ messages: AgentMessage[]; dropped?: DroppedUserTurn }> {
+    const withFresh = (messages: readonly AgentMessage[]) =>
+      fresh ? [...messages, fresh] : [...messages];
+    let replay = history;
+    let firstDrop: DroppedUserTurn | undefined;
+    for (;;) {
+      const fitted = fitHistoryToBudget(
+        withFresh(replay),
+        AGENT_HISTORY_TOKEN_BUDGET
+      );
+      const guarded = await this.guardReplayedUserTurn(
+        fresh ? fitted.slice(0, -1) : fitted,
+        fresh,
+        userId
+      );
+      firstDrop ??= guarded.dropped;
+      if (guarded.dropped && fresh) {
+        replay = guarded.messages;
+        continue;
+      }
+      const settled = guarded.dropped
+        ? fitHistoryToBudget(guarded.messages, AGENT_HISTORY_TOKEN_BUDGET)
+        : fitted;
+      return {
+        messages: coalesceMessages(settled),
+        ...(firstDrop ? { dropped: firstDrop } : {}),
+      };
+    }
+  }
+
   // The provider is handed consecutive user rows merged into one, so a pair that
   // is individually under the injection threshold can cross it only once joined.
   // Only the seam is re-scanned; both halves are already guarded on their own.
@@ -1037,27 +1072,6 @@ export class RunAgentTurnHandler {
       messages: history.filter((_, index) => index !== last),
       dropped: { score: verdict.score, contentLength: joined.length },
     };
-  }
-
-  private trimHistory(
-    messages: readonly AgentMessage[]
-  ): readonly AgentMessage[] {
-    const kept: AgentMessage[] = [];
-    let usedTokens = 0;
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const tokens = estimateMessageTokens(messages[i]);
-      if (kept.length > 0 && usedTokens + tokens > AGENT_HISTORY_TOKEN_BUDGET) {
-        break;
-      }
-      kept.unshift(messages[i]);
-      usedTokens += tokens;
-    }
-    // An empty history is safer than an invalid one, because the provider
-    // refuses a tool_result that has no preceding tool_use.
-    while (kept.length > 0 && kept[0].role !== 'user') {
-      kept.shift();
-    }
-    return kept;
   }
 
   private estimateTokens(messages: readonly AgentMessage[]): number {

@@ -6,6 +6,7 @@ import {
   type AgentMessagePart,
   type AgentRole,
 } from './agent-message';
+import { estimateMessageTokens } from './message-tokens';
 import type { ConversationMessageRow } from './ports/conversation.repository';
 
 export const PARTIAL_STOP_REASONS = ['aborted', 'error', 'length'] as const;
@@ -86,13 +87,15 @@ function recentToolTurns(
   return turns;
 }
 
-function textOnly(row: ConversationMessageRow): AgentMessage | null {
-  if (row.role === TOOL_ROLE) {
+function textOnlyMessage(message: AgentMessage): AgentMessage | null {
+  if (message.role === TOOL_ROLE) {
     return null;
   }
-  const content = row.parts?.length ? textOfParts(row.parts) : row.content;
-  return content.length > 0 || row.role === 'user'
-    ? { role: row.role, content }
+  const content = message.parts?.length
+    ? textOfParts(message.parts)
+    : message.content;
+  return content.length > 0 || message.role === 'user'
+    ? { role: message.role, content }
     : null;
 }
 
@@ -100,6 +103,10 @@ function withParts(row: ConversationMessageRow): AgentMessage {
   return row.parts && row.parts.length > 0
     ? { role: row.role, content: row.content, parts: row.parts }
     : { role: row.role, content: row.content };
+}
+
+function textOnly(row: ConversationMessageRow): AgentMessage | null {
+  return textOnlyMessage(withParts(row));
 }
 
 /** Removes both sides of orphaned tool pairs without reviving hidden content. */
@@ -171,4 +178,71 @@ export function pruneTranscript(
     );
   }
   return repairTranscriptOrphans(messages);
+}
+
+function splitTurns(messages: readonly AgentMessage[]): AgentMessage[][] {
+  const turns: AgentMessage[][] = [];
+  for (const m of messages) {
+    const turn = turns.at(-1);
+    if (m.role === 'user' && turn?.at(-1)?.role !== 'user') {
+      turns.push([m]);
+    } else {
+      turn?.push(m);
+    }
+  }
+  return turns;
+}
+
+function turnTokens(turn: readonly AgentMessage[]): number {
+  return turn.reduce((total, m) => total + estimateMessageTokens(m), 0);
+}
+
+function asText(turn: readonly AgentMessage[]): AgentMessage[] {
+  return turn.flatMap((m) => textOnlyMessage(m) ?? []);
+}
+
+interface AdmittedTurn {
+  readonly verbatim: readonly AgentMessage[];
+  readonly text: readonly AgentMessage[];
+  readonly cost: number;
+}
+
+/** Fits history into `budget` tokens a whole turn at a time, so a reply never loses the request it answers: the newest turn always survives (as text when it alone exceeds the budget), older turns survive as text newest-first, and then regain their tool activity newest-first while it still fits. Degrading a turn to text can leave same-role neighbours, so callers coalesce the result. */
+export function fitHistoryToBudget(
+  messages: readonly AgentMessage[],
+  budget: number
+): AgentMessage[] {
+  const turns = splitTurns(messages);
+  const newest = turns.pop();
+  if (!newest) {
+    return [];
+  }
+  const current = turnTokens(newest) > budget ? asText(newest) : newest;
+  let used = turnTokens(current);
+  const admitted: AdmittedTurn[] = [];
+  for (const verbatim of turns.toReversed()) {
+    const text = asText(verbatim);
+    const cost = turnTokens(text);
+    if (used + cost > budget) {
+      break;
+    }
+    admitted.push({ verbatim, text, cost });
+    used += cost;
+  }
+  let restored = 0;
+  for (const turn of admitted) {
+    const extra = turnTokens(turn.verbatim) - turn.cost;
+    if (used + extra > budget) {
+      break;
+    }
+    used += extra;
+    restored += 1;
+  }
+  return [
+    ...admitted
+      .map((turn, index) => (index < restored ? turn.verbatim : turn.text))
+      .toReversed()
+      .flat(),
+    ...current,
+  ];
 }
