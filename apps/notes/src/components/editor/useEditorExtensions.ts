@@ -20,7 +20,7 @@ import { AI_ACTION } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import { createAiClientProvider } from './ai/aiClientProvider';
-import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
+import { slashCommandsSuggestion } from './ai/slash-suggestion';
 import { createImageImportProvider } from './image/createImageImportProvider';
 import { createImageUploadProvider } from './image/createImageUploadProvider';
 import { createTagSuggestion } from './tags/tag-suggestion';

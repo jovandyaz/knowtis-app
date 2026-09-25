@@ -1,8 +1,10 @@
 import { PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
-import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
+import type { SuggestionProps } from '@tiptap/suggestion';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
+
+import type { SuggestionMenuOptions } from '@knowtis/editor';
 
 import {
   TagSuggestionMenu,
@@ -17,7 +19,7 @@ const TAG_SUGGESTION_PLUGIN_KEY = new PluginKey('tagSuggestions');
  */
 export function createTagSuggestion(
   noteId: string
-): Omit<SuggestionOptions, 'editor'> {
+): SuggestionMenuOptions['suggestion'] {
   return {
     char: '#',
     pluginKey: TAG_SUGGESTION_PLUGIN_KEY,
