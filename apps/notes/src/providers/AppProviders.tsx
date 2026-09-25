@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 
 import { authApi, authStore, tokenStorage } from '@/auth';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { RIGHT_DOCK_INSET_VAR } from '@/components/right-dock/dock-inset';
 import { AnalyticsIdentitySync } from '@/lib/analytics/AnalyticsIdentitySync';
 import { queryClient } from '@/lib/query-client';
 import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
@@ -22,10 +23,22 @@ import { ThemeProvider } from './ThemeProvider';
 // app's bottom edge is congested by the nav + FAB stack, so mobile toasts move
 // to the clear top-center; desktop keeps the bottom-right card.
 const MOBILE_TOAST_QUERY = '(max-width: 600px)';
+const TOAST_EDGE_GAP = '24px';
+// Toasts belong to the workspace, so the desktop card sits beside the copilot
+// dock (and follows its resize) instead of covering its composer.
+const DESKTOP_TOAST_OFFSET = {
+  bottom: TOAST_EDGE_GAP,
+  right: `calc(${TOAST_EDGE_GAP} + var(${RIGHT_DOCK_INSET_VAR}, 0px))`,
+};
 
 function AppToaster() {
   const isMobile = useMediaQuery(MOBILE_TOAST_QUERY);
-  return <Toaster position={isMobile ? 'top-center' : 'bottom-right'} />;
+  return (
+    <Toaster
+      position={isMobile ? 'top-center' : 'bottom-right'}
+      offset={isMobile ? undefined : DESKTOP_TOAST_OFFSET}
+    />
+  );
 }
 
 function SessionManager() {
