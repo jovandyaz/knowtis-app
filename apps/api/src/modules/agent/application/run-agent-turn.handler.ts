@@ -72,7 +72,10 @@ import {
   type PendingMutationStore,
 } from '../domain/ports/pending-mutation.store';
 import type { ProposedMutation } from '../domain/proposed-mutation';
-import { pruneTranscript } from '../domain/prune-transcript';
+import {
+  fitHistoryToBudget,
+  pruneTranscript,
+} from '../domain/prune-transcript';
 import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import { buildTurnRows } from '../domain/turn-transcript';
@@ -555,8 +558,16 @@ export class RunAgentTurnHandler {
     const sanitized = sanitizeReplayHistory(inputMessages, {
       enforceAssistantAndTool: enforced,
     });
+    const withFresh = (history: readonly AgentMessage[]) =>
+      freshUserMessage ? [...history, freshUserMessage] : [...history];
+    // Fit before guarding: dropping a turn's tool rows can leave its request
+    // beside the fresh one, and the guard must scan the seam actually sent.
+    const fitted = fitHistoryToBudget(
+      withFresh(sanitized.messages),
+      AGENT_HISTORY_TOKEN_BUDGET
+    );
     const guarded = await this.guardReplayedUserTurn(
-      sanitized.messages,
+      freshUserMessage ? fitted.slice(0, -1) : fitted,
       freshUserMessage,
       input.userId
     );
@@ -574,11 +585,13 @@ export class RunAgentTurnHandler {
       },
       guarded.dropped
     );
-    const history = guarded.messages;
-    const messages = this.trimHistory(
-      coalesceMessages(
-        freshUserMessage ? [...history, freshUserMessage] : history
-      )
+    const messages = coalesceMessages(
+      guarded.dropped
+        ? fitHistoryToBudget(
+            withFresh(guarded.messages),
+            AGENT_HISTORY_TOKEN_BUDGET
+          )
+        : withFresh(guarded.messages)
     );
     const estimatedTokens = this.estimateTokens(messages);
 
@@ -1037,27 +1050,6 @@ export class RunAgentTurnHandler {
       messages: history.filter((_, index) => index !== last),
       dropped: { score: verdict.score, contentLength: joined.length },
     };
-  }
-
-  private trimHistory(
-    messages: readonly AgentMessage[]
-  ): readonly AgentMessage[] {
-    const kept: AgentMessage[] = [];
-    let usedTokens = 0;
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const tokens = estimateMessageTokens(messages[i]);
-      if (kept.length > 0 && usedTokens + tokens > AGENT_HISTORY_TOKEN_BUDGET) {
-        break;
-      }
-      kept.unshift(messages[i]);
-      usedTokens += tokens;
-    }
-    // An empty history is safer than an invalid one, because the provider
-    // refuses a tool_result that has no preceding tool_use.
-    while (kept.length > 0 && kept[0].role !== 'user') {
-      kept.shift();
-    }
-    return kept;
   }
 
   private estimateTokens(messages: readonly AgentMessage[]): number {

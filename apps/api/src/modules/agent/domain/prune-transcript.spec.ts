@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AgentMessage } from './agent-message';
+import { estimateMessageTokens } from './message-tokens';
 import type { ConversationMessageRow } from './ports/conversation.repository';
-import { partialReplySuffix, pruneTranscript } from './prune-transcript';
+import {
+  fitHistoryToBudget,
+  partialReplySuffix,
+  pruneTranscript,
+} from './prune-transcript';
 
 const row = (
   r: Partial<ConversationMessageRow> &
@@ -302,5 +308,107 @@ describe('pruneTranscript', () => {
       ['assistant', 'a-t1'],
       ['assistant', 'legacy-a'],
     ]);
+  });
+});
+
+describe('fitHistoryToBudget', () => {
+  const tokens = (messages: readonly AgentMessage[]) =>
+    messages.reduce((total, m) => total + estimateMessageTokens(m), 0);
+  const toolTurnMessages = (q: string, a: string): AgentMessage[] => [
+    { role: 'user', content: q },
+    { role: 'assistant', content: '', parts: [call('c1')] },
+    {
+      role: 'tool',
+      content: '',
+      parts: [{ ...result('c1'), output: 'body '.repeat(500) }],
+    },
+    { role: 'assistant', content: a },
+  ];
+  const fresh: AgentMessage = { role: 'user', content: 'now' };
+
+  it('returns the history unchanged when every turn fits verbatim', () => {
+    const messages = [...toolTurnMessages('q1', 'a1'), fresh];
+
+    expect(fitHistoryToBudget(messages, tokens(messages))).toEqual(messages);
+  });
+
+  it('replays an older turn as text when only its text fits', () => {
+    const asText: AgentMessage[] = [
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+    ];
+    const messages = [...toolTurnMessages('q1', 'a1'), fresh];
+
+    expect(fitHistoryToBudget(messages, tokens([...asText, fresh]))).toEqual([
+      ...asText,
+      fresh,
+    ]);
+  });
+
+  it('gives tool activity back to the newest older turns first', () => {
+    const older = toolTurnMessages('q1', 'a1');
+    const newer = toolTurnMessages('q2', 'a2');
+    const olderText: AgentMessage[] = [
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+    ];
+
+    expect(
+      fitHistoryToBudget(
+        [...older, ...newer, fresh],
+        tokens([...olderText, ...newer, fresh])
+      )
+    ).toEqual([...olderText, ...newer, fresh]);
+  });
+
+  it('drops every turn older than the first one that does not fit', () => {
+    const small: AgentMessage[] = [
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+    ];
+    const large: AgentMessage[] = [
+      { role: 'user', content: 'q2' },
+      { role: 'assistant', content: 'long '.repeat(500) },
+    ];
+
+    expect(
+      fitHistoryToBudget([...small, ...large, fresh], tokens([...small, fresh]))
+    ).toEqual([fresh]);
+  });
+
+  it('keeps the newest turn as text when it alone exceeds the budget', () => {
+    const messages = toolTurnMessages('q1', 'a1');
+
+    expect(fitHistoryToBudget(messages, 1)).toEqual([
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+    ]);
+  });
+
+  it('keeps an unanswered request in the newest turn with the fresh one', () => {
+    const answered = toolTurnMessages('q1', 'a1');
+    const unanswered: AgentMessage = { role: 'user', content: 'q2' };
+
+    expect(fitHistoryToBudget([...answered, unanswered, fresh], 1)).toEqual([
+      unanswered,
+      fresh,
+    ]);
+  });
+
+  it('keeps only the request of a tool-only turn replayed as text', () => {
+    const request: AgentMessage = { role: 'user', content: 'q1' };
+    const toolOnly = toolTurnMessages('q1', 'a1').slice(0, -1);
+
+    expect(
+      fitHistoryToBudget([...toolOnly, fresh], tokens([request, fresh]))
+    ).toEqual([request, fresh]);
+  });
+
+  it('drops messages that precede the first user message', () => {
+    const orphan: AgentMessage = { role: 'assistant', content: 'stray' };
+
+    expect(
+      fitHistoryToBudget([orphan, fresh], tokens([orphan, fresh]))
+    ).toEqual([fresh]);
   });
 });
