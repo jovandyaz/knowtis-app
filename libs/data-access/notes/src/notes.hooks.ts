@@ -72,11 +72,11 @@ export function useSupertagCatalog() {
 export function useNote(noteId: string | undefined) {
   return useQuery({
     queryKey: notesQueryKeys.detail(noteId ?? ''),
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       if (!noteId) {
         throw new Error('noteId is required');
       }
-      return notesApi.getById(noteId);
+      return notesApi.getById(noteId, signal);
     },
     enabled: !!noteId,
     staleTime: DETAIL_STALE_TIME_MS,

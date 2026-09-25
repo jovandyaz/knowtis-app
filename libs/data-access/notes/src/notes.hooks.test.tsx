@@ -275,6 +275,33 @@ describe('Notes Hooks', () => {
       expect(notesApi.getById).toHaveBeenCalledTimes(1);
     });
 
+    it('aborts a read of the note still in flight when the delete starts', async () => {
+      await openNote();
+      let inFlightRead: AbortSignal | undefined;
+      vi.mocked(notesApi.getById).mockImplementationOnce((_id, signal) => {
+        inFlightRead = signal;
+        return new Promise(() => undefined);
+      });
+      void queryClient.refetchQueries({
+        queryKey: notesQueryKeys.detail(OPEN_NOTE.id),
+      });
+      await waitFor(() => expect(inFlightRead).toBeDefined());
+      vi.mocked(notesApi.delete).mockReturnValue(new Promise(() => undefined));
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate(OPEN_NOTE.id));
+
+      await waitFor(() => expect(inFlightRead?.aborted).toBe(true));
+      const detail = queryClient.getQueryState(
+        notesQueryKeys.detail(OPEN_NOTE.id)
+      );
+      expect([result.current.isPending, detail?.status, detail?.data]).toEqual([
+        true,
+        'success',
+        OPEN_NOTE,
+      ]);
+    });
+
     it('never refetches the note when its access is reconciled mid-delete', async () => {
       await openNote();
       let settleDelete: (value: { success: boolean }) => void = () => undefined;

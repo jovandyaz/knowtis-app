@@ -25,6 +25,25 @@ describe('notesApi', () => {
     await expect(notesApi.revokePerson('note', 'person')).rejects.toBe(error);
   });
 
+  describe('getById', () => {
+    it('reads a note without request options when no signal is given', async () => {
+      vi.mocked(httpClient.get).mockResolvedValue({});
+
+      await notesApi.getById('note');
+
+      expect(httpClient.get).toHaveBeenCalledWith('/notes/note', undefined);
+    });
+
+    it('lets the caller abort a note read', async () => {
+      vi.mocked(httpClient.get).mockResolvedValue({});
+      const { signal } = new AbortController();
+
+      await notesApi.getById('note', signal);
+
+      expect(httpClient.get).toHaveBeenCalledWith('/notes/note', { signal });
+    });
+  });
+
   describe('update', () => {
     it('sends the CRDT state in the body when provided', async () => {
       vi.mocked(httpClient.patch).mockResolvedValue({});

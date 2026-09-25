@@ -74,8 +74,11 @@ export const notesApi = {
     return httpClient.get<SupertagCatalog>('/notes/supertags');
   },
 
-  async getById(id: string): Promise<NoteDetail> {
-    return httpClient.get<NoteDetail>(`/notes/${id}`);
+  async getById(id: string, signal?: AbortSignal): Promise<NoteDetail> {
+    return httpClient.get<NoteDetail>(
+      `/notes/${id}`,
+      signal ? { signal } : undefined
+    );
   },
 
   async create(input: CreateNoteInput): Promise<Note> {
