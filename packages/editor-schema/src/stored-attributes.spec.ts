@@ -3,6 +3,7 @@ import { generateHTML, generateJSON } from '@tiptap/html/server';
 import { describe, expect, it } from 'vitest';
 
 import { markdownToHtml } from '@knowtis/note-markdown';
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { noteSchemaExtensions } from './note-schema';
 import { restoreStoredAttributes } from './stored-attributes';
@@ -20,10 +21,8 @@ function nodesOfType(node: JSONContent, type: string): JSONContent[] {
   ];
 }
 
-const SRC =
-  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
-const OTHER =
-  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/map.webp';
+const SRC = `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`;
+const OTHER = `https://${STORED_IMAGE_HOST}/notes/n1/map.webp`;
 const SIZED = storedHtml(
   `<p>Trip</p><figure data-image=""><img src="${SRC}" alt="lake" width="320" height="200"><figcaption></figcaption></figure><p>Old text.</p>`
 );

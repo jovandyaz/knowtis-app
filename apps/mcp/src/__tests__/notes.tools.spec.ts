@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
+
 import { ApiError } from '../api-client/client.js';
 import type { NoteResponse, NotesApi } from '../api-client/notes.api.js';
 import type { SearchApi, SearchHit } from '../api-client/search.api.js';
@@ -397,8 +399,7 @@ describe('registerNotesTools', () => {
   describe('update-note over a note holding what Markdown cannot show', () => {
     const AI_BLOCK =
       '<div data-ai-block="" topic="Rome" status="done" content="Rome was founded in 753 BC."></div>';
-    const STORED_SRC =
-      'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
+    const STORED_SRC = `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`;
 
     const storedNote = (content: string): NoteResponse => ({
       id: 'note-3',
