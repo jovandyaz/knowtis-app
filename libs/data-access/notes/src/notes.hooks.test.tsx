@@ -481,6 +481,36 @@ describe('Notes Hooks', () => {
       }
     );
 
+    it('refreshes the still-open note once an undo restores it', async () => {
+      vi.mocked(notesApi.getById).mockResolvedValue(OPEN_NOTE);
+      const page = render(<OpenNotePage noteId={OPEN_NOTE.id} />, { wrapper });
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+        ).toEqual(OPEN_NOTE)
+      );
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const deletion = renderHook(() => useDeleteNote(), { wrapper });
+      await act(() => deletion.result.current.mutateAsync(OPEN_NOTE.id));
+      const restored = { ...OPEN_NOTE, title: 'Restored' };
+      vi.mocked(notesApi.getById).mockResolvedValue(restored);
+      vi.mocked(notesApi.restore).mockResolvedValue(restored);
+      const restore = renderHook(() => useRestoreNote(), { wrapper });
+
+      await act(() => restore.result.current.mutateAsync(OPEN_NOTE.id));
+
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+        ).toEqual(restored)
+      );
+      expect(notesApi.getById).toHaveBeenCalledTimes(2);
+      page.unmount();
+      expect(
+        queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+      ).toEqual(restored);
+    });
+
     it('drops every query scoped to the deleted note and no other note', async () => {
       const scopedToDeleted = [
         notesQueryKeys.detail('n1'),

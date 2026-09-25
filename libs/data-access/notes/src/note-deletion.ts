@@ -25,6 +25,12 @@ function singleNoteQueries(queryClient: QueryClient, noteId: string): Query[] {
   );
 }
 
+function refreshSingleNote(queryClient: QueryClient, noteId: string) {
+  for (const queryKey of singleNoteQueryKeys(noteId)) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+}
+
 function stopsOf(queryClient: QueryClient): Map<string, NoteStop> {
   const existing = noteStops.get(queryClient);
   if (existing) {
@@ -68,9 +74,7 @@ function settleNote(queryClient: QueryClient, noteId: string) {
   for (const query of queries) {
     stoppedQueries.delete(query);
   }
-  for (const queryKey of singleNoteQueryKeys(noteId)) {
-    void queryClient.invalidateQueries({ queryKey });
-  }
+  refreshSingleNote(queryClient, noteId);
 }
 
 /**
@@ -94,6 +98,17 @@ export function stopNoteQueries(queryClient: QueryClient, noteId: string) {
 export function resumeNoteQueries(queryClient: QueryClient, noteId: string) {
   const stop = stopOf(queryClient, noteId);
   stop.pendingDeletes = Math.max(0, stop.pendingDeletes - 1);
+  settleNote(queryClient, noteId);
+}
+
+/** The note was restored: its queries resume and refresh unless a new delete of it is in flight. */
+export function reviveNoteQueries(queryClient: QueryClient, noteId: string) {
+  const stop = stopsOf(queryClient).get(noteId);
+  if (!stop) {
+    refreshSingleNote(queryClient, noteId);
+    return;
+  }
+  stop.deleted = false;
   settleNote(queryClient, noteId);
 }
 
@@ -131,7 +146,9 @@ export function dropNoteQueries(queryClient: QueryClient, noteId: string) {
       event.query.getObserversCount() === 0
     ) {
       observed.delete(event.query);
-      cache.remove(event.query);
+      if (stopsOf(queryClient).get(noteId)?.deleted) {
+        cache.remove(event.query);
+      }
     }
     if (observed.size === 0) {
       unsubscribe();

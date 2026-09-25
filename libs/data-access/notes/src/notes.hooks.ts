@@ -22,6 +22,7 @@ import {
 import {
   dropNoteQueries,
   resumeNoteQueries,
+  reviveNoteQueries,
   singleNoteQueryKeys,
   stopNoteQueries,
   unlessNoteDeleted,
@@ -222,8 +223,10 @@ export function useRestoreNote() {
 
   return useMutation({
     mutationFn: (id: string) => notesApi.restore(id),
-    onSettled: (_data, _error, id) => {
-      queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
+    onSuccess: (_note, id) => {
+      reviveNoteQueries(queryClient, id);
+    },
+    onSettled: () => {
       invalidateNoteCollections(queryClient);
     },
   });
