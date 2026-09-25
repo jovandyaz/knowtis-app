@@ -9,7 +9,9 @@ export { YJS_XML_FRAGMENT_NAME } from './constants';
 export {
   IMAGE_FIGURE_ATTRIBUTE,
   IMAGE_NODE_NAME,
+  IMAGE_SRC_ATTR,
   ImageNode,
+  isForeignImage,
   type ImageAttributes,
 } from './image-node';
 export {

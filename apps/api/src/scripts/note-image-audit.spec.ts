@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { prosemirrorJSONToYDoc } from 'y-prosemirror';
 import * as Y from 'yjs';
 
-import { IMAGE_NODE_NAME, YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import {
+  IMAGE_NODE_NAME,
+  IMAGE_SRC_ATTR,
+  YJS_XML_FRAGMENT_NAME,
+} from '@knowtis/editor-schema';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import {
   editorSchema,
-  SRC_ATTR,
   yjsStateToHtml,
 } from '../modules/notes/infrastructure/html-to-yjs';
 import { SCAN_BATCH_SIZE } from './id-keyset-scan';
@@ -260,7 +263,7 @@ describe('auditNoteImages', () => {
     const withForeignImage = deltaOnly((fragment) => {
       const image = new Y.XmlElement(IMAGE_NODE_NAME);
       fragment.insert(1, [image]);
-      image.setAttribute(SRC_ATTR, FOREIGN_SRC);
+      image.setAttribute(IMAGE_SRC_ATTR, FOREIGN_SRC);
     });
     const deletingWhatItLacks = deltaOnly((fragment) => fragment.delete(0, 1));
 

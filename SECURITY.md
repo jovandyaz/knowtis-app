@@ -64,6 +64,8 @@ If a future migration moves the project past these ranges (e.g. adopting TanStac
 
 The remaining security `pnpm.overrides` entries (`@protobufjs/utf8`, `dompurify`, `fast-uri`, `happy-dom`, `immutable`, `ip-address`, `lodash`, `lodash-es`, `multer`, `path-to-regexp`, `picomatch`, `postcss`, `protobufjs`, `qs`, `rollup`, `seroval`, `socket.io-parser`, `uuid`, `ws`, `yaml`) force patched versions of transitive dependencies whose direct consumers haven't yet released compatible updates. Each entry corresponds to one or more advisories surfaced by `pnpm audit --prod`.
 
+An override rewrites dependency ranges, but a package reached only as an auto-installed peer can keep a version the lockfile already resolved below the floor, leaving the override inert. `happy-dom`, a peer of `@tiptap/html` that the API bundles and the MCP server installs, is therefore also a direct dependency at `^20.8.9`. After adding or changing an override, check that `pnpm why <package>` lists only versions inside its range.
+
 The `react` and `react-dom` overrides are plain version pins that keep every workspace package on a single React build; they are not security constraints.
 
 These can be relaxed or removed once the direct consumers ship versions that resolve to the patched floors naturally. Run `pnpm audit --prod` after any override removal to confirm no vulnerabilities resurface.

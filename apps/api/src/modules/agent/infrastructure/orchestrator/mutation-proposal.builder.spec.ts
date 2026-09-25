@@ -7,13 +7,15 @@ import {
   AI_BLOCK_STATUS,
   IMAGE_NODE_NAME,
 } from '@knowtis/editor-schema';
+import {
+  NODES_WITHOUT_MARKDOWN,
+  nodesLostBetween,
+  noteSchemaExtensions,
+} from '@knowtis/editor-schema/server';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
-import {
-  editorSchema,
-  noteSchemaExtensions,
-} from '../../../notes/infrastructure/html-to-yjs';
+import { editorSchema } from '../../../notes/infrastructure/html-to-yjs';
 import { AgentErrors } from '../../domain/agent-errors';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
@@ -22,7 +24,6 @@ import type {
   NoteBody,
   NoteContentStatus,
 } from '../../domain/retrieval';
-import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
 import {
   AI_BLOCK_HTML,
@@ -35,9 +36,9 @@ import {
 } from '../sanitize/html-sanitizer.fixtures';
 import { MutationProposalBuilder } from './mutation-proposal.builder';
 
-vi.mock('../sanitize/document-fidelity', async (importOriginal) => {
+vi.mock('@knowtis/editor-schema/server', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../sanitize/document-fidelity')>();
+    await importOriginal<typeof import('@knowtis/editor-schema/server')>();
   return { ...actual, nodesLostBetween: vi.fn(actual.nodesLostBetween) };
 });
 
@@ -292,6 +293,78 @@ function contentHtmlOf(proposal: ProposedMutation): string {
   }
   return contentHtml;
 }
+
+const STORED_SRC = `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`;
+
+describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
+  it('refuses to rewrite a note holding an AI block the model was never shown', async () => {
+    const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
+
+    const r = await builder.buildUpdate(USER, 'note-1', {
+      contentMarkdown: 'New text.',
+    });
+
+    const error = r._unsafeUnwrapErr();
+    expect(error).toEqual(AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME]));
+    expect(error.code).toBe('AGENT_EDIT_WOULD_LOSE_CONTENT');
+    expect(error.message).toContain('insert or discard the AI block');
+  });
+
+  it.each([
+    ['clears the note', { contentMarkdown: '' }],
+    ['also renames it', { title: 'New', contentMarkdown: 'New text.' }],
+  ])(
+    'refuses a rewrite that %s while it holds an AI block',
+    async (_label, input) => {
+      const { builder } = editing(
+        storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`)
+      );
+
+      const r = await builder.buildUpdate(USER, 'note-1', input);
+
+      expect(r._unsafeUnwrapErr()).toEqual(
+        AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME])
+      );
+    }
+  );
+
+  it('still renames a note holding an AI block', async () => {
+    const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
+
+    const r = await builder.buildUpdate(USER, 'note-1', { title: 'New' });
+
+    expect(r._unsafeUnwrap().summary).toBe('Update "Old": title → "New"');
+  });
+
+  it('rewrites a note without one, dropping whatever the rewrite leaves out', async () => {
+    const { builder } = editing(
+      storedHtml(markdownToNoteHtml('# Trip\n\n| Day |\n| --- |\n| 1 |'))
+    );
+
+    const r = await builder.buildUpdate(USER, 'note-1', {
+      contentMarkdown: '## New',
+    });
+
+    expect(contentHtmlOf(r._unsafeUnwrap())).toBe(markdownToNoteHtml('## New'));
+  });
+
+  it('keeps an image size, a highlight colour and a diagram view mode the rewrite carries over', async () => {
+    const bodyHtml = storedHtml(
+      `<figure data-image=""><img src="${STORED_SRC}" alt="lake" width="320" height="200"><figcaption>Lake</figcaption></figure>` +
+        '<p>Bring <mark data-color="#ffc078" style="background-color: #ffc078; color: inherit">sunscreen</mark>.</p>' +
+        '<div data-mermaid-block="" data-code="flowchart LR" data-view-mode="code"></div>'
+    );
+    const { builder } = editing(bodyHtml);
+
+    const r = await builder.buildUpdate(USER, 'note-1', {
+      contentMarkdown: `${htmlToMarkdown(bodyHtml)}\n\nNew text.`,
+    });
+
+    expect(storedHtml(contentHtmlOf(r._unsafeUnwrap()))).toBe(
+      `${bodyHtml}<p>New text.</p>`
+    );
+  });
+});
 
 describe('MutationProposalBuilder.buildEdit', () => {
   it('replaces only the targeted text and keeps the read timestamp as the base version', async () => {
@@ -652,7 +725,7 @@ describe('MutationProposalBuilder.buildEdit', () => {
     }
   );
 
-  it('refuses an edit to a note holding an AI block, which Markdown has no form for', async () => {
+  it('refuses an edit to a note holding an AI block, asking for it to be inserted or discarded', async () => {
     const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
 
     const r = await builder.buildEdit(USER, 'note-1', {
@@ -660,7 +733,24 @@ describe('MutationProposalBuilder.buildEdit', () => {
     });
 
     expect(r._unsafeUnwrapErr()).toEqual(
-      AgentErrors.editWouldLoseContent([AI_BLOCK_NAME])
+      AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME])
+    );
+  });
+
+  it('says the note must be edited by hand when resolving the AI block would not be enough', async () => {
+    const bodyHtml = storedHtml(`<p>Text.</p>${AI_BLOCK_HTML}`);
+    const { builder } = editing(bodyHtml);
+    vi.mocked(nodesLostBetween).mockReturnValueOnce([
+      AI_BLOCK_NAME,
+      'taskList',
+    ]);
+
+    const r = await builder.buildEdit(USER, 'note-1', {
+      edits: [{ oldText: 'Text.', newText: 'Other.' }],
+    });
+
+    expect(r._unsafeUnwrapErr()).toEqual(
+      AgentErrors.editWouldLoseContent([AI_BLOCK_NAME, 'taskList'])
     );
   });
 
@@ -821,8 +911,7 @@ const EVERY_CARRIED_CONSTRUCT: JSONContent[] = [
   },
 ];
 
-// Markdown has no form for these, so an edit to a note holding one is refused.
-const REFUSED_CONSTRUCTS: Record<string, JSONContent> = {
+const BLOCKS_WITHOUT_MARKDOWN: Record<string, JSONContent> = {
   [AI_BLOCK_NAME]: {
     type: AI_BLOCK_NAME,
     attrs: { topic: 'Rome', status: AI_BLOCK_STATUS.DONE, content: 'Rome.' },
@@ -856,15 +945,22 @@ function noteHtml(blocks: JSONContent[]): string {
 
 describe('a copilot edit over every construct the note schema defines', () => {
   it('covers every node and mark the schema defines', () => {
+    expect(Object.keys(BLOCKS_WITHOUT_MARKDOWN).sort()).toEqual(
+      [...NODES_WITHOUT_MARKDOWN].sort()
+    );
     expect(
       typesHeldBy([
         ...EVERY_CARRIED_CONSTRUCT,
-        ...Object.values(REFUSED_CONSTRUCTS),
+        ...Object.values(BLOCKS_WITHOUT_MARKDOWN),
       ])
     ).toEqual(schemaTypesExcept([]));
     expect(typesHeldBy(EVERY_CARRIED_CONSTRUCT)).toEqual(
-      schemaTypesExcept(Object.keys(REFUSED_CONSTRUCTS))
+      schemaTypesExcept(NODES_WITHOUT_MARKDOWN)
     );
+  });
+
+  it('lacks a Markdown form only for the AI block, which the refusal message explains', () => {
+    expect(NODES_WITHOUT_MARKDOWN).toEqual([AI_BLOCK_NAME]);
   });
 
   it('keeps every other construct, attributes included, through an edit to one paragraph', async () => {
@@ -883,7 +979,24 @@ describe('a copilot edit over every construct the note schema defines', () => {
     );
   });
 
-  it.each(Object.entries(REFUSED_CONSTRUCTS))(
+  it.each(Object.entries(BLOCKS_WITHOUT_MARKDOWN))(
+    'refuses a rewrite of a note holding %s',
+    async (type, block) => {
+      const { builder } = editing(
+        noteHtml([block, paragraph(text('Old text.'))])
+      );
+
+      const r = await builder.buildUpdate(USER, 'note-1', {
+        contentMarkdown: 'New text.',
+      });
+
+      expect(r._unsafeUnwrapErr()).toEqual(
+        AgentErrors.aiBlockWouldBeLost([type])
+      );
+    }
+  );
+
+  it.each(Object.entries(BLOCKS_WITHOUT_MARKDOWN))(
     'refuses an edit to a note holding %s',
     async (type, block) => {
       const { builder } = editing(
@@ -895,7 +1008,7 @@ describe('a copilot edit over every construct the note schema defines', () => {
       });
 
       expect(r._unsafeUnwrapErr()).toEqual(
-        AgentErrors.editWouldLoseContent([type])
+        AgentErrors.aiBlockWouldBeLost([type])
       );
     }
   );

@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
 import { Inject, Injectable } from '@nestjs/common';
-import { err, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
+import {
+  nodesLostBetween,
+  nodesWithoutMarkdown,
+  nodesWithoutMarkdownLostBetween,
+  restoreStoredAttributes,
+} from '@knowtis/editor-schema/server';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
 import { AgentErrors, type AgentDomainError } from '../../domain/agent-errors';
@@ -19,9 +25,7 @@ import {
   ProposedMutation,
   type UpdateMutationPayload,
 } from '../../domain/proposed-mutation';
-import { nodesLostBetween } from '../sanitize/document-fidelity';
 import { markdownToNoteHtml } from '../sanitize/html-sanitizer';
-import { restoreStoredAttributes } from '../sanitize/stored-attributes';
 
 const UNRENDERABLE_CONTENT = 'content the server cannot render';
 
@@ -42,6 +46,11 @@ export interface EditProposalInput {
 interface NoteSubject {
   readonly title: string;
   readonly updatedAt: string;
+}
+
+interface RewrittenNote {
+  readonly note: NoteSubject;
+  readonly contentHtml: string;
 }
 
 function toEditError(failure: NoteEditFailure): AgentDomainError {
@@ -90,30 +99,23 @@ export class MutationProposalBuilder {
       );
     }
     let contentHtml: string | undefined;
-    let note: NoteSubject | null;
+    let note: NoteSubject;
     if (input.contentMarkdown === undefined) {
-      note = await this.retrieval.getBody(userId, noteId);
+      const body = await this.retrieval.getBody(userId, noteId);
+      if (!body) {
+        return err(AgentErrors.noteNotFound(noteId));
+      }
+      note = body;
     } else {
-      const read = await this.retrieval.getById(userId, noteId);
-      if (read) {
-        if (read.contentStatus !== 'complete') {
-          return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
-        }
-        const body = await this.retrieval.getBody(userId, noteId);
-        if (body?.html === null) {
-          return err(unrenderableBody());
-        }
+      const rewritten = await this.rewrite(
+        userId,
+        noteId,
+        input.contentMarkdown
+      );
+      if (rewritten.isErr()) {
+        return err(rewritten.error);
       }
-      note = read;
-    }
-    if (!note) {
-      return err(AgentErrors.noteNotFound(noteId));
-    }
-    if (input.contentMarkdown !== undefined) {
-      contentHtml = markdownToNoteHtml(input.contentMarkdown);
-      if (input.contentMarkdown.trim() && !contentHtml) {
-        return err(AgentErrors.sanitizeRejected());
-      }
+      ({ note, contentHtml } = rewritten.value);
     }
     const payload: UpdateMutationPayload = {
       ...(input.title !== undefined && { title: input.title }),
@@ -133,6 +135,39 @@ export class MutationProposalBuilder {
       payload,
       summary: `Update "${note.title}": ${parts.join(', ') || 'no changes'}`,
       baseVersion: note.updatedAt,
+    });
+  }
+
+  private async rewrite(
+    userId: string,
+    noteId: string,
+    contentMarkdown: string
+  ): Promise<Result<RewrittenNote, AgentDomainError>> {
+    const read = await this.retrieval.getById(userId, noteId);
+    if (!read) {
+      return err(AgentErrors.noteNotFound(noteId));
+    }
+    if (read.contentStatus !== 'complete') {
+      return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
+    }
+    const body = await this.retrieval.getBody(userId, noteId);
+    if (!body) {
+      return err(AgentErrors.noteNotFound(noteId));
+    }
+    if (body.html === null) {
+      return err(unrenderableBody());
+    }
+    const contentHtml = markdownToNoteHtml(contentMarkdown);
+    if (contentMarkdown.trim() && !contentHtml) {
+      return err(AgentErrors.sanitizeRejected());
+    }
+    const unseen = nodesWithoutMarkdownLostBetween(body.html, contentHtml);
+    if (unseen.length > 0) {
+      return err(AgentErrors.aiBlockWouldBeLost(unseen));
+    }
+    return ok({
+      note: read,
+      contentHtml: restoreStoredAttributes(body.html, contentHtml),
     });
   }
 
@@ -176,7 +211,11 @@ export class MutationProposalBuilder {
     }
     const lost = nodesLostBetween(body.html, markdownToNoteHtml(original));
     if (lost.length > 0) {
-      return err(AgentErrors.editWouldLoseContent(lost));
+      return err(
+        nodesWithoutMarkdown(lost).length === lost.length
+          ? AgentErrors.aiBlockWouldBeLost(lost)
+          : AgentErrors.editWouldLoseContent(lost)
+      );
     }
     const restoredHtml = restoreStoredAttributes(body.html, contentHtml);
     const changes = input.edits.length + (appendMarkdown === undefined ? 0 : 1);
