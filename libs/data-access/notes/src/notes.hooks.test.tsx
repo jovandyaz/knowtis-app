@@ -3,24 +3,28 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   notesApi,
   type NoteCounts,
+  type NoteDetail,
   type NoteWithAccess,
 } from '@knowtis/api-client';
 import { DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
+import { reconcileNoteAccess } from './note-invalidation';
 import {
   useCreateNote,
+  useDeleteNote,
+  useNote,
   useNoteCounts,
   useNotes,
   useRestoreNote,
   useUpdateNote,
 } from './notes.hooks';
-import { notesQueryKeys } from './query-keys';
+import { notesQueryKeys, tagsQueryKeys } from './query-keys';
 
 vi.mock('@knowtis/api-client', () => ({
   notesApi: {
@@ -221,6 +225,147 @@ describe('Notes Hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(spy).toHaveBeenCalledWith({ queryKey: ['notes', 'counts'] });
+    });
+  });
+
+  describe('useDeleteNote', () => {
+    const RECENT_LIMIT = 5;
+    const OPEN_NOTE: NoteDetail = {
+      id: 'n1',
+      title: 'Open note',
+      content: '',
+      accessLevel: 'owner',
+      ownerId: 'user-1',
+      owner: { id: 'user-1', name: 'Owner', avatarUrl: null },
+      generalAccess: 'restricted',
+      generalAccessPermission: 'viewer',
+      shareToken: null,
+      editorsCanShare: false,
+      bucket: null,
+      tags: [],
+      supertag: null,
+      supertagFields: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    function OpenNotePage({ noteId }: { noteId: string }) {
+      useNote(noteId);
+      return null;
+    }
+
+    async function openNote() {
+      vi.mocked(notesApi.getById).mockResolvedValue(OPEN_NOTE);
+      render(<OpenNotePage noteId={OPEN_NOTE.id} />, { wrapper });
+      await waitFor(() =>
+        expect(
+          queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+        ).toEqual(OPEN_NOTE)
+      );
+    }
+
+    it('never refetches the note when its access is reconciled after the delete', async () => {
+      await openNote();
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync(OPEN_NOTE.id));
+      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+
+      expect(notesApi.getById).toHaveBeenCalledTimes(1);
+    });
+
+    it('never refetches the note when its access is reconciled mid-delete', async () => {
+      await openNote();
+      let settleDelete: (value: { success: boolean }) => void = () => undefined;
+      vi.mocked(notesApi.delete).mockReturnValue(
+        new Promise((resolve) => {
+          settleDelete = resolve;
+        })
+      );
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate(OPEN_NOTE.id));
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+      await act(async () => settleDelete({ success: true }));
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+
+      expect(notesApi.getById).toHaveBeenCalledTimes(1);
+    });
+
+    it('still reconciles a note other than the one being deleted', async () => {
+      await openNote();
+      vi.mocked(notesApi.delete).mockReturnValue(new Promise(() => undefined));
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      act(() => result.current.mutate('another-note'));
+      await waitFor(() => expect(result.current.isPending).toBe(true));
+      await act(async () => reconcileNoteAccess(queryClient, OPEN_NOTE.id));
+
+      await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+    });
+
+    it('drops every query scoped to the deleted note and no other note', async () => {
+      const scopedToDeleted = [
+        notesQueryKeys.detail('n1'),
+        notesQueryKeys.people('n1'),
+        notesQueryKeys.sharingAuthority('n1'),
+      ];
+      const otherNote = notesQueryKeys.detail('n10');
+      for (const key of [...scopedToDeleted, otherNote]) {
+        queryClient.setQueryData(key, {});
+      }
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync('n1'));
+
+      expect(
+        scopedToDeleted.map((key) => queryClient.getQueryState(key))
+      ).toEqual([undefined, undefined, undefined]);
+      expect(queryClient.getQueryData(otherNote)).toEqual({});
+    });
+
+    it('marks the collections that listed the note stale', async () => {
+      const aggregates = [
+        notesQueryKeys.recent(RECENT_LIMIT),
+        notesQueryKeys.counts(),
+        tagsQueryKeys.tree(),
+      ];
+      queryClient.setQueryData(notesQueryKeys.list(), {
+        pages: [],
+        pageParams: [],
+      });
+      for (const key of aggregates) {
+        queryClient.setQueryData(key, {});
+      }
+      vi.mocked(notesApi.delete).mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() => result.current.mutateAsync('n1'));
+
+      expect(
+        [notesQueryKeys.list(), ...aggregates].map(
+          (key) => queryClient.getQueryState(key)?.isInvalidated
+        )
+      ).toEqual([true, true, true, true]);
+    });
+
+    it('keeps and refreshes a note it failed to delete', async () => {
+      await openNote();
+      vi.mocked(notesApi.delete).mockRejectedValue(new Error('refused'));
+      const { result } = renderHook(() => useDeleteNote(), { wrapper });
+
+      await act(() =>
+        result.current.mutateAsync(OPEN_NOTE.id).catch(() => undefined)
+      );
+
+      await waitFor(() => expect(notesApi.getById).toHaveBeenCalledTimes(2));
+      expect(
+        queryClient.getQueryData(notesQueryKeys.detail(OPEN_NOTE.id))
+      ).toEqual(OPEN_NOTE);
     });
   });
 

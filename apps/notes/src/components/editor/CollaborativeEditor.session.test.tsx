@@ -1,9 +1,14 @@
+import type { ReactNode } from 'react';
+
+import { QueryClientProvider } from '@tanstack/react-query';
+
 import { ROUTES } from '@/config';
 import { queryClient } from '@/lib/query-client';
-import { render } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { notesQueryKeys } from '@knowtis/data-access-notes';
+import { notesApi } from '@knowtis/api-client';
+import { notesQueryKeys, useDeleteNote } from '@knowtis/data-access-notes';
 
 import { CollaborativeEditor } from './CollaborativeEditor';
 
@@ -99,6 +104,35 @@ describe('CollaborativeEditor session expiry', () => {
         'n1',
       ])?.isInvalidated
     ).toBe(true);
+    queryClient.clear();
+  });
+
+  it('leaves a note it is deleting to that delete when access changes', async () => {
+    const deleteRequest = vi
+      .spyOn(notesApi, 'delete')
+      .mockReturnValue(new Promise(() => undefined));
+    queryClient.setQueryData(notesQueryKeys.detail('n1'), {
+      permission: 'editor',
+    });
+    render(
+      <CollaborativeEditor noteId="n1" initialContent="" onUpdate={vi.fn()} />
+    );
+    const { result } = renderHook(() => useDeleteNote(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      ),
+    });
+    act(() => result.current.mutate('n1'));
+    await waitFor(() => expect(result.current.isPending).toBe(true));
+
+    accessChanged?.();
+
+    expect(
+      queryClient.getQueryState(notesQueryKeys.detail('n1'))?.isInvalidated
+    ).toBe(false);
+    deleteRequest.mockRestore();
     queryClient.clear();
   });
 

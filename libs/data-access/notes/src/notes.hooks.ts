@@ -20,7 +20,7 @@ import {
   type NoteListPages,
 } from './note-cache';
 import { invalidateNoteCollections } from './note-invalidation';
-import { notesQueryKeys } from './query-keys';
+import { notesMutationKeys, notesQueryKeys } from './query-keys';
 
 const LIST_STALE_TIME_MS = 1000 * 60;
 const COUNTS_STALE_TIME_MS = 1000 * 30;
@@ -164,13 +164,31 @@ export function useUpdateNote() {
   });
 }
 
+function singleNoteQueryKeys(id: string) {
+  return [
+    notesQueryKeys.detail(id),
+    notesQueryKeys.people(id),
+    notesQueryKeys.sharingAuthority(id),
+  ];
+}
+
+/**
+ * Removes the deleted note's own queries instead of invalidating them: its
+ * page stays mounted until navigation lands, and any refresh in that window
+ * would ask the server for a note that no longer exists.
+ */
 export function useDeleteNote() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: notesMutationKeys.delete(),
     mutationFn: (id: string) => notesApi.delete(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: notesQueryKeys.lists() });
+      await Promise.all(
+        [notesQueryKeys.lists(), ...singleNoteQueryKeys(id)].map((queryKey) =>
+          queryClient.cancelQueries({ queryKey })
+        )
+      );
 
       const previousLists = queryClient.getQueriesData<NoteListPages>({
         queryKey: notesQueryKeys.lists(),
@@ -183,11 +201,19 @@ export function useDeleteNote() {
 
       return { previousLists };
     },
-    onError: (_err, _id, context) => {
+    onSuccess: (_result, id) => {
+      for (const queryKey of singleNoteQueryKeys(id)) {
+        queryClient.removeQueries({ queryKey });
+      }
+    },
+    onError: (_err, id, context) => {
       if (context?.previousLists) {
         for (const [queryKey, data] of context.previousLists) {
           queryClient.setQueryData(queryKey, data);
         }
+      }
+      for (const queryKey of singleNoteQueryKeys(id)) {
+        void queryClient.invalidateQueries({ queryKey });
       }
     },
     onSettled: () => {
