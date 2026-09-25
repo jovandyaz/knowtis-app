@@ -33,6 +33,7 @@ import { useCollapseFocusReturn, useMediaQuery } from '@knowtis/shared-hooks';
 import { isStudyFocusOpen } from '../artifacts/focus/study-focus-marker';
 import { AgentCopilotPanel } from '../copilot/AgentCopilotPanel';
 import { ConversationSwitcher } from '../copilot/ConversationSwitcher';
+import { useDockInsetRef } from './dock-inset';
 
 const DOCK_COLLAPSE_THRESHOLD = 240;
 const DOCK_PRESENTATION = {
@@ -246,6 +247,7 @@ export function RightDock() {
     setLayoutMovedDockIntoDialog(lastPresentation === DOCK_PRESENTATION.INLINE);
   }
   const panelRef = useRef<HTMLElement>(null);
+  const dockInsetRef = useDockInsetRef(panelRef);
   const openInlineRef = useRef(false);
   useEffect(() => {
     openInlineRef.current = isOpen && fitsBesideDocument;
@@ -260,7 +262,7 @@ export function RightDock() {
   if (fitsBesideDocument) {
     return (
       <ResizablePanel
-        ref={panelRef}
+        ref={dockInsetRef}
         side={DIALOG_SIDE.RIGHT}
         defaultWidth={preferredWidth}
         minWidth={DOCK_MIN_WIDTH}
