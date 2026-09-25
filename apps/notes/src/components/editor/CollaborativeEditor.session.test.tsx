@@ -5,7 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ROUTES } from '@/config';
 import { queryClient } from '@/lib/query-client';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notesApi } from '@knowtis/api-client';
 import { notesQueryKeys, useDeleteNote } from '@knowtis/data-access-notes';
@@ -64,6 +64,12 @@ describe('CollaborativeEditor session expiry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     expireSession = undefined;
+    accessChanged = undefined;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    queryClient.clear();
   });
 
   it('invalidates both detail and share-route permission snapshots after access changes', () => {
@@ -104,13 +110,10 @@ describe('CollaborativeEditor session expiry', () => {
         'n1',
       ])?.isInvalidated
     ).toBe(true);
-    queryClient.clear();
   });
 
   it('leaves a note it is deleting to that delete when access changes', async () => {
-    const deleteRequest = vi
-      .spyOn(notesApi, 'delete')
-      .mockReturnValue(new Promise(() => undefined));
+    vi.spyOn(notesApi, 'delete').mockReturnValue(new Promise(() => undefined));
     queryClient.setQueryData(notesQueryKeys.detail('n1'), {
       permission: 'editor',
     });
@@ -126,14 +129,13 @@ describe('CollaborativeEditor session expiry', () => {
     });
     act(() => result.current.mutate('n1'));
     await waitFor(() => expect(result.current.isPending).toBe(true));
+    expect(accessChanged).toBeDefined();
 
     accessChanged?.();
 
     expect(
       queryClient.getQueryState(notesQueryKeys.detail('n1'))?.isInvalidated
     ).toBe(false);
-    deleteRequest.mockRestore();
-    queryClient.clear();
   });
 
   it('sends a signed-in user to the login page', () => {
