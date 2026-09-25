@@ -4,27 +4,10 @@ import { generateHTML, generateJSON } from '@tiptap/html/server';
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import * as Y from 'yjs';
 
-import {
-  createSemanticExtensions,
-  IMAGE_NODE_NAME,
-  YJS_XML_FRAGMENT_NAME,
-} from '@knowtis/editor-schema';
-import { isStoredImageUrl } from '@knowtis/shared-util';
-
-export const SRC_ATTR = 'src';
-
-export const noteSchemaExtensions = [...createSemanticExtensions()];
+import { isForeignImage, YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import { noteSchemaExtensions } from '@knowtis/editor-schema/server';
 
 export const editorSchema = getSchema(noteSchemaExtensions);
-
-/** An image node whose `src` the app never stored: never content any write keeps. */
-export function isForeignImage(node: JSONContent): boolean {
-  if (node.type !== IMAGE_NODE_NAME) {
-    return false;
-  }
-  const src: unknown = node.attrs?.[SRC_ATTR];
-  return typeof src !== 'string' || !isStoredImageUrl(src);
-}
 
 // Every server-side write builds its state here, and an image the app did not
 // store is a URL every later reader's browser would fetch.

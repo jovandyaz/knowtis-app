@@ -26,6 +26,7 @@
       "@knowtis/ai-gateway": ["packages/ai-gateway/src/index.ts"],
       "@knowtis/design-system": ["packages/design-system/src/index.ts"],
       "@knowtis/editor-schema": ["packages/editor-schema/src/index.ts"],
+      "@knowtis/editor-schema/server": ["packages/editor-schema/src/server.ts"],
       "@knowtis/note-markdown": ["packages/note-markdown/src/index.ts"],
       "@knowtis/shared-hooks": ["packages/shared/hooks/src/index.ts"],
       "@knowtis/shared-util": ["packages/shared/util/src/index.ts"],

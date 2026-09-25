@@ -91,6 +91,42 @@ describe('AuthService', () => {
     ).not.toThrow();
   });
 
+  it('should require notes:read as well as notes:write for update-note, which reads the note before replacing it', () => {
+    const service = new AuthService(EXCHANGE_URL);
+
+    expect(() => service.checkScopes(['notes:write'], 'update-note')).toThrow(
+      "Access token does not have 'notes:read' scope required for tool 'update-note'."
+    );
+    expect(() => service.checkScopes(['notes:read'], 'update-note')).toThrow(
+      "Access token does not have 'notes:write' scope required for tool 'update-note'."
+    );
+    expect(() => service.checkScopes([], 'update-note')).toThrow(
+      "Access token does not have 'notes:read' and 'notes:write' scopes required for tool 'update-note'."
+    );
+    expect(() =>
+      service.checkScopes(['notes:read', 'notes:write'], 'update-note')
+    ).not.toThrow();
+  });
+
+  it('should refuse update-note for an API key whose exchange granted only notes:write', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accessToken: 'jwt-1',
+        expiresIn: 900,
+        scopes: 'notes:write',
+      }),
+    });
+    const service = new AuthService(EXCHANGE_URL);
+    await service.getToken('knowtis_mcp_live_write_only');
+
+    expect(() =>
+      service.checkScope('knowtis_mcp_live_write_only', 'update-note')
+    ).toThrow(
+      "API key does not have 'notes:read' scope required for tool 'update-note'."
+    );
+  });
+
   it('should throw when the token exchange responds non-ok', async () => {
     fetchMock.mockResolvedValue({
       ok: false,

@@ -1,6 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
+import {
+  nodesWithoutMarkdownLostBetween,
+  restoreStoredAttributes,
+} from '@knowtis/editor-schema/server';
 import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 
 import type { NotesApi } from '../api-client/notes.api.js';
@@ -17,6 +21,11 @@ import {
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
 const DEFAULT_LIST_NOTES_LIMIT = 20;
+
+const aiBlockWouldBeLost = (nodes: readonly string[]): string =>
+  `This note holds an AI block that has not been inserted or discarded yet (${nodes.join(', ')}). ` +
+  'Markdown has no form for it, so get-note does not show it, and this update would delete it; nothing was changed. ' +
+  'Ask the user to insert or discard the AI block in Knowtis, then call update-note again.';
 
 const noteSummaryShape = {
   id: z.string(),
@@ -198,7 +207,7 @@ export function registerNotesTools(
     {
       title: 'Update Note',
       description:
-        'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, underline, highlight, super/subscript, Mermaid diagrams).',
+        'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, underline, highlight, super/subscript, Mermaid diagrams). Image sizes, highlight colours and diagram view modes the note already had are kept. A content update is refused while the note holds an AI block the user has not inserted or discarded, since Markdown cannot carry it.',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to update'),
         title: z.string().optional().describe('New title'),
@@ -221,7 +230,16 @@ export function registerNotesTools(
           data.title = title;
         }
         if (content !== undefined) {
-          data.content = markdownToHtml(content);
+          const stored = await notesApi.get(token, noteId);
+          const rewritten = markdownToHtml(content);
+          const unseen = nodesWithoutMarkdownLostBetween(
+            stored.content,
+            rewritten
+          );
+          if (unseen.length > 0) {
+            throw new Error(aiBlockWouldBeLost(unseen));
+          }
+          data.content = restoreStoredAttributes(stored.content, rewritten);
         }
         const note = await notesApi.update(token, noteId, data);
         return { note: { ...note, content: htmlToMarkdown(note.content) } };

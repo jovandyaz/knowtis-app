@@ -1,31 +1,39 @@
+import type { JSONContent } from '@tiptap/core';
+import { generateHTML, generateJSON } from '@tiptap/html/server';
 import { describe, expect, it } from 'vitest';
 
-import { markdownToNoteHtml } from './html-sanitizer';
-import {
-  collectNodesOfType,
-  persistedDocument,
-  storedHtml,
-  type PMJson,
-} from './html-sanitizer.fixtures';
+import { markdownToHtml } from '@knowtis/note-markdown';
+import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
+
+import { noteSchemaExtensions } from './note-schema';
 import { restoreStoredAttributes } from './stored-attributes';
 
-const SRC =
-  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/lake.webp';
-const OTHER =
-  'https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/map.webp';
+const parsed = (html: string): JSONContent =>
+  generateJSON(html, noteSchemaExtensions);
+
+const storedHtml = (html: string): string =>
+  generateHTML(parsed(html), noteSchemaExtensions);
+
+function nodesOfType(node: JSONContent, type: string): JSONContent[] {
+  return [
+    ...(node.type === type ? [node] : []),
+    ...(node.content ?? []).flatMap((child) => nodesOfType(child, type)),
+  ];
+}
+
+const SRC = `https://${STORED_IMAGE_HOST}/notes/n1/lake.webp`;
+const OTHER = `https://${STORED_IMAGE_HOST}/notes/n1/map.webp`;
 const SIZED = storedHtml(
   `<p>Trip</p><figure data-image=""><img src="${SRC}" alt="lake" width="320" height="200"><figcaption></figcaption></figure><p>Old text.</p>`
 );
 
 function imageAttrs(html: string) {
-  return collectNodesOfType(persistedDocument(html), 'image').map(
-    (n) => n.attrs
-  );
+  return nodesOfType(parsed(html), 'image').map((n) => n.attrs);
 }
 
 describe('restoreStoredAttributes: image size', () => {
   it('gives a converted image back the size the stored body had for the same src', () => {
-    const proposed = markdownToNoteHtml(`Trip\n\n![lake](${SRC})\n\nNew text.`);
+    const proposed = markdownToHtml(`Trip\n\n![lake](${SRC})\n\nNew text.`);
     const restored = restoreStoredAttributes(SIZED, proposed);
     expect(imageAttrs(restored)).toEqual([
       { src: SRC, alt: 'lake', width: 320, height: 200 },
@@ -37,12 +45,12 @@ describe('restoreStoredAttributes: image size', () => {
     const unsized = storedHtml(
       `<figure data-image=""><img src="${SRC}" alt="lake"><figcaption></figcaption></figure>`
     );
-    const proposed = markdownToNoteHtml(`![lake](${SRC})`);
+    const proposed = markdownToHtml(`![lake](${SRC})`);
     expect(restoreStoredAttributes(unsized, proposed)).toBe(proposed);
   });
 
   it('leaves an image the model added at its natural size', () => {
-    const proposed = markdownToNoteHtml(`![map](${OTHER})`);
+    const proposed = markdownToHtml(`![map](${OTHER})`);
     expect(restoreStoredAttributes(SIZED, proposed)).toBe(proposed);
   });
 
@@ -61,7 +69,7 @@ describe('restoreStoredAttributes: image size by order of occurrence', () => {
         `<figure data-image=""><img src="${SRC}" alt="b"><figcaption></figcaption></figure>` +
         `<figure data-image=""><img src="${SRC}" alt="c" width="300" height="150"><figcaption></figcaption></figure>`
     );
-    const proposed = markdownToNoteHtml(
+    const proposed = markdownToHtml(
       `![a](${SRC})\n\n![b](${SRC})\n\n![c](${SRC})`
     );
     expect(
@@ -81,7 +89,7 @@ const DIAGRAM = (code: string, viewMode: string) =>
   `<div data-mermaid-block="" data-code="${code}" data-view-mode="${viewMode}"></div>`;
 
 function viewModes(html: string) {
-  return collectNodesOfType(persistedDocument(html), 'mermaidBlock').map(
+  return nodesOfType(parsed(html), 'mermaidBlock').map(
     (n) => n.attrs?.['viewMode']
   );
 }
@@ -91,7 +99,7 @@ describe('restoreStoredAttributes: diagram view mode', () => {
     const stored = storedHtml(
       DIAGRAM('graph TD', 'code') + DIAGRAM('graph LR', 'preview')
     );
-    const proposed = markdownToNoteHtml(
+    const proposed = markdownToHtml(
       '```mermaid\ngraph TD\n```\n\n```mermaid\ngraph LR\n```'
     );
     expect(viewModes(restoreStoredAttributes(stored, proposed))).toEqual([
@@ -102,7 +110,7 @@ describe('restoreStoredAttributes: diagram view mode', () => {
 
   it('matches code the converter trimmed of trailing newlines', () => {
     const stored = storedHtml(DIAGRAM('graph TD\n', 'code'));
-    const proposed = markdownToNoteHtml('```mermaid\ngraph TD\n```');
+    const proposed = markdownToHtml('```mermaid\ngraph TD\n```');
     expect(viewModes(restoreStoredAttributes(stored, proposed))).toEqual([
       'code',
     ]);
@@ -110,7 +118,7 @@ describe('restoreStoredAttributes: diagram view mode', () => {
 
   it('leaves a diagram whose code changed in the default view', () => {
     const stored = storedHtml(DIAGRAM('graph TD', 'code'));
-    const proposed = markdownToNoteHtml('```mermaid\ngraph TB\n```');
+    const proposed = markdownToHtml('```mermaid\ngraph TB\n```');
     expect(restoreStoredAttributes(stored, proposed)).toBe(proposed);
   });
 });
@@ -120,7 +128,7 @@ const COLORED = (text: string, color: string) =>
 
 function highlightColors(html: string): unknown[] {
   const colors: unknown[] = [];
-  const walk = (node: PMJson) => {
+  const walk = (node: JSONContent) => {
     for (const mark of node.marks ?? []) {
       if (mark.type === 'highlight') {
         colors.push(mark.attrs?.['color']);
@@ -128,7 +136,7 @@ function highlightColors(html: string): unknown[] {
     }
     (node.content ?? []).forEach(walk);
   };
-  walk(persistedDocument(html));
+  walk(parsed(html));
   return colors;
 }
 
@@ -137,9 +145,7 @@ describe('restoreStoredAttributes: highlight colour', () => {
     const stored = storedHtml(
       `<p>${COLORED('sunscreen', '#ffc078')} and ${COLORED('water', '#8ce99a')}</p><p>Old text.</p>`
     );
-    const proposed = markdownToNoteHtml(
-      '==sunscreen== and ==water==\n\nNew text.'
-    );
+    const proposed = markdownToHtml('==sunscreen== and ==water==\n\nNew text.');
     expect(highlightColors(restoreStoredAttributes(stored, proposed))).toEqual([
       '#ffc078',
       '#8ce99a',
@@ -150,7 +156,7 @@ describe('restoreStoredAttributes: highlight colour', () => {
     const stored = storedHtml(
       `<p>${COLORED('x', '#ffc078')} ${COLORED('x', '#8ce99a')}</p>`
     );
-    const proposed = markdownToNoteHtml('==x== ==x==');
+    const proposed = markdownToHtml('==x== ==x==');
     expect(highlightColors(restoreStoredAttributes(stored, proposed))).toEqual([
       '#ffc078',
       '#8ce99a',
@@ -159,19 +165,19 @@ describe('restoreStoredAttributes: highlight colour', () => {
 
   it('leaves a highlight whose text changed without the old colour', () => {
     const stored = storedHtml(`<p>${COLORED('sunscreen', '#ffc078')}</p>`);
-    const proposed = markdownToNoteHtml('==sun cream==');
+    const proposed = markdownToHtml('==sun cream==');
     expect(restoreStoredAttributes(stored, proposed)).toBe(proposed);
   });
 
   it('never gives a highlight a colour the stored body did not have', () => {
     const stored = storedHtml('<p><mark>sunscreen</mark></p>');
-    const proposed = markdownToNoteHtml('==sunscreen==');
+    const proposed = markdownToHtml('==sunscreen==');
     expect(restoreStoredAttributes(stored, proposed)).toBe(proposed);
   });
 
   it('never restores a colour that is not a hex value, even from a body the schema did not write', () => {
     const hostile = `<p>${COLORED('sunscreen', 'red; background-image: url(https://evil.example/t)')} and more</p>`;
-    const proposed = markdownToNoteHtml('==sunscreen== and less');
+    const proposed = markdownToHtml('==sunscreen== and less');
 
     expect(highlightColors(hostile)).toEqual([null]);
     expect(storedHtml(hostile)).toBe('<p><mark>sunscreen</mark> and more</p>');

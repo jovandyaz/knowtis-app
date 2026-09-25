@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { htmlToMarkdown } from '@knowtis/note-markdown';
+import { htmlToMarkdown, markdownToHtml } from '@knowtis/note-markdown';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
-import { nodesLostBetween } from './document-fidelity';
-import { markdownToNoteHtml } from './html-sanitizer';
+import { AI_BLOCK_NAME } from './ai-block-node';
+import {
+  nodesLostBetween,
+  nodesWithoutMarkdown,
+  nodesWithoutMarkdownLostBetween,
+} from './document-fidelity';
 
 const STORED_SRC = `https://${STORED_IMAGE_HOST}/notes/n1/a.webp`;
 const FOREIGN_SRC = 'https://attacker.example/x.png';
 
 const roundTripped = (html: string): string =>
-  markdownToNoteHtml(htmlToMarkdown(html));
+  markdownToHtml(htmlToMarkdown(html));
 
 const NESTED_TASK_LIST =
   '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><div><p>book</p>' +
@@ -114,6 +118,46 @@ describe('nodesLostBetween', () => {
   });
 });
 
+const AI_BLOCK =
+  '<div data-ai-block="" topic="Rome" status="done" content="Rome was founded in 753 BC."></div>';
+
+describe('nodesWithoutMarkdown', () => {
+  it('keeps only the types Markdown has no form for', () => {
+    expect(
+      nodesWithoutMarkdown(['paragraph', AI_BLOCK_NAME, 'table'])
+    ).toStrictEqual([AI_BLOCK_NAME]);
+  });
+});
+
+describe('nodesWithoutMarkdownLostBetween', () => {
+  it('names an AI block a rewrite no longer holds', () => {
+    expect(
+      nodesWithoutMarkdownLostBetween(`<p>Old</p>${AI_BLOCK}`, '<p>New</p>')
+    ).toStrictEqual([AI_BLOCK_NAME]);
+  });
+
+  it('names an AI block a rewrite to nothing would delete', () => {
+    expect(
+      nodesWithoutMarkdownLostBetween(`<p>Old</p>${AI_BLOCK}`, '')
+    ).toStrictEqual([AI_BLOCK_NAME]);
+  });
+
+  it('ignores every other node a rewrite removes, since Markdown showed it', () => {
+    expect(
+      nodesWithoutMarkdownLostBetween(TABLE_NOTE, '<p>New</p>')
+    ).toStrictEqual([]);
+  });
+
+  it('reports nothing when the AI block is still there', () => {
+    expect(
+      nodesWithoutMarkdownLostBetween(
+        `<p>Old</p>${AI_BLOCK}`,
+        `<p>New</p>${AI_BLOCK}`
+      )
+    ).toStrictEqual([]);
+  });
+});
+
 describe('the note shapes an edit can and cannot carry', () => {
   it.each([
     ['a table note', TABLE_NOTE],
@@ -127,7 +171,7 @@ describe('the note shapes an edit can and cannot carry', () => {
     ],
     [
       'an image',
-      '<figure data-image=""><img src="https://iy4r311mpkfdcnup.public.blob.vercel-storage.com/notes/n1/a.webp" alt="a"><figcaption></figcaption></figure>',
+      `<figure data-image=""><img src="${STORED_SRC}" alt="a"><figcaption></figcaption></figure>`,
     ],
     ['a nested task list', NESTED_TASK_LIST],
     [

@@ -1,18 +1,12 @@
 import type { JSONContent } from '@tiptap/core';
 import { generateHTML, generateJSON } from '@tiptap/html/server';
 
-import {
-  HIGHLIGHT_MARK_NAME,
-  IMAGE_NODE_NAME,
-  MERMAID_BLOCK_NAME,
-  MERMAID_VIEW_MODE,
-} from '@knowtis/editor-schema';
 import { TRAILING_NEWLINES } from '@knowtis/note-markdown';
 
-import {
-  noteSchemaExtensions,
-  SRC_ATTR,
-} from '../../../notes/infrastructure/html-to-yjs';
+import { IMAGE_NODE_NAME, IMAGE_SRC_ATTR } from './image-node';
+import { MERMAID_BLOCK_NAME, MERMAID_VIEW_MODE } from './mermaid-block-node';
+import { noteSchemaExtensions } from './note-schema';
+import { HIGHLIGHT_MARK_NAME } from './semantic-extensions';
 
 type Attributes = Record<string, unknown>;
 
@@ -41,7 +35,7 @@ const RESTORED: readonly KeyedAttributes[] = [
   {
     carriersOf: (node) =>
       node.type === IMAGE_NODE_NAME
-        ? carrier(node.attrs, node.attrs?.[SRC_ATTR])
+        ? carrier(node.attrs, node.attrs?.[IMAGE_SRC_ATTR])
         : [],
     unset: { width: null, height: null },
   },

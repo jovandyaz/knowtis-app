@@ -1,9 +1,11 @@
+import type { JSONContent } from '@tiptap/core';
 import { Node } from '@tiptap/core';
 
 import { isStoredImageUrl } from '@knowtis/shared-util';
 
 export const IMAGE_NODE_NAME = 'image' as const;
 export const IMAGE_FIGURE_ATTRIBUTE = 'data-image';
+export const IMAGE_SRC_ATTR = 'src';
 
 export interface ImageAttributes {
   src: string;
@@ -13,6 +15,15 @@ export interface ImageAttributes {
 }
 
 const IMAGE_FIGURE_TAG = `figure[${IMAGE_FIGURE_ATTRIBUTE}]`;
+
+/** An image node whose `src` the app never stored: never content any write keeps. */
+export function isForeignImage(node: JSONContent): boolean {
+  if (node.type !== IMAGE_NODE_NAME) {
+    return false;
+  }
+  const src: unknown = node.attrs?.[IMAGE_SRC_ATTR];
+  return typeof src !== 'string' || !isStoredImageUrl(src);
+}
 
 function dimension(value: string | null): number | null {
   const parsed = value === null ? Number.NaN : Number(value);

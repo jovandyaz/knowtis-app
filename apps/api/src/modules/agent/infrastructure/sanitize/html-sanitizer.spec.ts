@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { nodesLostBetween } from '@knowtis/editor-schema/server';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
-import { nodesLostBetween } from './document-fidelity';
 import {
   htmlToPlainText,
   markdownToNoteHtml,

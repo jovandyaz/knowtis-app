@@ -16,6 +16,19 @@ import minimalComments from './tools/lint-rules/minimal-comments.js';
 // `packages/**` matching when a project lints from its own directory.
 const workspaceRoot = import.meta.dirname;
 
+const BROWSER_SOURCES = [
+  'apps/notes/**/*.{ts,tsx}',
+  'apps/backoffice/**/*.{ts,tsx}',
+  'packages/crdt/**/*.{ts,tsx}',
+  'packages/design-system/**/*.{ts,tsx}',
+  'packages/editor/**/*.{ts,tsx}',
+  'packages/auth-react/**/*.{ts,tsx}',
+  'packages/permissions-react/**/*.{ts,tsx}',
+  'packages/shared/hooks/**/*.{ts,tsx}',
+  'libs/api-client/**/*.{ts,tsx}',
+  'libs/data-access/**/*.{ts,tsx}',
+];
+
 export default defineConfig([
   globalIgnores([
     'dist',
@@ -146,6 +159,30 @@ export default defineConfig([
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
+      ],
+    },
+  },
+  // A package's `/server` entry runs only in Node (happy-dom, node:crypto), and a
+  // browser import still typechecks against the base paths, then ships it.
+  {
+    basePath: workspaceRoot,
+    files: BROWSER_SOURCES,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@knowtis/editor-schema/server',
+              message:
+                'Node-only entry (it bundles happy-dom); browser code imports @knowtis/editor-schema.',
+            },
+            {
+              name: '@jovandyaz/auth/server',
+              message: 'Node-only entry; browser code imports @jovandyaz/auth.',
+            },
+          ],
+        },
       ],
     },
   },

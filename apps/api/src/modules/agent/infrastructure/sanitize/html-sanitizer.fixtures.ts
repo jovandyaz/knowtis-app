@@ -3,11 +3,11 @@ import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror';
 import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import { noteSchemaExtensions } from '@knowtis/editor-schema/server';
 
 import {
   editorSchema,
   htmlToYjsState,
-  noteSchemaExtensions,
   yDocToHtml,
   yjsStateToHtml,
 } from '../../../notes/infrastructure/html-to-yjs';
