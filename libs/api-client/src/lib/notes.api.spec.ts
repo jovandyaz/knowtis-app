@@ -34,7 +34,7 @@ describe('notesApi', () => {
       expect(httpClient.get).toHaveBeenCalledWith('/notes/note', undefined);
     });
 
-    it('lets the caller abort a note read', async () => {
+    it('forwards the abort signal for a note read', async () => {
       vi.mocked(httpClient.get).mockResolvedValue({});
       const { signal } = new AbortController();
 
@@ -56,7 +56,7 @@ describe('notesApi', () => {
       );
     });
 
-    it('lets the caller abort a collaborators read', async () => {
+    it('forwards the abort signal for a collaborators read', async () => {
       vi.mocked(httpClient.get).mockResolvedValue([]);
       const { signal } = new AbortController();
 
@@ -79,7 +79,7 @@ describe('notesApi', () => {
       });
     });
 
-    it('lets the caller abort a shared note read', async () => {
+    it('forwards the abort signal for a shared note read', async () => {
       vi.mocked(httpClient.get).mockResolvedValue({});
       const { signal } = new AbortController();
 
