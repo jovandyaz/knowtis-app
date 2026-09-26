@@ -32,7 +32,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 
-import { AI_CONFIG_SOURCES } from '@knowtis/shared-types';
+import { AI_CONFIG_SOURCES, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { BYTES_PER_MEGABYTE } from '../../core/http/byte-units';
 import { clientIpOf } from '../../core/http/client-ip';
@@ -185,7 +185,7 @@ const metricsSummarySchema = {
 @ApiBearerAuth()
 @Controller('ai')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
-@RequireFeatureFlag('ai_enabled')
+@RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 export class AIController {
   constructor(
     private readonly completeTextHandler: CompleteTextHandler,
@@ -242,7 +242,7 @@ export class AIController {
     description: 'Forbidden — admin role required',
   })
   @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-  @RequireFeatureFlag('ai_enabled')
+  @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
   @Roles('admin')
   @Get('health')
   getHealth(): { providers: Record<string, ProviderHealth> } {
@@ -419,7 +419,7 @@ export class AIController {
     description: 'Forbidden — admin role required',
   })
   @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-  @RequireFeatureFlag('ai_enabled')
+  @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
   @Roles('admin')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get('config')
@@ -463,7 +463,7 @@ export class AIController {
     description: 'Forbidden — admin role required',
   })
   @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-  @RequireFeatureFlag('ai_enabled')
+  @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
   @Roles('admin')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Put('config/:key')
@@ -505,7 +505,7 @@ export class AIController {
     description: 'Forbidden — admin role required',
   })
   @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-  @RequireFeatureFlag('ai_enabled')
+  @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
   @Roles('admin')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Delete('config/:key')

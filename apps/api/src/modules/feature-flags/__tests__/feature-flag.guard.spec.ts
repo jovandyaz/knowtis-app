@@ -2,6 +2,8 @@ import { ForbiddenException, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 import { FEATURE_FLAG_KEY, FeatureFlagGuard } from '../feature-flag.guard';
 import { FeatureFlagsService } from '../feature-flags.service';
 
@@ -47,49 +49,61 @@ describe('FeatureFlagGuard', () => {
 
   it('should return true when the required flag is enabled', async () => {
     const context = createMockExecutionContext();
-    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue(['test_flag']);
-    featureFlagsService.isEnabled.mockResolvedValue(true);
-
-    const result = await guard.canActivate(context);
-
-    expect(result).toBe(true);
-    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith('test_flag');
-  });
-
-  it('should throw ForbiddenException when the required flag is disabled', async () => {
-    const context = createMockExecutionContext();
-    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue(['disabled_flag']);
-    featureFlagsService.isEnabled.mockResolvedValue(false);
-
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      ForbiddenException
-    );
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      "Feature 'disabled_flag' is not enabled"
-    );
-  });
-
-  it('should check all flags from both handler and class levels', async () => {
-    const context = createMockExecutionContext();
     vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
-      'sample_flag',
-      'ai_enabled',
+      FEATURE_FLAG_KEYS.AI_ENABLED,
     ]);
     featureFlagsService.isEnabled.mockResolvedValue(true);
 
     const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
-    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith('sample_flag');
-    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith('ai_enabled');
+    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith(
+      FEATURE_FLAG_KEYS.AI_ENABLED
+    );
+  });
+
+  it('should throw ForbiddenException when the required flag is disabled', async () => {
+    const context = createMockExecutionContext();
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
+      FEATURE_FLAG_KEYS.AI_ENABLED,
+    ]);
+    featureFlagsService.isEnabled.mockResolvedValue(false);
+
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ForbiddenException
+    );
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      "Feature 'ai_enabled' is not enabled"
+    );
+  });
+
+  it('should check all flags from both handler and class levels', async () => {
+    const context = createMockExecutionContext();
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
+      FEATURE_FLAG_KEYS.AI_ENABLED,
+      FEATURE_FLAG_KEYS.AI_ENABLED,
+    ]);
+    featureFlagsService.isEnabled.mockResolvedValue(true);
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+    expect(featureFlagsService.isEnabled).toHaveBeenNthCalledWith(
+      1,
+      FEATURE_FLAG_KEYS.AI_ENABLED
+    );
+    expect(featureFlagsService.isEnabled).toHaveBeenNthCalledWith(
+      2,
+      FEATURE_FLAG_KEYS.AI_ENABLED
+    );
     expect(featureFlagsService.isEnabled).toHaveBeenCalledTimes(2);
   });
 
   it('should throw if any flag in a compound set is disabled', async () => {
     const context = createMockExecutionContext();
     vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
-      'sample_flag',
-      'ai_enabled',
+      FEATURE_FLAG_KEYS.AI_ENABLED,
+      FEATURE_FLAG_KEYS.AI_ENABLED,
     ]);
     featureFlagsService.isEnabled
       .mockResolvedValueOnce(true)
