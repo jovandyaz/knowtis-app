@@ -52,8 +52,6 @@ export function NoteList() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const loadingLabelId = useId();
   const aiEnabled = useAIStore((s) => s.aiEnabled);
-  const voiceNotesEnabled = useAIStore((s) => s.voiceNotesEnabled);
-  const showVoiceNote = aiEnabled && voiceNotesEnabled;
   const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const { createNote } = useCreateNoteAction();
 
@@ -245,7 +243,7 @@ export function NoteList() {
             />
           )}
           <div className="hidden md:flex md:items-center md:gap-3">
-            {showVoiceNote && <VoiceNoteRecorder size="default" />}
+            {aiEnabled && <VoiceNoteRecorder size="default" />}
             <Button className="gap-2" onClick={createNote}>
               <Plus className="h-4 w-4" />
               {t('create.newNote')}

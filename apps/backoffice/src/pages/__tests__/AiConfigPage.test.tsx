@@ -153,7 +153,6 @@ describe('AiConfigPage', () => {
         flagRow(FEATURE_FLAG_KEYS.AI_GLOBAL_SPEND_BREAKER, true),
         flagRow(FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH, true),
         flagRow(FEATURE_FLAG_KEYS.AGENT_BYOK, false),
-        flagRow(FEATURE_FLAG_KEYS.VOICE_NOTES_ENABLED, false),
       ],
       isLoading: false,
       isError: false,

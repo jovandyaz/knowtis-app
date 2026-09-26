@@ -72,7 +72,7 @@ describe('FeatureFlagGuard', () => {
   it('should check all flags from both handler and class levels', async () => {
     const context = createMockExecutionContext();
     vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
-      'voice_notes_enabled',
+      'sample_flag',
       'ai_enabled',
     ]);
     featureFlagsService.isEnabled.mockResolvedValue(true);
@@ -80,9 +80,7 @@ describe('FeatureFlagGuard', () => {
     const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
-    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith(
-      'voice_notes_enabled'
-    );
+    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith('sample_flag');
     expect(featureFlagsService.isEnabled).toHaveBeenCalledWith('ai_enabled');
     expect(featureFlagsService.isEnabled).toHaveBeenCalledTimes(2);
   });
@@ -90,7 +88,7 @@ describe('FeatureFlagGuard', () => {
   it('should throw if any flag in a compound set is disabled', async () => {
     const context = createMockExecutionContext();
     vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
-      'voice_notes_enabled',
+      'sample_flag',
       'ai_enabled',
     ]);
     featureFlagsService.isEnabled

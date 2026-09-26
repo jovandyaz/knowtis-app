@@ -21,8 +21,6 @@ export function FloatingCreateButton({
   const scrollDirection = useScrollDirection();
   const isVisible = scrollDirection !== 'down';
   const aiEnabled = useAIStore((s) => s.aiEnabled);
-  const voiceNotesEnabled = useAIStore((s) => s.voiceNotesEnabled);
-  const showVoiceNote = aiEnabled && voiceNotesEnabled;
   const portalTarget = usePortalTarget(MOBILE_FAB_SLOT_ID);
 
   if (!portalTarget) {
@@ -39,7 +37,7 @@ export function FloatingCreateButton({
           exit={{ scale: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
         >
-          {showVoiceNote && <VoiceNoteRecorder size="md" emphasis="quiet" />}
+          {aiEnabled && <VoiceNoteRecorder size="md" emphasis="quiet" />}
           <button
             type="button"
             className={cn(
