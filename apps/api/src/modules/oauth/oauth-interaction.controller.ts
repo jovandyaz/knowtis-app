@@ -76,7 +76,7 @@ export class OauthInteractionController {
 
   @Get(':uid')
   async describe(@Param('uid') uid: string): Promise<InteractionDescription> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const interaction = await this.findInteraction(provider, uid);
 
     const { params } = interaction;
@@ -99,7 +99,7 @@ export class OauthInteractionController {
     @Body() decision: ConsentDecisionDto,
     @CurrentUser() user: RequestUser
   ): Promise<{ returnTo: string }> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const resourceUrl = this.resolveResourceUrl();
     const interaction = await this.findInteraction(provider, uid);
 
@@ -161,7 +161,7 @@ export class OauthInteractionController {
 
   @Post(':uid/abort')
   async abort(@Param('uid') uid: string): Promise<{ returnTo: string }> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const interaction = await this.findInteraction(provider, uid);
 
     this.logger.log({

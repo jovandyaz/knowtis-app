@@ -106,7 +106,7 @@ export class OauthGrantsController {
   async list(
     @CurrentUser() user: RequestUser
   ): Promise<{ grants: ConnectedGrant[] }> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const rows = await listGrantsByAccount(this.db, user.id);
 
     const grants = await Promise.all(
@@ -136,7 +136,7 @@ export class OauthGrantsController {
     @Param('grantId') grantId: string,
     @CurrentUser() user: RequestUser
   ): Promise<void> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     if (!(await grantBelongsToAccount(this.db, grantId, user.id))) {
       throw new NotFoundException();
     }
