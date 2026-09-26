@@ -10,6 +10,8 @@ import { UserScopedThrottlerGuard } from './user-scoped-throttler.guard';
 
 const WINDOW_MS = 60_000;
 const REQUESTS_PER_WINDOW = 60;
+const THROTTLED_MESSAGE =
+  'Too many requests. Please slow down and try again shortly.';
 
 /**
  * Rate limiting for the whole API: the default budget every route gets, and the
@@ -38,6 +40,7 @@ const REQUESTS_PER_WINDOW = 60;
         return {
           throttlers: [{ ttl: WINDOW_MS, limit: REQUESTS_PER_WINDOW }],
           skipIf: () => !enabled,
+          errorMessage: THROTTLED_MESSAGE,
         };
       },
     }),

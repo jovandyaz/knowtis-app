@@ -337,6 +337,22 @@ describe('AIGateway', () => {
       expect(mockStreamHandler.execute).not.toHaveBeenCalled();
     });
 
+    it('should emit validation error for an artifact-only action', async () => {
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      await gateway.handleComplete(client, {
+        action: AI_ACTION.GENERATE_QUIZ,
+        content: 'Some content',
+      });
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'VALIDATION_ERROR' })
+      );
+      expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+    });
+
     it('should emit featureDisabled and not start a stream when the flag turns off after connect', async () => {
       vi.mocked(mockFeatureFlags.isEnabled).mockResolvedValue(false);
       const client = createMockAISocket();

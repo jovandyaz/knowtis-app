@@ -67,14 +67,6 @@ describe('AIOrchestrator', () => {
     );
   });
 
-  it('should route expand to default model', async () => {
-    const result = await orchestrator.selectModel(AI_ACTION.EXPAND);
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap().toPrimitive()).toBe(
-      'anthropic:claude-sonnet-4-20250514'
-    );
-  });
-
   it('should return err for unsupported model from config', async () => {
     const badAIConfigService = createMockAIConfigService({
       getDefaultModel: 'gpt-4o',
@@ -121,11 +113,9 @@ describe('AIOrchestrator', () => {
 
   it.each([
     AI_ACTION.SUMMARIZE,
-    AI_ACTION.EXPAND,
     AI_ACTION.TONE,
     AI_ACTION.OUTLINE,
     AI_ACTION.ACTION_ITEMS,
-    AI_ACTION.CHAT,
     AI_ACTION.IMPROVE_WRITING,
     AI_ACTION.FIX_SPELLING,
     AI_ACTION.MAKE_SHORTER,

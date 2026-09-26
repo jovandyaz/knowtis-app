@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
-import type { AIAction } from '@knowtis/shared-types';
+import type { CompletionAIAction } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import type { TokenProvider } from './http-client';
@@ -12,7 +12,7 @@ import {
 import { deriveWsBaseUrl } from './ws-url';
 
 export interface AICompletePayload {
-  action: AIAction;
+  action: CompletionAIAction;
   content: string;
   selection?: string;
   suffix?: string;

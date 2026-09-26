@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AIAction } from '@knowtis/shared-types';
-
 import { AIClient, type AICompletePayload } from './ai.client';
 import type { RefreshOutcome } from './token-refresh-policy';
 
@@ -45,7 +43,7 @@ function createCallbacks() {
 }
 
 const PAYLOAD: AICompletePayload = {
-  action: 'summarize' as AIAction,
+  action: 'summarize',
   content: 'hello world',
 };
 

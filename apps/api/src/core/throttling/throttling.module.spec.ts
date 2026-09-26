@@ -88,6 +88,16 @@ describe('ThrottlingModule', () => {
     return probeAt('/probe', token);
   }
 
+  async function probeBodyAt(
+    path: string,
+    token?: string
+  ): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+    });
+    return { status: response.status, body: await response.json() };
+  }
+
   beforeAll(async () => {
     tokenA = await sign(USER_A, ACCESS_TOKEN_SECRET);
     tokenB = await sign(USER_B, ACCESS_TOKEN_SECRET);
@@ -178,6 +188,17 @@ describe('ThrottlingModule', () => {
     expect(await probeAs({ 'x-real-ip': '203.0.113.7' })).toBe(200);
 
     expect(await probeAs({ 'x-real-ip': '203.0.113.8' })).toBe(200);
+  });
+
+  it('replies with a readable message instead of the throttler class name', async () => {
+    expect(await probe(tokenA)).toBe(200);
+
+    const { status, body } = await probeBodyAt('/probe', tokenA);
+
+    expect(status).toBe(429);
+    expect((body as { message: string }).message).toBe(
+      'Too many requests. Please slow down and try again shortly.'
+    );
   });
 
   it('spends no budget at all when RATE_LIMITING_ENABLED is false', async () => {

@@ -360,7 +360,7 @@ export class SuggestOrganizationHandler {
         noteId: note.id,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      void this.rateLimitService.releaseReservation(
+      await this.rateLimitService.releaseReservation(
         userId,
         ESTIMATED_TOKENS_PER_NOTE,
         estimatedCostUsd

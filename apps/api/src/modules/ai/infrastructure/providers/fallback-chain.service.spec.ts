@@ -17,13 +17,16 @@ vi.mock('@ai-sdk/openai', () => ({ createOpenAI: vi.fn(() => vi.fn()) }));
 
 const TEST_CHAIN_MODELS = TEST_FALLBACK_CHAIN.split(',');
 
-function buildService(configOverrides: Record<string, unknown> = {}) {
+function buildService(
+  configOverrides: Record<string, unknown> = {},
+  chain: string[] = TEST_CHAIN_MODELS
+) {
   const config = createMockConfig(configOverrides);
   const registry = new ProviderRegistryFactory(config);
   registry.onModuleInit();
   const alerts = { notify: vi.fn() } as unknown as WebhookAlertService;
   const chainSource: FallbackChainSource = {
-    getFallbackChain: async () => TEST_CHAIN_MODELS,
+    getFallbackChain: async () => chain,
   };
   const service = new FallbackChainService(
     chainSource,
@@ -31,13 +34,13 @@ function buildService(configOverrides: Record<string, unknown> = {}) {
     registry,
     alerts
   );
-  service.onModuleInit(TEST_CHAIN_MODELS);
+  service.onModuleInit(chain);
   return { service, alerts };
 }
 
 describe('FallbackChainService', () => {
   describe('healthSnapshot', () => {
-    it('should report every chain provider with configured status and no cooldown state', () => {
+    it('should report configured status per known provider with no cooldown state', () => {
       const { service } = buildService({ OPENAI_API_KEY: 'test-key' });
 
       const snapshot = service.healthSnapshot();
@@ -59,6 +62,39 @@ describe('FallbackChainService', () => {
       expect(snapshot['openai']?.configured).toBe(true);
       expect(snapshot['google']?.configured).toBe(false);
       expect(snapshot['openrouter']?.configured).toBe(false);
+    });
+
+    it('should report every known provider even when the chain does not use it', () => {
+      const { service } = buildService({}, ['anthropic:claude-haiku-4-5']);
+
+      expect(Object.keys(service.healthSnapshot()).sort()).toEqual([
+        'anthropic',
+        'google',
+        'openai',
+        'openrouter',
+      ]);
+    });
+
+    it('should surface an untracked provider that is only cooling down when the chain excludes it', () => {
+      const { service } = buildService(
+        { AI_GATEWAY_API_KEY: 'gw-key', AI_COOLDOWN_ALLOWED_FAILS: 2 },
+        ['anthropic:claude-haiku-4-5']
+      );
+
+      service.cooldown.recordFailure('xai:grok-4');
+      service.cooldown.recordFailure('xai:grok-4');
+
+      const snapshot = service.healthSnapshot();
+      expect(snapshot['xai']?.cooling).toBe(true);
+    });
+
+    it('should report configured for a chain provider outside AI_PROVIDERS from the registry', () => {
+      const { service } = buildService({ AI_GATEWAY_API_KEY: 'gw-key' }, [
+        'xai:grok-4',
+      ]);
+
+      const snapshot = service.healthSnapshot();
+      expect(snapshot['xai']?.configured).toBe(true);
     });
 
     it('should expose cooldown state after repeated provider failures', () => {

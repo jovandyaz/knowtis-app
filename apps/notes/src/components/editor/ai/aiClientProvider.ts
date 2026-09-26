@@ -2,7 +2,7 @@ import { captureProductEvent } from '@/lib/analytics/product-events';
 
 import { aiClient } from '@knowtis/api-client';
 import type { GhostTextProvider, GhostTextStreamInput } from '@knowtis/editor';
-import type { AIAction } from '@knowtis/shared-types';
+import type { CompletionAIAction } from '@knowtis/shared-types';
 
 const EMPTY: AsyncIterable<{ text: string }> = (async function* () {})();
 
@@ -15,8 +15,8 @@ type Event =
  * Bridges the singleton callback-based `aiClient.stream` API into the
  * AsyncIterable contract expected by `@knowtis/editor` providers.
  *
- * Designed to be reused by GhostText (1.5), AIBlock (1.6), and other
- * extensions whose only differentiator is the `AIAction` they invoke.
+ * Shared by the editor extensions whose only differentiator is the
+ * `CompletionAIAction` they invoke.
  *
  * Behavior:
  *  - Short-circuits BEFORE calling `aiClient.stream` if the input signal is
@@ -26,7 +26,9 @@ type Event =
  *  - Forwards `AbortSignal` aborts to the underlying `aiClient` handle.
  *  - Surfaces stream errors by throwing from the iterator.
  */
-export function createAiClientProvider(action: AIAction): GhostTextProvider {
+export function createAiClientProvider(
+  action: CompletionAIAction
+): GhostTextProvider {
   return {
     stream(input: GhostTextStreamInput) {
       if (input.signal.aborted) {
@@ -38,7 +40,7 @@ export function createAiClientProvider(action: AIAction): GhostTextProvider {
 }
 
 async function* pump(
-  action: AIAction,
+  action: CompletionAIAction,
   input: GhostTextStreamInput
 ): AsyncIterable<{ text: string }> {
   const buffer: Event[] = [];
@@ -96,10 +98,9 @@ async function* pump(
       while (buffer.length === 0) {
         await wait();
       }
-      // Drain buffered chunks BEFORE surfacing errors. Deliberate policy
-      // (Improvement 5): if the stream produced text and then errored, the
-      // chunks render first and the consumer's UI stays consistent with
-      // what the user has already seen; the error throws on the next pull.
+      // A stream that errors after producing text must still render that text
+      // first, so the UI matches what the user already saw; the error surfaces
+      // on the next pull.
       const ev = buffer.shift() as Event;
       if (ev.kind === 'error') {
         throw ev.error;

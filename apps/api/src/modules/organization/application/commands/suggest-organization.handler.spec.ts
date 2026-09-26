@@ -411,6 +411,27 @@ describe('SuggestOrganizationHandler', () => {
     expect(call[3]).toBeUndefined();
   });
 
+  it('does not answer until the failed reserve is given back', async () => {
+    structuredOutput.generateStructuredOutput.mockRejectedValueOnce(
+      new Error('provider exploded')
+    );
+    const release = Promise.withResolvers<undefined>();
+    rateLimit.releaseReservation.mockReturnValue(release.promise);
+    let settled = false;
+
+    const pending = handler
+      .execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      .finally(() => {
+        settled = true;
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    release.resolve(undefined);
+    expect((await pending).isErr()).toBe(true);
+  });
+
   it('fails the request when no note could be classified', async () => {
     structuredOutput.generateStructuredOutput.mockRejectedValue(
       new Error('provider exploded')
