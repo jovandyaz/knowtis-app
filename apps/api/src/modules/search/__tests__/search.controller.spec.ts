@@ -209,12 +209,8 @@ describe('SearchController', () => {
   });
 
   it('should not respond until the reservation is released', async () => {
-    let finishRelease: () => void = () => undefined;
-    rateLimit.releaseReservation.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishRelease = resolve;
-      })
-    );
+    const release = Promise.withResolvers<undefined>();
+    rateLimit.releaseReservation.mockReturnValue(release.promise);
     search.mockResolvedValue([hit('a')]);
     const dto = new SearchQueryDto();
     dto.q = 'x';
@@ -227,7 +223,7 @@ describe('SearchController', () => {
 
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
     expect(settled).toBe(false);
-    finishRelease();
+    release.resolve(undefined);
     await expect(response).resolves.toEqual({ hits: [hit('a')] });
   });
 
