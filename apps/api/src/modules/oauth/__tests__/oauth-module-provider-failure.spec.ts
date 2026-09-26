@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { I18nService } from 'nestjs-i18n';
 import { expect, it, vi } from 'vitest';
 
 import { DATABASE_CONNECTION } from '../../../database';
@@ -18,10 +19,13 @@ vi.mock('../oidc-provider.factory', async (importOriginal) => ({
 
 @Global()
 @Module({
-  providers: [{ provide: DATABASE_CONNECTION, useValue: {} }],
-  exports: [DATABASE_CONNECTION],
+  providers: [
+    { provide: DATABASE_CONNECTION, useValue: {} },
+    { provide: I18nService, useValue: { translate: (key: string) => key } },
+  ],
+  exports: [DATABASE_CONNECTION, I18nService],
 })
-class StubDatabaseModule {}
+class StubInfrastructureModule {}
 
 function signingJwk(kid: string): Record<string, unknown> {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -65,7 +69,7 @@ it('fails configured OAuth boot without logging provider details', async () => {
             }),
           ],
         }),
-        StubDatabaseModule,
+        StubInfrastructureModule,
         OauthModule,
       ],
     }).compile();
