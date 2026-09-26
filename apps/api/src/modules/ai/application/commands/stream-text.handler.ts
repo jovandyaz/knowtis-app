@@ -203,7 +203,7 @@ export class StreamTextHandler {
         latencyMs: Date.now() - context.startTime,
         mode: 'stream',
       });
-      this.pipeline.releaseReservation(context, input);
+      void this.pipeline.releaseReservation(context, input);
       callbacks.onError(AIErrors.providerError('AI streaming failed'));
     }
   }

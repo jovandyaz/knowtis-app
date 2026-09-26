@@ -70,6 +70,23 @@ describe('AIGenerationPipeline', () => {
     expect(releaseReservation).toHaveBeenCalledWith('user-1', 500, 0);
   });
 
+  it('does not answer a failed generation until the reservation is released', async () => {
+    const { pipeline, releaseReservation } = makePipeline();
+    const release = Promise.withResolvers<undefined>();
+    releaseReservation.mockReturnValue(release.promise);
+    let settled = false;
+
+    const pending = pipeline.execute(request).finally(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(releaseReservation).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    release.resolve(undefined);
+    expect((await pending).isErr()).toBe(true);
+  });
+
   it('surfaces model-selection errors without consuming the rate limit', async () => {
     const { pipeline, checkLimit } = makePipeline({
       selectModel: vi.fn().mockResolvedValue({
