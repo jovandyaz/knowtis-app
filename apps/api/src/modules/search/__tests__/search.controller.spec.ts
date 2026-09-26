@@ -148,6 +148,7 @@ describe('SearchController', () => {
         message: 'Rate limit exceeded (15 requests/min)',
       },
     });
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 
   it('should reserve with the caller identity and release the reservation after searching', async () => {
@@ -177,9 +178,34 @@ describe('SearchController', () => {
       0,
       'ip:abc'
     );
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
     expect(
       rateLimit.releaseReservation.mock.invocationCallOrder[0]
     ).toBeGreaterThan(search.mock.invocationCallOrder[0] ?? Infinity);
+  });
+
+  it('should reserve against the registered user budget and release it once', async () => {
+    search.mockResolvedValue([hit('a')]);
+    const dto = new SearchQueryDto();
+    dto.q = 'quarterly report';
+
+    await controller.search(user, dto, req);
+
+    expect(rateLimit.checkLimit).toHaveBeenCalledWith(
+      'user-1',
+      3,
+      false,
+      false,
+      0,
+      '203.0.113.9'
+    );
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      'user-1',
+      3,
+      0,
+      undefined
+    );
   });
 
   it('should propagate retrieval errors and still release the reservation', async () => {
