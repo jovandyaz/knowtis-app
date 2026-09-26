@@ -5,7 +5,6 @@ import { z } from 'zod';
 
 import { createMockConfig } from '../../../ai/testing/create-mock-config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
-import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import type { ConversationMessageRow } from '../../domain/ports/conversation.repository';
@@ -84,37 +83,30 @@ function fixture(model: MockLanguageModelV4) {
     AI_AGENT_MAX_OUTPUT_TOKENS: 1024,
     AI_MAX_RETRIES: 0,
   });
-  const flags = {
-    isEnabled: vi.fn().mockResolvedValue(false),
-  } as unknown as FeatureFlagsService;
   const reads: string[] = [];
-  const toolRegistry = new AgentToolRegistry(
-    [
-      {
-        name: 'fixture-notes',
-        availableIn: () => true,
-        build: () => ({
-          getNote: tool({
-            description: 'Read a fixture note.',
-            inputSchema: z.object({ id: z.literal('n1') }),
-            execute: async ({ id }) => {
-              reads.push(id);
-              return NOTE;
-            },
-          }),
+  const toolRegistry = new AgentToolRegistry([
+    {
+      name: 'fixture-notes',
+      availableIn: () => true,
+      build: () => ({
+        getNote: tool({
+          description: 'Read a fixture note.',
+          inputSchema: z.object({ id: z.literal('n1') }),
+          execute: async ({ id }) => {
+            reads.push(id);
+            return NOTE;
+          },
         }),
-      },
-    ],
-    flags
-  );
+      }),
+    },
+  ]);
   const { registry, chain } = createTestChain(config, '');
   vi.spyOn(registry, 'languageModel').mockReturnValue(model);
   const orchestrator = new AiSdkAgentOrchestrator(
     config,
     toolRegistry,
     registry,
-    chain,
-    flags
+    chain
   );
   return { orchestrator, reads };
 }
@@ -308,6 +300,9 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
       {
         role: 'user',
         content: [{ type: 'text', text: 'Summarize the note you read.' }],
+        providerOptions: {
+          anthropic: { cacheControl: { type: 'ephemeral' } },
+        },
       },
     ]);
     expect(nextEvents.at(-1)).toMatchObject({

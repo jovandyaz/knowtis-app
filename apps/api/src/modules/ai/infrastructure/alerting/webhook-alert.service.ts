@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -6,12 +6,22 @@ import type { EnvConfig } from '../../../../config/env.config';
 const WEBHOOK_TIMEOUT_MS = 5000;
 
 @Injectable()
-export class WebhookAlertService {
+export class WebhookAlertService implements OnModuleInit {
   private readonly logger = new Logger(WebhookAlertService.name);
   private readonly url: string | undefined;
 
   constructor(configService: ConfigService<EnvConfig, true>) {
     this.url = configService.get('AI_ALERT_WEBHOOK_URL') || undefined;
+  }
+
+  onModuleInit(): void {
+    if (!this.url) {
+      this.logger.warn({
+        event: 'ai.capability.unavailable',
+        capability: 'alerts',
+        env: 'AI_ALERT_WEBHOOK_URL',
+      });
+    }
   }
 
   /** Fire-and-forget JSON POST to the configured webhook; never throws and never blocks the caller. */

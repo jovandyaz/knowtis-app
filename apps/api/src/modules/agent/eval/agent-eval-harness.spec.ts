@@ -17,7 +17,6 @@ import {
 import { createMockConfig } from '../../ai/testing/create-mock-config';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import { createTestChain } from '../../ai/testing/create-test-chain';
-import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
 import type {
   AgentOrchestrator,
@@ -92,17 +91,13 @@ function setup() {
     AI_AGENT_MAX_OUTPUT_TOKENS: 1024,
     AI_MAX_RETRIES: 0,
   });
-  const flags = {
-    isEnabled: async () => false,
-  } as unknown as FeatureFlagsService;
   const { registry, chain } = createTestChain(config, '');
   vi.spyOn(registry, 'languageModel').mockReturnValue(model);
   const orchestrator = new AiSdkAgentOrchestrator(
     config,
-    new AgentToolRegistry([], flags),
+    new AgentToolRegistry([]),
     registry,
-    chain,
-    flags
+    chain
   );
   const harness = AgentEvalHarness.withCollaborators({
     moduleRef: { close: async () => undefined },

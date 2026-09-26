@@ -7,7 +7,6 @@ import {
   filterExternalHits,
   isHttpUrl,
 } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
@@ -64,7 +63,6 @@ function classifyWebFetchFailure(url: string) {
 @Injectable()
 export class WebToolGroup implements AgentToolGroup {
   readonly name = 'web';
-  readonly flag = FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH;
   private readonly logger = new Logger(WebToolGroup.name);
 
   constructor(
@@ -74,7 +72,7 @@ export class WebToolGroup implements AgentToolGroup {
   ) {}
 
   availableIn(): boolean {
-    return true;
+    return this.web.isConfigured();
   }
 
   build(ctx: AgentToolContext): ToolSet {
