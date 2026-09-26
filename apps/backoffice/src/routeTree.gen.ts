@@ -14,7 +14,6 @@ import { Route as ForbiddenRouteImport } from './routes/forbidden'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
-import { Route as AuthenticatedFeatureFlagsRouteImport } from './routes/_authenticated/feature-flags'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedAiMetricsRouteImport } from './routes/_authenticated/ai-metrics'
 import { Route as AuthenticatedAiConfigRouteImport } from './routes/_authenticated/ai-config'
@@ -43,12 +42,6 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedFeatureFlagsRoute =
-  AuthenticatedFeatureFlagsRouteImport.update({
-    id: '/feature-flags',
-    path: '/feature-flags',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -72,7 +65,6 @@ export interface FileRoutesByFullPath {
   '/ai-config': typeof AuthenticatedAiConfigRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
   '/audit': typeof AuthenticatedAuditRoute
-  '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/users': typeof AuthenticatedUsersRoute
 }
 export interface FileRoutesByTo {
@@ -81,7 +73,6 @@ export interface FileRoutesByTo {
   '/ai-config': typeof AuthenticatedAiConfigRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
   '/audit': typeof AuthenticatedAuditRoute
-  '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -93,7 +84,6 @@ export interface FileRoutesById {
   '/_authenticated/ai-config': typeof AuthenticatedAiConfigRoute
   '/_authenticated/ai-metrics': typeof AuthenticatedAiMetricsRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
-  '/_authenticated/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
@@ -106,7 +96,6 @@ export interface FileRouteTypes {
     | '/ai-config'
     | '/ai-metrics'
     | '/audit'
-    | '/feature-flags'
     | '/users'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -115,7 +104,6 @@ export interface FileRouteTypes {
     | '/ai-config'
     | '/ai-metrics'
     | '/audit'
-    | '/feature-flags'
     | '/users'
     | '/'
   id:
@@ -126,7 +114,6 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-config'
     | '/_authenticated/ai-metrics'
     | '/_authenticated/audit'
-    | '/_authenticated/feature-flags'
     | '/_authenticated/users'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -174,13 +161,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/feature-flags': {
-      id: '/_authenticated/feature-flags'
-      path: '/feature-flags'
-      fullPath: '/feature-flags'
-      preLoaderRoute: typeof AuthenticatedFeatureFlagsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/audit': {
       id: '/_authenticated/audit'
       path: '/audit'
@@ -209,7 +189,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAiConfigRoute: typeof AuthenticatedAiConfigRoute
   AuthenticatedAiMetricsRoute: typeof AuthenticatedAiMetricsRoute
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
-  AuthenticatedFeatureFlagsRoute: typeof AuthenticatedFeatureFlagsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -218,7 +197,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiConfigRoute: AuthenticatedAiConfigRoute,
   AuthenticatedAiMetricsRoute: AuthenticatedAiMetricsRoute,
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
-  AuthenticatedFeatureFlagsRoute: AuthenticatedFeatureFlagsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }

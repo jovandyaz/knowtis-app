@@ -10,6 +10,5 @@ export const ROUTES = {
   USERS: '/users',
   AI_METRICS: '/ai-metrics',
   AI_CONFIG: '/ai-config',
-  FEATURE_FLAGS: '/feature-flags',
   AUDIT: '/audit',
 } as const satisfies Record<string, AppRoute>;
