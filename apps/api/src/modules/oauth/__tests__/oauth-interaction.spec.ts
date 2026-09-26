@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createValidationPipe } from '../../../config/validation-pipe';
 import { DATABASE_CONNECTION } from '../../../database';
-import { FeatureFlagsService } from '../../feature-flags';
 import { OauthInteractionController } from '../oauth-interaction.controller';
 import { OAUTH_PROVIDER, OAUTH_RUNTIME } from '../oauth.tokens';
 import type { OidcProviderHandle } from '../oidc-provider.factory';
@@ -86,7 +85,6 @@ interface Harness {
   app: NestExpressApplication;
   base: string;
   provider: MockProvider;
-  flags: { isEnabled: ReturnType<typeof vi.fn> };
   dbWhere: ReturnType<typeof vi.fn>;
 }
 
@@ -97,7 +95,6 @@ async function buildHarness(
   const handle: OidcProviderHandle | null = provider
     ? ({ provider, callback: vi.fn() } as unknown as OidcProviderHandle)
     : null;
-  const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
   const dbWhere = vi.fn().mockResolvedValue([]);
   const db = {
     select: vi.fn().mockReturnValue({
@@ -111,7 +108,6 @@ async function buildHarness(
       { provide: OAUTH_PROVIDER, useValue: handle },
       { provide: OAUTH_RUNTIME, useValue: runtime },
       { provide: DATABASE_CONNECTION, useValue: db },
-      { provide: FeatureFlagsService, useValue: flags },
     ],
   })
     .overrideGuard(JwtAuthGuard)
@@ -131,7 +127,6 @@ async function buildHarness(
     app,
     base: await app.getUrl(),
     provider: provider as MockProvider,
-    flags,
     dbWhere,
   };
 }
@@ -223,16 +218,6 @@ describe('OauthInteractionController', () => {
     const res = await fetch(`${harness.base}/api/v1/oauth/interactions/GONE`);
 
     expect(res.status).toBe(404);
-  });
-
-  it('should 404 describe when the mcp_oauth flag is off', async () => {
-    harness = await buildHarness(makeProvider());
-    harness.flags.isEnabled.mockResolvedValue(false);
-
-    const res = await fetch(`${harness.base}/api/v1/oauth/interactions/UID`);
-
-    expect(res.status).toBe(404);
-    expect(harness.provider.Interaction.find).not.toHaveBeenCalled();
   });
 
   it('should 404 describe when the provider handle is null', async () => {

@@ -24,7 +24,7 @@ export function useOauthInteraction(uid: string) {
     queryFn: async () =>
       interactionDetailsSchema.parse(await oauthApi.getInteraction(uid)),
     enabled: uid.length > 0,
-    // A 404 (unknown/expired uid or flag off) is terminal — never retry.
+    // A 404 (unknown/expired uid or OAuth not configured) is terminal — never retry.
     retry: false,
     staleTime: Infinity,
     gcTime: 0,
@@ -59,7 +59,7 @@ export function useOauthGrants() {
     queryKey: oauthGrantsQueryKeys.list(),
     queryFn: async () =>
       oauthGrantsResponseSchema.parse(await oauthApi.getGrants()).grants,
-    // A 404 (MCP OAuth flag off) is terminal — the section hides instead.
+    // A 404 (OAuth not configured on the server) is terminal — the section hides instead.
     retry: false,
     staleTime: 1000 * 60,
   });
@@ -106,9 +106,10 @@ export function useRevokeGrant() {
 
 /**
  * Whether to surface the Connected apps feature in the nav. Hidden while the
- * grants query is still pending (so a flag-off feature never flashes in during
- * dark launch) and when the endpoint 404s (MCP OAuth flag off). An empty grants
- * list or a transient non-404 failure keeps the feature visible.
+ * grants query is still pending (so an unconfigured OAuth server never
+ * flashes in during dark launch) and when the endpoint 404s (OAuth not
+ * configured on the server). An empty grants list or a transient non-404
+ * failure keeps the feature visible.
  */
 export function useConnectedAppsAvailable(): boolean {
   const { isPending, error } = useOauthGrants();
