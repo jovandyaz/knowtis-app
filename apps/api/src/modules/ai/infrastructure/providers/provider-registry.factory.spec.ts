@@ -134,11 +134,17 @@ describe('ProviderRegistryFactory', () => {
     expect(factory.isModelAvailable('mistral:mistral-large')).toBe(false);
   });
 
-  it('reports a provider configured only when enabled with a key', () => {
+  it('should report a provider configured only when enabled with a key', () => {
     const factory = makeFactory({ OPENAI_API_KEY: 'k' });
 
     expect(factory.isProviderConfigured('openai')).toBe(true);
     expect(factory.isProviderConfigured('google')).toBe(false);
+  });
+
+  it('should report a provider outside AI_PROVIDERS as unconfigured in direct mode', () => {
+    const factory = makeFactory();
+
+    expect(factory.isProviderConfigured('xai')).toBe(false);
   });
 
   it('should register only anthropic when google and openai keys are absent', async () => {
@@ -419,6 +425,19 @@ describe('ProviderRegistryFactory', () => {
       expect(factory.languageModel('mistral:mistral-large')).toBe(
         'mock-gateway-model'
       );
+    });
+
+    it('should report isModelAvailable true for a provider outside AI_PROVIDERS', () => {
+      const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      expect(factory.isModelAvailable('xai:grok-4')).toBe(true);
+    });
+
+    it('should report openrouter unconfigured but an untracked provider configured', () => {
+      const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      expect(factory.isProviderConfigured('openrouter')).toBe(false);
+      expect(factory.isProviderConfigured('xai')).toBe(true);
     });
   });
 

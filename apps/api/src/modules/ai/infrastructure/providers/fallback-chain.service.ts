@@ -7,11 +7,7 @@ import {
   resolveChainCandidates,
   type ChainScope,
 } from '@knowtis/ai-gateway';
-import {
-  AI_PROVIDERS,
-  parseChain,
-  type AIProvider,
-} from '@knowtis/shared-types';
+import { parseChain } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
@@ -26,12 +22,6 @@ export interface FallbackChainSource {
 }
 
 const CHAIN_TTL_MS = 30_000; // matches the AI config cache window
-
-const AI_PROVIDER_SET = new Set<string>(AI_PROVIDERS);
-
-function isAIProvider(provider: string): provider is AIProvider {
-  return AI_PROVIDER_SET.has(provider);
-}
 
 export interface ProviderHealth {
   readonly configured: boolean;
@@ -146,9 +136,7 @@ export class FallbackChainService implements OnModuleInit {
     for (const provider of providers) {
       const states = byProvider.get(provider) ?? [];
       result[provider] = {
-        configured: isAIProvider(provider)
-          ? this.providerRegistry.isProviderConfigured(provider)
-          : false,
+        configured: this.providerRegistry.isProviderConfigured(provider),
         cooling: states.some((s) => s.cooling),
         failureCount: states.reduce((total, s) => total + s.failureCount, 0),
         lastFailureAt: toIsoOrNull(

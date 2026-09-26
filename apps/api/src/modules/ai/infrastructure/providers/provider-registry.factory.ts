@@ -204,11 +204,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
     if (!isQualifiedModelId(modelId)) {
       return false;
     }
-    const provider = providerOf(modelId);
-    if (!isAIProvider(provider)) {
-      return Boolean(this.gateway);
-    }
-    return this.providerRoutable(provider);
+    return this.isProviderConfigured(providerOf(modelId));
   }
 
   /** Every provider this process knows how to route, regardless of configuration. */
@@ -216,8 +212,17 @@ export class ProviderRegistryFactory implements OnModuleInit {
     return AI_PROVIDERS;
   }
 
-  /** True when `provider` is routable right now — see `providerRoutable`. */
-  isProviderConfigured(provider: AIProvider): boolean {
+  /**
+   * True when `provider` is configured to route right now. A tracked
+   * provider (AI_PROVIDERS) must be enabled and hold a routable key, except
+   * openrouter, which gateway mode never routes directly. An untracked
+   * provider is configured only through the gateway — its catalog is wider
+   * than AI_PROVIDERS.
+   */
+  isProviderConfigured(provider: string): boolean {
+    if (!isAIProvider(provider)) {
+      return Boolean(this.gateway);
+    }
     return this.providerRoutable(provider);
   }
 

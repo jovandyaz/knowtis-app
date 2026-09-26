@@ -40,7 +40,7 @@ function buildService(
 
 describe('FallbackChainService', () => {
   describe('healthSnapshot', () => {
-    it('should report every chain provider with configured status and no cooldown state', () => {
+    it('should report configured status per known provider with no cooldown state', () => {
       const { service } = buildService({ OPENAI_API_KEY: 'test-key' });
 
       const snapshot = service.healthSnapshot();
@@ -64,7 +64,7 @@ describe('FallbackChainService', () => {
       expect(snapshot['openrouter']?.configured).toBe(false);
     });
 
-    it('reports every known provider even when the chain does not use it', () => {
+    it('should report every known provider even when the chain does not use it', () => {
       const { service } = buildService({}, ['anthropic:claude-haiku-4-5']);
 
       expect(Object.keys(service.healthSnapshot()).sort()).toEqual([
@@ -73,6 +73,27 @@ describe('FallbackChainService', () => {
         'openai',
         'openrouter',
       ]);
+    });
+
+    it('should surface a provider that is only cooling down when the chain excludes it', () => {
+      const { service } = buildService({ AI_COOLDOWN_ALLOWED_FAILS: 2 }, [
+        'anthropic:claude-haiku-4-5',
+      ]);
+
+      service.cooldown.recordFailure('openai');
+      service.cooldown.recordFailure('openai');
+
+      const snapshot = service.healthSnapshot();
+      expect(snapshot['openai']?.cooling).toBe(true);
+    });
+
+    it('should report configured for a chain provider outside AI_PROVIDERS from the registry', () => {
+      const { service } = buildService({ AI_GATEWAY_API_KEY: 'gw-key' }, [
+        'xai:grok-4',
+      ]);
+
+      const snapshot = service.healthSnapshot();
+      expect(snapshot['xai']?.configured).toBe(true);
     });
 
     it('should expose cooldown state after repeated provider failures', () => {
