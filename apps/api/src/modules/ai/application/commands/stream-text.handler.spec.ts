@@ -455,6 +455,46 @@ describe('StreamTextHandler', () => {
     );
   });
 
+  it('reports a provider failure only after the reservation is released', async () => {
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: (async function* () {
+        yield 'partial';
+        throw new Error('provider exploded');
+      })(),
+      usage: Promise.resolve({
+        promptTokens: 0,
+        completionTokens: 0,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+    const release = Promise.withResolvers<undefined>();
+    const releaseSpy = vi
+      .spyOn(pipeline, 'releaseReservation')
+      .mockReturnValue(release.promise);
+    let settled = false;
+
+    const pending = handler
+      .execute(
+        {
+          userId: 'user-123',
+          action: AI_ACTION.SUMMARIZE,
+          content: 'Some content',
+        },
+        callbacks
+      )
+      .finally(() => {
+        settled = true;
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(releaseSpy).toHaveBeenCalledTimes(1);
+    expect(errorResult).toBeNull();
+    expect(settled).toBe(false);
+    release.resolve(undefined);
+    await pending;
+    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
+  });
+
   it('records estimated partial usage instead of {0,0} when the client aborts', async () => {
     const controller = new AbortController();
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
