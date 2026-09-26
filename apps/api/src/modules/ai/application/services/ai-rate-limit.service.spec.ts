@@ -205,6 +205,7 @@ describe('AIRateLimitService', () => {
     let mockRateLimitProvider: RateLimitProvider;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       mockRateLimitProvider = {
         checkRpm: vi.fn(),
         checkAndIncrement: vi.fn(),
@@ -221,6 +222,10 @@ describe('AIRateLimitService', () => {
         mockConfig,
         mockRateLimitProvider
       );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('should release a reservation by correcting usage to zero', async () => {
@@ -342,6 +347,7 @@ describe('AIRateLimitService', () => {
     let warningService: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       alerts = { notify: vi.fn() };
       warningService = new AIRateLimitService(
         mockUsageRepo,
@@ -350,6 +356,10 @@ describe('AIRateLimitService', () => {
         alerts as unknown as WebhookAlertService
       );
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     const usageRecord = {
@@ -616,7 +626,7 @@ describe('AIRateLimitService', () => {
       );
     }
 
-    it('reserves the estimated cost, runs the IP budget, the BYOK ceiling and the global breaker with no flags service', async () => {
+    it('reserves the estimated cost, runs the IP budget, the BYOK ceiling and the global breaker', async () => {
       const svc = makeService();
 
       await svc.checkLimit('user-1', 100, true, false, 0.01, '203.0.113.9');
@@ -631,7 +641,7 @@ describe('AIRateLimitService', () => {
       expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
         expect.stringMatching(/^ip:/),
         expect.anything(),
-        expect.anything(),
+        0.01,
         expect.anything(),
         false
       );
@@ -724,6 +734,7 @@ describe('AIRateLimitService', () => {
     let gated: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       provider = {
         checkRpm: vi.fn().mockResolvedValue({
           allowed: true,
@@ -744,6 +755,10 @@ describe('AIRateLimitService', () => {
         provider
       );
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('refuses a byok turn at the byok cost ceiling', async () => {
@@ -857,6 +872,7 @@ describe('AIRateLimitService', () => {
     let svc: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       provider = {
         checkRpm: vi.fn().mockResolvedValue({
           allowed: true,
@@ -883,6 +899,10 @@ describe('AIRateLimitService', () => {
         totalCostUsd: 0,
         requestCount: 0,
       });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('reserves against both the user and the hashed IP subject for anonymous turns', async () => {
@@ -1088,6 +1108,29 @@ describe('AIRateLimitService', () => {
         false
       );
     });
+
+    it('releases both subjects with the reserved cost when releasing a dual reservation', async () => {
+      await svc.releaseReservation('anon-1', 200, 0.02, IP_SUBJECT);
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        200,
+        0,
+        0.02,
+        0
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        0,
+        0.02,
+        0,
+        false
+      );
+    });
   });
 
   describe('global daily-spend breaker', () => {
@@ -1096,6 +1139,7 @@ describe('AIRateLimitService', () => {
     let breakered: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       provider = {
         checkRpm: vi.fn().mockResolvedValue({
           allowed: true,
@@ -1124,6 +1168,10 @@ describe('AIRateLimitService', () => {
         provider,
         alerts as unknown as WebhookAlertService
       );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('rejects a server-billed turn once global spend reaches the limit', async () => {
