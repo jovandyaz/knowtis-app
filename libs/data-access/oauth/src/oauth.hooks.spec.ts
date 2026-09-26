@@ -272,7 +272,7 @@ describe('oauth hooks', () => {
   });
 
   describe('useConnectedAppsAvailable', () => {
-    it('stays hidden while the grants query is still pending (dark launch)', () => {
+    it('stays hidden while the grants query is still pending', () => {
       // A pending query has no error yet — the feature must not flash visible.
       vi.mocked(oauthApi.getGrants).mockReturnValue(
         new Promise(() => undefined)

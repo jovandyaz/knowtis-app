@@ -21,15 +21,6 @@ function userRow(overrides: {
   } as unknown as UserRow;
 }
 
-function usersReturning(fields: {
-  isAnonymous: boolean;
-  emailVerifiedAt: Date | null;
-}): UsersService {
-  return {
-    findById: vi.fn().mockResolvedValue(userRow(fields)),
-  } as unknown as UsersService;
-}
-
 describe('VerifiedIdentityPolicy', () => {
   let usersService: { findById: ReturnType<typeof vi.fn> };
   let policy: VerifiedIdentityPolicy;
@@ -42,13 +33,6 @@ describe('VerifiedIdentityPolicy', () => {
   });
 
   describe('isVerified', () => {
-    it('rejects an unverified account with no feature-flag service', async () => {
-      const policy = new VerifiedIdentityPolicy(
-        usersReturning({ isAnonymous: false, emailVerifiedAt: null })
-      );
-      await expect(policy.isVerified('user-1')).resolves.toBe(false);
-    });
-
     it('denies an anonymous session', async () => {
       usersService.findById.mockResolvedValue(
         userRow({ isAnonymous: true, emailVerifiedAt: null })

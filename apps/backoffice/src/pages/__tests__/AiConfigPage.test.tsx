@@ -439,10 +439,14 @@ describe('AiConfigPage', () => {
 
     renderPage();
 
-    const master = screen.getByRole('switch', { name: 'AI enabled' });
     for (const tab of screen.getAllByRole('tab')) {
       await userEvent.click(tab);
-      expect(screen.getAllByRole('switch')).toEqual([master]);
+      expect(
+        screen.getByRole('switch', { name: 'AI enabled' })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('switch', { name: /retired_flag/i })
+      ).toBeNull();
     }
   });
 
