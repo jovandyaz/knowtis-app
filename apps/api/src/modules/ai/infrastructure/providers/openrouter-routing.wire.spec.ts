@@ -158,10 +158,9 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
     });
     const orchestrator = new AiSdkAgentOrchestrator(
       config,
-      { resolve: async () => ({ calculate }) } as never,
+      { resolve: () => ({ calculate }) } as never,
       registry,
-      chain,
-      { isEnabled: async () => false } as never
+      chain
     );
     const events = [];
     for await (const event of orchestrator.run({
@@ -232,10 +231,9 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
       } else {
         const orchestrator = new AiSdkAgentOrchestrator(
           config,
-          { resolve: async () => ({}) } as never,
+          { resolve: () => ({}) } as never,
           registry,
-          chain,
-          { isEnabled: async () => false } as never
+          chain
         );
         const events = [];
         for await (const event of orchestrator.run({

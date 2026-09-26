@@ -29,16 +29,6 @@ describe('feature flag catalog', () => {
     });
   });
 
-  it('catalogues replay enforcement as an AI guardrail', () => {
-    expect(FEATURE_FLAG_KEYS.AGENT_HISTORY_INJECTION_ENFORCEMENT).toBe(
-      'agent_history_injection_enforcement'
-    );
-    expect(flagMetaFor('agent_history_injection_enforcement')).toMatchObject({
-      domain: FLAG_DOMAIN.AI,
-      group: FLAG_GROUP.GUARDRAIL,
-    });
-  });
-
   it('falls back to the product fallback group for unknown keys', () => {
     expect(flagMetaFor('some_adhoc_flag')).toEqual({
       domain: FLAG_DOMAIN.PRODUCT,

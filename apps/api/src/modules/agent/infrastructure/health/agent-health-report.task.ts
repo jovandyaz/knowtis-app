@@ -3,13 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { WebhookAlertService } from '../../../ai/infrastructure/alerting/webhook-alert.service';
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { evaluateAgentHealth } from './agent-health.evaluator';
 import { AgentHealthQueries } from './agent-health.queries';
 
@@ -17,7 +14,7 @@ const ADVISORY_LOCK_KEY = 778_493_004;
 const WINDOW_HOURS = 24;
 const MIN_SAMPLES = 20;
 
-export type AgentHealthRunStatus = 'reported' | 'flag_disabled' | 'locked';
+export type AgentHealthRunStatus = 'reported' | 'locked';
 
 @Injectable()
 export class AgentHealthReportTask {
@@ -26,7 +23,6 @@ export class AgentHealthReportTask {
   constructor(
     @Inject(DATABASE_CLIENT) private readonly client: Sql,
     private readonly config: ConfigService<EnvConfig, true>,
-    private readonly flags: FeatureFlagsService,
     private readonly queries: AgentHealthQueries,
     private readonly alerts: WebhookAlertService
   ) {}
@@ -44,9 +40,6 @@ export class AgentHealthReportTask {
   }
 
   async run(): Promise<AgentHealthRunStatus> {
-    if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_HEALTH_ALERTS))) {
-      return 'flag_disabled';
-    }
     const outcome = await runWithAdvisoryLock(
       this.client,
       ADVISORY_LOCK_KEY,

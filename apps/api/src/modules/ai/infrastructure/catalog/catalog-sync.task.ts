@@ -4,7 +4,6 @@ import type { Sql } from 'postgres';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
-  FEATURE_FLAG_KEYS,
   PROMOTED_STATUS,
   type CatalogSyncResultDto,
   type CatalogSyncSkipReason,
@@ -12,7 +11,6 @@ import {
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
   isCatalogCandidate,
   toCandidateUpsert,
@@ -61,7 +59,6 @@ export class CatalogSyncTask {
 
   constructor(
     @Inject(DATABASE_CLIENT) private readonly client: Sql,
-    private readonly flags: FeatureFlagsService,
     @Inject(AI_CATALOG_REPOSITORY) private readonly repo: AiCatalogRepository,
     @Inject(OPENROUTER_MODELS_CLIENT)
     private readonly openRouter: OpenRouterModelsClient,
@@ -86,9 +83,6 @@ export class CatalogSyncTask {
    * Runs one pass and resolves what it did. Rejects when the upstream fetch fails — the cron swallows that, an on-demand caller surfaces it.
    */
   async run(): Promise<CatalogSyncResultDto> {
-    if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_CATALOG_SYNC))) {
-      return skipped('flag_disabled');
-    }
     const outcome = await runWithAdvisoryLock(
       this.client,
       ADVISORY_LOCK_KEY,

@@ -1,8 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
@@ -85,14 +83,10 @@ function make(
       { output_cost_per_token?: number; deprecation_date?: string }
     >;
     locked?: boolean;
-    flagEnabled?: boolean;
     promoted?: string[];
   } = {}
 ) {
   const lock = createAdvisoryLockClient(options.locked ?? true);
-  const flags = {
-    isEnabled: vi.fn().mockResolvedValue(options.flagEnabled ?? true),
-  };
   const repo = {
     upsertCandidate: vi.fn().mockResolvedValue(undefined),
     createAlert: vi.fn().mockResolvedValue(undefined),
@@ -113,13 +107,12 @@ function make(
   };
   const task = new CatalogSyncTask(
     lock.client,
-    flags as never,
     repo as never,
     openRouter as never,
     liteLlm as never,
     catalog as never
   );
-  return { task, lock, flags, repo, openRouter, liteLlm, catalog };
+  return { task, lock, repo, openRouter, liteLlm, catalog };
 }
 
 describe('CatalogSyncTask', () => {
@@ -138,30 +131,6 @@ describe('CatalogSyncTask', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it('should gate the run on the registered ai_catalog_sync flag key', async () => {
-    expect(FEATURE_FLAG_KEYS.AI_CATALOG_SYNC).toBe('ai_catalog_sync');
-    const { task, flags } = make();
-
-    await task.sync();
-
-    expect(flags.isEnabled).toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AI_CATALOG_SYNC
-    );
-  });
-
-  it('should touch nothing while the flag is off', async () => {
-    const { task, openRouter, liteLlm, lock } = make({
-      flagEnabled: false,
-      upstream: [QWEN_CANDIDATE],
-    });
-
-    await task.sync();
-
-    expect(openRouter.fetchModels).not.toHaveBeenCalled();
-    expect(liteLlm.fetchPrices).not.toHaveBeenCalled();
-    expect(lock.reserve).not.toHaveBeenCalled();
   });
 
   it('should store every upstream model that passes the candidate filter', async () => {
@@ -482,19 +451,6 @@ describe('CatalogSyncTask', () => {
       candidates: 1,
       alerts: 0,
       failures: 1,
-    });
-  });
-
-  it('should tell an on-demand run the flag is what stopped it', async () => {
-    const { task } = make({ flagEnabled: false, upstream: [QWEN_CANDIDATE] });
-
-    await expect(task.run()).resolves.toEqual({
-      status: 'skipped',
-      skippedReason: 'flag_disabled',
-      upstream: 0,
-      candidates: 0,
-      alerts: 0,
-      failures: 0,
     });
   });
 

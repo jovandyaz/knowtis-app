@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import type { ConversationMessageRow } from '../../domain/ports/conversation.repository';
 import { MemoryExtractionTask } from './memory-extraction.task';
@@ -45,15 +43,14 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
   },
 ];
 
-function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
-  const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'vk';
+function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
+  const embedConfigured = opts.embedConfigured ?? true;
   const lock = opts.lock ?? true;
   const { client } = createAdvisoryLockClient(lock);
   const config = {
     get: (k: string) =>
       (
         ({
-          VOYAGE_API_KEY: voyageKey,
           AI_MEMORY_QUIET_SECONDS: 180,
           AI_MEMORY_BATCH_SIZE: 20,
           AI_MEMORY_MAX_PER_USER: 100,
@@ -61,7 +58,6 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
       )[k],
   };
   const aiConfig = { getFastModel: vi.fn().mockResolvedValue('m') };
-  const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
   const conversations = {
     findExtractable: vi.fn().mockResolvedValue([{ id: 'c1', userId: 'u1' }]),
     loadMessages: vi.fn().mockResolvedValue([
@@ -90,6 +86,7 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     }),
   };
   const embed = {
+    isConfigured: vi.fn().mockReturnValue(embedConfigured),
     embedDocuments: vi.fn().mockResolvedValue({
       embeddings: [new Array(1024).fill(0)],
       totalTokens: 1,
@@ -101,7 +98,6 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     client,
     config as never,
     aiConfig as never,
-    flags as never,
     conversations as never,
     memory as never,
     structured as never,
@@ -114,24 +110,12 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     conversations,
     memory,
     structured,
-    flags,
     embed,
     rateLimit,
   };
 }
 
 describe('MemoryExtractionTask', () => {
-  it('gates reconcile on the registered agent_longterm_memory flag key', async () => {
-    expect(FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY).toBe(
-      'agent_longterm_memory'
-    );
-    const { task, flags } = make();
-    await task.reconcile();
-    expect(flags.isEnabled).toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-    );
-  });
-
   it('extracts, persists an ADD, and marks the conversation', async () => {
     const { task, memory, conversations } = make();
     await task.reconcile();
@@ -189,16 +173,6 @@ describe('MemoryExtractionTask', () => {
     );
   });
 
-  it('does nothing when the flag is off', async () => {
-    const { task, conversations, flags } = make();
-    flags.isEnabled.mockResolvedValue(false);
-    await task.reconcile();
-    expect(flags.isEnabled).toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-    );
-    expect(conversations.findExtractable).not.toHaveBeenCalled();
-  });
-
   it('skips storing content flagged as prompt injection', async () => {
     const { task, memory, embed, structured } = make();
     structured.generateStructuredOutput.mockResolvedValue({
@@ -253,8 +227,8 @@ describe('MemoryExtractionTask', () => {
     expect(conversations.markExtracted).not.toHaveBeenCalled();
   });
 
-  it('does nothing when VOYAGE_API_KEY is absent', async () => {
-    const { task, conversations } = make({ voyageKey: undefined });
+  it('does nothing when embeddings are not configured', async () => {
+    const { task, conversations } = make({ embedConfigured: false });
     await task.reconcile();
     expect(conversations.findExtractable).not.toHaveBeenCalled();
   });

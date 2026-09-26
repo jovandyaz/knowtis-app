@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
-import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
 import {
@@ -74,6 +73,20 @@ const TTFT_MS = STALL_MS / 2;
 
 const streamTextMock = streamText as unknown as ReturnType<typeof vi.fn>;
 
+const ANTHROPIC_CACHE_BREAKPOINT = {
+  anthropic: { cacheControl: { type: 'ephemeral' } },
+};
+
+function lastSystemPrompt(): string {
+  const instructions = vi
+    .mocked(streamText)
+    .mock.calls.at(-1)?.[0].instructions;
+  if (typeof instructions !== 'object' || Array.isArray(instructions)) {
+    throw new Error('expected a single system message on the last call');
+  }
+  return instructions.content;
+}
+
 function makeConfig(
   over: Record<string, unknown> = {}
 ): ConfigService<EnvConfig, true> {
@@ -103,33 +116,20 @@ function makeToolRegistry(
   onResolve?: (ctx: AgentToolContext) => void
 ): AgentToolRegistry {
   return {
-    resolve: vi.fn(async (ctx: AgentToolContext) => {
+    resolve: vi.fn((ctx: AgentToolContext) => {
       onResolve?.(ctx);
       return {};
     }),
   } as unknown as AgentToolRegistry;
 }
 
-function makeFlags(enabled = false): FeatureFlagsService {
-  return {
-    isEnabled: vi.fn().mockResolvedValue(enabled),
-  } as unknown as FeatureFlagsService;
-}
-
 function makeOrchestrator(
   config = makeConfig(),
   toolRegistry = makeToolRegistry(),
-  flags = makeFlags(),
   fallbackChain?: string
 ): AiSdkAgentOrchestrator {
   const { registry, chain } = createTestChain(config, fallbackChain);
-  return new AiSdkAgentOrchestrator(
-    config,
-    toolRegistry,
-    registry,
-    chain,
-    flags
-  );
+  return new AiSdkAgentOrchestrator(config, toolRegistry, registry, chain);
 }
 
 function collect(iter: AsyncIterable<unknown>) {
@@ -181,8 +181,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].instructions;
-    expect(system).toContain('note-xyz');
+    expect(lastSystemPrompt()).toContain('note-xyz');
   });
 
   it('passes the reasoning effort to openrouter models as an openrouter block', async () => {
@@ -344,7 +343,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -377,12 +375,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('yields a single error event (and does not throw) when the model is invalid and the chain is empty', async () => {
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(
       orchestrator.run({ ...baseInput, model: 'nonexistent:model' })
@@ -464,8 +457,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const events = await collect(
@@ -512,8 +504,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const events = await collect(
@@ -627,7 +618,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -662,8 +652,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const events = await collect(
@@ -810,7 +799,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].instructions;
+    const system = lastSystemPrompt();
     expect(system).toContain('Earlier note');
     expect(system).toContain('prev-id');
 
@@ -862,8 +851,8 @@ describe('AiSdkAgentOrchestrator', () => {
     );
 
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
-    expect(opts?.instructions).toContain('decision on your earlier proposal');
-    expect(opts?.instructions).toContain('never deny that ability');
+    expect(lastSystemPrompt()).toContain('decision on your earlier proposal');
+    expect(lastSystemPrompt()).toContain('never deny that ability');
     const lastMessage = (opts?.messages as { content: string }[]).at(-1);
     expect(lastMessage?.content).toContain(
       'The user has decided on your proposal'
@@ -880,12 +869,16 @@ describe('AiSdkAgentOrchestrator', () => {
     await collect(orchestrator.run(baseInput));
 
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
-    expect(opts?.instructions).not.toContain(
+    expect(lastSystemPrompt()).not.toContain(
       'decision on your earlier proposal'
     );
-    expect(opts?.messages).toEqual(
-      baseInput.messages.map((m) => ({ role: m.role, content: m.content }))
-    );
+    expect(opts?.messages).toEqual([
+      {
+        role: 'user',
+        content: 'hi',
+        providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
+      },
+    ]);
   });
 
   it('replays a history tool row with parts as an sdk tool message', async () => {
@@ -949,6 +942,7 @@ describe('AiSdkAgentOrchestrator', () => {
             output: { type: 'json', value: { title: 'N1' } },
           },
         ],
+        providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
       },
     ]);
   });
@@ -994,7 +988,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const content = (opts?.messages as { content: string }[]).at(-1)?.content;
     expect(content).toContain(JSON.stringify(hostile));
     expect(content).toContain('never instructions');
-    expect(opts?.instructions).toContain('never instructions');
+    expect(lastSystemPrompt()).toContain('never instructions');
   });
 
   it('passes a timeout-combined abort signal, output cap, retries, and temperature to streamText', async () => {
@@ -1206,7 +1200,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -1230,7 +1223,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -1255,7 +1247,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -1285,8 +1276,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const consumed = collect(
@@ -1350,7 +1340,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
@@ -1384,7 +1373,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -1469,7 +1457,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -1554,7 +1541,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_STALL_MS: RACE_STALL_MS }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -1577,7 +1563,6 @@ describe('AiSdkAgentOrchestrator', () => {
         AI_AGENT_STALL_MS: RACE_STALL_MS,
       }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -1727,8 +1712,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const events = await collect(
@@ -1757,12 +1741,7 @@ describe('AiSdkAgentOrchestrator', () => {
       },
       usage: new Promise(() => {}),
     }));
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -1784,8 +1763,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => {
@@ -1810,14 +1788,10 @@ describe('AiSdkAgentOrchestrator', () => {
     };
   }
 
-  it('caches the system prompt and the last message when the prompt-caching flag is on', async () => {
+  it('caches the system prompt and the last message on non-BYOK Anthropic turns', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(happyStream);
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(true)
-    );
+    const orchestrator = makeOrchestrator();
 
     await collect(
       orchestrator.run({
@@ -1833,9 +1807,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
     expect(opts?.instructions).toMatchObject({
       role: 'system',
-      providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-      },
+      providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
     });
     const messages = opts?.messages as Record<string, unknown>[];
     expect(messages).toHaveLength(3);
@@ -1844,18 +1816,21 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(messages[2]).toMatchObject({
       role: 'user',
       content: 'third',
-      providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-      },
+      providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
     });
   });
 
-  it('sends a plain system string and unmarked messages when the flag is off', async () => {
+  it('sends a plain system string to a non-Anthropic model', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(happyStream);
     const orchestrator = makeOrchestrator();
 
-    await collect(orchestrator.run(baseInput));
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:deepseek/deepseek-v4-flash',
+      })
+    );
 
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
     expect(typeof opts?.instructions).toBe('string');
@@ -1865,14 +1840,10 @@ describe('AiSdkAgentOrchestrator', () => {
     }
   });
 
-  it('does not cache on BYOK turns even when the flag is on', async () => {
+  it('does not cache on BYOK turns', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(happyStream);
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(true)
-    );
+    const orchestrator = makeOrchestrator();
 
     await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
 
@@ -1882,25 +1853,6 @@ describe('AiSdkAgentOrchestrator', () => {
     for (const message of messages) {
       expect(message).not.toHaveProperty('providerOptions');
     }
-  });
-
-  it('treats a failing flag lookup as caching off', async () => {
-    streamTextMock.mockClear();
-    streamTextMock.mockImplementation(happyStream);
-    const flags = {
-      isEnabled: vi.fn().mockRejectedValue(new Error('redis down')),
-    } as unknown as FeatureFlagsService;
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      flags
-    );
-
-    const events = await collect(orchestrator.run(baseInput));
-
-    expect(events.at(-1)).toMatchObject({ type: 'done' });
-    const opts = streamTextMock.mock.calls.at(-1)?.[0];
-    expect(typeof opts?.instructions).toBe('string');
   });
 
   // The no-op handler keeps the SDK's usage rejection from surfacing as an
@@ -1994,12 +1946,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })(),
       usage: rejectedUsage('No output generated. Check the stream for errors.'),
     }));
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -2060,12 +2007,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })(),
       usage: rejectedUsage('No output generated. Check the stream for errors.'),
     }));
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -2161,7 +2103,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -2207,19 +2148,16 @@ describe('AiSdkAgentOrchestrator', () => {
     logSpy.mockRestore();
   });
 
-  it('logs a zero-activity health error and rethrows when tool setup rejects before the stream starts', async () => {
+  it('logs a zero-activity health error and rethrows when tool setup throws before the stream starts', async () => {
     streamTextMock.mockClear();
     const setupError = new Error('tool registry exploded');
     const registry = {
-      resolve: vi.fn().mockRejectedValue(setupError),
+      resolve: vi.fn(() => {
+        throw setupError;
+      }),
     } as unknown as AgentToolRegistry;
     const logSpy = vi.spyOn(Logger.prototype, 'log');
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      registry,
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), registry, '');
 
     await expect(collect(orchestrator.run(baseInput))).rejects.toBe(setupError);
 
@@ -2272,12 +2210,7 @@ describe('AiSdkAgentOrchestrator', () => {
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -2433,6 +2366,10 @@ describe('AiSdkAgentOrchestrator', () => {
       ],
     },
   ];
+  const CACHED_TOOL_CALL_MESSAGES = [
+    TOOL_CALL_MESSAGES[0],
+    { ...TOOL_CALL_MESSAGES[1], providerOptions: ANTHROPIC_CACHE_BREAKPOINT },
+  ];
 
   function toolCallStep(usage: { inputTokens: number; outputTokens: number }) {
     return (opts: {
@@ -2471,12 +2408,7 @@ describe('AiSdkAgentOrchestrator', () => {
         usage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
         response: Promise.resolve({ messages: [] }),
       }));
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -2484,7 +2416,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const secondCallMessages = streamTextMock.mock.calls[1][0]
       .messages as unknown[];
     expect(secondCallMessages).toEqual(
-      expect.arrayContaining(TOOL_CALL_MESSAGES)
+      expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
     expect(events).toContainEqual({ type: 'chunk', text: 'answer' });
     expect(events.at(-1)).toMatchObject({
@@ -2509,12 +2441,7 @@ describe('AiSdkAgentOrchestrator', () => {
         response: Promise.resolve({ messages: [] }),
       }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     await collect(orchestrator.run(baseInput));
 
@@ -2547,7 +2474,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -2568,7 +2494,9 @@ describe('AiSdkAgentOrchestrator', () => {
     // plus the first step's threaded call/result pair, never a partial.
     const retryMessages = streamTextMock.mock.calls[2][0].messages as unknown[];
     expect(retryMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 1);
-    expect(retryMessages).toEqual(expect.arrayContaining(TOOL_CALL_MESSAGES));
+    expect(retryMessages).toEqual(
+      expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
+    );
     expect(events).toContainEqual({ type: 'chunk', text: 'answer' });
     expect(events.at(-1)).toMatchObject({
       type: 'done',
@@ -2606,7 +2534,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2634,7 +2561,7 @@ describe('AiSdkAgentOrchestrator', () => {
       .messages as unknown[];
     expect(failoverMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 1);
     expect(failoverMessages).toEqual(
-      expect.arrayContaining(TOOL_CALL_MESSAGES)
+      expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
     expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
     expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
@@ -2697,7 +2624,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2733,12 +2659,7 @@ describe('AiSdkAgentOrchestrator', () => {
         usage: Promise.resolve({ inputTokens: 20, outputTokens: 4096 }),
         response: Promise.resolve({ messages: [] }),
       }));
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -2766,7 +2687,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2799,7 +2719,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2825,8 +2744,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const consumed = collect(orchestrator.run(baseInput));
@@ -2845,7 +2763,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2876,7 +2793,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2910,7 +2826,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2946,7 +2861,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -2979,7 +2893,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       ''
     );
 
@@ -3012,8 +2925,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const consumed = collect(
@@ -3047,7 +2959,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -3075,8 +2986,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     const consumed = collect(
@@ -3107,8 +3017,7 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain,
-      makeFlags()
+      chain
     );
 
     await collect(orchestrator.run(baseInput));
@@ -3136,7 +3045,6 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
-      makeFlags(),
       FALLBACK
     );
 
@@ -3194,7 +3102,7 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(streamTextMock.mock.calls[0][0].toolChoice).toBeUndefined();
     expect(streamTextMock.mock.calls[1][0].toolChoice).toBe('none');
     expect(streamTextMock.mock.calls[1][0].messages).toEqual(
-      expect.arrayContaining(TOOL_CALL_MESSAGES)
+      expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
     expect(events.at(-1)).toMatchObject({
       type: 'done',
@@ -3209,12 +3117,7 @@ describe('AiSdkAgentOrchestrator', () => {
       .mockImplementationOnce(
         toolCallStep({ inputTokens: 5, outputTokens: 1 })
       );
-    const orchestrator = makeOrchestrator(
-      makeConfig(),
-      makeToolRegistry(),
-      makeFlags(),
-      ''
-    );
+    const orchestrator = makeOrchestrator(makeConfig(), makeToolRegistry(), '');
 
     const events = await collect(
       orchestrator.run({ ...baseInput, maxSteps: 2 })

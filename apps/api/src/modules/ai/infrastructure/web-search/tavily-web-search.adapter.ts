@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { TavilyWebSearch } from '@knowtis/ai-gateway';
@@ -12,10 +12,24 @@ import type { EnvConfig } from '../../../../config/env.config';
 import type { WebSearchPort } from '../../domain/ports/web-search.port';
 
 @Injectable()
-export class TavilyWebSearchAdapter implements WebSearchPort {
+export class TavilyWebSearchAdapter implements WebSearchPort, OnModuleInit {
   private readonly logger = new Logger(TavilyWebSearchAdapter.name);
 
   constructor(private readonly config: ConfigService<EnvConfig, true>) {}
+
+  isConfigured(): boolean {
+    return Boolean(this.config.get('TAVILY_API_KEY'));
+  }
+
+  onModuleInit(): void {
+    if (!this.isConfigured()) {
+      this.logger.warn({
+        event: 'ai.capability.unavailable',
+        capability: 'web_search',
+        env: 'TAVILY_API_KEY',
+      });
+    }
+  }
 
   async search(
     query: string,
@@ -35,12 +49,11 @@ export class TavilyWebSearchAdapter implements WebSearchPort {
   }
 
   private client(): TavilyWebSearch {
-    const apiKey = this.config.get('TAVILY_API_KEY');
-    if (!apiKey) {
+    if (!this.isConfigured()) {
       throw new Error('TAVILY_API_KEY is not set');
     }
     return new TavilyWebSearch({
-      apiKey,
+      apiKey: this.config.get('TAVILY_API_KEY') as string,
       maxResults: this.config.get('AI_WEB_SEARCH_MAX_RESULTS'),
       depth: this.config.get('AI_WEB_SEARCH_DEPTH'),
       timeoutMs: this.config.get('AI_TIMEOUT_MS'),

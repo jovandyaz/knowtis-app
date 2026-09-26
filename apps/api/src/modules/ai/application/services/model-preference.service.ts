@@ -3,20 +3,17 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  Logger,
 } from '@nestjs/common';
 
 import { providerOf } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
-  FEATURE_FLAG_KEYS,
   type AIPreferences,
   type ModelReasoning,
   type SelectableModel,
   type UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -27,26 +24,13 @@ import { SelectableModelsService } from './selectable-models.service';
 
 @Injectable()
 export class ModelPreferenceService {
-  private readonly logger = new Logger(ModelPreferenceService.name);
-
   constructor(
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
     private readonly selectable: SelectableModelsService,
     private readonly aiConfig: AIConfigService,
-    private readonly byok: ByokService,
-    private readonly flags: FeatureFlagsService
+    private readonly byok: ByokService
   ) {}
-
-  /** Fail-open: a flag-store outage must degrade to the ungated status quo, never lock users out. */
-  async tierGatingOn(): Promise<boolean> {
-    try {
-      return await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_TIER_GATING);
-    } catch (error) {
-      this.logger.warn('ai_tier_gating lookup failed, treating as off', error);
-      return false;
-    }
-  }
 
   async listModels(user: {
     id: string;
@@ -67,26 +51,18 @@ export class ModelPreferenceService {
     id: string;
     isAnonymous?: boolean;
   }): Promise<SelectableModel[]> {
-    const [
-      systemDefault,
-      configured,
-      byokProviders,
-      tierGatingOn,
-      ceiling,
-      intentModels,
-    ] = await Promise.all([
-      this.aiConfig.getDefaultModel(),
-      this.aiConfig.getConfiguredModelIds(),
-      this.byok.enabledProviders(user.id, user.isAnonymous === true),
-      this.tierGatingOn(),
-      this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-      this.aiConfig.getIntentModels(),
-    ]);
+    const [systemDefault, configured, byokProviders, ceiling, intentModels] =
+      await Promise.all([
+        this.aiConfig.getDefaultModel(),
+        this.aiConfig.getConfiguredModelIds(),
+        this.byok.enabledProviders(user.id, user.isAnonymous === true),
+        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
+        this.aiConfig.getIntentModels(),
+      ]);
     return this.selectable.list(
       systemDefault,
       configured,
       byokProviders,
-      tierGatingOn,
       ceiling,
       intentModels
     );
@@ -115,8 +91,7 @@ export class ModelPreferenceService {
 
   async isSelectableWith(
     modelId: string,
-    byokProviders: ReadonlySet<string>,
-    tierGatingOn: boolean
+    byokProviders: ReadonlySet<string>
   ): Promise<boolean> {
     const [configured, ceiling] = await Promise.all([
       this.aiConfig.getConfiguredModelIds(),
@@ -126,7 +101,6 @@ export class ModelPreferenceService {
       modelId,
       configured,
       byokProviders,
-      tierGatingOn,
       ceiling
     );
   }
@@ -139,12 +113,10 @@ export class ModelPreferenceService {
 
   async getEffectiveDefault(
     userId: string,
-    byokProviders?: ReadonlySet<string>,
-    tierGatingOn?: boolean
+    byokProviders?: ReadonlySet<string>
   ): Promise<string> {
     const providers =
       byokProviders ?? (await this.byok.enabledProviders(userId));
-    const gatingOn = tierGatingOn ?? (await this.tierGatingOn());
     const [offered, ceiling] = await Promise.all([
       this.aiConfig.getConfiguredModelIds(),
       this.aiConfig.getFreeTierMaxOutputCostPerToken(),
@@ -155,13 +127,7 @@ export class ModelPreferenceService {
     if (
       preferredModel &&
       providers.has(providerOf(preferredModel)) &&
-      this.selectable.isSelectable(
-        preferredModel,
-        offered,
-        providers,
-        gatingOn,
-        ceiling
-      )
+      this.selectable.isSelectable(preferredModel, offered, providers, ceiling)
     ) {
       return preferredModel;
     }
@@ -174,57 +140,15 @@ export class ModelPreferenceService {
     // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
     if (
       byokPick &&
-      this.selectable.isSelectable(
-        byokPick,
-        offered,
-        providers,
-        gatingOn,
-        ceiling
-      )
+      this.selectable.isSelectable(byokPick, offered, providers, ceiling)
     ) {
       return byokPick;
     }
     const configured = await this.aiConfig.getIntentModel(intent);
-    if (
-      this.selectable.isSelectable(
-        configured,
-        offered,
-        providers,
-        gatingOn,
-        ceiling
-      )
-    ) {
+    if (this.selectable.isSelectable(configured, offered, providers, ceiling)) {
       return configured;
     }
-    const systemDefault = await this.aiConfig.getDefaultModel();
-    // Only under gating: dark behavior must stay byte-for-byte status quo.
-    if (
-      !gatingOn ||
-      this.selectable.isSelectable(
-        systemDefault,
-        offered,
-        providers,
-        gatingOn,
-        ceiling
-      )
-    ) {
-      return systemDefault;
-    }
-    const fallback = this.selectable.firstSelectable(
-      offered,
-      providers,
-      gatingOn,
-      ceiling
-    );
-    if (!fallback) {
-      return systemDefault;
-    }
-    this.logger.warn({
-      event: 'ai.model.default_gated',
-      systemDefault,
-      fallback,
-    });
-    return fallback;
+    return await this.aiConfig.getDefaultModel();
   }
 
   async setUserPreferences(
@@ -240,20 +164,16 @@ export class ModelPreferenceService {
       return;
     }
     if (typeof patch.preferredModel === 'string') {
-      const [byokProviders, tierGatingOn, offered, ceiling] = await Promise.all(
-        [
-          this.byok.enabledProviders(user.id),
-          this.tierGatingOn(),
-          this.aiConfig.getConfiguredModelIds(),
-          this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-        ]
-      );
+      const [byokProviders, offered, ceiling] = await Promise.all([
+        this.byok.enabledProviders(user.id),
+        this.aiConfig.getConfiguredModelIds(),
+        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
+      ]);
       if (
         !this.selectable.isSelectable(
           patch.preferredModel,
           offered,
           byokProviders,
-          tierGatingOn,
           ceiling
         )
       ) {

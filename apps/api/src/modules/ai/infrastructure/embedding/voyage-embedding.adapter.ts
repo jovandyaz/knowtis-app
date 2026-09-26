@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -14,10 +14,24 @@ const OUTPUT_DIMENSION = 1024;
 const PRICE_PER_1M_TOKENS_USD = 0.12;
 
 @Injectable()
-export class VoyageEmbeddingAdapter implements EmbeddingPort {
+export class VoyageEmbeddingAdapter implements EmbeddingPort, OnModuleInit {
   private readonly logger = new Logger(VoyageEmbeddingAdapter.name);
 
   constructor(private readonly config: ConfigService<EnvConfig, true>) {}
+
+  isConfigured(): boolean {
+    return Boolean(this.config.get('VOYAGE_API_KEY'));
+  }
+
+  onModuleInit(): void {
+    if (!this.isConfigured()) {
+      this.logger.warn({
+        event: 'ai.capability.unavailable',
+        capability: 'embeddings',
+        env: 'VOYAGE_API_KEY',
+      });
+    }
+  }
 
   async embedQuery(text: string): Promise<QueryEmbedding> {
     const { embeddings, costUsd } = await this.call([text], 'query');
@@ -35,10 +49,10 @@ export class VoyageEmbeddingAdapter implements EmbeddingPort {
     input: string[],
     inputType: 'query' | 'document'
   ): Promise<EmbeddingResult> {
-    const apiKey = this.config.get('VOYAGE_API_KEY');
-    if (!apiKey) {
+    if (!this.isConfigured()) {
       throw new Error('VOYAGE_API_KEY is not set');
     }
+    const apiKey = this.config.get('VOYAGE_API_KEY') as string;
     const model = this.config.get('AI_EMBEDDING_MODEL');
 
     const response = await fetch(VOYAGE_URL, {

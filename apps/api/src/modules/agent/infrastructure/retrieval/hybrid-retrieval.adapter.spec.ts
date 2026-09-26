@@ -5,20 +5,24 @@ import type { AIRateLimitService } from '../../../ai/application/services/ai-rat
 import type { EmbeddingPort } from '../../../ai/domain/ports/embedding.port';
 import type { NoteReadRepository } from '../../../notes/domain/ports/note-read.repository';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
-import type { AgentNote, NoteBody } from '../../domain/retrieval';
+import type { AgentNote, NoteBody, NoteHit } from '../../domain/retrieval';
 import { HybridRetrievalAdapter } from './hybrid-retrieval.adapter';
 import type { KeywordRetrievalAdapter } from './keyword-retrieval.adapter';
 
-const KEYWORD_NOTE: AgentNote = {
+const KEYWORD_HIT: NoteHit = {
   id: 'kw',
   title: 'kw',
-  content: 'kw body',
-  contentStatus: 'complete',
-  createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
   isOwner: true,
   isSharedWithMe: false,
   isPubliclyShared: false,
+};
+
+const KEYWORD_NOTE: AgentNote = {
+  ...KEYWORD_HIT,
+  content: 'kw body',
+  contentStatus: 'complete',
+  createdAt: '2026-06-01T00:00:00.000Z',
 };
 
 const KEYWORD_BODY: NoteBody = {
@@ -39,23 +43,28 @@ function summary(id: string) {
   };
 }
 
-function make(opts: {
-  lexical: string[];
-  vector: string[];
-  embedThrows?: boolean;
-  unindexed?: string[];
-  voyageKey?: string;
-}) {
+function make(
+  opts: {
+    lexical?: string[];
+    vector?: string[];
+    embedThrows?: boolean;
+    unindexed?: string[];
+    configured?: boolean;
+  } = {}
+) {
   const repo = {
     findAccessibleNotesByLexicalRank: vi.fn(async () =>
-      opts.lexical.map(summary)
+      (opts.lexical ?? []).map(summary)
     ),
-    findAccessibleNotesByEmbedding: vi.fn(async () => opts.vector.map(summary)),
+    findAccessibleNotesByEmbedding: vi.fn(async () =>
+      (opts.vector ?? []).map(summary)
+    ),
     findAccessibleNotesUnindexed: vi.fn(async () =>
       (opts.unindexed ?? []).map(summary)
     ),
   } as unknown as NoteReadRepository;
   const embed = {
+    isConfigured: vi.fn().mockReturnValue(opts.configured ?? true),
     embedQuery: vi.fn(async () => {
       if (opts.embedThrows) {
         throw new Error('voyage down');
@@ -74,7 +83,7 @@ function make(opts: {
   };
   const config = {
     get: (key: string) =>
-      key === 'VOYAGE_API_KEY' ? (opts.voyageKey ?? 'vk-test') : 'voyage-4',
+      key === 'AI_EMBEDDING_MODEL' ? 'voyage-4' : undefined,
   } as unknown as ConfigService<Record<string, unknown>, true>;
   const rateLimit = {
     recordSideCost: vi.fn().mockResolvedValue(undefined),
@@ -124,6 +133,28 @@ describe('HybridRetrievalAdapter.search', () => {
     expect(repo.findAccessibleNotesByEmbedding).not.toHaveBeenCalled();
   });
 
+  it('returns lexical results without calling the embedder when embeddings are not configured', async () => {
+    const { adapter, embed, rateLimit, repo } = make({
+      lexical: ['a', 'b'],
+      vector: ['c'],
+      configured: false,
+    });
+    const hits = await adapter.search('u1', 'query');
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
+    expect(repo.findAccessibleNotesByEmbedding).not.toHaveBeenCalled();
+    expect(hits.map((h) => h.id)).toEqual(['a', 'b']);
+  });
+
+  it('degrades to keyword search when the lexical leg throws', async () => {
+    const { adapter, repo, keyword } = make();
+    vi.mocked(repo.findAccessibleNotesByLexicalRank).mockRejectedValue(
+      new Error('db down')
+    );
+    vi.mocked(keyword.search).mockResolvedValue([KEYWORD_HIT]);
+    await expect(adapter.search('u1', 'q')).resolves.toEqual([KEYWORD_HIT]);
+  });
+
   it('does not record a side cost when the embedding call fails', async () => {
     const { adapter, rateLimit } = make({
       lexical: ['a'],
@@ -137,11 +168,7 @@ describe('HybridRetrievalAdapter.search', () => {
 
 describe('HybridRetrievalAdapter.listUnindexed', () => {
   it('asks the repository for notes the current embedding model cannot reach', async () => {
-    const { adapter, repo } = make({
-      lexical: [],
-      vector: [],
-      unindexed: ['fresh'],
-    });
+    const { adapter, repo } = make({ unindexed: ['fresh'] });
 
     const hits = await adapter.listUnindexed('u1', 5);
 
@@ -155,7 +182,7 @@ describe('HybridRetrievalAdapter.listUnindexed', () => {
   });
 
   it('bounds the claim to a window a healthy reconciler could cover', async () => {
-    const { adapter, repo } = make({ lexical: [], vector: [] });
+    const { adapter, repo } = make();
 
     await adapter.listUnindexed('u1', 5);
 
@@ -167,20 +194,23 @@ describe('HybridRetrievalAdapter.listUnindexed', () => {
     expect(withinSeconds).toBeLessThanOrEqual(3600);
   });
 
-  it('reports none when no Voyage key is configured, so nothing is ever indexed', async () => {
-    const { adapter, repo } = make({
-      lexical: [],
-      vector: [],
-      unindexed: ['fresh'],
-      voyageKey: '',
-    });
+  it('reports none when embeddings are not configured, so nothing is ever indexed', async () => {
+    const { adapter, repo } = make({ unindexed: ['fresh'], configured: false });
 
     expect(await adapter.listUnindexed('u1', 5)).toEqual([]);
     expect(repo.findAccessibleNotesUnindexed).not.toHaveBeenCalled();
   });
 
+  it('reports no pending notes when the unindexed lookup throws', async () => {
+    const { adapter, repo } = make();
+    vi.mocked(repo.findAccessibleNotesUnindexed).mockRejectedValue(
+      new Error('db down')
+    );
+    await expect(adapter.listUnindexed('u1', 5)).resolves.toEqual([]);
+  });
+
   it('reports none for an unusable user id', async () => {
-    const { adapter, repo } = make({ lexical: [], vector: [] });
+    const { adapter, repo } = make();
 
     expect(await adapter.listUnindexed('', 5)).toEqual([]);
     expect(repo.findAccessibleNotesUnindexed).not.toHaveBeenCalled();
@@ -189,7 +219,7 @@ describe('HybridRetrievalAdapter.listUnindexed', () => {
 
 describe('HybridRetrievalAdapter note reads', () => {
   it('delegates getBody to the keyword adapter, never to the vector leg', async () => {
-    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+    const { adapter, keyword, embed } = make();
 
     expect(await adapter.getBody('u1', 'n1')).toBe(KEYWORD_BODY);
     expect(keyword.getBody).toHaveBeenCalledWith('u1', 'n1');
@@ -200,7 +230,7 @@ describe('HybridRetrievalAdapter note reads', () => {
     ['a missing note', null],
     ['an inaccessible note', null],
   ])('passes through what keyword returns for %s', async (_label, expected) => {
-    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+    const { adapter, keyword, embed } = make();
     keyword.getBody = vi.fn(async () => expected);
 
     expect(await adapter.getBody('u1', 'n1')).toBe(expected);
@@ -208,7 +238,7 @@ describe('HybridRetrievalAdapter note reads', () => {
   });
 
   it('lets a keyword read failure surface instead of degrading to the vector leg', async () => {
-    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+    const { adapter, keyword, embed } = make();
     keyword.getBody = vi.fn(async () => {
       throw new Error('note store down');
     });
@@ -220,7 +250,7 @@ describe('HybridRetrievalAdapter note reads', () => {
   });
 
   it('delegates getById to the keyword adapter, never to the vector leg', async () => {
-    const { adapter, keyword, embed } = make({ lexical: [], vector: [] });
+    const { adapter, keyword, embed } = make();
 
     expect(await adapter.getById('u1', 'n1')).toBe(KEYWORD_NOTE);
     expect(keyword.getById).toHaveBeenCalledWith('u1', 'n1');

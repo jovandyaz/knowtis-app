@@ -1,9 +1,6 @@
 import type { ToolSet } from 'ai';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import type { FeatureFlagKey } from '@knowtis/shared-types';
-
-import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type {
   AgentToolContext,
   AgentToolGroup,
@@ -18,11 +15,10 @@ const fakeTool = (n: string) => ({ [n]: { description: n } }) as ToolSet;
 
 function group(
   name: string,
-  opts: { flag?: FeatureFlagKey; phases: AgentToolPhase[]; toolName?: string }
+  opts: { phases: AgentToolPhase[]; toolName?: string }
 ): AgentToolGroup {
   return {
     name,
-    ...(opts.flag ? { flag: opts.flag } : {}),
     availableIn: (p) => opts.phases.includes(p),
     build: () => fakeTool(opts.toolName ?? name),
   };
@@ -40,52 +36,28 @@ function ctx(phase: AgentToolPhase): AgentToolContext {
 }
 
 describe('AgentToolRegistry', () => {
-  it('should exclude groups not available in the phase', async () => {
-    const flags = { isEnabled: vi.fn() } as unknown as FeatureFlagsService;
-    const registry = new AgentToolRegistry(
-      [
-        group('read', { phases: ['full', 'readonly'] }),
-        group('mutate', { phases: ['full'] }),
-      ],
-      flags
-    );
-    const tools = await registry.resolve(ctx('readonly'));
+  it('should exclude groups not available in the phase', () => {
+    const registry = new AgentToolRegistry([
+      group('read', { phases: ['full', 'readonly'] }),
+      group('mutate', { phases: ['full'] }),
+    ]);
+    const tools = registry.resolve(ctx('readonly'));
     expect(Object.keys(tools)).toEqual(['read']);
   });
 
-  it('should omit a flag-gated group when its flag is disabled', async () => {
-    const flags = {
-      isEnabled: vi.fn().mockResolvedValue(false),
-    } as unknown as FeatureFlagsService;
-    const registry = new AgentToolRegistry(
-      [group('web', { flag: 'agent_web_search', phases: ['full'] })],
-      flags
-    );
-    expect(Object.keys(await registry.resolve(ctx('full')))).toEqual([]);
-    expect(flags.isEnabled).toHaveBeenCalledWith('agent_web_search');
+  it('should include a group available in the phase', () => {
+    const registry = new AgentToolRegistry([
+      group('web', { phases: ['full'] }),
+    ]);
+    expect(Object.keys(registry.resolve(ctx('full')))).toEqual(['web']);
   });
 
-  it('should include a flag-gated group when its flag is enabled', async () => {
-    const flags = {
-      isEnabled: vi.fn().mockResolvedValue(true),
-    } as unknown as FeatureFlagsService;
-    const registry = new AgentToolRegistry(
-      [group('web', { flag: 'agent_web_search', phases: ['full'] })],
-      flags
-    );
-    expect(Object.keys(await registry.resolve(ctx('full')))).toEqual(['web']);
-  });
-
-  it('should throw when two groups expose the same tool name', async () => {
-    const flags = { isEnabled: vi.fn() } as unknown as FeatureFlagsService;
-    const registry = new AgentToolRegistry(
-      [
-        group('groupA', { phases: ['full'], toolName: 'shared' }),
-        group('groupB', { phases: ['full'], toolName: 'shared' }),
-      ],
-      flags
-    );
-    await expect(registry.resolve(ctx('full'))).rejects.toThrow(
+  it('should throw when two groups expose the same tool name', () => {
+    const registry = new AgentToolRegistry([
+      group('groupA', { phases: ['full'], toolName: 'shared' }),
+      group('groupB', { phases: ['full'], toolName: 'shared' }),
+    ]);
+    expect(() => registry.resolve(ctx('full'))).toThrow(
       /Duplicate agent tool name: shared/
     );
   });

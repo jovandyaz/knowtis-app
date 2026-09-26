@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import { AgentHealthReportTask } from './agent-health-report.task';
 
-const flags = { isEnabled: vi.fn() };
 const queries = { collectWindowStats: vi.fn() };
 const alerts = { notify: vi.fn() };
 const config = {
@@ -17,7 +16,6 @@ function makeTask(locked = true): AgentHealthReportTask {
   return new AgentHealthReportTask(
     lock.client,
     config as never,
-    flags as never,
     queries as never,
     alerts as never
   );
@@ -28,14 +26,7 @@ describe('AgentHealthReportTask', () => {
     vi.clearAllMocks();
   });
 
-  it('skips when the flag is disabled', async () => {
-    flags.isEnabled.mockResolvedValue(false);
-    await expect(makeTask().run()).resolves.toBe('flag_disabled');
-    expect(queries.collectWindowStats).not.toHaveBeenCalled();
-  });
-
   it('reports without alerting when rates are healthy', async () => {
-    flags.isEnabled.mockResolvedValue(true);
     queries.collectWindowStats.mockResolvedValue({
       toolCalls: 100,
       toolErrors: 1,
@@ -47,7 +38,6 @@ describe('AgentHealthReportTask', () => {
   });
 
   it('notifies one webhook event per crossed signal', async () => {
-    flags.isEnabled.mockResolvedValue(true);
     queries.collectWindowStats.mockResolvedValue({
       toolCalls: 50,
       toolErrors: 25,
@@ -67,7 +57,6 @@ describe('AgentHealthReportTask', () => {
   });
 
   it('returns locked when another run holds the advisory lock', async () => {
-    flags.isEnabled.mockResolvedValue(true);
     await expect(makeTask(false).run()).resolves.toBe('locked');
     expect(alerts.notify).not.toHaveBeenCalled();
   });
