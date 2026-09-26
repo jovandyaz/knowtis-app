@@ -8,8 +8,16 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
 import { createValidationPipe } from '../../../config/validation-pipe';
 import { DATABASE_CONNECTION } from '../../../database';
+import {
+  IDENTITY_STATE,
+  policyFor,
+  type IdentityState,
+} from '../../../test-support/verified-identity';
+import { VerifiedIdentityPolicy } from '../../users/verified-identity.policy';
 import { OauthInteractionController } from '../oauth-interaction.controller';
 import { OAUTH_PROVIDER, OAUTH_RUNTIME } from '../oauth.tokens';
 import type { OidcProviderHandle } from '../oidc-provider.factory';
@@ -90,7 +98,8 @@ interface Harness {
 
 async function buildHarness(
   provider: MockProvider | null,
-  runtime: { resourceUrl: string } | null = { resourceUrl: RESOURCE_URL }
+  runtime: { resourceUrl: string } | null = { resourceUrl: RESOURCE_URL },
+  identity: IdentityState = IDENTITY_STATE.VERIFIED
 ): Promise<Harness> {
   const handle: OidcProviderHandle | null = provider
     ? ({ provider, callback: vi.fn() } as unknown as OidcProviderHandle)
@@ -108,6 +117,7 @@ async function buildHarness(
       { provide: OAUTH_PROVIDER, useValue: handle },
       { provide: OAUTH_RUNTIME, useValue: runtime },
       { provide: DATABASE_CONNECTION, useValue: db },
+      { provide: VerifiedIdentityPolicy, useValue: policyFor(identity) },
     ],
   })
     .overrideGuard(JwtAuthGuard)
@@ -480,6 +490,47 @@ describe('OauthInteractionController', () => {
 
     expect(res.status).toBe(409);
     expect(interaction.persist).not.toHaveBeenCalled();
+  });
+
+  it.each([IDENTITY_STATE.UNVERIFIED, IDENTITY_STATE.ANONYMOUS])(
+    'should refuse confirm for an %s account without touching the interaction',
+    async (identity) => {
+      harness = await buildHarness(
+        makeProvider(),
+        { resourceUrl: RESOURCE_URL },
+        identity
+      );
+      const interaction = makeInteraction({ grantId: 'grant-old' });
+      harness.provider.Interaction.find.mockResolvedValue(interaction);
+
+      const res = await postConfirm(harness.base, ['notes:read']);
+      const body = (await res.json()) as { code: string; message: string };
+
+      expect(res.status).toBe(403);
+      expect(body).toMatchObject({
+        code: EMAIL_NOT_VERIFIED_CODE,
+        message: 'Verify your email address to connect apps',
+      });
+      expect(grantInstances).toHaveLength(0);
+      expect(
+        harness.provider.AccessToken.revokeByGrantId
+      ).not.toHaveBeenCalled();
+      expect(interaction.persist).not.toHaveBeenCalled();
+    }
+  );
+
+  it('should let a verified account confirm', async () => {
+    harness = await buildHarness(
+      makeProvider(),
+      { resourceUrl: RESOURCE_URL },
+      IDENTITY_STATE.VERIFIED
+    );
+    harness.provider.Interaction.find.mockResolvedValue(makeInteraction());
+
+    const res = await postConfirm(harness.base, ['notes:read']);
+
+    expect(res.status).toBe(201);
+    expect(grantInstances[0].save).toHaveBeenCalled();
   });
 
   it('should reject confirm bodies with unknown scopes', async () => {

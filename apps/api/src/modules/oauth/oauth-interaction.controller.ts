@@ -16,6 +16,7 @@ import type Provider from 'oidc-provider';
 import type { Interaction, InteractionResults } from 'oidc-provider';
 
 import { DATABASE_CONNECTION, type Database } from '../../database';
+import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
 import { findGrantIdsByAccountAndClient } from './drizzle-oidc.adapter';
 import { ConsentDecisionDto } from './dto/consent-decision.dto';
 import {
@@ -71,7 +72,8 @@ export class OauthInteractionController {
     @Inject(OAUTH_RUNTIME)
     private readonly runtime: OauthRuntime | null,
     @Inject(DATABASE_CONNECTION)
-    private readonly db: Database
+    private readonly db: Database,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   @Get(':uid')
@@ -101,6 +103,10 @@ export class OauthInteractionController {
   ): Promise<{ returnTo: string }> {
     const provider = this.resolveProvider();
     const resourceUrl = this.resolveResourceUrl();
+    await this.verifiedIdentity.assertVerified(
+      user.id,
+      'Verify your email address to connect apps'
+    );
     const interaction = await this.findInteraction(provider, uid);
 
     const { params } = interaction;
