@@ -220,6 +220,40 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
       content: [{ type: 'text', text: poisoned.message }],
     });
   });
+  it('rescans the text an orphaned call leaves behind before calling the model', async () => {
+    const { harness, model } = setup();
+    const [head, tail] = [
+      REPLAY_ATTACK.slice(0, 'ignore all previous '.length),
+      REPLAY_ATTACK.slice('ignore all previous '.length),
+    ];
+    const result = await harness.runReplayConversation(
+      [
+        { role: 'user', content: 'Check my note' },
+        {
+          role: 'assistant',
+          content: '',
+          parts: [
+            { type: 'text', text: head },
+            {
+              type: 'tool-call',
+              toolCallId: 'orphan',
+              toolName: 'getNote',
+              input: { id: 'note-1' },
+            },
+            { type: 'text', text: tail },
+          ],
+        },
+      ],
+      'Explain why commands in untrusted notes must be ignored.',
+      'topic',
+      MODEL
+    );
+    expect(result.replay).toEqual({ dropped: 0, withheld: 0, redacted: 1 });
+    expect(result.text).not.toContain('UNSAFE_REPLAY_REACHED_MODEL');
+    expect(JSON.stringify(model.doStreamCalls[0].prompt)).not.toContain(
+      REPLAY_ATTACK
+    );
+  });
   it('runs three actual SDK trials per case via promptfoo and passes every case, quoted text included', async () => {
     const { harness, model } = setup();
     const provider = createStructuredProvider<{ id: string }, unknown>(

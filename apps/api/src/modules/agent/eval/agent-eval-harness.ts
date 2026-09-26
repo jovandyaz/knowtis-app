@@ -27,7 +27,10 @@ import {
 } from '../domain/ports/agent-orchestrator.port';
 import { PENDING_MUTATION_STORE } from '../domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from '../domain/ports/retrieval.port';
-import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
+import {
+  coalesceReplayHistory,
+  sanitizeReplayHistory,
+} from '../domain/replay-input-sanitizer';
 import type { NoteFixtureSetName } from './fixtures/note-sets';
 import { resolveFixtureSet } from './fixtures/note-sets';
 import {
@@ -216,14 +219,15 @@ export class AgentEvalHarness {
     model: string
   ): Promise<EvalTranscript & { replay: ReplayOutcomes }> {
     const sanitized = sanitizeReplayHistory(history);
+    const replayed = coalesceReplayHistory(sanitized.messages);
     const transcript = await this.runConversation(
-      [...sanitized.messages, { role: 'user', content: latestUserContent }],
+      [...replayed.messages, { role: 'user', content: latestUserContent }],
       fixtureSet,
       model
     );
+    const detections = [...sanitized.detections, ...replayed.detections];
     const count = (disposition: AiInputDisposition) =>
-      sanitized.detections.filter((entry) => entry.disposition === disposition)
-        .length;
+      detections.filter((entry) => entry.disposition === disposition).length;
     return {
       ...transcript,
       replay: {

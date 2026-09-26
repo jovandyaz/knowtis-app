@@ -14,6 +14,7 @@ import {
   type AgentToolCallPart,
   type AgentToolResultPart,
 } from './agent-message';
+import { coalesceMessages } from './coalesce-messages';
 import { repairTranscriptOrphans } from './prune-transcript';
 import {
   NOTE_CONTENT_NOTE,
@@ -382,4 +383,30 @@ export function sanitizeReplayHistory(messages: readonly AgentMessage[]): {
     }
   }
   return { messages: repairTranscriptOrphans(replayed), detections };
+}
+
+/** Coalesces fitted history the way the provider receives it, then rescans every content-only assistant row: joining rows, flattening a tool turn to text, or repairing an orphaned call can bring together a hit no scanned row held. Such a row is redacted, or withheld whole as `REPLAY_REDACTION_MARKER`. User rows are left to the caller's seam guard. Each detection's `index` points into the returned messages. */
+export function coalesceReplayHistory(messages: readonly AgentMessage[]): {
+  messages: AgentMessage[];
+  detections: ReplayDetection[];
+} {
+  const detections: ReplayDetection[] = [];
+  const coalesced = coalesceMessages(messages).map((message, index) => {
+    if (message.role !== 'assistant' || message.parts?.length) {
+      return message;
+    }
+    const detection = detectAiInput(projectReplayText(message));
+    if (detection.safe) {
+      return message;
+    }
+    const text = neutralizeText(message.content);
+    detections.push({
+      index,
+      detection,
+      disposition: text.withheld ? 'withhold' : 'redact',
+      redactedSpans: text.redactedSpans,
+    });
+    return { ...message, content: text.value };
+  });
+  return { messages: coalesced, detections };
 }
