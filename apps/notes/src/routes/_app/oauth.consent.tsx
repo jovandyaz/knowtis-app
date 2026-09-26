@@ -23,7 +23,8 @@ export const Route = createFileRoute('/_app/oauth/consent')({
   beforeLoad: ({ location }) => {
     const { isAuthenticated, user } = authStore.getState();
     if (!isAuthenticated || user?.isAnonymous) {
-      // location.href carries the ?uid= capability through login and back.
+      // Signing in would drop the consent request unless the redirect keeps
+      // its ?uid= capability.
       throw redirect({ to: ROUTES.LOGIN, search: { redirect: location.href } });
     }
   },
