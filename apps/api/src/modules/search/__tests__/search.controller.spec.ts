@@ -208,6 +208,29 @@ describe('SearchController', () => {
     );
   });
 
+  it('should not respond until the reservation is released', async () => {
+    let finishRelease: () => void = () => undefined;
+    rateLimit.releaseReservation.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishRelease = resolve;
+      })
+    );
+    search.mockResolvedValue([hit('a')]);
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+    let settled = false;
+
+    const response = controller.search(user, dto, req).finally(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    finishRelease();
+    await expect(response).resolves.toEqual({ hits: [hit('a')] });
+  });
+
   it('should propagate retrieval errors and still release the reservation', async () => {
     search.mockRejectedValue(new Error('boom'));
     const dto = new SearchQueryDto();

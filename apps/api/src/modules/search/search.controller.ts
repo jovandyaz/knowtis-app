@@ -111,7 +111,7 @@ export class SearchController {
       const hits = await this.retrieval.search(user.id, query.q);
       return { hits: hits.slice(0, query.limit ?? DEFAULT_LIMIT) };
     } finally {
-      void this.rateLimit.releaseReservation(
+      await this.rateLimit.releaseReservation(
         user.id,
         estimatedTokens,
         0,
