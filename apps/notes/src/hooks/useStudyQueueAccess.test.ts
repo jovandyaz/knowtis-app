@@ -1,14 +1,14 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, type FeatureFlagKey } from '@knowtis/shared-types';
 
 import { useStudyQueueAccess } from './useStudyQueueAccess';
 
 const { flagsState, refetch, useFeatureFlag } = vi.hoisted(() => ({
   flagsState: { isPending: false, isError: false },
   refetch: vi.fn(),
-  useFeatureFlag: vi.fn<(key: string) => boolean>(),
+  useFeatureFlag: vi.fn<(key: FeatureFlagKey) => boolean>(),
 }));
 
 vi.mock('@knowtis/data-access-feature-flags', () => ({

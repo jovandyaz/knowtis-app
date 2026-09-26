@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { I18nService } from 'nestjs-i18n';
 import { describe, expect, it } from 'vitest';
 
 import { InvalidOauthJwksError } from '../../../config/oauth-public-keys';
@@ -11,10 +12,13 @@ import { OAUTH_PROVIDER } from '../oauth.tokens';
 
 @Global()
 @Module({
-  providers: [{ provide: DATABASE_CONNECTION, useValue: {} }],
-  exports: [DATABASE_CONNECTION],
+  providers: [
+    { provide: DATABASE_CONNECTION, useValue: {} },
+    { provide: I18nService, useValue: { translate: (key: string) => key } },
+  ],
+  exports: [DATABASE_CONNECTION, I18nService],
 })
-class StubDatabaseModule {}
+class StubInfrastructureModule {}
 
 function signingJwk(kid: string): Record<string, unknown> {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -53,7 +57,7 @@ async function bootstrapWith(rawJwks: string): Promise<void> {
           }),
         ],
       }),
-      StubDatabaseModule,
+      StubInfrastructureModule,
       OauthModule,
     ],
   }).compile();
@@ -71,7 +75,7 @@ describe('OauthModule bootstrap', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
-        StubDatabaseModule,
+        StubInfrastructureModule,
         OauthModule,
       ],
     }).compile();

@@ -7,6 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../../../config/env.config';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 
@@ -36,7 +38,9 @@ export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    const aiEnabled = await this.featureFlagsService.isEnabled('ai_enabled');
+    const aiEnabled = await this.featureFlagsService.isEnabled(
+      FEATURE_FLAG_KEYS.AI_ENABLED
+    );
     if (!aiEnabled) {
       this.logger.log('AI disabled — skipping Redis connection');
       return;

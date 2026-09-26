@@ -9,7 +9,6 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DATABASE_CONNECTION } from '../../../database';
-import { FeatureFlagsService } from '../../feature-flags';
 import {
   grantBelongsToAccount,
   listGrantsByAccount,
@@ -102,21 +101,18 @@ interface Harness {
   app: NestExpressApplication;
   base: string;
   provider: MockProvider;
-  flags: { isEnabled: ReturnType<typeof vi.fn> };
 }
 
 async function buildHarness(provider: MockProvider | null): Promise<Harness> {
   const handle: OidcProviderHandle | null = provider
     ? ({ provider, callback: vi.fn() } as unknown as OidcProviderHandle)
     : null;
-  const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
 
   const moduleRef: TestingModule = await Test.createTestingModule({
     controllers: [OauthGrantsController],
     providers: [
       { provide: OAUTH_PROVIDER, useValue: handle },
       { provide: DATABASE_CONNECTION, useValue: {} },
-      { provide: FeatureFlagsService, useValue: flags },
     ],
   })
     .overrideGuard(JwtAuthGuard)
@@ -135,7 +131,6 @@ async function buildHarness(provider: MockProvider | null): Promise<Harness> {
     app,
     base: await app.getUrl(),
     provider: provider as MockProvider,
-    flags,
   };
 }
 
@@ -260,16 +255,6 @@ describe('OauthGrantsController', () => {
       expect(body.grants[0].scopes).toEqual(['notes:read']);
     });
 
-    it('should 404 when the mcp_oauth flag is off without touching the store', async () => {
-      harness = await buildHarness(makeProvider());
-      harness.flags.isEnabled.mockResolvedValue(false);
-
-      const res = await authed(harness.base, '/api/v1/oauth/grants');
-
-      expect(res.status).toBe(404);
-      expect(listGrantsByAccount).not.toHaveBeenCalled();
-    });
-
     it('should 404 when the provider handle is null', async () => {
       harness = await buildHarness(null);
 
@@ -328,18 +313,6 @@ describe('OauthGrantsController', () => {
         harness.provider.AccessToken.revokeByGrantId
       ).not.toHaveBeenCalled();
       expect(harness.provider.Grant.adapter.destroy).not.toHaveBeenCalled();
-    });
-
-    it('should 404 when the mcp_oauth flag is off', async () => {
-      harness = await buildHarness(makeProvider());
-      harness.flags.isEnabled.mockResolvedValue(false);
-
-      const res = await authed(harness.base, '/api/v1/oauth/grants/grant-1', {
-        method: 'DELETE',
-      });
-
-      expect(res.status).toBe(404);
-      expect(grantBelongsToAccount).not.toHaveBeenCalled();
     });
 
     it('should reject anonymous callers with 401', async () => {

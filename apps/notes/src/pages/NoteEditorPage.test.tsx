@@ -61,20 +61,12 @@ vi.mock('@/components/organization/NotePropertiesRow', () => ({
 }));
 
 const aiEnabled = vi.fn<() => boolean>();
-const voiceNotesEnabled = vi.fn<() => boolean>();
-const autoOrganizeEnabled = vi.fn<() => boolean>();
 
 vi.mock('@/stores/ai.store', () => ({
-  useAIStore: (
-    selector: (s: { aiEnabled: boolean; voiceNotesEnabled: boolean }) => unknown
-  ) =>
-    selector({
-      aiEnabled: aiEnabled(),
-      voiceNotesEnabled: voiceNotesEnabled(),
-    }),
+  useAIStore: (selector: (s: { aiEnabled: boolean }) => unknown) =>
+    selector({ aiEnabled: aiEnabled() }),
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
-  useFeatureFlag: () => autoOrganizeEnabled(),
   useFeatureFlags: () => ({ isPending: false }),
 }));
 
@@ -182,11 +174,9 @@ describe('NoteEditorPage', () => {
     noteQuery.mockReturnValue(loadedNote);
     authUser.mockReturnValue({ isAnonymous: false });
     aiEnabled.mockReturnValue(true);
-    voiceNotesEnabled.mockReturnValue(true);
-    autoOrganizeEnabled.mockReturnValue(true);
   });
 
-  it('offers the voice note entry points when AI and voice notes are both enabled', () => {
+  it('offers the voice note entry points when AI is on', () => {
     renderWithClient(<NoteEditorPage />);
 
     expect(capturedOnVoiceNote).toBeInstanceOf(Function);
@@ -220,15 +210,6 @@ describe('NoteEditorPage', () => {
     editor.destroy();
   });
 
-  it('hides the voice note entry points when voice notes are disabled', () => {
-    voiceNotesEnabled.mockReturnValue(false);
-
-    renderWithClient(<NoteEditorPage />);
-
-    expect(capturedOnVoiceNote).toBeUndefined();
-    expect(screen.queryByTestId('voice-note-recorder')).not.toBeInTheDocument();
-  });
-
   it('hides the voice note entry points when AI is disabled', () => {
     aiEnabled.mockReturnValue(false);
 
@@ -238,7 +219,7 @@ describe('NoteEditorPage', () => {
     expect(screen.queryByTestId('voice-note-recorder')).not.toBeInTheDocument();
   });
 
-  it('offers the suggestion affordance when both AI flags are on', () => {
+  it('offers the suggestion affordance when AI is on', () => {
     renderWithClient(<NoteEditorPage />);
 
     expect(propertiesRowProps.mock.calls[0][0].onSuggest).toBeInstanceOf(

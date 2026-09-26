@@ -5,6 +5,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { authStore } from '@/auth';
 import { ConsentCard } from '@/components/oauth/ConsentCard';
 import { ROUTES } from '@/config';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { z } from 'zod';
 
 import {
@@ -22,7 +23,8 @@ export const Route = createFileRoute('/_app/oauth/consent')({
   beforeLoad: ({ location }) => {
     const { isAuthenticated, user } = authStore.getState();
     if (!isAuthenticated || user?.isAnonymous) {
-      // location.href carries the ?uid= capability through login and back.
+      // Signing in would drop the consent request unless the redirect keeps
+      // its ?uid= capability.
       throw redirect({ to: ROUTES.LOGIN, search: { redirect: location.href } });
     }
   },
@@ -34,6 +36,7 @@ function OauthConsentRoute() {
   const { uid } = Route.useSearch();
   const interaction = useOauthInteraction(uid);
   const decision = useConsentDecision(uid);
+  const verifyEmailGate = useVerifyEmailGate();
 
   return (
     <div className="flex min-h-[70vh] w-full items-center justify-center p-4">
@@ -55,10 +58,13 @@ function OauthConsentRoute() {
         <ConsentCard
           details={interaction.data}
           onApprove={() =>
-            decision.mutate({
-              action: 'approve',
-              approvedScopes: interaction.data.scopes,
-            })
+            decision.mutate(
+              {
+                action: 'approve',
+                approvedScopes: interaction.data.scopes,
+              },
+              { onError: verifyEmailGate.handleError }
+            )
           }
           onDeny={() => decision.mutate({ action: 'deny' })}
           isApproving={

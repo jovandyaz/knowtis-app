@@ -12,9 +12,8 @@ export const SUPPORTED_AI_ACTIONS = AI_ACTIONS;
 export type SupportedAIAction = AIActionType;
 
 /**
- * Actions whose own endpoint carries a flag narrower than `ai_enabled`:
- * `/ai/voice-note` behind `voice_notes_enabled`, `/ai/organization/suggest`
- * behind `ai_auto_organize`.
+ * Actions owned by a dedicated endpoint: `/ai/voice-note` and
+ * `/ai/organization/suggest`.
  */
 const DEDICATED_ENDPOINT_ACTIONS = [
   AI_ACTION.SUGGEST_ORGANIZATION,
@@ -29,9 +28,9 @@ export type CompletionAIAction = Exclude<
 
 /**
  * Actions the generic completion surface accepts. `/ai/complete` and the
- * `ai:complete` socket event are gated on `ai_enabled` alone, so an action
- * owned by a narrower-flagged endpoint must stay out of this set — otherwise
- * that flag is inert and callers reach the action through the generic route.
+ * `ai:complete` socket event skip the checks a dedicated endpoint applies to
+ * its action, such as note ownership or a tighter throttle, so an action owned
+ * by one must stay out of this set — otherwise callers reach it around them.
  */
 export const COMPLETION_AI_ACTIONS = SUPPORTED_AI_ACTIONS.filter(
   (action): action is CompletionAIAction =>

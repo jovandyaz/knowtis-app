@@ -4,6 +4,7 @@ import { resolveAdminAccess } from '@/auth/admin-gate';
 import { authStore } from '@/auth/setup';
 import { AppShell } from '@/components/AppShell';
 import { ROUTES } from '@/config/routes.config';
+import { NotFoundPage } from '@/pages/NotFoundPage';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: () => {
@@ -21,4 +22,5 @@ export const Route = createFileRoute('/_authenticated')({
       <Outlet />
     </AppShell>
   ),
+  notFoundComponent: NotFoundPage,
 });

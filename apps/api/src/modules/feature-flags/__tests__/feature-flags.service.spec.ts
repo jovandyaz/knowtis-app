@@ -2,6 +2,8 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 import { AdminAuditService } from '../../admin/audit/admin-audit.service';
 import {
   FEATURE_FLAG_REPOSITORY,
@@ -69,32 +71,36 @@ describe('FeatureFlagsService', () => {
     it('should return cached value without calling repository', async () => {
       cache.get.mockResolvedValue(true);
 
-      const result = await service.isEnabled('test_flag');
+      const result = await service.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED);
 
       expect(result).toBe(true);
-      expect(cache.get).toHaveBeenCalledWith('ff:test_flag');
+      expect(cache.get).toHaveBeenCalledWith('ff:ai_enabled');
       expect(repository.findByKey).not.toHaveBeenCalled();
     });
 
     it('should query repository on cache miss and cache the result', async () => {
       cache.get.mockResolvedValue(undefined);
-      repository.findByKey.mockResolvedValue(createMockFlag({ enabled: true }));
+      repository.findByKey.mockResolvedValue(
+        createMockFlag({ key: FEATURE_FLAG_KEYS.AI_ENABLED, enabled: true })
+      );
 
-      const result = await service.isEnabled('test_flag');
+      const result = await service.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED);
 
       expect(result).toBe(true);
-      expect(repository.findByKey).toHaveBeenCalledWith('test_flag');
-      expect(cache.set).toHaveBeenCalledWith('ff:test_flag', true, 30000);
+      expect(repository.findByKey).toHaveBeenCalledWith(
+        FEATURE_FLAG_KEYS.AI_ENABLED
+      );
+      expect(cache.set).toHaveBeenCalledWith('ff:ai_enabled', true, 30000);
     });
 
-    it('should return false when flag is not found in DB', async () => {
+    it('should read a known flag as disabled when its row is absent from the DB', async () => {
       cache.get.mockResolvedValue(undefined);
       repository.findByKey.mockResolvedValue(null);
 
-      const result = await service.isEnabled('nonexistent');
+      const result = await service.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED);
 
       expect(result).toBe(false);
-      expect(cache.set).toHaveBeenCalledWith('ff:nonexistent', false, 30000);
+      expect(cache.set).toHaveBeenCalledWith('ff:ai_enabled', false, 30000);
     });
   });
 

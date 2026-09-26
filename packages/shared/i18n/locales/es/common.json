@@ -263,6 +263,7 @@
       "alreadyResolved": "Esta solicitud ya fue respondida. Reinicia la conexión desde tu cliente MCP.",
       "expired": "Esta solicitud expiró. Reinicia la conexión desde tu cliente MCP.",
       "sessionExpired": "Tu sesión expiró. Inicia sesión de nuevo y reinicia la conexión desde tu cliente MCP.",
+      "emailNotVerified": "Verifica tu correo electrónico para conectar aplicaciones y luego vuelve a aprobar.",
       "retryable": "No pudimos completar tu solicitud. Inténtalo de nuevo."
     }
   },

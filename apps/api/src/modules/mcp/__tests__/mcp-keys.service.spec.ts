@@ -74,15 +74,6 @@ describe('McpKeysService.create', () => {
     keyHash: McpKeysService.hashKey(key),
   });
 
-  it('mints a key for an unverified user while the gate flag is off', async () => {
-    const { service, values } = makeService(IDENTITY_STATE.GATE_OFF);
-
-    const { key, record } = await service.create('user-1', 'laptop');
-
-    expect(record).toEqual({ id: 'key-1' });
-    expect(values).toHaveBeenCalledWith(persistedRecordFor(key));
-  });
-
   it('refuses an unverified user with EMAIL_NOT_VERIFIED and writes nothing', async () => {
     const { service, insert } = makeService(IDENTITY_STATE.UNVERIFIED);
 

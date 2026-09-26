@@ -24,11 +24,6 @@ export const ADMIN_SECTIONS = [
     description: 'Change the default and fast models live.',
   },
   {
-    to: ROUTES.FEATURE_FLAGS,
-    label: 'Feature Flags',
-    description: 'Toggle product features live.',
-  },
-  {
     to: ROUTES.AUDIT,
     label: 'Audit Log',
     description: 'Review admin actions.',

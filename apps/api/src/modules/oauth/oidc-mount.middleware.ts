@@ -2,11 +2,8 @@ import type { INestApplication } from '@nestjs/common';
 import express from 'express';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
-import { FeatureFlagsService } from '../feature-flags';
 import { OAUTH_PROVIDER } from './oauth.tokens';
 import type { OidcProviderHandle } from './oidc-provider.factory';
-
-export const MCP_OAUTH_FLAG = 'mcp_oauth';
 
 const OAUTH_PREFIX = '/oauth';
 const WELL_KNOWN_PATHS = new Set([
@@ -23,9 +20,9 @@ export function isOauthPath(path: string): boolean {
 }
 
 /**
- * Forwards /oauth/* and the root well-knowns to oidc-provider, checking the
- * mcp_oauth flag per request so flipping it needs no restart. Anything not
- * handled falls through to Nest's router.
+ * Forwards /oauth/* and the root well-knowns to oidc-provider. The mount
+ * stays dormant only when the OIDC provider handle is null (the OAuth env is
+ * unset); anything else not handled falls through to Nest's router.
  *
  * oidc-provider derives its mount prefix from originalUrl minus url, so the
  * /oauth prefix is stripped from url (and prepended to originalUrl for the
@@ -34,13 +31,9 @@ export function isOauthPath(path: string): boolean {
  */
 export function createOidcMount(app: INestApplication): RequestHandler {
   const handle = app.get<OidcProviderHandle | null>(OAUTH_PROVIDER);
-  const flags = app.get(FeatureFlagsService);
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!handle || !isOauthPath(req.path)) {
-        return next();
-      }
-      if (!(await flags.isEnabled(MCP_OAUTH_FLAG))) {
         return next();
       }
       if (req.path.startsWith(OAUTH_PREFIX)) {

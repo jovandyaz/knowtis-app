@@ -2,18 +2,9 @@ import { Body, Controller, Post, VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { exportJWK, generateKeyPair } from 'jose';
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Database } from '../../../database';
-import { FeatureFlagsService } from '../../feature-flags';
 import { OAUTH_PROVIDER } from '../oauth.tokens';
 import {
   applyBodyParsersExcludingOauth,
@@ -57,19 +48,14 @@ async function generateTestJwks(): Promise<{
 interface Harness {
   app: NestExpressApplication;
   base: string;
-  flags: { isEnabled: ReturnType<typeof vi.fn> };
 }
 
 async function buildHarness(
   handle: OidcProviderHandle | null
 ): Promise<Harness> {
-  const flags = { isEnabled: vi.fn() };
   const moduleRef: TestingModule = await Test.createTestingModule({
     controllers: [EchoController],
-    providers: [
-      { provide: OAUTH_PROVIDER, useValue: handle },
-      { provide: FeatureFlagsService, useValue: flags },
-    ],
+    providers: [{ provide: OAUTH_PROVIDER, useValue: handle }],
   }).compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>({
@@ -85,7 +71,7 @@ async function buildHarness(
     prefix: 'v',
   });
   await app.listen(0, '127.0.0.1');
-  return { app, base: await app.getUrl(), flags };
+  return { app, base: await app.getUrl() };
 }
 
 describe('OIDC mount (provider available)', () => {
@@ -107,28 +93,7 @@ describe('OIDC mount (provider available)', () => {
     await harness.app.close();
   });
 
-  beforeEach(() => {
-    harness.flags.isEnabled.mockReset();
-  });
-
-  it('should 404 all oauth surfaces when mcp_oauth is off', async () => {
-    harness.flags.isEnabled.mockResolvedValue(false);
-
-    const discovery = await fetch(
-      `${harness.base}/.well-known/oauth-authorization-server`,
-      { headers: PROXY_HEADERS }
-    );
-    const jwks = await fetch(`${harness.base}/oauth/jwks`, {
-      headers: PROXY_HEADERS,
-    });
-
-    expect(discovery.status).toBe(404);
-    expect(jwks.status).toBe(404);
-  });
-
-  it('should serve discovery with S256, CIMD and none auth when the flag is on', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
+  it('should serve discovery with S256, CIMD and none auth', async () => {
     const res = await fetch(
       `${harness.base}/.well-known/oauth-authorization-server`,
       { headers: PROXY_HEADERS }
@@ -143,8 +108,6 @@ describe('OIDC mount (provider available)', () => {
   });
 
   it('should serve the same discovery document at openid-configuration', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(
       `${harness.base}/.well-known/openid-configuration`,
       { headers: PROXY_HEADERS }
@@ -156,8 +119,6 @@ describe('OIDC mount (provider available)', () => {
   });
 
   it('should advertise absolute /oauth-prefixed endpoint URLs in discovery', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(
       `${harness.base}/.well-known/oauth-authorization-server`,
       { headers: PROXY_HEADERS }
@@ -174,8 +135,6 @@ describe('OIDC mount (provider available)', () => {
   });
 
   it('publishes both rotation keys without private parameters', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(`${harness.base}/oauth/jwks`, {
       headers: PROXY_HEADERS,
     });
@@ -201,25 +160,7 @@ describe('OIDC mount (provider available)', () => {
     ).toBe(true);
   });
 
-  it('should honour the flag per request without a restart', async () => {
-    harness.flags.isEnabled.mockResolvedValue(false);
-    const off = await fetch(
-      `${harness.base}/.well-known/oauth-authorization-server`,
-      { headers: PROXY_HEADERS }
-    );
-    expect(off.status).toBe(404);
-
-    harness.flags.isEnabled.mockResolvedValue(true);
-    const on = await fetch(
-      `${harness.base}/.well-known/oauth-authorization-server`,
-      { headers: PROXY_HEADERS }
-    );
-    expect(on.status).toBe(200);
-  });
-
   it('should let oidc-provider read the raw body on /oauth/token', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(`${harness.base}/oauth/token`, {
       method: 'POST',
       headers: {
@@ -236,8 +177,6 @@ describe('OIDC mount (provider available)', () => {
   });
 
   it('should fall through to Nest 404 for non-oauth paths sharing the prefix', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(`${harness.base}/oauthX`, {
       headers: PROXY_HEADERS,
     });
@@ -248,8 +187,6 @@ describe('OIDC mount (provider available)', () => {
   });
 
   it('should still parse JSON bodies on non-oauth routes', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(`${harness.base}/api/v1/echo`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -262,8 +199,6 @@ describe('OIDC mount (provider available)', () => {
   });
 
   it('should still parse urlencoded bodies on non-oauth routes', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
     const res = await fetch(`${harness.base}/api/v1/echo`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -287,9 +222,7 @@ describe('OIDC mount (provider unavailable)', () => {
     await harness.app.close();
   });
 
-  it('should 404 oauth surfaces even when the flag is on', async () => {
-    harness.flags.isEnabled.mockResolvedValue(true);
-
+  it('should 404 oauth surfaces when the provider is not configured', async () => {
     const discovery = await fetch(
       `${harness.base}/.well-known/oauth-authorization-server`,
       { headers: PROXY_HEADERS }

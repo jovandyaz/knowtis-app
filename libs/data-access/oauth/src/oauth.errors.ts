@@ -1,13 +1,17 @@
-import { ApiClientError } from '@knowtis/api-client';
+import { ApiClientError, isEmailNotVerifiedError } from '@knowtis/api-client';
 
 export type ConsentDecisionErrorKind =
   | 'alreadyResolved'
   | 'expired'
   | 'sessionExpired'
+  | 'emailNotVerified'
   | 'retryable';
 
 /** Kinds that cannot be retried; the status map only ever holds these. */
-type TerminalDecisionErrorKind = Exclude<ConsentDecisionErrorKind, 'retryable'>;
+type TerminalDecisionErrorKind = Exclude<
+  ConsentDecisionErrorKind,
+  'emailNotVerified' | 'retryable'
+>;
 
 export interface ConsentDecisionError {
   kind: ConsentDecisionErrorKind;
@@ -24,10 +28,14 @@ const TERMINAL_KIND_BY_STATUS: Record<number, TerminalDecisionErrorKind> = {
 
 /**
  * Classifies a consent confirm/abort failure by HTTP status. Terminal kinds
- * (409 replay, 404/410 expiry, 401 session death) cannot be retried; anything
- * else (5xx, network) is retryable.
+ * (409 replay, 404/410 expiry, 401 session death) cannot be retried; an
+ * unverified email can be retried once verified; anything else (5xx, network)
+ * is retryable.
  */
 export function classifyConsentError(error: unknown): ConsentDecisionError {
+  if (isEmailNotVerifiedError(error)) {
+    return { kind: 'emailNotVerified', terminal: false };
+  }
   const status = ApiClientError.isApiClientError(error) ? error.status : 0;
   const kind = TERMINAL_KIND_BY_STATUS[status];
   return kind
@@ -35,7 +43,7 @@ export function classifyConsentError(error: unknown): ConsentDecisionError {
     : { kind: 'retryable', terminal: false };
 }
 
-/** True when the API answered 404 — the MCP OAuth feature is off. */
+/** True when the API answered 404 — OAuth is not configured on the server. */
 export function isOauthDisabledError(error: unknown): boolean {
   return ApiClientError.isApiClientError(error) && error.status === 404;
 }

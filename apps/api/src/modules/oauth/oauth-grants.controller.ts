@@ -14,13 +14,11 @@ import {
 import type Provider from 'oidc-provider';
 
 import { DATABASE_CONNECTION, type Database } from '../../database';
-import { FeatureFlagsService } from '../feature-flags';
 import {
   grantBelongsToAccount,
   listGrantsByAccount,
 } from './drizzle-oidc.adapter';
 import { OAUTH_PROVIDER } from './oauth.tokens';
-import { MCP_OAUTH_FLAG } from './oidc-mount.middleware';
 import type { OidcProviderHandle } from './oidc-provider.factory';
 
 interface ConnectedGrant {
@@ -100,8 +98,7 @@ export class OauthGrantsController {
     @Inject(OAUTH_PROVIDER)
     private readonly handle: OidcProviderHandle | null,
     @Inject(DATABASE_CONNECTION)
-    private readonly db: Database,
-    private readonly featureFlags: FeatureFlagsService
+    private readonly db: Database
   ) {}
 
   @Get()
@@ -109,7 +106,7 @@ export class OauthGrantsController {
   async list(
     @CurrentUser() user: RequestUser
   ): Promise<{ grants: ConnectedGrant[] }> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const rows = await listGrantsByAccount(this.db, user.id);
 
     const grants = await Promise.all(
@@ -139,7 +136,7 @@ export class OauthGrantsController {
     @Param('grantId') grantId: string,
     @CurrentUser() user: RequestUser
   ): Promise<void> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     if (!(await grantBelongsToAccount(this.db, grantId, user.id))) {
       throw new NotFoundException();
     }
@@ -158,11 +155,8 @@ export class OauthGrantsController {
     });
   }
 
-  private async resolveProvider(): Promise<Provider> {
+  private resolveProvider(): Provider {
     if (!this.handle) {
-      throw new NotFoundException();
-    }
-    if (!(await this.featureFlags.isEnabled(MCP_OAUTH_FLAG))) {
       throw new NotFoundException();
     }
     return this.handle.provider;

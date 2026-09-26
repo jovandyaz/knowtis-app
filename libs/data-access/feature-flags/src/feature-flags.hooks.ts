@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { httpClient } from '@knowtis/api-client';
-import type { FeatureFlagDto } from '@knowtis/shared-types';
+import type { FeatureFlagDto, FeatureFlagKey } from '@knowtis/shared-types';
 
 export const featureFlagsQueryKeys = {
   all: ['feature-flags'] as const,
@@ -16,7 +16,7 @@ export function useFeatureFlags() {
   });
 }
 
-export function useFeatureFlag(key: string): boolean {
+export function useFeatureFlag(key: FeatureFlagKey): boolean {
   const { data } = useFeatureFlags();
   return data?.find((f) => f.key === key)?.enabled ?? false;
 }

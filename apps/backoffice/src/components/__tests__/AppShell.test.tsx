@@ -126,7 +126,7 @@ describe('AppShell', () => {
         await screen.findByRole('dialog', { name: NAV_SHEET_TITLE })
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('link', { name: 'Feature Flags' })
+        screen.getByRole('link', { name: 'Audit Log' })
       ).toBeInTheDocument();
       expect(
         screen.getByRole('button', { name: 'Sign out' })

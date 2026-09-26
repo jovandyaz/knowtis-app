@@ -56,7 +56,7 @@ function pending(overrides: Partial<NotesQueryResult>): NotesQueryResult {
 
 const useNotes = vi.fn<(filters?: NotesListFilters) => NotesQueryResult>();
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
-const aiState = { aiEnabled: false, voiceNotesEnabled: false };
+const aiState = { aiEnabled: false };
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useNotes: (filters?: NotesListFilters) => useNotes(filters),
@@ -139,13 +139,11 @@ describe('NoteList', () => {
     useNotes.mockReturnValue(loaded([]));
     authUser.mockReturnValue({ isAnonymous: false });
     aiState.aiEnabled = false;
-    aiState.voiceNotesEnabled = false;
     useNotesSearchStore.setState({ query: '', focusRequested: false });
   });
 
-  it('offers the voice recorder when AI and voice notes are both enabled', async () => {
+  it('offers the voice recorder when AI is on', async () => {
     aiState.aiEnabled = true;
-    aiState.voiceNotesEnabled = true;
 
     await renderAt('/notes');
 
@@ -154,20 +152,8 @@ describe('NoteList', () => {
     ).toBeInTheDocument();
   });
 
-  it('hides the voice recorder when voice notes are disabled', async () => {
-    aiState.aiEnabled = true;
-    aiState.voiceNotesEnabled = false;
-
-    await renderAt('/notes');
-
-    expect(
-      screen.queryByRole('button', { name: 'voice-note-recorder' })
-    ).not.toBeInTheDocument();
-  });
-
   it('hides the voice recorder when AI is disabled', async () => {
     aiState.aiEnabled = false;
-    aiState.voiceNotesEnabled = true;
 
     await renderAt('/notes');
 

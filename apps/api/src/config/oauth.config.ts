@@ -20,14 +20,14 @@ function warnDormantOnce(reason: string): void {
   }
   dormantWarned = true;
   logger.warn(
-    `OAuth config unavailable (${reason}); mcp_oauth stays dormant even if the flag is on.`
+    `OAuth config unavailable (${reason}); the OAuth mount stays dormant.`
   );
 }
 
 /**
  * Resolves the OAuth authorization-server config from validated env, or null
- * when any piece is missing. A null return keeps the mcp_oauth module dormant
- * even when the feature flag is on; the reason is warned once.
+ * when any piece is missing. A null return keeps the OAuth mount dormant; the
+ * reason is warned once.
  */
 export function getOauthConfig(
   config: ConfigService<EnvConfig, true>

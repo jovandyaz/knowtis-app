@@ -285,16 +285,6 @@ describe('ByokService', () => {
       );
     };
 
-    it('stores a key for an unverified user while the gate flag is off', async () => {
-      const { service, repo, store } = makeService({
-        identity: IDENTITY_STATE.GATE_OFF,
-      });
-
-      await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
-
-      expectKeyStoredForU1(repo, store);
-    });
-
     it('refuses an unverified user with EMAIL_NOT_VERIFIED and stores nothing', async () => {
       const { service, repo, validateKey } = makeService({
         identity: IDENTITY_STATE.UNVERIFIED,

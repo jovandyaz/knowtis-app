@@ -23,12 +23,13 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import type {
-  AssignableModelDto,
-  CatalogModelDto,
-  CatalogOverviewDto,
-  CatalogSyncResultDto,
-  PaginatedCandidatesDto,
+import {
+  FEATURE_FLAG_KEYS,
+  type AssignableModelDto,
+  type CatalogModelDto,
+  type CatalogOverviewDto,
+  type CatalogSyncResultDto,
+  type PaginatedCandidatesDto,
 } from '@knowtis/shared-types';
 
 import {
@@ -56,7 +57,7 @@ const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 @ApiTags('AI')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-@RequireFeatureFlag('ai_enabled')
+@RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Roles('admin')
 @Controller('ai/catalog')
 export class AiCatalogController {

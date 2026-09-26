@@ -2,6 +2,8 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 
+import type { FeatureFlagKey } from '@knowtis/shared-types';
+
 import { AdminAuditService } from '../admin/audit/admin-audit.service';
 import {
   FEATURE_FLAG_REPOSITORY,
@@ -24,7 +26,7 @@ export class FeatureFlagsService {
     private readonly adminAuditService: AdminAuditService
   ) {}
 
-  async isEnabled(key: string): Promise<boolean> {
+  async isEnabled(key: FeatureFlagKey): Promise<boolean> {
     const cacheKey = `${CACHE_PREFIX}${key}`;
 
     const cached = await this.cache.get<boolean>(cacheKey);

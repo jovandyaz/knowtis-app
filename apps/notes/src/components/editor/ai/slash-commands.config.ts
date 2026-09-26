@@ -33,10 +33,8 @@ export interface SlashCommandItem {
   action: (editor: Editor, range: Range) => void;
 }
 
-function buildAISlashCommands(voiceNotesEnabled: boolean): SlashCommandItem[] {
-  return getAIActionsForContext(AI_MENU_CONTEXT.CURSOR, {
-    voiceNotesEnabled,
-  }).map((config) => ({
+function buildAISlashCommands(): SlashCommandItem[] {
+  return getAIActionsForContext(AI_MENU_CONTEXT.CURSOR).map((config) => ({
     id: config.id,
     icon: config.icon,
     labelKey: config.labelKey,
@@ -204,20 +202,15 @@ const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
   },
 ];
 
-const SLASH_COMMANDS_WITH_VOICE: SlashCommandItem[] = [
-  ...buildAISlashCommands(true),
-  ...FORMATTING_SLASH_COMMANDS,
-];
-
-const SLASH_COMMANDS_WITHOUT_VOICE: SlashCommandItem[] = [
-  ...buildAISlashCommands(false),
+const SLASH_COMMANDS_WITH_AI: SlashCommandItem[] = [
+  ...buildAISlashCommands(),
   ...FORMATTING_SLASH_COMMANDS,
 ];
 
 export function filterSlashCommands(query: string): SlashCommandItem[] {
-  const commands = useAIStore.getState().voiceNotesEnabled
-    ? SLASH_COMMANDS_WITH_VOICE
-    : SLASH_COMMANDS_WITHOUT_VOICE;
+  const commands = useAIStore.getState().aiEnabled
+    ? SLASH_COMMANDS_WITH_AI
+    : FORMATTING_SLASH_COMMANDS;
 
   if (!query) {
     return commands;
