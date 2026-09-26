@@ -4,7 +4,6 @@ import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../config/env.config';
 import { getOauthConfig } from '../../config/oauth.config';
 import { DATABASE_CONNECTION, type Database } from '../../database';
-import { FeatureFlagsModule } from '../feature-flags';
 import { OauthGrantsController } from './oauth-grants.controller';
 import { OauthInteractionController } from './oauth-interaction.controller';
 import {
@@ -28,7 +27,6 @@ export class OauthInitializationError extends Error {
 }
 
 @Module({
-  imports: [FeatureFlagsModule],
   controllers: [OauthInteractionController, OauthGrantsController],
   providers: [
     {

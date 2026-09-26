@@ -179,7 +179,7 @@ export class OauthInteractionController {
     );
   }
 
-  private async resolveProvider(): Promise<Provider> {
+  private resolveProvider(): Provider {
     if (!this.handle) {
       throw new NotFoundException();
     }
