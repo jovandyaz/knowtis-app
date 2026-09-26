@@ -495,6 +495,83 @@ describe('StreamTextHandler', () => {
     expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
   });
 
+  it('settles the budget once when delivering the finished stream throws', async () => {
+    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      {
+        ...callbacks,
+        onDone: () => {
+          throw new Error('socket write failed');
+        },
+        onError,
+      }
+    );
+
+    expect(recordSpy).toHaveBeenCalledTimes(1);
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not record a settled stream again when the client aborts afterwards', async () => {
+    const controller = new AbortController();
+    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      {
+        ...callbacks,
+        onDone: () => {
+          controller.abort();
+          throw new Error('socket closed');
+        },
+      },
+      controller.signal
+    );
+
+    expect(recordSpy).toHaveBeenCalledTimes(1);
+    expect(recordSpy.mock.calls[0][3]).toEqual({
+      mode: 'stream',
+      aborted: false,
+    });
+    expect(releaseSpy).not.toHaveBeenCalled();
+  });
+
+  it('releases the reservation once when a chunk cannot be delivered', async () => {
+    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      {
+        ...callbacks,
+        onChunk: () => {
+          throw new Error('socket write failed');
+        },
+      }
+    );
+
+    expect(releaseSpy).toHaveBeenCalledTimes(1);
+    expect(recordSpy).not.toHaveBeenCalled();
+    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
+  });
+
   it('records estimated partial usage instead of {0,0} when the client aborts', async () => {
     const controller = new AbortController();
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({

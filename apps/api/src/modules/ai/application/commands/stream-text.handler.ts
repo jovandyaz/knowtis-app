@@ -84,6 +84,7 @@ export class StreamTextHandler {
 
     const { context } = preflight;
     const collectedChunks: string[] = [];
+    let usageSettled = false;
 
     try {
       const streamResult = this.aiProvider.streamCompletion(
@@ -156,6 +157,7 @@ export class StreamTextHandler {
         },
         { mode: 'stream', aborted }
       );
+      usageSettled = true;
 
       callbacks.onDone({
         inputTokens,
@@ -164,6 +166,15 @@ export class StreamTextHandler {
         costUsd: usage.costUsd,
       });
     } catch (error) {
+      if (usageSettled) {
+        this.logger.error({
+          event: 'ai.stream.done_failed',
+          requestId: context.requestId,
+          userId: input.userId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        return;
+      }
       if (signal?.aborted) {
         const outputTokens = estimateTokenCount(collectedChunks.join(''));
         const usage = TokenUsage.create(
