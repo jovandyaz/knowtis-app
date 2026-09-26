@@ -16,7 +16,11 @@ import {
 import type { Server } from 'socket.io';
 import { z } from 'zod';
 
-import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
+import {
+  AI_LANGUAGES,
+  AI_TONES,
+  COMPLETION_AI_ACTIONS,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
@@ -29,7 +33,6 @@ import {
 import { SocketTokenExpiry } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
-import { COMPLETION_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
 
 const aiCompletePayloadSchema = z.object({
   action: z.enum(COMPLETION_AI_ACTIONS),

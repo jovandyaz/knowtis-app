@@ -23,9 +23,9 @@ import { toast } from 'sonner';
 import { AI_BLOCK_NAME, AI_BLOCK_STATUS } from '@knowtis/editor-schema';
 import {
   AI_ACTION,
-  type AIAction,
   type AILanguage,
   type AITone,
+  type CompletionAIAction,
 } from '@knowtis/shared-types';
 
 export const AI_MENU_CONTEXT = {
@@ -46,7 +46,7 @@ export interface AIMenuActionConfig {
   contexts: readonly AIMenuContext[];
   keywords: readonly string[];
   kind: AIActionKind;
-  action?: AIAction;
+  action?: CompletionAIAction;
   submenu?: AISubmenu;
   requiresContent?: boolean;
 }
