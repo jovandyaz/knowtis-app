@@ -10,6 +10,7 @@ export interface InputDetectionRow {
   readonly detection: AiInputDetection;
   readonly disposition: AiInputDisposition;
   readonly role?: 'user' | 'assistant' | 'tool';
+  readonly redactedSpans: number;
 }
 
 export interface DroppedUserTurn {
@@ -28,7 +29,11 @@ export function logInputDetections(
   },
   droppedUserTurn?: DroppedUserTurn
 ): void {
-  const blocked = rows.filter((row) => row.disposition === 'block').length;
+  const count = (disposition: AiInputDisposition) =>
+    rows.filter((row) => row.disposition === disposition).length;
+  const blocked = count('block');
+  const withheld = count('withhold');
+  const redacted = count('redact');
   const metadata = {
     surface: context.surface,
     userId: context.userId,
@@ -40,7 +45,6 @@ export function logInputDetections(
     logger.warn({
       event: 'ai.input_guard.detected',
       ...metadata,
-      observed: rows.length - blocked,
       blocked,
       rows: rows.map((row) => ({
         ...(row.role ? { role: row.role } : {}),
@@ -48,6 +52,7 @@ export function logInputDetections(
         score: row.detection.score,
         contentLength: row.detection.contentLength,
         reasonCode: row.detection.reasonCode,
+        redactedSpans: row.redactedSpans,
       })),
     });
   }
@@ -56,6 +61,14 @@ export function logInputDetections(
       event: 'agent.history.message_dropped',
       ...metadata,
       blocked,
+    });
+  }
+  if (withheld + redacted > 0) {
+    logger.warn({
+      event: 'agent.history.content_neutralized',
+      ...metadata,
+      withheld,
+      redacted,
     });
   }
   if (droppedUserTurn) {

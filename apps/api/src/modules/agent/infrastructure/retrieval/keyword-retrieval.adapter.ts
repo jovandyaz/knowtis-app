@@ -14,6 +14,7 @@ import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import {
   MAX_NOTE_CONTENT_CHARS,
   TRUNCATION_MARKER,
+  WITHHELD_CONTENT,
   type AgentNote,
   type NoteBody,
   type NoteContentStatus,
@@ -24,8 +25,6 @@ import { htmlToPlainText } from '../sanitize/html-sanitizer';
 import { toNoteHit } from './note-hit.mapper';
 
 const MAX_SEARCH_HITS = 20;
-const WITHHELD_CONTENT =
-  '[Note content withheld: it failed the injection safety check]';
 
 interface BoundedText {
   readonly text: string;

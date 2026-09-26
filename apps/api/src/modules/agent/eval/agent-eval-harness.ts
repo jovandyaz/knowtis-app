@@ -8,6 +8,7 @@ import { I18nModule } from 'nestjs-i18n';
 import {
   computeTokenCostUsd,
   MODEL_CATALOG,
+  type AiInputDisposition,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
 import type { ReasoningEffort } from '@knowtis/shared-types';
@@ -46,6 +47,12 @@ export interface EvalTurnSettings {
   openRouterProviderOrder(): Promise<readonly string[]>;
   openRouterIgnoredProviders(): Promise<readonly string[]>;
   effortFor(model: string): Promise<ReasoningEffort | undefined>;
+}
+
+interface ReplayOutcomes {
+  readonly dropped: number;
+  readonly withheld: number;
+  readonly redacted: number;
 }
 
 const NOOP_PENDING_STORE = {
@@ -207,22 +214,22 @@ export class AgentEvalHarness {
     latestUserContent: string,
     fixtureSet: NoteFixtureSetName,
     model: string
-  ): Promise<
-    EvalTranscript & { replay: { detected: number; dropped: number } }
-  > {
+  ): Promise<EvalTranscript & { replay: ReplayOutcomes }> {
     const sanitized = sanitizeReplayHistory(history);
     const transcript = await this.runConversation(
       [...sanitized.messages, { role: 'user', content: latestUserContent }],
       fixtureSet,
       model
     );
+    const count = (disposition: AiInputDisposition) =>
+      sanitized.detections.filter((entry) => entry.disposition === disposition)
+        .length;
     return {
       ...transcript,
       replay: {
-        detected: sanitized.detections.length,
-        dropped: sanitized.detections.filter(
-          (entry) => entry.disposition === 'block'
-        ).length,
+        dropped: count('block'),
+        withheld: count('withhold'),
+        redacted: count('redact'),
       },
     };
   }

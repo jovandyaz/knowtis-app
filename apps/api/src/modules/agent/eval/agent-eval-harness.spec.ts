@@ -22,6 +22,7 @@ import type {
   AgentOrchestrator,
   AgentRunInput,
 } from '../domain/ports/agent-orchestrator.port';
+import { WITHHELD_CONTENT } from '../domain/retrieval';
 import { AgentToolRegistry } from '../infrastructure/orchestrator/agent-tool.registry';
 import { AiSdkAgentOrchestrator } from '../infrastructure/orchestrator/ai-sdk-agent.orchestrator';
 import { AgentEvalHarness, type EvalTurnSettings } from './agent-eval-harness';
@@ -34,7 +35,6 @@ import {
 import {
   REPLAY_ATTACK,
   REPLAY_GUARD_CASES,
-  REPLAY_KNOWN_FAILURES,
   REPLAY_LONG_DETAIL,
   REPLAY_QUOTED_FACT,
   REPLAY_SAFE_FACT,
@@ -208,19 +208,19 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
       'topic',
       MODEL
     );
-    expect(result.replay).toEqual({ detected: 1, dropped: 1 });
+    expect(result.replay).toEqual({ dropped: 0, withheld: 1, redacted: 0 });
     expect(result.error).toBeNull();
     expect(result.text).not.toContain('UNSAFE_REPLAY_REACHED_MODEL');
     expect(model.doStreamCalls).toHaveLength(1);
-    expect(JSON.stringify(model.doStreamCalls[0].prompt)).not.toContain(
-      REPLAY_ATTACK
-    );
+    const prompt = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(prompt).not.toContain(REPLAY_ATTACK);
+    expect(prompt).toContain(JSON.stringify(WITHHELD_CONTENT));
     expect(model.doStreamCalls[0].prompt.at(-1)).toMatchObject({
       role: 'user',
       content: [{ type: 'text', text: poisoned.message }],
     });
   });
-  it('runs three actual SDK trials per case via promptfoo and reports quoted-text loss separately', async () => {
+  it('runs three actual SDK trials per case via promptfoo and passes every case, quoted text included', async () => {
     const { harness, model } = setup();
     const provider = createStructuredProvider<{ id: string }, unknown>(
       'local-replay-sdk',
@@ -257,14 +257,8 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
     expect(stats.providerErrors).toBe(0);
     expect(REPLAY_GUARD_CASES).toHaveLength(5);
     expect(stats.cases).toHaveLength(5);
-    expect(stats.casesBelowThreshold.map((item) => item.key)).toEqual(
-      REPLAY_KNOWN_FAILURES.map((id) => caseKeyOf({ id }))
-    );
-    for (const id of REPLAY_KNOWN_FAILURES) {
-      expect(
-        stats.cases.find((item) => item.key === caseKeyOf({ id }))?.passes
-      ).toBe(0);
-    }
+    expect(stats.casesBelowThreshold).toEqual([]);
+    expect(stats.cases.map((item) => item.passes)).toEqual([3, 3, 3, 3, 3]);
     expect(model.doStreamCalls).toHaveLength(15);
   }, 30_000);
 });

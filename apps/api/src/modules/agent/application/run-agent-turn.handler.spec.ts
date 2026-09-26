@@ -32,6 +32,7 @@ import type {
 import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { ProposedMutation } from '../domain/proposed-mutation';
+import { REPLAY_REDACTION_MARKER } from '../domain/replay-input-sanitizer';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import type { InjectionGuardService } from './injection-guard.service';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
@@ -4971,13 +4972,16 @@ describe('RunAgentTurnHandler replay guard', () => {
     };
     return { ...deps, handler, callbacks, guard };
   }
-  it('blocks injected assistant history', async () => {
+  it('neutralizes injected assistant history in place instead of dropping it', async () => {
     const warn = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
     const { handler, callbacks, orchestrator } = setup([
       historyRow({ role: 'user', content: 'old question' }),
-      historyRow({ role: 'assistant', content: attack }),
+      historyRow({
+        role: 'assistant',
+        content: `Noted the risk. The note said: ${attack}.`,
+      }),
     ]);
     await handler.execute(
       {
@@ -4990,15 +4994,27 @@ describe('RunAgentTurnHandler replay guard', () => {
     );
     const passed = vi.mocked(orchestrator.run).mock.calls[0][0].messages;
     expect(JSON.stringify(passed)).not.toContain(attack);
+    expect(passed).toEqual([
+      { role: 'user', content: 'old question' },
+      {
+        role: 'assistant',
+        content: `Noted the risk. ${REPLAY_REDACTION_MARKER}`,
+      },
+      { role: 'user', content: 'safe follow up' },
+    ]);
     expect(callbacks.onError).not.toHaveBeenCalled();
-    expect(
-      warn.mock.calls.some(
-        ([event]) =>
-          typeof event === 'object' &&
-          event !== null &&
-          event.event === 'agent.history.message_dropped'
-      )
-    ).toBe(true);
+    const events = warn.mock.calls.map(([event]) => event);
+    expect(events).toContainEqual({
+      event: 'agent.history.content_neutralized',
+      surface: 'history',
+      userId: USER,
+      conversationId: 'conv-1',
+      withheld: 0,
+      redacted: 1,
+    });
+    expect(events).not.toContainEqual(
+      expect.objectContaining({ event: 'agent.history.message_dropped' })
+    );
     expect(JSON.stringify(warn.mock.calls)).not.toMatch(/ignore all/);
   });
   it('drops old injected user text before coalescing with the fresh user', async () => {
@@ -5023,7 +5039,6 @@ describe('RunAgentTurnHandler replay guard', () => {
         event: 'ai.input_guard.detected',
         userId: USER,
         conversationId: 'conv-1',
-        observed: 0,
         blocked: 1,
         rows: [expect.objectContaining({ role: 'user', disposition: 'block' })],
       })

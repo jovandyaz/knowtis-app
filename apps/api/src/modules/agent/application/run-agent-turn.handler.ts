@@ -550,11 +550,14 @@ export class RunAgentTurnHandler {
     );
     logInputDetections(
       this.logger,
-      sanitized.detections.map(({ index, detection, disposition }) => ({
-        detection,
-        disposition,
-        role: inputMessages[index].role,
-      })),
+      sanitized.detections.map(
+        ({ index, detection, disposition, redactedSpans }) => ({
+          detection,
+          disposition,
+          redactedSpans,
+          role: inputMessages[index].role,
+        })
+      ),
       {
         surface: 'history',
         userId: input.userId,
