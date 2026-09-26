@@ -161,7 +161,6 @@ function makeModelPreference(
     isSelectable: vi.fn().mockReturnValue(true),
     isSelectableWith: vi.fn().mockResolvedValue(true),
     byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
-    tierGatingOn: vi.fn().mockResolvedValue(false),
     reasoningFor: vi.fn().mockResolvedValue(null),
   } as unknown as ModelPreferenceService;
 }
@@ -3755,8 +3754,7 @@ describe('RunAgentTurnHandler', () => {
     );
     expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
       USER,
-      expect.anything(),
-      false
+      expect.anything()
     );
   });
 
@@ -3847,8 +3845,7 @@ describe('RunAgentTurnHandler', () => {
 
     expect(modelPreference.isSelectableWith).toHaveBeenCalledWith(
       'openai:gpt-4o-mini',
-      expect.any(Set),
-      false
+      expect.any(Set)
     );
     expect(conversations.setModel).toHaveBeenCalledWith(
       'conv-1',
@@ -4009,104 +4006,6 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
-  });
-
-  it('rejects an explicit premium model when tier gating locks it for a keyless caller', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const conversations = makeConversations();
-    const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.tierGatingOn).mockResolvedValue(true);
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      conversations,
-      makeMemory(),
-      makeEmbed(),
-      modelPreference,
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
-    const onError = vi.fn();
-
-    await handler.execute(
-      {
-        userId: USER,
-        turnId: TURN_ID,
-        message: { content: 'hi' },
-        model: 'anthropic:claude-opus-4-8',
-      },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
-    );
-
-    expect(modelPreference.isSelectableWith).toHaveBeenCalledWith(
-      'anthropic:claude-opus-4-8',
-      expect.any(Set),
-      true
-    );
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'AI_INVALID_MODEL' })
-    );
-    expect(orchestrator.run).not.toHaveBeenCalled();
-    expect(conversations.setModel).not.toHaveBeenCalled();
-  });
-
-  it('falls back to the effective default when a stored model is gated for a keyless caller', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const conversations = makeConversations();
-    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
-      id: 'conv-1',
-      model: 'anthropic:claude-opus-4-8',
-    });
-    const modelPreference = makeModelPreference(
-      'anthropic:claude-sonnet-4-20250514'
-    );
-    vi.mocked(modelPreference.tierGatingOn).mockResolvedValue(true);
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      conversations,
-      makeMemory(),
-      makeEmbed(),
-      modelPreference,
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
-
-    await handler.execute(
-      {
-        userId: USER,
-        turnId: TURN_ID,
-        conversationId: 'conv-1',
-        message: { content: 'hi' },
-      },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
-      USER,
-      expect.any(Set),
-      true
-    );
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
-    );
   });
 
   it('releases the reservation and reports the error once when the orchestrator throws a non-abort error', async () => {

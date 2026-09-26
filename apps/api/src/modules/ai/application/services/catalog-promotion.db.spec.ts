@@ -40,8 +40,6 @@ const TEST_MODEL_IDS = [CHEAP_MODEL_ID, EXPENSIVE_MODEL_ID];
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
 const NO_BYOK: ReadonlySet<string> = new Set();
 const OPENROUTER_BYOK: ReadonlySet<string> = new Set(['openrouter']);
-const TIER_GATING_ON = true;
-const TIER_GATING_OFF = false;
 
 const BELOW_CEILING_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN / 2;
 const ABOVE_CEILING_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4;
@@ -139,21 +137,16 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   });
 
   it('leaves a candidate out of the offered catalog until it is promoted', () => {
-    expect(
-      selectable.isSelectable(
-        CHEAP_MODEL_ID,
-        ALL_CURATED,
-        NO_BYOK,
-        TIER_GATING_ON
-      )
-    ).toBe(false);
+    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
+      false
+    );
   });
 
   it('makes a promoted open-tier model selectable by a user with no key at all', async () => {
     await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
 
     const offered = selectable
-      .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, TIER_GATING_ON)
+      .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
       .find((m) => m.id === CHEAP_MODEL_ID);
 
     expect(offered).toMatchObject({
@@ -163,14 +156,9 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
       billedToUser: false,
       contextWindow: 262_144,
     });
-    expect(
-      selectable.isSelectable(
-        CHEAP_MODEL_ID,
-        ALL_CURATED,
-        NO_BYOK,
-        TIER_GATING_ON
-      )
-    ).toBe(true);
+    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
+      true
+    );
   });
 
   it('reaches the picker without waiting for the cache interval', async () => {
@@ -182,48 +170,14 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     expect(promotedCache.snapshot().map((m) => m.id)).toContain(CHEAP_MODEL_ID);
   });
 
-  it('routes a promoted model of a paid tier through the caller’s own key', async () => {
-    await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
-
-    expect(
-      selectable.isSelectable(
-        CHEAP_MODEL_ID,
-        ALL_CURATED,
-        NO_BYOK,
-        TIER_GATING_ON
-      )
-    ).toBe(false);
-    expect(
-      selectable.firstOfTier('powerful', ALL_CURATED, OPENROUTER_BYOK)
-    ).toBe(CHEAP_MODEL_ID);
-  });
-
   it('never gives away a promoted model priced above the free ceiling', async () => {
     await admin.promote(EXPENSIVE_MODEL_ID, 'open', ACTOR_ID);
 
     expect(
-      selectable.isSelectable(
-        EXPENSIVE_MODEL_ID,
-        ALL_CURATED,
-        NO_BYOK,
-        TIER_GATING_ON
-      )
+      selectable.isSelectable(EXPENSIVE_MODEL_ID, ALL_CURATED, NO_BYOK)
     ).toBe(false);
     expect(
-      selectable.isSelectable(
-        EXPENSIVE_MODEL_ID,
-        ALL_CURATED,
-        NO_BYOK,
-        TIER_GATING_OFF
-      )
-    ).toBe(false);
-    expect(
-      selectable.isSelectable(
-        EXPENSIVE_MODEL_ID,
-        ALL_CURATED,
-        OPENROUTER_BYOK,
-        TIER_GATING_ON
-      )
+      selectable.isSelectable(EXPENSIVE_MODEL_ID, ALL_CURATED, OPENROUTER_BYOK)
     ).toBe(true);
   });
 
@@ -232,14 +186,9 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
     await admin.retire(CHEAP_MODEL_ID, ACTOR_ID);
 
-    expect(
-      selectable.isSelectable(
-        CHEAP_MODEL_ID,
-        ALL_CURATED,
-        NO_BYOK,
-        TIER_GATING_ON
-      )
-    ).toBe(false);
+    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
+      false
+    );
     expect(promotedCache.snapshot().map((m) => m.id)).not.toContain(
       CHEAP_MODEL_ID
     );
@@ -306,7 +255,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
     expect(
       selectable
-        .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, TIER_GATING_ON)
+        .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
         .find((m) => m.id === CHEAP_MODEL_ID)?.label
     ).toBe('Renamed by admin');
   });

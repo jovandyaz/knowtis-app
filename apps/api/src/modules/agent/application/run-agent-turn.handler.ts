@@ -583,8 +583,6 @@ export class RunAgentTurnHandler {
       return;
     }
 
-    const tierGatingOn = await this.modelPreference.tierGatingOn();
-
     let model: string | null;
     try {
       model = await this.resolveModel(
@@ -592,7 +590,6 @@ export class RunAgentTurnHandler {
         persistence?.conversationId,
         callbacks,
         byokProviders,
-        tierGatingOn,
         Boolean(resume)
       );
     } catch (error) {
@@ -883,15 +880,13 @@ export class RunAgentTurnHandler {
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
     byokProviders: ReadonlySet<string>,
-    tierGatingOn: boolean,
     resuming: boolean
   ): Promise<string | null> {
     if (input.model) {
       if (
         !(await this.modelPreference.isSelectableWith(
           input.model,
-          byokProviders,
-          tierGatingOn
+          byokProviders
         ))
       ) {
         this.logger.warn({
@@ -917,18 +912,13 @@ export class RunAgentTurnHandler {
     if (
       stored &&
       resuming &&
-      (await this.modelPreference.isSelectableWith(
-        stored,
-        byokProviders,
-        tierGatingOn
-      ))
+      (await this.modelPreference.isSelectableWith(stored, byokProviders))
     ) {
       return stored;
     }
     return this.modelPreference.getEffectiveDefault(
       input.userId,
-      byokProviders,
-      tierGatingOn
+      byokProviders
     );
   }
 
