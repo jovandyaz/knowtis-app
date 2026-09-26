@@ -649,7 +649,7 @@ describe('registerNotesTools', () => {
           statusCode: 429,
           error: 'AI_RATE_LIMIT_EXCEEDED',
           code: 'AI_RATE_LIMIT_EXCEEDED',
-          message: 'Daily AI usage limit exceeded. Please try again tomorrow.',
+          message: 'Daily usage limit exceeded. Please try again tomorrow.',
         })
       ),
     });
@@ -660,7 +660,7 @@ describe('registerNotesTools', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe(
-      'Rate limit exceeded: Daily AI usage limit exceeded. Please try again tomorrow.'
+      'Daily usage limit exceeded. Please try again tomorrow.'
     );
     expect(result.structuredContent).toBeUndefined();
   });
