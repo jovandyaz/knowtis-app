@@ -642,6 +642,29 @@ describe('registerNotesTools', () => {
     expect(result.structuredContent).toBeUndefined();
   });
 
+  it('should surface a search-notes 429 as a rate-limit tool error', async () => {
+    searchApi = createMockSearchApi({
+      search: vi.fn().mockRejectedValue(
+        new ApiError(429, {
+          statusCode: 429,
+          error: 'AI_RATE_LIMIT_EXCEEDED',
+          code: 'AI_RATE_LIMIT_EXCEEDED',
+          message: 'Daily AI usage limit exceeded. Please try again tomorrow.',
+        })
+      ),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'search-notes').cb({ query: 'budget' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe(
+      'Rate limit exceeded. Try again later.'
+    );
+    expect(result.structuredContent).toBeUndefined();
+  });
+
   it('should reject search-notes without notes:read scope', async () => {
     const oauthCredential: McpCredential = {
       kind: 'oauth',

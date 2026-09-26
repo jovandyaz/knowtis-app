@@ -3,6 +3,7 @@ import type { RequestUser } from '@jovandyaz/auth/server';
 import { PoliciesGuard } from '@jovandyaz/permissions-nestjs';
 import { Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { Request } from 'express';
 import { describe, expect, it } from 'vitest';
 
 import { AgentModule } from '../../agent/agent.module';
@@ -11,6 +12,8 @@ import {
   type RetrievalPort,
 } from '../../agent/domain/ports/retrieval.port';
 import type { NoteHit } from '../../agent/domain/retrieval';
+import { AIModule } from '../../ai/ai.module';
+import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchController } from '../search.controller';
 import { SearchModule } from '../search.module';
@@ -43,6 +46,20 @@ const stubRetrieval: RetrievalPort = {
 })
 class StubAgentModule {}
 
+const stubRateLimit: Pick<
+  AIRateLimitService,
+  'checkLimit' | 'releaseReservation'
+> = {
+  checkLimit: async () => ({ allowed: true }),
+  releaseReservation: async () => undefined,
+};
+
+@Module({
+  providers: [{ provide: AIRateLimitService, useValue: stubRateLimit }],
+  exports: [AIRateLimitService],
+})
+class StubAiModule {}
+
 describe('SearchModule bootstrap', () => {
   // Guards the REAL AgentModule's export list. The DI-boot test below stubs
   // AgentModule, so it cannot catch a regression that drops this export — only
@@ -53,12 +70,20 @@ describe('SearchModule bootstrap', () => {
     expect(exports).toContain(RETRIEVAL_PORT);
   });
 
+  it('exports AIRateLimitService from AIModule for cross-module injection', () => {
+    const exports: unknown[] =
+      Reflect.getMetadata(MODULE_EXPORTS_KEY, AIModule) ?? [];
+    expect(exports).toContain(AIRateLimitService);
+  });
+
   it('resolves SearchController with the retrieval port injected via the imported module export', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [SearchModule],
     })
       .overrideModule(AgentModule)
       .useModule(StubAgentModule)
+      .overrideModule(AIModule)
+      .useModule(StubAiModule)
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(PoliciesGuard)
@@ -70,7 +95,9 @@ describe('SearchModule bootstrap', () => {
 
     const dto = new SearchQueryDto();
     dto.q = 'sentinel';
-    const result = await controller.search({ id: 'u1' } as RequestUser, dto);
+    const result = await controller.search({ id: 'u1' } as RequestUser, dto, {
+      headers: {},
+    } as Request);
     expect(result.hits).toEqual([sentinel]);
 
     await moduleRef.close();
