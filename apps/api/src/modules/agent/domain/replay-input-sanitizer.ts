@@ -385,7 +385,7 @@ export function sanitizeReplayHistory(messages: readonly AgentMessage[]): {
   return { messages: repairTranscriptOrphans(replayed), detections };
 }
 
-/** Coalesces fitted history the way the provider receives it, then rescans every content-only assistant row: joining rows, flattening a tool turn to text, or repairing an orphaned call can bring together a hit no scanned row held. Such a row is redacted, or withheld whole as `REPLAY_REDACTION_MARKER`. User rows are left to the caller's seam guard. Each detection's `index` points into the returned messages. */
+/** Merges consecutive content-only assistant rows, then rescans each merged row and neutralizes any unsafe one, redacting or withholding it as `REPLAY_REDACTION_MARKER`. User rows are left to the caller's seam guard; each detection's `index` points into the returned messages. */
 export function coalesceReplayHistory(messages: readonly AgentMessage[]): {
   messages: AgentMessage[];
   detections: ReplayDetection[];
