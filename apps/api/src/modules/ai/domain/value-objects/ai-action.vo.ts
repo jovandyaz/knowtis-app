@@ -13,9 +13,10 @@ export type SupportedAIAction = AIActionType;
 
 /**
  * Actions the notes client never sends to `/ai/complete` or `ai:complete`:
- * `SUGGEST_ORGANIZATION` and the voice actions own a dedicated, narrower-
- * flagged endpoint; `GENERATE_FLASHCARDS`, `GENERATE_QUIZ`, `GENERATE_SUMMARY`
- * and `GENERATE_MIND_MAP` are only produced by the artifacts module.
+ * `SUGGEST_ORGANIZATION` and the voice actions are owned by a dedicated
+ * endpoint (`/ai/organization/suggest`, `/ai/voice-note`); `GENERATE_FLASHCARDS`,
+ * `GENERATE_QUIZ`, `GENERATE_SUMMARY` and `GENERATE_MIND_MAP` are produced only
+ * by the artifacts module.
  */
 const NON_COMPLETION_ACTIONS = [
   AI_ACTION.SUGGEST_ORGANIZATION,
@@ -34,10 +35,9 @@ export type CompletionAIAction = Exclude<
 
 /**
  * Actions the generic completion surface accepts. `/ai/complete` and the
- * `ai:complete` socket event are gated on `ai_enabled` alone, so an action
- * owned by a narrower-flagged endpoint or another module's dedicated route
- * must stay out of this set — otherwise that boundary is inert and callers
- * reach the action through the generic route.
+ * `ai:complete` socket event skip the checks a dedicated endpoint applies to
+ * its action, such as note ownership or a tighter throttle, so an action owned
+ * by one must stay out of this set — otherwise callers reach it around them.
  */
 export const COMPLETION_AI_ACTIONS = SUPPORTED_AI_ACTIONS.filter(
   (action): action is CompletionAIAction =>

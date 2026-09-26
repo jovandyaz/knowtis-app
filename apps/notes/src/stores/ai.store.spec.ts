@@ -180,7 +180,7 @@ describe('useAIStore', () => {
       const staleError = first.getCallbacks().onError;
 
       const second = captureCallbacks();
-      useAIStore.getState().startStream({ ...PAYLOAD, action: 'summarize' });
+      useAIStore.getState().startStream({ ...PAYLOAD, action: 'translate' });
       staleError({ code: 'X', message: 'stale failure' });
       second.getCallbacks().onDone({ usage: {} });
 
@@ -193,7 +193,7 @@ describe('useAIStore', () => {
         {
           source: 'assistant',
           assistant_type: 'selection',
-          action: 'summarize',
+          action: 'translate',
         }
       );
     });
@@ -204,7 +204,7 @@ describe('useAIStore', () => {
       const staleDone = first.getCallbacks().onDone;
 
       captureCallbacks();
-      useAIStore.getState().startStream({ ...PAYLOAD, action: 'summarize' });
+      useAIStore.getState().startStream({ ...PAYLOAD, action: 'translate' });
       staleDone({ usage: {} });
 
       expect(captureProductEvent).not.toHaveBeenCalled();
