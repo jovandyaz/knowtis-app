@@ -1,12 +1,10 @@
 export const AI_ACTION = {
   SUMMARIZE: 'summarize',
-  EXPAND: 'expand',
   TRANSLATE: 'translate',
   TONE: 'tone',
   OUTLINE: 'outline',
   ACTION_ITEMS: 'action-items',
   GHOST_TEXT: 'ghost-text',
-  CHAT: 'chat',
   IMPROVE_WRITING: 'improve-writing',
   FIX_SPELLING: 'fix-spelling',
   MAKE_SHORTER: 'make-shorter',

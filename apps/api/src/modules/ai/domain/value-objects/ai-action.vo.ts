@@ -12,30 +12,36 @@ export const SUPPORTED_AI_ACTIONS = AI_ACTIONS;
 export type SupportedAIAction = AIActionType;
 
 /**
- * Actions whose own endpoint carries a flag narrower than `ai_enabled`:
- * `/ai/voice-note` behind `voice_notes_enabled`, `/ai/organization/suggest`
- * behind `ai_auto_organize`.
+ * Actions the notes client never sends to `/ai/complete` or `ai:complete`:
+ * `SUGGEST_ORGANIZATION` and the voice actions own a dedicated, narrower-
+ * flagged endpoint; `GENERATE_FLASHCARDS`, `GENERATE_QUIZ`, `GENERATE_SUMMARY`
+ * and `GENERATE_MIND_MAP` are only produced by the artifacts module.
  */
-const DEDICATED_ENDPOINT_ACTIONS = [
+const NON_COMPLETION_ACTIONS = [
   AI_ACTION.SUGGEST_ORGANIZATION,
   AI_ACTION.VOICE_TRANSCRIPTION,
   AI_ACTION.STRUCTURE_VOICE_NOTE,
+  AI_ACTION.GENERATE_FLASHCARDS,
+  AI_ACTION.GENERATE_QUIZ,
+  AI_ACTION.GENERATE_SUMMARY,
+  AI_ACTION.GENERATE_MIND_MAP,
 ] as const;
 
 export type CompletionAIAction = Exclude<
   SupportedAIAction,
-  (typeof DEDICATED_ENDPOINT_ACTIONS)[number]
+  (typeof NON_COMPLETION_ACTIONS)[number]
 >;
 
 /**
  * Actions the generic completion surface accepts. `/ai/complete` and the
  * `ai:complete` socket event are gated on `ai_enabled` alone, so an action
- * owned by a narrower-flagged endpoint must stay out of this set — otherwise
- * that flag is inert and callers reach the action through the generic route.
+ * owned by a narrower-flagged endpoint or another module's dedicated route
+ * must stay out of this set — otherwise that boundary is inert and callers
+ * reach the action through the generic route.
  */
 export const COMPLETION_AI_ACTIONS = SUPPORTED_AI_ACTIONS.filter(
   (action): action is CompletionAIAction =>
-    !DEDICATED_ENDPOINT_ACTIONS.some((dedicated) => dedicated === action)
+    !NON_COMPLETION_ACTIONS.some((excluded) => excluded === action)
 );
 
 export class AIAction {

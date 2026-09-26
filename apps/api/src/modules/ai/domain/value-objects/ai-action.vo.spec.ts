@@ -31,14 +31,28 @@ describe('AIAction', () => {
     AI_ACTION.SUGGEST_ORGANIZATION,
     AI_ACTION.VOICE_TRANSCRIPTION,
     AI_ACTION.STRUCTURE_VOICE_NOTE,
+    AI_ACTION.GENERATE_FLASHCARDS,
+    AI_ACTION.GENERATE_QUIZ,
+    AI_ACTION.GENERATE_SUMMARY,
+    AI_ACTION.GENERATE_MIND_MAP,
   ])('keeps %s off the generic completion surface', (action) => {
     expect(COMPLETION_AI_ACTIONS).not.toContain(action);
     expect(SUPPORTED_AI_ACTIONS).toContain(action);
   });
 
-  it('still accepts every other action for completion', () => {
-    expect(COMPLETION_AI_ACTIONS).toHaveLength(SUPPORTED_AI_ACTIONS.length - 3);
-    expect(COMPLETION_AI_ACTIONS).toContain(AI_ACTION.LEARN_TOPIC);
-    expect(COMPLETION_AI_ACTIONS).toContain(AI_ACTION.SUMMARIZE);
+  it('accepts on the completion surface exactly the actions the notes client sends', () => {
+    expect([...COMPLETION_AI_ACTIONS].sort()).toEqual([
+      'action-items',
+      'fix-spelling',
+      'ghost-text',
+      'improve-writing',
+      'learn-topic',
+      'make-longer',
+      'make-shorter',
+      'outline',
+      'summarize',
+      'tone',
+      'translate',
+    ]);
   });
 });
