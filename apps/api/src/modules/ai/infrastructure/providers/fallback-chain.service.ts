@@ -7,7 +7,11 @@ import {
   resolveChainCandidates,
   type ChainScope,
 } from '@knowtis/ai-gateway';
-import { parseChain } from '@knowtis/shared-types';
+import {
+  AI_PROVIDERS,
+  parseChain,
+  type AIProvider,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
@@ -22,6 +26,12 @@ export interface FallbackChainSource {
 }
 
 const CHAIN_TTL_MS = 30_000; // matches the AI config cache window
+
+const AI_PROVIDER_SET = new Set<string>(AI_PROVIDERS);
+
+function isAIProvider(provider: string): provider is AIProvider {
+  return AI_PROVIDER_SET.has(provider);
+}
 
 export interface ProviderHealth {
   readonly configured: boolean;
@@ -118,11 +128,6 @@ export class FallbackChainService implements OnModuleInit {
 
   /** Passive per-provider health from the cooldown tracker — no probes, no token spend. */
   healthSnapshot(): Record<string, ProviderHealth> {
-    const providers = new Set<string>([
-      ...this.chain.map(providerOf),
-      providerOf(AI_SETTING_DEFAULTS.ai_default_model),
-      providerOf(AI_SETTING_DEFAULTS.ai_fast_model),
-    ]);
     const cooldownState = this.cooldown.snapshot();
     // Cooldown keys are per-model for aggregator providers (OpenRouter); fold
     // them back to the provider so this stays a provider-level view.
@@ -132,13 +137,18 @@ export class FallbackChainService implements OnModuleInit {
       group.push(state);
       byProvider.set(providerOf(key), group);
     }
+    const providers = new Set<string>([
+      ...this.providerRegistry.knownProviders(),
+      ...byProvider.keys(),
+      ...this.chain.map(providerOf),
+    ]);
     const result: Record<string, ProviderHealth> = {};
     for (const provider of providers) {
       const states = byProvider.get(provider) ?? [];
       result[provider] = {
-        configured: this.providerRegistry.isModelAvailable(
-          `${provider}:health-check`
-        ),
+        configured: isAIProvider(provider)
+          ? this.providerRegistry.isProviderConfigured(provider)
+          : false,
         cooling: states.some((s) => s.cooling),
         failureCount: states.reduce((total, s) => total + s.failureCount, 0),
         lastFailureAt: toIsoOrNull(

@@ -134,6 +134,13 @@ describe('ProviderRegistryFactory', () => {
     expect(factory.isModelAvailable('mistral:mistral-large')).toBe(false);
   });
 
+  it('reports a provider configured only when enabled with a key', () => {
+    const factory = makeFactory({ OPENAI_API_KEY: 'k' });
+
+    expect(factory.isProviderConfigured('openai')).toBe(true);
+    expect(factory.isProviderConfigured('google')).toBe(false);
+  });
+
   it('should register only anthropic when google and openai keys are absent', async () => {
     const { createProviderRegistry } = vi.mocked(await import('ai'));
     createProviderRegistry.mockClear();

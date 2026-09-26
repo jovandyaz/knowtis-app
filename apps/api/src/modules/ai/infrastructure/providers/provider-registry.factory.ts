@@ -204,25 +204,33 @@ export class ProviderRegistryFactory implements OnModuleInit {
     if (!isQualifiedModelId(modelId)) {
       return false;
     }
+    const provider = providerOf(modelId);
+    if (!isAIProvider(provider)) {
+      return Boolean(this.gateway);
+    }
+    return this.providerRoutable(provider);
+  }
+
+  /** Every provider this process knows how to route, regardless of configuration. */
+  knownProviders(): readonly AIProvider[] {
+    return AI_PROVIDERS;
+  }
+
+  /** True when `provider` is routable right now — see `providerRoutable`. */
+  isProviderConfigured(provider: AIProvider): boolean {
+    return this.providerRoutable(provider);
+  }
+
+  private providerRoutable(provider: AIProvider): boolean {
     if (this.gateway) {
-      if (providerOf(modelId) === OPENROUTER_PROVIDER) {
+      if (provider === OPENROUTER_PROVIDER) {
         return false;
       }
       this.refreshSystemConfigsIfStale();
-      try {
-        this.assertProviderEnabled(modelId);
-        return true;
-      } catch {
-        return false;
-      }
+      return this.isProviderEnabled(provider);
     }
     this.refreshSystemConfigsIfStale();
-    try {
-      this.assertProviderRoutable(modelId);
-      return true;
-    } catch {
-      return false;
-    }
+    return this.routableKey(provider) !== undefined;
   }
 
   /** Every secret that could route for this provider, so a caller can scrub the ones a provider echoes back in an error. */

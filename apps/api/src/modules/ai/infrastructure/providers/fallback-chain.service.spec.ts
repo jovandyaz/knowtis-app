@@ -17,13 +17,16 @@ vi.mock('@ai-sdk/openai', () => ({ createOpenAI: vi.fn(() => vi.fn()) }));
 
 const TEST_CHAIN_MODELS = TEST_FALLBACK_CHAIN.split(',');
 
-function buildService(configOverrides: Record<string, unknown> = {}) {
+function buildService(
+  configOverrides: Record<string, unknown> = {},
+  chain: string[] = TEST_CHAIN_MODELS
+) {
   const config = createMockConfig(configOverrides);
   const registry = new ProviderRegistryFactory(config);
   registry.onModuleInit();
   const alerts = { notify: vi.fn() } as unknown as WebhookAlertService;
   const chainSource: FallbackChainSource = {
-    getFallbackChain: async () => TEST_CHAIN_MODELS,
+    getFallbackChain: async () => chain,
   };
   const service = new FallbackChainService(
     chainSource,
@@ -31,7 +34,7 @@ function buildService(configOverrides: Record<string, unknown> = {}) {
     registry,
     alerts
   );
-  service.onModuleInit(TEST_CHAIN_MODELS);
+  service.onModuleInit(chain);
   return { service, alerts };
 }
 
@@ -59,6 +62,17 @@ describe('FallbackChainService', () => {
       expect(snapshot['openai']?.configured).toBe(true);
       expect(snapshot['google']?.configured).toBe(false);
       expect(snapshot['openrouter']?.configured).toBe(false);
+    });
+
+    it('reports every known provider even when the chain does not use it', () => {
+      const { service } = buildService({}, ['anthropic:claude-haiku-4-5']);
+
+      expect(Object.keys(service.healthSnapshot()).sort()).toEqual([
+        'anthropic',
+        'google',
+        'openai',
+        'openrouter',
+      ]);
     });
 
     it('should expose cooldown state after repeated provider failures', () => {
