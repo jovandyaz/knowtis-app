@@ -75,16 +75,17 @@ describe('FallbackChainService', () => {
       ]);
     });
 
-    it('should surface a provider that is only cooling down when the chain excludes it', () => {
-      const { service } = buildService({ AI_COOLDOWN_ALLOWED_FAILS: 2 }, [
-        'anthropic:claude-haiku-4-5',
-      ]);
+    it('should surface an untracked provider that is only cooling down when the chain excludes it', () => {
+      const { service } = buildService(
+        { AI_GATEWAY_API_KEY: 'gw-key', AI_COOLDOWN_ALLOWED_FAILS: 2 },
+        ['anthropic:claude-haiku-4-5']
+      );
 
-      service.cooldown.recordFailure('openai');
-      service.cooldown.recordFailure('openai');
+      service.cooldown.recordFailure('xai:grok-4');
+      service.cooldown.recordFailure('xai:grok-4');
 
       const snapshot = service.healthSnapshot();
-      expect(snapshot['openai']?.cooling).toBe(true);
+      expect(snapshot['xai']?.cooling).toBe(true);
     });
 
     it('should report configured for a chain provider outside AI_PROVIDERS from the registry', () => {
