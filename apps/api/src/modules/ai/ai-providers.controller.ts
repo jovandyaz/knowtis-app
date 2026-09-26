@@ -18,12 +18,13 @@ import { Throttle } from '@nestjs/throttler';
 import { APICallError, generateText } from 'ai';
 
 import { providerOf } from '@knowtis/ai-gateway';
-import type {
-  AIProvider,
-  ProviderKeyProbeResult,
-  ProviderTestResult,
-  SetSystemProviderResult,
-  SystemProviderInfo,
+import {
+  FEATURE_FLAG_KEYS,
+  type AIProvider,
+  type ProviderKeyProbeResult,
+  type ProviderTestResult,
+  type SetSystemProviderResult,
+  type SystemProviderInfo,
 } from '@knowtis/shared-types';
 
 import { Roles, RolesGuard } from '../authorization/roles.guard';
@@ -43,7 +44,7 @@ const PROBE_TIMEOUT_MS = 10_000;
 const REDACTABLE_KEY_MIN_LENGTH = 8;
 
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-@RequireFeatureFlag('ai_enabled')
+@RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Roles('admin')
 @Controller('ai/providers')
 export class AiProvidersController {

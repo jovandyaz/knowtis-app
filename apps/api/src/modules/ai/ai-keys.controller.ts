@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 
-import type { ProviderKeyInfo } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, type ProviderKeyInfo } from '@knowtis/shared-types';
 
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { ByokService } from './application/services/byok.service';
@@ -21,7 +21,7 @@ import { ProviderParamDto } from './dto/provider-param.dto';
 import { SetProviderKeyDto } from './dto/set-provider-key.dto';
 
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
-@RequireFeatureFlag('ai_enabled')
+@RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Controller('ai/keys')
 export class AiKeysController {
   constructor(private readonly byok: ByokService) {}

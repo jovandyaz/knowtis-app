@@ -17,7 +17,11 @@ import {
 import type { Server } from 'socket.io';
 import { z } from 'zod';
 
-import { MODEL_ID_MAX_LENGTH, REASONING_EFFORTS } from '@knowtis/shared-types';
+import {
+  FEATURE_FLAG_KEYS,
+  MODEL_ID_MAX_LENGTH,
+  REASONING_EFFORTS,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
@@ -127,7 +131,9 @@ export class AgentGateway
       return;
     }
 
-    if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
+    if (
+      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
+    ) {
       client.emit('agent:error', AIErrors.featureDisabled());
       client.disconnect();
       return;
@@ -357,7 +363,9 @@ export class AgentGateway
   }
 
   private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {
-    if (await this.featureFlagsService.isEnabled('ai_enabled')) {
+    if (
+      await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED)
+    ) {
       return true;
     }
     client.emit('agent:error', AIErrors.featureDisabled());

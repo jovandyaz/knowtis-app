@@ -16,7 +16,11 @@ import {
 import type { Server } from 'socket.io';
 import { z } from 'zod';
 
-import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
+import {
+  AI_LANGUAGES,
+  AI_TONES,
+  FEATURE_FLAG_KEYS,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
@@ -86,7 +90,9 @@ export class AIGateway
       return;
     }
 
-    if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
+    if (
+      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
+    ) {
       client.emit('ai:error', AIErrors.featureDisabled());
       client.disconnect();
       return;
@@ -140,7 +146,9 @@ export class AIGateway
     userId: string,
     payload: unknown
   ): Promise<void> {
-    if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
+    if (
+      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
+    ) {
       client.emit('ai:error', AIErrors.featureDisabled());
       return;
     }
