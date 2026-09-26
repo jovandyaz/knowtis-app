@@ -1,6 +1,5 @@
-import { useAIStore } from '@/stores/ai.store';
 import type { Editor, Range } from '@tiptap/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { filterSlashCommands } from './slash-commands.config';
 
@@ -15,23 +14,12 @@ vi.mock('../image/imagePicker', () => ({
 const ids = (items: { id: string }[]) => items.map((item) => item.id);
 
 describe('filterSlashCommands', () => {
-  beforeEach(() => {
-    useAIStore.setState({ voiceNotesEnabled: false });
-  });
-
-  it('offers the voice note command when voice notes are enabled', () => {
-    useAIStore.setState({ voiceNotesEnabled: true });
-
+  it('offers the voice note command', () => {
     expect(ids(filterSlashCommands(''))).toContain('ai-voice-note');
     expect(ids(filterSlashCommands('voz'))).toEqual(['ai-voice-note']);
   });
 
-  it('drops the voice note command when voice notes are disabled', () => {
-    expect(ids(filterSlashCommands(''))).not.toContain('ai-voice-note');
-    expect(filterSlashCommands('voz')).toEqual([]);
-  });
-
-  it('keeps the other AI and formatting commands regardless of the flag', () => {
+  it('offers the other AI and formatting commands', () => {
     const items = ids(filterSlashCommands(''));
 
     expect(items).toContain('ai-continue');

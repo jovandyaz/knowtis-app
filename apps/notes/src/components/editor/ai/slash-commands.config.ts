@@ -1,4 +1,3 @@
-import { useAIStore } from '@/stores/ai.store';
 import type { Editor, Range } from '@tiptap/react';
 import {
   CheckSquare,
@@ -33,10 +32,8 @@ export interface SlashCommandItem {
   action: (editor: Editor, range: Range) => void;
 }
 
-function buildAISlashCommands(voiceNotesEnabled: boolean): SlashCommandItem[] {
-  return getAIActionsForContext(AI_MENU_CONTEXT.CURSOR, {
-    voiceNotesEnabled,
-  }).map((config) => ({
+function buildAISlashCommands(): SlashCommandItem[] {
+  return getAIActionsForContext(AI_MENU_CONTEXT.CURSOR).map((config) => ({
     id: config.id,
     icon: config.icon,
     labelKey: config.labelKey,
@@ -204,28 +201,19 @@ const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
   },
 ];
 
-const SLASH_COMMANDS_WITH_VOICE: SlashCommandItem[] = [
-  ...buildAISlashCommands(true),
-  ...FORMATTING_SLASH_COMMANDS,
-];
-
-const SLASH_COMMANDS_WITHOUT_VOICE: SlashCommandItem[] = [
-  ...buildAISlashCommands(false),
+const SLASH_COMMANDS: SlashCommandItem[] = [
+  ...buildAISlashCommands(),
   ...FORMATTING_SLASH_COMMANDS,
 ];
 
 export function filterSlashCommands(query: string): SlashCommandItem[] {
-  const commands = useAIStore.getState().voiceNotesEnabled
-    ? SLASH_COMMANDS_WITH_VOICE
-    : SLASH_COMMANDS_WITHOUT_VOICE;
-
   if (!query) {
-    return commands;
+    return SLASH_COMMANDS;
   }
 
   const normalizedQuery = query.toLowerCase();
 
-  return commands.filter((item) => {
+  return SLASH_COMMANDS.filter((item) => {
     const matchesId = item.id.toLowerCase().includes(normalizedQuery);
     const matchesKeywords = item.keywords.some((keyword) =>
       keyword.toLowerCase().includes(normalizedQuery)

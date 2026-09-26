@@ -325,8 +325,7 @@ export class AIController {
     description: `Payload too large — audio file larger than ${MAX_VOICE_NOTE_BYTES / BYTES_PER_MEGABYTE} MB, refused before it is buffered`,
   })
   @ApiBadRequest('invalid audio file or mode')
-  @ApiAuthErrors('AI or voice-notes feature is disabled')
-  @RequireFeatureFlag('voice_notes_enabled')
+  @ApiAuthErrors('AI is disabled')
   @Post('voice-note')
   @UseInterceptors(
     FileInterceptor('audio', { limits: { fileSize: MAX_VOICE_NOTE_BYTES } })

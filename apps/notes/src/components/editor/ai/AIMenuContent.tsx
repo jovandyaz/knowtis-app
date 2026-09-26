@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAIStore } from '@/stores/ai.store';
 import type { Editor } from '@tiptap/react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -56,11 +55,7 @@ export function AIMenuContent({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const voiceNotesEnabled = useAIStore((s) => s.voiceNotesEnabled);
-  const rootActions = useMemo(
-    () => getAIActionsForContext(context, { voiceNotesEnabled }),
-    [context, voiceNotesEnabled]
-  );
+  const rootActions = useMemo(() => getAIActionsForContext(context), [context]);
 
   const goToView = (next: MenuView) => {
     setView(next);
