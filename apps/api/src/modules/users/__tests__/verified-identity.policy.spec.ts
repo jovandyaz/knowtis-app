@@ -1,12 +1,8 @@
 import { ForbiddenException, HttpStatus } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  EMAIL_NOT_VERIFIED_CODE,
-  FEATURE_FLAG_KEYS,
-} from '@knowtis/shared-types';
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
-import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { UsersService } from '../users.service';
 import { VerifiedIdentityPolicy } from '../verified-identity.policy';
 
@@ -25,55 +21,32 @@ function userRow(overrides: {
   } as unknown as UserRow;
 }
 
+function usersReturning(fields: {
+  isAnonymous: boolean;
+  emailVerifiedAt: Date | null;
+}): UsersService {
+  return {
+    findById: vi.fn().mockResolvedValue(userRow(fields)),
+  } as unknown as UsersService;
+}
+
 describe('VerifiedIdentityPolicy', () => {
   let usersService: { findById: ReturnType<typeof vi.fn> };
-  let featureFlags: { isEnabled: ReturnType<typeof vi.fn> };
   let policy: VerifiedIdentityPolicy;
 
   beforeEach(() => {
     usersService = { findById: vi.fn() };
-    featureFlags = { isEnabled: vi.fn() };
     policy = new VerifiedIdentityPolicy(
-      usersService as unknown as UsersService,
-      featureFlags as unknown as FeatureFlagsService
+      usersService as unknown as UsersService
     );
   });
 
-  describe('when the gate flag is off', () => {
-    beforeEach(() => {
-      featureFlags.isEnabled.mockResolvedValue(false);
-    });
-
-    it('allows an unverified user', async () => {
-      usersService.findById.mockResolvedValue(
-        userRow({ isAnonymous: false, emailVerifiedAt: null })
+  describe('isVerified', () => {
+    it('rejects an unverified account with no feature-flag service', async () => {
+      const policy = new VerifiedIdentityPolicy(
+        usersReturning({ isAnonymous: false, emailVerifiedAt: null })
       );
-
-      await expect(policy.isVerified('user-1')).resolves.toBe(true);
-    });
-
-    it('allows even when the user lookup would fail', async () => {
-      usersService.findById.mockRejectedValue(new Error('users unavailable'));
-
-      await expect(policy.isVerified('user-1')).resolves.toBe(true);
-    });
-  });
-
-  describe('when the gate flag is on', () => {
-    beforeEach(() => {
-      featureFlags.isEnabled.mockResolvedValue(true);
-    });
-
-    it('checks the gate flag by its key', async () => {
-      usersService.findById.mockResolvedValue(
-        userRow({ isAnonymous: false, emailVerifiedAt: VERIFIED_AT })
-      );
-
-      await policy.isVerified('user-1');
-
-      expect(featureFlags.isEnabled).toHaveBeenCalledWith(
-        FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE
-      );
+      await expect(policy.isVerified('user-1')).resolves.toBe(false);
     });
 
     it('denies an anonymous session', async () => {
@@ -130,7 +103,6 @@ describe('VerifiedIdentityPolicy', () => {
 
   describe('assertVerified', () => {
     it('resolves for a verified user', async () => {
-      featureFlags.isEnabled.mockResolvedValue(true);
       usersService.findById.mockResolvedValue(
         userRow({ isAnonymous: false, emailVerifiedAt: VERIFIED_AT })
       );
@@ -141,7 +113,6 @@ describe('VerifiedIdentityPolicy', () => {
     });
 
     it('throws a 403 carrying the shared gate code and the caller message', async () => {
-      featureFlags.isEnabled.mockResolvedValue(true);
       usersService.findById.mockResolvedValue(
         userRow({ isAnonymous: false, emailVerifiedAt: null })
       );

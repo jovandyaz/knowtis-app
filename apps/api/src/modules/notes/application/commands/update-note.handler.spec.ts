@@ -1039,14 +1039,5 @@ describe('UpdateNoteHandler', () => {
       expect(result.isOk()).toBe(true);
       expect(mockRepository.update).toHaveBeenCalled();
     });
-
-    it('lets an unverified owner widen while the gate flag is off', async () => {
-      const result = await updateAs(IDENTITY_STATE.GATE_OFF, mockNote, {
-        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
-      });
-
-      expect(result.isOk()).toBe(true);
-      expect(mockRepository.update).toHaveBeenCalled();
-    });
   });
 });
