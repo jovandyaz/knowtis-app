@@ -43,15 +43,14 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
   },
 ];
 
-function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
-  const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'vk';
+function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
+  const embedConfigured = opts.embedConfigured ?? true;
   const lock = opts.lock ?? true;
   const { client } = createAdvisoryLockClient(lock);
   const config = {
     get: (k: string) =>
       (
         ({
-          VOYAGE_API_KEY: voyageKey,
           AI_MEMORY_QUIET_SECONDS: 180,
           AI_MEMORY_BATCH_SIZE: 20,
           AI_MEMORY_MAX_PER_USER: 100,
@@ -87,6 +86,7 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     }),
   };
   const embed = {
+    isConfigured: vi.fn().mockReturnValue(embedConfigured),
     embedDocuments: vi.fn().mockResolvedValue({
       embeddings: [new Array(1024).fill(0)],
       totalTokens: 1,
@@ -227,8 +227,8 @@ describe('MemoryExtractionTask', () => {
     expect(conversations.markExtracted).not.toHaveBeenCalled();
   });
 
-  it('does nothing when VOYAGE_API_KEY is absent', async () => {
-    const { task, conversations } = make({ voyageKey: undefined });
+  it('does nothing when embeddings are not configured', async () => {
+    const { task, conversations } = make({ embedConfigured: false });
     await task.reconcile();
     expect(conversations.findExtractable).not.toHaveBeenCalled();
   });

@@ -15,21 +15,20 @@ import { embeddingInputHash } from './embedding-text';
 function makeTask(opts: {
   stale: StaleNote[];
   lock?: boolean;
-  voyageKey?: string | undefined;
+  embedConfigured?: boolean;
 }): {
   task: EmbeddingReconcileTask;
   repo: NoteEmbeddingRepository;
   embed: EmbeddingPort;
   rateLimit: { recordGlobalCost: ReturnType<typeof vi.fn> };
 } {
-  const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'test-key';
   const repo = {
     findStaleNotes: vi.fn(async () => opts.stale),
     upsert: vi.fn(async () => undefined),
     touch: vi.fn(async () => undefined),
   } as unknown as NoteEmbeddingRepository;
   const embed = {
-    isConfigured: vi.fn().mockReturnValue(true),
+    isConfigured: vi.fn().mockReturnValue(opts.embedConfigured ?? true),
     embedQuery: vi.fn(),
     embedDocuments: vi.fn(async (texts: string[]) => ({
       embeddings: texts.map(() => new Array(1024).fill(0.1)),
@@ -42,9 +41,6 @@ function makeTask(opts: {
     get: (k: string) => {
       if (k === 'AI_EMBEDDING_MODEL') {
         return 'voyage-4';
-      }
-      if (k === 'VOYAGE_API_KEY') {
-        return voyageKey;
       }
       return undefined;
     },
@@ -105,10 +101,10 @@ describe('EmbeddingReconcileTask', () => {
     expect(repo.findStaleNotes).not.toHaveBeenCalled();
   });
 
-  it('does nothing when VOYAGE_API_KEY is not set', async () => {
+  it('does nothing when embeddings are not configured', async () => {
     const { task, repo } = makeTask({
       stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],
-      voyageKey: undefined,
+      embedConfigured: false,
     });
     await task.reconcile();
     expect(repo.findStaleNotes).not.toHaveBeenCalled();

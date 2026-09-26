@@ -64,7 +64,7 @@ export class MemoryExtractionTask {
 
   @Interval(INTERVAL_MS)
   async reconcile(): Promise<void> {
-    if (!this.config.get('VOYAGE_API_KEY')) {
+    if (!this.embed.isConfigured()) {
       return;
     }
     const { acquired } = await runWithAdvisoryLock(
