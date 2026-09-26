@@ -84,7 +84,7 @@ export class SearchController {
   })
   @ApiResponse({
     status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'The daily AI usage budget is exhausted',
+    description: 'AI rate or budget limit exceeded',
   })
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
@@ -104,7 +104,7 @@ export class SearchController {
       clientIpOf(req)
     );
     const reservation = unwrapOrThrow(
-      check.allowed ? ok(check) : err(AIErrors.rateLimitExceeded()),
+      check.allowed ? ok(check) : err(AIErrors.rateLimitExceeded(check.reason)),
       RATE_LIMIT_STATUS_MAP
     );
     try {

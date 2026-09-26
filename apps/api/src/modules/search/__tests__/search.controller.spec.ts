@@ -116,7 +116,7 @@ describe('SearchController', () => {
   });
 
   it('should reject with 429 before searching when the AI budget is exhausted', async () => {
-    rateLimit.checkLimit.mockResolvedValue({ allowed: false, reason: 'daily' });
+    rateLimit.checkLimit.mockResolvedValue({ allowed: false });
     const dto = new SearchQueryDto();
     dto.q = 'x';
 
@@ -131,6 +131,23 @@ describe('SearchController', () => {
     });
     expect(search).not.toHaveBeenCalled();
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+  });
+
+  it('should report the limiter reason in the 429 body', async () => {
+    rateLimit.checkLimit.mockResolvedValue({
+      allowed: false,
+      reason: 'Rate limit exceeded (15 requests/min)',
+    });
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+
+    await expect(controller.search(user, dto, req)).rejects.toMatchObject({
+      status: 429,
+      response: {
+        code: AIErrorCodes.RATE_LIMIT_EXCEEDED,
+        message: 'Rate limit exceeded (15 requests/min)',
+      },
+    });
   });
 
   it('should reserve with the caller identity and release the reservation after searching', async () => {
