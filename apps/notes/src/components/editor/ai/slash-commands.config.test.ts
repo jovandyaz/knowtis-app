@@ -1,5 +1,6 @@
+import { useAIStore } from '@/stores/ai.store';
 import type { Editor, Range } from '@tiptap/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { filterSlashCommands } from './slash-commands.config';
 
@@ -13,22 +14,45 @@ vi.mock('../image/imagePicker', () => ({
 
 const ids = (items: { id: string }[]) => items.map((item) => item.id);
 
+const aiItems = (items: { group: string }[]) =>
+  items.filter((item) => item.group === 'ai');
+
 describe('filterSlashCommands', () => {
-  it('offers the voice note command', () => {
+  beforeEach(() => {
+    useAIStore.setState({ aiEnabled: true });
+  });
+
+  it('offers the voice note command when AI is on', () => {
     expect(ids(filterSlashCommands(''))).toContain('ai-voice-note');
     expect(ids(filterSlashCommands('voz'))).toEqual(['ai-voice-note']);
   });
 
-  it('offers the other AI and formatting commands', () => {
-    const items = ids(filterSlashCommands(''));
+  it('offers the other AI and formatting commands when AI is on', () => {
+    const items = filterSlashCommands('');
 
-    expect(items).toContain('ai-continue');
-    expect(items).toContain('heading-1');
+    expect(aiItems(items)).not.toHaveLength(0);
+    expect(ids(items)).toContain('ai-continue');
+    expect(ids(items)).toContain('heading-1');
   });
 
-  it('returns a stable list for an empty query so the menu keeps its selection', () => {
-    expect(filterSlashCommands('')).toBe(filterSlashCommands(''));
+  it('offers only the formatting commands when AI is off', () => {
+    useAIStore.setState({ aiEnabled: false });
+
+    const items = filterSlashCommands('');
+
+    expect(aiItems(items)).toEqual([]);
+    expect(ids(items)).toContain('heading-1');
+    expect(filterSlashCommands('voz')).toEqual([]);
   });
+
+  it.each([true, false])(
+    'returns a stable list for an empty query so the menu keeps its selection (AI on: %s)',
+    (aiEnabled) => {
+      useAIStore.setState({ aiEnabled });
+
+      expect(filterSlashCommands('')).toBe(filterSlashCommands(''));
+    }
+  );
 });
 
 describe('the image slash command', () => {

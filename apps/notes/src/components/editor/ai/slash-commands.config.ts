@@ -1,3 +1,4 @@
+import { useAIStore } from '@/stores/ai.store';
 import type { Editor, Range } from '@tiptap/react';
 import {
   CheckSquare,
@@ -201,19 +202,23 @@ const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
   },
 ];
 
-const SLASH_COMMANDS: SlashCommandItem[] = [
+const SLASH_COMMANDS_WITH_AI: SlashCommandItem[] = [
   ...buildAISlashCommands(),
   ...FORMATTING_SLASH_COMMANDS,
 ];
 
 export function filterSlashCommands(query: string): SlashCommandItem[] {
+  const commands = useAIStore.getState().aiEnabled
+    ? SLASH_COMMANDS_WITH_AI
+    : FORMATTING_SLASH_COMMANDS;
+
   if (!query) {
-    return SLASH_COMMANDS;
+    return commands;
   }
 
   const normalizedQuery = query.toLowerCase();
 
-  return SLASH_COMMANDS.filter((item) => {
+  return commands.filter((item) => {
     const matchesId = item.id.toLowerCase().includes(normalizedQuery);
     const matchesKeywords = item.keywords.some((keyword) =>
       keyword.toLowerCase().includes(normalizedQuery)
