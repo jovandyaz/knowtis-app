@@ -2,36 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AI_INPUT_DISPOSITION, detectAiInput } from '@knowtis/ai-gateway';
 
-import {
-  logInputDetections,
-  resolveInputEnforcement,
-} from './ai-input-guard.policy';
+import { logInputDetections } from './ai-input-guard.policy';
 
 describe('input guard policy', () => {
-  it('fails into observation and never logs the raw flag error', async () => {
-    const logger = { warn: vi.fn() };
-    const flags = {
-      isEnabled: vi.fn().mockRejectedValue(new Error('private-secret')),
-    };
-    expect(await resolveInputEnforcement(flags, 'history', logger)).toBe(false);
-    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(
-      'private-secret'
-    );
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith({
-      event: 'ai.input_guard.flag_unavailable',
-      key: 'history',
-    });
-  });
-  it.each([false, true])('preserves successful flag=%s', async (enabled) => {
-    expect(
-      await resolveInputEnforcement(
-        { isEnabled: async () => enabled },
-        'history',
-        { warn: vi.fn() }
-      )
-    ).toBe(enabled);
-  });
   it.each(AI_INPUT_DISPOSITION)(
     'aggregates every %s row of a turn into one event pair with explicit metadata only',
     (disposition) => {

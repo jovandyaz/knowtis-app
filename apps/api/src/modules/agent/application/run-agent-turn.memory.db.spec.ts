@@ -25,7 +25,6 @@ import type { ModelPreferenceService } from '../../ai/application/services/model
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
-import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
@@ -52,9 +51,6 @@ const embedStub = {
     .fn()
     .mockResolvedValue({ vector: new Array(1024).fill(0), costUsd: 0 }),
 } as unknown as EmbeddingPort;
-const flagsOff = {
-  isEnabled: vi.fn().mockResolvedValue(false),
-} as unknown as FeatureFlagsService;
 const modelPreferenceStub = {
   getEffectiveDefault: vi.fn().mockResolvedValue(MODEL),
   assertSelectable: vi.fn(),
@@ -163,7 +159,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       new DrizzleConversationRepository(db),
       noMemories,
       embedStub,
-      flagsOff,
       modelPreferenceStub,
       byokStub,
       guardStub,
@@ -243,7 +238,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       repo,
       noMemories,
       embedStub,
-      flagsOff,
       modelPreferenceStub,
       byokStub,
       guardStub,
@@ -297,7 +291,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       new DrizzleConversationRepository(db),
       noMemories,
       embedStub,
-      flagsOff,
       modelPreferenceStub,
       byokStub,
       guardStub,

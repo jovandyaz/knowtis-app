@@ -47,16 +47,14 @@ describe('transcript replay fixtures', () => {
       ).toBe(true);
     }
   });
-  it('replays an oversized legitimate tool result to the model with enforcement on', () => {
+  it('replays an oversized legitimate tool result to the model', () => {
     const oversized = REPLAY_GUARD_CASES.find(
       (item) => item.id === 'oversized-tool'
     );
     expect(oversized).toBeDefined();
     expect(REPLAY_LONG_FACT.length).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
     const history = oversized?.history ?? [];
-    const { messages, detections } = sanitizeReplayHistory(history, {
-      enforceAssistantAndTool: true,
-    });
+    const { messages, detections } = sanitizeReplayHistory(history);
     expect(detections).toEqual([]);
     expect(JSON.stringify(toModelMessages(messages))).toContain(
       REPLAY_LONG_DETAIL

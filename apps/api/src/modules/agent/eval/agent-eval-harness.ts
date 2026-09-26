@@ -210,9 +210,7 @@ export class AgentEvalHarness {
   ): Promise<
     EvalTranscript & { replay: { detected: number; dropped: number } }
   > {
-    const sanitized = sanitizeReplayHistory(history, {
-      enforceAssistantAndTool: true,
-    });
+    const sanitized = sanitizeReplayHistory(history);
     const transcript = await this.runConversation(
       [...sanitized.messages, { role: 'user', content: latestUserContent }],
       fixtureSet,

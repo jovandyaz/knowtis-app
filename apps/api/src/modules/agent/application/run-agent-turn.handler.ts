@@ -12,7 +12,6 @@ import {
 import {
   AGENT_STOP_REASON,
   deriveConversationTitle,
-  FEATURE_FLAG_KEYS,
   type AgentStopReason,
   type ByokProvider,
   type MessageStopReason,
@@ -23,7 +22,6 @@ import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import {
   logInputDetections,
-  resolveInputEnforcement,
   type DroppedUserTurn,
 } from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
@@ -40,7 +38,6 @@ import {
 } from '../../ai/domain/ports/embedding.port';
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
-import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import { AgentErrors } from '../domain/agent-errors';
 import type {
   AgentSource,
@@ -172,7 +169,6 @@ export class RunAgentTurnHandler {
     private readonly memory: MemoryRepository,
     @Inject(EMBEDDING_PORT)
     private readonly embed: EmbeddingPort,
-    private readonly featureFlags: FeatureFlagsService,
     private readonly modelPreference: ModelPreferenceService,
     private readonly byok: ByokService,
     private readonly injectionGuard: InjectionGuardService,
@@ -546,14 +542,7 @@ export class RunAgentTurnHandler {
         return;
       }
     }
-    const enforced = await resolveInputEnforcement(
-      this.featureFlags,
-      FEATURE_FLAG_KEYS.AGENT_HISTORY_INJECTION_ENFORCEMENT,
-      this.logger
-    );
-    const sanitized = sanitizeReplayHistory(inputMessages, {
-      enforceAssistantAndTool: enforced,
-    });
+    const sanitized = sanitizeReplayHistory(inputMessages);
     const fitted = await this.fitGuardedHistory(
       sanitized.messages,
       freshUserMessage,

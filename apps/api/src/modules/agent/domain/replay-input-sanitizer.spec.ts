@@ -44,15 +44,24 @@ const result = (output: unknown): AgentMessage => ({
 });
 
 describe('replay input sanitizer', () => {
-  it('drops the whole unsafe tool row and repairs its call, while observation preserves history', () => {
+  it('blocks an injected assistant row without any enforcement option', () => {
+    const userOk: AgentMessage = { role: 'user', content: 'old question' };
+    const assistantInjected: AgentMessage = {
+      role: 'assistant',
+      content: attack,
+    };
+    const { messages, detections } = sanitizeReplayHistory([
+      userOk,
+      assistantInjected,
+    ]);
+    expect(messages).toEqual([userOk]);
+    expect(detections).toEqual([
+      expect.objectContaining({ disposition: 'block' }),
+    ]);
+  });
+  it('drops the whole unsafe tool row and repairs its call', () => {
     const history = [call, result({ body: attack })];
-    expect(
-      sanitizeReplayHistory(history, { enforceAssistantAndTool: true }).messages
-    ).toEqual([]);
-    expect(
-      sanitizeReplayHistory(history, { enforceAssistantAndTool: false })
-        .messages
-    ).toEqual(history);
+    expect(sanitizeReplayHistory(history).messages).toEqual([]);
   });
   it('projects assistant text and tool-call input, never identifiers or divergent content', () => {
     const message: AgentMessage = {
@@ -64,9 +73,7 @@ describe('replay input sanitizer', () => {
       'id\nnote-1\nA useful safe answer.'
     );
     expect(
-      sanitizeReplayHistory([message, result({ body: 'safe' })], {
-        enforceAssistantAndTool: true,
-      }).detections
+      sanitizeReplayHistory([message, result({ body: 'safe' })]).detections
     ).toEqual([]);
     expect(
       projectReplayText({ role: 'assistant', content: 'visible', parts: [] })
@@ -87,8 +94,7 @@ describe('replay input sanitizer', () => {
       ],
     };
     expect(
-      sanitizeReplayHistory([call, message], { enforceAssistantAndTool: true })
-        .detections[0]?.disposition
+      sanitizeReplayHistory([call, message]).detections[0]?.disposition
     ).toBe('block');
   });
   it('scans the tool-call input the mapper replays verbatim', () => {
@@ -105,9 +111,7 @@ describe('replay input sanitizer', () => {
     };
     expect(projectReplayText(poisoned)).toContain(attack);
     expect(
-      sanitizeReplayHistory([poisoned, result({ body: 'safe' })], {
-        enforceAssistantAndTool: true,
-      }).messages
+      sanitizeReplayHistory([poisoned, result({ body: 'safe' })]).messages
     ).toEqual([]);
   });
   it('joins assistant text parts without hiding a split instruction', () => {
@@ -132,35 +136,21 @@ describe('replay input sanitizer', () => {
       },
       { role: 'user', content: attack },
     ] as AgentMessage[]) {
-      expect(
-        sanitizeReplayHistory([message], { enforceAssistantAndTool: true })
-          .messages
-      ).toEqual([]);
+      expect(sanitizeReplayHistory([message]).messages).toEqual([]);
     }
-    expect(
-      sanitizeReplayHistory([{ role: 'user', content: attack }], {
-        enforceAssistantAndTool: false,
-      }).messages
-    ).toEqual([]);
   });
   it('keeps an oversized legitimate tool result and the call it answers', () => {
     const body = filler.repeat(FILLER_REPEATS_PAST_ONE_WINDOW);
     expect(body.length).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
     const history = [call, result({ content: body })];
-    const sanitized = sanitizeReplayHistory(history, {
-      enforceAssistantAndTool: true,
-    });
+    const sanitized = sanitizeReplayHistory(history);
     expect(sanitized.detections).toEqual([]);
     expect(sanitized.messages).toEqual(history);
   });
   it('still blocks an injection that only appears past the first scan window', () => {
     const output = `${filler.repeat(FILLER_REPEATS_PAST_ONE_WINDOW)}${attack}`;
     expect(output.length).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
-    expect(
-      sanitizeReplayHistory([call, result(output)], {
-        enforceAssistantAndTool: true,
-      }).messages
-    ).toEqual([]);
+    expect(sanitizeReplayHistory([call, result(output)]).messages).toEqual([]);
   });
   it('bounds text length and iterative traversal including wide and cyclic outputs', () => {
     const cycle: unknown[] = [];
@@ -173,17 +163,14 @@ describe('replay input sanitizer', () => {
       const projection = projectReplayText(result(output));
       expect(projection).toHaveLength(MAX_GUARD_SCAN_CHARS + 1);
       expect(
-        sanitizeReplayHistory([call, result(output)], {
-          enforceAssistantAndTool: true,
-        }).detections[0]?.detection.reasonCode
+        sanitizeReplayHistory([call, result(output)]).detections[0]?.detection
+          .reasonCode
       ).toBe('too_large');
     }
   });
   it('scans JSON property names that are visible to the model', () => {
     expect(
-      sanitizeReplayHistory([call, result({ [attack]: true })], {
-        enforceAssistantAndTool: true,
-      }).messages
+      sanitizeReplayHistory([call, result({ [attack]: true })]).messages
     ).toEqual([]);
   });
   it('keeps visible content for a row with an empty parts array', () => {
@@ -192,40 +179,30 @@ describe('replay input sanitizer', () => {
       content: 'visible',
       parts: [],
     };
-    expect(
-      toModelMessages(
-        sanitizeReplayHistory([message], { enforceAssistantAndTool: true })
-          .messages
-      )
-    ).toEqual([{ role: 'assistant', content: 'visible' }]);
+    expect(toModelMessages(sanitizeReplayHistory([message]).messages)).toEqual([
+      { role: 'assistant', content: 'visible' },
+    ]);
   });
   it('does not impose the fresh user limit on safe assistants', () => {
     const message: AgentMessage = {
       role: 'assistant',
       content: 'safe text '.repeat(1500),
     };
-    expect(
-      sanitizeReplayHistory([message], { enforceAssistantAndTool: true })
-        .messages
-    ).toEqual([message]);
+    expect(sanitizeReplayHistory([message]).messages).toEqual([message]);
   });
   it('keeps benign Spanish and exposes the known quoted-text calibration failure', () => {
     expect(
-      sanitizeReplayHistory(
-        [{ role: 'assistant', content: 'La revisión será el lunes.' }],
-        { enforceAssistantAndTool: true }
-      ).detections
+      sanitizeReplayHistory([
+        { role: 'assistant', content: 'La revisión será el lunes.' },
+      ]).detections
     ).toEqual([]);
     expect(
-      sanitizeReplayHistory(
-        [
-          {
-            role: 'assistant',
-            content: `El artículo cita "${attack}" como ejemplo.`,
-          },
-        ],
-        { enforceAssistantAndTool: true }
-      ).detections
+      sanitizeReplayHistory([
+        {
+          role: 'assistant',
+          content: `El artículo cita "${attack}" como ejemplo.`,
+        },
+      ]).detections
     ).toHaveLength(1);
   });
   it('never revives divergent content after orphan repair, including text-only pruning', () => {

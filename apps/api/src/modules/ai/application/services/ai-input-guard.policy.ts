@@ -6,8 +6,6 @@ import type {
   AiInputSurface,
 } from '@knowtis/ai-gateway';
 
-import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
-
 export interface InputDetectionRow {
   readonly detection: AiInputDetection;
   readonly disposition: AiInputDisposition;
@@ -17,19 +15,6 @@ export interface InputDetectionRow {
 export interface DroppedUserTurn {
   readonly score: number;
   readonly contentLength: number;
-}
-
-export async function resolveInputEnforcement(
-  flags: Pick<FeatureFlagsService, 'isEnabled'>,
-  key: string,
-  logger: Pick<Logger, 'warn'>
-): Promise<boolean> {
-  try {
-    return await flags.isEnabled(key);
-  } catch {
-    logger.warn({ event: 'ai.input_guard.flag_unavailable', key });
-    return false;
-  }
 }
 
 /** Emits at most one event per outcome per turn: history rows are rescanned on every replay, so per-row warnings would never stop. */

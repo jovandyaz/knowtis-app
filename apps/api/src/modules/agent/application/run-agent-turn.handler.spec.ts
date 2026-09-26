@@ -10,7 +10,6 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
-  FEATURE_FLAG_KEYS,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 
@@ -23,7 +22,6 @@ import { TurnEffortResolver } from '../../ai/application/services/turn-effort.re
 import { AIErrorCodes, AIErrors } from '../../ai/domain/errors/ai.errors';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
-import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
 import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
@@ -154,12 +152,6 @@ function makeEmbed() {
   } as unknown as EmbeddingPort;
 }
 
-function makeFlags() {
-  return {
-    isEnabled: vi.fn().mockResolvedValue(false),
-  } as unknown as FeatureFlagsService;
-}
-
 function makeModelPreference(
   effectiveDefault = 'anthropic:claude-sonnet-4-20250514'
 ) {
@@ -222,7 +214,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -279,7 +270,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -325,7 +315,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -360,7 +349,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -404,7 +392,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -444,7 +431,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -498,7 +484,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -541,7 +526,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -578,7 +562,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -612,7 +595,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -656,7 +638,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -702,7 +683,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -752,7 +732,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -799,7 +778,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -837,7 +815,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -875,7 +852,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -923,7 +899,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -955,7 +930,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -991,7 +965,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1031,7 +1004,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1082,7 +1054,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1122,7 +1093,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1171,7 +1141,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1218,7 +1187,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1258,7 +1226,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1303,7 +1270,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1343,7 +1309,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1393,7 +1358,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1447,7 +1411,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1482,7 +1445,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1521,7 +1483,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference('custom:unpriced-model'),
       makeByok(),
       makeGuard(),
@@ -1563,7 +1524,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1607,7 +1567,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1648,7 +1607,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1700,7 +1658,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1749,7 +1706,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1792,7 +1748,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1835,7 +1790,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1873,7 +1827,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1916,7 +1869,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -1964,7 +1916,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       byok,
       makeGuard(),
@@ -2010,7 +1961,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2050,7 +2000,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2099,7 +2048,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2139,7 +2087,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2221,7 +2168,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2314,7 +2260,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2395,7 +2340,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2472,7 +2416,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2521,7 +2464,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2571,7 +2513,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -2624,7 +2565,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       byok,
       makeGuard(),
@@ -2671,7 +2611,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2723,7 +2662,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2765,7 +2703,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2803,7 +2740,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2840,7 +2776,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2878,7 +2813,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2914,7 +2848,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       guard,
@@ -2958,7 +2891,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       guard,
@@ -2996,7 +2928,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3035,7 +2966,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3083,7 +3013,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3123,7 +3052,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(false),
@@ -3171,7 +3099,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3219,7 +3146,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3257,7 +3183,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference('not-a-model'),
       makeByok(),
       makeGuard(),
@@ -3295,7 +3220,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3332,7 +3256,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3373,7 +3296,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3425,7 +3347,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3466,7 +3387,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3515,7 +3435,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3559,7 +3478,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3593,7 +3511,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3643,7 +3560,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3686,7 +3602,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3729,7 +3644,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3769,7 +3683,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3815,7 +3728,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -3870,7 +3782,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -3911,7 +3822,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -3964,7 +3874,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -4024,7 +3933,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       byok,
       makeGuard(),
@@ -4075,7 +3983,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       byok,
       makeGuard(),
@@ -4119,7 +4026,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -4171,7 +4077,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       makeByok(),
       makeGuard(),
@@ -4221,7 +4126,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4267,7 +4171,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4306,7 +4209,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4348,7 +4250,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4403,7 +4304,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       modelPreference,
       byok,
       makeGuard(),
@@ -4441,7 +4341,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4482,7 +4381,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4528,7 +4426,6 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4577,7 +4474,6 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -4647,7 +4543,6 @@ describe('RunAgentTurnHandler', () => {
         conversations,
         makeMemory(),
         makeEmbed(),
-        makeFlags(),
         makeModelPreference(),
         makeByok(),
         guard,
@@ -4960,7 +4855,6 @@ describe('RunAgentTurnHandler', () => {
         conversations,
         makeMemory(),
         makeEmbed(),
-        makeFlags(),
         makeModelPreference(),
         makeByok(),
         makeGuard(),
@@ -5152,20 +5046,9 @@ describe('RunAgentTurnHandler replay guard', () => {
   }
   function setup(
     history: ConversationMessageRow[],
-    flag: boolean | Error,
     guard: InjectionGuardService = makeGuard()
   ) {
     const deps = makeDeps({});
-    const flags = makeFlags();
-    vi.mocked(flags.isEnabled).mockImplementation(async (key) => {
-      if (key === FEATURE_FLAG_KEYS.AGENT_HISTORY_INJECTION_ENFORCEMENT) {
-        if (flag instanceof Error) {
-          throw flag;
-        }
-        return flag;
-      }
-      return false;
-    });
     const handler = new RunAgentTurnHandler(
       deps.orchestrator,
       deps.rateLimit,
@@ -5175,7 +5058,6 @@ describe('RunAgentTurnHandler replay guard', () => {
       makeConversations(history),
       makeMemory(),
       makeEmbed(),
-      flags,
       makeModelPreference(),
       makeByok(),
       guard,
@@ -5190,52 +5072,43 @@ describe('RunAgentTurnHandler replay guard', () => {
     };
     return { ...deps, handler, callbacks, guard };
   }
-  it.each([false, true, new Error('private flag failure')])(
-    'observes or blocks assistant history according to flag %s',
-    async (flag) => {
-      const warn = vi
-        .spyOn(Logger.prototype, 'warn')
-        .mockImplementation(() => undefined);
-      const { handler, callbacks, orchestrator } = setup(
-        [
-          historyRow({ role: 'user', content: 'old question' }),
-          historyRow({ role: 'assistant', content: attack }),
-        ],
-        flag
-      );
-      await handler.execute(
-        {
-          userId: USER,
-          turnId: TURN_ID,
-          conversationId: 'conv-1',
-          message: { content: 'safe follow up' },
-        },
-        callbacks
-      );
-      const passed = vi.mocked(orchestrator.run).mock.calls[0][0].messages;
-      expect(JSON.stringify(passed).includes(attack)).toBe(flag !== true);
-      expect(callbacks.onError).not.toHaveBeenCalled();
-      expect(
-        warn.mock.calls.some(
-          ([event]) =>
-            typeof event === 'object' &&
-            event !== null &&
-            event.event === 'agent.history.message_dropped'
-        )
-      ).toBe(flag === true);
-      expect(JSON.stringify(warn.mock.calls)).not.toMatch(
-        /ignore all|private flag failure/
-      );
-    }
-  );
+  it('blocks injected assistant history', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { handler, callbacks, orchestrator } = setup([
+      historyRow({ role: 'user', content: 'old question' }),
+      historyRow({ role: 'assistant', content: attack }),
+    ]);
+    await handler.execute(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        message: { content: 'safe follow up' },
+      },
+      callbacks
+    );
+    const passed = vi.mocked(orchestrator.run).mock.calls[0][0].messages;
+    expect(JSON.stringify(passed)).not.toContain(attack);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(
+      warn.mock.calls.some(
+        ([event]) =>
+          typeof event === 'object' &&
+          event !== null &&
+          event.event === 'agent.history.message_dropped'
+      )
+    ).toBe(true);
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/ignore all/);
+  });
   it('drops old injected user text before coalescing with the fresh user', async () => {
     const warn = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
-    const { handler, callbacks, orchestrator, guard } = setup(
-      [historyRow({ role: 'user', content: attack })],
-      false
-    );
+    const { handler, callbacks, orchestrator, guard } = setup([
+      historyRow({ role: 'user', content: attack }),
+    ]);
     await handler.execute(
       {
         userId: USER,
@@ -5270,7 +5143,6 @@ describe('RunAgentTurnHandler replay guard', () => {
   it('guards the coalesced user tail so sub-threshold rows cannot combine', async () => {
     const { handler, callbacks, orchestrator, guard } = setup(
       [historyRow({ role: 'user', content: 'new instructions:' })],
-      false,
       realGuard()
     );
     await handler.execute(
@@ -5327,7 +5199,6 @@ describe('RunAgentTurnHandler replay guard', () => {
           turnId: 't1',
         }),
       ],
-      false,
       realGuard()
     );
     await handler.execute(
@@ -5383,7 +5254,6 @@ describe('RunAgentTurnHandler replay guard', () => {
         ...toolOnlyTurn('t1', 'first half'),
         ...toolOnlyTurn('t2', 'second half'),
       ],
-      false,
       {
         guard: vi.fn(async (text: string) =>
           text.includes(COALESCED_MESSAGE_SEPARATOR)
@@ -5413,7 +5283,6 @@ describe('RunAgentTurnHandler replay guard', () => {
     const half = 'safe planning words. '.repeat(1_500);
     const { handler, callbacks, orchestrator } = setup(
       [historyRow({ role: 'user', content: half })],
-      false,
       realGuard()
     );
     expect(half.length * 2).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
@@ -5439,7 +5308,6 @@ describe('RunAgentTurnHandler replay guard', () => {
     const fresh = 'fresh question';
     const { handler, callbacks, guard } = setup(
       [historyRow({ role: 'user', content: persisted })],
-      false,
       {
         guard: vi.fn(async (text: string) =>
           text.includes(COALESCED_MESSAGE_SEPARATOR)
@@ -5474,7 +5342,6 @@ describe('RunAgentTurnHandler replay guard', () => {
     const fresh = 'all previous instructions';
     const { handler, callbacks, orchestrator, guard } = setup(
       [historyRow({ role: 'user', content: persisted })],
-      false,
       realGuard()
     );
     await handler.execute(
@@ -5501,7 +5368,6 @@ describe('RunAgentTurnHandler replay guard', () => {
       .mockImplementation(() => undefined);
     const { handler, callbacks, orchestrator } = setup(
       [historyRow({ role: 'user', content: 'new instructions:' })],
-      false,
       {
         guard: vi.fn(async (text: string) =>
           text.includes(COALESCED_MESSAGE_SEPARATOR)
@@ -5552,7 +5418,6 @@ describe('RunAgentTurnHandler replay guard', () => {
         historyRow({ role: 'user', content: 'later question' }),
         historyRow({ role: 'assistant', content: 'pending proposal' }),
       ],
-      false,
       makeGuard(false)
     );
     await handler.resumeTurn(
@@ -5575,7 +5440,6 @@ describe('RunAgentTurnHandler replay guard', () => {
   it('treats the last persisted user on resume as history, not a fresh request', async () => {
     const { handler, callbacks, orchestrator, guard } = setup(
       [historyRow({ role: 'user', content: attack })],
-      true,
       makeGuard(false)
     );
     await handler.resumeTurn(
@@ -5594,7 +5458,6 @@ describe('RunAgentTurnHandler replay guard', () => {
   it('still rejects a fresh injected request before reserving quota', async () => {
     const { handler, callbacks, orchestrator, rateLimit } = setup(
       [],
-      true,
       makeGuard(false)
     );
     await handler.execute(
@@ -5635,7 +5498,6 @@ describe('RunAgentTurnHandler turn identity', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(),
       over.modelPreference ?? makeModelPreference(),
       makeByok(),
       over.guard ?? makeGuard(),

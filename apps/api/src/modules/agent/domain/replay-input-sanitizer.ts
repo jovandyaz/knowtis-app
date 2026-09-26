@@ -86,22 +86,18 @@ export function projectReplayText(message: AgentMessage): string {
 }
 
 /** Scans persisted history only; the caller guards the fresh user separately. */
-export function sanitizeReplayHistory(
-  messages: readonly AgentMessage[],
-  options: { enforceAssistantAndTool: boolean }
-): { messages: AgentMessage[]; detections: ReplayDetection[] } {
+export function sanitizeReplayHistory(messages: readonly AgentMessage[]): {
+  messages: AgentMessage[];
+  detections: ReplayDetection[];
+} {
   const detections: ReplayDetection[] = [];
   const kept = messages.filter((message, index) => {
     const detection = detectAiInput(projectReplayText(message));
     if (detection.safe) {
       return true;
     }
-    const disposition =
-      message.role === 'user' || options.enforceAssistantAndTool
-        ? 'block'
-        : 'observe';
-    detections.push({ index, detection, disposition });
-    return disposition === 'observe';
+    detections.push({ index, detection, disposition: 'block' });
+    return false;
   });
   return { messages: repairTranscriptOrphans(kept), detections };
 }
