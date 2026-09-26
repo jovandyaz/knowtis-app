@@ -1,105 +1,50 @@
-import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
-import type { RequestUser } from '@jovandyaz/auth/server';
-import { PoliciesGuard } from '@jovandyaz/permissions-nestjs';
-import { Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import type { Request } from 'express';
 import { describe, expect, it } from 'vitest';
 
-import { AgentModule } from '../../agent/agent.module';
 import {
-  RETRIEVAL_PORT,
-  type RetrievalPort,
-} from '../../agent/domain/ports/retrieval.port';
-import type { NoteHit } from '../../agent/domain/retrieval';
-import { AIModule } from '../../ai/ai.module';
+  bootConfigModule,
+  infrastructureStub,
+} from '../../../test-support/module-boot';
+import { RETRIEVAL_PORT } from '../../agent/domain/ports/retrieval.port';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
-import { SearchQueryDto } from '../dto/search-query.dto';
+import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
 import { SearchController } from '../search.controller';
 import { SearchModule } from '../search.module';
 
-// NestJS records @Module({ exports }) under this Reflect key; reading it proves
-// the export contract without booting AgentModule's deep infrastructure graph.
-const MODULE_EXPORTS_KEY = 'exports';
+const COMPILE_TIMEOUT_MS = 15_000;
 
-const sentinel: NoteHit = {
-  id: 'sentinel',
-  title: 'Sentinel',
-  updatedAt: '2026-07-01T00:00:00.000Z',
-  isOwner: true,
-  isSharedWithMe: false,
-  isPubliclyShared: false,
-};
-
-const stubRetrieval: RetrievalPort = {
-  search: async () => [sentinel],
-  listUnindexed: async () => [],
-  getById: async () => null,
-  getBody: async () => null,
-  listRecent: async () => [],
-  overview: async () => ({ total: 0, owned: 0, sharedWithMe: 0 }),
-};
-
-@Module({
-  providers: [{ provide: RETRIEVAL_PORT, useValue: stubRetrieval }],
-  exports: [RETRIEVAL_PORT],
-})
-class StubAgentModule {}
-
-const stubRateLimit: Pick<
+const IMPORTED_TOKENS: readonly unknown[] = [
+  RETRIEVAL_PORT,
   AIRateLimitService,
-  'checkLimit' | 'releaseReservation'
-> = {
-  checkLimit: async () => ({ allowed: true }),
-  releaseReservation: async () => undefined,
-};
+];
 
-@Module({
-  providers: [{ provide: AIRateLimitService, useValue: stubRateLimit }],
-  exports: [AIRateLimitService],
-})
-class StubAiModule {}
+const mockAllButTheImportedTokens = (token: unknown) =>
+  IMPORTED_TOKENS.includes(token) ? undefined : infrastructureStub();
 
-describe('SearchModule bootstrap', () => {
-  // Guards the REAL AgentModule's export list. The DI-boot test below stubs
-  // AgentModule, so it cannot catch a regression that drops this export — only
-  // this metadata assertion can.
-  it('exports RETRIEVAL_PORT from AgentModule for cross-module injection', () => {
-    const exports: unknown[] =
-      Reflect.getMetadata(MODULE_EXPORTS_KEY, AgentModule) ?? [];
-    expect(exports).toContain(RETRIEVAL_PORT);
-  });
+describe('SearchModule wiring', () => {
+  it(
+    'builds SearchController on the retrieval port and rate limiter its imported modules export',
+    async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [bootConfigModule(), SearchModule],
+      })
+        .overrideProvider(AI_REDIS)
+        .useValue(infrastructureStub())
+        .useMocker(mockAllButTheImportedTokens)
+        .compile();
 
-  it('exports AIRateLimitService from AIModule for cross-module injection', () => {
-    const exports: unknown[] =
-      Reflect.getMetadata(MODULE_EXPORTS_KEY, AIModule) ?? [];
-    expect(exports).toContain(AIRateLimitService);
-  });
+      try {
+        const controller = moduleRef.get(SearchController);
+        const retrieval = moduleRef.get(RETRIEVAL_PORT);
+        const rateLimit = moduleRef.get(AIRateLimitService);
 
-  it('resolves SearchController with the retrieval port injected via the imported module export', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [SearchModule],
-    })
-      .overrideModule(AgentModule)
-      .useModule(StubAgentModule)
-      .overrideModule(AIModule)
-      .useModule(StubAiModule)
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(PoliciesGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
-
-    const controller = moduleRef.get(SearchController);
-    expect(controller).toBeInstanceOf(SearchController);
-
-    const dto = new SearchQueryDto();
-    dto.q = 'sentinel';
-    const result = await controller.search({ id: 'u1' } as RequestUser, dto, {
-      headers: {},
-    } as Request);
-    expect(result.hits).toEqual([sentinel]);
-
-    await moduleRef.close();
-  });
+        expect(rateLimit).toBeInstanceOf(AIRateLimitService);
+        expect(Object.values(controller)).toContain(retrieval);
+        expect(Object.values(controller)).toContain(rateLimit);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
 });
