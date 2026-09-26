@@ -146,6 +146,7 @@ function makeMemory(
 
 function makeEmbed() {
   return {
+    isConfigured: vi.fn().mockReturnValue(true),
     embedQuery: vi.fn().mockResolvedValue({
       vector: new Array(1024).fill(0),
       costUsd: 0.001,
@@ -153,9 +154,9 @@ function makeEmbed() {
   } as unknown as EmbeddingPort;
 }
 
-function makeFlags(enabled = false) {
+function makeFlags() {
   return {
-    isEnabled: vi.fn().mockResolvedValue(enabled),
+    isEnabled: vi.fn().mockResolvedValue(false),
   } as unknown as FeatureFlagsService;
 }
 
@@ -3579,11 +3580,10 @@ describe('RunAgentTurnHandler', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
-  it('retrieves user memories and injects them into the orchestrator when the flag is on', async () => {
+  it('retrieves user memories and injects them into the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
-    const flags = makeFlags(true);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3593,7 +3593,7 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      flags,
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3629,11 +3629,11 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
-  it('does not inject memories when the flag is off', async () => {
+  it('skips memory retrieval without embedding when embeddings are not configured', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
-    const flags = makeFlags(false);
+    vi.mocked(embed.isConfigured).mockReturnValue(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3643,7 +3643,7 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      flags,
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3666,17 +3666,17 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
     expect(memory.searchForUser).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.not.objectContaining({ userMemories: expect.anything() })
     );
   });
 
-  it('does not retrieve memories for anonymous users even with the flag on', async () => {
+  it('does not retrieve memories for anonymous users', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
-    const flags = makeFlags(true);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3686,7 +3686,7 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      flags,
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3709,9 +3709,6 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(flags.isEnabled).not.toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-    );
     expect(embed.embedQuery).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.not.objectContaining({ userMemories: expect.anything() })
@@ -3723,7 +3720,6 @@ describe('RunAgentTurnHandler', () => {
     const memory = makeMemory();
     vi.mocked(memory.searchForUser).mockRejectedValue(new Error('vector down'));
     const embed = makeEmbed();
-    const flags = makeFlags(true);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3733,7 +3729,7 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      flags,
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3752,50 +3748,6 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(onError).not.toHaveBeenCalled();
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.not.objectContaining({ userMemories: expect.anything() })
-    );
-  });
-
-  it('proceeds without memories when the feature-flag lookup throws', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
-    const embed = makeEmbed();
-    const flags = makeFlags(true);
-    vi.mocked(flags.isEnabled).mockImplementation((key) =>
-      key === FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-        ? Promise.reject(new Error('flag store down'))
-        : Promise.resolve(false)
-    );
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      memory,
-      embed,
-      flags,
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
-    const onError = vi.fn();
-
-    await handler.execute(
-      {
-        userId: USER,
-        turnId: TURN_ID,
-        message: { content: 'what should I cook?' },
-      },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
-    );
-
-    expect(onError).not.toHaveBeenCalled();
-    expect(embed.embedQuery).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.not.objectContaining({ userMemories: expect.anything() })
     );
@@ -3808,7 +3760,6 @@ describe('RunAgentTurnHandler', () => {
       { id: 'm2', content: 'Noise', score: 0.05 },
     ]);
     const embed = makeEmbed();
-    const flags = makeFlags(true);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3818,7 +3769,7 @@ describe('RunAgentTurnHandler', () => {
       makeConversations(),
       memory,
       embed,
-      flags,
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),

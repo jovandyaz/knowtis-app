@@ -29,6 +29,7 @@ function makeTask(opts: {
     touch: vi.fn(async () => undefined),
   } as unknown as NoteEmbeddingRepository;
   const embed = {
+    isConfigured: vi.fn().mockReturnValue(true),
     embedQuery: vi.fn(),
     embedDocuments: vi.fn(async (texts: string[]) => ({
       embeddings: texts.map(() => new Array(1024).fill(0.1)),

@@ -48,14 +48,31 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     if (branded.isErr()) {
       return [];
     }
-    const user = branded.value;
+    try {
+      return await this.fuse(branded.value, userId, query);
+    } catch (error) {
+      this.logger.warn(
+        'Hybrid retrieval failed; degrading to keyword',
+        error instanceof Error ? error.stack : String(error)
+      );
+      return this.keyword.search(userId, query);
+    }
+  }
 
+  private async fuse(
+    user: UserId,
+    userId: string,
+    query: string
+  ): Promise<NoteHit[]> {
     const lexicalRows = await this.notes.findAccessibleNotesByLexicalRank(
       user,
       query,
       CANDIDATES_PER_LEG
     );
     const lexical = lexicalRows.map((r) => toNoteHit(r, userId));
+    if (!this.embed.isConfigured()) {
+      return lexical.slice(0, MAX_HITS);
+    }
 
     let vector: NoteHit[] = [];
     try {
@@ -88,20 +105,28 @@ export class HybridRetrievalAdapter implements RetrievalPort {
   }
 
   async listUnindexed(userId: string, limit: number): Promise<NoteHit[]> {
-    if (!this.config.get('VOYAGE_API_KEY')) {
+    if (!this.embed.isConfigured()) {
       return [];
     }
     const branded = UserId.create(userId);
     if (branded.isErr()) {
       return [];
     }
-    const rows = await this.notes.findAccessibleNotesUnindexed(
-      branded.value,
-      this.config.get('AI_EMBEDDING_MODEL'),
-      PENDING_INDEX_WINDOW_SECONDS,
-      limit
-    );
-    return rows.map((r) => toNoteHit(r, userId));
+    try {
+      const rows = await this.notes.findAccessibleNotesUnindexed(
+        branded.value,
+        this.config.get('AI_EMBEDDING_MODEL'),
+        PENDING_INDEX_WINDOW_SECONDS,
+        limit
+      );
+      return rows.map((r) => toNoteHit(r, userId));
+    } catch (error) {
+      this.logger.warn(
+        'Unindexed lookup failed; reporting none',
+        error instanceof Error ? error.stack : String(error)
+      );
+      return [];
+    }
   }
 
   getById(userId: string, noteId: string): Promise<AgentNote | null> {

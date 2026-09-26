@@ -303,11 +303,7 @@ export class RunAgentTurnHandler {
       return [];
     }
     try {
-      if (
-        !(await this.featureFlags.isEnabled(
-          FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-        ))
-      ) {
+      if (!this.embed.isConfigured()) {
         return [];
       }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');

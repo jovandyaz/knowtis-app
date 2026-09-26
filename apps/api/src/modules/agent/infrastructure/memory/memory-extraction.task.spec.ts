@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import type { ConversationMessageRow } from '../../domain/ports/conversation.repository';
 import { MemoryExtractionTask } from './memory-extraction.task';
@@ -61,7 +59,6 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
       )[k],
   };
   const aiConfig = { getFastModel: vi.fn().mockResolvedValue('m') };
-  const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
   const conversations = {
     findExtractable: vi.fn().mockResolvedValue([{ id: 'c1', userId: 'u1' }]),
     loadMessages: vi.fn().mockResolvedValue([
@@ -101,7 +98,6 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     client,
     config as never,
     aiConfig as never,
-    flags as never,
     conversations as never,
     memory as never,
     structured as never,
@@ -114,24 +110,12 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     conversations,
     memory,
     structured,
-    flags,
     embed,
     rateLimit,
   };
 }
 
 describe('MemoryExtractionTask', () => {
-  it('gates reconcile on the registered agent_longterm_memory flag key', async () => {
-    expect(FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY).toBe(
-      'agent_longterm_memory'
-    );
-    const { task, flags } = make();
-    await task.reconcile();
-    expect(flags.isEnabled).toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-    );
-  });
-
   it('extracts, persists an ADD, and marks the conversation', async () => {
     const { task, memory, conversations } = make();
     await task.reconcile();
@@ -187,16 +171,6 @@ describe('MemoryExtractionTask', () => {
       expect.anything(),
       expect.objectContaining({ fallbackScope: 'same-family' })
     );
-  });
-
-  it('does nothing when the flag is off', async () => {
-    const { task, conversations, flags } = make();
-    flags.isEnabled.mockResolvedValue(false);
-    await task.reconcile();
-    expect(flags.isEnabled).toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-    );
-    expect(conversations.findExtractable).not.toHaveBeenCalled();
   });
 
   it('skips storing content flagged as prompt injection', async () => {
