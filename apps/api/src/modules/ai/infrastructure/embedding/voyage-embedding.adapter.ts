@@ -49,10 +49,10 @@ export class VoyageEmbeddingAdapter implements EmbeddingPort, OnModuleInit {
     input: string[],
     inputType: 'query' | 'document'
   ): Promise<EmbeddingResult> {
-    const apiKey = this.config.get('VOYAGE_API_KEY');
-    if (!apiKey) {
+    if (!this.isConfigured()) {
       throw new Error('VOYAGE_API_KEY is not set');
     }
+    const apiKey = this.config.get('VOYAGE_API_KEY') as string;
     const model = this.config.get('AI_EMBEDDING_MODEL');
 
     const response = await fetch(VOYAGE_URL, {
