@@ -18,7 +18,7 @@ describe('SettingsNav', () => {
     vi.clearAllMocks();
   });
 
-  it('hides the connected apps entry when the feature is unavailable (flag off)', () => {
+  it('hides the connected apps entry when the feature is unavailable (OAuth not configured)', () => {
     useConnectedAppsAvailable.mockReturnValue(false);
 
     render(<SettingsNav activeSection="profile" onSectionChange={vi.fn()} />);

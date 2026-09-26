@@ -33,7 +33,7 @@ export function ConnectedAppsSection() {
   const { data: grants, isLoading, isError, error } = useOauthGrants();
   const [revokeTarget, setRevokeTarget] = useState<OauthGrant | null>(null);
 
-  // A terminal 404 means the MCP OAuth flag is off — hide the section entirely.
+  // A terminal 404 means OAuth isn't configured on the server, so hide the section entirely.
   if (isOauthDisabledError(error)) {
     return null;
   }

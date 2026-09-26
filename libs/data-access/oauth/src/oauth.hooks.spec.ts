@@ -204,7 +204,7 @@ describe('oauth hooks', () => {
       expect(result.current.data).toEqual(grants);
     });
 
-    it('does not retry and surfaces the error when the flag is off (404)', async () => {
+    it('does not retry and surfaces the error when OAuth is not configured (404)', async () => {
       vi.mocked(oauthApi.getGrants).mockRejectedValue(new Error('Not Found'));
 
       const { result } = renderHook(() => useOauthGrants(), { wrapper });
@@ -285,7 +285,7 @@ describe('oauth hooks', () => {
       expect(result.current).toBe(false);
     });
 
-    it('turns unavailable when the grants request 404s (flag off)', async () => {
+    it('turns unavailable when the grants request 404s (OAuth not configured)', async () => {
       vi.mocked(oauthApi.getGrants).mockRejectedValue(
         new ApiClientError('Not Found', 404)
       );

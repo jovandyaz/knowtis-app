@@ -16,7 +16,6 @@ import type Provider from 'oidc-provider';
 import type { Interaction, InteractionResults } from 'oidc-provider';
 
 import { DATABASE_CONNECTION, type Database } from '../../database';
-import { FeatureFlagsService } from '../feature-flags';
 import { findGrantIdsByAccountAndClient } from './drizzle-oidc.adapter';
 import { ConsentDecisionDto } from './dto/consent-decision.dto';
 import {
@@ -24,7 +23,6 @@ import {
   OAUTH_RUNTIME,
   type OauthRuntime,
 } from './oauth.tokens';
-import { MCP_OAUTH_FLAG } from './oidc-mount.middleware';
 import type { OidcProviderHandle } from './oidc-provider.factory';
 
 interface InteractionDescription {
@@ -73,8 +71,7 @@ export class OauthInteractionController {
     @Inject(OAUTH_RUNTIME)
     private readonly runtime: OauthRuntime | null,
     @Inject(DATABASE_CONNECTION)
-    private readonly db: Database,
-    private readonly featureFlags: FeatureFlagsService
+    private readonly db: Database
   ) {}
 
   @Get(':uid')
@@ -184,9 +181,6 @@ export class OauthInteractionController {
 
   private async resolveProvider(): Promise<Provider> {
     if (!this.handle) {
-      throw new NotFoundException();
-    }
-    if (!(await this.featureFlags.isEnabled(MCP_OAUTH_FLAG))) {
       throw new NotFoundException();
     }
     return this.handle.provider;

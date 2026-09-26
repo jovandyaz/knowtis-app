@@ -35,7 +35,7 @@ export function classifyConsentError(error: unknown): ConsentDecisionError {
     : { kind: 'retryable', terminal: false };
 }
 
-/** True when the API answered 404 — the MCP OAuth feature is off. */
+/** True when the API answered 404 — OAuth is not configured on the server. */
 export function isOauthDisabledError(error: unknown): boolean {
   return ApiClientError.isApiClientError(error) && error.status === 404;
 }

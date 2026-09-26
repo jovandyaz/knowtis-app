@@ -38,7 +38,7 @@ describe('ConnectedAppsSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders nothing when the grants request 404s (OAuth flag off)', () => {
+  it('renders nothing when the grants request 404s (OAuth not configured)', () => {
     useOauthGrants.mockReturnValue({
       data: undefined,
       isLoading: false,
