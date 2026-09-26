@@ -49,12 +49,11 @@ export class TavilyWebSearchAdapter implements WebSearchPort, OnModuleInit {
   }
 
   private client(): TavilyWebSearch {
-    const apiKey = this.config.get('TAVILY_API_KEY');
-    if (!apiKey) {
+    if (!this.isConfigured()) {
       throw new Error('TAVILY_API_KEY is not set');
     }
     return new TavilyWebSearch({
-      apiKey,
+      apiKey: this.config.get('TAVILY_API_KEY') as string,
       maxResults: this.config.get('AI_WEB_SEARCH_MAX_RESULTS'),
       depth: this.config.get('AI_WEB_SEARCH_DEPTH'),
       timeoutMs: this.config.get('AI_TIMEOUT_MS'),
