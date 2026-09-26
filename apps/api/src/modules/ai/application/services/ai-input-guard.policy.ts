@@ -6,10 +6,12 @@ import type {
   AiInputSurface,
 } from '@knowtis/ai-gateway';
 
+type InputRole = 'user' | 'assistant' | 'tool';
+
 export interface InputDetectionRow {
   readonly detection: AiInputDetection;
   readonly disposition: AiInputDisposition;
-  readonly role?: 'user' | 'assistant' | 'tool';
+  readonly role: InputRole;
   readonly redactedSpans: number;
 }
 
@@ -34,6 +36,12 @@ export function logInputDetections(
   const blocked = count('block');
   const withheld = count('withhold');
   const redacted = count('redact');
+  const droppedRoles: Partial<Record<InputRole, number>> = {};
+  for (const row of rows) {
+    if (row.disposition === 'block') {
+      droppedRoles[row.role] = (droppedRoles[row.role] ?? 0) + 1;
+    }
+  }
   const metadata = {
     surface: context.surface,
     userId: context.userId,
@@ -47,7 +55,7 @@ export function logInputDetections(
       ...metadata,
       blocked,
       rows: rows.map((row) => ({
-        ...(row.role ? { role: row.role } : {}),
+        role: row.role,
         disposition: row.disposition,
         score: row.detection.score,
         contentLength: row.detection.contentLength,
@@ -61,6 +69,7 @@ export function logInputDetections(
       event: 'agent.history.message_dropped',
       ...metadata,
       blocked,
+      roles: droppedRoles,
     });
   }
   if (withheld + redacted > 0) {

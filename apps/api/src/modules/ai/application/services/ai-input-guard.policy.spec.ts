@@ -19,6 +19,7 @@ const OUTCOME_EVENTS: Record<AiInputDisposition, object> = {
     event: 'agent.history.message_dropped',
     ...metadata,
     blocked: 2,
+    roles: { assistant: 1, tool: 1 },
   },
   withhold: {
     event: 'agent.history.content_neutralized',
@@ -95,7 +96,14 @@ describe('input guard policy', () => {
       metadata
     );
     expect(logger.warn.mock.calls.slice(1)).toEqual([
-      [{ event: 'agent.history.message_dropped', ...metadata, blocked: 1 }],
+      [
+        {
+          event: 'agent.history.message_dropped',
+          ...metadata,
+          blocked: 1,
+          roles: { user: 1 },
+        },
+      ],
       [
         {
           event: 'agent.history.content_neutralized',
