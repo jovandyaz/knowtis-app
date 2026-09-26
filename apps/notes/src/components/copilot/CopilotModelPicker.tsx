@@ -14,7 +14,6 @@ import { useAgentStore } from '@/stores/agent.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
-import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import {
   Button,
   ModelMenu,
@@ -23,7 +22,6 @@ import {
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import {
   DEFAULT_MODEL_INTENT,
-  FEATURE_FLAG_KEYS,
   isModelIntent,
   isReasoningEffort,
 } from '@knowtis/shared-types';
@@ -45,8 +43,7 @@ export function CopilotModelPicker() {
   const showPicker = user != null;
   const isAnonymous = user?.isAnonymous === true;
   // The key endpoints reject a guest, so BYOK stays registered-only.
-  const canUseByok =
-    useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && !isAnonymous;
+  const canUseByok = !isAnonymous;
   const {
     data: models,
     isPending,

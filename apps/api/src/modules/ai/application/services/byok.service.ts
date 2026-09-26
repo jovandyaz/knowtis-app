@@ -9,14 +9,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import { providerOf } from '@knowtis/ai-gateway';
-import {
-  FEATURE_FLAG_KEYS,
-  type ByokProvider,
-  type ProviderKeyInfo,
-} from '@knowtis/shared-types';
+import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
   USER_AI_SETTINGS_REPOSITORY,
@@ -44,7 +39,6 @@ export class ByokService {
   constructor(
     @Inject(USER_PROVIDER_KEYS_REPOSITORY)
     private readonly repo: UserProviderKeysRepository,
-    private readonly flags: FeatureFlagsService,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly registry: ProviderRegistryFactory,
     private readonly verifiedIdentity: VerifiedIdentityPolicy,
@@ -61,11 +55,7 @@ export class ByokService {
     userId: string,
     isAnonymous = false
   ): Promise<ReadonlySet<ByokProvider>> {
-    if (
-      isAnonymous ||
-      !this.masterKey ||
-      !(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_BYOK))
-    ) {
+    if (isAnonymous || !this.masterKey) {
       return new Set();
     }
     return new Set(await this.repo.getEnabledProviders(userId));
@@ -75,10 +65,7 @@ export class ByokService {
     userId: string,
     provider: ByokProvider
   ): Promise<string | null> {
-    if (
-      !this.masterKey ||
-      !(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_BYOK))
-    ) {
+    if (!this.masterKey) {
       return null;
     }
     const stored = await this.repo.getEncrypted(userId, provider);

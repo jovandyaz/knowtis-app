@@ -17,7 +17,6 @@ const modelsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsData = vi.fn();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
-const byokFlag = vi.fn<() => boolean>();
 const openSettings = vi.fn();
 const navigate = vi.fn();
 const keysData = vi.fn();
@@ -32,9 +31,6 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
-}));
-vi.mock('@knowtis/data-access-feature-flags', () => ({
-  useFeatureFlag: () => byokFlag(),
 }));
 vi.mock('@/stores/settings.store', () => ({
   useSettingsStore: (selector: (s: { open: typeof openSettings }) => unknown) =>
@@ -206,7 +202,6 @@ describe('CopilotModelPicker', () => {
       preferredIntent: null,
     });
     authUser.mockReturnValue({ isAnonymous: false });
-    byokFlag.mockReturnValue(true);
     keysData.mockReturnValue([]);
     keysPending.mockReturnValue(false);
   });

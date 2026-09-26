@@ -417,13 +417,13 @@ describe('CatalogSection', () => {
     );
   });
 
-  it('names the flag when that is what stopped the sync', () => {
+  it('says another sync holds the lock when that is what stopped it', () => {
     syncStateMock.mockReturnValue({
       ...IDLE_SYNC,
       isSuccess: true,
       data: {
         status: 'skipped',
-        skippedReason: 'flag_disabled',
+        skippedReason: 'locked',
         upstream: 0,
         candidates: 0,
         alerts: 0,
@@ -432,7 +432,9 @@ describe('CatalogSection', () => {
     });
     renderSection();
 
-    expect(screen.getByRole('status')).toHaveTextContent(/ai_catalog_sync/);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Skipped: another sync is already running.'
+    );
   });
 
   it('still reports a sync whose skip reason this bundle predates', () => {

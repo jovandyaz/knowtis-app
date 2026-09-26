@@ -7,9 +7,8 @@ import {
 } from '@/hooks';
 import { useSettingsStore } from '@/stores/settings.store';
 
-import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { Switch } from '@knowtis/design-system';
-import { DEFAULT_MODEL_INTENT, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import { DEFAULT_MODEL_INTENT } from '@knowtis/shared-types';
 
 import { advancedOverride } from '../../copilot/intent-picker-options';
 import { IntentModelPicker } from '../../copilot/IntentModelPicker';
@@ -21,7 +20,6 @@ export function AIAssistantSection() {
   const { data: models, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
-  const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
   const focusTarget = useSettingsStore((s) => s.focusTarget);
 
   return (
@@ -61,9 +59,7 @@ export function AIAssistantSection() {
         </div>
       </section>
 
-      {byokEnabled ? (
-        <AIKeysManager focusFirstField={focusTarget === 'aiKeys'} />
-      ) : null}
+      <AIKeysManager focusFirstField={focusTarget === 'aiKeys'} />
     </div>
   );
 }

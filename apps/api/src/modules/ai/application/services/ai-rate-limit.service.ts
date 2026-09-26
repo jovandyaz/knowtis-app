@@ -3,10 +3,7 @@ import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import type { EnvConfig } from '../../../../config/env.config';
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
@@ -24,9 +21,10 @@ interface RateLimitResult {
   readonly reason?: string;
   /**
    * The hashed per-IP subject that was actually reserved this turn, or absent
-   * when no IP reservation was made (not anonymous, flag off, or the IP reserve
-   * degraded open). Callers thread it back into recordUsage/releaseReservation
-   * so reconciliation touches exactly what was reserved — never a re-derived set.
+   * when no IP reservation was made (not anonymous, no client IP, or the IP
+   * reserve degraded open). Callers thread it back into
+   * recordUsage/releaseReservation so reconciliation touches exactly what was
+   * reserved — never a re-derived set.
    */
   readonly reservedIpSubject?: string;
 }
@@ -64,9 +62,7 @@ export class AIRateLimitService {
     @Inject(RATE_LIMIT_PROVIDER)
     private readonly rateLimitProvider?: RateLimitProvider,
     @Optional()
-    private readonly alerts?: WebhookAlertService,
-    @Optional()
-    private readonly featureFlags?: FeatureFlagsService
+    private readonly alerts?: WebhookAlertService
   ) {}
 
   async checkLimit(
@@ -78,8 +74,7 @@ export class AIRateLimitService {
     clientIp?: string
   ): Promise<RateLimitResult> {
     const limits = this.effectiveLimits(isAnonymous);
-    const effectiveCostUsd =
-      await this.effectiveEstimatedCost(estimatedCostUsd);
+    const effectiveCostUsd = Math.max(estimatedCostUsd, 0);
 
     if (this.rateLimitProvider) {
       // The global breaker bounds ALL server-billed spend, so it runs before any
@@ -105,9 +100,6 @@ export class AIRateLimitService {
         this.logger.warn('Redis RPM check unavailable, skipping', error);
       }
 
-      // BYOK turns bill the user's key: no daily budget, only RPM plus (behind
-      // ai_byok_cost_gate) a ceiling on server-billed side costs. PG RPM
-      // backstop applies when the Redis RPM check was unavailable.
       if (byok) {
         const byokGate = await this.checkByokCostCeiling(userId);
         if (!byokGate.allowed) {
@@ -164,7 +156,7 @@ export class AIRateLimitService {
     isAnonymous: boolean,
     clientIp?: string
   ): Promise<RateLimitResult> {
-    const ipSubject = await this.anonymousIpSubject(isAnonymous, clientIp);
+    const ipSubject = this.anonymousIpSubject(isAnonymous, clientIp);
     if (!ipSubject || !this.rateLimitProvider) {
       return { allowed: true };
     }
@@ -203,27 +195,18 @@ export class AIRateLimitService {
     }
   }
 
-  // Derived once, at reserve time. The reserved subject is threaded back to
-  // reconciliation as a receipt (see RateLimitResult.reservedIpSubject), so a
-  // mid-turn flag flip can never desync reserve and reconcile.
-  private async anonymousIpSubject(
+  private anonymousIpSubject(
     isAnonymous: boolean,
     clientIp: string | undefined
-  ): Promise<string | undefined> {
+  ): string | undefined {
     if (!isAnonymous || !clientIp) {
-      return undefined;
-    }
-    if (!(await this.isFlagOn('AI_ANON_IP_BUDGET'))) {
       return undefined;
     }
     return `ip:${createHash('sha256').update(clientIp).digest('hex').slice(0, 16)}`;
   }
 
   private async checkByokCostCeiling(userId: string): Promise<RateLimitResult> {
-    if (
-      !this.rateLimitProvider ||
-      !(await this.isFlagOn('AI_BYOK_COST_GATE'))
-    ) {
+    if (!this.rateLimitProvider) {
       return { allowed: true };
     }
     try {
@@ -249,10 +232,7 @@ export class AIRateLimitService {
   // most (in-flight turns × per-turn estimate). Enforcement stays out of the
   // reservation Lua because BYOK turns skip reservation yet must still be gated.
   private async checkGlobalSpendBreaker(): Promise<RateLimitResult> {
-    if (
-      !this.rateLimitProvider ||
-      !(await this.isFlagOn('AI_GLOBAL_SPEND_BREAKER'))
-    ) {
+    if (!this.rateLimitProvider) {
       return { allowed: true };
     }
     try {
@@ -365,40 +345,6 @@ export class AIRateLimitService {
     }
   }
 
-  private async isFlagOn(
-    key: keyof typeof FEATURE_FLAG_KEYS
-  ): Promise<boolean> {
-    if (!this.featureFlags) {
-      return false;
-    }
-    try {
-      return await this.featureFlags.isEnabled(FEATURE_FLAG_KEYS[key]);
-    } catch (error) {
-      this.logger.warn(`Flag lookup for ${key} failed, treating as off`, error);
-      return false;
-    }
-  }
-
-  private async effectiveEstimatedCost(
-    estimatedCostUsd: number
-  ): Promise<number> {
-    if (estimatedCostUsd <= 0 || !this.featureFlags) {
-      return 0;
-    }
-    try {
-      const enabled = await this.featureFlags.isEnabled(
-        FEATURE_FLAG_KEYS.AI_COST_RESERVE
-      );
-      return enabled ? estimatedCostUsd : 0;
-    } catch (error) {
-      this.logger.warn(
-        'Cost reserve flag lookup failed, treating as off',
-        error
-      );
-      return 0;
-    }
-  }
-
   /**
    * Per-turn ceilings for the agent loop. A BYOK turn bills the user's own key,
    * so it has no token budget and gets the wider BYOK step cap; otherwise the
@@ -447,8 +393,7 @@ export class AIRateLimitService {
     if (!this.rateLimitProvider) {
       return;
     }
-    const effectiveCostUsd =
-      await this.effectiveEstimatedCost(estimatedCostUsd);
+    const effectiveCostUsd = Math.max(estimatedCostUsd, 0);
     for (const subject of reservedIpSubject
       ? [userId, reservedIpSubject]
       : [userId]) {
@@ -483,9 +428,7 @@ export class AIRateLimitService {
     }
 
     if (this.rateLimitProvider) {
-      const effectiveCostUsd = await this.effectiveEstimatedCost(
-        params.estimatedCostUsd ?? 0
-      );
+      const effectiveCostUsd = Math.max(params.estimatedCostUsd ?? 0, 0);
       for (const subject of params.reservedIpSubject
         ? [params.userId, params.reservedIpSubject]
         : [params.userId]) {
