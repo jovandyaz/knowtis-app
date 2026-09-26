@@ -13,7 +13,9 @@ export function formatError(error: unknown): ToolErrorResult {
       403: "You don't have permission to perform this action.",
       404: 'Note not found.',
       422: `Invalid input: ${error.message}`,
-      429: 'Rate limit exceeded. Try again later.',
+      429: error.message
+        ? `Rate limit exceeded: ${error.message}`
+        : 'Rate limit exceeded. Try again later.',
     };
     const text = messages[error.status] ?? `API error: ${error.message}`;
     return { content: [{ type: 'text', text }], isError: true };
