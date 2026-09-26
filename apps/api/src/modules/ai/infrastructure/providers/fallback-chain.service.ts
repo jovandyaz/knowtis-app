@@ -21,7 +21,7 @@ export interface FallbackChainSource {
   getFallbackChain(): Promise<string[]>;
 }
 
-const CHAIN_TTL_MS = 30_000; // matches the AI config cache window
+const CHAIN_TTL_MS = 30_000;
 
 export interface ProviderHealth {
   readonly configured: boolean;

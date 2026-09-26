@@ -230,7 +230,6 @@ describe('ProviderRegistryFactory', () => {
   });
 
   describe('system provider keys', () => {
-    // mockReset restores the implementation each vi.mock factory supplied.
     afterEach(async () => {
       const { createProviderRegistry } = vi.mocked(await import('ai'));
       vi.mocked(createAnthropic).mockReset();
