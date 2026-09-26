@@ -161,6 +161,19 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     );
   });
 
+  it('grants a cheap promoted model whatever its tier, as prod does today', async () => {
+    await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
+
+    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
+      true
+    );
+    expect(
+      selectable
+        .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
+        .find((m) => m.id === CHEAP_MODEL_ID)?.access
+    ).toBe('granted');
+  });
+
   it('reaches the picker without waiting for the cache interval', async () => {
     const beforePromotion = promotedCache.snapshot().map((m) => m.id);
 

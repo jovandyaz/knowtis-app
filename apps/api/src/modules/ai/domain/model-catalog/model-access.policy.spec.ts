@@ -26,6 +26,7 @@ const premium = candidate({ id: curatedPremium.id });
 
 describe('accessFor', () => {
   it('should grant everything curated, as prod does today', () => {
+    expect(accessFor(open, NONE)).toBe('granted');
     expect(accessFor(premium, NONE)).toBe('granted');
     expect(
       accessFor(
@@ -33,10 +34,6 @@ describe('accessFor', () => {
         NONE
       )
     ).toBe('granted');
-  });
-
-  it('should grant the open tier to users without any key', () => {
-    expect(accessFor(open, NONE)).toBe('granted');
   });
 
   it('should gate a model the catalog cannot price', () => {
@@ -52,7 +49,7 @@ describe('accessFor', () => {
     expect(accessFor(negative, new Set(['openrouter']))).toBe('granted');
   });
 
-  it('should gate an open-tier model priced above the free ceiling', () => {
+  it('should gate a promoted model priced above the free ceiling', () => {
     const expensive = candidate({
       outputCostPerToken: ABOVE_CEILING_OUTPUT_COST,
     });
@@ -91,13 +88,5 @@ describe('accessFor', () => {
     expect(accessFor(midRange, new Set(['openrouter']), tightened)).toBe(
       'granted'
     );
-  });
-
-  it('grants a cheap promoted model whatever its tier, as prod does today', () => {
-    const model = {
-      id: 'openrouter:vendor/cheap-pro',
-      outputCostPerToken: 1e-7,
-    } as const;
-    expect(accessFor(model, new Set())).toBe('granted');
   });
 });
