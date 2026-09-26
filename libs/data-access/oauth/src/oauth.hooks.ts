@@ -106,10 +106,9 @@ export function useRevokeGrant() {
 
 /**
  * Whether to surface the Connected apps feature in the nav. Hidden while the
- * grants query is still pending (so an unconfigured OAuth server never
- * flashes in during dark launch) and when the endpoint 404s (OAuth not
- * configured on the server). An empty grants list or a transient non-404
- * failure keeps the feature visible.
+ * grants query is still pending (so the entry never flashes in) and when the
+ * endpoint 404s (OAuth not configured on the server). An empty grants list or
+ * a transient non-404 failure keeps the feature visible.
  */
 export function useConnectedAppsAvailable(): boolean {
   const { isPending, error } = useOauthGrants();

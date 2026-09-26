@@ -93,15 +93,6 @@ describe('OIDC mount (provider available)', () => {
     await harness.app.close();
   });
 
-  it('serves oauth surfaces with no feature-flag service registered', async () => {
-    const discovery = await fetch(
-      `${harness.base}/.well-known/oauth-authorization-server`,
-      { headers: PROXY_HEADERS }
-    );
-
-    expect(discovery.status).toBe(200);
-  });
-
   it('should serve discovery with S256, CIMD and none auth', async () => {
     const res = await fetch(
       `${harness.base}/.well-known/oauth-authorization-server`,
@@ -119,9 +110,7 @@ describe('OIDC mount (provider available)', () => {
   it('should serve the same discovery document at openid-configuration', async () => {
     const res = await fetch(
       `${harness.base}/.well-known/openid-configuration`,
-      {
-        headers: PROXY_HEADERS,
-      }
+      { headers: PROXY_HEADERS }
     );
     const body = (await res.json()) as Record<string, unknown>;
 
