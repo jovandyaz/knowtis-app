@@ -21,7 +21,7 @@ async function requireFreePort(port: number): Promise<void> {
   });
 }
 
-const ENABLED_FEATURE_FLAGS = ['ai_enabled', 'email_verification_gate'];
+const ENABLED_FEATURE_FLAGS = ['ai_enabled'];
 
 /** The API caches each flag for 30 s per process, so a flag flipped after boot
  * can stay invisible to the first tests; seeding before boot makes the first

@@ -23,11 +23,8 @@ import {
   vi,
 } from 'vitest';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import { createValidationPipe } from '../../../config/validation-pipe';
 import { DatabaseModule } from '../../../database/database.module';
-import { featureFlags } from '../../../database/schema/feature-flags.schema';
 import { notePermissions, notes } from '../../../database/schema/notes.schema';
 import { sessions } from '../../../database/schema/sessions.schema';
 import { users } from '../../../database/schema/users.schema';
@@ -59,8 +56,6 @@ describe.runIf(DB_AVAILABLE)(
     let app: INestApplication;
     let base: string;
     const tokens = new Map<string, string>();
-    let flagChanged = false;
-    let previousFlag: typeof featureFlags.$inferSelect | undefined;
     beforeAll(async () => {
       f = await createSharingFixture();
       const secret = 's1-http-contract-local-secret-32-characters';
@@ -106,21 +101,6 @@ describe.runIf(DB_AVAILABLE)(
       app.setGlobalPrefix('api/v1');
       await app.listen(0, '127.0.0.1');
       base = await app.getUrl();
-      [previousFlag] = await f.db
-        .select()
-        .from(featureFlags)
-        .where(eq(featureFlags.key, FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE));
-      await f.db
-        .insert(featureFlags)
-        .values({
-          key: FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE,
-          enabled: true,
-        })
-        .onConflictDoUpdate({
-          target: featureFlags.key,
-          set: { enabled: true },
-        });
-      flagChanged = true;
       const jwt = new JwtService({ secret });
       for (const id of [
         f.ids.owner,
@@ -153,22 +133,6 @@ describe.runIf(DB_AVAILABLE)(
     afterAll(async () => {
       try {
         await app?.close();
-        if (f && flagChanged) {
-          if (previousFlag) {
-            await f.db
-              .update(featureFlags)
-              .set(previousFlag)
-              .where(
-                eq(featureFlags.key, FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE)
-              );
-          } else {
-            await f.db
-              .delete(featureFlags)
-              .where(
-                eq(featureFlags.key, FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE)
-              );
-          }
-        }
       } finally {
         await f?.close();
       }

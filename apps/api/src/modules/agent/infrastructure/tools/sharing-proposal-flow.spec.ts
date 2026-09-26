@@ -184,8 +184,8 @@ describe('Copilot sharing proposal to canonical execution', () => {
     }
   );
 
-  it('preserves gate-off sharing through the real identity policy', async () => {
-    const f = flow(null, IDENTITY_STATE.GATE_OFF);
+  it('lets a verified owner confirm a new share through the real identity policy', async () => {
+    const f = flow(null, IDENTITY_STATE.VERIFIED);
     const proposalId = await f.propose('viewer');
     expect(
       (await f.approval.execute({ proposalId, userId: 'u1' })).isOk()
