@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
+import { stackOf } from '../../../core/errors/stack-of';
 import { NoteUpdatedEvent } from '../../notes/domain/events/note-updated.event';
 import { HocuspocusService } from '../hocuspocus.service';
 
@@ -42,7 +43,7 @@ export class NoteUpdatedListener {
     } catch (error) {
       this.logger.error(
         `Failed to broadcast external update for note ${event.aggregateId}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
     }
   }

@@ -23,6 +23,8 @@ import * as Y from 'yjs';
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import type { EnvConfig } from '../../config/env.config';
+import { reasonOf } from '../../core/errors/reason-of';
+import { stackOf } from '../../core/errors/stack-of';
 import { HocuspocusAuthExtension } from './extensions/hocuspocus-auth.extension';
 import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persistence.extension';
 
@@ -113,19 +115,13 @@ export class HocuspocusService
       // remove or rename this internal method.
       this.server.hocuspocus.flushPendingStores?.();
     } catch (error) {
-      this.logger.warn(
-        'flushPendingStores failed on shutdown',
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.warn('flushPendingStores failed on shutdown', stackOf(error));
     }
 
     try {
       await this.server.destroy();
     } catch (error) {
-      this.logger.error(
-        'Hocuspocus shutdown failed',
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.error('Hocuspocus shutdown failed', stackOf(error));
     }
   }
 
@@ -249,7 +245,7 @@ export class HocuspocusService
     } catch (error) {
       this.logger.error(
         `Rejected malformed external Yjs state for note ${noteId}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       return false;
     } finally {
@@ -294,9 +290,7 @@ export class HocuspocusService
       new URL(redisUrl);
     } catch (error) {
       this.logger.warn(
-        `Invalid REDIS_URL, skipping Redis extension: ${
-          error instanceof Error ? error.message : error
-        }`
+        `Invalid REDIS_URL, skipping Redis extension: ${reasonOf(error)}`
       );
       return [];
     }

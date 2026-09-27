@@ -5,6 +5,7 @@ import { transcribe } from 'ai';
 import { err, ok, type Result } from 'neverthrow';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import type { AIDomainError } from '../../domain/errors/ai.errors';
 import { AIErrors } from '../../domain/errors/ai.errors';
 
@@ -54,7 +55,7 @@ export class VoiceTranscriptionService {
     } catch (error) {
       this.logger.error({
         event: 'ai.transcription.error',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
       });
       return err(AIErrors.providerError('Voice transcription failed'));
     }

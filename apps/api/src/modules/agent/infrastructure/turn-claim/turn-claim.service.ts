@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   AI_REDIS,
   AIRedisProvider,
@@ -128,7 +129,7 @@ export class TurnClaimService {
       event,
       userId: request.userId,
       turnId: request.turnId,
-      error: error instanceof Error ? error.message : 'unknown',
+      error: reasonOf(error),
     });
   }
 }

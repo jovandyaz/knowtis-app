@@ -5,6 +5,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import {
   AI_COMPLETION_PROVIDER,
@@ -118,7 +119,7 @@ export class CompleteTextHandler {
         userId: input.userId,
         action: context.action,
         model: context.model,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
         latencyMs: Date.now() - context.startTime,
       });
       await this.pipeline.releaseReservation(context, input);

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { buildRedactedTelemetry } from '../../infrastructure/providers/redacted-telemetry';
@@ -95,9 +96,7 @@ export class InjectionClassifierService {
       if (usage) {
         this.recordCost(userId, model, usage);
       }
-      this.logger.warn(
-        `Injection classifier failed open: ${error instanceof Error ? error.message : 'unknown'}`
-      );
+      this.logger.warn(`Injection classifier failed open: ${reasonOf(error)}`);
       return { safe: true };
     }
   }
@@ -129,7 +128,7 @@ export class InjectionClassifierService {
       });
     } catch (error) {
       this.logger.warn(
-        `Injection classifier cost record failed: ${error instanceof Error ? error.message : 'unknown'}`
+        `Injection classifier cost record failed: ${reasonOf(error)}`
       );
     }
   }

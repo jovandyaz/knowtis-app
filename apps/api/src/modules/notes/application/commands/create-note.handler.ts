@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   NOTE_WRITE_REPOSITORY,
   NoteContent,
@@ -70,7 +71,7 @@ export class CreateNoteHandler {
         content = yjsStateToHtml(yjsState);
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : 'Unknown parser error';
+          error instanceof Error ? reasonOf(error) : 'Unknown parser error';
         this.logger.warn(
           `Failed to generate yjsState for new note (id=${input.id ?? 'new'}, size=${input.content.length}B): ${message}`
         );

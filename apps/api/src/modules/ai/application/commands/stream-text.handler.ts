@@ -8,6 +8,7 @@ import {
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors } from '../../domain/errors/ai.errors';
 import {
   AI_COMPLETION_PROVIDER,
@@ -171,7 +172,7 @@ export class StreamTextHandler {
           event: 'ai.stream.done_failed',
           requestId: context.requestId,
           userId: input.userId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: reasonOf(error),
         });
         return;
       }
@@ -210,7 +211,7 @@ export class StreamTextHandler {
         userId: input.userId,
         action: context.action,
         model: context.model,
-        error: error instanceof Error ? error.message : 'AI streaming failed',
+        error: reasonOf(error),
         latencyMs: Date.now() - context.startTime,
         mode: 'stream',
       });

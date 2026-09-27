@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   AI_REDIS,
   AIRedisProvider,
@@ -94,7 +95,7 @@ return v
       parsed = JSON.parse(res) as SerializedRecord;
     } catch (error) {
       this.logger.warn(
-        `Failed to parse pending mutation ${proposalId}: ${error instanceof Error ? error.message : 'unknown'}`
+        `Failed to parse pending mutation ${proposalId}: ${reasonOf(error)}`
       );
       return null;
     }
