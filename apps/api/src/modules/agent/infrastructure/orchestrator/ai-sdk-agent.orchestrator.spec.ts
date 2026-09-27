@@ -3641,4 +3641,48 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(secret);
     warnSpy.mockRestore();
   });
+
+  it('answers a turn that failed on a query with a fixed message and keeps the diagnostics in the log', async () => {
+    const errorSpy = vi.spyOn(Logger.prototype, 'error');
+    const secret = 'sentinel-turn-query-param';
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'partial' };
+        throw failedQuery(
+          [secret],
+          postgresError({
+            message:
+              'duplicate key value violates unique constraint "users_email_unique"',
+            code: '23505',
+            table_name: 'users',
+            constraint_name: 'users_email_unique',
+            detail: secret,
+          })
+        );
+      })(),
+      usage: new Promise(() => {}),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: {
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Agent run failed',
+      },
+    });
+    expect(JSON.stringify(events)).not.toContain('users_email_unique');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.run.error',
+        error:
+          'DrizzleQueryError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)',
+      })
+    );
+    expect(JSON.stringify([events, errorSpy.mock.calls])).not.toContain(secret);
+    errorSpy.mockRestore();
+  });
 });

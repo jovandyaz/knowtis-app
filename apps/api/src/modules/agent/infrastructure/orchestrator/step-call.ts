@@ -49,12 +49,13 @@ import { bestEffortUsage, type StepUsageAccumulator } from './turn-usage';
 
 const AGENT_TEMPERATURE = 0.7;
 const TOOL_ERROR_LOG_MAX_CHARS = 300;
+const AGENT_RUN_FAILED = 'Agent run failed';
 
 export function errorMessage(error: unknown, redact: boolean): string {
   if (redact) {
     return 'BYOK provider request failed';
   }
-  return error instanceof Error ? reasonOf(error) : 'Agent run failed';
+  return error instanceof Error ? reasonOf(error) : AGENT_RUN_FAILED;
 }
 
 function describeToolError(
@@ -79,11 +80,14 @@ function describeToolError(
   };
 }
 
+/** The error the client receives; a database failure's diagnostics name tables and constraints, so they stay in the log. */
 export function toError(error: unknown, redact = false) {
   if (isOverloadedError(error)) {
     return AIErrors.providerOverloaded();
   }
-  return AIErrors.providerError(errorMessage(error, redact));
+  return AIErrors.providerError(
+    isDatabaseError(error) ? AGENT_RUN_FAILED : errorMessage(error, redact)
+  );
 }
 
 export function errorEvent(
