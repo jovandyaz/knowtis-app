@@ -30,11 +30,17 @@ import {
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import {
   TurnEffortResolver,
   type TurnEffortRequest,
 } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
+import {
+  billedByKey,
+  type AiExecutionContext,
+} from '../../ai/domain/execution-context/ai-execution-context';
+import { segmentLimits } from '../../ai/domain/execution-context/segment-policy';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -99,6 +105,10 @@ interface RunAgentTurnInput {
   readonly conversationModel?: string | null;
   readonly effort?: ReasoningEffort;
 }
+
+type TurnInput = Omit<RunAgentTurnInput, 'isAnonymous' | 'clientIp'> & {
+  readonly execution: AiExecutionContext;
+};
 
 export interface RunAgentTurnCallbacks {
   readonly onChunk: (text: string) => void;
@@ -191,7 +201,8 @@ export class RunAgentTurnHandler {
     private readonly byok: ByokService,
     private readonly injectionGuard: InjectionGuardService,
     private readonly aiConfig: AIConfigService,
-    private readonly turnEffort: TurnEffortResolver
+    private readonly turnEffort: TurnEffortResolver,
+    private readonly tierResolver: TierResolver
   ) {}
 
   async execute(
@@ -206,14 +217,39 @@ export class RunAgentTurnHandler {
       });
       return;
     }
-    // Reject before resolveConversation so a rejected turn leaves no row behind.
-    if (input.effort && input.isAnonymous) {
+    // Resolve and reject before resolveConversation so a refused turn leaves no row behind.
+    const execution = await this.resolveExecution(input, callbacks);
+    if (!execution) {
+      return;
+    }
+    if (input.effort && !execution.policy.effortSelectable) {
       callbacks.onError(
         AIErrors.validationError('effort is not available on anonymous turns')
       );
       return;
     }
-    return this.executeWithMemory(input, callbacks, signal);
+    return this.executeWithMemory(input, execution, callbacks, signal);
+  }
+
+  private async resolveExecution(
+    input: RunAgentTurnInput,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
+  ): Promise<AiExecutionContext | null> {
+    try {
+      return await this.tierResolver.resolve({
+        userId: input.userId,
+        isAnonymous: input.isAnonymous === true,
+        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.tier.resolve_failed',
+        userId: input.userId,
+        error: reasonOf(error),
+      });
+      callbacks.onError(AIErrors.providerError('Model resolution failed'));
+      return null;
+    }
   }
 
   private executePolicy(
@@ -239,6 +275,7 @@ export class RunAgentTurnHandler {
 
   private async executeWithMemory(
     input: RunAgentTurnInput,
+    execution: AiExecutionContext,
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
@@ -267,17 +304,15 @@ export class RunAgentTurnHandler {
     );
     const messages = history;
     const userMemories = await this.loadUserMemories(
-      input.userId,
-      input.isAnonymous,
+      execution,
       message.content
     );
-    const synthInput: RunAgentTurnInput = {
+    const synthInput: TurnInput = {
       userId: input.userId,
       turnId: input.turnId,
       messages,
       message,
-      ...(input.isAnonymous ? { isAnonymous: true } : {}),
-      ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+      execution,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       knownNotes,
       ...(userMemories.length ? { userMemories } : {}),
@@ -301,13 +336,13 @@ export class RunAgentTurnHandler {
   }
 
   private async loadUserMemories(
-    userId: string,
-    isAnonymous: boolean | undefined,
+    execution: AiExecutionContext,
     latestUserContent: string
   ): Promise<string[]> {
-    if (isAnonymous) {
+    if (!execution.policy.longTermMemory) {
       return [];
     }
+    const { userId } = execution.subject;
     // The turn-level length/injection guards in runLoop run after this; bail
     // early so oversized or injected input never reaches the paid embed call.
     if (
@@ -480,6 +515,10 @@ export class RunAgentTurnHandler {
     >,
     signal?: AbortSignal
   ): Promise<void> {
+    const execution = await this.resolveExecution(input, callbacks);
+    if (!execution) {
+      return;
+    }
     const found = await this.conversations.findByIdForUser(
       input.conversationId,
       input.userId
@@ -497,21 +536,16 @@ export class RunAgentTurnHandler {
     const latestUserContent =
       history.findLast((m) => m.role === 'user')?.content ?? '';
     const userMemories = latestUserContent
-      ? await this.loadUserMemories(
-          input.userId,
-          input.isAnonymous,
-          latestUserContent
-        )
+      ? await this.loadUserMemories(execution, latestUserContent)
       : [];
-    const synthInput: RunAgentTurnInput & {
+    const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
       userId: input.userId,
       turnId: input.turnId,
       messages: history,
       knownNotes,
-      ...(input.isAnonymous ? { isAnonymous: true } : {}),
-      ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+      execution,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       ...(userMemories.length ? { userMemories } : {}),
       conversationModel: found.model,
@@ -528,7 +562,7 @@ export class RunAgentTurnHandler {
   }
 
   private async runLoop(
-    input: RunAgentTurnInput,
+    input: TurnInput,
     resume: { outcome: string } | undefined,
     callbacks: Pick<
       RunAgentTurnCallbacks,
@@ -584,29 +618,12 @@ export class RunAgentTurnHandler {
 
     // Resolve the model and the BYOK key BEFORE the budget gate: a BYOK turn
     // bills the user's own key, so it must skip the daily token/cost ceiling.
-    let byokProviders: ReadonlySet<string>;
-    try {
-      byokProviders = await this.modelPreference.byokProvidersFor(
-        input.userId,
-        input.isAnonymous
-      );
-    } catch (error) {
-      this.logger.warn({
-        event: 'agent.byok.providers_lookup_failed',
-        userId: input.userId,
-        error: reasonOf(error),
-      });
-      callbacks.onError(AIErrors.providerError('Model resolution failed'));
-      return;
-    }
-
     let model: string | null;
     try {
       model = await this.resolveModel(
         input,
         persistence?.conversationId,
         callbacks,
-        byokProviders,
         Boolean(resume)
       );
     } catch (error) {
@@ -636,9 +653,14 @@ export class RunAgentTurnHandler {
       : 0;
 
     const provider = providerOf(model);
-    const shouldUseByok = byokProviders.has(provider);
+    const execution = input.execution.byokProviders.has(
+      provider as ByokProvider
+    )
+      ? billedByKey(input.execution, provider as ByokProvider)
+      : input.execution;
+    const isByok = execution.billing.kind === 'byok';
     let byokApiKey: string | null = null;
-    if (shouldUseByok) {
+    if (isByok) {
       byokApiKey = await this.byok.getApiKey(
         input.userId,
         provider as ByokProvider
@@ -654,14 +676,15 @@ export class RunAgentTurnHandler {
         return;
       }
     }
-    const isByok = shouldUseByok;
 
     // Resolve turn settings BEFORE reserving quota: a settings-store failure
     // must escape before any reservation exists, else the held reservation
     // leaks with no client-facing error (the gateway turn slot has no catch).
-    const { maxSteps, maxTurnTokens } = this.rateLimit.turnLimits({
-      isAnonymous: input.isAnonymous ?? false,
-      isByok,
+    const { maxSteps, maxTurnTokens } = segmentLimits(execution, {
+      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
+      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
+      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
+      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
     });
     const [openrouterProviderOrder, openrouterIgnoredProviders] =
       await Promise.all([
@@ -672,10 +695,10 @@ export class RunAgentTurnHandler {
     const limit = await this.rateLimit.checkLimit(
       input.userId,
       estimatedTokens,
-      input.isAnonymous ?? false,
+      execution.tier === 'anonymous',
       isByok,
       estimatedCostUsd,
-      input.clientIp
+      execution.subject.clientIp
     );
     if (!limit.allowed) {
       callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
@@ -730,10 +753,8 @@ export class RunAgentTurnHandler {
         maxTurnTokens,
         effortFor: (candidate: string) =>
           this.effortForModel({
-            userId: input.userId,
+            execution,
             model: candidate,
-            isByok,
-            isAnonymous: input.isAnonymous,
             requested: input.effort,
           }),
         openrouterProviderOrder,
@@ -893,12 +914,12 @@ export class RunAgentTurnHandler {
   }
 
   private async resolveModel(
-    input: RunAgentTurnInput,
+    input: TurnInput,
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
-    byokProviders: ReadonlySet<string>,
     resuming: boolean
   ): Promise<string | null> {
+    const { byokProviders } = input.execution;
     if (input.model) {
       if (
         !(await this.modelPreference.isSelectableWith(

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import type { RateLimitProvider } from '../../domain/ports/rate-limit.port';
 import type { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { AIRateLimitService } from './ai-rate-limit.service';
 
@@ -50,41 +51,23 @@ describe('AIRateLimitService', () => {
     expect(anonymous.allowed).toBe(false);
   });
 
-  it('returns the configured turn limits for authenticated users', () => {
-    expect(service.turnLimits({ isAnonymous: false, isByok: false })).toEqual({
-      maxSteps: 8,
-      maxTurnTokens: 150000,
+  describe('dailyAllowance', () => {
+    it('gives a registered caller the configured daily limits', () => {
+      expect(
+        service.dailyAllowance(createExecutionContext({ tier: 'free' }))
+      ).toEqual({ tokenLimit: 100000, costLimit: 1 });
     });
-  });
 
-  it('lifts the token budget and uses the BYOK step cap when the turn bills the user key', () => {
-    expect(service.turnLimits({ isAnonymous: false, isByok: true })).toEqual({
-      maxSteps: 20,
-      maxTurnTokens: Number.POSITIVE_INFINITY,
-    });
-  });
-
-  it.each([
-    { pct: 0.33, budget: 150000, expected: 33000 },
-    { pct: 1, budget: 150000, expected: 100000 },
-    { pct: 0.5, budget: 150000, expected: 50000 },
-    { pct: 0.5, budget: 20000, expected: 20000 },
-    { pct: 0, budget: 150000, expected: 0 },
-  ])(
-    'clamps the anonymous turn budget to min($budget, daily × $pct) = $expected',
-    ({ pct, budget, expected }) => {
+    it('gives an anonymous caller the configured share', () => {
       const anonymous = new AIRateLimitService(
         mockUsageRepo,
-        createMockConfig({
-          AI_ANONYMOUS_DAILY_LIMIT_PCT: pct,
-          AI_AGENT_TURN_TOKEN_BUDGET: budget,
-        })
+        createMockConfig({ AI_ANONYMOUS_DAILY_LIMIT_PCT: 0.5 })
       );
       expect(
-        anonymous.turnLimits({ isAnonymous: true, isByok: false })
-      ).toEqual({ maxSteps: 8, maxTurnTokens: expected });
-    }
-  );
+        anonymous.dailyAllowance(createExecutionContext({ tier: 'anonymous' }))
+      ).toEqual({ tokenLimit: 50000, costLimit: 0.5 });
+    });
+  });
 
   it('should deny request when token limit exceeded', async () => {
     vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({

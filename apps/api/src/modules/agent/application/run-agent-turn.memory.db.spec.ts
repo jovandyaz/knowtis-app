@@ -22,8 +22,10 @@ import type { AIConfigService } from '../../ai/application/services/ai-config.se
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import type { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
@@ -56,7 +58,6 @@ const modelPreferenceStub = {
   assertSelectable: vi.fn(),
   isSelectable: vi.fn().mockReturnValue(true),
   isSelectableWith: vi.fn().mockReturnValue(true),
-  byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
 } as unknown as ModelPreferenceService;
 const byokStub = {
   getApiKey: vi.fn().mockResolvedValue(null),
@@ -75,6 +76,10 @@ const aiConfigStub = {
 const turnEffortStub = {
   resolve: vi.fn().mockResolvedValue('medium'),
 } as unknown as TurnEffortResolver;
+
+const tierResolverStub = {
+  resolve: vi.fn().mockResolvedValue(createExecutionContext({ userId: USER })),
+} as unknown as TierResolver;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let moduleRef: TestingModule;
@@ -138,9 +143,9 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   it('reconstructs turn 1 on turn 2 from only conversationId + message', async () => {
     const rateLimit = {
       checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
-      turnLimits: vi
+      dailyAllowance: vi
         .fn()
-        .mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
+        .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
       recordSideCost: vi.fn().mockResolvedValue(undefined),
@@ -162,7 +167,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       byokStub,
       guardStub,
       aiConfigStub,
-      turnEffortStub
+      turnEffortStub,
+      tierResolverStub
     );
 
     let conversationId: string | undefined;
@@ -217,9 +223,9 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
 
     const rateLimit = {
       checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
-      turnLimits: vi
+      dailyAllowance: vi
         .fn()
-        .mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
+        .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
       recordSideCost: vi.fn().mockResolvedValue(undefined),
@@ -241,7 +247,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       byokStub,
       guardStub,
       aiConfigStub,
-      turnEffortStub
+      turnEffortStub,
+      tierResolverStub
     );
 
     const onError = vi.fn();
@@ -270,9 +277,9 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
         .fn()
         .mockResolvedValueOnce({ allowed: false, reason: 'limit' })
         .mockResolvedValue({ allowed: true }),
-      turnLimits: vi
+      dailyAllowance: vi
         .fn()
-        .mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
+        .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
       recordSideCost: vi.fn().mockResolvedValue(undefined),
@@ -294,7 +301,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       byokStub,
       guardStub,
       aiConfigStub,
-      turnEffortStub
+      turnEffortStub,
+      tierResolverStub
     );
     const opened = conversationIdForTurn(USER, REPLAYED_TURN);
     const deliver = (callbacks: {

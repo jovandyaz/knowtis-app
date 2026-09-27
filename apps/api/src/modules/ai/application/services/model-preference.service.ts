@@ -82,13 +82,6 @@ export class ModelPreferenceService {
     return models.find((model) => model.id === modelId)?.reasoning ?? null;
   }
 
-  byokProvidersFor(
-    userId: string,
-    isAnonymous = false
-  ): Promise<ReadonlySet<string>> {
-    return this.byok.enabledProviders(userId, isAnonymous);
-  }
-
   async isSelectableWith(
     modelId: string,
     byokProviders: ReadonlySet<string>

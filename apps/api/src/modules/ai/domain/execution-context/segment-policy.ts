@@ -1,4 +1,5 @@
 import type { AiExecutionContext } from './ai-execution-context';
+import { ANONYMOUS_SHARE_ALLOWANCE } from './tier-policy';
 
 export interface SegmentLimits {
   readonly maxSteps: number;
@@ -31,7 +32,7 @@ export function segmentLimits(
   return {
     maxSteps: settings.maxSteps,
     maxTurnTokens:
-      execution.policy.dailyAllowance === 'anonymous-share'
+      execution.policy.dailyAllowance === ANONYMOUS_SHARE_ALLOWANCE
         ? Math.min(settings.turnTokenBudget, settings.dailyTokenAllowance)
         : settings.turnTokenBudget,
   };

@@ -4,6 +4,12 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import {
+  dailyAllowance,
+  TIER_POLICIES,
+  type TierPolicy,
+} from '../../domain/execution-context/tier-policy';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
@@ -27,11 +33,6 @@ interface RateLimitResult {
    * reserved — never a re-derived set.
    */
   readonly reservedIpSubject?: string;
-}
-
-interface TurnLimits {
-  readonly maxSteps: number;
-  readonly maxTurnTokens: number;
 }
 
 const PG_RPM_SWEEP_THRESHOLD = 1000;
@@ -73,7 +74,9 @@ export class AIRateLimitService {
     estimatedCostUsd = 0,
     clientIp?: string
   ): Promise<RateLimitResult> {
-    const limits = this.effectiveLimits(isAnonymous);
+    const limits = this.allowanceFor(
+      TIER_POLICIES[isAnonymous ? 'anonymous' : 'free']
+    );
     const effectiveCostUsd = Math.max(estimatedCostUsd, 0);
 
     if (this.rateLimitProvider) {
@@ -345,42 +348,20 @@ export class AIRateLimitService {
     }
   }
 
-  /**
-   * Per-turn ceilings for the agent loop. A BYOK turn bills the user's own key,
-   * so it has no token budget and gets the wider BYOK step cap; otherwise the
-   * configured budget applies, clamped to the anonymous daily allowance so one
-   * anonymous turn can never exceed a day's quota.
-   */
-  turnLimits(params: {
-    readonly isAnonymous: boolean;
-    readonly isByok: boolean;
-  }): TurnLimits {
-    if (params.isByok) {
-      return {
-        maxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
-        maxTurnTokens: Number.POSITIVE_INFINITY,
-      };
-    }
-    const budget = this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET');
-    return {
-      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
-      maxTurnTokens: params.isAnonymous
-        ? Math.min(budget, this.effectiveLimits(true).tokenLimit)
-        : budget,
-    };
+  /** The daily token and cost allowance the caller's tier grants. */
+  dailyAllowance(execution: AiExecutionContext): RateLimits {
+    return this.allowanceFor(execution.policy);
   }
 
-  private effectiveLimits(isAnonymous: boolean): RateLimits {
-    const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
-    const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');
-    if (!isAnonymous) {
-      return { tokenLimit, costLimit };
-    }
-    const pct = this.configService.get('AI_ANONYMOUS_DAILY_LIMIT_PCT');
-    return {
-      tokenLimit: Math.floor(tokenLimit * pct),
-      costLimit: costLimit * pct,
-    };
+  private allowanceFor(policy: TierPolicy): RateLimits {
+    return dailyAllowance(
+      policy,
+      {
+        tokenLimit: this.configService.get('AI_DAILY_TOKEN_LIMIT'),
+        costLimit: this.configService.get('AI_DAILY_COST_LIMIT_USD'),
+      },
+      this.configService.get('AI_ANONYMOUS_DAILY_LIMIT_PCT')
+    );
   }
 
   /** Never rejects — release failures are logged and swallowed, so callers may fire-and-forget. */

@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
 import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
 
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import {
   clampEffort,
   type EffortAudience,
@@ -11,10 +12,8 @@ import { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
 
 export interface TurnEffortRequest {
-  readonly userId: string;
+  readonly execution: AiExecutionContext;
   readonly model: string;
-  readonly isByok: boolean;
-  readonly isAnonymous?: boolean | undefined;
   readonly requested?: ReasoningEffort | undefined;
 }
 
@@ -34,19 +33,19 @@ export class TurnEffortResolver {
    * with a structured warn — never a silent mismatch.
    */
   async resolve({
-    userId,
+    execution,
     model,
-    isByok,
-    isAnonymous,
     requested,
   }: TurnEffortRequest): Promise<ReasoningEffort | undefined> {
-    const user = { id: userId, isAnonymous: isAnonymous === true };
+    const user = {
+      id: execution.subject.userId,
+      isAnonymous: execution.tier === 'anonymous',
+    };
     if (!requested) {
       return this.defaultFor(model, user);
     }
-    const audience: Exclude<EffortAudience, 'anonymous'> = isByok
-      ? 'byok'
-      : 'free';
+    const audience: Exclude<EffortAudience, 'anonymous'> =
+      execution.billing.kind === 'byok' ? 'byok' : 'free';
     const declared = await this.modelPreference.reasoningFor(model, user);
     const clamped = clampEffort(requested, declared, audience);
     if (clamped === null) {

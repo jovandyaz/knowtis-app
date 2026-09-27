@@ -2,9 +2,11 @@ import type { RateLimits } from '../ports/rate-limit.port';
 
 export type AccessTier = 'anonymous' | 'free' | 'byok';
 
-export const DAILY_ALLOWANCE_KINDS = ['full', 'anonymous-share'] as const;
-export type DailyAllowanceKind = (typeof DAILY_ALLOWANCE_KINDS)[number];
-const [FULL_ALLOWANCE, ANONYMOUS_SHARE_ALLOWANCE] = DAILY_ALLOWANCE_KINDS;
+export const FULL_ALLOWANCE = 'full' as const;
+export const ANONYMOUS_SHARE_ALLOWANCE = 'anonymous-share' as const;
+export type DailyAllowanceKind =
+  | typeof FULL_ALLOWANCE
+  | typeof ANONYMOUS_SHARE_ALLOWANCE;
 
 /** What a tier may do, independent of who pays for a given call. */
 export interface TierPolicy {
