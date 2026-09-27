@@ -40,8 +40,6 @@ pre-commit:
         - merge
         - rebase
     - name: check-migrations
-      # The default matcher reads `**` as one or more directories, so files
-      # directly under schema/ need their own pattern.
       glob:
         - 'apps/api/src/database/schema/*.ts'
         - 'apps/api/src/database/schema/**/*.ts'
