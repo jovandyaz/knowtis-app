@@ -1,4 +1,11 @@
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { users } from './users.schema';
 
@@ -22,7 +29,7 @@ export const sessions = pgTable(
   (table) => [
     index('sessions_user_id_idx').on(table.userId),
     index('sessions_family_id_idx').on(table.familyId),
-    index('sessions_refresh_token_hash_idx').on(table.refreshTokenHash),
+    uniqueIndex('sessions_refresh_token_hash_idx').on(table.refreshTokenHash),
     index('sessions_rotated_at_idx').on(table.rotatedAt),
   ]
 );

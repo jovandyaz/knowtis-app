@@ -41,6 +41,7 @@ pre-commit:
         - rebase
     - name: check-migrations
       glob:
+        - 'apps/api/src/database/schema/*.ts'
         - 'apps/api/src/database/schema/**/*.ts'
         - 'packages/shared/types/src/lib/ai.types.ts'
       run: |
