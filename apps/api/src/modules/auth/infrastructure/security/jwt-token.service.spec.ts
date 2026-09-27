@@ -6,21 +6,23 @@ import {
 import { UserId } from '@jovandyaz/auth/server';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JwtTokenService } from './jwt-token.service';
 
-function createService(): JwtTokenService {
+function createConfig(): ConfigService {
   const secrets: Record<string, string> = {
     JWT_SECRET: 'access-secret',
     JWT_REFRESH_SECRET: 'refresh-secret',
   };
-  const config = {
+  return {
     getOrThrow: (key: string) => secrets[key],
     get: (_key: string, fallback?: string) => fallback,
   } as unknown as ConfigService;
+}
 
-  return new JwtTokenService(new JwtService(), config);
+function createService(): JwtTokenService {
+  return new JwtTokenService(new JwtService(), createConfig());
 }
 
 const ACCESS_SECRET = 'a'.repeat(48);
@@ -30,6 +32,8 @@ interface DecodedClaims {
   iss?: string;
   aud?: string;
   sub?: string;
+  iat?: number;
+  jti?: string;
 }
 
 describe('JwtTokenService', () => {
@@ -61,6 +65,38 @@ describe('JwtTokenService', () => {
     );
     expect(verified.isOk()).toBe(true);
     expect(verified._unsafeUnwrap().familyId).toBeUndefined();
+  });
+
+  describe('within a single second', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({
+        toFake: ['Date'],
+        now: new Date('2026-09-27T12:00:00.000Z'),
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('signs a distinct refresh token on every call for the same user and family', async () => {
+      const jwtService = new JwtService();
+      const service = new JwtTokenService(jwtService, createConfig());
+
+      const first = await service.generateTokens(userId, 'u@example.com', {
+        familyId: 'fam-9',
+      });
+      const second = await service.generateTokens(userId, 'u@example.com', {
+        familyId: 'fam-9',
+      });
+
+      const firstToken = first._unsafeUnwrap().refreshToken;
+      const secondToken = second._unsafeUnwrap().refreshToken;
+      expect(jwtService.decode<DecodedClaims>(firstToken).iat).toBe(
+        jwtService.decode<DecodedClaims>(secondToken).iat
+      );
+      expect(firstToken).not.toBe(secondToken);
+    });
   });
 
   it('rejects a refresh token signed with the wrong secret', async () => {
@@ -134,6 +170,27 @@ describe('JwtTokenService', () => {
       const result = await service.verifyRefreshToken(
         generated._unsafeUnwrap().refreshToken
       );
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should accept refresh tokens minted without a jti', async () => {
+      const legacyToken = await jwtService.signAsync(
+        {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'user@example.com',
+        },
+        {
+          secret: REFRESH_SECRET,
+          expiresIn: '7d',
+          algorithm: 'HS256',
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE_REFRESH,
+        }
+      );
+      expect(jwtService.decode<DecodedClaims>(legacyToken).jti).toBeUndefined();
+
+      const result = await service.verifyRefreshToken(legacyToken);
+
       expect(result.isOk()).toBe(true);
     });
 
