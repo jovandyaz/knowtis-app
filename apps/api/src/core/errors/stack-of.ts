@@ -13,13 +13,17 @@ function framesOf(error: Error): string {
   return quoted === -1 ? '' : stack.slice(quoted + error.message.length);
 }
 
-/** The stack of whatever was thrown, for a log line; a database error's stack is headed by its {@link reasonOf} instead of the message it quotes. */
+/** The stack of whatever was thrown, for a log line; a database error's stack is headed by its {@link reasonOf} instead of the message it quotes, and anything else that was thrown is described by its reason. Never throws. */
 export function stackOf(error: unknown): string {
-  if (!(error instanceof Error)) {
-    return String(error);
+  try {
+    if (!(error instanceof Error)) {
+      return reasonOf(error);
+    }
+    if (!isDatabaseError(error)) {
+      return error.stack ?? error.message;
+    }
+    return `${reasonOf(error)}${framesOf(error)}`;
+  } catch {
+    return reasonOf(error);
   }
-  if (!isDatabaseError(error)) {
-    return error.stack ?? error.message;
-  }
-  return `${reasonOf(error)}${framesOf(error)}`;
 }

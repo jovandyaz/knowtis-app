@@ -12,9 +12,35 @@ describe('reasonOf', () => {
     );
   });
 
-  it('stringifies anything else that was thrown', () => {
+  it('stringifies a thrown primitive', () => {
     expect(reasonOf('timeout')).toBe('timeout');
     expect(reasonOf(undefined)).toBe('undefined');
+    expect(reasonOf(null)).toBe('null');
+    expect(reasonOf(42)).toBe('42');
+    expect(reasonOf(Symbol('probe'))).toBe('Symbol(probe)');
+  });
+
+  it('names a thrown object by its class, never by what it holds', () => {
+    class Rejection {
+      readonly secret = SECRET_PARAM;
+    }
+
+    expect(reasonOf({ params: [SECRET_PARAM] })).toBe('[Object]');
+    expect(reasonOf(new Rejection())).toBe('[Rejection]');
+    expect(reasonOf([SECRET_PARAM])).toBe('[Array]');
+  });
+
+  it('names a thrown object that has no class without throwing', () => {
+    const bare = Object.assign(Object.create(null), { secret: SECRET_PARAM });
+
+    expect(reasonOf(bare)).toBe('[unknown]');
+  });
+
+  it('names an object whose class cannot even be read without throwing', () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+
+    expect(reasonOf(proxy)).toBe('[unknown]');
   });
 
   it('describes a failed query by its diagnostics, never by its bound parameters', () => {

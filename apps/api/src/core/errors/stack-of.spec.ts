@@ -17,8 +17,10 @@ describe('stackOf', () => {
     expect(stackOf(error)).toBe(error.stack);
   });
 
-  it('stringifies anything else that was thrown', () => {
+  it('describes anything else that was thrown by its reason', () => {
     expect(stackOf('timeout')).toBe('timeout');
+    expect(stackOf(Object.create(null))).toBe('[unknown]');
+    expect(stackOf({ params: [SECRET_PARAM] })).toBe('[Object]');
   });
 
   it('heads a failed query with its diagnostics and keeps its frames, never its parameters', () => {

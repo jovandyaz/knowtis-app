@@ -34,18 +34,23 @@ function queryFailureIn(
   error: unknown
 ): DrizzleQueryError | postgres.PostgresError | undefined {
   const visited = new Set<Error>();
-  for (
-    let current: unknown = error;
-    current instanceof Error && !visited.has(current);
-    current = current.cause
-  ) {
-    if (
-      current instanceof DrizzleQueryError ||
-      current instanceof postgres.PostgresError
+  try {
+    for (
+      let current: unknown = error;
+      current instanceof Error && !visited.has(current);
+      current = current.cause
     ) {
-      return current;
+      if (
+        current instanceof DrizzleQueryError ||
+        current instanceof postgres.PostgresError
+      ) {
+        return current;
+      }
+      visited.add(current);
     }
-    visited.add(current);
+  } catch {
+    // A revoked proxy throws on the prototype read behind instanceof; nothing
+    // can read it, so it carries no query values either.
   }
   return undefined;
 }
