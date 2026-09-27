@@ -6,6 +6,7 @@ import {
   type ArgumentsHost,
 } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
+import { DrizzleQueryError } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RetryAfterHttpException } from '../http/retry-after.exception';
@@ -84,6 +85,28 @@ describe('GlobalExceptionFilter', () => {
     expect(loggerError).toHaveBeenCalled();
     const logged = loggerError.mock.calls[0].map(String).join(' ');
     expect(logged).toContain('pg pool exhausted');
+  });
+
+  it('logs an uncaught failed query by its diagnostics, never by its parameters', () => {
+    const { host, getBody } = createHost();
+    const refreshTokenHash = 'sentinel-refresh-token-hash';
+    const failedQuery = new DrizzleQueryError(
+      'select * from "sessions" where "refresh_token_hash" = $1',
+      [refreshTokenHash],
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+        code: 'ECONNREFUSED',
+      })
+    );
+
+    filter.catch(failedQuery, host);
+
+    const [line, stack] = loggerError.mock.calls[0].map(String);
+    expect(line).toBe(
+      'GET /api/v1/test - 500: DrizzleQueryError (failureCategory=connection_failure, sqlState=null)'
+    );
+    expect(stack).not.toContain(refreshTokenHash);
+    expect(stack).toContain('http-exception.filter.spec.ts');
+    expect(JSON.stringify(getBody())).not.toContain(refreshTokenHash);
   });
 
   it('keeps 4xx HttpException messages intact', () => {

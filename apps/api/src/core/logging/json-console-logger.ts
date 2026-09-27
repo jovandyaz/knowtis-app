@@ -2,6 +2,10 @@ import { inspect } from 'node:util';
 
 import { ConsoleLogger, type LogLevel } from '@nestjs/common';
 
+import { isDatabaseError } from '../errors/database-diagnostics';
+import { reasonOf } from '../errors/reason-of';
+import { stackOf } from '../errors/stack-of';
+
 const SEVERITY = {
   DEBUG: 'debug',
   INFO: 'info',
@@ -49,6 +53,9 @@ function firstNonEmptyText(candidates: unknown[]): string | undefined {
 }
 
 function errorFields(error: Error): Record<string, unknown> {
+  if (isDatabaseError(error)) {
+    return { name: error.name, message: reasonOf(error) };
+  }
   const scalarProperties = Object.entries(error).filter(([, value]) =>
     isScalar(value)
   );
@@ -63,9 +70,10 @@ function errorFields(error: Error): Record<string, unknown> {
  * Writes each log call as one JSON line in the shape Railway's log explorer
  * parses: a non-empty string `message`, a `level` of debug/info/warn/error, and
  * the fields of object payloads at the top level, filterable as `@field:value`.
- * An `Error` argument becomes an `error` field and supplies `stack`. `level`,
- * `message`, `timestamp` and `context` always come from the call, never from a
- * payload.
+ * An `Error` argument becomes an `error` field and supplies `stack`; a database
+ * error, there or nested in a payload, is told by its diagnostics rather than
+ * by a message that can quote query values. `level`, `message`, `timestamp` and
+ * `context` always come from the call, never from a payload.
  */
 export class JsonConsoleLogger extends ConsoleLogger {
   constructor() {
@@ -101,17 +109,23 @@ export class JsonConsoleLogger extends ConsoleLogger {
         firstNonEmptyText([
           lead,
           ...MESSAGE_FIELDS.map((field) => fields[field]),
-          error?.message,
+          error && reasonOf(error),
           context,
         ]) ?? logLevel,
       timestamp: new Date().toISOString(),
       context: context || undefined,
-      stack: errorStack ?? error?.stack ?? fields.stack,
+      stack: errorStack ?? (error && stackOf(error)) ?? fields.stack,
     };
     const extras = details.length > 0 ? { details } : {};
     process[writeStreamType ?? 'stdout'].write(
       `${this.serialize({ ...fields, ...extras, ...envelope }, envelope)}\n`
     );
+  }
+
+  protected override stringifyReplacer(key: string, value: unknown): unknown {
+    return isDatabaseError(value)
+      ? stackOf(value)
+      : super.stringifyReplacer(key, value);
   }
 
   private serialize(

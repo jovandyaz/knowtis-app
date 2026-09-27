@@ -1,4 +1,6 @@
 import { ConsoleLogger, Logger, type LogLevel } from '@nestjs/common';
+import { DrizzleQueryError } from 'drizzle-orm';
+import postgres from 'postgres';
 import {
   afterEach,
   beforeEach,
@@ -237,6 +239,74 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
     });
 
     expect(String(onlyEntry(stdout).cause)).toContain('nested failure');
+  });
+
+  describe('a database error', () => {
+    const SECRET_PARAM = '$argon2id$v=19$m=65536,t=3,p=4$sentinel-hash';
+    const PostgresError = postgres.PostgresError as unknown as new (
+      fields: Partial<postgres.PostgresError>
+    ) => postgres.PostgresError;
+    const DIAGNOSTICS =
+      'DrizzleQueryError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)';
+
+    function uniqueViolation() {
+      return new PostgresError({
+        message:
+          'duplicate key value violates unique constraint "users_email_unique"',
+        code: '23505',
+        table_name: 'users',
+        constraint_name: 'users_email_unique',
+        detail: `Key (email)=(${SECRET_PARAM}) already exists.`,
+      });
+    }
+
+    function failedQuery() {
+      return new DrizzleQueryError(
+        'insert into "users" ("email", "password_hash") values ($1, $2)',
+        ['someone@example.com', SECRET_PARAM],
+        uniqueViolation()
+      );
+    }
+
+    it('is described by its diagnostics next to a text message, never by its parameters', () => {
+      new Logger('Users').error('Failed to create user', failedQuery());
+
+      const entry = onlyEntry(stderr);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(entry).toMatchObject({
+        message: 'Failed to create user',
+        error: { name: 'Error', message: DIAGNOSTICS },
+      });
+      expect(String(entry.stack).split('\n')[0]).toBe(DIAGNOSTICS);
+    });
+
+    it('is described by its diagnostics when a framework logs it on its own', () => {
+      new Logger('WsExceptionsHandler').error(failedQuery());
+
+      const entry = onlyEntry(stderr);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(entry.message).toBe(DIAGNOSTICS);
+    });
+
+    it('drops the detail of a raw Postgres error', () => {
+      new Logger('Tasks').warn('Reconcile failed', uniqueViolation());
+
+      const entry = onlyEntry(stdout);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(entry.error).toEqual({
+        name: 'PostgresError',
+        message:
+          'PostgresError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)',
+      });
+    });
+
+    it('is described by its diagnostics when nested in a payload', () => {
+      new Logger('Probe').warn({ event: 'probe', cause: failedQuery() });
+
+      const entry = onlyEntry(stdout);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(String(entry.cause).split('\n')[0]).toBe(DIAGNOSTICS);
+    });
   });
 
   it('logs a circular payload instead of throwing into the caller', () => {
