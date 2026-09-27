@@ -522,7 +522,6 @@ describe('StreamTextHandler', () => {
 
   it('does not record a settled stream again when the client aborts afterwards', async () => {
     const controller = new AbortController();
-    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
     const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
 
     await handler.execute(
@@ -541,11 +540,10 @@ describe('StreamTextHandler', () => {
       controller.signal
     );
 
-    expect(recordSpy).toHaveBeenCalledTimes(1);
-    expect(recordSpy.mock.calls[0][3]).toEqual({
-      mode: 'stream',
-      aborted: false,
-    });
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 80, outputTokens: 30 })
+    );
     expect(releaseSpy).not.toHaveBeenCalled();
   });
 
