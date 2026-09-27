@@ -31,6 +31,7 @@ const CUTOFF_GATE_MS = 10000;
 const APPLY_CLOCK_SLACK_MS = 250;
 const SUBSCRIBER_SETTLE_TIMEOUT_MS = 2000;
 const SUBSCRIBER_SETTLE_POLL_MS = 50;
+const HYDRATION_PAST_RENEWAL_MS = 1300;
 
 if (!process.env['DATABASE_URL'] || !process.env['REDIS_URL']) {
   throw new Error(
@@ -564,7 +565,8 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
     a.beforeLoad = () => held.promise;
     const guest = a.connect(f.ids.editor);
     try {
-      await until(() => a.access.diagnostics.completedReads >= 2);
+      await until(() => a.access.diagnostics.activeNotes > 0);
+      await delay(HYDRATION_PAST_RENEWAL_MS);
       held.release();
       await until(() => guest.provider.synced);
       await delay(1500);

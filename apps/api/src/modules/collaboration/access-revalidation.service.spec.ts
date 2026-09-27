@@ -156,6 +156,29 @@ describe('active access leases', () => {
     expect(connection.close).not.toHaveBeenCalled();
   });
 
+  it('closes a late-registered connection whose renewal read finds access revoked', async () => {
+    const lease = await service.acquire('note', guest);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(reads).toHaveBeenCalledTimes(2);
+    const skippedExpiry = lease.expiresAt;
+    snapshot = { ...initial, directPermissions: [] };
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+
+    service.register(lease, connection);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(reads).toHaveBeenCalledTimes(3);
+    expect(lease.closed).toBe(true);
+    expect(lease.expiresAt).toBe(skippedExpiry);
+    expect(connection.close).toHaveBeenCalledExactlyOnceWith({
+      code: 4403,
+      reason: COLLABORATION_CLOSE_REASON.ACCESS_CHANGED,
+    });
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(reads).toHaveBeenCalledTimes(3);
+    expect(service.diagnostics.activeNotes).toBe(0);
+  });
+
   it('closes a connection registered after revocation with the original reason', async () => {
     const lease = await service.acquire('note', guest);
     snapshot = { ...initial, directPermissions: [] };
