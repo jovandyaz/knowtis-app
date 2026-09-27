@@ -237,11 +237,11 @@ The backoffice project needs `VITE_API_URL` only (`apps/backoffice/.env.example`
 
 ## Feature Flag
 
-`ai_enabled` is the only feature flag left in the system, rolled out from the backoffice **AI Config** page's status header. Every other AI/agent capability that used to sit behind a flag is now either always on or gated by whether its env var is configured — `AI_ALERT_WEBHOOK_URL` for agent health alerts, `VOYAGE_API_KEY` for hybrid retrieval and long-term memory, `TAVILY_API_KEY` for web search — see [AI.md → Feature flag](AI.md#feature-flag) for the full table.
+`ai_enabled` is the only feature flag in the system, rolled out from the backoffice **AI Config** page's status header. Every other AI/agent capability is either always on or gated by whether its own env var is configured — `AI_ALERT_WEBHOOK_URL` for agent health alerts, `VOYAGE_API_KEY` for hybrid retrieval and long-term memory, `TAVILY_API_KEY` for web search — see [AI.md → Feature flag](AI.md#feature-flag) for the full table.
 
 ### Email verification gate
 
-Always enforced — no flag, no rollout to run. A verified non-anonymous account is required to open a note to anyone with the link, give link holders edit rights, create MCP API keys, store BYOK provider keys and approve a copilot share proposal (`403 EMAIL_NOT_VERIFIED`, see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). `TOKEN_HASH_KEY` must be set on Railway for the verification-code flow itself to work; `VerifyEmailBanner` nudges every unverified account regardless.
+Always enforced — no flag, no rollout to run. A verified non-anonymous account is required to open a note to anyone with the link, give link holders edit rights, create MCP API keys, store BYOK provider keys, approve a copilot share proposal and approve an OAuth client's requested scopes (`403 EMAIL_NOT_VERIFIED`, see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). `TOKEN_HASH_KEY` must be set on Railway for the verification-code flow itself to work; `VerifyEmailBanner` nudges every unverified account regardless.
 
 ---
 

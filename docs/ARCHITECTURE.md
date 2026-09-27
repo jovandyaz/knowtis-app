@@ -30,7 +30,7 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  │       Notes App (React)        │ │   Backoffice (React)   │  │
 │  │  • Rich text editing (Tiptap)  │ │  • Admin-only (RBAC)   │  │
 │  │  • Real-time collab (Yjs)      │ │  • AI Config & Metrics │  │
-│  │  • Offline support (IndexedDB) │ │  • Users, flags, audit │  │
+│  │  • Offline support (IndexedDB) │ │  • Users, audit log    │  │
 │  │  • Copilot dock + Study tabs   │ │                        │  │
 │  └────────────────────────────────┘ └────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤

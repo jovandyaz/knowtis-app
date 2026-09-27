@@ -58,7 +58,7 @@ pnpm dev:all    # API :3333, Notes :4200, Backoffice :4400
 apps/
   api/            NestJS backend: auth, notes, collaboration, AI, copilot agent, MCP keys
   notes/          React frontend: editor, collaboration, study tools
-  backoffice/     Admin surface: users, feature flags, AI config and metrics
+  backoffice/     Admin surface: users, audit log, AI config and metrics
   mcp/            Standalone MCP server (Hono)
 libs/
   api-client/     Typed HTTP and WebSocket client

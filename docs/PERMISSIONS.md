@@ -146,7 +146,7 @@ There is no feature flag for this gate — `VerifiedIdentityPolicy.isVerified()`
 
 ### What it covers
 
-Five call sites enforce the gate:
+Six call sites enforce the gate:
 
 | Site                                 | Action                                                                                                   | Notes                                                                                                                                           |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -155,22 +155,24 @@ Five call sites enforce the gate:
 | `McpKeysService.create`              | Creating an MCP API key                                                                                  | —                                                                                                                                               |
 | `ByokService.setKey`                 | Storing a BYOK provider key                                                                              | —                                                                                                                                               |
 | `ApproveMutationHandler.commitShare` | The copilot's own share mutation, once a proposal is approved                                            | Checked **before** resolving the target user by email, so an unverified caller can't use the copilot to probe whether an address has an account |
+| `OauthInteractionController.confirm` | `POST /oauth/interactions/:uid/confirm` — approve an OAuth client's requested scopes                     | After resolving the provider and resource URL, before the interaction lookup                                                                    |
 
 ### Where each site places the check
 
-The five sites do not all gate at the same point, and the differences are
+The six sites do not all gate at the same point, and the differences are
 deliberate. Two rules are in tension: gating **early** keeps an unverified
 caller from learning whether a note or an account exists, while gating **late**
 lets a caller who lacks the right hear that instead of being told to verify for
 something they could never do.
 
-| Site                                 | Position                                                              | Why there                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ApproveMutationHandler.commitShare` | First statement, ahead of the note lookup and the target-email lookup | Enumeration resistance, stated in the code. Resolving `targetEmail` first would answer whether that address has an account                                                                                                                                                                                                                                               |
-| `ShareNoteHandler.execute`           | First statement, ahead of the note lookup and the permission check    | Same reason. Sharing is gated unconditionally, so the answer needs no note state — and evaluating it first means an unverified caller cannot use this route to probe whether a note id exists. The cost is that an unverified **non-owner** is told to verify rather than that they lack the right                                                                       |
-| `UpdateNoteHandler.execute`          | After the note lookup and after `isOwner`                             | Not a free choice: only an _owner raising the link's exposure_ is gated — `linkExposureRank` orders `closed < anyone-with-link/viewer < anyone-with-link/editor`, and a change that does not climb it is free — so the condition cannot be evaluated until the note and the caller's role are known. Placing it after `isOwner` also gives a non-owner the truer refusal |
-| `McpKeysService.create`              | First statement                                                       | Nothing precedes it to leak                                                                                                                                                                                                                                                                                                                                              |
-| `ByokService.setKey`                 | After the "BYOK configured" check, before `validateKey`               | The configuration check is about the server, not the caller. The gate must precede `validateKey`, which sends the submitted key to the provider — an unverified caller must not reach an outbound call                                                                                                                                                                   |
+| Site                                 | Position                                                               | Why there                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ApproveMutationHandler.commitShare` | First statement, ahead of the note lookup and the target-email lookup  | Enumeration resistance, stated in the code. Resolving `targetEmail` first would answer whether that address has an account                                                                                                                                                                                                                                               |
+| `ShareNoteHandler.execute`           | First statement, ahead of the note lookup and the permission check     | Same reason. Sharing is gated unconditionally, so the answer needs no note state — and evaluating it first means an unverified caller cannot use this route to probe whether a note id exists. The cost is that an unverified **non-owner** is told to verify rather than that they lack the right                                                                       |
+| `UpdateNoteHandler.execute`          | After the note lookup and after `isOwner`                              | Not a free choice: only an _owner raising the link's exposure_ is gated — `linkExposureRank` orders `closed < anyone-with-link/viewer < anyone-with-link/editor`, and a change that does not climb it is free — so the condition cannot be evaluated until the note and the caller's role are known. Placing it after `isOwner` also gives a non-owner the truer refusal |
+| `McpKeysService.create`              | First statement                                                        | Nothing precedes it to leak                                                                                                                                                                                                                                                                                                                                              |
+| `ByokService.setKey`                 | After the "BYOK configured" check, before `validateKey`                | The configuration check is about the server, not the caller. The gate must precede `validateKey`, which sends the submitted key to the provider — an unverified caller must not reach an outbound call                                                                                                                                                                   |
+| `OauthInteractionController.confirm` | After `resolveProvider`/`resolveResourceUrl`, before `findInteraction` | Neither resolution call reveals anything about the caller's specific `uid`; gating before the interaction lookup means an unverified caller cannot use a bad or expired `uid` to learn whether it names a live interaction                                                                                                                                               |
 
 ### What is deliberately not gated
 
@@ -182,18 +184,18 @@ still be able to take back access they already granted. Gating it would leave an
 unverified owner unable to undo their own sharing.
 
 `POST /auth/resend-verification` (`AuthAccountController.resendVerification` in
-`apps/api/src/modules/auth/auth-account.controller.ts`) does not go
-through `VerifiedIdentityPolicy` at all, even though it is the email-verification
-flow itself. It refuses an **anonymous** session outright: an anonymous account's address is the synthetic
-`@anonymous.knowtis.local` one, mailing it bounces, and bounces damage a
-freshly-provisioned sending domain's reputation. The refusal is a plain
-`ForbiddenException` (403) with no structured error code — it is not the
+`apps/api/src/modules/auth/auth-account.controller.ts`) does not go through
+`VerifiedIdentityPolicy` at all, even though it is the email-verification flow
+itself. It refuses an **anonymous** session outright: an anonymous account's
+address is the synthetic `@anonymous.knowtis.local` one, mailing it bounces, and
+bounces damage a freshly-provisioned sending domain's reputation. The refusal is a
+plain `ForbiddenException` (403) with no structured error code — it is not the
 `EMAIL_NOT_VERIFIED` code from the table above, so a client matching on that code
 will not recognize this site's refusal.
 
 ### Error codes
 
-- **`EMAIL_NOT_VERIFIED`** (`EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`) — HTTP `403` from the four non-copilot sites, reached two different ways. `McpKeysService` and `ByokService` throw a `ForbiddenException` directly, via `VerifiedIdentityPolicy.assertVerified()`. `ShareNoteHandler` and `UpdateNoteHandler` instead return a domain `Result` carrying `NoteErrors.verificationRequired()`, which `NOTE_ERROR_STATUS_MAP` turns into the same `403` at the controller boundary. The wire response is identical either way. `isEmailNotVerifiedError()` in `@knowtis/api-client` recognizes it by status + code so the frontend can offer verification instead of surfacing a dead error.
+- **`EMAIL_NOT_VERIFIED`** (`EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`) — HTTP `403` from the five non-copilot sites, reached two different ways. `McpKeysService`, `ByokService` and `OauthInteractionController` throw a `ForbiddenException` directly, via `VerifiedIdentityPolicy.assertVerified()`. `ShareNoteHandler` and `UpdateNoteHandler` instead return a domain `Result` carrying `NoteErrors.verificationRequired()`, which `NOTE_ERROR_STATUS_MAP` turns into the same `403` at the controller boundary. The wire response is identical either way. `isEmailNotVerifiedError()` in `@knowtis/api-client` recognizes it by status + code so the frontend can offer verification instead of surfacing a dead error.
 - **`AGENT_EMAIL_NOT_VERIFIED`** (`AGENT_EMAIL_NOT_VERIFIED_CODE`, also from `@knowtis/shared-types`) — the copilot's own domain error (`AgentErrors.emailNotVerified()`), delivered over the agent WebSocket rather than as an HTTP response, for the `ApproveMutationHandler.commitShare` site. It lives in `shared-types` so the emitter and the frontend's `CODE_TO_KEY` table cannot drift apart under a rename.
 
 ### Anonymous users
@@ -359,7 +361,7 @@ The dialog refreshes both note detail and People every time it opens. All mutati
 - **People with access:** Add an existing account by exact email, choose Viewer/Editor, change another person's permission, or confirm removal. Owner and current actor rows are read-only. The current actor must be the owner or a direct editor with the sharing policy enabled; effective link editing alone is insufficient.
 - **General access and link permission:** Owner-only controls, with a copy link action when access is open. Restricted notes retain their token, so resuming uses the same URL.
 - **Editors can share:** Owner-only switch allowing direct editors to manage other people.
-- **Verification:** Only an actual server `EMAIL_NOT_VERIFIED` refusal opens the existing verification flow. Adding people, viewer→editor, and widening link exposure require verification when the flag is enabled; listing, removing, reducing permissions, restricting links, and changing the sharing-policy switch remain available without verification.
+- **Verification:** Only an actual server `EMAIL_NOT_VERIFIED` refusal opens the existing verification flow. Adding people, viewer→editor, and widening link exposure always require verification; listing, removing, reducing permissions, restricting links, and changing the sharing-policy switch remain available without verification.
 - **Removal confirmation:** Names the person and states that direct access is removed. When the link remains open, it explains that the person may still access the note through that link.
 
 People writes are pessimistic: no temporary UUIDs or speculative rows. Hooks parse runtime responses with Zod and await invalidation of People, detail, lists, recents, and counts. The dialog shares a synchronous action lock across People, removal, link, and policy actions, including close/reopen while a write is pending. EN/ES labels, visible inline errors/status, independent drafts, keyboard permission choices, and nested-dialog focus restoration are included.

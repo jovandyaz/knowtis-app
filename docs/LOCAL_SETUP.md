@@ -81,7 +81,7 @@ pnpm nx build design-system
 Two things trip up first-time local runs:
 
 1. **Settings is a modal, not a route.** There is no `/settings/integrations` URL — open it from the user menu (bottom-left avatar → **Settings**). The modal only renders for a signed-in, **non-anonymous** user.
-2. **Register sends a 6-digit code, and local dev prints it instead of mailing it.** After you register, the app shows "Check your email". With `EMAIL_PROVIDER=console` (the `.env.example` default) the API terminal logs the whole message at `DEBUG`, including `Your verification code is 123456` and the `/verify-email?token=…` link — type the code there, or later from the banner's **Verify now**. Settings does not depend on it; only the actions the [verified-identity gate](PERMISSIONS.md#verified-identity-gate) covers do (opening a note link, sharing, MCP keys, BYOK keys), and that gate is always enforced. If the log is gone, the DB shortcut still works:
+2. **Register sends a 6-digit code, and local dev prints it instead of mailing it.** After you register, the app shows "Check your email". With `EMAIL_PROVIDER=console` (the `.env.example` default) the API terminal logs the whole message at `DEBUG`, including `Your verification code is 123456` and the `/verify-email?token=…` link — type the code there, or later from the banner's **Verify now**. Settings does not depend on it; only the actions the [verified-identity gate](PERMISSIONS.md#verified-identity-gate) covers do (opening a note link, sharing, MCP keys, BYOK keys, approving an OAuth app connection), and that gate is always enforced. If the log is gone, the DB shortcut still works:
 
 ```bash
 docker exec knowtis-postgres psql -U knowtis -d knowtis \

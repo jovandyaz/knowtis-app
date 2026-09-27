@@ -95,7 +95,7 @@ Run `/mcp` in a session and choose **Authenticate** — Claude Code opens the br
 
 ### What you see
 
-The consent page (served by the Knowtis web app at `/oauth/consent?uid=...`) shows the **client name**, the **redirect host** the code will be sent to, and the **list of scopes** requested. CIMD clients (identified by an HTTPS `client_id`) get a "verified by URL" badge. Anonymous sessions cannot authorize — you are routed through login first. Approving creates a grant; denying aborts with `access_denied`.
+The consent page (served by the Knowtis web app at `/oauth/consent?uid=...`) shows the **client name**, the **redirect host** the code will be sent to, and the **list of scopes** requested. CIMD clients (identified by an HTTPS `client_id`) get a "verified by URL" badge. Anonymous sessions cannot authorize — you are routed through login first — and an unverified signed-in account is refused with `403 EMAIL_NOT_VERIFIED` on Approve (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). Approving creates a grant; denying aborts with `access_denied`.
 
 ### Managing connections (revocation)
 
