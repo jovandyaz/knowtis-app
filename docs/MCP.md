@@ -116,7 +116,7 @@ claude mcp add --transport http knowtis https://mcp.knowtis.app/mcp \
 
 ### Claude Desktop
 
-When OAuth is configured, prefer the **native custom connector** in [Connect with OAuth](#connect-with-oauth) — no bridge required. Use the bridge below only for API-key auth (or while OAuth is dark): Claude Desktop's custom-connector UI has no field for an `Authorization` header, so an API key must be injected through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Add this to `claude_desktop_config.json` (**Settings > Developer > Edit Config**) and restart Claude Desktop:
+When OAuth is configured, prefer the **native custom connector** in [Connect with OAuth](#connect-with-oauth) — no bridge required. Use the bridge below only for API-key auth (or when the OAuth env is not set on both services): Claude Desktop's custom-connector UI has no field for an `Authorization` header, so an API key must be injected through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Add this to `claude_desktop_config.json` (**Settings > Developer > Edit Config**) and restart Claude Desktop:
 
 ```json
 {
