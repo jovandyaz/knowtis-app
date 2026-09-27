@@ -10,6 +10,10 @@ import type {
   AgentToolGroup,
   AgentToolPhase,
 } from './agent-tool';
+import {
+  classifyNoteStoreFailure,
+  wrapUpstreamFailure,
+} from './tool-execution.error';
 
 const MAX_EDITS_PER_PROPOSAL = 20;
 const MAX_EDIT_TEXT_CHARS = 10_000;
@@ -90,10 +94,14 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             .describe('Markdown to add after the end of the note'),
         }),
         execute: async ({ noteId, edits, appendMarkdown }) => {
-          const r = await this.proposalBuilder.buildEdit(userId, noteId, {
-            edits,
-            ...(appendMarkdown !== undefined && { appendMarkdown }),
-          });
+          const r = await wrapUpstreamFailure(
+            () =>
+              this.proposalBuilder.buildEdit(userId, noteId, {
+                edits,
+                ...(appendMarkdown !== undefined && { appendMarkdown }),
+              }),
+            classifyNoteStoreFailure
+          );
           return r.isOk()
             ? captureProposal(proposals, r.value)
             : { error: r.error.message };
@@ -119,10 +127,14 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             }
           ),
         execute: async ({ noteId, title, contentMarkdown }) => {
-          const r = await this.proposalBuilder.buildUpdate(userId, noteId, {
-            ...(title !== undefined && { title }),
-            ...(contentMarkdown !== undefined && { contentMarkdown }),
-          });
+          const r = await wrapUpstreamFailure(
+            () =>
+              this.proposalBuilder.buildUpdate(userId, noteId, {
+                ...(title !== undefined && { title }),
+                ...(contentMarkdown !== undefined && { contentMarkdown }),
+              }),
+            classifyNoteStoreFailure
+          );
           return r.isOk()
             ? captureProposal(proposals, r.value)
             : { error: r.error.message };
@@ -140,11 +152,15 @@ export class NoteMutateToolGroup implements AgentToolGroup {
           permission: z.enum(['viewer', 'editor']).default('viewer'),
         }),
         execute: async ({ noteId, targetEmail, permission }) => {
-          const r = await this.proposalBuilder.buildShare(
-            userId,
-            noteId,
-            targetEmail,
-            permission
+          const r = await wrapUpstreamFailure(
+            () =>
+              this.proposalBuilder.buildShare(
+                userId,
+                noteId,
+                targetEmail,
+                permission
+              ),
+            classifyNoteStoreFailure
           );
           return r.isOk()
             ? captureProposal(proposals, r.value)

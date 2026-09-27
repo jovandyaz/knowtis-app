@@ -4,7 +4,10 @@ import { streamText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { failedQuery } from '../../../../test-support/database-errors';
+import {
+  failedQuery,
+  postgresError,
+} from '../../../../test-support/database-errors';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
@@ -3581,6 +3584,60 @@ describe('AiSdkAgentOrchestrator', () => {
           'DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)',
       })
     );
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(secret);
+    warnSpy.mockRestore();
+  });
+
+  it('logs the diagnostics of the query behind a note store failure, never its parameters', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const secret = 'sentinel-note-store-param';
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'proposeShareNote',
+          input: { noteId: 'n1' },
+          error: new ToolExecutionError(
+            TOOL_ERROR_CODES.NOTE_STORE_FAILED,
+            'Note store request failed',
+            {
+              cause: failedQuery(
+                [secret],
+                postgresError({
+                  message: 'canceling statement due to statement timeout',
+                  code: '57014',
+                  detail: secret,
+                })
+              ),
+            }
+          ),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const toolErrorLogs = warnSpy.mock.calls
+      .map(([payload]) => payload as Record<string, unknown>)
+      .filter((p) => p?.event === 'agent.tool.error');
+    expect(toolErrorLogs).toEqual([
+      {
+        event: 'agent.tool.error',
+        userId: 'u1',
+        model: expect.any(String),
+        toolName: 'proposeShareNote',
+        code: 'NOTE_STORE_FAILED',
+        error: 'Note store request failed',
+        errorName: 'DrizzleQueryError',
+        failureCategory: 'unclassified',
+        sqlState: '57014',
+      },
+    ]);
     expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(secret);
     warnSpy.mockRestore();
   });

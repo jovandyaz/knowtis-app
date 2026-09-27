@@ -11,6 +11,11 @@ import {
 
 import { isOverloadedError } from '@knowtis/ai-gateway';
 
+import {
+  databaseDiagnostics,
+  isDatabaseError,
+  type DatabaseDiagnostics,
+} from '../../../../core/errors/database-diagnostics';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   AIErrors,
@@ -52,11 +57,14 @@ export function errorMessage(error: unknown, redact: boolean): string {
   return error instanceof Error ? reasonOf(error) : 'Agent run failed';
 }
 
-function describeToolError(error: unknown): { code: string; error: string } {
+function describeToolError(
+  error: unknown
+): { code: string; error: string } & Partial<DatabaseDiagnostics> {
   if (error instanceof ToolExecutionError) {
     return {
       code: error.code,
       error: error.message.slice(0, TOOL_ERROR_LOG_MAX_CHARS),
+      ...(isDatabaseError(error.cause) && databaseDiagnostics(error.cause)),
     };
   }
   const message =
