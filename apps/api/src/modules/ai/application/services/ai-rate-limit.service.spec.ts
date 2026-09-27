@@ -940,6 +940,29 @@ describe('AIRateLimitService', () => {
         );
       });
 
+      it('still charges the IP subject when the user-subject correction fails', async () => {
+        vi.mocked(provider.correctUsage).mockRejectedValueOnce(
+          new Error('redis down')
+        );
+        const execution = createExecutionContext({
+          tier: 'anonymous',
+          clientIp: '203.0.113.9',
+        });
+
+        await expect(
+          gated.recordSideCost(execution, EMBEDDING_COST)
+        ).resolves.toBeUndefined();
+
+        expect(provider.correctUsage).toHaveBeenCalledWith(
+          expect.stringMatching(/^ip:[0-9a-f]{16}$/),
+          0,
+          0,
+          0,
+          0.001,
+          false
+        );
+      });
+
       it('charges only the user subject for an anonymous caller without an IP', async () => {
         await gated.recordSideCost(
           createExecutionContext({ tier: 'anonymous' }),

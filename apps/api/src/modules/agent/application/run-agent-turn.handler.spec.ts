@@ -1912,9 +1912,9 @@ describe('RunAgentTurnHandler', () => {
     const PLATFORM_MODEL = 'openai:gpt-4o-mini';
     const ANTHROPIC_MODEL = SERVED_MODEL;
 
-    function makeContextHandler() {
+    function makeContextHandler(history: ConversationMessageRow[] = []) {
       const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-      const conversations = makeConversations();
+      const conversations = makeConversations(history);
       const byok = makeByok();
       vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
       const tierResolver = makeTierResolver();
@@ -2042,19 +2042,36 @@ describe('RunAgentTurnHandler', () => {
       );
     });
 
-    it('charges the memory embedding of a byok-billed turn to the turn context', async () => {
-      const { handler, rateLimit, tierResolver, callbacks } =
-        makeContextHandler();
+    it('charges the memory embedding and the guards of a byok-billed turn to the turn context, and runs the turn on it', async () => {
+      const {
+        handler,
+        orchestrator,
+        rateLimit,
+        injectionGuard,
+        tierResolver,
+        callbacks,
+      } = makeContextHandler([
+        historyRow({ role: 'user', content: 'earlier question' }),
+      ]);
       vi.mocked(tierResolver.resolve).mockResolvedValue(
         createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] })
       );
+      const billed = expect.objectContaining({
+        billing: { kind: 'byok', provider: 'anthropic' },
+      });
       await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
       expect(rateLimit.recordSideCost).toHaveBeenCalledWith(
-        expect.objectContaining({
-          billing: { kind: 'byok', provider: 'anthropic' },
-        }),
+        billed,
         expect.objectContaining({ action: 'embedding' })
       );
+      expect(injectionGuard.guard).toHaveBeenCalledWith('hi', billed);
+      expect(injectionGuard.guard).toHaveBeenCalledWith(
+        expect.stringContaining(COALESCED_MESSAGE_SEPARATOR),
+        billed
+      );
+      expect(
+        vi.mocked(orchestrator.run).mock.calls[0][0].execution.billing
+      ).toEqual({ kind: 'byok', provider: 'anthropic' });
     });
 
     it('guards the fresh message with the turn context', async () => {

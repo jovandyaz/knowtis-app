@@ -56,6 +56,7 @@ interface Gate {
 
 const PG_RPM_SWEEP_THRESHOLD = 1000;
 const BUDGET_WARNING_THRESHOLD = 0.8;
+const SIDE_COST_ROUTING_FAILED = 'Side-cost Redis routing failed';
 
 @Injectable()
 export class AIRateLimitService {
@@ -370,28 +371,31 @@ export class AIRateLimitService {
     if (!this.rateLimitProvider) {
       return;
     }
-    try {
-      if (execution.billing.kind === 'byok') {
+    if (execution.billing.kind === 'byok') {
+      try {
         await this.rateLimitProvider.recordByokCost(userId, cost.costUsd);
-        return;
+      } catch (error) {
+        this.logger.warn(SIDE_COST_ROUTING_FAILED, error);
       }
-      await this.rateLimitProvider.correctUsage(userId, 0, 0, 0, cost.costUsd);
-      const ipSubject = this.anonymousIpSubject(
-        execution.tier === 'anonymous',
-        execution.subject.clientIp
-      );
-      if (ipSubject) {
+      return;
+    }
+    const ipSubject = this.anonymousIpSubject(
+      execution.tier === 'anonymous',
+      execution.subject.clientIp
+    );
+    for (const subject of ipSubject ? [userId, ipSubject] : [userId]) {
+      try {
         await this.rateLimitProvider.correctUsage(
-          ipSubject,
+          subject,
           0,
           0,
           0,
           cost.costUsd,
-          false
+          ...(subject === ipSubject ? ([false] as const) : [])
         );
+      } catch (error) {
+        this.logger.warn(SIDE_COST_ROUTING_FAILED, error);
       }
-    } catch (error) {
-      this.logger.warn('Side-cost Redis routing failed', error);
     }
   }
 
