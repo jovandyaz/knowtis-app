@@ -302,6 +302,22 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
       expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
       expect(String(entry.cause).split('\n')[0]).toBe(DIAGNOSTICS);
     });
+
+    it('is described by its diagnostics inside a circular payload', () => {
+      const payload: Record<string, unknown> = {
+        event: 'probe',
+        cause: rejectedSignUp(),
+        attempts: [{ failure: rejectedSignUp() }],
+      };
+      payload.self = payload;
+
+      new Logger('Probe').warn(payload);
+
+      const entry = onlyEntry(stdout);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(String(entry.payload)).toContain('[Circular');
+      expect(String(entry.payload)).toContain(DIAGNOSTICS);
+    });
   });
 
   it('logs a circular payload instead of throwing into the caller', () => {

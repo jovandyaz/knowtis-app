@@ -52,6 +52,35 @@ function firstNonEmptyText(candidates: unknown[]): string | undefined {
   );
 }
 
+function withDatabaseErrorsDescribed(
+  value: unknown,
+  copies = new WeakMap<object, unknown>()
+): unknown {
+  if (isDatabaseError(value)) {
+    return stackOf(value);
+  }
+  if (!Array.isArray(value) && !isPlainObject(value)) {
+    return value;
+  }
+  if (copies.has(value)) {
+    return copies.get(value);
+  }
+  if (Array.isArray(value)) {
+    const copy: unknown[] = [];
+    copies.set(value, copy);
+    for (const nested of value) {
+      copy.push(withDatabaseErrorsDescribed(nested, copies));
+    }
+    return copy;
+  }
+  const copy: Record<string, unknown> = {};
+  copies.set(value, copy);
+  for (const [key, nested] of Object.entries(value)) {
+    copy[key] = withDatabaseErrorsDescribed(nested, copies);
+  }
+  return copy;
+}
+
 function errorFields(error: Error): Record<string, unknown> {
   if (isDatabaseError(error)) {
     return { name: error.name, message: reasonOf(error) };
@@ -139,7 +168,7 @@ export class JsonConsoleLogger extends ConsoleLogger {
     } catch {
       // A circular payload must not turn the log call into a throw inside the
       // caller's catch block, which would hide the error being reported.
-      const payload = inspect(entry, {
+      const payload = inspect(withDatabaseErrorsDescribed(entry), {
         depth: UNSERIALIZABLE_INSPECT_DEPTH,
         breakLength: Infinity,
       });
