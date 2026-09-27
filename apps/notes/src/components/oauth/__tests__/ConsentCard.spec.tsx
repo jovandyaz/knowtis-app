@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
 import type { OauthInteractionDetails } from '@knowtis/data-access-oauth';
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
 import { ConsentCard } from '../ConsentCard';
 
@@ -99,6 +100,26 @@ describe('ConsentCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/already answered/i);
     expect(screen.queryByRole('button', { name: /approve/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /deny/i })).toBeNull();
+  });
+
+  it('asks an unverified user to verify their email and keeps the actions', () => {
+    renderCard(
+      {},
+      {
+        decisionError: new ApiClientError(
+          'Forbidden',
+          403,
+          EMAIL_NOT_VERIFIED_CODE
+        ),
+      }
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Verify your email address to connect apps, then approve again.'
+    );
+    expect(
+      screen.getByRole('button', { name: /approve/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /deny/i })).toBeInTheDocument();
   });
 
   it('keeps the actions and shows a retry message on a server error (5xx)', () => {

@@ -20,6 +20,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 import {
   ApiAuthErrors,
   ApiBadRequest,
@@ -33,7 +35,7 @@ import { FeatureFlagsService } from './feature-flags.service';
 const flagSchema = {
   type: 'object',
   properties: {
-    key: { type: 'string', example: 'ai_enabled' },
+    key: { type: 'string', example: FEATURE_FLAG_KEYS.AI_ENABLED },
     enabled: { type: 'boolean', example: true },
     description: {
       type: 'string',
@@ -79,7 +81,7 @@ export class FeatureFlagsController {
     type: 'string',
     description:
       'The feature flag key (lowercase alphanumeric with underscores)',
-    example: 'ai_enabled',
+    example: FEATURE_FLAG_KEYS.AI_ENABLED,
   })
   @ApiBody({ type: UpsertFeatureFlagDto })
   @ApiResponse({
@@ -114,7 +116,7 @@ export class FeatureFlagsController {
     name: 'key',
     type: 'string',
     description: 'The feature flag key to delete',
-    example: 'ai_enabled',
+    example: FEATURE_FLAG_KEYS.AI_ENABLED,
   })
   @ApiResponse({ status: 204, description: 'Feature flag deleted' })
   @ApiAuthErrors('user does not have admin role')

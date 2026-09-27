@@ -8,7 +8,6 @@ export {
   useAssignableModels,
   useAuditLog,
   useClearSystemProviderKey,
-  useDeleteFeatureFlag,
   useGlobalAiMetrics,
   useGlobalAiTimeseries,
   useGlobalAiUsage,

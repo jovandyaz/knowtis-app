@@ -27,12 +27,10 @@ interface AIState {
   lastPayload: AICompletePayload | null;
   selectionRange: SelectionRange | null;
   aiEnabled: boolean;
-  voiceNotesEnabled: boolean;
   _streamHandle: AIStreamHandle | null;
   startStream: (payload: AICompletePayload) => void;
   setSelectionRange: (range: SelectionRange | null) => void;
   setAIEnabled: (enabled: boolean) => void;
-  setVoiceNotesEnabled: (enabled: boolean) => void;
   retry: () => void;
   cancelStream: () => void;
   reset: () => void;
@@ -60,7 +58,6 @@ export const useAIStore = create<AIState>((set, get) => {
     lastPayload: null,
     selectionRange: null,
     aiEnabled: false,
-    voiceNotesEnabled: false,
     _streamHandle: null,
 
     startStream: (payload) => {
@@ -124,10 +121,6 @@ export const useAIStore = create<AIState>((set, get) => {
 
     setAIEnabled: (enabled) => {
       set({ aiEnabled: enabled });
-    },
-
-    setVoiceNotesEnabled: (enabled) => {
-      set({ voiceNotesEnabled: enabled });
     },
 
     retry: () => {
