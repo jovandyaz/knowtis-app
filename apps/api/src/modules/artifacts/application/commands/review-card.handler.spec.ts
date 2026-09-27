@@ -1,9 +1,11 @@
+import { Logger } from '@nestjs/common';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SM2_QUALITY } from '@knowtis/shared-types';
 
+import { failedQuery } from '../../../../test-support/database-errors';
 import { ArtifactErrorCodes } from '../../domain/errors/artifact.errors';
 import { FlashcardReviewedEvent } from '../../domain/events/flashcard-reviewed.event';
 import type {
@@ -178,5 +180,45 @@ describe('ReviewCardHandler', () => {
       message: 'Internal error: review log insert failed',
     });
     expect(emit).not.toHaveBeenCalled();
+  });
+
+  describe('when reading the progress throws', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('logs the failure by its diagnostics and answers with the fixed internal error', async () => {
+      const secret = 'sentinel-progress-value';
+      getProgress.mockRejectedValue(failedQuery([secret]));
+      const log = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      const result = await handler.execute({
+        artifactId: ARTIFACT_ID,
+        userId: USER_ID,
+        cardIndex: 0,
+        quality: SM2_QUALITY.GOOD,
+      });
+
+      expect(result._unsafeUnwrapErr()).toEqual({
+        code: ArtifactErrorCodes.INTERNAL_ERROR,
+        message: 'Internal error: Failed to review card',
+      });
+      expect(log.mock.calls).toEqual([
+        [
+          {
+            event: 'review_card.error',
+            artifactId: ARTIFACT_ID,
+            userId: USER_ID,
+            cardIndex: 0,
+            error:
+              'DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)',
+          },
+        ],
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain(secret);
+      expect(emit).not.toHaveBeenCalled();
+    });
   });
 });

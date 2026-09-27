@@ -8,6 +8,7 @@ import {
   type QuizAttemptScope,
 } from '@knowtis/shared-types';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { quizAttempts } from '../../../../database/schema';
 import {
@@ -62,15 +63,9 @@ export class DrizzleQuizAttemptRepository implements QuizAttemptRepository {
         event: 'quiz_attempt.create_error',
         artifactId: data.artifactId,
         userId: data.userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        ...databaseDiagnostics(error),
       });
-      return err(
-        ArtifactErrors.internalError(
-          error instanceof Error
-            ? error.message
-            : 'Failed to create quiz attempt'
-        )
-      );
+      return err(ArtifactErrors.internalError('Failed to create quiz attempt'));
     }
   }
 
