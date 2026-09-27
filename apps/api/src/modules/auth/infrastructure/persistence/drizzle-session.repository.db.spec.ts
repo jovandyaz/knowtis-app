@@ -21,6 +21,7 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { isUniqueViolation } from '../../../../database/unique-violation';
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleSessionRepository } from './drizzle-session.repository';
 
@@ -34,6 +35,8 @@ const SECRET_REFRESH_TOKEN_HASH = 'sentinel-refresh-token-hash';
 const SECRET_USER_AGENT = 'sentinel-user-agent';
 const SECRET_IP_ADDRESS = '203.0.113.77';
 const SESSION_EXPIRES_AT = new Date('2099-01-01T00:00:00.000Z');
+const REFRESH_TOKEN_HASH_INDEX = 'sessions_refresh_token_hash_idx';
+const COLLIDING_HASH = 'colliding-refresh-token-hash';
 
 describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
   let moduleRef: TestingModule;
@@ -45,6 +48,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
       userId,
       familyId,
       refreshTokenHash: hash,
+      expiresAt: SESSION_EXPIRES_AT,
+    });
+
+  const insertSessionRow = (refreshTokenHash: string) =>
+    db.insert(sessions).values({
+      userId: DB_USER_ID,
+      familyId: CURRENT_FAMILY_ID,
+      refreshTokenHash,
       expiresAt: SESSION_EXPIRES_AT,
     });
 
@@ -194,5 +205,15 @@ describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
         message: 'Failed to create session',
       });
     });
+  });
+
+  it('rejects a second session holding an existing refresh token hash', async () => {
+    await insertSessionRow(COLLIDING_HASH);
+
+    const outcome = await insertSessionRow(COLLIDING_HASH).catch(
+      (error: unknown) => error
+    );
+
+    expect(isUniqueViolation(outcome, REFRESH_TOKEN_HASH_INDEX)).toBe(true);
   });
 });
