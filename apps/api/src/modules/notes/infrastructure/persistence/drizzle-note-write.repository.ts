@@ -1,15 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  and,
-  DrizzleQueryError,
-  eq,
-  isNotNull,
-  isNull,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import {
   DATABASE_CONNECTION,
   notes,
@@ -27,36 +20,6 @@ import {
 } from '../../domain';
 import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
 import { mapToNoteEntity } from './note-entity.mapper';
-
-const SQLSTATE_PATTERN = /^[A-Z0-9]{5}$/;
-
-function rotationFailureCategory(code: unknown) {
-  switch (code) {
-    case '23505':
-      return 'unique_violation';
-    case '08006':
-    case 'ECONNREFUSED':
-      return 'connection_failure';
-    case '55P03':
-      return 'transaction_conflict';
-    default:
-      return 'unclassified';
-  }
-}
-
-function rotationDiagnostics(error: unknown) {
-  const cause = error instanceof DrizzleQueryError ? error.cause : error;
-  const code =
-    typeof cause === 'object' && cause !== null && 'code' in cause
-      ? cause.code
-      : undefined;
-  return {
-    failureCategory: rotationFailureCategory(code),
-    sqlState:
-      typeof code === 'string' && SQLSTATE_PATTERN.test(code) ? code : null,
-    errorName: error instanceof Error ? error.constructor.name : typeof error,
-  };
-}
 
 type NoteUpdatePayload = Omit<Partial<NewNote>, 'shareToken'> & {
   shareToken?: string | null | SQL | undefined;
@@ -166,7 +129,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       this.logger.error({
         operation: 'rotateShareToken',
         noteId: data.noteId,
-        ...rotationDiagnostics(error),
+        ...databaseDiagnostics(error),
       });
       return err(NoteErrors.persistenceError('rotateShareToken', data.noteId));
     }
