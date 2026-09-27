@@ -1,3 +1,5 @@
+import { inspect } from 'node:util';
+
 import { ConsoleLogger, Logger, type LogLevel } from '@nestjs/common';
 import {
   afterEach,
@@ -440,6 +442,84 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
       expect(map.get(failure)).toBe('failure');
       expect(set.has(failure)).toBe(true);
       expect(payload.holders).toEqual([property, aggregate, map, set]);
+    });
+
+    class Sealed {
+      readonly #contents: unknown;
+
+      constructor(contents: unknown) {
+        this.#contents = contents;
+      }
+
+      [inspect.custom](): string {
+        return `Sealed<${typeof this.#contents}>`;
+      }
+    }
+
+    class Registry extends Map<string, unknown> {}
+
+    it.each(Object.keys(PAYLOADS))(
+      'leaves an object with its own inspector to it in %s',
+      (payloadKind) => {
+        const holder = new Map([['sealed', new Sealed(rejectedSignUp())]]);
+
+        new Logger('Probe').warn(
+          PAYLOADS[payloadKind as keyof typeof PAYLOADS](holder)
+        );
+
+        const logged = JSON.stringify(onlyEntry(stdout));
+        expect(logged).toContain('Sealed<object>');
+        expect(logged).not.toContain('[unserializable payload]');
+        expect(logged).not.toContain(SECRET_PARAM);
+      }
+    );
+
+    it.each(Object.keys(PAYLOADS))(
+      'logs a promise holding it as a placeholder in %s',
+      (payloadKind) => {
+        const holder = new Map([
+          ['pending', Promise.resolve(rejectedSignUp())],
+        ]);
+
+        new Logger('Probe').warn(
+          PAYLOADS[payloadKind as keyof typeof PAYLOADS](holder)
+        );
+
+        const logged = JSON.stringify(onlyEntry(stdout));
+        expect(logged).toContain('[Promise]');
+        expect(logged).not.toContain(SECRET_PARAM);
+      }
+    );
+
+    it('keeps the class of a Map subclass holding it', () => {
+      new Logger('Probe').warn({
+        event: 'probe',
+        holder: new Registry([['failure', rejectedSignUp()]]),
+      });
+
+      const logged = String(onlyEntry(stdout).holder);
+      expect(logged).toMatch(
+        /^Registry\(1\) \[Map\] \{ 'failure' => 'DrizzleQueryError/
+      );
+      expect(logged).not.toContain(SECRET_PARAM);
+    });
+
+    it('describes the printed entries of a long array and counts the rest', () => {
+      const failures = Array.from({ length: 150 }, (_, index) =>
+        failedQuery(
+          [SECRET_PARAM],
+          postgresError({ code: String(index).padStart(5, '0') })
+        )
+      );
+
+      new Logger('Probe').warn({
+        event: 'probe',
+        holder: new Map([['failures', failures]]),
+      });
+
+      const logged = String(onlyEntry(stdout).holder);
+      expect(logged).toContain('... 50 more items');
+      expect(logged).not.toContain(SECRET_PARAM);
     });
 
     it.each([1, 2, 3, 4, 5, 6, 7])(

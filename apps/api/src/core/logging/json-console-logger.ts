@@ -1,4 +1,4 @@
-import { inspect } from 'node:util';
+import { inspect, type InspectOptions } from 'node:util';
 
 import { ConsoleLogger, type LogLevel } from '@nestjs/common';
 
@@ -29,7 +29,10 @@ const DEFAULT_LOG_LEVEL: LogLevel = 'log';
 
 const MESSAGE_FIELDS = ['message', 'event', 'operation'] as const;
 
-const UNSERIALIZABLE_INSPECT_DEPTH = 4;
+const UNSERIALIZABLE_INSPECT_OPTIONS: InspectOptions = {
+  depth: 4,
+  breakLength: Infinity,
+};
 
 const UNSERIALIZABLE_PAYLOAD = '[unserializable payload]';
 
@@ -133,12 +136,7 @@ export class JsonConsoleLogger extends ConsoleLogger {
       value instanceof Map || value instanceof Set || value instanceof Error;
     return super.stringifyReplacer(
       key,
-      renderedWhole
-        ? rewriteDatabaseErrors(
-            value,
-            this.inspectOptions.depth ?? Number.POSITIVE_INFINITY
-          )
-        : value
+      renderedWhole ? rewriteDatabaseErrors(value, this.inspectOptions) : value
     );
   }
 
@@ -155,8 +153,8 @@ export class JsonConsoleLogger extends ConsoleLogger {
       // throw inside the caller's catch block, hiding the error it reports.
       try {
         const payload = inspect(
-          rewriteDatabaseErrors(entry, UNSERIALIZABLE_INSPECT_DEPTH),
-          { depth: UNSERIALIZABLE_INSPECT_DEPTH, breakLength: Infinity }
+          rewriteDatabaseErrors(entry, UNSERIALIZABLE_INSPECT_OPTIONS),
+          UNSERIALIZABLE_INSPECT_OPTIONS
         );
         return JSON.stringify({ ...envelope, payload }, replacer);
       } catch {
