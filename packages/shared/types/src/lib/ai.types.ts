@@ -1,12 +1,10 @@
 export const AI_ACTION = {
   SUMMARIZE: 'summarize',
-  EXPAND: 'expand',
   TRANSLATE: 'translate',
   TONE: 'tone',
   OUTLINE: 'outline',
   ACTION_ITEMS: 'action-items',
   GHOST_TEXT: 'ghost-text',
-  CHAT: 'chat',
   IMPROVE_WRITING: 'improve-writing',
   FIX_SPELLING: 'fix-spelling',
   MAKE_SHORTER: 'make-shorter',
@@ -24,6 +22,39 @@ export const AI_ACTION = {
 export const AI_ACTIONS = Object.values(AI_ACTION);
 
 export type AIAction = (typeof AI_ACTIONS)[number];
+
+/**
+ * Actions the notes client never sends to `/ai/complete` or `ai:complete`:
+ * `SUGGEST_ORGANIZATION` and the voice actions are owned by a dedicated
+ * endpoint (`/ai/organization/suggest`, `/ai/voice-note`); `GENERATE_FLASHCARDS`,
+ * `GENERATE_QUIZ`, `GENERATE_SUMMARY` and `GENERATE_MIND_MAP` are produced only
+ * by the artifacts module.
+ */
+const NON_COMPLETION_ACTIONS = [
+  AI_ACTION.SUGGEST_ORGANIZATION,
+  AI_ACTION.VOICE_TRANSCRIPTION,
+  AI_ACTION.STRUCTURE_VOICE_NOTE,
+  AI_ACTION.GENERATE_FLASHCARDS,
+  AI_ACTION.GENERATE_QUIZ,
+  AI_ACTION.GENERATE_SUMMARY,
+  AI_ACTION.GENERATE_MIND_MAP,
+] as const;
+
+export type CompletionAIAction = Exclude<
+  AIAction,
+  (typeof NON_COMPLETION_ACTIONS)[number]
+>;
+
+/**
+ * Actions the generic completion surface accepts. `/ai/complete` and the
+ * `ai:complete` socket event skip the checks a dedicated endpoint applies to
+ * its action, such as note ownership or a tighter throttle, so an action owned
+ * by one must stay out of this set — otherwise callers reach it around them.
+ */
+export const COMPLETION_AI_ACTIONS = AI_ACTIONS.filter(
+  (action): action is CompletionAIAction =>
+    !NON_COMPLETION_ACTIONS.some((excluded) => excluded === action)
+);
 
 export const AI_LANGUAGES = [
   'English',

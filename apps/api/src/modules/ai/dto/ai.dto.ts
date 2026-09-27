@@ -7,9 +7,11 @@ import {
   MinLength,
 } from 'class-validator';
 
-import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
-
-import { COMPLETION_AI_ACTIONS } from '../domain/value-objects/ai-action.vo';
+import {
+  AI_LANGUAGES,
+  AI_TONES,
+  COMPLETION_AI_ACTIONS,
+} from '@knowtis/shared-types';
 
 export class AICompleteDto {
   @ApiProperty({

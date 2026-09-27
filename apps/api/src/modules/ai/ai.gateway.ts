@@ -19,6 +19,7 @@ import { z } from 'zod';
 import {
   AI_LANGUAGES,
   AI_TONES,
+  COMPLETION_AI_ACTIONS,
   FEATURE_FLAG_KEYS,
 } from '@knowtis/shared-types';
 
@@ -33,7 +34,6 @@ import {
 import { SocketTokenExpiry } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
-import { COMPLETION_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
 
 const aiCompletePayloadSchema = z.object({
   action: z.enum(COMPLETION_AI_ACTIONS),

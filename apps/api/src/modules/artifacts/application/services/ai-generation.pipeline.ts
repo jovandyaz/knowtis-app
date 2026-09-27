@@ -180,7 +180,7 @@ export class AIGenerationPipeline {
         ...request.logContext,
       });
 
-      void this.rateLimitService.releaseReservation(
+      await this.rateLimitService.releaseReservation(
         request.userId,
         request.estimatedTokens,
         estimatedCostUsd

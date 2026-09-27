@@ -53,6 +53,7 @@ export { ANONYMOUS_LIMITS, type AnonymousLimits } from './lib/anonymous.types';
 export {
   AI_ACTION,
   AI_ACTIONS,
+  COMPLETION_AI_ACTIONS,
   AI_LANGUAGES,
   AI_TONES,
   MODEL_ID_MAX_LENGTH,
@@ -74,6 +75,7 @@ export {
   type AIConfigKey,
   type AIConfigSource,
   type AIAction,
+  type CompletionAIAction,
   type AILanguage,
   type AITone,
   type ModelTier,

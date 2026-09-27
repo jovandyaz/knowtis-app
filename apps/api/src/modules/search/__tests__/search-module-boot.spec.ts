@@ -1,78 +1,98 @@
-import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
-import { PoliciesGuard } from '@jovandyaz/permissions-nestjs';
-import { Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { describe, expect, it } from 'vitest';
+import type { Request } from 'express';
+import { describe, expect, it, vi } from 'vitest';
 
-import { AgentModule } from '../../agent/agent.module';
+import {
+  bootConfigModule,
+  infrastructureStub,
+} from '../../../test-support/module-boot';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
 } from '../../agent/domain/ports/retrieval.port';
-import type { NoteHit } from '../../agent/domain/retrieval';
+import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchController } from '../search.controller';
 import { SearchModule } from '../search.module';
 
-// NestJS records @Module({ exports }) under this Reflect key; reading it proves
-// the export contract without booting AgentModule's deep infrastructure graph.
-const MODULE_EXPORTS_KEY = 'exports';
+const COMPILE_TIMEOUT_MS = 15_000;
 
-const sentinel: NoteHit = {
-  id: 'sentinel',
-  title: 'Sentinel',
-  updatedAt: '2026-07-01T00:00:00.000Z',
-  isOwner: true,
-  isSharedWithMe: false,
-  isPubliclyShared: false,
-};
+const IMPORTED_TOKENS: readonly unknown[] = [
+  RETRIEVAL_PORT,
+  AIRateLimitService,
+];
 
-const stubRetrieval: RetrievalPort = {
-  search: async () => [sentinel],
-  listUnindexed: async () => [],
-  getById: async () => null,
-  getBody: async () => null,
-  listRecent: async () => [],
-  overview: async () => ({ total: 0, owned: 0, sharedWithMe: 0 }),
-};
+const mockAllButTheImportedTokens = (token: unknown) =>
+  IMPORTED_TOKENS.includes(token) ? undefined : infrastructureStub();
 
-@Module({
-  providers: [{ provide: RETRIEVAL_PORT, useValue: stubRetrieval }],
-  exports: [RETRIEVAL_PORT],
-})
-class StubAgentModule {}
+const user: RequestUser = {
+  id: 'user-1',
+  email: 'u@example.com',
+  name: 'U',
+  avatarUrl: null,
+} as RequestUser;
 
-describe('SearchModule bootstrap', () => {
-  // Guards the REAL AgentModule's export list. The DI-boot test below stubs
-  // AgentModule, so it cannot catch a regression that drops this export — only
-  // this metadata assertion can.
-  it('exports RETRIEVAL_PORT from AgentModule for cross-module injection', () => {
-    const exports: unknown[] =
-      Reflect.getMetadata(MODULE_EXPORTS_KEY, AgentModule) ?? [];
-    expect(exports).toContain(RETRIEVAL_PORT);
-  });
+const req = { headers: {} } as unknown as Request;
 
-  it('resolves SearchController with the retrieval port injected via the imported module export', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [SearchModule],
-    })
-      .overrideModule(AgentModule)
-      .useModule(StubAgentModule)
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(PoliciesGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+describe('SearchModule wiring', () => {
+  it(
+    'exercises an allowed and a rate-limited search through the compiled module',
+    async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [bootConfigModule(), SearchModule],
+      })
+        .overrideProvider(AI_REDIS)
+        .useValue(infrastructureStub())
+        .useMocker(mockAllButTheImportedTokens)
+        .compile();
 
-    const controller = moduleRef.get(SearchController);
-    expect(controller).toBeInstanceOf(SearchController);
+      try {
+        const controller = moduleRef.get(SearchController);
+        const retrieval = moduleRef.get<RetrievalPort>(RETRIEVAL_PORT);
+        const rateLimit = moduleRef.get(AIRateLimitService);
 
-    const dto = new SearchQueryDto();
-    dto.q = 'sentinel';
-    const result = await controller.search({ id: 'u1' } as RequestUser, dto);
-    expect(result.hits).toEqual([sentinel]);
+        expect(rateLimit).toBeInstanceOf(AIRateLimitService);
 
-    await moduleRef.close();
-  });
+        const checkLimitSpy = vi
+          .spyOn(rateLimit, 'checkLimit')
+          .mockResolvedValue({ allowed: true });
+        const releaseSpy = vi
+          .spyOn(rateLimit, 'releaseReservation')
+          .mockResolvedValue(undefined);
+        const searchSpy = vi.spyOn(retrieval, 'search').mockResolvedValue([
+          {
+            id: 'note-1',
+            title: 'Note',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            isOwner: true,
+            isSharedWithMe: false,
+            isPubliclyShared: false,
+          },
+        ]);
+        const dto = new SearchQueryDto();
+        dto.q = 'quarterly report';
+
+        const allowed = await controller.search(user, dto, req);
+
+        expect(allowed.hits).toHaveLength(1);
+        expect(searchSpy).toHaveBeenCalledWith('user-1', 'quarterly report');
+        expect(releaseSpy).toHaveBeenCalledTimes(1);
+
+        checkLimitSpy.mockResolvedValue({ allowed: false });
+        searchSpy.mockClear();
+        releaseSpy.mockClear();
+
+        await expect(controller.search(user, dto, req)).rejects.toMatchObject({
+          status: 429,
+        });
+        expect(searchSpy).not.toHaveBeenCalled();
+        expect(releaseSpy).not.toHaveBeenCalled();
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
 });

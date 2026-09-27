@@ -236,8 +236,8 @@ export class AICompletionPipeline {
   releaseReservation(
     context: PreflightContext,
     input: TextCompletionInput
-  ): void {
-    void this.rateLimitService.releaseReservation(
+  ): Promise<void> {
+    return this.rateLimitService.releaseReservation(
       input.userId,
       context.estimatedTokens,
       context.estimatedCostUsd,

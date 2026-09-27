@@ -1,58 +1,118 @@
+import type { UserRole } from '@jovandyaz/auth';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { RolesGuard } from '../roles.guard';
+import { Roles, RolesGuard } from '../roles.guard';
 
-function createMockContext(user: Record<string, unknown>): ExecutionContext {
+class NoRolesController {
+  handler(): void {}
+}
+
+@Roles('admin')
+class ClassRolesController {
+  handler(): void {}
+}
+
+class HandlerRolesController {
+  @Roles('admin')
+  handler(): void {}
+}
+
+@Roles('admin')
+class HandlerOverridesClassController {
+  @Roles('user')
+  handler(): void {}
+}
+
+class AnyOfRolesController {
+  @Roles('admin', 'user')
+  handler(): void {}
+}
+
+interface RequestUserStub {
+  id: string;
+  role?: UserRole;
+}
+
+const ADMIN: RequestUserStub = { id: '1', role: 'admin' };
+const MEMBER: RequestUserStub = { id: '2', role: 'user' };
+const ROLELESS: RequestUserStub = { id: '3' };
+
+function createExecutionContext(
+  target: new () => { handler(): void },
+  user: RequestUserStub
+): ExecutionContext {
   return {
-    switchToHttp: () => ({
-      getRequest: () => ({ user }),
-    }),
-    getHandler: () => vi.fn(),
-    getClass: () => vi.fn(),
+    switchToHttp: () => ({ getRequest: () => ({ user }) }),
+    getHandler: () => target.prototype.handler,
+    getClass: () => target,
   } as unknown as ExecutionContext;
 }
 
 describe('RolesGuard', () => {
-  let guard: RolesGuard;
-  let reflector: Reflector;
+  const guard = new RolesGuard(new Reflector());
 
-  beforeEach(() => {
-    reflector = new Reflector();
-    guard = new RolesGuard(reflector);
-  });
+  it('allows access when neither handler nor class require a role', () => {
+    const context = createExecutionContext(NoRolesController, ROLELESS);
 
-  it('should allow access when no roles are required', () => {
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
-    const context = createMockContext({ id: '1', role: 'user' });
     expect(guard.canActivate(context)).toBe(true);
   });
 
-  it('should allow access when user has required role', () => {
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
-    const context = createMockContext({ id: '1', role: 'admin' });
+  it('reads class-level roles and allows a user holding one', () => {
+    const context = createExecutionContext(ClassRolesController, ADMIN);
+
     expect(guard.canActivate(context)).toBe(true);
   });
 
-  it('should deny access when user lacks required role', () => {
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
-    const context = createMockContext({ id: '1', role: 'user' });
+  it('reads class-level roles and forbids a user without one', () => {
+    const context = createExecutionContext(ClassRolesController, MEMBER);
+
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 
-  it('should deny access when user has no role', () => {
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['admin']);
-    const context = createMockContext({ id: '1' });
+  it('reads handler-level roles and allows a user holding one', () => {
+    const context = createExecutionContext(HandlerRolesController, ADMIN);
+
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it('reads handler-level roles and forbids a user without one', () => {
+    const context = createExecutionContext(HandlerRolesController, MEMBER);
+
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 
-  it('should accept any of the specified roles', () => {
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
-      'admin',
-      'moderator',
-    ]);
-    const context = createMockContext({ id: '1', role: 'admin' });
+  it('forbids a user with no role when a role is required', () => {
+    const context = createExecutionContext(HandlerRolesController, ROLELESS);
+
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it('lets handler roles override the class roles', () => {
+    const context = createExecutionContext(
+      HandlerOverridesClassController,
+      MEMBER
+    );
+
     expect(guard.canActivate(context)).toBe(true);
   });
+
+  it('does not merge the class roles into the overriding handler roles', () => {
+    const context = createExecutionContext(
+      HandlerOverridesClassController,
+      ADMIN
+    );
+
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it.each([ADMIN, MEMBER])(
+    'accepts any of the listed roles ($role)',
+    (user) => {
+      const context = createExecutionContext(AnyOfRolesController, user);
+
+      expect(guard.canActivate(context)).toBe(true);
+    }
+  );
 });

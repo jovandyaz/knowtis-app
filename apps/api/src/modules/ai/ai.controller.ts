@@ -252,7 +252,7 @@ export class AIController {
   @ApiOperation({
     summary: 'Complete text with AI',
     description:
-      'Processes text using the specified AI action (summarize, expand, translate, etc.). Requires the ai_enabled feature flag.',
+      'Processes text using the specified AI action (summarize, translate, improve-writing, etc.). Requires the ai_enabled feature flag.',
   })
   @ApiBody({ type: AICompleteDto })
   @ApiResponse({
