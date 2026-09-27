@@ -143,6 +143,92 @@ describe('active access leases', () => {
     expect(service.diagnostics.activeNotes).toBe(0);
   });
 
+  it('renews a lease whose connection registers after a renewal skipped it', async () => {
+    const lease = await service.acquire('note', guest);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(reads).toHaveBeenCalledTimes(2);
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+
+    service.register(lease, connection);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(lease.closed).toBe(false);
+    expect(connection.close).not.toHaveBeenCalled();
+  });
+
+  it('closes a late-registered connection whose renewal read finds access revoked', async () => {
+    const lease = await service.acquire('note', guest);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(reads).toHaveBeenCalledTimes(2);
+    const skippedExpiry = lease.expiresAt;
+    snapshot = { ...initial, directPermissions: [] };
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+
+    service.register(lease, connection);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(reads).toHaveBeenCalledTimes(3);
+    expect(lease.closed).toBe(true);
+    expect(lease.expiresAt).toBe(skippedExpiry);
+    expect(connection.close).toHaveBeenCalledExactlyOnceWith({
+      code: 4403,
+      reason: COLLABORATION_CLOSE_REASON.ACCESS_CHANGED,
+    });
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(reads).toHaveBeenCalledTimes(3);
+    expect(service.diagnostics.activeNotes).toBe(0);
+  });
+
+  it('renews a lease that registers after the read that skipped it applied but before it settled', async () => {
+    const lease = await service.acquire('note', guest);
+    const renewal = deferred<AccessSnapshot>();
+    reads.mockImplementationOnce(() => renewal.promise);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reads).toHaveBeenCalledTimes(2);
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+    // Apply resolves the joiner's lease, so this continuation runs before the
+    // renewal read's finally clears its reading flag.
+    const registered = service
+      .acquire('note', owner)
+      .then(() => service.register(lease, connection));
+
+    renewal.resolve(initial);
+    await registered;
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(lease.closed).toBe(false);
+    expect(connection.close).not.toHaveBeenCalled();
+  });
+
+  it('serves a handshake that joins while a read awaits its snapshot without another read', async () => {
+    const [first, second] = await Promise.all([
+      service.acquire('note', owner),
+      service.acquire('note', guest),
+    ]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(first.effectiveAccess).toBe('owner');
+    expect(second.effectiveAccess).toBe('editor');
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves a handshake that joins after a read applied but before it settled', async () => {
+    const outcome = vi.fn();
+    // Apply resolves the first lease, so this continuation acquires before
+    // that read's finally clears its reading flag.
+    void service
+      .acquire('note', owner)
+      .then(() => service.acquire('note', guest))
+      .then(outcome, outcome);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(outcome).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ effectiveAccess: 'editor', closed: false })
+    );
+    expect(reads).toHaveBeenCalledTimes(2);
+  });
+
   it('closes a connection registered after revocation with the original reason', async () => {
     const lease = await service.acquire('note', guest);
     snapshot = { ...initial, directPermissions: [] };
@@ -206,6 +292,50 @@ describe('active access leases', () => {
     pending.resolve(initial);
     await vi.advanceTimersByTimeAsync(10);
     expect(session.closed).toBe(true);
+  });
+
+  it('serves a handshake that joined a timed-out read on the first sweep after it settles', async () => {
+    const stalled = deferred<AccessSnapshot>();
+    reads.mockImplementationOnce(() => stalled.promise);
+    const abandoned = service.acquire('note', owner).catch(() => null);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await abandoned).toBeNull();
+    const outcome = vi.fn();
+    void service.acquire('note', guest).then(outcome, outcome);
+
+    stalled.resolve(initial);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(outcome).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ effectiveAccess: 'editor', closed: false })
+    );
+  });
+
+  it('counts a snapshot that lands past its deadline before the timer as timed out', async () => {
+    const warnings = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const late = deferred<AccessSnapshot>();
+    // Scheduled before the read's own deadline timer, so at the same instant
+    // the snapshot settles first and the timer never fires.
+    setTimeout(() => late.resolve(initial), 1000);
+    reads.mockImplementationOnce(() => late.promise);
+    void service.acquire('note', owner).catch(() => null);
+    await vi.advanceTimersByTimeAsync(500);
+    const outcome = vi.fn();
+    void service.acquire('note', guest).then(outcome, outcome);
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(service.diagnostics.timedOutReads).toBe(1);
+    expect(warnings).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ reason: 'deadline_exceeded' })
+    );
+    expect(outcome).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(outcome).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ effectiveAccess: 'editor', closed: false })
+    );
   });
 
   it('retains SQL admission after caller timeout and bounds the waiting queue', async () => {
