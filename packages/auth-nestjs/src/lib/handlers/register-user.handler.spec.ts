@@ -189,4 +189,22 @@ describe('RegisterUserHandler', () => {
     expect(logged).not.toContain(tokenHasher.hash(payload.code));
     expect(logged).not.toContain(payload.token);
   });
+
+  it('hands an unexpected verification failure to the logger whole, so the host logger decides what of it to print', async () => {
+    const errorSpy = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const failure = new Error('sentinel-store-failure');
+    vi.mocked(tokenRepository.create).mockRejectedValue(failure);
+
+    const result = await handler.execute(INPUT);
+
+    expect(result.isOk()).toBe(true);
+    await vi.waitFor(() =>
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Unexpected error sending verification email',
+        failure
+      )
+    );
+  });
 });

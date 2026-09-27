@@ -114,11 +114,8 @@ export class RegisterUserHandler {
 
     const tokens = tokensResult.value;
 
-    this.verificationEmailIssuer.issue(user).catch((error) => {
-      this.logger.error(
-        'Unexpected error sending verification email',
-        error instanceof Error ? error.stack : error
-      );
+    this.verificationEmailIssuer.issue(user).catch((error: unknown) => {
+      this.logger.error('Unexpected error sending verification email', error);
     });
 
     this.eventEmitter.emit(
