@@ -311,6 +311,11 @@ export class AIRateLimitService {
     return { allowed: true };
   }
 
+  /** True while the global daily spend breaker is open; background jobs skip their run instead of reserving per call. */
+  async isGlobalSpendExhausted(): Promise<boolean> {
+    return !(await this.checkGlobalSpendBreaker()).allowed;
+  }
+
   private async claimGlobalBreakerFlag(): Promise<boolean> {
     if (this.rateLimitProvider) {
       try {

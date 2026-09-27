@@ -1400,6 +1400,18 @@ describe('AIRateLimitService', () => {
       expect(result.allowed).toBe(true);
     });
 
+    it('reports global spend exhausted at the configured ceiling', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
+
+      await expect(breakered.isGlobalSpendExhausted()).resolves.toBe(true);
+    });
+
+    it('reports global spend available under the ceiling', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(24.99);
+
+      await expect(breakered.isGlobalSpendExhausted()).resolves.toBe(false);
+    });
+
     it('records a non-attributed global cost through the provider', async () => {
       await breakered.recordGlobalCost(0.004);
 
