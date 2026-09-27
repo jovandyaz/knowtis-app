@@ -3,6 +3,7 @@ import type { EmailVerificationTokenRepository } from '@jovandyaz/auth-nestjs';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
+import { stackOf } from '../../../core/errors/stack-of';
 import { DrizzleAnonymousUserRepository } from '../infrastructure/persistence/drizzle-anonymous-user.repository';
 
 @Injectable()
@@ -38,10 +39,7 @@ export class AuthCleanupTask {
         this.logger.log(`Cleaned up ${deleted} abandoned anonymous users`);
       }
     } catch (error) {
-      this.logger.error(
-        'Anonymous user cleanup failed',
-        error instanceof Error ? (error.stack ?? error.message) : String(error)
-      );
+      this.logger.error('Anonymous user cleanup failed', stackOf(error));
     }
   }
 
@@ -51,7 +49,7 @@ export class AuthCleanupTask {
     } catch (error) {
       this.logger.error(
         'Expired verification token cleanup failed',
-        error instanceof Error ? (error.stack ?? error.message) : String(error)
+        stackOf(error)
       );
     }
   }

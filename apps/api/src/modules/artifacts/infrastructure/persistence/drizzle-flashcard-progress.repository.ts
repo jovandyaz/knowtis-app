@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   and,
   count,
@@ -19,6 +19,7 @@ import {
   type FlashcardProgress,
 } from '@knowtis/shared-types';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import {
   artifacts,
@@ -45,6 +46,8 @@ import {
 
 @Injectable()
 export class DrizzleFlashcardProgressRepository implements FlashcardProgressRepository {
+  private readonly logger = new Logger(DrizzleFlashcardProgressRepository.name);
+
   constructor(
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database
@@ -323,11 +326,14 @@ export class DrizzleFlashcardProgressRepository implements FlashcardProgressRepo
         });
       });
     } catch (error) {
-      return err(
-        ArtifactErrors.internalError(
-          error instanceof Error ? error.message : 'Failed to record the review'
-        )
-      );
+      this.logger.error({
+        operation: 'recordFlashcardReview',
+        artifactId: input.artifactId,
+        userId: input.userId,
+        cardIndex: input.cardIndex,
+        ...databaseDiagnostics(error),
+      });
+      return err(ArtifactErrors.internalError('Failed to record the review'));
     }
 
     return ok(undefined);

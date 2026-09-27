@@ -37,3 +37,12 @@ export async function wrapUpstreamFailure<T>(
     throw classify(error);
   }
 }
+
+/** Any failure behind a note store call, reported without the query or the values the store saw. */
+export function classifyNoteStoreFailure(error: unknown): ToolExecutionError {
+  return new ToolExecutionError(
+    TOOL_ERROR_CODES.NOTE_STORE_FAILED,
+    'Note store request failed',
+    { cause: error }
+  );
+}

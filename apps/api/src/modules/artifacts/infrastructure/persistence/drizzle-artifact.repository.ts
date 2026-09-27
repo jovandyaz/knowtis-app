@@ -4,6 +4,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import type { ArtifactContent, ArtifactType } from '@knowtis/shared-types';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { artifacts } from '../../../../database/schema';
 import {
@@ -92,15 +93,12 @@ export class DrizzleArtifactRepository
 
       return ok(this.toEntity(result[0]));
     } catch (error) {
-      this.logger.error(
-        'Failed to create artifact',
-        error instanceof Error ? error.stack : error
-      );
-      return err(
-        ArtifactErrors.internalError(
-          error instanceof Error ? error.message : 'Unknown error'
-        )
-      );
+      this.logger.error({
+        operation: 'createArtifact',
+        userId: data.userId,
+        ...databaseDiagnostics(error),
+      });
+      return err(ArtifactErrors.internalError('Failed to create artifact'));
     }
   }
 
@@ -120,15 +118,12 @@ export class DrizzleArtifactRepository
 
       return ok(true);
     } catch (error) {
-      this.logger.error(
-        `Failed to delete artifact ${id}`,
-        error instanceof Error ? error.stack : error
-      );
-      return err(
-        ArtifactErrors.internalError(
-          error instanceof Error ? error.message : 'Unknown error'
-        )
-      );
+      this.logger.error({
+        operation: 'deleteArtifact',
+        artifactId: id,
+        ...databaseDiagnostics(error),
+      });
+      return err(ArtifactErrors.internalError('Failed to delete artifact'));
     }
   }
 

@@ -11,6 +11,7 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { registerTelemetry } from 'ai';
 
 import type { EnvConfig } from '../../config/env.config';
+import { reasonOf } from '../../core/errors/reason-of';
 
 @Injectable()
 export class LangfuseTracingService
@@ -45,9 +46,7 @@ export class LangfuseTracingService
       registerTelemetry(new LangfuseVercelAiSdkIntegration());
       this.logger.log('Langfuse tracing enabled');
     } catch (error) {
-      this.logger.warn(
-        `Langfuse initialization failed: ${error instanceof Error ? error.message : 'unknown'}`
-      );
+      this.logger.warn(`Langfuse initialization failed: ${reasonOf(error)}`);
       this.sdk = undefined;
       this.spanProcessor = undefined;
     }
@@ -61,9 +60,7 @@ export class LangfuseTracingService
       await this.spanProcessor?.forceFlush();
       await this.sdk.shutdown();
     } catch (error) {
-      this.logger.warn(
-        `Langfuse shutdown failed: ${error instanceof Error ? error.message : 'unknown'}`
-      );
+      this.logger.warn(`Langfuse shutdown failed: ${reasonOf(error)}`);
     }
   }
 }

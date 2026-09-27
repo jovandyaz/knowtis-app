@@ -10,6 +10,7 @@ import {
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { unpricedCuratedModels } from './curated-pricing';
 import { LITELLM_PRICES_URL } from './litellm-prices.client';
 
@@ -55,7 +56,7 @@ export class ModelCatalogAdapter implements ModelCatalog, OnModuleInit {
     } catch (error) {
       this.logger.warn({
         event: 'ai.catalog.refresh_failed',
-        reason: error instanceof Error ? error.message : 'unknown error',
+        reason: reasonOf(error),
         fallback: 'vendored snapshot',
       });
     }

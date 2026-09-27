@@ -8,6 +8,7 @@ import {
   isHttpUrl,
 } from '@knowtis/ai-gateway';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   WEB_SEARCH_PORT,
@@ -156,9 +157,7 @@ export class WebToolGroup implements AgentToolGroup {
         byokTurn: ctx.byokTurn,
       });
     } catch (error) {
-      this.logger.warn(
-        `web cost record failed: ${error instanceof Error ? error.message : 'unknown'}`
-      );
+      this.logger.warn(`web cost record failed: ${reasonOf(error)}`);
     }
   }
 }

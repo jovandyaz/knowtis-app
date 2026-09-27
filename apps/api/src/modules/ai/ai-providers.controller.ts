@@ -27,6 +27,7 @@ import {
   type SystemProviderInfo,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../core/errors/reason-of';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
@@ -164,10 +165,7 @@ export class AiProvidersController {
     // them before rethrowing, so a non-retryable APICallError is the only shape
     // that proves the provider answered and refused.
     const refused = APICallError.isInstance(error) && !error.isRetryable;
-    const detail = redact(
-      error instanceof Error ? error.message : 'unknown',
-      secrets
-    );
+    const detail = redact(reasonOf(error), secrets);
     this.logger.warn({
       event: 'system_provider_key.probe_failed',
       provider,

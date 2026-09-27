@@ -15,6 +15,8 @@ import {
   HANDSHAKE_FAILURE,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../core/errors/reason-of';
+import { stackOf } from '../../../core/errors/stack-of';
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../../mcp/mcp-token';
 import type {
   AccessSnapshot,
@@ -201,7 +203,7 @@ export class HocuspocusAuthExtension {
       });
     } catch (error) {
       this.logger.warn(
-        `Invalid JWT token for note ${documentName}: ${error instanceof Error ? error.message : error}`
+        `Invalid JWT token for note ${documentName}: ${reasonOf(error)}`
       );
       throw new HandshakeError(HANDSHAKE_FAILURE.INVALID_TOKEN);
     }
@@ -219,7 +221,7 @@ export class HocuspocusAuthExtension {
     } catch (error) {
       this.logger.error(
         `Failed to load user ${payload.sub} during auth for note ${documentName}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       throw new HandshakeError(HANDSHAKE_FAILURE.INVALID_TOKEN);
     }

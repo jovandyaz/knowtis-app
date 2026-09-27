@@ -12,6 +12,7 @@ import { providerOf } from '@knowtis/ai-gateway';
 import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
   USER_AI_SETTINGS_REPOSITORY,
@@ -79,7 +80,7 @@ export class ByokService {
         event: 'byok.decrypt_failed',
         userId,
         provider,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
       return null;
     }
@@ -139,9 +140,7 @@ export class ByokService {
     try {
       await this.repo.touchLastUsed(userId, provider);
     } catch (error) {
-      this.logger.warn(
-        `byok last-used update failed: ${error instanceof Error ? error.message : 'unknown'}`
-      );
+      this.logger.warn(`byok last-used update failed: ${reasonOf(error)}`);
     }
   }
 

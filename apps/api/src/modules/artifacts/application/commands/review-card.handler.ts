@@ -4,6 +4,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { ARTIFACT_TYPE, type FlashcardContent } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   ArtifactErrors,
   type ArtifactDomainError,
@@ -112,13 +113,9 @@ export class ReviewCardHandler {
         artifactId: input.artifactId,
         userId: input.userId,
         cardIndex: input.cardIndex,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
       });
-      return err(
-        ArtifactErrors.internalError(
-          error instanceof Error ? error.message : 'Failed to review card'
-        )
-      );
+      return err(ArtifactErrors.internalError('Failed to review card'));
     }
   }
 }

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { sql } from 'drizzle-orm';
 
+import { reasonOf } from '../../core/errors/reason-of';
 import {
   DATABASE_CONNECTION,
   type Database,
@@ -23,9 +24,7 @@ export class DbHealthIndicator {
       await this.db.execute(sql`SELECT 1`);
       return indicator.up();
     } catch (error) {
-      this.logger.error(
-        `Database health check failed: ${(error as Error).message}`
-      );
+      this.logger.error(`Database health check failed: ${reasonOf(error)}`);
       return indicator.down({ message: 'Database unreachable' });
     }
   }

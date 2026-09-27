@@ -3,6 +3,7 @@ import type { HealthIndicatorService } from '@nestjs/terminus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../../../database/database.module';
+import { failedQuery } from '../../../test-support/database-errors';
 import { DbHealthIndicator } from '../db-health.indicator';
 
 const RAW_DRIVER_ERROR = 'connect ECONNREFUSED 10.0.0.5:5432';
@@ -80,5 +81,20 @@ describe('DbHealthIndicator', () => {
     expect(loggerError).toHaveBeenCalledWith(
       expect.stringContaining(RAW_DRIVER_ERROR)
     );
+  });
+
+  it('logs a failed probe query by its diagnostics, never by the query it quotes', async () => {
+    const secret = 'sentinel-probe-param';
+    const { db } = createMockDb(
+      vi.fn().mockRejectedValue(failedQuery([secret]))
+    );
+    const { service } = createMockHealthIndicatorService();
+
+    await new DbHealthIndicator(service, db).isHealthy('database');
+
+    expect(loggerError).toHaveBeenCalledWith(
+      'Database health check failed: DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)'
+    );
+    expect(JSON.stringify(loggerError.mock.calls)).not.toContain(secret);
   });
 });

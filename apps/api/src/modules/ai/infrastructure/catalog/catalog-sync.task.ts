@@ -10,6 +10,7 @@ import {
 } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
+import { stackOf } from '../../../../core/errors/stack-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import {
   isCatalogCandidate,
@@ -74,7 +75,7 @@ export class CatalogSyncTask {
       this.logger.error({
         event: 'ai.catalog.sync_failed',
         reason: reasonOf(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        stack: stackOf(error),
       });
     }
   }

@@ -1,7 +1,17 @@
+import { AuthErrorCodes } from '@jovandyaz/auth/server';
+import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
@@ -19,6 +29,10 @@ const OTHER_USER_ID = '00000000-0000-4000-8000-000000000162';
 const CURRENT_FAMILY_ID = '00000000-0000-4000-8000-000000000171';
 const STALE_FAMILY_ID = '00000000-0000-4000-8000-000000000172';
 const OTHER_USER_FAMILY_ID = '00000000-0000-4000-8000-000000000173';
+const MISSING_USER_ID = '00000000-0000-4000-8000-000000000f11';
+const SECRET_REFRESH_TOKEN_HASH = 'sentinel-refresh-token-hash';
+const SECRET_USER_AGENT = 'sentinel-user-agent';
+const SECRET_IP_ADDRESS = '203.0.113.77';
 const SESSION_EXPIRES_AT = new Date('2099-01-01T00:00:00.000Z');
 
 describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
@@ -68,6 +82,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await db
       .delete(sessions)
       .where(inArray(sessions.userId, [DB_USER_ID, OTHER_USER_ID]));
@@ -130,5 +145,54 @@ describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
       .where(eq(sessions.userId, DB_USER_ID));
 
     expect(remaining).toEqual([]);
+  });
+
+  describe('a session the database rejects', () => {
+    const createForMissingUser = () =>
+      repo.create({
+        userId: MISSING_USER_ID,
+        familyId: CURRENT_FAMILY_ID,
+        refreshTokenHash: SECRET_REFRESH_TOKEN_HASH,
+        userAgent: SECRET_USER_AGENT,
+        ipAddress: SECRET_IP_ADDRESS,
+        expiresAt: SESSION_EXPIRES_AT,
+      });
+
+    it('is logged by the violated constraint, never by the values it carried', async () => {
+      const log = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      await createForMissingUser();
+
+      expect(log.mock.calls).toEqual([
+        [
+          {
+            operation: 'createSession',
+            userId: MISSING_USER_ID,
+            errorName: 'DrizzleQueryError',
+            failureCategory: 'unclassified',
+            sqlState: '23503',
+            table: 'sessions',
+            constraint: 'sessions_user_id_users_id_fk',
+          },
+        ],
+      ]);
+      const logged = JSON.stringify(log.mock.calls);
+      expect(logged).not.toContain(SECRET_REFRESH_TOKEN_HASH);
+      expect(logged).not.toContain(SECRET_USER_AGENT);
+      expect(logged).not.toContain(SECRET_IP_ADDRESS);
+    });
+
+    it('answers with the fixed internal error', async () => {
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      const rejected = await createForMissingUser();
+
+      expect(rejected._unsafeUnwrapErr()).toEqual({
+        code: AuthErrorCodes.INTERNAL_ERROR,
+        message: 'Failed to create session',
+      });
+    });
   });
 });

@@ -11,6 +11,7 @@ import type {
   UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
 
+import { stackOf } from '../../../../core/errors/stack-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import type { CatalogAlert } from '../../domain/model-catalog/catalog-alert';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
@@ -214,7 +215,7 @@ export class AiCatalogAdminService {
     } catch (error) {
       this.logger.warn(
         'Failed to refresh promoted models after a catalog change; the interval will catch up',
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
     }
   }

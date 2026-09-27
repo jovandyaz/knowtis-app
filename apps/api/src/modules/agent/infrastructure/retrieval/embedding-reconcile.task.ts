@@ -4,6 +4,7 @@ import { Interval } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { stackOf } from '../../../../core/errors/stack-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
@@ -85,10 +86,7 @@ export class EmbeddingReconcileTask {
         );
       }
     } catch (error) {
-      this.logger.error(
-        'Embedding reconcile failed',
-        error instanceof Error ? error.stack : String(error)
-      );
+      this.logger.error('Embedding reconcile failed', stackOf(error));
     }
   }
 
@@ -133,7 +131,7 @@ export class EmbeddingReconcileTask {
     } catch (error) {
       this.logger.warn(
         `Failed to embed a batch of ${chunk.length} notes`,
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
       return 0;
     }
@@ -157,7 +155,7 @@ export class EmbeddingReconcileTask {
       } catch (error) {
         this.logger.warn(
           `Failed to persist embedding for note ${chunk[i].noteId}`,
-          error instanceof Error ? error.stack : String(error)
+          stackOf(error)
         );
       }
     }

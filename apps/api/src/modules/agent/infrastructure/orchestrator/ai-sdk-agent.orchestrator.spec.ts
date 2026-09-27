@@ -4,6 +4,10 @@ import { streamText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import {
+  failedQuery,
+  postgresError,
+} from '../../../../test-support/database-errors';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
@@ -3549,5 +3553,136 @@ describe('AiSdkAgentOrchestrator', () => {
     });
     warnSpy.mockRestore();
     logSpy.mockRestore();
+  });
+
+  it('logs a tool that failed on a query by its diagnostics, never by the query parameters', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const secret = 'sentinel-note-query-value';
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'proposeEditNote',
+          input: { noteId: 'n1' },
+          error: failedQuery([secret]),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        code: 'UNCLASSIFIED',
+        error:
+          'DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)',
+      })
+    );
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(secret);
+    warnSpy.mockRestore();
+  });
+
+  it('logs the diagnostics of the query behind a note store failure, never its parameters', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const secret = 'sentinel-note-store-param';
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'proposeShareNote',
+          input: { noteId: 'n1' },
+          error: new ToolExecutionError(
+            TOOL_ERROR_CODES.NOTE_STORE_FAILED,
+            'Note store request failed',
+            {
+              cause: failedQuery(
+                [secret],
+                postgresError({
+                  message: 'canceling statement due to statement timeout',
+                  code: '57014',
+                  detail: secret,
+                })
+              ),
+            }
+          ),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const toolErrorLogs = warnSpy.mock.calls
+      .map(([payload]) => payload as Record<string, unknown>)
+      .filter((p) => p?.event === 'agent.tool.error');
+    expect(toolErrorLogs).toEqual([
+      {
+        event: 'agent.tool.error',
+        userId: 'u1',
+        model: expect.any(String),
+        toolName: 'proposeShareNote',
+        code: 'NOTE_STORE_FAILED',
+        error: 'Note store request failed',
+        errorName: 'DrizzleQueryError',
+        failureCategory: 'unclassified',
+        sqlState: '57014',
+      },
+    ]);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(secret);
+    warnSpy.mockRestore();
+  });
+
+  it('answers a turn that failed on a query with a fixed message and keeps the diagnostics in the log', async () => {
+    const errorSpy = vi.spyOn(Logger.prototype, 'error');
+    const secret = 'sentinel-turn-query-param';
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'partial' };
+        throw failedQuery(
+          [secret],
+          postgresError({
+            message:
+              'duplicate key value violates unique constraint "users_email_unique"',
+            code: '23505',
+            table_name: 'users',
+            constraint_name: 'users_email_unique',
+            detail: secret,
+          })
+        );
+      })(),
+      usage: new Promise(() => {}),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: {
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Agent run failed',
+      },
+    });
+    expect(JSON.stringify(events)).not.toContain('users_email_unique');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.run.error',
+        error:
+          'DrizzleQueryError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)',
+      })
+    );
+    expect(JSON.stringify([events, errorSpy.mock.calls])).not.toContain(secret);
+    errorSpy.mockRestore();
   });
 });

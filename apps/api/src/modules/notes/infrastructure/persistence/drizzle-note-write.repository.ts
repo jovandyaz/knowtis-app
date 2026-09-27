@@ -1,15 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  and,
-  DrizzleQueryError,
-  eq,
-  isNotNull,
-  isNull,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
+import { stackOf } from '../../../../core/errors/stack-of';
 import {
   DATABASE_CONNECTION,
   notes,
@@ -27,36 +21,6 @@ import {
 } from '../../domain';
 import type { RotateShareTokenData } from '../../domain/ports/note-write.repository';
 import { mapToNoteEntity } from './note-entity.mapper';
-
-const SQLSTATE_PATTERN = /^[A-Z0-9]{5}$/;
-
-function rotationFailureCategory(code: unknown) {
-  switch (code) {
-    case '23505':
-      return 'unique_violation';
-    case '08006':
-    case 'ECONNREFUSED':
-      return 'connection_failure';
-    case '55P03':
-      return 'transaction_conflict';
-    default:
-      return 'unclassified';
-  }
-}
-
-function rotationDiagnostics(error: unknown) {
-  const cause = error instanceof DrizzleQueryError ? error.cause : error;
-  const code =
-    typeof cause === 'object' && cause !== null && 'code' in cause
-      ? cause.code
-      : undefined;
-  return {
-    failureCategory: rotationFailureCategory(code),
-    sqlState:
-      typeof code === 'string' && SQLSTATE_PATTERN.test(code) ? code : null,
-    errorName: error instanceof Error ? error.constructor.name : typeof error,
-  };
-}
 
 type NoteUpdatePayload = Omit<Partial<NewNote>, 'shareToken'> & {
   shareToken?: string | null | SQL | undefined;
@@ -135,10 +99,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
 
       return ok(mapToNoteEntity(result[0]));
     } catch (error) {
-      this.logger.error(
-        `Failed to create note`,
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.error(`Failed to create note`, stackOf(error));
       return err(NoteErrors.persistenceError('create', data.id ?? 'unknown'));
     }
   }
@@ -166,7 +127,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       this.logger.error({
         operation: 'rotateShareToken',
         noteId: data.noteId,
-        ...rotationDiagnostics(error),
+        ...databaseDiagnostics(error),
       });
       return err(NoteErrors.persistenceError('rotateShareToken', data.noteId));
     }
@@ -188,10 +149,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       }
       return ok(mapToNoteEntity(result[0]));
     } catch (error) {
-      this.logger.error(
-        `Failed to update note ${id}`,
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.error(`Failed to update note ${id}`, stackOf(error));
       return err(NoteErrors.persistenceError('update', id));
     }
   }
@@ -214,7 +172,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
     } catch (error) {
       this.logger.error(
         `Failed to update Yjs state for note ${id}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       return err(NoteErrors.persistenceError('updateYjsState', id));
     }
@@ -243,7 +201,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
     } catch (error) {
       this.logger.error(
         `Failed atomic content+yjsState update for note ${id}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       return err(NoteErrors.persistenceError('updateContentWithYjsState', id));
     }
@@ -262,10 +220,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       }
       return ok(true);
     } catch (error) {
-      this.logger.error(
-        `Failed to delete note ${id}`,
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.error(`Failed to delete note ${id}`, stackOf(error));
       return err(NoteErrors.persistenceError('delete', id));
     }
   }
@@ -292,10 +247,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       }
       return ok(mapToNoteEntity(result[0]));
     } catch (error) {
-      this.logger.error(
-        `Failed to restore note ${id}`,
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.error(`Failed to restore note ${id}`, stackOf(error));
       return err(NoteErrors.persistenceError('restore', id));
     }
   }

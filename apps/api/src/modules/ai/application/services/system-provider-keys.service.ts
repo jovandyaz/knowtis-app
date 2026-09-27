@@ -18,6 +18,7 @@ import {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
@@ -175,7 +176,7 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
       this.logger.error({
         event: 'system_provider_key.decrypt_failed',
         provider,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
       return null;
     }

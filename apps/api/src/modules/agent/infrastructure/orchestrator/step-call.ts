@@ -12,6 +12,12 @@ import {
 import { isOverloadedError } from '@knowtis/ai-gateway';
 
 import {
+  databaseDiagnostics,
+  isDatabaseError,
+  type DatabaseDiagnostics,
+} from '../../../../core/errors/database-diagnostics';
+import { reasonOf } from '../../../../core/errors/reason-of';
+import {
   AIErrors,
   type AIDomainError,
 } from '../../../ai/domain/errors/ai.errors';
@@ -43,24 +49,28 @@ import { bestEffortUsage, type StepUsageAccumulator } from './turn-usage';
 
 const AGENT_TEMPERATURE = 0.7;
 const TOOL_ERROR_LOG_MAX_CHARS = 300;
+const AGENT_RUN_FAILED = 'Agent run failed';
 
 export function errorMessage(error: unknown, redact: boolean): string {
   if (redact) {
     return 'BYOK provider request failed';
   }
-  return error instanceof Error ? error.message : 'Agent run failed';
+  return error instanceof Error ? reasonOf(error) : AGENT_RUN_FAILED;
 }
 
-function describeToolError(error: unknown): { code: string; error: string } {
+function describeToolError(
+  error: unknown
+): { code: string; error: string } & Partial<DatabaseDiagnostics> {
   if (error instanceof ToolExecutionError) {
     return {
       code: error.code,
       error: error.message.slice(0, TOOL_ERROR_LOG_MAX_CHARS),
+      ...(isDatabaseError(error.cause) && databaseDiagnostics(error.cause)),
     };
   }
   const message =
     error instanceof Error
-      ? error.message
+      ? reasonOf(error)
       : typeof error === 'string'
         ? error
         : 'non-Error value thrown';
@@ -70,11 +80,14 @@ function describeToolError(error: unknown): { code: string; error: string } {
   };
 }
 
+/** The error the client receives; a database failure's diagnostics name tables and constraints, so they stay in the log. */
 export function toError(error: unknown, redact = false) {
   if (isOverloadedError(error)) {
     return AIErrors.providerOverloaded();
   }
-  return AIErrors.providerError(errorMessage(error, redact));
+  return AIErrors.providerError(
+    isDatabaseError(error) ? AGENT_RUN_FAILED : errorMessage(error, redact)
+  );
 }
 
 export function errorEvent(

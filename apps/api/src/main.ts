@@ -12,6 +12,7 @@ import { AppModule } from './app/app.module';
 import { buildAllowedOrigins, buildCorsOptions } from './config/cors-origins';
 import { SHUTDOWN_OPTIONS } from './config/shutdown-options';
 import { createValidationPipe } from './config/validation-pipe';
+import { stackOf } from './core/errors/stack-of';
 import { GlobalExceptionFilter } from './core/filters/http-exception.filter';
 import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
 import { JsonConsoleLogger } from './core/logging/json-console-logger';
@@ -130,10 +131,6 @@ async function bootstrap() {
 
 bootstrap().catch((error: unknown) => {
   Logger.flush();
-  Logger.error(
-    'API bootstrap failed',
-    error instanceof Error ? error.stack : String(error),
-    'Bootstrap'
-  );
+  Logger.error('API bootstrap failed', stackOf(error), 'Bootstrap');
   process.exit(1);
 });

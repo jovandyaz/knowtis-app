@@ -16,6 +16,7 @@ import {
 } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
   linkExposureAfter,
@@ -331,7 +332,7 @@ export class UpdateNoteHandler {
       return ok({ yjsState, content: yjsStateToHtml(yjsState) });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Unknown parser error';
+        error instanceof Error ? reasonOf(error) : 'Unknown parser error';
       this.logger.warn(
         `Failed to generate yjsState for note ${noteId}: ${message}`
       );

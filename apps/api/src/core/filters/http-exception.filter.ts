@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 
+import { reasonOf } from '../errors/reason-of';
+import { stackOf } from '../errors/stack-of';
 import { RetryAfterHttpException } from '../http/retry-after.exception';
 import { RETRY_AFTER_HEADER } from '../http/retry-after.header';
 
@@ -71,7 +73,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message = exception.message;
       error = this.getDefaultErrorName(status);
     } else if (exception instanceof Error) {
-      message = exception.message;
+      message = reasonOf(exception);
       error = exception.name;
     }
 
@@ -79,7 +81,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const detail = Array.isArray(message) ? message.join(', ') : message;
       this.logger.error(
         `${request.method} ${request.url} - ${status}: ${detail}`,
-        exception instanceof Error ? exception.stack : undefined
+        exception instanceof Error ? stackOf(exception) : undefined
       );
       message = 'Internal server error';
       error = 'Internal Server Error';

@@ -1,7 +1,17 @@
+import { AuthErrorCodes } from '@jovandyaz/auth/server';
+import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
@@ -17,6 +27,9 @@ import { DrizzleEmailVerificationTokenRepository } from './drizzle-email-verific
 const DB_USER_ID = '00000000-0000-4000-8000-000000000151';
 const OTHER_DB_USER_ID = '00000000-0000-4000-8000-000000000152';
 const DB_USER_IDS = [DB_USER_ID, OTHER_DB_USER_ID];
+const MISSING_USER_ID = '00000000-0000-4000-8000-000000000f21';
+const SECRET_TOKEN_HASH = 'sentinel-link-token-hash';
+const SECRET_CODE_HASH = 'sentinel-code-hash';
 
 function tokenData() {
   return {
@@ -63,6 +76,7 @@ describe.runIf(DB_AVAILABLE)(
     });
 
     afterEach(async () => {
+      vi.restoreAllMocks();
       await db
         .delete(emailVerificationTokens)
         .where(inArray(emailVerificationTokens.userId, DB_USER_IDS));
@@ -234,6 +248,81 @@ describe.runIf(DB_AVAILABLE)(
 
       expect(expiredRow).toBeUndefined();
       expect(freshRow).toBeDefined();
+    });
+
+    describe('a token the database rejects', () => {
+      const secretTokenData = (userId: string) => ({
+        ...tokenData(),
+        userId,
+        tokenHash: SECRET_TOKEN_HASH,
+        codeHash: SECRET_CODE_HASH,
+      });
+
+      function silencedErrorLog() {
+        return vi
+          .spyOn(Logger.prototype, 'error')
+          .mockImplementation(() => undefined);
+      }
+
+      function expectNoSecretsIn(logged: unknown) {
+        const text = JSON.stringify(logged);
+        expect(text).not.toContain(SECRET_TOKEN_HASH);
+        expect(text).not.toContain(SECRET_CODE_HASH);
+      }
+
+      it('logs a rejected issue by the violated constraint and answers with the fixed internal error', async () => {
+        await repo.create(tokenData());
+        const log = silencedErrorLog();
+
+        const rejected = await repo.create(secretTokenData(DB_USER_ID));
+
+        expect(log.mock.calls).toEqual([
+          [
+            {
+              operation: 'createEmailVerificationToken',
+              userId: DB_USER_ID,
+              errorName: 'DrizzleQueryError',
+              failureCategory: 'unique_violation',
+              sqlState: '23505',
+              table: 'email_verification_tokens',
+              constraint: 'email_verification_tokens_user_id_idx',
+            },
+          ],
+        ]);
+        expectNoSecretsIn(log.mock.calls);
+        expect(rejected._unsafeUnwrapErr()).toEqual({
+          code: AuthErrorCodes.INTERNAL_ERROR,
+          message: 'Failed to create email verification token',
+        });
+      });
+
+      it('logs a rejected replacement by the violated constraint and answers with the fixed internal error', async () => {
+        const log = silencedErrorLog();
+
+        const rejected = await repo.replaceIfOlderThan(
+          secretTokenData(MISSING_USER_ID),
+          0
+        );
+
+        expect(log.mock.calls).toEqual([
+          [
+            {
+              operation: 'replaceEmailVerificationToken',
+              userId: MISSING_USER_ID,
+              errorName: 'DrizzleQueryError',
+              failureCategory: 'unclassified',
+              sqlState: '23503',
+              table: 'email_verification_tokens',
+              constraint: 'email_verification_tokens_user_id_users_id_fk',
+            },
+          ],
+        ]);
+        expectNoSecretsIn(log.mock.calls);
+        expect(rejected._unsafeUnwrapErr()).toEqual({
+          code: AuthErrorCodes.INTERNAL_ERROR,
+          message: 'Failed to replace email verification token',
+        });
+      });
     });
   }
 );

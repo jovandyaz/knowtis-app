@@ -12,20 +12,11 @@ import {
 } from '../../domain/retrieval';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
 import {
-  TOOL_ERROR_CODES,
-  ToolExecutionError,
+  classifyNoteStoreFailure,
   wrapUpstreamFailure,
 } from './tool-execution.error';
 
 const UNINDEXED_HINT_LIMIT = 5;
-
-function classifyNoteStoreFailure(error: unknown): ToolExecutionError {
-  return new ToolExecutionError(
-    TOOL_ERROR_CODES.NOTE_STORE_FAILED,
-    'Note store request failed',
-    { cause: error }
-  );
-}
 
 @Injectable()
 export class NoteReadToolGroup implements AgentToolGroup {

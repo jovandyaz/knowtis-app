@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 
 const WEBHOOK_TIMEOUT_MS = 5000;
 
@@ -52,7 +53,7 @@ export class WebhookAlertService implements OnModuleInit {
         this.logger.warn({
           event: 'ai.alert.webhook_failed',
           alert: event,
-          error: error instanceof Error ? error.message : 'unknown error',
+          error: reasonOf(error),
         });
       });
   }

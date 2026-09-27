@@ -8,6 +8,7 @@ import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from '../../domain/ports/ai-structured-output.port';
 import type { AIStructuredOutputProvider } from '../../domain/ports/ai-structured-output.port';
@@ -156,7 +157,7 @@ export class VoiceNoteHandler {
           event: 'ai.usage.record_failed',
           requestId,
           userId: input.userId,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: reasonOf(err),
         })
       );
 
@@ -224,7 +225,7 @@ export class VoiceNoteHandler {
             event: 'ai.usage.record_failed',
             requestId,
             userId: input.userId,
-            error: err instanceof Error ? err.message : 'Unknown error',
+            error: reasonOf(err),
           })
         );
 
@@ -250,7 +251,7 @@ export class VoiceNoteHandler {
         event: 'ai.voice-note.structuring-fallback',
         requestId,
         userId: input.userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
         latencyMs: Date.now() - startTime,
       });
 

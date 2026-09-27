@@ -1,6 +1,11 @@
-import { inspect } from 'node:util';
+import { inspect, type InspectOptions } from 'node:util';
 
 import { ConsoleLogger, type LogLevel } from '@nestjs/common';
+
+import { isDatabaseError } from '../errors/database-diagnostics';
+import { reasonOf } from '../errors/reason-of';
+import { stackOf } from '../errors/stack-of';
+import { rewriteDatabaseErrors } from './rewrite-database-errors';
 
 const SEVERITY = {
   DEBUG: 'debug',
@@ -24,7 +29,12 @@ const DEFAULT_LOG_LEVEL: LogLevel = 'log';
 
 const MESSAGE_FIELDS = ['message', 'event', 'operation'] as const;
 
-const UNSERIALIZABLE_INSPECT_DEPTH = 4;
+const UNSERIALIZABLE_INSPECT_OPTIONS: InspectOptions = {
+  depth: 4,
+  breakLength: Infinity,
+};
+
+const UNSERIALIZABLE_PAYLOAD = '[unserializable payload]';
 
 type WriteStream = 'stdout' | 'stderr';
 
@@ -49,6 +59,9 @@ function firstNonEmptyText(candidates: unknown[]): string | undefined {
 }
 
 function errorFields(error: Error): Record<string, unknown> {
+  if (isDatabaseError(error)) {
+    return { name: error.name, message: reasonOf(error) };
+  }
   const scalarProperties = Object.entries(error).filter(([, value]) =>
     isScalar(value)
   );
@@ -63,9 +76,11 @@ function errorFields(error: Error): Record<string, unknown> {
  * Writes each log call as one JSON line in the shape Railway's log explorer
  * parses: a non-empty string `message`, a `level` of debug/info/warn/error, and
  * the fields of object payloads at the top level, filterable as `@field:value`.
- * An `Error` argument becomes an `error` field and supplies `stack`. `level`,
- * `message`, `timestamp` and `context` always come from the call, never from a
- * payload.
+ * An `Error` argument becomes an `error` field and supplies `stack`; a database
+ * error, there or anywhere in a payload, is told by its diagnostics rather than
+ * by a message that can quote query values. `level`, `message`, `timestamp` and
+ * `context` always come from the call, never from a payload, and a payload that
+ * cannot be written never turns the call into a throw.
  */
 export class JsonConsoleLogger extends ConsoleLogger {
   constructor() {
@@ -101,16 +116,27 @@ export class JsonConsoleLogger extends ConsoleLogger {
         firstNonEmptyText([
           lead,
           ...MESSAGE_FIELDS.map((field) => fields[field]),
-          error?.message,
+          error && reasonOf(error),
           context,
         ]) ?? logLevel,
       timestamp: new Date().toISOString(),
       context: context || undefined,
-      stack: errorStack ?? error?.stack ?? fields.stack,
+      stack: errorStack ?? (error && stackOf(error)) ?? fields.stack,
     };
     const extras = details.length > 0 ? { details } : {};
     process[writeStreamType ?? 'stdout'].write(
       `${this.serialize({ ...fields, ...extras, ...envelope }, envelope)}\n`
+    );
+  }
+
+  // Nest's replacer hands Maps, Sets and errors to inspect whole, so JSON never
+  // visits what they hold.
+  protected override stringifyReplacer(key: string, value: unknown): unknown {
+    const renderedWhole =
+      value instanceof Map || value instanceof Set || value instanceof Error;
+    return super.stringifyReplacer(
+      key,
+      renderedWhole ? rewriteDatabaseErrors(value, this.inspectOptions) : value
     );
   }
 
@@ -123,13 +149,24 @@ export class JsonConsoleLogger extends ConsoleLogger {
     try {
       return JSON.stringify(entry, replacer);
     } catch {
-      // A circular payload must not turn the log call into a throw inside the
-      // caller's catch block, which would hide the error being reported.
-      const payload = inspect(entry, {
-        depth: UNSERIALIZABLE_INSPECT_DEPTH,
-        breakLength: Infinity,
-      });
-      return JSON.stringify({ ...envelope, payload }, replacer);
+      // A payload that cannot be written must not turn the log call into a
+      // throw inside the caller's catch block, hiding the error it reports.
+      try {
+        const payload = inspect(
+          rewriteDatabaseErrors(entry, UNSERIALIZABLE_INSPECT_OPTIONS),
+          UNSERIALIZABLE_INSPECT_OPTIONS
+        );
+        return JSON.stringify({ ...envelope, payload }, replacer);
+      } catch {
+        const { level, message, timestamp, context } = envelope;
+        return JSON.stringify({
+          level,
+          message,
+          timestamp,
+          context,
+          payload: UNSERIALIZABLE_PAYLOAD,
+        });
+      }
     }
   }
 }

@@ -9,6 +9,7 @@ import {
 import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../core/errors/reason-of';
+import { stackOf } from '../../../core/errors/stack-of';
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
 import {
@@ -42,7 +43,7 @@ export class HocuspocusPersistenceExtension {
         } catch (error) {
           logger.error(
             `Failed to load note ${documentName} for hydration`,
-            error instanceof Error ? error.stack : error
+            stackOf(error)
           );
           // Returning null would hand the editor a blank doc whose first
           // keystroke defeats the trivial-fragment guard and overwrites the note.
@@ -63,7 +64,7 @@ export class HocuspocusPersistenceExtension {
           } catch (error) {
             logger.error(
               `Failed to hydrate legacy note ${documentName} from HTML`,
-              error instanceof Error ? error.stack : error
+              stackOf(error)
             );
             return null;
           }
@@ -75,7 +76,7 @@ export class HocuspocusPersistenceExtension {
         } catch (error) {
           logger.error(
             `Failed to hydrate Y.Doc for note ${documentName}`,
-            error instanceof Error ? error.stack : error
+            stackOf(error)
           );
           doc.destroy();
           return null;
@@ -95,7 +96,7 @@ export class HocuspocusPersistenceExtension {
             .catch((error) => {
               logger.warn(
                 `onStoreDocument guard: findById failed for note ${documentName}, failing open`,
-                error instanceof Error ? error.stack : error
+                stackOf(error)
               );
               return null;
             });

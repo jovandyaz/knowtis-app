@@ -11,6 +11,7 @@ import {
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import {
   AI_CACHE,
@@ -228,7 +229,7 @@ export class AICompletionPipeline {
           event: 'ai.usage.record_failed',
           requestId: context.requestId,
           userId: input.userId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: reasonOf(error),
         })
       );
   }
@@ -270,7 +271,7 @@ export class AICompletionPipeline {
           this.logger.warn({
             event: 'ai.cache.write_failed',
             requestId: context.requestId,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: reasonOf(error),
           })
         );
     }

@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { stackOf } from '../../../../core/errors/stack-of';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   EMBEDDING_PORT,
@@ -53,7 +54,7 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     } catch (error) {
       this.logger.warn(
         'Hybrid retrieval failed; degrading to keyword',
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
       return this.keyword.search(userId, query);
     }
@@ -96,7 +97,7 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     } catch (error) {
       this.logger.warn(
         'Vector leg failed; returning lexical-only results',
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
       return lexical.slice(0, MAX_HITS);
     }
@@ -123,7 +124,7 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     } catch (error) {
       this.logger.warn(
         'Unindexed lookup failed; reporting none',
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
       return [];
     }

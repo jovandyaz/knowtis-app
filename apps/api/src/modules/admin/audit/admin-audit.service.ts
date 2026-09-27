@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { stackOf } from '../../../core/errors/stack-of';
 import {
   ADMIN_AUDIT_REPOSITORY,
   type AdminAuditRepository,
@@ -24,7 +25,7 @@ export class AdminAuditService {
     } catch (error) {
       this.logger.error(
         `Failed to record audit entry '${entry.action}' on ${entry.targetType}${entry.targetId ? ` ${entry.targetId}` : ''} by ${entry.actorId}`,
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
     }
   }

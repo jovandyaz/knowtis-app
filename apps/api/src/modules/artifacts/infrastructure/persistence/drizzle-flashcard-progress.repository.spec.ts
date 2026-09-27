@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../../../../database';
+import { failedQuery } from '../../../../test-support/database-errors';
 import { ArtifactErrorCodes } from '../../domain/errors/artifact.errors';
 import type { RecordReviewInput } from '../../domain/ports/artifact.repository';
 import { DrizzleFlashcardProgressRepository } from './drizzle-flashcard-progress.repository';
+
+const REVIEW_FAILED = {
+  code: ArtifactErrorCodes.INTERNAL_ERROR,
+  message: 'Internal error: Failed to record the review',
+};
 
 const REVIEW: RecordReviewInput = {
   artifactId: 'artifact-1',
@@ -43,6 +50,11 @@ describe('DrizzleFlashcardProgressRepository', () => {
     repo = new DrizzleFlashcardProgressRepository({
       transaction,
     } as unknown as Database);
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('records the review inside one transaction: progress upsert plus review log insert', async () => {
@@ -82,10 +94,7 @@ describe('DrizzleFlashcardProgressRepository', () => {
 
     const result = await repo.recordReview(REVIEW);
 
-    expect(result._unsafeUnwrapErr()).toEqual({
-      code: ArtifactErrorCodes.INTERNAL_ERROR,
-      message: 'Internal error: progress upsert failed',
-    });
+    expect(result._unsafeUnwrapErr()).toEqual(REVIEW_FAILED);
     expect(insertValues).toHaveBeenCalledTimes(1);
     await expect(transaction.mock.results[0]?.value).rejects.toThrow(
       'progress upsert failed'
@@ -97,13 +106,34 @@ describe('DrizzleFlashcardProgressRepository', () => {
 
     const result = await repo.recordReview(REVIEW);
 
-    expect(result._unsafeUnwrapErr()).toEqual({
-      code: ArtifactErrorCodes.INTERNAL_ERROR,
-      message: 'Internal error: review log insert failed',
-    });
+    expect(result._unsafeUnwrapErr()).toEqual(REVIEW_FAILED);
     expect(insertValues).toHaveBeenCalledTimes(2);
     await expect(transaction.mock.results[0]?.value).rejects.toThrow(
       'review log insert failed'
     );
+  });
+
+  it('logs a rejected review by its diagnostics, never by the values the query carried', async () => {
+    const secret = 'sentinel-review-value';
+    onConflictDoUpdate.mockRejectedValue(failedQuery([secret]));
+    const log = vi.mocked(Logger.prototype.error);
+
+    const result = await repo.recordReview(REVIEW);
+
+    expect(result._unsafeUnwrapErr()).toEqual(REVIEW_FAILED);
+    expect(log.mock.calls).toEqual([
+      [
+        {
+          operation: 'recordFlashcardReview',
+          artifactId: REVIEW.artifactId,
+          userId: REVIEW.userId,
+          cardIndex: REVIEW.cardIndex,
+          errorName: 'DrizzleQueryError',
+          failureCategory: 'unclassified',
+          sqlState: '40P01',
+        },
+      ],
+    ]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(secret);
   });
 });

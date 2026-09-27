@@ -3,6 +3,7 @@ import { APICallError, generateText } from 'ai';
 import { providerOf } from '@knowtis/ai-gateway';
 import type { AIProvider } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import type { ProviderRegistryFactory } from './provider-registry.factory';
 
@@ -69,7 +70,10 @@ export async function probeProviderKey(
     return {
       valid: false,
       reason: classify(error),
-      error: redact(error instanceof Error ? error.message : 'unknown', apiKey),
+      error: redact(
+        error instanceof Error ? reasonOf(error) : 'unknown',
+        apiKey
+      ),
     };
   } finally {
     clearTimeout(timer);

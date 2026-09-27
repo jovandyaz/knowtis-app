@@ -2,6 +2,7 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { failedQuery } from '../../../../test-support/database-errors';
 import { AgentErrors } from '../../domain/agent-errors';
 import type {
   CreateProposedMutation,
@@ -173,6 +174,45 @@ describe('NoteMutateToolGroup', () => {
     );
     expect(c.proposals.captured).toBe(shareProposal);
   });
+});
+
+describe('NoteMutateToolGroup when the note store fails', () => {
+  const SECRET_PARAM = 'sentinel-note-store-param';
+
+  it.each([
+    [
+      'proposeEditNote',
+      'buildEdit',
+      { noteId: 'n1', edits: [], appendMarkdown: 'more' },
+    ],
+    ['proposeUpdateNote', 'buildUpdate', { noteId: 'n1', title: 'New' }],
+    [
+      'proposeShareNote',
+      'buildShare',
+      { noteId: 'n1', targetEmail: 'a@b.com', permission: 'viewer' },
+    ],
+  ])(
+    '%s hands the model a generic store failure, never the query',
+    async (tool, method, input) => {
+      const upstream = failedQuery([SECRET_PARAM]);
+      const builder = {
+        [method]: vi.fn().mockRejectedValue(upstream),
+      } as unknown as MutationProposalBuilder;
+      const c = ctx();
+
+      const thrown = await run(group(builder), c, tool, input).catch(
+        (e: unknown) => e
+      );
+
+      expect(thrown).toMatchObject({
+        name: 'ToolExecutionError',
+        code: 'NOTE_STORE_FAILED',
+        message: 'Note store request failed',
+      });
+      expect((thrown as Error).cause).toBe(upstream);
+      expect(c.proposals.captured).toBeNull();
+    }
+  );
 });
 
 const NOTE_ID = '11111111-1111-4111-8111-111111111111';
