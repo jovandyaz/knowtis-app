@@ -41,6 +41,13 @@ export interface MeteredUsage {
   readonly costUsd: number;
 }
 
+/** A server-paid call that bills no tokens: the injection classifier, an embedding, a web search. */
+export interface SideCost {
+  readonly action: string;
+  readonly model: string;
+  readonly costUsd: number;
+}
+
 interface Gate {
   readonly allowed: boolean;
   readonly reason?: string;
@@ -340,25 +347,21 @@ export class AIRateLimitService {
   }
 
   /**
-   * Records a server-billed side cost (Tavily, Voyage). Never throws — callers
-   * fire-and-forget from hot paths, so failures are logged, not propagated.
+   * Records a server-billed side cost (classifier, embeddings, web search).
+   * The server always pays, so the usage row is never marked byok; the counter
+   * it lands on follows the caller's billing. Never throws.
    */
-  async recordSideCost(params: {
-    readonly userId: string;
-    readonly action: string;
-    readonly model: string;
-    readonly costUsd: number;
-    readonly byokTurn: boolean;
-  }): Promise<void> {
+  async recordSideCost(
+    execution: AiExecutionContext,
+    cost: SideCost
+  ): Promise<void> {
+    const userId = execution.subject.userId;
     try {
-      // The SERVER pays Tavily/Voyage regardless of the turn's LLM billing.
       await this.usageRepository.recordUsage({
-        userId: params.userId,
-        action: params.action,
-        model: params.model,
+        userId,
+        ...cost,
         inputTokens: 0,
         outputTokens: 0,
-        costUsd: params.costUsd,
         byok: false,
       });
     } catch (error) {
@@ -368,18 +371,23 @@ export class AIRateLimitService {
       return;
     }
     try {
-      if (params.byokTurn) {
-        await this.rateLimitProvider.recordByokCost(
-          params.userId,
-          params.costUsd
-        );
-      } else {
+      if (execution.billing.kind === 'byok') {
+        await this.rateLimitProvider.recordByokCost(userId, cost.costUsd);
+        return;
+      }
+      await this.rateLimitProvider.correctUsage(userId, 0, 0, 0, cost.costUsd);
+      const ipSubject = this.anonymousIpSubject(
+        execution.tier === 'anonymous',
+        execution.subject.clientIp
+      );
+      if (ipSubject) {
         await this.rateLimitProvider.correctUsage(
-          params.userId,
+          ipSubject,
           0,
           0,
           0,
-          params.costUsd
+          cost.costUsd,
+          false
         );
       }
     } catch (error) {

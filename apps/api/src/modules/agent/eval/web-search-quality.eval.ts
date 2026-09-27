@@ -13,6 +13,7 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
 import { DatabaseModule } from '../../../database';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { AgentModule } from '../agent.module';
 import type { AgentEvent, WebSource } from '../domain/agent-event';
 import {
@@ -26,6 +27,7 @@ const GATE =
   !!process.env['TAVILY_API_KEY']?.trim() &&
   !!process.env['ANTHROPIC_API_KEY']?.trim();
 const USER = '00000000-0000-4000-8000-0000000000fa';
+const EXECUTION = createExecutionContext({ userId: USER });
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 
 describe.runIf(GATE)('web search tool quality', () => {
@@ -80,6 +82,7 @@ describe.runIf(GATE)('web search tool quality', () => {
     const model = process.env['AI_EVAL_MODEL']?.trim() || DEFAULT_AGENT_MODEL;
     const events = orchestrator.run({
       userId: USER,
+      execution: EXECUTION,
       messages: [
         {
           role: 'user',

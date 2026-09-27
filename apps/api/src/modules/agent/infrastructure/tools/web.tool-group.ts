@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
@@ -8,7 +8,6 @@ import {
   isHttpUrl,
 } from '@knowtis/ai-gateway';
 
-import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   WEB_SEARCH_PORT,
@@ -27,6 +26,7 @@ const MAX_WEB_SNIPPET_CHARS = 1500;
 const MAX_WEB_FETCH_CHARS = 8000;
 const FETCH_DROPPED_NOTE =
   'Fetched content failed the safety check and was dropped.';
+const WEB_SIDE_COST = { action: 'agent_web_search', model: 'tavily' } as const;
 
 function isTimeout(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'TimeoutError';
@@ -64,7 +64,6 @@ function classifyWebFetchFailure(url: string) {
 @Injectable()
 export class WebToolGroup implements AgentToolGroup {
   readonly name = 'web';
-  private readonly logger = new Logger(WebToolGroup.name);
 
   constructor(
     @Inject(WEB_SEARCH_PORT) private readonly web: WebSearchPort,
@@ -87,7 +86,10 @@ export class WebToolGroup implements AgentToolGroup {
             () => this.web.search(query),
             classifyWebSearchFailure
           );
-          await this.recordCost(ctx, result.costUsd);
+          await this.rateLimit.recordSideCost(ctx.execution, {
+            ...WEB_SIDE_COST,
+            costUsd: result.costUsd,
+          });
           const safe = filterExternalHits(result.hits, {
             maxHits: MAX_WEB_HITS,
             maxChars: MAX_WEB_SNIPPET_CHARS,
@@ -125,10 +127,13 @@ export class WebToolGroup implements AgentToolGroup {
             () => this.web.fetch(url),
             classifyWebFetchFailure(url)
           );
-          await this.recordCost(ctx, result.costUsd);
+          await this.rateLimit.recordSideCost(ctx.execution, {
+            ...WEB_SIDE_COST,
+            costUsd: result.costUsd,
+          });
           const verdict = await this.injectionGuard.guard(
             result.content,
-            ctx.userId
+            ctx.execution
           );
           if (!verdict.safe) {
             return { note: FETCH_DROPPED_NOTE, url };
@@ -142,22 +147,5 @@ export class WebToolGroup implements AgentToolGroup {
         },
       }),
     };
-  }
-
-  private async recordCost(
-    ctx: AgentToolContext,
-    costUsd: number
-  ): Promise<void> {
-    try {
-      await this.rateLimit.recordSideCost({
-        userId: ctx.userId,
-        action: 'agent_web_search',
-        model: 'tavily',
-        costUsd,
-        byokTurn: ctx.byokTurn,
-      });
-    } catch (error) {
-      this.logger.warn(`web cost record failed: ${reasonOf(error)}`);
-    }
   }
 }

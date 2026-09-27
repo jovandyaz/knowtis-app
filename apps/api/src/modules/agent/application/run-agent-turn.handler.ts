@@ -102,7 +102,6 @@ interface RunAgentTurnInput {
   readonly knownNotes?: readonly AgentSource[];
   readonly message?: { content: string };
   readonly conversationId?: string;
-  readonly userMemories?: readonly string[];
   readonly model?: string;
   readonly conversationModel?: string | null;
   readonly effort?: ReasoningEffort;
@@ -113,6 +112,8 @@ type TurnInput = Omit<
   'userId' | 'isAnonymous' | 'clientIp'
 > & {
   readonly execution: AiExecutionContext;
+  /** The text long-term memory is retrieved for; absent when there is none. */
+  readonly memoryQuery?: string;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -304,19 +305,14 @@ export class RunAgentTurnHandler {
       conversationId,
       input.userId
     );
-    const messages = history;
-    const userMemories = await this.loadUserMemories(
-      execution,
-      message.content
-    );
     const synthInput: TurnInput = {
       turnId: input.turnId,
-      messages,
+      messages: history,
       message,
       execution,
+      memoryQuery: message.content,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       knownNotes,
-      ...(userMemories.length ? { userMemories } : {}),
       ...(input.model ? { model: input.model } : {}),
       ...(input.effort ? { effort: input.effort } : {}),
       conversationModel: conversation.model,
@@ -338,17 +334,17 @@ export class RunAgentTurnHandler {
 
   private async loadUserMemories(
     execution: AiExecutionContext,
-    latestUserContent: string
+    memoryQuery: string
   ): Promise<string[]> {
     if (!execution.policy.longTermMemory) {
       return [];
     }
     const { userId } = execution.subject;
-    // The turn-level length/injection guards in runLoop run after this; bail
-    // early so oversized or injected input never reaches the paid embed call.
+    // A resume embeds a replayed row the fresh-message guard never saw, so
+    // oversized or injected text must not reach the paid embed call.
     if (
-      latestUserContent.length > MAX_USER_MESSAGE_CHARS ||
-      !detectPromptInjection(latestUserContent).safe
+      memoryQuery.length > MAX_USER_MESSAGE_CHARS ||
+      !detectPromptInjection(memoryQuery).safe
     ) {
       return [];
     }
@@ -358,14 +354,11 @@ export class RunAgentTurnHandler {
       }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
       const min = this.configService.get('AI_MEMORY_SIMILARITY_MIN');
-      const { vector, costUsd } =
-        await this.embed.embedQuery(latestUserContent);
-      void this.rateLimit.recordSideCost({
-        userId,
+      const { vector, costUsd } = await this.embed.embedQuery(memoryQuery);
+      void this.rateLimit.recordSideCost(execution, {
         action: 'embedding',
         model: this.configService.get('AI_EMBEDDING_MODEL'),
         costUsd,
-        byokTurn: false,
       });
       const matches = await this.memory.searchForUser(userId, vector, k);
       return matches.filter((m) => m.score >= min).map((m) => m.content);
@@ -533,11 +526,7 @@ export class RunAgentTurnHandler {
     );
     // A resume carries a tool-confirmation outcome, not the user's words, so
     // memory retrieval embeds the last real user message instead.
-    const latestUserContent =
-      history.findLast((m) => m.role === 'user')?.content ?? '';
-    const userMemories = latestUserContent
-      ? await this.loadUserMemories(execution, latestUserContent)
-      : [];
+    const memoryQuery = history.findLast((m) => m.role === 'user')?.content;
     const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
@@ -545,8 +534,8 @@ export class RunAgentTurnHandler {
       messages: history,
       knownNotes,
       execution,
+      ...(memoryQuery ? { memoryQuery } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
-      ...(userMemories.length ? { userMemories } : {}),
       conversationModel: found.model,
       resume: input.resume,
     };
@@ -575,49 +564,10 @@ export class RunAgentTurnHandler {
       return;
     }
     const { userId } = input.execution.subject;
-    const inputMessages = input.messages ?? [];
-    const freshUserMessage: AgentMessage | undefined =
-      resume === undefined && input.message
-        ? { role: 'user', content: input.message.content }
-        : undefined;
-    if (freshUserMessage) {
-      if (freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
-        callbacks.onError(messageTooLongError());
-        return;
-      }
-      const verdict = await this.injectionGuard.guard(
-        freshUserMessage.content,
-        userId
-      );
-      if (!verdict.safe) {
-        callbacks.onError(AIErrors.promptInjectionDetected());
-        return;
-      }
-    }
-    const sanitized = sanitizeReplayHistory(inputMessages);
-    const fitted = await this.fitGuardedHistory(
-      sanitized.messages,
-      freshUserMessage,
-      userId
-    );
-    logInputDetections(
-      this.logger,
-      [
-        ...detectionRows(sanitized.detections, inputMessages),
-        ...detectionRows(fitted.detections, fitted.messages),
-      ],
-      {
-        surface: 'history',
-        userId,
-        ...(persistence ? { conversationId: persistence.conversationId } : {}),
-      },
-      fitted.dropped
-    );
-    const messages = fitted.messages;
-    const estimatedTokens = this.estimateTokens(messages);
 
-    // Resolve the model and the BYOK key BEFORE the budget gate: a BYOK turn
-    // bills the user's own key, so it must skip the daily token/cost ceiling.
+    // The guards, the memory embedding and the budget gate all charge the
+    // turn's payer, so the model and its billing must be resolved before any
+    // of them; a BYOK turn also skips the daily token/cost ceiling.
     let model: string | null;
     try {
       model = await this.resolveModel(
@@ -644,14 +594,6 @@ export class RunAgentTurnHandler {
       return;
     }
 
-    const pricing = this.modelCatalog.getPricing(model);
-    const estimatedCostUsd = pricing
-      ? computeTokenCostUsd(
-          { inputTokens: estimatedTokens, outputTokens: 0 },
-          pricing
-        )
-      : 0;
-
     const execution = billingFor(input.execution, providerOf(model));
     let byokApiKey: string | null = null;
     if (execution.billing.kind === 'byok') {
@@ -670,6 +612,57 @@ export class RunAgentTurnHandler {
         return;
       }
     }
+
+    const inputMessages = input.messages ?? [];
+    const freshUserMessage: AgentMessage | undefined =
+      resume === undefined && input.message
+        ? { role: 'user', content: input.message.content }
+        : undefined;
+    if (freshUserMessage) {
+      if (freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
+        callbacks.onError(messageTooLongError());
+        return;
+      }
+      const verdict = await this.injectionGuard.guard(
+        freshUserMessage.content,
+        execution
+      );
+      if (!verdict.safe) {
+        callbacks.onError(AIErrors.promptInjectionDetected());
+        return;
+      }
+    }
+    const sanitized = sanitizeReplayHistory(inputMessages);
+    const fitted = await this.fitGuardedHistory(
+      sanitized.messages,
+      freshUserMessage,
+      execution
+    );
+    logInputDetections(
+      this.logger,
+      [
+        ...detectionRows(sanitized.detections, inputMessages),
+        ...detectionRows(fitted.detections, fitted.messages),
+      ],
+      {
+        surface: 'history',
+        userId,
+        ...(persistence ? { conversationId: persistence.conversationId } : {}),
+      },
+      fitted.dropped
+    );
+    const messages = fitted.messages;
+    const estimatedTokens = this.estimateTokens(messages);
+    const pricing = this.modelCatalog.getPricing(model);
+    const estimatedCostUsd = pricing
+      ? computeTokenCostUsd(
+          { inputTokens: estimatedTokens, outputTokens: 0 },
+          pricing
+        )
+      : 0;
+    const userMemories = input.memoryQuery
+      ? await this.loadUserMemories(execution, input.memoryQuery)
+      : [];
 
     // Resolve turn settings BEFORE reserving quota: a settings-store failure
     // must escape before any reservation exists, else the held reservation
@@ -733,6 +726,7 @@ export class RunAgentTurnHandler {
     try {
       for await (const event of this.orchestrator.run({
         userId,
+        execution,
         messages,
         model,
         maxSteps,
@@ -747,9 +741,7 @@ export class RunAgentTurnHandler {
         openrouterIgnoredProviders,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
-        ...(input.userMemories?.length
-          ? { userMemories: input.userMemories }
-          : {}),
+        ...(userMemories.length ? { userMemories } : {}),
         ...(signal ? { signal } : {}),
         ...(resume ? { resume } : {}),
         ...(byokApiKey ? { byokApiKey } : {}),
@@ -989,7 +981,7 @@ export class RunAgentTurnHandler {
   private async fitGuardedHistory(
     history: readonly AgentMessage[],
     fresh: AgentMessage | undefined,
-    userId: string
+    execution: AiExecutionContext
   ): Promise<{
     messages: AgentMessage[];
     detections: ReplayDetection[];
@@ -1007,7 +999,7 @@ export class RunAgentTurnHandler {
       const guarded = await this.guardReplayedUserTurn(
         fresh ? fitted.slice(0, -1) : fitted,
         fresh,
-        userId
+        execution
       );
       firstDrop ??= guarded.dropped;
       if (guarded.dropped && fresh) {
@@ -1030,7 +1022,7 @@ export class RunAgentTurnHandler {
   private async guardReplayedUserTurn(
     history: AgentMessage[],
     fresh: AgentMessage | undefined,
-    userId: string
+    execution: AiExecutionContext
   ): Promise<{ messages: AgentMessage[]; dropped?: DroppedUserTurn }> {
     const last = fresh
       ? history.length - 1
@@ -1044,7 +1036,7 @@ export class RunAgentTurnHandler {
     const text = fresh
       ? `${seamTail(history[last].content)}${COALESCED_MESSAGE_SEPARATOR}${seamHead(fresh.content)}`
       : joined;
-    const verdict = await this.injectionGuard.guard(text, userId);
+    const verdict = await this.injectionGuard.guard(text, execution);
     if (verdict.safe) {
       return { messages: history };
     }

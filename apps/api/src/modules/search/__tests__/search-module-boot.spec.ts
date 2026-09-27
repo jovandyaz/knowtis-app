@@ -57,8 +57,9 @@ describe('SearchModule wiring', () => {
 
         expect(rateLimit).toBeInstanceOf(AIRateLimitService);
 
+        const execution = createExecutionContext({ userId: 'user-1' });
         vi.spyOn(moduleRef.get(TierResolver), 'resolve').mockResolvedValue(
-          createExecutionContext({ userId: 'user-1' })
+          execution
         );
         const checkLimitSpy = vi
           .spyOn(rateLimit, 'checkLimit')
@@ -85,7 +86,7 @@ describe('SearchModule wiring', () => {
         const allowed = await controller.search(user, dto, req);
 
         expect(allowed.hits).toHaveLength(1);
-        expect(searchSpy).toHaveBeenCalledWith('user-1', 'quarterly report');
+        expect(searchSpy).toHaveBeenCalledWith(execution, 'quarterly report');
         expect(releaseSpy).toHaveBeenCalledTimes(1);
 
         checkLimitSpy.mockResolvedValue({ allowed: false });

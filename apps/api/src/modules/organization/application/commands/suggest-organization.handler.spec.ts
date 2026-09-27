@@ -347,6 +347,12 @@ describe('SuggestOrganizationHandler', () => {
     expect(query).toBe('Alpha kickoff');
   });
 
+  it("searches related notes on the caller's context, so the embedding bills its payer", async () => {
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
+
+    expect(retrieval.search).toHaveBeenCalledWith(OWNER, 'Alpha kickoff');
+  });
+
   it('falls back to a content lead when the note has no title', async () => {
     noteRepository.findOwnedSummariesByIds.mockResolvedValue([
       noteFixture({ title: '   ' }),

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
@@ -31,22 +32,22 @@ export class NoteReadToolGroup implements AgentToolGroup {
   }
 
   private async searchWithPendingFallback(
-    userId: string,
+    execution: AiExecutionContext,
     query: string
   ): Promise<SearchNotesResult> {
-    const hits = await this.retrieval.search(userId, query);
+    const hits = await this.retrieval.search(execution, query);
     if (hits.length > 0) {
       return { hits };
     }
     const unindexed = await this.retrieval.listUnindexed(
-      userId,
+      execution.subject.userId,
       UNINDEXED_HINT_LIMIT
     );
     return unindexed.length > 0 ? { hits, unindexed } : { hits };
   }
 
   build(ctx: AgentToolContext): ToolSet {
-    const { userId } = ctx;
+    const { userId, execution } = ctx;
     return {
       searchNotes: tool({
         description:
@@ -59,7 +60,7 @@ export class NoteReadToolGroup implements AgentToolGroup {
         }),
         execute: async ({ query }) =>
           wrapUpstreamFailure(
-            () => this.searchWithPendingFallback(userId, query),
+            () => this.searchWithPendingFallback(execution, query),
             classifyNoteStoreFailure
           ),
       }),
@@ -71,7 +72,7 @@ export class NoteReadToolGroup implements AgentToolGroup {
         }),
         execute: async ({ noteId }) => {
           const note = await wrapUpstreamFailure(
-            () => this.retrieval.getById(userId, noteId),
+            () => this.retrieval.getById(execution, noteId),
             classifyNoteStoreFailure
           );
           return note

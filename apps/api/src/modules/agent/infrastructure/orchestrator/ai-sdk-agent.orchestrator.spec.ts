@@ -8,6 +8,7 @@ import {
   failedQuery,
   postgresError,
 } from '../../../../test-support/database-errors';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
@@ -150,6 +151,7 @@ const TURN_TOKEN_BUDGET = 150000;
 
 const baseInput = {
   userId: 'u1',
+  execution: createExecutionContext({ userId: 'u1' }),
   messages: [{ role: 'user' as const, content: 'hi' }],
   model: MODEL,
   maxSteps: 4,
@@ -681,18 +683,24 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(contexts.at(-1)).toMatchObject({
       userId: 'user-42',
       phase: 'full',
-      byokTurn: false,
     });
   });
 
-  it('marks the tool context as a byok turn when a byok key is in scope', async () => {
+  it("hands the tools the turn's billed context, so their side costs reach its payer", async () => {
     const contexts: AgentToolContext[] = [];
     const registry = makeToolRegistry((ctx) => contexts.push(ctx));
     const orchestrator = makeOrchestrator(makeConfig(), registry);
+    const execution = createExecutionContext({
+      userId: 'u1',
+      tier: 'byok',
+      billing: { kind: 'byok', provider: 'anthropic' },
+    });
 
-    await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
+    await collect(
+      orchestrator.run({ ...baseInput, execution, byokApiKey: 'user-key' })
+    );
 
-    expect(contexts.at(-1)).toMatchObject({ byokTurn: true });
+    expect(contexts.at(-1)?.execution).toBe(execution);
   });
 
   it('allows a url from an earlier user turn for webFetch, but not one from an assistant turn', async () => {
@@ -795,6 +803,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const events = await collect(
       orchestrator.run({
         userId: 'u1',
+        execution: baseInput.execution,
         messages: [{ role: 'user', content: 'resume esa nota' }],
         model: 'anthropic:claude-sonnet-4-20250514',
         maxSteps: 4,

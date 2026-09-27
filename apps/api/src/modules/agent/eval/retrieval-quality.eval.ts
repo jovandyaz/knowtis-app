@@ -25,6 +25,7 @@ import {
   EMBEDDING_PORT,
   type EmbeddingPort,
 } from '../../ai/domain/ports/embedding.port';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { AgentModule } from '../agent.module';
 import { HybridRetrievalAdapter } from '../infrastructure/retrieval/hybrid-retrieval.adapter';
 
@@ -32,6 +33,7 @@ loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
 const GATE = !!process.env['VOYAGE_API_KEY']?.trim();
 const USER = '00000000-0000-4000-8000-0000000000f1';
+const EXECUTION = createExecutionContext({ userId: USER });
 const ES_NOTE = '00000000-0000-4000-8000-0000000000f2';
 const EN_NOTE = '00000000-0000-4000-8000-0000000000f3';
 const MODEL = process.env['AI_EMBEDDING_MODEL'] ?? 'voyage-4';
@@ -138,7 +140,7 @@ describe.runIf(GATE)('hybrid retrieval quality', () => {
   const MAX_RANK = 3;
   for (const c of CASES) {
     it(`ranks the expected note for: ${c.name}`, async () => {
-      const hits = await adapter.search(USER, c.query);
+      const hits = await adapter.search(EXECUTION, c.query);
       const rank = hits.findIndex((h) => h.id === c.expected);
       expect(rank).toBeGreaterThanOrEqual(0);
       expect(rank).toBeLessThan(MAX_RANK);

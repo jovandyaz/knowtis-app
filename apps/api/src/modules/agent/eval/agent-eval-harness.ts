@@ -42,6 +42,7 @@ import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 import { drainEvents, type EvalTranscript } from './transcript';
 
 const EVAL_USER_ID = '00000000-0000-4000-8000-000000000e7a';
+const EVAL_EXECUTION = createExecutionContext({ userId: EVAL_USER_ID });
 
 /** The per-turn inputs `RunAgentTurnHandler` resolves before it calls the
  *  orchestrator. The harness calls the orchestrator directly, so without these
@@ -157,7 +158,7 @@ export class AgentEvalHarness {
           aiConfig.getOpenRouterIgnoredProviders(),
         effortFor: (model) =>
           turnEffort.resolve({
-            execution: createExecutionContext({ userId: EVAL_USER_ID }),
+            execution: EVAL_EXECUTION,
             model,
           }),
       };
@@ -195,6 +196,7 @@ export class AgentEvalHarness {
       ]);
     const events = this.orchestrator.run({
       userId: EVAL_USER_ID,
+      execution: EVAL_EXECUTION,
       messages,
       model,
       maxSteps: this.maxSteps,

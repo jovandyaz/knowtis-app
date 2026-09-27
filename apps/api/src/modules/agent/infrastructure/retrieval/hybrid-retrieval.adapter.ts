@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EnvConfig } from '../../../../config/env.config';
 import { stackOf } from '../../../../core/errors/stack-of';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -44,27 +45,31 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     private readonly rateLimit: AIRateLimitService
   ) {}
 
-  async search(userId: string, query: string): Promise<NoteHit[]> {
-    const branded = UserId.create(userId);
+  async search(
+    execution: AiExecutionContext,
+    query: string
+  ): Promise<NoteHit[]> {
+    const branded = UserId.create(execution.subject.userId);
     if (branded.isErr()) {
       return [];
     }
     try {
-      return await this.fuse(branded.value, userId, query);
+      return await this.fuse(branded.value, execution, query);
     } catch (error) {
       this.logger.warn(
         'Hybrid retrieval failed; degrading to keyword',
         stackOf(error)
       );
-      return this.keyword.search(userId, query);
+      return this.keyword.search(execution, query);
     }
   }
 
   private async fuse(
     user: UserId,
-    userId: string,
+    execution: AiExecutionContext,
     query: string
   ): Promise<NoteHit[]> {
+    const { userId } = execution.subject;
     const lexicalRows = await this.notes.findAccessibleNotesByLexicalRank(
       user,
       query,
@@ -80,12 +85,10 @@ export class HybridRetrievalAdapter implements RetrievalPort {
       const { vector: queryVector, costUsd } =
         await this.embed.embedQuery(query);
       const model = this.config.get('AI_EMBEDDING_MODEL');
-      void this.rateLimit.recordSideCost({
-        userId,
+      void this.rateLimit.recordSideCost(execution, {
         action: 'embedding',
         model,
         costUsd,
-        byokTurn: false,
       });
       const vectorRows = await this.notes.findAccessibleNotesByEmbedding(
         user,
@@ -130,8 +133,11 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     }
   }
 
-  getById(userId: string, noteId: string): Promise<AgentNote | null> {
-    return this.keyword.getById(userId, noteId);
+  getById(
+    execution: AiExecutionContext,
+    noteId: string
+  ): Promise<AgentNote | null> {
+    return this.keyword.getById(execution, noteId);
   }
 
   getBody(userId: string, noteId: string): Promise<NoteBody | null> {

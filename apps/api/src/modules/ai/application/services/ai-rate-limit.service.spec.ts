@@ -895,19 +895,76 @@ describe('AIRateLimitService', () => {
       expect(result.allowed).toBe(true);
     });
 
-    it('routes a byok-turn side cost to the dedicated byok counter, never the shared key', async () => {
-      await gated.recordSideCost({
-        userId: 'u1',
-        action: 'agent_web_search',
-        model: 'tavily',
-        costUsd: 0.008,
-        byokTurn: true,
+    describe('recordSideCost', () => {
+      const EMBEDDING_COST = {
+        action: 'embedding',
+        model: 'voyage',
+        costUsd: 0.001,
+      };
+
+      it('routes a byok-billed side cost to the byok ceiling, never the platform budget', async () => {
+        const execution = createExecutionContext({
+          tier: 'byok',
+          billing: { kind: 'byok', provider: 'anthropic' },
+        });
+        await gated.recordSideCost(execution, EMBEDDING_COST);
+        expect(provider.recordByokCost).toHaveBeenCalledWith('user-1', 0.001);
+        expect(provider.correctUsage).not.toHaveBeenCalled();
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+          expect.objectContaining({ byok: false })
+        );
       });
 
-      expect(provider.recordByokCost).toHaveBeenCalledWith('u1', 0.008);
-      expect(provider.correctUsage).not.toHaveBeenCalled();
-      expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
-        expect.objectContaining({
+      it('charges an anonymous side cost to the user and the IP subject, counting global spend once', async () => {
+        const execution = createExecutionContext({
+          tier: 'anonymous',
+          clientIp: '203.0.113.9',
+        });
+        await gated.recordSideCost(execution, EMBEDDING_COST);
+        expect(provider.correctUsage).toHaveBeenNthCalledWith(
+          1,
+          'user-1',
+          0,
+          0,
+          0,
+          0.001
+        );
+        expect(provider.correctUsage).toHaveBeenNthCalledWith(
+          2,
+          expect.stringMatching(/^ip:[0-9a-f]{16}$/),
+          0,
+          0,
+          0,
+          0.001,
+          false
+        );
+      });
+
+      it('charges only the user subject for an anonymous caller without an IP', async () => {
+        await gated.recordSideCost(
+          createExecutionContext({ tier: 'anonymous' }),
+          EMBEDDING_COST
+        );
+        expect(provider.correctUsage).toHaveBeenCalledTimes(1);
+      });
+
+      it('routes a platform-billed side cost into the shared cost key and records a server-paid row', async () => {
+        await gated.recordSideCost(free('u1'), {
+          action: 'agent_web_search',
+          model: 'tavily',
+          costUsd: 0.008,
+        });
+
+        expect(provider.correctUsage).toHaveBeenCalledOnce();
+        expect(provider.correctUsage).toHaveBeenCalledWith(
+          'u1',
+          0,
+          0,
+          0,
+          0.008
+        );
+        expect(provider.recordByokCost).not.toHaveBeenCalled();
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith({
           userId: 'u1',
           action: 'agent_web_search',
           model: 'tavily',
@@ -915,57 +972,38 @@ describe('AIRateLimitService', () => {
           inputTokens: 0,
           outputTokens: 0,
           byok: false,
-        })
-      );
-    });
-
-    it('routes a server-turn side cost into the shared cost key', async () => {
-      await gated.recordSideCost({
-        userId: 'u1',
-        action: 'embedding',
-        model: 'voyage-3.5',
-        costUsd: 0.002,
-        byokTurn: false,
+        });
       });
 
-      expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
-      expect(provider.recordByokCost).not.toHaveBeenCalled();
-    });
+      it('still persists the PG row when Redis routing fails', async () => {
+        vi.mocked(provider.correctUsage).mockRejectedValue(
+          new Error('redis down')
+        );
 
-    it('still persists the PG row when Redis routing fails', async () => {
-      vi.mocked(provider.correctUsage).mockRejectedValue(
-        new Error('redis down')
-      );
+        await expect(
+          gated.recordSideCost(free('u1'), EMBEDDING_COST)
+        ).resolves.toBeUndefined();
 
-      await expect(
-        gated.recordSideCost({
-          userId: 'u1',
-          action: 'embedding',
-          model: 'voyage-3.5',
-          costUsd: 0.002,
-          byokTurn: false,
-        })
-      ).resolves.toBeUndefined();
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalled();
+      });
 
-      expect(mockUsageRepo.recordUsage).toHaveBeenCalled();
-    });
+      it('never throws when the PG write fails and still routes the Redis cost', async () => {
+        vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
+          new Error('db down')
+        );
 
-    it('never throws when the PG write fails and still routes the Redis cost', async () => {
-      vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
-        new Error('db down')
-      );
+        await expect(
+          gated.recordSideCost(free('u1'), EMBEDDING_COST)
+        ).resolves.toBeUndefined();
 
-      await expect(
-        gated.recordSideCost({
-          userId: 'u1',
-          action: 'embedding',
-          model: 'voyage-3.5',
-          costUsd: 0.002,
-          byokTurn: false,
-        })
-      ).resolves.toBeUndefined();
-
-      expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
+        expect(provider.correctUsage).toHaveBeenCalledWith(
+          'u1',
+          0,
+          0,
+          0,
+          0.001
+        );
+      });
     });
   });
 

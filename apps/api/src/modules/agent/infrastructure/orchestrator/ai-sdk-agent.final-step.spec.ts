@@ -3,6 +3,7 @@ import { MockLanguageModelV4 } from 'ai/test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createMockConfig } from '../../../ai/testing/create-mock-config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import type { AgentEvent } from '../../domain/agent-event';
@@ -27,6 +28,7 @@ const NOTE = {
 const ANSWER = 'Take one step at a time.';
 const INPUT: AgentRunInput = {
   userId: 'fixture-user',
+  execution: createExecutionContext({ userId: 'fixture-user' }),
   model: MODEL,
   messages: [{ role: 'user', content: 'Read note n1 and summarize it.' }],
   maxSteps: 2,

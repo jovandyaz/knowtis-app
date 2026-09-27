@@ -39,7 +39,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
   }
 
   build(ctx: AgentToolContext): ToolSet {
-    const { userId, proposals } = ctx;
+    const { userId, execution, proposals } = ctx;
     return {
       proposeCreateNote: tool({
         description:
@@ -129,7 +129,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
         execute: async ({ noteId, title, contentMarkdown }) => {
           const r = await wrapUpstreamFailure(
             () =>
-              this.proposalBuilder.buildUpdate(userId, noteId, {
+              this.proposalBuilder.buildUpdate(execution, noteId, {
                 ...(title !== undefined && { title }),
                 ...(contentMarkdown !== undefined && { contentMarkdown }),
               }),

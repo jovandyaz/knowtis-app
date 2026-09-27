@@ -1,5 +1,6 @@
 import type { ReasoningEffort } from '@knowtis/shared-types';
 
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import type { AgentEvent, AgentSource } from '../agent-event';
 import type { AgentMessage } from '../agent-message';
 
@@ -9,6 +10,8 @@ export interface AgentResumeContext {
 
 export interface AgentRunInput {
   readonly userId: string;
+  /** The turn's billed context; the tools' side costs are charged to it. */
+  readonly execution: AiExecutionContext;
   readonly messages: readonly AgentMessage[];
   readonly model: string;
   readonly maxSteps: number;

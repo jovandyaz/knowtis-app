@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { AiSdkAgentOrchestrator } from '../../../agent/infrastructure/orchestrator/ai-sdk-agent.orchestrator';
 import { AIConfigService } from '../../application/services/ai-config.service';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { createTestChain } from '../../testing/create-test-chain';
 import { AISDKProvider } from './ai-sdk.provider';
@@ -165,6 +166,7 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
     const events = [];
     for await (const event of orchestrator.run({
       userId: 'local-user',
+      execution: createExecutionContext({ userId: 'local-user' }),
       messages: [{ role: 'user', content: 'test' }],
       model: PRIMARY,
       maxSteps: 3,
@@ -238,6 +240,7 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
         const events = [];
         for await (const event of orchestrator.run({
           userId: 'local-user',
+          execution: createExecutionContext({ userId: 'local-user' }),
           messages: [{ role: 'user', content: 'test' }],
           model: PRIMARY,
           maxSteps: 3,

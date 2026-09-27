@@ -1,6 +1,7 @@
 import type { ToolSet } from 'ai';
 import { describe, expect, it } from 'vitest';
 
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import type {
   AgentToolContext,
   AgentToolGroup,
@@ -28,7 +29,7 @@ function ctx(phase: AgentToolPhase): AgentToolContext {
   return {
     userId: 'u1',
     phase,
-    byokTurn: false,
+    execution: createExecutionContext({ userId: 'u1' }),
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),

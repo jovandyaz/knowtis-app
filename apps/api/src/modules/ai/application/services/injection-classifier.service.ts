@@ -7,6 +7,7 @@ import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { buildRedactedTelemetry } from '../../infrastructure/providers/redacted-telemetry';
@@ -65,7 +66,10 @@ export class InjectionClassifierService {
   ) {}
 
   /** Fail-open: any classifier error returns { safe: true } so infrastructure failures never block a turn. */
-  async classify(text: string, userId: string): Promise<{ safe: boolean }> {
+  async classify(
+    text: string,
+    execution: AiExecutionContext
+  ): Promise<{ safe: boolean }> {
     const model = this.configService.get('AI_GUARD_CLASSIFIER_MODEL');
     try {
       // Content carrying the fence literal could "close" the data block and
@@ -76,25 +80,27 @@ export class InjectionClassifierService {
       // Deliberately a single direct SDK call: the fallback chain shares the
       // copilot's cooldown tracker, so classifier timeout bursts would open
       // the breaker for main agent turns.
-      const result = await withTraceIdentity({ userId }, () =>
-        generateText({
-          model: this.providerRegistry.languageModel(model),
-          instructions: CLASSIFIER_SYSTEM_PROMPT,
-          prompt: `---BEGIN DATA---\n${fenced}\n---END DATA---`,
-          output: Output.object({ schema: verdictSchema }),
-          maxRetries: 0,
-          abortSignal: AbortSignal.timeout(CLASSIFIER_TIMEOUT_MS),
-          // recordContent stays false unconditionally: the input is suspected-hostile
-          // and must never reach traces.
-          telemetry: buildRedactedTelemetry('injection-classifier', false),
-        })
+      const result = await withTraceIdentity(
+        { userId: execution.subject.userId },
+        () =>
+          generateText({
+            model: this.providerRegistry.languageModel(model),
+            instructions: CLASSIFIER_SYSTEM_PROMPT,
+            prompt: `---BEGIN DATA---\n${fenced}\n---END DATA---`,
+            output: Output.object({ schema: verdictSchema }),
+            maxRetries: 0,
+            abortSignal: AbortSignal.timeout(CLASSIFIER_TIMEOUT_MS),
+            // recordContent stays false unconditionally: the input is suspected-hostile
+            // and must never reach traces.
+            telemetry: buildRedactedTelemetry('injection-classifier', false),
+          })
       );
-      this.recordCost(userId, model, result.usage);
+      this.recordCost(execution, model, result.usage);
       return { safe: !result.output.injection };
     } catch (error) {
       const usage = settledUsage(error);
       if (usage) {
-        this.recordCost(userId, model, usage);
+        this.recordCost(execution, model, usage);
       }
       this.logger.warn(`Injection classifier failed open: ${reasonOf(error)}`);
       return { safe: true };
@@ -104,7 +110,7 @@ export class InjectionClassifierService {
   // Never throws — cost accounting is a side effect that must not flip a
   // classifier verdict into fail-open when pricing lookup or recording fails.
   private recordCost(
-    userId: string,
+    execution: AiExecutionContext,
     model: string,
     usage:
       | { inputTokens?: number | undefined; outputTokens?: number | undefined }
@@ -119,12 +125,10 @@ export class InjectionClassifierService {
         },
         this.modelCatalog.getPricing(model)
       ).costUsd;
-      void this.rateLimit.recordSideCost({
-        userId,
+      void this.rateLimit.recordSideCost(execution, {
         action: 'injection_classifier',
         model,
         costUsd,
-        byokTurn: false,
       });
     } catch (error) {
       this.logger.warn(

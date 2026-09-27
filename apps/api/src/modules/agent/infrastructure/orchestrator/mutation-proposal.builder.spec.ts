@@ -15,6 +15,7 @@ import {
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { editorSchema } from '../../../notes/infrastructure/html-to-yjs';
 import { AgentErrors } from '../../domain/agent-errors';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
@@ -79,6 +80,7 @@ function readingStatus(contentStatus: NoteContentStatus): RetrievalPort {
 }
 
 const USER = 'u1';
+const EXECUTION = createExecutionContext({ userId: USER });
 
 describe('MutationProposalBuilder', () => {
   it('builds a create proposal with sanitized html', async () => {
@@ -95,7 +97,7 @@ describe('MutationProposalBuilder', () => {
 
   it('builds an update proposal capturing baseVersion', async () => {
     const builder = new MutationProposalBuilder(makeRetrieval());
-    const r = await builder.buildUpdate(USER, 'note-1', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {
       contentMarkdown: '## New',
     });
     expect(r.isOk()).toBe(true);
@@ -115,7 +117,7 @@ describe('MutationProposalBuilder', () => {
 
   it('rejects an update with no changes', async () => {
     const builder = new MutationProposalBuilder(makeRetrieval());
-    const r = await builder.buildUpdate(USER, 'note-1', {});
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {});
     expect(r.isErr()).toBe(true);
   });
 
@@ -149,7 +151,7 @@ describe('MutationProposalBuilder', () => {
     const retrieval = makeRetrieval();
     const builder = new MutationProposalBuilder(retrieval);
 
-    const r = await builder.buildUpdate(USER, 'note-1', { title: 'New' });
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', { title: 'New' });
 
     expect(retrieval.getBody).toHaveBeenCalledWith(USER, 'note-1');
     expect(retrieval.getById).not.toHaveBeenCalled();
@@ -161,11 +163,12 @@ describe('MutationProposalBuilder', () => {
     const retrieval = makeRetrieval();
     const builder = new MutationProposalBuilder(retrieval);
 
-    const r = await builder.buildUpdate(USER, 'note-1', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {
       contentMarkdown: '## New',
     });
 
-    expect(retrieval.getById).toHaveBeenCalledWith(USER, 'note-1');
+    expect(retrieval.getById).toHaveBeenCalledWith(EXECUTION, 'note-1');
+    expect(retrieval.getBody).toHaveBeenCalledWith(USER, 'note-1');
     expect(r.isOk()).toBe(true);
   });
 
@@ -177,7 +180,7 @@ describe('MutationProposalBuilder', () => {
     async (contentStatus, hint) => {
       const builder = new MutationProposalBuilder(readingStatus(contentStatus));
 
-      const r = await builder.buildUpdate(USER, 'note-1', {
+      const r = await builder.buildUpdate(EXECUTION, 'note-1', {
         contentMarkdown: '## New',
       });
 
@@ -189,7 +192,7 @@ describe('MutationProposalBuilder', () => {
   it('refuses a title-and-content update on a truncated note whole', async () => {
     const builder = new MutationProposalBuilder(readingStatus('truncated'));
 
-    const r = await builder.buildUpdate(USER, 'note-1', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {
       title: 'New',
       contentMarkdown: '## New',
     });
@@ -202,7 +205,7 @@ describe('MutationProposalBuilder', () => {
       makeRetrieval({ getBody: vi.fn().mockResolvedValue(null) })
     );
 
-    const r = await builder.buildUpdate(USER, 'note-x', { title: 'x' });
+    const r = await builder.buildUpdate(EXECUTION, 'note-x', { title: 'x' });
 
     expect(r._unsafeUnwrapErr().code).toBe('AGENT_NOTE_NOT_FOUND');
   });
@@ -212,7 +215,7 @@ describe('MutationProposalBuilder', () => {
       makeRetrieval({ getById: vi.fn().mockResolvedValue(null) })
     );
 
-    const r = await builder.buildUpdate(USER, 'note-x', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-x', {
       contentMarkdown: '## New',
     });
 
@@ -241,7 +244,7 @@ describe('MutationProposalBuilder', () => {
         })
       );
 
-      const r = await builder.buildUpdate(USER, 'note-1', input);
+      const r = await builder.buildUpdate(EXECUTION, 'note-1', input);
 
       expect(r._unsafeUnwrapErr()).toEqual(
         AgentErrors.editWouldLoseContent(['content the server cannot render'])
@@ -256,7 +259,9 @@ describe('MutationProposalBuilder', () => {
       })
     );
 
-    const renamed = await builder.buildUpdate(USER, 'note-1', { title: 'New' });
+    const renamed = await builder.buildUpdate(EXECUTION, 'note-1', {
+      title: 'New',
+    });
     const shared = await builder.buildShare(
       USER,
       'note-1',
@@ -300,7 +305,7 @@ describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
   it('refuses to rewrite a note holding an AI block the model was never shown', async () => {
     const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
 
-    const r = await builder.buildUpdate(USER, 'note-1', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {
       contentMarkdown: 'New text.',
     });
 
@@ -320,7 +325,7 @@ describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
         storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`)
       );
 
-      const r = await builder.buildUpdate(USER, 'note-1', input);
+      const r = await builder.buildUpdate(EXECUTION, 'note-1', input);
 
       expect(r._unsafeUnwrapErr()).toEqual(
         AgentErrors.aiBlockWouldBeLost([AI_BLOCK_NAME])
@@ -331,7 +336,7 @@ describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
   it('still renames a note holding an AI block', async () => {
     const { builder } = editing(storedHtml(`<p>Old text.</p>${AI_BLOCK_HTML}`));
 
-    const r = await builder.buildUpdate(USER, 'note-1', { title: 'New' });
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', { title: 'New' });
 
     expect(r._unsafeUnwrap().summary).toBe('Update "Old": title → "New"');
   });
@@ -341,7 +346,7 @@ describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
       storedHtml(markdownToNoteHtml('# Trip\n\n| Day |\n| --- |\n| 1 |'))
     );
 
-    const r = await builder.buildUpdate(USER, 'note-1', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {
       contentMarkdown: '## New',
     });
 
@@ -356,7 +361,7 @@ describe('MutationProposalBuilder.buildUpdate over the stored body', () => {
     );
     const { builder } = editing(bodyHtml);
 
-    const r = await builder.buildUpdate(USER, 'note-1', {
+    const r = await builder.buildUpdate(EXECUTION, 'note-1', {
       contentMarkdown: `${htmlToMarkdown(bodyHtml)}\n\nNew text.`,
     });
 
@@ -986,7 +991,7 @@ describe('a copilot edit over every construct the note schema defines', () => {
         noteHtml([block, paragraph(text('Old text.'))])
       );
 
-      const r = await builder.buildUpdate(USER, 'note-1', {
+      const r = await builder.buildUpdate(EXECUTION, 'note-1', {
         contentMarkdown: 'New text.',
       });
 

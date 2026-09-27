@@ -11,6 +11,7 @@ import {
 } from '@knowtis/editor-schema/server';
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import { AgentErrors, type AgentDomainError } from '../../domain/agent-errors';
 import {
   applyNoteEdits,
@@ -89,7 +90,7 @@ export class MutationProposalBuilder {
   }
 
   async buildUpdate(
-    userId: string,
+    execution: AiExecutionContext,
     noteId: string,
     input: UpdateProposalInput
   ): Promise<Result<ProposedMutation, AgentDomainError>> {
@@ -101,14 +102,17 @@ export class MutationProposalBuilder {
     let contentHtml: string | undefined;
     let note: NoteSubject;
     if (input.contentMarkdown === undefined) {
-      const body = await this.retrieval.getBody(userId, noteId);
+      const body = await this.retrieval.getBody(
+        execution.subject.userId,
+        noteId
+      );
       if (!body) {
         return err(AgentErrors.noteNotFound(noteId));
       }
       note = body;
     } else {
       const rewritten = await this.rewrite(
-        userId,
+        execution,
         noteId,
         input.contentMarkdown
       );
@@ -139,18 +143,18 @@ export class MutationProposalBuilder {
   }
 
   private async rewrite(
-    userId: string,
+    execution: AiExecutionContext,
     noteId: string,
     contentMarkdown: string
   ): Promise<Result<RewrittenNote, AgentDomainError>> {
-    const read = await this.retrieval.getById(userId, noteId);
+    const read = await this.retrieval.getById(execution, noteId);
     if (!read) {
       return err(AgentErrors.noteNotFound(noteId));
     }
     if (read.contentStatus !== 'complete') {
       return err(AgentErrors.wholeBodyUpdateRefused(read.contentStatus));
     }
-    const body = await this.retrieval.getBody(userId, noteId);
+    const body = await this.retrieval.getBody(execution.subject.userId, noteId);
     if (!body) {
       return err(AgentErrors.noteNotFound(noteId));
     }

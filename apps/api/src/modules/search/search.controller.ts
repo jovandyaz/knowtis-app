@@ -113,7 +113,7 @@ export class SearchController {
       RATE_LIMIT_STATUS_MAP
     );
     try {
-      const hits = await this.retrieval.search(user.id, query.q);
+      const hits = await this.retrieval.search(execution, query.q);
       return { hits: hits.slice(0, query.limit ?? DEFAULT_LIMIT) };
     } finally {
       await this.rateLimit.releaseReservation(execution, reservation);

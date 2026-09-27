@@ -84,7 +84,11 @@ describe('SearchController', () => {
 
     const result = await controller.search(user, dto, req);
 
-    expect(search).toHaveBeenCalledWith('user-1', 'quarterly report');
+    const [execution] = rateLimit.checkLimit.mock.calls[0];
+    expect(execution).toMatchObject({
+      subject: { userId: 'user-1', clientIp: '203.0.113.9' },
+    });
+    expect(search).toHaveBeenCalledWith(execution, 'quarterly report');
     expect(result).toEqual({ hits: [hit('a'), hit('b')] });
   });
 

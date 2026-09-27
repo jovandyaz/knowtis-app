@@ -351,7 +351,7 @@ export class SuggestOrganizationHandler {
           noteId: note.id,
           bucket: result.object.bucket,
           tags: this.toSuggestedTags(result.object.tags, params.known),
-          relatedNotes: await this.findRelated(execution.subject.userId, {
+          relatedNotes: await this.findRelated(execution, {
             id: note.id,
             title,
             content,
@@ -433,7 +433,7 @@ export class SuggestOrganizationHandler {
    * for a note id and a hallucinated one is structurally impossible.
    */
   private async findRelated(
-    userId: string,
+    execution: AiExecutionContext,
     note: { id: string; title: string; content: string }
   ): Promise<RelatedNote[]> {
     const query = (note.title.trim() || note.content.trim()).slice(
@@ -445,7 +445,7 @@ export class SuggestOrganizationHandler {
     }
 
     try {
-      const hits = await this.retrieval.search(userId, query);
+      const hits = await this.retrieval.search(execution, query);
       return hits
         .filter((hit) => hit.id !== note.id)
         .slice(0, MAX_RELATED_NOTES)

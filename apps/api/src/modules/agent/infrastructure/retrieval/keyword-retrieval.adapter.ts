@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import type { NoteEntity } from '../../../notes/domain/entities/note.entity';
 import {
   NOTE_READ_REPOSITORY,
@@ -46,7 +47,11 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     private readonly injectionGuard: InjectionGuardService
   ) {}
 
-  async search(userId: string, query: string): Promise<NoteHit[]> {
+  async search(
+    execution: AiExecutionContext,
+    query: string
+  ): Promise<NoteHit[]> {
+    const { userId } = execution.subject;
     const branded = this.brandUser(userId, 'search');
     if (!branded) {
       return [];
@@ -65,7 +70,11 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     return [];
   }
 
-  async getById(userId: string, noteId: string): Promise<AgentNote | null> {
+  async getById(
+    execution: AiExecutionContext,
+    noteId: string
+  ): Promise<AgentNote | null> {
+    const { userId } = execution.subject;
     const branded = this.brandUser(userId, 'getById');
     if (!branded) {
       return null;
@@ -77,7 +86,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     const html = this.currentBody(note, 'getById') ?? note.content;
     return {
       ...toNoteHit(note, userId),
-      ...(await this.toToolContent(html, userId, note.id)),
+      ...(await this.toToolContent(html, execution, note.id)),
       createdAt: note.createdAt.toISOString(),
     };
   }
@@ -140,7 +149,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
 
   private async toToolContent(
     html: string,
-    userId: string,
+    execution: AiExecutionContext,
     noteId: string
   ): Promise<ToolContent> {
     const markdown = this.bound(htmlToMarkdown(html));
@@ -154,7 +163,7 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
         ? [markdown.text]
         : [markdown.text, plain.text];
     for (const text of views) {
-      const verdict = await this.injectionGuard.guard(text, userId);
+      const verdict = await this.injectionGuard.guard(text, execution);
       if (!verdict.safe) {
         this.logger.warn({
           event: 'agent.retrieval.content_blocked',
