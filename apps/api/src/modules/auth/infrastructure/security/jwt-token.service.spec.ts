@@ -33,6 +33,7 @@ interface DecodedClaims {
   aud?: string;
   sub?: string;
   iat?: number;
+  jti?: string;
 }
 
 describe('JwtTokenService', () => {
@@ -169,6 +170,27 @@ describe('JwtTokenService', () => {
       const result = await service.verifyRefreshToken(
         generated._unsafeUnwrap().refreshToken
       );
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('should accept refresh tokens minted without a jti', async () => {
+      const legacyToken = await jwtService.signAsync(
+        {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'user@example.com',
+        },
+        {
+          secret: REFRESH_SECRET,
+          expiresIn: '7d',
+          algorithm: 'HS256',
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE_REFRESH,
+        }
+      );
+      expect(jwtService.decode<DecodedClaims>(legacyToken).jti).toBeUndefined();
+
+      const result = await service.verifyRefreshToken(legacyToken);
+
       expect(result.isOk()).toBe(true);
     });
 

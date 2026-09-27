@@ -40,6 +40,8 @@ import { JwtTokenService } from '../infrastructure/security/jwt-token.service';
 const USER_ID = '00000000-0000-4000-8000-000000000641';
 const FAMILY_ID = '00000000-0000-4000-8000-000000000642';
 const EMAIL = `e-${USER_ID}@test.local`;
+// The handler prunes rotated sessions of every user, so the clock must predate any real row.
+const CLOCK_BEFORE_REAL_SESSIONS = new Date('2000-01-01T00:00:00.000Z');
 const ONE_SECOND_MS = 1_000;
 const REFRESHED = 'REFRESHED';
 const REUSE_DETECTED = AuthErrorCodes.TOKEN_REUSE_DETECTED;
@@ -127,7 +129,7 @@ describe.runIf(DB_AVAILABLE)('Refresh token rotation (database)', () => {
   });
 
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
+    vi.useFakeTimers({ toFake: ['Date'], now: CLOCK_BEFORE_REAL_SESSIONS });
   });
 
   afterEach(async () => {
