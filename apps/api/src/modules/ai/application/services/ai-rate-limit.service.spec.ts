@@ -1229,6 +1229,62 @@ describe('AIRateLimitService', () => {
       );
     });
 
+    it('still reconciles every reserved subject when the usage row fails, then rejects', async () => {
+      vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
+        new Error('db down')
+      );
+
+      await expect(
+        svc.recordUsage(
+          anonymous('anon-1', CLIENT_IP),
+          { estimate: estimate(200), reservedIpSubject: IP_SUBJECT },
+          AGENT_USAGE
+        )
+      ).rejects.toThrow('db down');
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        200,
+        150,
+        0,
+        0.4
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
+    it('charges an anonymous caller and its IP subject for usage metered with nothing reserved', async () => {
+      await svc.recordUsage(anonymous('anon-1', CLIENT_IP), null, AGENT_USAGE);
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        0,
+        150,
+        0,
+        0.4
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        0,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
     it('releases both subjects when releasing a dual reservation', async () => {
       await svc.releaseReservation(anonymous('anon-1', CLIENT_IP), {
         estimate: estimate(200),

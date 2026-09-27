@@ -48,6 +48,13 @@ export interface SideCost {
   readonly costUsd: number;
 }
 
+interface UsageCorrection {
+  readonly estimatedTokens: number;
+  readonly actualTokens: number;
+  readonly estimatedCostUsd: number;
+  readonly actualCostUsd: number;
+}
+
 interface Gate {
   readonly allowed: boolean;
   readonly reason?: string;
@@ -384,24 +391,17 @@ export class AIRateLimitService {
       }
       return;
     }
-    const ipSubject = this.anonymousIpSubject(
-      execution.tier === 'anonymous',
-      execution.subject.clientIp
+    await this.correctSubjects(
+      userId,
+      this.unreservedIpSubject(execution),
+      {
+        estimatedTokens: 0,
+        actualTokens: 0,
+        estimatedCostUsd: 0,
+        actualCostUsd: cost.costUsd,
+      },
+      SIDE_COST_ROUTING_FAILED
     );
-    for (const subject of ipSubject ? [userId, ipSubject] : [userId]) {
-      try {
-        await this.rateLimitProvider.correctUsage(
-          subject,
-          0,
-          0,
-          0,
-          cost.costUsd,
-          ...(subject === ipSubject ? ([false] as const) : [])
-        );
-      } catch (error) {
-        this.logger.warn(SIDE_COST_ROUTING_FAILED, error);
-      }
-    }
   }
 
   /** The daily token and cost allowance the caller's tier grants. */
@@ -421,72 +421,96 @@ export class AIRateLimitService {
     execution: AiExecutionContext,
     reservation: Reservation
   ): Promise<void> {
-    if (execution.billing.kind === 'byok' || !this.rateLimitProvider) {
+    if (execution.billing.kind === 'byok') {
       return;
     }
-    for (const subject of this.reservedSubjects(execution, reservation)) {
-      try {
-        await this.rateLimitProvider.correctUsage(
-          subject,
-          reservation.estimate.tokens,
-          0,
-          reservation.estimate.costUsd,
-          0,
-          ...(subject === reservation.reservedIpSubject
-            ? ([false] as const)
-            : [])
-        );
-      } catch (error) {
-        this.logger.warn('Redis reservation release failed', error);
-      }
-    }
+    await this.correctSubjects(
+      execution.subject.userId,
+      reservation.reservedIpSubject,
+      {
+        estimatedTokens: reservation.estimate.tokens,
+        actualTokens: 0,
+        estimatedCostUsd: reservation.estimate.costUsd,
+        actualCostUsd: 0,
+      },
+      'Redis reservation release failed'
+    );
   }
 
+  /**
+   * With a `null` reservation the usage is charged as actual-only, to the same
+   * subjects `recordSideCost` charges. Rejects when the usage row fails, but
+   * only after every subject is reconciled.
+   */
   async recordUsage(
     execution: AiExecutionContext,
     reservation: Reservation | null,
     usage: MeteredUsage
   ): Promise<void> {
-    const byok = execution.billing.kind === 'byok';
-    await this.usageRepository.recordUsage({
-      userId: execution.subject.userId,
-      ...usage,
-      byok,
-    });
+    const row = { userId: execution.subject.userId, ...usage };
     // A byok-billed call never reserved against the budget (see checkLimit), so
     // there is nothing to correct or warn about.
-    if (byok) {
+    if (execution.billing.kind === 'byok') {
+      await this.usageRepository.recordUsage({ ...row, byok: true });
       return;
     }
     const estimate = reservation?.estimate ?? { tokens: 0, costUsd: 0 };
-    if (this.rateLimitProvider) {
-      for (const subject of this.reservedSubjects(execution, reservation)) {
-        try {
-          await this.rateLimitProvider.correctUsage(
-            subject,
-            estimate.tokens,
-            usage.inputTokens + usage.outputTokens,
-            estimate.costUsd,
-            usage.costUsd,
-            ...(subject === reservation?.reservedIpSubject
-              ? ([false] as const)
-              : [])
-          );
-        } catch (error) {
-          this.logger.warn('Redis usage correction failed', error);
-        }
-      }
+    try {
+      await this.usageRepository.recordUsage({ ...row, byok: false });
+    } finally {
+      // Reconciled even when the usage row fails: otherwise the estimate stays
+      // reserved and the actual spend never reaches the global breaker.
+      await this.correctSubjects(
+        row.userId,
+        reservation
+          ? reservation.reservedIpSubject
+          : this.unreservedIpSubject(execution),
+        {
+          estimatedTokens: estimate.tokens,
+          actualTokens: usage.inputTokens + usage.outputTokens,
+          estimatedCostUsd: estimate.costUsd,
+          actualCostUsd: usage.costUsd,
+        },
+        'Redis usage correction failed'
+      );
     }
-    await this.maybeWarnBudget(execution.subject.userId);
+    await this.maybeWarnBudget(row.userId);
   }
 
-  private reservedSubjects(
-    execution: AiExecutionContext,
-    reservation: Reservation | null
-  ): string[] {
-    return reservation?.reservedIpSubject
-      ? [execution.subject.userId, reservation.reservedIpSubject]
-      : [execution.subject.userId];
+  // Each subject is corrected on its own so one Redis failure cannot skip the
+  // other; the IP subject never counts global spend, which the user side did.
+  private async correctSubjects(
+    userId: string,
+    ipSubject: string | undefined,
+    correction: UsageCorrection,
+    failureMessage: string
+  ): Promise<void> {
+    if (!this.rateLimitProvider) {
+      return;
+    }
+    for (const subject of ipSubject ? [userId, ipSubject] : [userId]) {
+      try {
+        await this.rateLimitProvider.correctUsage(
+          subject,
+          correction.estimatedTokens,
+          correction.actualTokens,
+          correction.estimatedCostUsd,
+          correction.actualCostUsd,
+          ...(subject === ipSubject ? ([false] as const) : [])
+        );
+      } catch (error) {
+        this.logger.warn(failureMessage, error);
+      }
+    }
+  }
+
+  private unreservedIpSubject(
+    execution: AiExecutionContext
+  ): string | undefined {
+    return this.anonymousIpSubject(
+      execution.tier === 'anonymous',
+      execution.subject.clientIp
+    );
   }
 
   private async maybeWarnBudget(userId: string): Promise<void> {

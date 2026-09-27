@@ -228,11 +228,22 @@ describe('MemoryExtractionTask', () => {
   });
 
   it('skips the run while global spend is exhausted, marking nothing', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const debug = vi
+      .spyOn(Logger.prototype, 'debug')
+      .mockImplementation(() => undefined);
     const { task, rateLimit, conversations, structured } = make();
     rateLimit.isGlobalSpendExhausted.mockResolvedValue(true);
 
     await task.reconcile();
 
+    expect(debug).toHaveBeenCalledWith({
+      event: 'agent.memory.extraction_skipped',
+      reason: 'global_breaker',
+    });
+    expect(warn).not.toHaveBeenCalled();
     expect(conversations.findExtractable).not.toHaveBeenCalled();
     expect(structured.generateStructuredOutput).not.toHaveBeenCalled();
     expect(conversations.markExtracted).not.toHaveBeenCalled();

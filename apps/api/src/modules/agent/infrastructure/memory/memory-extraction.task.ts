@@ -92,7 +92,7 @@ export class MemoryExtractionTask {
   private async reconcileLocked(): Promise<void> {
     try {
       if (await this.rateLimit.isGlobalSpendExhausted()) {
-        this.logger.warn({
+        this.logger.debug({
           event: 'agent.memory.extraction_skipped',
           reason: 'global_breaker',
         });
