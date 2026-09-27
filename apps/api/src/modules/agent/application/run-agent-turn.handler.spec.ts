@@ -11,6 +11,7 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
+  type ByokProvider,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 
@@ -19,9 +20,15 @@ import type { AIConfigService } from '../../ai/application/services/ai-config.se
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import type { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrorCodes, AIErrors } from '../../ai/domain/errors/ai.errors';
+import {
+  PLATFORM_BILLING,
+  type AiCaller,
+} from '../../ai/domain/execution-context/ai-execution-context';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
@@ -84,20 +91,21 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordUsage: vi.fn().mockResolvedValue(undefined),
     releaseReservation: vi.fn().mockResolvedValue(undefined),
     recordSideCost: vi.fn().mockResolvedValue(undefined),
-    turnLimits: vi.fn().mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
+    dailyAllowance: vi
+      .fn()
+      .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
   } as unknown as AIRateLimitService;
+  const settings: Record<string, number> = {
+    AI_AGENT_MAX_MS: 120000,
+    AI_AGENT_HISTORY_LIMIT: 40,
+    AI_MEMORY_RETRIEVAL_K: 6,
+    AI_MEMORY_SIMILARITY_MIN: 0.2,
+    AI_AGENT_MAX_STEPS: 8,
+    AI_AGENT_BYOK_MAX_STEPS: 20,
+    AI_AGENT_TURN_TOKEN_BUDGET: 150000,
+  };
   const config = {
-    get: vi.fn((k: string) =>
-      k === 'AI_AGENT_MAX_MS'
-        ? 120000
-        : k === 'AI_AGENT_HISTORY_LIMIT'
-          ? 40
-          : k === 'AI_MEMORY_RETRIEVAL_K'
-            ? 6
-            : k === 'AI_MEMORY_SIMILARITY_MIN'
-              ? 0.2
-              : 0
-    ),
+    get: vi.fn((k: string) => settings[k] ?? 0),
   } as unknown as ConfigService<EnvConfig, true>;
   const orchestrator = orchestratorYielding(
     over.events ?? [
@@ -168,7 +176,6 @@ function makeModelPreference(
     assertSelectable: vi.fn(),
     isSelectable: vi.fn().mockReturnValue(true),
     isSelectableWith: vi.fn().mockResolvedValue(true),
-    byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
     reasoningFor: vi.fn().mockResolvedValue(null),
   } as unknown as ModelPreferenceService;
 }
@@ -191,6 +198,23 @@ function makeTurnEffort(effort: ReasoningEffort = 'medium') {
   return {
     resolve: vi.fn().mockResolvedValue(effort),
   } as unknown as TurnEffortResolver;
+}
+
+function makeTierResolver(byokProviders: readonly ByokProvider[] = []) {
+  return {
+    resolve: vi.fn(async (caller: AiCaller) =>
+      createExecutionContext({
+        userId: caller.userId,
+        tier: caller.isAnonymous
+          ? 'anonymous'
+          : byokProviders.length > 0
+            ? 'byok'
+            : 'free',
+        byokProviders,
+        ...(caller.clientIp ? { clientIp: caller.clientIp } : {}),
+      })
+    ),
+  } as unknown as TierResolver;
 }
 
 function makeAIConfig(
@@ -225,7 +249,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -281,7 +306,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onThinking = vi.fn();
     const onChunk = vi.fn();
@@ -326,7 +352,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -360,7 +387,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -403,7 +431,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -442,7 +471,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -495,7 +525,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -537,7 +568,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -573,7 +605,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const error = vi.fn();
 
@@ -606,7 +639,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const error = vi.fn();
 
@@ -649,7 +683,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const done = vi.fn();
 
@@ -694,7 +729,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const done = vi.fn();
 
@@ -743,7 +779,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const done = vi.fn();
 
@@ -789,7 +826,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -826,7 +864,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -863,7 +902,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -910,7 +950,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -941,7 +982,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const controller = new AbortController();
     controller.abort();
@@ -976,7 +1018,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1015,7 +1058,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onConversation = vi.fn();
 
@@ -1065,7 +1109,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onConversation = vi.fn();
     const onDone = vi.fn();
@@ -1104,7 +1149,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1152,7 +1198,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onProposal = vi.fn();
 
@@ -1198,7 +1245,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onDone = vi.fn();
 
@@ -1237,7 +1285,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.resumeTurn(
@@ -1281,7 +1330,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1320,7 +1370,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1369,7 +1420,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onDone = vi.fn();
 
@@ -1422,7 +1474,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1456,7 +1509,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1494,7 +1548,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1535,7 +1590,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -1578,7 +1634,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1618,7 +1675,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1669,7 +1727,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -1717,7 +1776,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onDone = vi.fn();
 
@@ -1759,7 +1819,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -1801,7 +1862,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -1819,142 +1881,216 @@ describe('RunAgentTurnHandler', () => {
     expect(appended.messages).toEqual([{ role: 'user', content: 'hola' }]);
   });
 
-  it('forwards the anonymous turn limits from the rate limiter to the orchestrator', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    vi.mocked(rateLimit.turnLimits).mockReturnValue({
-      maxSteps: 8,
-      maxTurnTokens: 33000,
-    });
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
+  describe('execution context', () => {
+    const PLATFORM_MODEL = 'openai:gpt-4o-mini';
+    const ANTHROPIC_MODEL = SERVED_MODEL;
 
-    await handler.execute(
-      {
+    function makeContextHandler() {
+      const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+      const conversations = makeConversations();
+      const byok = makeByok();
+      vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+      const tierResolver = makeTierResolver();
+      const handler = new RunAgentTurnHandler(
+        orchestrator,
+        rateLimit,
+        config,
+        pendingStore,
+        createTestCatalog(),
+        conversations,
+        makeMemory(),
+        makeEmbed(),
+        makeModelPreference(),
+        byok,
+        makeGuard(),
+        makeAIConfig(),
+        makeTurnEffort(),
+        tierResolver
+      );
+      const callbacks = {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      };
+      return {
+        handler,
+        orchestrator,
+        rateLimit,
+        conversations,
+        byok,
+        tierResolver,
+        callbacks,
+      };
+    }
+
+    function turnInput(
+      over: {
+        model?: string;
+        isAnonymous?: boolean;
+        effort?: ReasoningEffort;
+      } = {}
+    ) {
+      return {
         userId: USER,
         turnId: TURN_ID,
         message: { content: 'hi' },
-        isAnonymous: true,
-      },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
+        ...over,
+      };
+    }
 
-    expect(rateLimit.turnLimits).toHaveBeenCalledWith({
-      isAnonymous: true,
-      isByok: false,
+    it('gives a registered turn the configured steps and budget', async () => {
+      const { handler, orchestrator, callbacks } = makeContextHandler();
+
+      await handler.execute(turnInput(), callbacks);
+
+      expect(orchestrator.run).toHaveBeenCalledWith(
+        expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
+      );
     });
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ maxSteps: 8, maxTurnTokens: 33000 })
-    );
-  });
 
-  it('forwards the registered turn limits from the rate limiter to the orchestrator', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
+    it('keeps platform limits for a byok-tier caller whose turn runs on a platform model', async () => {
+      const {
+        handler,
+        orchestrator,
+        rateLimit,
+        byok,
+        tierResolver,
+        callbacks,
+      } = makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockResolvedValue(
+        createExecutionContext({
+          userId: USER,
+          tier: 'byok',
+          byokProviders: ['anthropic'],
+        })
+      );
 
-    await handler.execute(
-      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
+      await handler.execute(turnInput({ model: PLATFORM_MODEL }), callbacks);
 
-    expect(rateLimit.turnLimits).toHaveBeenCalledWith({
-      isAnonymous: false,
-      isByok: false,
+      expect(orchestrator.run).toHaveBeenCalledWith(
+        expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
+      );
+      expect(byok.getApiKey).not.toHaveBeenCalled();
+      expect(rateLimit.checkLimit).toHaveBeenCalledWith(
+        USER,
+        expect.any(Number),
+        false,
+        false,
+        expect.any(Number),
+        undefined
+      );
     });
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
-    );
-  });
 
-  it('forwards the BYOK turn limits when the turn bills the user key', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    vi.mocked(rateLimit.turnLimits).mockReturnValue({
-      maxSteps: 20,
-      maxTurnTokens: Number.POSITIVE_INFINITY,
+    it('bills the key, lifts the budget and widens the steps when the model runs on the caller key', async () => {
+      const {
+        handler,
+        orchestrator,
+        rateLimit,
+        byok,
+        tierResolver,
+        callbacks,
+      } = makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockResolvedValue(
+        createExecutionContext({
+          userId: USER,
+          tier: 'byok',
+          byokProviders: ['anthropic'],
+        })
+      );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(orchestrator.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          maxSteps: 20,
+          maxTurnTokens: Number.POSITIVE_INFINITY,
+        })
+      );
+      expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'anthropic');
+      expect(rateLimit.checkLimit).toHaveBeenCalledWith(
+        USER,
+        expect.any(Number),
+        false,
+        true,
+        expect.any(Number),
+        undefined
+      );
     });
-    const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set(['google'])
-    );
-    const byok = makeByok();
-    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      modelPreference,
-      byok,
-      makeGuard(),
-      makeAIConfig(),
-      makeTurnEffort()
-    );
 
-    await handler.execute(
-      {
-        userId: USER,
-        turnId: TURN_ID,
-        message: { content: 'hi' },
-        model: 'google:gemini-2.0-flash',
-      },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
+    it('clamps an anonymous turn to the anonymous daily token share', async () => {
+      const { handler, orchestrator, tierResolver, callbacks } =
+        makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockResolvedValue(
+        createExecutionContext({ userId: USER, tier: 'anonymous' })
+      );
 
-    expect(rateLimit.turnLimits).toHaveBeenCalledWith({
-      isAnonymous: false,
-      isByok: true,
+      await handler.execute(turnInput({ isAnonymous: true }), callbacks);
+
+      expect(orchestrator.run).toHaveBeenCalledWith(
+        expect.objectContaining({ maxSteps: 8, maxTurnTokens: 33000 })
+      );
     });
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maxSteps: 20,
-        maxTurnTokens: Number.POSITIVE_INFINITY,
-      })
-    );
+
+    it('fails the turn before any row or reservation when tier resolution fails', async () => {
+      const { handler, rateLimit, conversations, tierResolver, callbacks } =
+        makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockRejectedValue(new Error('db down'));
+
+      await handler.execute(turnInput(), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'AI provider error: Model resolution failed',
+        })
+      );
+      expect(conversations.create).not.toHaveBeenCalled();
+      expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    });
+
+    it('fails a resume before loading the conversation when tier resolution fails', async () => {
+      const { handler, rateLimit, conversations, tierResolver, callbacks } =
+        makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockRejectedValue(new Error('db down'));
+
+      await handler.resumeTurn(
+        {
+          userId: USER,
+          turnId: TURN_ID,
+          conversationId: 'conv-1',
+          resume: { outcome: 'created' },
+        },
+        callbacks
+      );
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'AI provider error: Model resolution failed',
+        })
+      );
+      expect(conversations.findByIdForUser).not.toHaveBeenCalled();
+      expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    });
+
+    it('rejects effort on an anonymous turn by policy, before any conversation row', async () => {
+      const { handler, conversations, tierResolver, callbacks } =
+        makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockResolvedValue(
+        createExecutionContext({ userId: USER, tier: 'anonymous' })
+      );
+
+      await handler.execute(
+        turnInput({ isAnonymous: true, effort: 'high' }),
+        callbacks
+      );
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'effort is not available on anonymous turns',
+        })
+      );
+      expect(conversations.create).not.toHaveBeenCalled();
+    });
   });
 
   it('estimates tokens with the real tokenizer plus a fixed prompt-overhead margin', async () => {
@@ -1972,7 +2108,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2011,7 +2148,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -2059,7 +2197,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -2098,7 +2237,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -2179,7 +2319,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2271,7 +2412,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2351,7 +2493,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2427,7 +2570,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2475,7 +2619,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      turnEffort
+      turnEffort,
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2496,10 +2641,11 @@ describe('RunAgentTurnHandler', () => {
     const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
     await expect(effortFor?.(SERVED_MODEL)).resolves.toBe('max');
     expect(turnEffort.resolve).toHaveBeenCalledWith({
-      userId: USER,
+      execution: expect.objectContaining({
+        tier: 'free',
+        billing: PLATFORM_BILLING,
+      }),
       model: SERVED_MODEL,
-      isByok: false,
-      isAnonymous: undefined,
       requested: 'xhigh',
     });
   });
@@ -2507,9 +2653,6 @@ describe('RunAgentTurnHandler', () => {
   it('grades a server-billed rescue model as free even when the user keys its provider', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set([providerOf(USER_KEYED_MODEL)])
-    );
     const turnEffort = makeTurnEffort('high');
     const handler = new RunAgentTurnHandler(
       orchestrator,
@@ -2524,7 +2667,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      turnEffort
+      turnEffort,
+      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider])
     );
 
     await handler.execute(
@@ -2545,10 +2689,8 @@ describe('RunAgentTurnHandler', () => {
     const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
     await effortFor?.(USER_KEYED_MODEL);
     expect(turnEffort.resolve).toHaveBeenCalledWith({
-      userId: USER,
+      execution: expect.objectContaining({ billing: PLATFORM_BILLING }),
       model: USER_KEYED_MODEL,
-      isByok: false,
-      isAnonymous: undefined,
       requested: 'max',
     });
   });
@@ -2556,9 +2698,6 @@ describe('RunAgentTurnHandler', () => {
   it("grades every model of a byok turn against the user's own key", async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set([providerOf(USER_KEYED_MODEL)])
-    );
     vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
@@ -2576,7 +2715,8 @@ describe('RunAgentTurnHandler', () => {
       byok,
       makeGuard(),
       makeAIConfig(),
-      turnEffort
+      turnEffort,
+      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider])
     );
 
     await handler.execute(
@@ -2598,10 +2738,10 @@ describe('RunAgentTurnHandler', () => {
     const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
     await effortFor?.(USER_KEYED_MODEL);
     expect(turnEffort.resolve).toHaveBeenCalledWith({
-      userId: USER,
+      execution: expect.objectContaining({
+        billing: { kind: 'byok', provider: providerOf(USER_KEYED_MODEL) },
+      }),
       model: USER_KEYED_MODEL,
-      isByok: true,
-      isAnonymous: undefined,
       requested: 'max',
     });
   });
@@ -2622,7 +2762,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      turnEffort
+      turnEffort,
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2643,10 +2784,11 @@ describe('RunAgentTurnHandler', () => {
     const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
     await effortFor?.(SERVED_MODEL);
     expect(turnEffort.resolve).toHaveBeenCalledWith({
-      userId: USER,
+      execution: expect.objectContaining({
+        tier: 'anonymous',
+        billing: PLATFORM_BILLING,
+      }),
       model: SERVED_MODEL,
-      isByok: false,
-      isAnonymous: true,
       requested: undefined,
     });
   });
@@ -2673,7 +2815,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      turnEffort
+      turnEffort,
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2714,7 +2857,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -2751,7 +2895,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig('medium', ['fireworks', 'together'], ['parasail']),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2787,7 +2932,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig('medium', []),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -2824,7 +2970,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       aiConfig,
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await expect(
@@ -2859,7 +3006,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       guard,
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -2902,7 +3050,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       guard,
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -2939,7 +3088,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -2977,7 +3127,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
     const onConversation = vi.fn();
@@ -3024,7 +3175,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -3063,7 +3215,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(false),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -3110,7 +3263,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onDone = vi.fn();
 
@@ -3157,7 +3311,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3194,7 +3349,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -3231,7 +3387,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3267,7 +3424,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const done = vi.fn();
     await handler.execute(
@@ -3307,7 +3465,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -3358,7 +3517,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     await handler.execute(
       {
@@ -3398,7 +3558,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const error = vi.fn();
     await handler.execute(
@@ -3446,7 +3607,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onProposal = vi.fn();
 
@@ -3489,7 +3651,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -3522,7 +3685,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3571,7 +3735,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3613,7 +3778,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3655,7 +3821,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -3694,7 +3861,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3739,7 +3907,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3792,7 +3961,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.resumeTurn(
@@ -3832,7 +4002,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -3883,7 +4054,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -3923,9 +4095,6 @@ describe('RunAgentTurnHandler', () => {
       },
     ]);
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set(['google'])
-    );
     vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
@@ -3942,7 +4111,8 @@ describe('RunAgentTurnHandler', () => {
       byok,
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver(['google'])
     );
 
     await handler.execute(
@@ -3973,9 +4143,6 @@ describe('RunAgentTurnHandler', () => {
   it('fails closed without server billing when an advertised BYOK key is unavailable', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set(['google'])
-    );
     vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue(null);
@@ -3992,7 +4159,8 @@ describe('RunAgentTurnHandler', () => {
       byok,
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver(['google'])
     );
     const onError = vi.fn();
 
@@ -4037,7 +4205,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -4082,7 +4251,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -4120,7 +4290,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -4161,7 +4332,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
 
     await handler.execute(
@@ -4196,9 +4368,6 @@ describe('RunAgentTurnHandler', () => {
       }),
     };
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set(['google'])
-    );
     vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
@@ -4215,7 +4384,8 @@ describe('RunAgentTurnHandler', () => {
       byok,
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver(['google'])
     );
     const onError = vi.fn();
 
@@ -4252,7 +4422,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -4292,7 +4463,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -4337,7 +4509,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
     const onProposal = vi.fn();
@@ -4385,7 +4558,8 @@ describe('RunAgentTurnHandler', () => {
       makeByok(),
       makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const onError = vi.fn();
 
@@ -4454,7 +4628,8 @@ describe('RunAgentTurnHandler', () => {
         makeByok(),
         guard,
         makeAIConfig(),
-        makeTurnEffort()
+        makeTurnEffort(),
+        makeTierResolver()
       );
       return { conversations, orchestrator, handler };
     }
@@ -4766,7 +4941,8 @@ describe('RunAgentTurnHandler', () => {
         makeByok(),
         makeGuard(),
         makeAIConfig(),
-        makeTurnEffort()
+        makeTurnEffort(),
+        makeTierResolver()
       );
       return {
         conversations,
@@ -4969,7 +5145,8 @@ describe('RunAgentTurnHandler replay guard', () => {
       makeByok(),
       guard,
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -5528,7 +5705,8 @@ describe('RunAgentTurnHandler turn identity', () => {
       makeByok(),
       over.guard ?? makeGuard(),
       makeAIConfig(),
-      makeTurnEffort()
+      makeTurnEffort(),
+      makeTierResolver()
     );
     const callbacks = {
       onChunk: vi.fn(),

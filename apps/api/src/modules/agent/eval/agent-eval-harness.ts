@@ -19,6 +19,7 @@ import { DatabaseModule } from '../../../database';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { FallbackChainService } from '../../ai/infrastructure/providers/fallback-chain.service';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { AgentModule } from '../agent.module';
 import type { AgentMessage } from '../domain/agent-message';
 import {
@@ -155,7 +156,10 @@ export class AgentEvalHarness {
         openRouterIgnoredProviders: () =>
           aiConfig.getOpenRouterIgnoredProviders(),
         effortFor: (model) =>
-          turnEffort.resolve({ userId: EVAL_USER_ID, model, isByok: false }),
+          turnEffort.resolve({
+            execution: createExecutionContext({ userId: EVAL_USER_ID }),
+            model,
+          }),
       };
       const maxSteps = config.get('AI_AGENT_MAX_STEPS');
       const maxTurnTokens = config.get('AI_AGENT_TURN_TOKEN_BUDGET');

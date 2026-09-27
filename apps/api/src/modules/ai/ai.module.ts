@@ -34,6 +34,7 @@ import {
 } from './application/services/prompt-loader.service';
 import { SelectableModelsService } from './application/services/selectable-models.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
+import { TierResolver } from './application/services/tier-resolver.service';
 import { TurnEffortResolver } from './application/services/turn-effort.resolver';
 import { VoiceTranscriptionService } from './application/services/voice-transcription.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
@@ -106,6 +107,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     SelectableModelsService,
     ModelPreferenceService,
     TurnEffortResolver,
+    TierResolver,
     {
       provide: USER_AI_SETTINGS_REPOSITORY,
       useClass: DrizzleUserAiSettingsRepository,
@@ -175,6 +177,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AIConfigService,
     ModelPreferenceService,
     TurnEffortResolver,
+    TierResolver,
     AIMetricsService,
     AIOrchestrator,
     AIRateLimitService,

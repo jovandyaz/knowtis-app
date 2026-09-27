@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
+import { providerOf } from '@knowtis/ai-gateway';
+import type {
+  ByokProvider,
+  ModelReasoning,
+  ReasoningEffort,
+} from '@knowtis/shared-types';
 
+import { createExecutionContext } from '../../testing/create-execution-context';
 import type { AIConfigService } from './ai-config.service';
 import type { ModelPreferenceService } from './model-preference.service';
 import { TurnEffortResolver } from './turn-effort.resolver';
@@ -11,6 +17,19 @@ const MODEL = 'openrouter:z-ai/glm-5.3';
 const DIRECT_MODEL = 'anthropic:claude-opus-5';
 const UNDECLARED_DIRECT_MODEL = 'anthropic:claude-haiku-4-5';
 const GLOBAL_DEFAULT: ReasoningEffort = 'medium';
+const FREE_CALLER = createExecutionContext({ userId: USER });
+const ANONYMOUS_CALLER = createExecutionContext({
+  userId: USER,
+  tier: 'anonymous',
+});
+
+function billedToKey(model: string) {
+  return createExecutionContext({
+    userId: USER,
+    tier: 'byok',
+    billing: { kind: 'byok', provider: providerOf(model) as ByokProvider },
+  });
+}
 
 function make(declared: ModelReasoning | null) {
   const aiConfig = {
@@ -34,7 +53,7 @@ describe('TurnEffortResolver', () => {
     });
 
     await expect(
-      resolver.resolve({ userId: USER, model: MODEL, isByok: true })
+      resolver.resolve({ execution: billedToKey(MODEL), model: MODEL })
     ).resolves.toBe(GLOBAL_DEFAULT);
     expect(modelPreference.reasoningFor).not.toHaveBeenCalled();
   });
@@ -47,9 +66,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: billedToKey(MODEL),
         model: MODEL,
-        isByok: true,
         requested: 'max',
       })
     ).resolves.toBe('max');
@@ -63,11 +81,26 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: FREE_CALLER,
         model: MODEL,
-        isByok: false,
         requested: 'max',
       })
+    ).resolves.toBe('high');
+  });
+
+  it('treats a byok-tier caller on a platform model as the free audience', async () => {
+    const { resolver } = make({
+      levels: ['low', 'medium', 'high', 'xhigh'],
+      mandatory: false,
+    });
+    const execution = createExecutionContext({
+      userId: USER,
+      tier: 'byok',
+      byokProviders: ['anthropic'],
+    });
+
+    await expect(
+      resolver.resolve({ execution, model: MODEL, requested: 'max' })
     ).resolves.toBe('high');
   });
 
@@ -79,9 +112,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: FREE_CALLER,
         model: MODEL,
-        isByok: false,
         requested: 'low',
       })
     ).resolves.toBe('low');
@@ -92,9 +124,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: FREE_CALLER,
         model: UNDECLARED_DIRECT_MODEL,
-        isByok: false,
       })
     ).resolves.toBeUndefined();
   });
@@ -106,7 +137,7 @@ describe('TurnEffortResolver', () => {
     });
 
     await expect(
-      resolver.resolve({ userId: USER, model: DIRECT_MODEL, isByok: false })
+      resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
     ).resolves.toBe(GLOBAL_DEFAULT);
   });
 
@@ -114,7 +145,7 @@ describe('TurnEffortResolver', () => {
     const { resolver } = make({ levels: ['low', 'high'], mandatory: true });
 
     await expect(
-      resolver.resolve({ userId: USER, model: DIRECT_MODEL, isByok: false })
+      resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
     ).resolves.toBeUndefined();
   });
 
@@ -122,7 +153,7 @@ describe('TurnEffortResolver', () => {
     const { resolver, modelPreference } = make(null);
 
     await expect(
-      resolver.resolve({ userId: USER, model: MODEL, isByok: false })
+      resolver.resolve({ execution: FREE_CALLER, model: MODEL })
     ).resolves.toBe(GLOBAL_DEFAULT);
     expect(modelPreference.reasoningFor).not.toHaveBeenCalled();
   });
@@ -135,9 +166,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: billedToKey(DIRECT_MODEL),
         model: DIRECT_MODEL,
-        isByok: true,
         requested: 'xhigh',
       })
     ).resolves.toBeUndefined();
@@ -156,10 +186,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: ANONYMOUS_CALLER,
         model: DIRECT_MODEL,
-        isByok: false,
-        isAnonymous: true,
       })
     ).resolves.toBe(GLOBAL_DEFAULT);
     expect(modelPreference.reasoningFor).toHaveBeenCalledWith(DIRECT_MODEL, {
@@ -173,9 +201,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: FREE_CALLER,
         model: MODEL,
-        isByok: false,
         requested: 'high',
       })
     ).resolves.toBe(GLOBAL_DEFAULT);
@@ -186,9 +213,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: billedToKey(MODEL),
         model: MODEL,
-        isByok: true,
         requested: 'xhigh',
       })
     ).resolves.toBe(GLOBAL_DEFAULT);
@@ -199,9 +225,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: billedToKey(MODEL),
         model: MODEL,
-        isByok: true,
         requested: 'high',
       })
     ).resolves.toBe(GLOBAL_DEFAULT);
@@ -212,9 +237,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: billedToKey(MODEL),
         model: MODEL,
-        isByok: true,
         requested: 'high',
       })
     ).resolves.toBe(GLOBAL_DEFAULT);
@@ -231,9 +255,8 @@ describe('TurnEffortResolver', () => {
       .mockImplementation(() => undefined);
 
     await resolver.resolve({
-      userId: USER,
+      execution: billedToKey(MODEL),
       model: MODEL,
-      isByok: true,
       requested: 'max',
     });
 
@@ -261,9 +284,8 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({
-        userId: USER,
+        execution: FREE_CALLER,
         model: MODEL,
-        isByok: false,
         requested: 'xhigh',
       })
     ).resolves.toBe('high');
@@ -289,9 +311,8 @@ describe('TurnEffortResolver', () => {
       .mockImplementation(() => undefined);
 
     await resolver.resolve({
-      userId: USER,
+      execution: FREE_CALLER,
       model: MODEL,
-      isByok: false,
       requested: 'high',
     });
 
