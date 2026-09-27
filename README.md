@@ -20,7 +20,7 @@ Knowtis is a local-first, real-time notes workspace where AI is a collaborator r
 
 ## Features
 
-**Write.** A Tiptap editor with slash commands, ghost-text suggestions, and inline AI actions to rewrite, summarize, translate, or expand a selection. Voice notes are recorded and transcribed in place.
+**Write.** A Tiptap editor with slash commands, ghost-text suggestions, and inline AI actions to rewrite, summarize, translate, or adjust the tone of a selection. Voice notes are recorded and transcribed in place.
 
 **Collaborate.** Yjs CRDT sync with live presence and remote cursors. Notes persist to IndexedDB, so editing works offline and reconciles when you reconnect.
 
@@ -58,7 +58,7 @@ pnpm dev:all    # API :3333, Notes :4200, Backoffice :4400
 apps/
   api/            NestJS backend: auth, notes, collaboration, AI, copilot agent, MCP keys
   notes/          React frontend: editor, collaboration, study tools
-  backoffice/     Admin surface: users, feature flags, AI config and metrics
+  backoffice/     Admin surface: users, audit log, AI config and metrics
   mcp/            Standalone MCP server (Hono)
 libs/
   api-client/     Typed HTTP and WebSocket client

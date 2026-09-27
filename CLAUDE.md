@@ -144,7 +144,7 @@ pnpm run setup   # scaffolds apps/{api,notes,mcp}/.env, pnpm install, docker com
 
 `setup` is a pnpm built-in, so the `run` is required. Full walkthrough: [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
 
-> AI features require `OPENROUTER_API_KEY` in `apps/api/.env` (the default models are OpenRouter-hosted; Anthropic/OpenAI/Google keys are optional) and the `ai_enabled` flag toggled on in the DB. Bring-your-own-key (BYOK) additionally needs `BYOK_ENCRYPTION_KEY` (32-byte base64) and the `agent_byok` flag. See [docs/AI.md](docs/AI.md).
+> AI features require `OPENROUTER_API_KEY` in `apps/api/.env` (the default models are OpenRouter-hosted; Anthropic/OpenAI/Google keys are optional) and the `ai_enabled` flag toggled on in the DB — it's the only feature flag left in the system. Bring-your-own-key (BYOK) additionally needs `BYOK_ENCRYPTION_KEY` (32-byte base64); there is no separate BYOK flag. See [docs/AI.md](docs/AI.md).
 
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->

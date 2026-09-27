@@ -23,7 +23,7 @@ Authorization: Bearer <oauth-access-token | knowtis_mcp_...>
 
 Without a valid Bearer token the server replies `HTTP 401` with a `WWW-Authenticate: Bearer` challenge (carrying `resource_metadata` when OAuth is enabled, so clients can start discovery).
 
-> **OAuth availability.** The authorization server is gated by the `mcp_oauth` feature flag and is **on by default in every environment** (seeded `true` by migration `0020_enable_mcp_oauth`). Discovery resolves and "click to connect" works as soon as the OAuth env is set (`OAUTH_ISSUER`, `OAUTH_JWKS`, `OAUTH_COOKIE_KEYS`, `MCP_RESOURCE_URL` on the API; `MCP_OAUTH_ISSUER`, `MCP_RESOURCE_URL` on the MCP service). If those are unset the AS stays dormant and clients fall back to API-key auth, even with the flag on.
+> **OAuth availability.** The authorization server is purely env-gated — there is no feature flag. Discovery resolves and "click to connect" works as soon as the OAuth env is set (`OAUTH_ISSUER`, `OAUTH_JWKS`, `OAUTH_COOKIE_KEYS`, `MCP_RESOURCE_URL` on the API; `MCP_OAUTH_ISSUER`, `MCP_RESOURCE_URL` on the MCP service). If those are unset the AS stays dormant and clients fall back to API-key auth.
 
 ## Connect with OAuth
 
@@ -42,7 +42,7 @@ The access token is an **ES256 JWT** whose audience (`aud`) is the MCP resource 
 
 ### Discovery URLs
 
-Authorization server (Knowtis API) — served at the **root** of the API origin, `404` while the flag is off:
+Authorization server (Knowtis API) — served at the **root** of the API origin, `404` while the OAuth env is not configured:
 
 ```text
 https://api.knowtis.app/.well-known/oauth-authorization-server
@@ -79,7 +79,7 @@ Refresh tokens **rotate on every use with no grace window**: replaying an alread
 
 ### Clients
 
-**Claude Desktop** — custom connectors support OAuth natively. Add a connector (**Settings > Connectors > Add custom connector**) pointing at `https://mcp.knowtis.app/mcp`. Claude Desktop runs discovery, opens a browser for consent, and stores the tokens. **No `Authorization` header, no `mcp-remote` bridge** — the bridge in [API keys](#api-keys-headless--advanced) is only needed when the flag is off or for API-key auth.
+**Claude Desktop** — custom connectors support OAuth natively. Add a connector (**Settings > Connectors > Add custom connector**) pointing at `https://mcp.knowtis.app/mcp`. Claude Desktop runs discovery, opens a browser for consent, and stores the tokens. **No `Authorization` header, no `mcp-remote` bridge** — the bridge in [API keys](#api-keys-headless--advanced) is only needed when OAuth is not configured or for API-key auth.
 
 **claude.ai** (web) — custom connectors connect over CIMD: claude.ai identifies itself by its own metadata URL, so there is no manual client registration. Add a custom connector with `https://mcp.knowtis.app/mcp`, then complete the browser consent.
 
@@ -95,11 +95,11 @@ Run `/mcp` in a session and choose **Authenticate** — Claude Code opens the br
 
 ### What you see
 
-The consent page (served by the Knowtis web app at `/oauth/consent?uid=...`) shows the **client name**, the **redirect host** the code will be sent to, and the **list of scopes** requested. CIMD clients (identified by an HTTPS `client_id`) get a "verified by URL" badge. Anonymous sessions cannot authorize — you are routed through login first. Approving creates a grant; denying aborts with `access_denied`.
+The consent page (served by the Knowtis web app at `/oauth/consent?uid=...`) shows the **client name**, the **redirect host** the code will be sent to, and the **list of scopes** requested. CIMD clients (identified by an HTTPS `client_id`) get a "verified by URL" badge. Anonymous sessions cannot authorize — you are routed through login first — and an unverified signed-in account is refused with `403 EMAIL_NOT_VERIFIED` on Approve (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). Approving creates a grant; denying aborts with `access_denied`.
 
 ### Managing connections (revocation)
 
-Authorized apps appear in the Knowtis web app under **Settings > Connected apps** — each row shows the app, its scopes, and when it was authorized, with a **Revoke** button. (The section is hidden while the `mcp_oauth` flag is off.)
+Authorized apps appear in the Knowtis web app under **Settings > Connected apps** — each row shows the app, its scopes, and when it was authorized, with a **Revoke** button. (The section hides itself when the server reports OAuth as not configured — `isOauthDisabledError`.)
 
 **Revocation semantics — access tokens are stateless 1h; revoking a grant cuts future refresh, but an already-issued access token works until its exp.** Revoking an app deletes its grant and refresh token at the authorization server, so the client can no longer mint new tokens. But MCP access tokens are stateless ES256 JWTs validated by signature and audience — the MCP server never calls back to the authorization server per request — so an access token issued **before** the revocation keeps working until it expires, up to one hour later. Revocation guarantees no tokens beyond that one-hour window; to cut off a leaked token sooner you must wait out its `exp`.
 
@@ -116,7 +116,7 @@ claude mcp add --transport http knowtis https://mcp.knowtis.app/mcp \
 
 ### Claude Desktop
 
-With the `mcp_oauth` flag on, prefer the **native custom connector** in [Connect with OAuth](#connect-with-oauth) — no bridge required. Use the bridge below only for API-key auth (or while OAuth is dark): Claude Desktop's custom-connector UI has no field for an `Authorization` header, so an API key must be injected through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Add this to `claude_desktop_config.json` (**Settings > Developer > Edit Config**) and restart Claude Desktop:
+When OAuth is configured, prefer the **native custom connector** in [Connect with OAuth](#connect-with-oauth) — no bridge required. Use the bridge below only for API-key auth (or when the OAuth env is not set on both services): Claude Desktop's custom-connector UI has no field for an `Authorization` header, so an API key must be injected through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Add this to `claude_desktop_config.json` (**Settings > Developer > Edit Config**) and restart Claude Desktop:
 
 ```json
 {
@@ -185,7 +185,7 @@ npx mcp-remote https://mcp.knowtis.app/mcp \
 
 ## API Key Management
 
-API keys are managed from the Knowtis web app under **Settings > Integrations**, or via the API directly. All key-management endpoints require a session JWT (`JwtAuthGuard`); an MCP-sourced token (API-key exchange or OAuth) is refused with `403` by `McpScopeGuard`, because `McpKeysController` declares no `@RequireMcpScope` — keys cannot manage keys. Creating a key also requires a verified, non-anonymous account when the `email_verification_gate` flag is on (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)).
+API keys are managed from the Knowtis web app under **Settings > Integrations**, or via the API directly. All key-management endpoints require a session JWT (`JwtAuthGuard`); an MCP-sourced token (API-key exchange or OAuth) is refused with `403` by `McpScopeGuard`, because `McpKeysController` declares no `@RequireMcpScope` — keys cannot manage keys. Creating a key also requires a verified, non-anonymous account (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)).
 
 ### Create a key
 
@@ -340,7 +340,7 @@ The read and the write are two requests with no version check between them, so a
 
 `list-notes` orders by recency and paginates with an **opaque cursor**: when more notes remain, the result carries a `nextCursor` to pass to the next call. An invalid or missing cursor starts from the first page.
 
-`search-notes` delegates to the API's hybrid retrieval endpoint (`GET /api/v1/search` — full-text + semantic ranking server-side) and returns the most relevant notes the user can access. Use it to find notes by meaning, then `get-note` to read one.
+`search-notes` delegates to the API's hybrid retrieval endpoint (`GET /api/v1/search` — full-text + semantic ranking server-side) and returns the most relevant notes the user can access. Use it to find notes by meaning, then `get-note` to read one. The endpoint shares the caller's AI rate limit and daily budget (`AIRateLimitService.checkLimit`), so a search can return `429` when that budget or the RPM limit is exhausted; `formatError` relays the API's rate-limit reason text verbatim rather than a generic message.
 
 `delete-note` calls `DELETE /api/v1/notes/:id`, which is a **soft delete**: the API stamps `notes.deleted_at` and the note disappears from every listing and access check, but the owner can bring it back with `restore-note`, which calls `POST /api/v1/notes/:id/restore` and returns the restored note. Restoring a note that is not deleted (or not owned) is a `404`.
 
@@ -460,13 +460,7 @@ To exercise the full OAuth flow (e.g. with the [MCP Inspector](https://github.co
    MCP_RESOURCE_URL=http://localhost:3334/mcp
    ```
 
-3. **Flag is on by default** (seeded `true` by `0020_enable_mcp_oauth`). If a legacy DB still has it off, enable it:
-
-   ```sql
-   UPDATE feature_flags SET enabled = true WHERE key = 'mcp_oauth';
-   ```
-
-`MCP_RESOURCE_URL` must be byte-identical on both sides (no trailing slash) — it is the token audience, and any mismatch fails verification.
+There is no flag to enable — once both env sets above are present, the authorization server mounts on the next boot. `MCP_RESOURCE_URL` must be byte-identical on both sides (no trailing slash) — it is the token audience, and any mismatch fails verification.
 
 ### Build, test, lint
 
@@ -547,7 +541,7 @@ Tests sit in `__tests__/` directories next to the code they cover (`src/__tests_
 
 The MCP server runs as its own Railway service (`knowtis-mcp`), declared next to the API in [`.railway/railway.ts`](../.railway/railway.ts): built from [`apps/mcp/Dockerfile`](../apps/mcp/Dockerfile) (`pnpm nx build mcp`, then a production install of only the packages the bundle imports, pinned to the root lockfile by `tools/prune-runtime-deps.mjs`), start `node dist/apps/mcp/index.js`, healthcheck `/health`, restart on failure with 3 retries. `NODE_ENV=production`, `PORT=3334` and `MCP_ALLOWED_HOSTS=mcp.knowtis.app` are declared in that file; `API_INTERNAL_URL`, the OAuth pair below and the rest are `preserve()`: managed in Railway and referenced from the file, never written to source. `API_INTERNAL_URL` is a Railway service variable pointing at the API's private-network endpoint (`knowtisapp` in `.railway/railway.ts`, e.g. `http://knowtisapp.railway.internal:3333`).
 
-To enable OAuth in production, set on the **MCP** service `MCP_OAUTH_ISSUER=https://api.knowtis.app` and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`, and on the **API** service `OAUTH_ISSUER=https://api.knowtis.app`, `OAUTH_JWKS` (a **prod-generated** keypair — never the dev one), `OAUTH_COOKIE_KEYS`, and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`. The resource server can be deployed with its env set while `mcp_oauth` stays off (it is env-gated); flip the flag to turn on the authorization server.
+To enable OAuth in production, set on the **MCP** service `MCP_OAUTH_ISSUER=https://api.knowtis.app` and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`, and on the **API** service `OAUTH_ISSUER=https://api.knowtis.app`, `OAUTH_JWKS` (a **prod-generated** keypair — never the dev one), `OAUTH_COOKIE_KEYS`, and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`. Both are purely env-gated: the resource server activates as soon as its env is set, and the authorization server mounts as soon as the API's env is set — no flag involved.
 
 ### Rotate OAuth signing keys
 

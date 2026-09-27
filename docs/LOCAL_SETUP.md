@@ -81,7 +81,7 @@ pnpm nx build design-system
 Two things trip up first-time local runs:
 
 1. **Settings is a modal, not a route.** There is no `/settings/integrations` URL — open it from the user menu (bottom-left avatar → **Settings**). The modal only renders for a signed-in, **non-anonymous** user.
-2. **Register sends a 6-digit code, and local dev prints it instead of mailing it.** After you register, the app shows "Check your email". With `EMAIL_PROVIDER=console` (the `.env.example` default) the API terminal logs the whole message at `DEBUG`, including `Your verification code is 123456` and the `/verify-email?token=…` link — type the code there, or later from the banner's **Verify now**. Settings does not depend on it; only the actions behind the `email_verification_gate` flag do (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)), and that flag is seeded off. If the log is gone, the DB shortcut still works:
+2. **Register sends a 6-digit code, and local dev prints it instead of mailing it.** After you register, the app shows "Check your email". With `EMAIL_PROVIDER=console` (the `.env.example` default) the API terminal logs the whole message at `DEBUG`, including `Your verification code is 123456` and the `/verify-email?token=…` link — type the code there, or later from the banner's **Verify now**. Settings does not depend on it; only the actions the [verified-identity gate](PERMISSIONS.md#verified-identity-gate) covers do (widening a note's link or its sharing — never narrowing — plus MCP keys, BYOK keys, approving an OAuth app connection), and that gate is always enforced. If the log is gone, the DB shortcut still works:
 
 ```bash
 docker exec knowtis-postgres psql -U knowtis -d knowtis \
@@ -92,13 +92,13 @@ The banner goes away on the next profile load — sign out and in to see it imme
 
 ## AI / copilot (optional)
 
-Nothing AI works out of the box: `ai_enabled` has no seeded row and a missing flag reads **off**, so turn on the ones you need from the backoffice **AI Config** page (or `PUT /api/v1/flags/:key` with an admin JWT).
+Nothing AI works out of the box: `ai_enabled` has no seeded row and a missing flag reads **off**, so turn it on from the backoffice **AI Config** page (or `PUT /api/v1/flags/:key` with an admin JWT) — it's the only flag left; every other AI/agent capability below is gated purely by whether its env var is set.
 
 - **`OPENROUTER_API_KEY`** is the one key the defaults need: the shipped code defaults (`AI_SETTING_DEFAULTS`) are all `openrouter:*` models, so without it (or a key stored from the backoffice) no default model can serve a turn. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` are optional and only matter if you select models from those providers.
-- **`ANTHROPIC_API_KEY`** is required for the Anthropic-gated suites of `pnpm nx run api:eval` — the harness drives `anthropic:claude-sonnet-5` and its `llm-rubric` grader is Anthropic regardless of `AI_EVAL_MODEL`. Each suite self-skips without its provider key, so a run without it exits 0 having done nothing. `VOYAGE_API_KEY` and `TAVILY_API_KEY` light up the retrieval/memory and web-search suites.
-- **`BYOK_ENCRYPTION_KEY`** (32 bytes, base64) is only needed if you turn `agent_byok` on.
+- **`ANTHROPIC_API_KEY`** is required for the Anthropic-gated suites of `pnpm nx run api:eval` — the harness drives `anthropic:claude-sonnet-5` and its `llm-rubric` grader is Anthropic regardless of `AI_EVAL_MODEL`. Each suite self-skips without its provider key, so a run without it exits 0 having done nothing. `VOYAGE_API_KEY` and `TAVILY_API_KEY` light up the retrieval/memory and web-search suites — and the copilot's hybrid retrieval, long-term memory and web tools, which run whenever those keys are present.
+- **`BYOK_ENCRYPTION_KEY`** (32 bytes, base64) is only needed if you want to test bring-your-own-key.
 
-Every AI variable, its default, and the flag it pairs with is in [AI.md → Environment Variables](AI.md#environment-variables).
+Every AI variable and its default is in [AI.md → Environment Variables](AI.md#environment-variables); which capability each one gates is in [AI.md → Feature flag](AI.md#feature-flag).
 
 ## Connecting an MCP client locally
 
@@ -106,7 +106,7 @@ The MCP server exposes your notes to AI clients. There are two auth paths.
 
 ### API key (works out of the box locally)
 
-OAuth "click to connect" is **on by default** (migration `0020_enable_mcp_oauth.sql` seeds the `mcp_oauth` flag to `true`, so it holds once `pnpm db:migrate:run` has run). It activates once the OAuth env is set on both services (below); until then, discovery stays dormant and clients fall back to API keys.
+OAuth "click to connect" is purely env-gated — no flag. It activates once the OAuth env is set on both services (below); until then, discovery stays dormant and clients fall back to API keys.
 
 1. Sign in (see above), open **Settings → Integrations**.
 2. Expand **Advanced: API keys** → **Create API Key** → pick a permission level (the dialog defaults to read + write; the API's own default when `scopes` is omitted is `notes:read`) → copy the `knowtis_mcp_...` key.
