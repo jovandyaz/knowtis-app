@@ -143,6 +143,19 @@ describe('active access leases', () => {
     expect(service.diagnostics.activeNotes).toBe(0);
   });
 
+  it('renews a lease whose connection registers after a renewal skipped it', async () => {
+    const lease = await service.acquire('note', guest);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(reads).toHaveBeenCalledTimes(2);
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+
+    service.register(lease, connection);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(lease.closed).toBe(false);
+    expect(connection.close).not.toHaveBeenCalled();
+  });
+
   it('closes a connection registered after revocation with the original reason', async () => {
     const lease = await service.acquire('note', guest);
     snapshot = { ...initial, directPermissions: [] };

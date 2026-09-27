@@ -557,4 +557,21 @@ describe('production access leases with PostgreSQL, Redis and real providers', (
       held.release();
     }
   });
+
+  it('renews a handshake whose hydration outlasts a renewal but not its initial lease', async () => {
+    const a = await server();
+    const held = gate();
+    a.beforeLoad = () => held.promise;
+    const guest = a.connect(f.ids.editor);
+    try {
+      await until(() => a.access.diagnostics.completedReads >= 2);
+      held.release();
+      await until(() => guest.provider.synced);
+      await delay(1500);
+      expect(guest.closes).toEqual([]);
+      expect(a.access.diagnostics.expiredSessions).toBe(0);
+    } finally {
+      held.release();
+    }
+  }, 15000);
 });

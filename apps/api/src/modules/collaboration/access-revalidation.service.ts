@@ -57,7 +57,7 @@ interface NoteState {
   generation: number;
   reading: boolean;
   dirty: boolean;
-  nextReadAt: number;
+  readStartedAt: number;
   queuedAt?: number;
 }
 
@@ -135,7 +135,7 @@ export class AccessRevalidationService
         generation: 0,
         reading: false,
         dirty: false,
-        nextReadAt: 0,
+        readStartedAt: Number.NEGATIVE_INFINITY,
       };
       this.notes.set(noteId, state);
     }
@@ -165,6 +165,13 @@ export class AccessRevalidationService
       connection.close({ code: 4403, reason: lease.closeReason });
     } else if (performance.now() >= lease.expiresAt) {
       this.close(lease, lease.closeReason);
+    } else {
+      const state = this.notes.get(lease.noteId);
+      // A read that ran while this connection hydrated skipped its lease, so
+      // the renewal schedule no longer reaches it before it expires.
+      if (state && lease.expiresAt < state.readStartedAt + LEASE_MS) {
+        this.requestRead(state);
+      }
     }
   }
 
@@ -208,7 +215,7 @@ export class AccessRevalidationService
           this.close(lease, COLLABORATION_CLOSE_REASON.ACCESS_UNAVAILABLE);
         }
       }
-      if (state.sessions.size && now >= state.nextReadAt) {
+      if (state.sessions.size && now >= state.readStartedAt + RENEW_MS) {
         this.requestRead(state);
       }
       this.cleanup(state);
@@ -262,7 +269,7 @@ export class AccessRevalidationService
   private startRead(state: NoteState): void {
     const startedAt = performance.now();
     const generation = state.generation;
-    state.nextReadAt = startedAt + RENEW_MS;
+    state.readStartedAt = startedAt;
     state.reading = true;
     state.dirty = false;
     this.activeReads++;
