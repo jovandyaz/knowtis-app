@@ -351,6 +351,13 @@
       "when": 1790274393330,
       "tag": "0049_lethal_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790488595102,
+      "tag": "0050_drop_retired_feature_flags",
+      "breakpoints": true
     }
   ]
 }
