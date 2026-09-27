@@ -179,6 +179,27 @@ describe('active access leases', () => {
     expect(service.diagnostics.activeNotes).toBe(0);
   });
 
+  it('renews a lease that registers after the read that skipped it applied but before it settled', async () => {
+    const lease = await service.acquire('note', guest);
+    const renewal = deferred<AccessSnapshot>();
+    reads.mockImplementationOnce(() => renewal.promise);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reads).toHaveBeenCalledTimes(2);
+    const connection = { close: vi.fn(), onClose: vi.fn() };
+    // Apply resolves the joiner's lease, so this continuation runs before the
+    // renewal read's finally clears its reading flag.
+    const registered = service
+      .acquire('note', owner)
+      .then(() => service.register(lease, connection));
+
+    renewal.resolve(initial);
+    await registered;
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(lease.closed).toBe(false);
+    expect(connection.close).not.toHaveBeenCalled();
+  });
+
   it('closes a connection registered after revocation with the original reason', async () => {
     const lease = await service.acquire('note', guest);
     snapshot = { ...initial, directPermissions: [] };

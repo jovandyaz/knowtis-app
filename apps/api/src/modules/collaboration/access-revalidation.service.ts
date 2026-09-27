@@ -168,8 +168,10 @@ export class AccessRevalidationService
     } else {
       const state = this.notes.get(lease.noteId);
       // A read that ran while this connection hydrated skipped its lease, so
-      // the renewal schedule no longer reaches it before it expires.
+      // the renewal schedule no longer reaches it before it expires. Dirty
+      // re-reads even when that read has applied but not yet settled.
       if (state && lease.expiresAt < state.readStartedAt + LEASE_MS) {
+        state.dirty = true;
         this.requestRead(state);
       }
     }
