@@ -311,6 +311,33 @@ describe('active access leases', () => {
     );
   });
 
+  it('counts a snapshot that lands past its deadline before the timer as timed out', async () => {
+    const warnings = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const late = deferred<AccessSnapshot>();
+    // Scheduled before the read's own deadline timer, so at the same instant
+    // the snapshot settles first and the timer never fires.
+    setTimeout(() => late.resolve(initial), 1000);
+    reads.mockImplementationOnce(() => late.promise);
+    void service.acquire('note', owner).catch(() => null);
+    await vi.advanceTimersByTimeAsync(500);
+    const outcome = vi.fn();
+    void service.acquire('note', guest).then(outcome, outcome);
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(service.diagnostics.timedOutReads).toBe(1);
+    expect(warnings).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ reason: 'deadline_exceeded' })
+    );
+    expect(outcome).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(outcome).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ effectiveAccess: 'editor', closed: false })
+    );
+  });
+
   it('retains SQL admission after caller timeout and bounds the waiting queue', async () => {
     const pending = deferred<AccessSnapshot>();
     reads.mockImplementation(() => pending.promise);

@@ -295,12 +295,14 @@ export class AccessRevalidationService
       .then(() => this.repository.findAccessSnapshot(state.noteId))
       .then((snapshot) => {
         state.settling = true;
-        if (
-          this.stopped ||
-          timedOut ||
-          performance.now() - startedAt >= READ_DEADLINE_MS ||
-          generation !== state.generation
-        ) {
+        if (this.stopped || timedOut) {
+          return;
+        }
+        if (performance.now() - startedAt >= READ_DEADLINE_MS) {
+          this.reportReadFailure('deadline_exceeded');
+          return;
+        }
+        if (generation !== state.generation) {
           return;
         }
         this.apply(state, snapshot, startedAt + LEASE_MS);
