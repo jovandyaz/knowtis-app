@@ -216,4 +216,44 @@ describe.runIf(DB_AVAILABLE)('DrizzleSessionRepository (database)', () => {
 
     expect(isUniqueViolation(outcome, REFRESH_TOKEN_HASH_INDEX)).toBe(true);
   });
+
+  it('logs a session colliding on its refresh token hash by the unique index, never by the hash', async () => {
+    const log = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    await createSession(DB_USER_ID, CURRENT_FAMILY_ID, COLLIDING_HASH);
+
+    await createSession(DB_USER_ID, CURRENT_FAMILY_ID, COLLIDING_HASH);
+
+    expect(log.mock.calls).toEqual([
+      [
+        {
+          operation: 'createSession',
+          userId: DB_USER_ID,
+          errorName: 'DrizzleQueryError',
+          failureCategory: 'unique_violation',
+          sqlState: '23505',
+          table: 'sessions',
+          constraint: REFRESH_TOKEN_HASH_INDEX,
+        },
+      ],
+    ]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(COLLIDING_HASH);
+  });
+
+  it('answers a session colliding on its refresh token hash with the fixed internal error', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    await createSession(DB_USER_ID, CURRENT_FAMILY_ID, COLLIDING_HASH);
+
+    const collision = await createSession(
+      DB_USER_ID,
+      CURRENT_FAMILY_ID,
+      COLLIDING_HASH
+    );
+
+    expect(collision._unsafeUnwrapErr()).toEqual({
+      code: AuthErrorCodes.INTERNAL_ERROR,
+      message: 'Failed to create session',
+    });
+  });
 });
