@@ -10,21 +10,23 @@ import { AI_ACTION } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from '../../domain/ports/ai-structured-output.port';
 import type { AIStructuredOutputProvider } from '../../domain/ports/ai-structured-output.port';
 import { voiceNoteOutputSchema } from '../../domain/schemas/voice-note.schema';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { AIOrchestrator } from '../services/ai-orchestrator.service';
-import { AIRateLimitService } from '../services/ai-rate-limit.service';
+import {
+  AIRateLimitService,
+  type Reservation,
+} from '../services/ai-rate-limit.service';
 import { VoiceTranscriptionService } from '../services/voice-transcription.service';
 
 interface VoiceNoteInput {
-  readonly userId: string;
+  readonly execution: AiExecutionContext;
   readonly audio: Buffer;
   readonly mode: 'create-note' | 'insert';
   readonly language?: string;
-  readonly isAnonymous?: boolean;
-  readonly clientIp?: string;
 }
 
 export interface VoiceNoteOutput {
@@ -56,6 +58,8 @@ export class VoiceNoteHandler {
   ): Promise<Result<VoiceNoteOutput, AIDomainError>> {
     const requestId = randomUUID();
     const startTime = Date.now();
+    const { execution } = input;
+    const { userId } = execution.subject;
 
     const estimatedTokens = this.estimateTokensFromAudio(input.audio);
     const transcriptionModel = this.configService.get('AI_TRANSCRIPTION_MODEL');
@@ -63,29 +67,35 @@ export class VoiceNoteHandler {
       this.estimateAudioDurationSeconds(input.audio) *
       (this.modelCatalog.getPricing(transcriptionModel)?.inputCostPerSecond ??
         0);
-    const rateLimitCheck = await this.rateLimitService.checkLimit(
-      input.userId,
-      estimatedTokens,
-      input.isAnonymous ?? false,
-      false,
-      estimatedCostUsd,
-      input.clientIp
-    );
+    const rateLimitCheck = await this.rateLimitService.checkLimit(execution, {
+      tokens: estimatedTokens,
+      costUsd: estimatedCostUsd,
+    });
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
         event: 'ai.voice-note.rejected',
         requestId,
-        userId: input.userId,
+        userId,
         reason: rateLimitCheck.reason,
       });
       return err(AIErrors.rateLimitExceeded());
     }
-    const reservedIpSubject = rateLimitCheck.reservedIpSubject;
+    const { reservation } = rateLimitCheck;
+    // The whisper leg reconciles the cost reserve and the structuring leg the
+    // token reserve; handing both legs the whole reservation would subtract it twice.
+    const costReservation: Reservation = {
+      ...reservation,
+      estimate: { tokens: 0, costUsd: reservation.estimate.costUsd },
+    };
+    const tokenReservation: Reservation = {
+      ...reservation,
+      estimate: { tokens: reservation.estimate.tokens, costUsd: 0 },
+    };
 
     this.logger.log({
       event: 'ai.voice-note.start',
       requestId,
-      userId: input.userId,
+      userId,
       audioSizeBytes: input.audio.length,
       mode: input.mode,
     });
@@ -98,16 +108,11 @@ export class VoiceNoteHandler {
       this.logger.error({
         event: 'ai.voice-note.transcription-error',
         requestId,
-        userId: input.userId,
+        userId,
         error: transcriptionResult.error.message,
         latencyMs: Date.now() - startTime,
       });
-      await this.rateLimitService.releaseReservation(
-        input.userId,
-        estimatedTokens,
-        estimatedCostUsd,
-        reservedIpSubject
-      );
+      await this.rateLimitService.releaseReservation(execution, reservation);
       return err(transcriptionResult.error);
     }
 
@@ -117,15 +122,10 @@ export class VoiceNoteHandler {
       this.logger.warn({
         event: 'ai.voice-note.empty-transcription',
         requestId,
-        userId: input.userId,
+        userId,
         latencyMs: Date.now() - startTime,
       });
-      await this.rateLimitService.releaseReservation(
-        input.userId,
-        estimatedTokens,
-        estimatedCostUsd,
-        reservedIpSubject
-      );
+      await this.rateLimitService.releaseReservation(execution, reservation);
       return err(
         AIErrors.invalidInput(
           'Transcription produced no text. Please try again with clearer audio.'
@@ -139,24 +139,18 @@ export class VoiceNoteHandler {
       this.modelCatalog.getPricing(transcriptionModel)?.inputCostPerSecond ?? 0;
     const whisperCostUsd = billedSeconds * costPerSecond;
     this.rateLimitService
-      .recordUsage({
-        userId: input.userId,
+      .recordUsage(execution, costReservation, {
         action: AI_ACTION.VOICE_TRANSCRIPTION,
         model: transcriptionModel,
-        // The structuring leg reconciles the token reserve; this leg reconciles
-        // the cost reserve. Crossing them would subtract each reserve twice.
-        estimatedTokens: 0,
-        estimatedCostUsd,
         inputTokens: 0,
         outputTokens: 0,
         costUsd: whisperCostUsd,
-        ...(reservedIpSubject ? { reservedIpSubject } : {}),
       })
       .catch((err) =>
         this.logger.warn({
           event: 'ai.usage.record_failed',
           requestId,
-          userId: input.userId,
+          userId,
           error: reasonOf(err),
         })
       );
@@ -164,7 +158,7 @@ export class VoiceNoteHandler {
     this.logger.log({
       event: 'ai.voice-note.transcription-complete',
       requestId,
-      userId: input.userId,
+      userId,
       transcriptLength: transcript.length,
       durationInSeconds: billedSeconds,
       whisperCostUsd,
@@ -177,10 +171,8 @@ export class VoiceNoteHandler {
       );
       if (modelResult.isErr()) {
         await this.rateLimitService.releaseReservation(
-          input.userId,
-          estimatedTokens,
-          0,
-          reservedIpSubject
+          execution,
+          tokenReservation
         );
         return err(modelResult.error);
       }
@@ -209,22 +201,18 @@ export class VoiceNoteHandler {
       );
 
       this.rateLimitService
-        .recordUsage({
-          userId: input.userId,
+        .recordUsage(execution, tokenReservation, {
           action: AI_ACTION.STRUCTURE_VOICE_NOTE,
           model,
-          estimatedTokens,
-          estimatedCostUsd: 0,
           inputTokens,
           outputTokens,
           costUsd: usage.costUsd,
-          ...(reservedIpSubject ? { reservedIpSubject } : {}),
         })
         .catch((err) =>
           this.logger.warn({
             event: 'ai.usage.record_failed',
             requestId,
-            userId: input.userId,
+            userId,
             error: reasonOf(err),
           })
         );
@@ -232,7 +220,7 @@ export class VoiceNoteHandler {
       this.logger.log({
         event: 'ai.voice-note.complete',
         requestId,
-        userId: input.userId,
+        userId,
         model,
         inputTokens,
         outputTokens,
@@ -250,16 +238,14 @@ export class VoiceNoteHandler {
       this.logger.warn({
         event: 'ai.voice-note.structuring-fallback',
         requestId,
-        userId: input.userId,
+        userId,
         error: reasonOf(error),
         latencyMs: Date.now() - startTime,
       });
 
       await this.rateLimitService.releaseReservation(
-        input.userId,
-        estimatedTokens,
-        0,
-        reservedIpSubject
+        execution,
+        tokenReservation
       );
 
       const fallbackTitle = this.buildFallbackTitle(transcript);

@@ -12,13 +12,17 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
+import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { GetNoteHandler } from '../notes/application';
 import { NoteErrorCodes } from '../notes/domain/errors/note.errors';
@@ -40,14 +44,16 @@ export class ArtifactsController {
     private readonly getArtifactHandler: GetArtifactHandler,
     private readonly getArtifactsHandler: GetArtifactsHandler,
     private readonly deleteArtifactHandler: DeleteArtifactHandler,
-    private readonly getNoteHandler: GetNoteHandler
+    private readonly getNoteHandler: GetNoteHandler,
+    private readonly tierResolver: TierResolver
   ) {}
 
   @ApiOperation({ summary: 'Generate an artifact from a note' })
   @Post('generate')
   async generate(
     @CurrentUser() user: RequestUser,
-    @Body() dto: GenerateArtifactDto
+    @Body() dto: GenerateArtifactDto,
+    @Req() req: Request
   ) {
     const noteResult = await this.getNoteHandler.execute({
       noteId: dto.noteId,
@@ -66,8 +72,13 @@ export class ArtifactsController {
     }
 
     const note = noteResult.value;
-    const result = await this.generateArtifactHandler.execute({
+    const execution = await this.tierResolver.resolve({
       userId: user.id,
+      isAnonymous: user.isAnonymous === true,
+      clientIp: clientIpOf(req),
+    });
+    const result = await this.generateArtifactHandler.execute({
+      execution,
       noteId: dto.noteId,
       noteContent: note.content ?? '',
       noteTitle: note.title,

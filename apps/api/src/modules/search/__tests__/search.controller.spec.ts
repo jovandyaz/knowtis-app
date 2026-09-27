@@ -8,7 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RETRIEVAL_PORT } from '../../agent/domain/ports/retrieval.port';
 import type { NoteHit } from '../../agent/domain/retrieval';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { AIErrorCodes } from '../../ai/domain/errors/ai.errors';
+import type { AiCaller } from '../../ai/domain/execution-context/ai-execution-context';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchController } from '../search.controller';
 
@@ -20,6 +23,8 @@ const user: RequestUser = {
 } as RequestUser;
 
 const req = { headers: { 'x-real-ip': '203.0.113.9' } } as unknown as Request;
+
+const RESERVATION = { estimate: { tokens: 3, costUsd: 0 } };
 
 function hit(id: string): NoteHit {
   return {
@@ -39,16 +44,29 @@ describe('SearchController', () => {
     checkLimit: vi.fn(),
     releaseReservation: vi.fn(),
   };
+  const tierResolver = { resolve: vi.fn() };
 
   beforeEach(async () => {
     search.mockReset();
-    rateLimit.checkLimit.mockReset().mockResolvedValue({ allowed: true });
+    rateLimit.checkLimit
+      .mockReset()
+      .mockResolvedValue({ allowed: true, reservation: RESERVATION });
     rateLimit.releaseReservation.mockReset().mockResolvedValue(undefined);
+    tierResolver.resolve
+      .mockReset()
+      .mockImplementation(async (caller: AiCaller) =>
+        createExecutionContext({
+          userId: caller.userId,
+          tier: caller.isAnonymous ? 'anonymous' : 'free',
+          ...(caller.clientIp ? { clientIp: caller.clientIp } : {}),
+        })
+      );
     const moduleRef = await Test.createTestingModule({
       controllers: [SearchController],
       providers: [
         { provide: RETRIEVAL_PORT, useValue: { search } },
         { provide: AIRateLimitService, useValue: rateLimit },
+        { provide: TierResolver, useValue: tierResolver },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -152,31 +170,33 @@ describe('SearchController', () => {
   });
 
   it('should reserve with the caller identity and release the reservation after searching', async () => {
-    rateLimit.checkLimit.mockResolvedValue({
-      allowed: true,
+    const reservation = {
+      estimate: { tokens: 2, costUsd: 0 },
       reservedIpSubject: 'ip:abc',
-    });
+    };
+    rateLimit.checkLimit.mockResolvedValue({ allowed: true, reservation });
     search.mockResolvedValue([hit('a')]);
     const dto = new SearchQueryDto();
     dto.q = 'hello';
 
     await controller.search({ ...user, isAnonymous: true }, dto, req);
 
-    expect(rateLimit.checkLimit).toHaveBeenCalledWith(
-      'user-1',
-      expect.any(Number),
-      true,
-      false,
-      0,
-      '203.0.113.9'
-    );
-    const reservedTokens = rateLimit.checkLimit.mock.calls[0]?.[1];
+    expect(tierResolver.resolve).toHaveBeenCalledWith({
+      userId: 'user-1',
+      isAnonymous: true,
+      clientIp: '203.0.113.9',
+    });
+    const execution = await tierResolver.resolve.mock.results[0]?.value;
+    expect(execution.tier).toBe('anonymous');
+    expect(rateLimit.checkLimit).toHaveBeenCalledWith(execution, {
+      tokens: expect.any(Number),
+      costUsd: 0,
+    });
+    const reservedTokens = rateLimit.checkLimit.mock.calls[0]?.[1].tokens;
     expect(reservedTokens).toBeGreaterThan(0);
     expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
-      'user-1',
-      reservedTokens,
-      0,
-      'ip:abc'
+      execution,
+      reservation
     );
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
     expect(
@@ -191,20 +211,16 @@ describe('SearchController', () => {
 
     await controller.search(user, dto, req);
 
-    expect(rateLimit.checkLimit).toHaveBeenCalledWith(
-      'user-1',
-      3,
-      false,
-      false,
-      0,
-      '203.0.113.9'
-    );
+    const execution = await tierResolver.resolve.mock.results[0]?.value;
+    expect(execution.tier).toBe('free');
+    expect(rateLimit.checkLimit).toHaveBeenCalledWith(execution, {
+      tokens: 3,
+      costUsd: 0,
+    });
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
     expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
-      'user-1',
-      3,
-      0,
-      undefined
+      execution,
+      RESERVATION
     );
   });
 
@@ -234,10 +250,10 @@ describe('SearchController', () => {
 
     await expect(controller.search(user, dto, req)).rejects.toThrow('boom');
     expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
-      'user-1',
-      expect.any(Number),
-      0,
-      undefined
+      expect.objectContaining({
+        subject: { userId: 'user-1', clientIp: '203.0.113.9' },
+      }),
+      RESERVATION
     );
   });
 });

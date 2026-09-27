@@ -3,7 +3,19 @@ import { z } from 'zod';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
+import type { UsageEstimate } from '../../../ai/application/services/ai-rate-limit.service';
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { AIGenerationPipeline } from './ai-generation.pipeline';
+
+function allowing() {
+  return vi.fn(
+    async (_execution: AiExecutionContext, estimate: UsageEstimate) => ({
+      allowed: true,
+      reservation: { estimate },
+    })
+  );
+}
 
 interface PipelineOverrides {
   checkLimit?: ReturnType<typeof vi.fn>;
@@ -13,14 +25,10 @@ interface PipelineOverrides {
 }
 
 function makePipeline(overrides: PipelineOverrides = {}) {
-  const checkLimit =
-    overrides.checkLimit ?? vi.fn().mockResolvedValue({ allowed: true });
+  const checkLimit = overrides.checkLimit ?? allowing();
   const releaseReservation = vi.fn().mockResolvedValue(undefined);
-  const rateLimit = {
-    checkLimit,
-    recordUsage: vi.fn().mockResolvedValue(undefined),
-    releaseReservation,
-  };
+  const recordUsage = vi.fn().mockResolvedValue(undefined);
+  const rateLimit = { checkLimit, recordUsage, releaseReservation };
   const orchestrator = {
     selectModel:
       overrides.selectModel ??
@@ -47,13 +55,14 @@ function makePipeline(overrides: PipelineOverrides = {}) {
   return {
     pipeline,
     checkLimit,
+    recordUsage,
     releaseReservation,
     generateStructuredOutput: structuredOutput.generateStructuredOutput,
   };
 }
 
 const request = {
-  userId: 'user-1',
+  execution: createExecutionContext({ userId: 'user-1' }),
   action: AI_ACTION.SUMMARIZE,
   prompt: 'generate something',
   schema: z.object({ title: z.string() }),
@@ -67,7 +76,9 @@ describe('AIGenerationPipeline', () => {
     const result = await pipeline.execute(request);
 
     expect(result.isErr()).toBe(true);
-    expect(releaseReservation).toHaveBeenCalledWith('user-1', 500, 0);
+    expect(releaseReservation).toHaveBeenCalledWith(request.execution, {
+      estimate: { tokens: 500, costUsd: 0 },
+    });
   });
 
   it('does not answer a failed generation until the reservation is released', async () => {
@@ -109,11 +120,10 @@ describe('AIGenerationPipeline', () => {
     await pipeline.execute(request);
 
     expect(checkLimit).toHaveBeenCalledTimes(1);
-    const [userId, estimatedTokens, , , estimatedCostUsd] =
-      checkLimit.mock.calls[0];
-    expect(userId).toBe('user-1');
-    expect(estimatedTokens).toBe(500);
-    expect(estimatedCostUsd).toBeCloseTo(500 * 0.000003, 12);
+    const [execution, estimate] = checkLimit.mock.calls[0];
+    expect(execution).toBe(request.execution);
+    expect(estimate.tokens).toBe(500);
+    expect(estimate.costUsd).toBeCloseTo(500 * 0.000003, 12);
   });
 
   it('releases the reserved cost when generation fails after a costed reserve', async () => {
@@ -124,8 +134,8 @@ describe('AIGenerationPipeline', () => {
     const result = await pipeline.execute(request);
 
     expect(result.isErr()).toBe(true);
-    const [, , releasedCost] = releaseReservation.mock.calls[0];
-    expect(releasedCost).toBeCloseTo(500 * 0.000003, 12);
+    const [, released] = releaseReservation.mock.calls[0];
+    expect(released.estimate.costUsd).toBeCloseTo(500 * 0.000003, 12);
   });
 
   it('does not release a reservation when the rate-limit check itself fails', async () => {
@@ -137,5 +147,61 @@ describe('AIGenerationPipeline', () => {
     await expect(pipeline.execute(request)).rejects.toThrow('redis exploded');
     expect(releaseReservation).not.toHaveBeenCalled();
     expect(generateStructuredOutput).not.toHaveBeenCalled();
+  });
+
+  it('reserves the anonymous share and the IP subject for an anonymous caller', async () => {
+    const { pipeline, checkLimit } = makePipeline();
+    const execution = createExecutionContext({
+      tier: 'anonymous',
+      clientIp: '203.0.113.9',
+    });
+    await pipeline.execute({ ...request, execution });
+    expect(checkLimit).toHaveBeenCalledWith(execution, {
+      tokens: request.estimatedTokens,
+      costUsd: expect.any(Number),
+    });
+  });
+
+  it('releases exactly the reservation it was given when generation fails', async () => {
+    const reservation = {
+      estimate: { tokens: 10, costUsd: 0.01 },
+      reservedIpSubject: 'ip:abc',
+    };
+    const { pipeline, releaseReservation } = makePipeline({
+      checkLimit: vi.fn().mockResolvedValue({ allowed: true, reservation }),
+      generateStructuredOutput: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    const execution = createExecutionContext({
+      tier: 'anonymous',
+      clientIp: '203.0.113.9',
+    });
+    await pipeline.execute({ ...request, execution });
+    expect(releaseReservation).toHaveBeenCalledWith(execution, reservation);
+  });
+
+  it('reconciles the same reservation on success', async () => {
+    const reservation = {
+      estimate: { tokens: 10, costUsd: 0.01 },
+      reservedIpSubject: 'ip:abc',
+    };
+    const { pipeline, recordUsage } = makePipeline({
+      checkLimit: vi.fn().mockResolvedValue({ allowed: true, reservation }),
+      generateStructuredOutput: vi.fn().mockResolvedValue({
+        object: { title: 'Summary' },
+        inputTokens: 40,
+        outputTokens: 20,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+    const execution = createExecutionContext({
+      tier: 'anonymous',
+      clientIp: '203.0.113.9',
+    });
+    await pipeline.execute({ ...request, execution });
+    expect(recordUsage).toHaveBeenCalledWith(
+      execution,
+      reservation,
+      expect.objectContaining({ action: request.action })
+    );
   });
 });

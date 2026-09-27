@@ -7,6 +7,7 @@ import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import {
   AI_COMPLETION_PROVIDER,
   type AICompletionProvider,
@@ -15,14 +16,12 @@ import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { AICompletionPipeline } from '../services/ai-completion-pipeline.service';
 
 interface CompleteTextInput {
-  readonly userId: string;
+  readonly execution: AiExecutionContext;
   readonly action: string;
   readonly content: string;
   readonly selection?: string;
   readonly targetLanguage?: string;
   readonly targetTone?: string;
-  readonly isAnonymous?: boolean;
-  readonly clientIp?: string;
 }
 
 export interface CompleteTextOutput {
@@ -82,7 +81,7 @@ export class CompleteTextHandler {
           timeout: { totalMs: this.configService.get('AI_TIMEOUT_MS') },
           telemetry: {
             functionId: `completion:${context.action}`,
-            userId: input.userId,
+            userId: input.execution.subject.userId,
           },
         }
       );
@@ -116,7 +115,7 @@ export class CompleteTextHandler {
       this.logger.error({
         event: 'ai.request.error',
         requestId: context.requestId,
-        userId: input.userId,
+        userId: input.execution.subject.userId,
         action: context.action,
         model: context.model,
         error: reasonOf(error),

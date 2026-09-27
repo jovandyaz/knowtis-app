@@ -13,6 +13,7 @@ import {
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import {
   AI_CACHE,
   type AICache,
@@ -21,18 +22,16 @@ import {
 import type { SupportedAIAction } from '../../domain/value-objects/ai-action.vo';
 import { AIAction } from '../../domain/value-objects/ai-action.vo';
 import { AIOrchestrator } from './ai-orchestrator.service';
-import { AIRateLimitService } from './ai-rate-limit.service';
+import { AIRateLimitService, type Reservation } from './ai-rate-limit.service';
 
 export interface TextCompletionInput {
-  readonly userId: string;
+  readonly execution: AiExecutionContext;
   readonly action: string;
   readonly content: string;
   readonly selection?: string;
   readonly suffix?: string;
   readonly targetLanguage?: string;
   readonly targetTone?: string;
-  readonly isAnonymous?: boolean;
-  readonly clientIp?: string;
 }
 
 export interface PreflightContext {
@@ -42,9 +41,7 @@ export interface PreflightContext {
   readonly model: string;
   readonly systemPrompt: string;
   readonly userPrompt: string;
-  readonly estimatedTokens: number;
-  readonly estimatedCostUsd: number;
-  readonly reservedIpSubject?: string;
+  readonly reservation: Reservation;
 }
 
 interface PreflightReady {
@@ -88,6 +85,7 @@ export class AICompletionPipeline {
   async preflight(input: TextCompletionInput): Promise<PreflightResult> {
     const requestId = randomUUID();
     const startTime = Date.now();
+    const { userId } = input.execution.subject;
 
     const actionResult = AIAction.create(input.action);
     if (actionResult.isErr()) {
@@ -111,7 +109,7 @@ export class AICompletionPipeline {
         this.logger.warn({
           event: 'ai.request.injection_blocked',
           requestId,
-          userId: input.userId,
+          userId,
           action,
           ...(field && { field }),
           score: check.score,
@@ -138,18 +136,14 @@ export class AICompletionPipeline {
       : 0;
 
     const rateLimitCheck = await this.rateLimitService.checkLimit(
-      input.userId,
-      estimatedTokens,
-      input.isAnonymous ?? false,
-      false,
-      estimatedCostUsd,
-      input.clientIp
+      input.execution,
+      { tokens: estimatedTokens, costUsd: estimatedCostUsd }
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
         event: 'ai.request.rejected',
         requestId,
-        userId: input.userId,
+        userId,
         action,
         reason: rateLimitCheck.reason,
       });
@@ -166,33 +160,24 @@ export class AICompletionPipeline {
       model,
       systemPrompt,
       userPrompt,
-      estimatedTokens,
-      estimatedCostUsd,
-      ...(rateLimitCheck.reservedIpSubject
-        ? { reservedIpSubject: rateLimitCheck.reservedIpSubject }
-        : {}),
+      reservation: rateLimitCheck.reservation,
     };
 
     this.logger.log({
       event: 'ai.request.start',
       requestId,
-      userId: input.userId,
+      userId,
       action,
       model,
     });
 
     if (this.cache?.isCacheable(action)) {
-      const cached = await this.cache.get(
-        input.userId,
-        action,
-        model,
-        userPrompt
-      );
+      const cached = await this.cache.get(userId, action, model, userPrompt);
       if (cached) {
         this.logger.log({
           event: 'ai.request.complete',
           requestId,
-          userId: input.userId,
+          userId,
           action,
           model: cached.model,
           latencyMs: Date.now() - startTime,
@@ -211,24 +196,18 @@ export class AICompletionPipeline {
     result: Omit<RecordCompletionParams, 'text'>
   ): void {
     this.rateLimitService
-      .recordUsage({
-        userId: input.userId,
+      .recordUsage(input.execution, context.reservation, {
         action: context.action,
         model: result.model,
-        estimatedTokens: context.estimatedTokens,
-        estimatedCostUsd: context.estimatedCostUsd,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costUsd: result.costUsd,
-        ...(context.reservedIpSubject
-          ? { reservedIpSubject: context.reservedIpSubject }
-          : {}),
       })
       .catch((error) =>
         this.logger.warn({
           event: 'ai.usage.record_failed',
           requestId: context.requestId,
-          userId: input.userId,
+          userId: input.execution.subject.userId,
           error: reasonOf(error),
         })
       );
@@ -239,10 +218,8 @@ export class AICompletionPipeline {
     input: TextCompletionInput
   ): Promise<void> {
     return this.rateLimitService.releaseReservation(
-      input.userId,
-      context.estimatedTokens,
-      context.estimatedCostUsd,
-      context.reservedIpSubject
+      input.execution,
+      context.reservation
     );
   }
 
@@ -260,13 +237,19 @@ export class AICompletionPipeline {
       result.text
     ) {
       this.cache
-        .set(input.userId, context.action, context.model, context.userPrompt, {
-          text: result.text,
-          model: result.model,
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-          costUsd: result.costUsd,
-        })
+        .set(
+          input.execution.subject.userId,
+          context.action,
+          context.model,
+          context.userPrompt,
+          {
+            text: result.text,
+            model: result.model,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            costUsd: result.costUsd,
+          }
+        )
         .catch((error) =>
           this.logger.warn({
             event: 'ai.cache.write_failed',
@@ -279,12 +262,12 @@ export class AICompletionPipeline {
     this.logger.log({
       event: 'ai.request.complete',
       requestId: context.requestId,
-      userId: input.userId,
+      userId: input.execution.subject.userId,
       action: context.action,
       model: result.model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
-      estimatedTokens: context.estimatedTokens,
+      estimatedTokens: context.reservation.estimate.tokens,
       costUsd: result.costUsd,
       latencyMs: Date.now() - context.startTime,
       cacheStatus: this.cache?.isCacheable(context.action) ? 'miss' : 'skip',

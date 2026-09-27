@@ -2,15 +2,29 @@ import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AIErrors } from '../../domain/errors/ai.errors';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { AICache } from '../../domain/ports/ai-cache.port';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { createTestCatalog } from '../../testing/create-test-catalog';
 import { AICompletionPipeline } from './ai-completion-pipeline.service';
 import type { AIOrchestrator } from './ai-orchestrator.service';
-import type { AIRateLimitService } from './ai-rate-limit.service';
+import type {
+  AIRateLimitService,
+  UsageEstimate,
+} from './ai-rate-limit.service';
 
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
 const MODEL_INPUT_COST_PER_TOKEN = 0.000003;
 const IP_SUBJECT = 'ip:fec52565aa0cf18f';
+
+function allowing() {
+  return vi.fn(
+    async (_execution: AiExecutionContext, estimate: UsageEstimate) => ({
+      allowed: true,
+      reservation: { estimate },
+    })
+  );
+}
 
 function createPipeline(overrides?: {
   checkLimit?: ReturnType<typeof vi.fn>;
@@ -29,8 +43,7 @@ function createPipeline(overrides?: {
   } as unknown as AIOrchestrator;
 
   const rateLimitService = {
-    checkLimit:
-      overrides?.checkLimit ?? vi.fn().mockResolvedValue({ allowed: true }),
+    checkLimit: overrides?.checkLimit ?? allowing(),
     recordUsage: overrides?.recordUsage ?? vi.fn().mockResolvedValue(undefined),
     releaseReservation:
       overrides?.releaseReservation ?? vi.fn().mockResolvedValue(undefined),
@@ -55,7 +68,7 @@ function createPipeline(overrides?: {
 }
 
 const baseInput = {
-  userId: 'user-1',
+  execution: createExecutionContext({ userId: 'user-1' }),
   action: 'summarize',
   content: 'Some note content to summarize',
 };
@@ -136,48 +149,47 @@ describe('AICompletionPipeline', () => {
     });
 
     it('should pass the estimated cost of the selected model to the rate-limit check', async () => {
-      const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+      const checkLimit = allowing();
       const { pipeline } = createPipeline({ checkLimit });
 
       await pipeline.preflight(baseInput);
 
-      const [userId, estimatedTokens, isAnonymous, byok, estimatedCostUsd] =
-        checkLimit.mock.calls[0];
-      expect(userId).toBe('user-1');
-      expect(estimatedTokens).toBeGreaterThan(0);
-      expect(isAnonymous).toBe(false);
-      expect(byok).toBe(false);
-      expect(estimatedCostUsd).toBeCloseTo(
-        estimatedTokens * MODEL_INPUT_COST_PER_TOKEN,
+      const [execution, estimate] = checkLimit.mock.calls[0];
+      expect(execution).toBe(baseInput.execution);
+      expect(estimate.tokens).toBeGreaterThan(0);
+      expect(estimate.costUsd).toBeCloseTo(
+        estimate.tokens * MODEL_INPUT_COST_PER_TOKEN,
         12
       );
     });
 
-    it('should pass the client IP to the rate-limit check', async () => {
-      const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+    it("should check the limit against the caller's execution context", async () => {
+      const checkLimit = allowing();
       const { pipeline } = createPipeline({ checkLimit });
-
-      await pipeline.preflight({
-        ...baseInput,
-        isAnonymous: true,
+      const execution = createExecutionContext({
+        tier: 'anonymous',
         clientIp: '203.0.113.7',
       });
 
-      expect(checkLimit.mock.calls[0][2]).toBe(true);
-      expect(checkLimit.mock.calls[0][5]).toBe('203.0.113.7');
+      await pipeline.preflight({ ...baseInput, execution });
+
+      expect(checkLimit).toHaveBeenCalledWith(execution, expect.anything());
     });
 
-    it('should expose the estimated cost on the preflight context', async () => {
-      const { pipeline } = createPipeline();
+    it('should carry the reservation the rate-limit check made on the preflight context', async () => {
+      const reservation = {
+        estimate: { tokens: 12, costUsd: 0.01 },
+        reservedIpSubject: IP_SUBJECT,
+      };
+      const { pipeline } = createPipeline({
+        checkLimit: vi.fn().mockResolvedValue({ allowed: true, reservation }),
+      });
 
       const result = await pipeline.preflight(baseInput);
 
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value.context.estimatedCostUsd).toBeCloseTo(
-          result.value.context.estimatedTokens * MODEL_INPUT_COST_PER_TOKEN,
-          12
-        );
+        expect(result.value.context.reservation).toBe(reservation);
       }
     });
 
@@ -241,7 +253,7 @@ describe('AICompletionPipeline', () => {
         expect(context.systemPrompt).toBe('system prompt');
         expect(context.userPrompt).toBe('user prompt');
         expect(context.action).toBe('summarize');
-        expect(context.estimatedTokens).toBeGreaterThan(0);
+        expect(context.reservation.estimate.tokens).toBeGreaterThan(0);
         expect(context.requestId).toMatch(/[0-9a-f-]{36}/);
       }
     });
@@ -276,16 +288,17 @@ describe('AICompletionPipeline', () => {
         costUsd: 0.002,
       });
 
-      expect(recordUsage).toHaveBeenCalledWith({
-        userId: 'user-1',
-        action: 'summarize',
-        model: MODEL,
-        estimatedTokens: context.estimatedTokens,
-        estimatedCostUsd: context.estimatedCostUsd,
-        inputTokens: 100,
-        outputTokens: 40,
-        costUsd: 0.002,
-      });
+      expect(recordUsage).toHaveBeenCalledWith(
+        baseInput.execution,
+        context.reservation,
+        {
+          action: 'summarize',
+          model: MODEL,
+          inputTokens: 100,
+          outputTokens: 40,
+          costUsd: 0.002,
+        }
+      );
     });
 
     it('should release the reserved cost together with the token estimate', async () => {
@@ -301,10 +314,8 @@ describe('AICompletionPipeline', () => {
       await pipeline.releaseReservation(context, baseInput);
 
       expect(releaseReservation).toHaveBeenCalledWith(
-        'user-1',
-        context.estimatedTokens,
-        context.estimatedCostUsd,
-        undefined
+        baseInput.execution,
+        context.reservation
       );
     });
 
@@ -333,19 +344,27 @@ describe('AICompletionPipeline', () => {
       expect(settled).toBe(true);
     });
 
-    it('should forward the reserved IP subject into usage recording', async () => {
+    const ipReservation = {
+      estimate: { tokens: 12, costUsd: 0 },
+      reservedIpSubject: IP_SUBJECT,
+    };
+    const anonymousInput = {
+      ...baseInput,
+      execution: createExecutionContext({
+        tier: 'anonymous',
+        clientIp: '203.0.113.7',
+      }),
+    };
+
+    it('should reconcile usage against the reservation that holds the IP subject', async () => {
       const recordUsage = vi.fn().mockResolvedValue(undefined);
       const { pipeline } = createPipeline({
         recordUsage,
         checkLimit: vi
           .fn()
-          .mockResolvedValue({ allowed: true, reservedIpSubject: IP_SUBJECT }),
+          .mockResolvedValue({ allowed: true, reservation: ipReservation }),
       });
-      const input = {
-        ...baseInput,
-        isAnonymous: true,
-        clientIp: '203.0.113.7',
-      };
+      const input = anonymousInput;
 
       const preflight = await pipeline.preflight(input);
       if (preflight.isErr() || preflight.value.kind !== 'ready') {
@@ -360,39 +379,31 @@ describe('AICompletionPipeline', () => {
       });
 
       expect(recordUsage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          reservedIpSubject: IP_SUBJECT,
-        })
+        input.execution,
+        ipReservation,
+        expect.objectContaining({ action: 'summarize' })
       );
     });
 
-    it('should release the reservation with the reserved IP subject', async () => {
+    it('should release the reservation that holds the IP subject', async () => {
       const releaseReservation = vi.fn().mockResolvedValue(undefined);
       const { pipeline } = createPipeline({
         releaseReservation,
         checkLimit: vi
           .fn()
-          .mockResolvedValue({ allowed: true, reservedIpSubject: IP_SUBJECT }),
+          .mockResolvedValue({ allowed: true, reservation: ipReservation }),
       });
-      const input = {
-        ...baseInput,
-        isAnonymous: true,
-        clientIp: '203.0.113.7',
-      };
+      const input = anonymousInput;
 
       const preflight = await pipeline.preflight(input);
       if (preflight.isErr() || preflight.value.kind !== 'ready') {
         throw new Error('expected ready preflight');
       }
-      const { context } = preflight.value;
-
-      await pipeline.releaseReservation(context, input);
+      await pipeline.releaseReservation(preflight.value.context, input);
 
       expect(releaseReservation).toHaveBeenCalledWith(
-        'user-1',
-        context.estimatedTokens,
-        context.estimatedCostUsd,
-        IP_SUBJECT
+        input.execution,
+        ipReservation
       );
     });
 

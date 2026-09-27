@@ -2,14 +2,31 @@ import { ConfigService } from '@nestjs/config';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAX_SUGGESTED_TAGS, PARA_BUCKETS } from '@knowtis/shared-types';
+import {
+  AI_ACTION,
+  MAX_SUGGESTED_TAGS,
+  PARA_BUCKETS,
+} from '@knowtis/shared-types';
 
+import type { UsageEstimate } from '../../../ai/application/services/ai-rate-limit.service';
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { SuggestOrganizationHandler } from './suggest-organization.handler';
 
 const OWNER_ID = '00000000-0000-4000-8000-00000000f401';
 const STRANGER_ID = '00000000-0000-4000-8000-00000000f402';
 const NOTE_ID = '11111111-1111-4111-8111-111111111401';
 const OTHER_NOTE_ID = '11111111-1111-4111-8111-111111111402';
+const OWNER = createExecutionContext({ userId: OWNER_ID });
+const ANONYMOUS_OWNER = createExecutionContext({
+  userId: OWNER_ID,
+  tier: 'anonymous',
+  clientIp: '203.0.113.9',
+});
+const IP_RESERVATION = {
+  estimate: { tokens: 10, costUsd: 0.01 },
+  reservedIpSubject: 'ip:abc',
+};
 
 function noteFixture(overrides: Record<string, unknown> = {}) {
   return {
@@ -63,7 +80,12 @@ describe('SuggestOrganizationHandler', () => {
       }),
     };
     rateLimit = {
-      checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      checkLimit: vi.fn(
+        async (_execution: AiExecutionContext, estimate: UsageEstimate) => ({
+          allowed: true,
+          reservation: { estimate },
+        })
+      ),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
     };
@@ -89,7 +111,7 @@ describe('SuggestOrganizationHandler', () => {
 
   it('returns a suggestion for a note the caller owns', async () => {
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID],
     });
 
@@ -101,7 +123,7 @@ describe('SuggestOrganizationHandler', () => {
 
   it('checks ownership of every note with a single repository read', async () => {
     await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID, OTHER_NOTE_ID],
     });
 
@@ -118,7 +140,7 @@ describe('SuggestOrganizationHandler', () => {
     ]);
 
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID],
     });
 
@@ -130,7 +152,7 @@ describe('SuggestOrganizationHandler', () => {
     noteRepository.findOwnedSummariesByIds.mockResolvedValue([]);
 
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID],
     });
 
@@ -142,7 +164,7 @@ describe('SuggestOrganizationHandler', () => {
     noteRepository.findOwnedSummariesByIds.mockResolvedValue([noteFixture()]);
 
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID, OTHER_NOTE_ID],
     });
 
@@ -152,7 +174,7 @@ describe('SuggestOrganizationHandler', () => {
 
   it('bills a repeated id once', async () => {
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID, NOTE_ID, NOTE_ID],
     });
 
@@ -169,7 +191,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.tags).toEqual([
@@ -195,7 +217,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.tags).toEqual([{ path: 'topic-78', isNew: false }]);
@@ -210,7 +232,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.tags).toEqual([{ path: 'work', isNew: false }]);
@@ -225,7 +247,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.tags).toEqual([
@@ -246,7 +268,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.tags).toHaveLength(MAX_SUGGESTED_TAGS);
@@ -256,7 +278,7 @@ describe('SuggestOrganizationHandler', () => {
     tagRepository.findTreeByOwner.mockRejectedValue(new Error('pg is down'));
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.tags).toEqual([{ path: 'work/alpha', isNew: true }]);
@@ -264,7 +286,7 @@ describe('SuggestOrganizationHandler', () => {
 
   it('rejects a blank user id before touching any repository', async () => {
     const result = await handler.execute({
-      userId: '   ',
+      execution: createExecutionContext({ userId: '   ' }),
       noteIds: [NOTE_ID],
     });
 
@@ -273,7 +295,7 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('offers the vocabulary most-used first', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const prompt = structuredOutput.generateStructuredOutput.mock
       .calls[0][0] as string;
@@ -285,7 +307,7 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('sends the note as plain text, not as editor markup', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const prompt = structuredOutput.generateStructuredOutput.mock
       .calls[0][0] as string;
@@ -294,7 +316,7 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('caps the provider call so a hung request cannot run unbounded', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const options = structuredOutput.generateStructuredOutput.mock
       .calls[0][2] as { timeoutMs?: number; maxOutputTokens?: number };
@@ -303,7 +325,7 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('classifies at a fixed temperature so the same note keeps its bucket', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const options = structuredOutput.generateStructuredOutput.mock
       .calls[0][2] as { temperature?: number };
@@ -311,7 +333,7 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('refuses to let the classifier fall back across model families', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const options = structuredOutput.generateStructuredOutput.mock
       .calls[0][2] as { fallbackScope?: string };
@@ -319,7 +341,7 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('looks related notes up by title, never by the note body', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const [, query] = retrieval.search.mock.calls[0];
     expect(query).toBe('Alpha kickoff');
@@ -330,7 +352,7 @@ describe('SuggestOrganizationHandler', () => {
       noteFixture({ title: '   ' }),
     ]);
 
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     const [, query] = retrieval.search.mock.calls[0];
     expect(query).toBe(
@@ -346,7 +368,7 @@ describe('SuggestOrganizationHandler', () => {
     ]);
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.relatedNotes).toEqual([
@@ -355,11 +377,12 @@ describe('SuggestOrganizationHandler', () => {
   });
 
   it('records what the note actually cost', async () => {
-    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+    await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] });
 
     expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      OWNER,
+      { estimate: { tokens: expect.any(Number), costUsd: 0 } },
       expect.objectContaining({
-        userId: OWNER_ID,
         inputTokens: 800,
         outputTokens: 20,
         model: 'anthropic:fast',
@@ -379,7 +402,7 @@ describe('SuggestOrganizationHandler', () => {
 
     const suggestions = (
       await handler.execute({
-        userId: OWNER_ID,
+        execution: OWNER,
         noteIds: [NOTE_ID, OTHER_NOTE_ID],
       })
     )._unsafeUnwrap();
@@ -394,21 +417,46 @@ describe('SuggestOrganizationHandler', () => {
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
   });
 
-  it('releases the failed reserve against the user subject only, never the raw IP', async () => {
+  it('reserves the anonymous share and the IP subject for an anonymous caller', async () => {
+    await handler.execute({ execution: ANONYMOUS_OWNER, noteIds: [NOTE_ID] });
+
+    expect(rateLimit.checkLimit).toHaveBeenCalledWith(ANONYMOUS_OWNER, {
+      tokens: expect.any(Number),
+      costUsd: expect.any(Number),
+    });
+  });
+
+  it('releases exactly the reservation it was given when the provider fails', async () => {
+    rateLimit.checkLimit.mockResolvedValue({
+      allowed: true,
+      reservation: IP_RESERVATION,
+    });
     structuredOutput.generateStructuredOutput.mockRejectedValueOnce(
       new Error('provider exploded')
     );
 
-    await handler.execute({
-      userId: OWNER_ID,
-      noteIds: [NOTE_ID],
-      clientIp: '203.0.113.7',
-    });
+    await handler.execute({ execution: ANONYMOUS_OWNER, noteIds: [NOTE_ID] });
 
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
-    const call = vi.mocked(rateLimit.releaseReservation).mock.calls[0];
-    expect(call[0]).toBe(OWNER_ID);
-    expect(call[3]).toBeUndefined();
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      ANONYMOUS_OWNER,
+      IP_RESERVATION
+    );
+  });
+
+  it('reconciles the same reservation on success', async () => {
+    rateLimit.checkLimit.mockResolvedValue({
+      allowed: true,
+      reservation: IP_RESERVATION,
+    });
+
+    await handler.execute({ execution: ANONYMOUS_OWNER, noteIds: [NOTE_ID] });
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      ANONYMOUS_OWNER,
+      IP_RESERVATION,
+      expect.objectContaining({ action: AI_ACTION.SUGGEST_ORGANIZATION })
+    );
   });
 
   it('does not answer until the failed reserve is given back', async () => {
@@ -420,7 +468,7 @@ describe('SuggestOrganizationHandler', () => {
     let settled = false;
 
     const pending = handler
-      .execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      .execute({ execution: OWNER, noteIds: [NOTE_ID] })
       .finally(() => {
         settled = true;
       });
@@ -438,7 +486,7 @@ describe('SuggestOrganizationHandler', () => {
     );
 
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID],
     });
 
@@ -452,7 +500,7 @@ describe('SuggestOrganizationHandler', () => {
     ]);
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion).toEqual({
@@ -478,7 +526,7 @@ describe('SuggestOrganizationHandler', () => {
     ]);
 
     const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+      await handler.execute({ execution: OWNER, noteIds: [NOTE_ID] })
     )._unsafeUnwrap();
 
     expect(suggestion?.bucket).toBeNull();
@@ -492,7 +540,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     const result = await handler.execute({
-      userId: OWNER_ID,
+      execution: OWNER,
       noteIds: [NOTE_ID],
     });
 

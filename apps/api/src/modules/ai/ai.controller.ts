@@ -47,6 +47,7 @@ import {
   InvalidAIConfigError,
   type AIConfigEntry,
 } from './application/services/ai-config.service';
+import { TierResolver } from './application/services/tier-resolver.service';
 import { AIErrorCodes } from './domain/errors/ai.errors';
 import {
   AI_USAGE_REPOSITORY,
@@ -193,7 +194,8 @@ export class AIController {
     private readonly aiConfigService: AIConfigService,
     private readonly fallbackChain: FallbackChainService,
     @Inject(AI_USAGE_REPOSITORY)
-    private readonly usageRepository: AIUsageRepository
+    private readonly usageRepository: AIUsageRepository,
+    private readonly tierResolver: TierResolver
   ) {}
 
   @ApiOperation({
@@ -276,9 +278,13 @@ export class AIController {
     @Body() dto: AICompleteDto,
     @Req() req: Request
   ) {
-    const clientIp = clientIpOf(req);
-    const result = await this.completeTextHandler.execute({
+    const execution = await this.tierResolver.resolve({
       userId: user.id,
+      isAnonymous: user.isAnonymous === true,
+      clientIp: clientIpOf(req),
+    });
+    const result = await this.completeTextHandler.execute({
+      execution,
       action: dto.action,
       content: dto.content,
       ...(dto.selection !== undefined && { selection: dto.selection }),
@@ -286,8 +292,6 @@ export class AIController {
         targetLanguage: dto.targetLanguage,
       }),
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
-      ...(user.isAnonymous && { isAnonymous: true }),
-      clientIp,
     });
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
   }
@@ -346,14 +350,16 @@ export class AIController {
     @CurrentUser() user: RequestUser,
     @Req() req: Request
   ) {
-    const clientIp = clientIpOf(req);
-    const result = await this.voiceNoteHandler.execute({
+    const execution = await this.tierResolver.resolve({
       userId: user.id,
+      isAnonymous: user.isAnonymous === true,
+      clientIp: clientIpOf(req),
+    });
+    const result = await this.voiceNoteHandler.execute({
+      execution,
       audio: audio.buffer,
       mode: dto.mode,
       ...(dto.language !== undefined && { language: dto.language }),
-      ...(user.isAnonymous && { isAnonymous: true }),
-      clientIp,
     });
 
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);

@@ -10,6 +10,7 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIErrors } from '../../domain/errors/ai.errors';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import {
   AI_COMPLETION_PROVIDER,
   type AICompletionProvider,
@@ -18,15 +19,13 @@ import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { AICompletionPipeline } from '../services/ai-completion-pipeline.service';
 
 interface StreamTextInput {
-  readonly userId: string;
+  readonly execution: AiExecutionContext;
   readonly action: string;
   readonly content: string;
   readonly selection?: string;
   readonly suffix?: string;
   readonly targetLanguage?: string;
   readonly targetTone?: string;
-  readonly isAnonymous?: boolean;
-  readonly clientIp?: string;
 }
 
 export interface StreamTextCallbacks {
@@ -84,6 +83,8 @@ export class StreamTextHandler {
     }
 
     const { context } = preflight;
+    const { userId } = input.execution.subject;
+    const estimatedTokens = context.reservation.estimate.tokens;
     const collectedChunks: string[] = [];
     let usageSettled = false;
 
@@ -101,7 +102,7 @@ export class StreamTextHandler {
           ...(signal ? { signal } : {}),
           telemetry: {
             functionId: `completion:${context.action}`,
-            userId: input.userId,
+            userId,
           },
         }
       );
@@ -111,7 +112,7 @@ export class StreamTextHandler {
           this.logger.log({
             event: 'ai.request.cancelled',
             requestId: context.requestId,
-            userId: input.userId,
+            userId,
             latencyMs: Date.now() - context.startTime,
           });
           break;
@@ -128,9 +129,7 @@ export class StreamTextHandler {
       const zeroSettled =
         actualUsage.promptTokens === 0 && actualUsage.completionTokens === 0;
       const inputTokens =
-        aborted && zeroSettled
-          ? context.estimatedTokens
-          : actualUsage.promptTokens;
+        aborted && zeroSettled ? estimatedTokens : actualUsage.promptTokens;
       const outputTokens =
         aborted && zeroSettled
           ? estimateTokenCount(collectedChunks.join(''))
@@ -171,7 +170,7 @@ export class StreamTextHandler {
         this.logger.error({
           event: 'ai.stream.done_failed',
           requestId: context.requestId,
-          userId: input.userId,
+          userId,
           error: reasonOf(error),
         });
         return;
@@ -180,7 +179,7 @@ export class StreamTextHandler {
         const outputTokens = estimateTokenCount(collectedChunks.join(''));
         const usage = TokenUsage.create(
           {
-            inputTokens: context.estimatedTokens,
+            inputTokens: estimatedTokens,
             outputTokens,
             model: context.model,
           },
@@ -190,7 +189,7 @@ export class StreamTextHandler {
           context,
           input,
           {
-            inputTokens: context.estimatedTokens,
+            inputTokens: estimatedTokens,
             outputTokens,
             model: context.model,
             costUsd: usage.costUsd,
@@ -200,7 +199,7 @@ export class StreamTextHandler {
         this.logger.log({
           event: 'ai.request.cancelled',
           requestId: context.requestId,
-          userId: input.userId,
+          userId,
           latencyMs: Date.now() - context.startTime,
         });
         return;
@@ -208,7 +207,7 @@ export class StreamTextHandler {
       this.logger.error({
         event: 'ai.request.error',
         requestId: context.requestId,
-        userId: input.userId,
+        userId,
         action: context.action,
         model: context.model,
         error: reasonOf(error),

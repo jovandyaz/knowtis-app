@@ -10,6 +10,7 @@ import {
   type ArtifactType,
 } from '@knowtis/shared-types';
 
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import type { SupportedAIAction } from '../../../ai/domain/value-objects/ai-action.vo';
 import {
   ArtifactErrors,
@@ -30,7 +31,7 @@ import {
 import { AIGenerationPipeline } from '../services/ai-generation.pipeline';
 
 interface GenerateArtifactInput {
-  userId: string;
+  execution: AiExecutionContext;
   noteId: string;
   noteContent: string;
   noteTitle: string;
@@ -86,7 +87,7 @@ export class GenerateArtifactHandler {
     const schema = SCHEMA_MAP[input.type];
 
     const genResult = await this.pipeline.execute({
-      userId: input.userId,
+      execution: input.execution,
       action,
       prompt: sanitizedContent,
       schema: schema as ZodType,
@@ -99,10 +100,11 @@ export class GenerateArtifactHandler {
     }
 
     const title = `${TITLE_PREFIX_MAP[input.type]}: ${input.noteTitle}`;
+    const { userId } = input.execution.subject;
 
     const createResult = await this.repository.create({
       type: input.type,
-      userId: input.userId,
+      userId,
       sourceNoteId: input.noteId,
       title,
       content: genResult.value.object as ArtifactContent,
@@ -114,11 +116,7 @@ export class GenerateArtifactHandler {
 
     this.eventEmitter.emit(
       ArtifactGeneratedEvent.EVENT_NAME,
-      new ArtifactGeneratedEvent(
-        createResult.value.id,
-        input.userId,
-        input.type
-      )
+      new ArtifactGeneratedEvent(createResult.value.id, userId, input.type)
     );
 
     return ok(createResult.value);

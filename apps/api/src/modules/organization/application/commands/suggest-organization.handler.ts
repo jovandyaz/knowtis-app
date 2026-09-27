@@ -30,11 +30,15 @@ import {
 } from '../../../agent/domain/ports/retrieval.port';
 import { htmlToPlainText } from '../../../agent/infrastructure/sanitize/html-sanitizer';
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
-import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
+import {
+  AIRateLimitService,
+  type Reservation,
+} from '../../../ai/application/services/ai-rate-limit.service';
 import {
   AIErrors,
   type AIDomainError,
 } from '../../../ai/domain/errors/ai.errors';
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from '../../../ai/domain/ports/ai-structured-output.port';
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { TokenUsage } from '../../../ai/domain/value-objects/token-usage.vo';
@@ -49,9 +53,8 @@ import {
 import { suggestOrganizationSchema } from '../../domain/schemas/suggest-organization.schema';
 
 export interface SuggestOrganizationInput {
-  readonly userId: string;
+  readonly execution: AiExecutionContext;
   readonly noteIds: string[];
-  readonly clientIp?: string;
 }
 
 /** Vocabulary sent to the model, most-used first so the useful part survives the cap. */
@@ -117,7 +120,9 @@ export class SuggestOrganizationHandler {
     input: SuggestOrganizationInput
   ): Promise<Result<OrganizationSuggestion[], AIDomainError>> {
     const requestId = randomUUID();
-    const userIdResult = UserId.create(input.userId);
+    const { execution } = input;
+    const { userId } = execution.subject;
+    const userIdResult = UserId.create(userId);
     if (userIdResult.isErr()) {
       return err(AIErrors.invalidInput('Invalid user id'));
     }
@@ -132,7 +137,7 @@ export class SuggestOrganizationHandler {
         noteIds,
         userIdResult.value
       )
-    ).filter((note) => note.ownerId === input.userId);
+    ).filter((note) => note.ownerId === userId);
     if (owned.length !== noteIds.length) {
       return err(
         AIErrors.forbidden('Suggestions are only available on your own notes')
@@ -167,16 +172,13 @@ export class SuggestOrganizationHandler {
         batch.map((note) =>
           this.suggestOne({
             note,
-            userId: input.userId,
+            execution,
             model,
             instructions,
             estimatedCostUsd,
             vocabulary,
             known,
             requestId,
-            ...(input.clientIp !== undefined
-              ? { clientIp: input.clientIp }
-              : {}),
           })
         )
       );
@@ -190,7 +192,7 @@ export class SuggestOrganizationHandler {
       this.logger.error({
         event: 'ai.suggest-organization.all-failed',
         requestId,
-        userId: input.userId,
+        userId,
         noteCount: owned.length,
       });
       return err(
@@ -205,7 +207,7 @@ export class SuggestOrganizationHandler {
     this.logger.log({
       event: 'ai.suggest-organization.complete',
       requestId,
-      userId: input.userId,
+      userId,
       noteCount: outcomes.length,
       failedCount: failures.length,
     });
@@ -253,17 +255,22 @@ export class SuggestOrganizationHandler {
    */
   private async suggestOne(params: {
     note: NoteContentSummary;
-    userId: string;
+    execution: AiExecutionContext;
     model: string;
     instructions: string;
     estimatedCostUsd: number;
     vocabulary: string[];
     known: Set<string>;
     requestId: string;
-    clientIp?: string;
   }): Promise<NoteOutcome> {
-    const { note, userId, model, instructions, estimatedCostUsd, requestId } =
-      params;
+    const {
+      note,
+      execution,
+      model,
+      instructions,
+      estimatedCostUsd,
+      requestId,
+    } = params;
     const empty: OrganizationSuggestion = {
       noteId: note.id,
       bucket: null,
@@ -299,14 +306,10 @@ export class SuggestOrganizationHandler {
       return { suggestion: empty };
     }
 
-    const rateLimitCheck = await this.rateLimitService.checkLimit(
-      userId,
-      ESTIMATED_TOKENS_PER_NOTE,
-      false,
-      false,
-      estimatedCostUsd,
-      params.clientIp
-    );
+    const rateLimitCheck = await this.rateLimitService.checkLimit(execution, {
+      tokens: ESTIMATED_TOKENS_PER_NOTE,
+      costUsd: estimatedCostUsd,
+    });
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
         event: 'ai.suggest-organization.rejected',
@@ -316,6 +319,7 @@ export class SuggestOrganizationHandler {
       });
       return { suggestion: empty, failure: NOTE_FAILURE.RATE_LIMIT };
     }
+    const { reservation } = rateLimitCheck;
 
     try {
       const result =
@@ -334,8 +338,8 @@ export class SuggestOrganizationHandler {
         );
 
       this.recordUsage({
-        userId,
-        estimatedCostUsd,
+        execution,
+        reservation,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         model: result.model,
@@ -347,7 +351,7 @@ export class SuggestOrganizationHandler {
           noteId: note.id,
           bucket: result.object.bucket,
           tags: this.toSuggestedTags(result.object.tags, params.known),
-          relatedNotes: await this.findRelated(userId, {
+          relatedNotes: await this.findRelated(execution.subject.userId, {
             id: note.id,
             title,
             content,
@@ -361,18 +365,14 @@ export class SuggestOrganizationHandler {
         noteId: note.id,
         error: reasonOf(error),
       });
-      await this.rateLimitService.releaseReservation(
-        userId,
-        ESTIMATED_TOKENS_PER_NOTE,
-        estimatedCostUsd
-      );
+      await this.rateLimitService.releaseReservation(execution, reservation);
       return { suggestion: empty, failure: NOTE_FAILURE.PROVIDER };
     }
   }
 
   private recordUsage(params: {
-    userId: string;
-    estimatedCostUsd: number;
+    execution: AiExecutionContext;
+    reservation: Reservation;
     inputTokens: number;
     outputTokens: number;
     model: string;
@@ -388,12 +388,9 @@ export class SuggestOrganizationHandler {
     );
 
     this.rateLimitService
-      .recordUsage({
-        userId: params.userId,
+      .recordUsage(params.execution, params.reservation, {
         action: AI_ACTION.SUGGEST_ORGANIZATION,
         model: params.model,
-        estimatedTokens: ESTIMATED_TOKENS_PER_NOTE,
-        estimatedCostUsd: params.estimatedCostUsd,
         inputTokens: params.inputTokens,
         outputTokens: params.outputTokens,
         costUsd: usage.costUsd,
@@ -402,7 +399,7 @@ export class SuggestOrganizationHandler {
         this.logger.warn({
           event: 'ai.usage.record_failed',
           requestId: params.requestId,
-          userId: params.userId,
+          userId: params.execution.subject.userId,
           error: reasonOf(error),
         })
       );

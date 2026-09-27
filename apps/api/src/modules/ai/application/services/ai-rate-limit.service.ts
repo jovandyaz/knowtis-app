@@ -5,15 +5,10 @@ import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
-import {
-  dailyAllowance,
-  TIER_POLICIES,
-  type TierPolicy,
-} from '../../domain/execution-context/tier-policy';
+import { dailyAllowance } from '../../domain/execution-context/tier-policy';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
-  type RecordUsageInput,
 } from '../../domain/ports/ai-usage.repository';
 import {
   RATE_LIMIT_PROVIDER,
@@ -22,16 +17,33 @@ import {
 } from '../../domain/ports/rate-limit.port';
 import { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
 
-interface RateLimitResult {
+export interface UsageEstimate {
+  readonly tokens: number;
+  readonly costUsd: number;
+}
+
+/** What `checkLimit` reserved; pass it back to `recordUsage` or `releaseReservation` so reconciliation touches exactly what was reserved. */
+export interface Reservation {
+  readonly estimate: UsageEstimate;
+  /** The hashed per-IP subject actually reserved; absent when the caller is not anonymous, has no client IP, or the IP reserve degraded open. */
+  readonly reservedIpSubject?: string;
+}
+
+export type RateLimitResult =
+  | { readonly allowed: true; readonly reservation: Reservation }
+  | { readonly allowed: false; readonly reason?: string };
+
+export interface MeteredUsage {
+  readonly action: string;
+  readonly model: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly costUsd: number;
+}
+
+interface Gate {
   readonly allowed: boolean;
   readonly reason?: string;
-  /**
-   * The hashed per-IP subject that was actually reserved this turn, or absent
-   * when no IP reservation was made (not anonymous, no client IP, or the IP
-   * reserve degraded open). Callers thread it back into
-   * recordUsage/releaseReservation so reconciliation touches exactly what was
-   * reserved — never a re-derived set.
-   */
   readonly reservedIpSubject?: string;
 }
 
@@ -67,18 +79,45 @@ export class AIRateLimitService {
   ) {}
 
   async checkLimit(
+    execution: AiExecutionContext,
+    estimate: UsageEstimate
+  ): Promise<RateLimitResult> {
+    const costUsd = Math.max(estimate.costUsd, 0);
+    const gate = await this.reserve(
+      execution.subject.userId,
+      estimate.tokens,
+      this.dailyAllowance(execution),
+      execution.tier === 'anonymous',
+      execution.billing.kind === 'byok',
+      costUsd,
+      execution.subject.clientIp
+    );
+    if (!gate.allowed) {
+      return {
+        allowed: false,
+        ...(gate.reason !== undefined ? { reason: gate.reason } : {}),
+      };
+    }
+    return {
+      allowed: true,
+      reservation: {
+        estimate: { tokens: estimate.tokens, costUsd },
+        ...(gate.reservedIpSubject
+          ? { reservedIpSubject: gate.reservedIpSubject }
+          : {}),
+      },
+    };
+  }
+
+  private async reserve(
     userId: string,
     estimatedTokens: number,
-    isAnonymous = false,
-    byok = false,
-    estimatedCostUsd = 0,
-    clientIp?: string
-  ): Promise<RateLimitResult> {
-    const limits = this.allowanceFor(
-      TIER_POLICIES[isAnonymous ? 'anonymous' : 'free']
-    );
-    const effectiveCostUsd = Math.max(estimatedCostUsd, 0);
-
+    limits: RateLimits,
+    isAnonymous: boolean,
+    byok: boolean,
+    estimatedCostUsd: number,
+    clientIp: string | undefined
+  ): Promise<Gate> {
     if (this.rateLimitProvider) {
       // The global breaker bounds ALL server-billed spend, so it runs before any
       // reservation and before the byok branch (byok turns still incur side costs).
@@ -117,7 +156,7 @@ export class AIRateLimitService {
         const result = await this.rateLimitProvider.checkAndIncrement(
           userId,
           estimatedTokens,
-          effectiveCostUsd,
+          estimatedCostUsd,
           limits
         );
         if (!result.allowed) {
@@ -129,7 +168,7 @@ export class AIRateLimitService {
         return this.checkAnonymousIpBudget(
           userId,
           estimatedTokens,
-          effectiveCostUsd,
+          estimatedCostUsd,
           limits,
           isAnonymous,
           clientIp
@@ -145,7 +184,7 @@ export class AIRateLimitService {
     return this.checkLimitViaPg(
       userId,
       estimatedTokens,
-      effectiveCostUsd,
+      estimatedCostUsd,
       limits,
       byok
     );
@@ -157,8 +196,8 @@ export class AIRateLimitService {
     effectiveCostUsd: number,
     limits: RateLimits,
     isAnonymous: boolean,
-    clientIp?: string
-  ): Promise<RateLimitResult> {
+    clientIp: string | undefined
+  ): Promise<Gate> {
     const ipSubject = this.anonymousIpSubject(isAnonymous, clientIp);
     if (!ipSubject || !this.rateLimitProvider) {
       return { allowed: true };
@@ -208,7 +247,7 @@ export class AIRateLimitService {
     return `ip:${createHash('sha256').update(clientIp).digest('hex').slice(0, 16)}`;
   }
 
-  private async checkByokCostCeiling(userId: string): Promise<RateLimitResult> {
+  private async checkByokCostCeiling(userId: string): Promise<Gate> {
     if (!this.rateLimitProvider) {
       return { allowed: true };
     }
@@ -234,7 +273,7 @@ export class AIRateLimitService {
   // Read-then-reserve: concurrent in-flight turns may overshoot the cap by at
   // most (in-flight turns × per-turn estimate). Enforcement stays out of the
   // reservation Lua because BYOK turns skip reservation yet must still be gated.
-  private async checkGlobalSpendBreaker(): Promise<RateLimitResult> {
+  private async checkGlobalSpendBreaker(): Promise<Gate> {
     if (!this.rateLimitProvider) {
       return { allowed: true };
     }
@@ -350,12 +389,8 @@ export class AIRateLimitService {
 
   /** The daily token and cost allowance the caller's tier grants. */
   dailyAllowance(execution: AiExecutionContext): RateLimits {
-    return this.allowanceFor(execution.policy);
-  }
-
-  private allowanceFor(policy: TierPolicy): RateLimits {
     return dailyAllowance(
-      policy,
+      execution.policy,
       {
         tokenLimit: this.configService.get('AI_DAILY_TOKEN_LIMIT'),
         costLimit: this.configService.get('AI_DAILY_COST_LIMIT_USD'),
@@ -366,26 +401,23 @@ export class AIRateLimitService {
 
   /** Never rejects — release failures are logged and swallowed, so callers may fire-and-forget. */
   async releaseReservation(
-    userId: string,
-    estimatedTokens: number,
-    estimatedCostUsd = 0,
-    reservedIpSubject?: string
+    execution: AiExecutionContext,
+    reservation: Reservation
   ): Promise<void> {
-    if (!this.rateLimitProvider) {
+    if (execution.billing.kind === 'byok' || !this.rateLimitProvider) {
       return;
     }
-    const effectiveCostUsd = Math.max(estimatedCostUsd, 0);
-    for (const subject of reservedIpSubject
-      ? [userId, reservedIpSubject]
-      : [userId]) {
+    for (const subject of this.reservedSubjects(execution, reservation)) {
       try {
         await this.rateLimitProvider.correctUsage(
           subject,
-          estimatedTokens,
+          reservation.estimate.tokens,
           0,
-          effectiveCostUsd,
+          reservation.estimate.costUsd,
           0,
-          ...(subject === reservedIpSubject ? ([false] as const) : [])
+          ...(subject === reservation.reservedIpSubject
+            ? ([false] as const)
+            : [])
         );
       } catch (error) {
         this.logger.warn('Redis reservation release failed', error);
@@ -394,41 +426,50 @@ export class AIRateLimitService {
   }
 
   async recordUsage(
-    params: RecordUsageInput & {
-      readonly estimatedTokens: number;
-      readonly estimatedCostUsd?: number;
-      readonly reservedIpSubject?: string;
-    }
+    execution: AiExecutionContext,
+    reservation: Reservation | null,
+    usage: MeteredUsage
   ): Promise<void> {
-    await this.usageRepository.recordUsage(params);
-
-    // BYOK turns never reserved against the budget (see checkLimit), so there is
-    // nothing to correct or warn about — only the PG row is recorded for telemetry.
-    if (params.byok) {
+    const byok = execution.billing.kind === 'byok';
+    await this.usageRepository.recordUsage({
+      userId: execution.subject.userId,
+      ...usage,
+      byok,
+    });
+    // A byok-billed call never reserved against the budget (see checkLimit), so
+    // there is nothing to correct or warn about.
+    if (byok) {
       return;
     }
-
+    const estimate = reservation?.estimate ?? { tokens: 0, costUsd: 0 };
     if (this.rateLimitProvider) {
-      const effectiveCostUsd = Math.max(params.estimatedCostUsd ?? 0, 0);
-      for (const subject of params.reservedIpSubject
-        ? [params.userId, params.reservedIpSubject]
-        : [params.userId]) {
+      for (const subject of this.reservedSubjects(execution, reservation)) {
         try {
           await this.rateLimitProvider.correctUsage(
             subject,
-            params.estimatedTokens,
-            params.inputTokens + params.outputTokens,
-            effectiveCostUsd,
-            params.costUsd,
-            ...(subject === params.reservedIpSubject ? ([false] as const) : [])
+            estimate.tokens,
+            usage.inputTokens + usage.outputTokens,
+            estimate.costUsd,
+            usage.costUsd,
+            ...(subject === reservation?.reservedIpSubject
+              ? ([false] as const)
+              : [])
           );
         } catch (error) {
           this.logger.warn('Redis usage correction failed', error);
         }
       }
     }
+    await this.maybeWarnBudget(execution.subject.userId);
+  }
 
-    await this.maybeWarnBudget(params.userId);
+  private reservedSubjects(
+    execution: AiExecutionContext,
+    reservation: Reservation | null
+  ): string[] {
+    return reservation?.reservedIpSubject
+      ? [execution.subject.userId, reservation.reservedIpSubject]
+      : [execution.subject.userId];
   }
 
   private async maybeWarnBudget(userId: string): Promise<void> {
@@ -510,8 +551,8 @@ export class AIRateLimitService {
     estimatedTokens: number,
     estimatedCostUsd: number,
     limits: RateLimits,
-    byok = false
-  ): Promise<RateLimitResult> {
+    byok: boolean
+  ): Promise<Gate> {
     if (!this.allowPgRpm(userId)) {
       this.logger.warn(`PG-fallback RPM limit exceeded for user ${userId}`);
       return {

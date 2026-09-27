@@ -28,8 +28,10 @@ import {
   AIConfigService,
   InvalidAIConfigError,
 } from './application/services/ai-config.service';
+import { TierResolver } from './application/services/tier-resolver.service';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { FallbackChainService } from './infrastructure/providers/fallback-chain.service';
+import { createExecutionContext } from './testing/create-execution-context';
 
 function createContext(role: string | undefined, handler: object) {
   return {
@@ -99,6 +101,7 @@ describe('AIController resetConfig', () => {
       {} as never,
       aiConfigService as never,
       {} as never,
+      {} as never,
       {} as never
     );
 
@@ -128,6 +131,7 @@ describe('AIController resetConfig', () => {
       {} as never,
       aiConfigService as never,
       {} as never,
+      {} as never,
       {} as never
     );
 
@@ -138,10 +142,55 @@ describe('AIController resetConfig', () => {
   });
 });
 
+describe('AIController complete', () => {
+  it("runs the completion on the caller's resolved execution context", async () => {
+    const execution = createExecutionContext({
+      userId: 'anon-1',
+      tier: 'anonymous',
+      clientIp: '203.0.113.9',
+    });
+    const tierResolver = { resolve: vi.fn().mockResolvedValue(execution) };
+    const completeTextHandler = {
+      execute: vi
+        .fn()
+        .mockResolvedValue(
+          ok({ text: 'ok', inputTokens: 1, outputTokens: 1, model: 'm' })
+        ),
+    };
+    const controller = new AIController(
+      completeTextHandler as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      tierResolver as never
+    );
+
+    await controller.complete(
+      { id: 'anon-1', isAnonymous: true } as RequestUser,
+      { action: 'summarize', content: 'text' } as never,
+      { headers: { 'x-real-ip': '203.0.113.9' } } as never
+    );
+
+    expect(tierResolver.resolve).toHaveBeenCalledWith({
+      userId: 'anon-1',
+      isAnonymous: true,
+      clientIp: '203.0.113.9',
+    });
+    expect(completeTextHandler.execute).toHaveBeenCalledWith({
+      execution,
+      action: 'summarize',
+      content: 'text',
+    });
+  });
+});
+
 describe('POST /ai/voice-note', () => {
   let app: INestApplication;
   let base: string;
   const execute = vi.fn();
+  const execution = createExecutionContext({ userId: 'u1' });
+  const resolve = vi.fn();
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -152,6 +201,7 @@ describe('POST /ai/voice-note', () => {
         { provide: AIConfigService, useValue: {} },
         { provide: FallbackChainService, useValue: {} },
         { provide: AI_USAGE_REPOSITORY, useValue: {} },
+        { provide: TierResolver, useValue: { resolve } },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -176,6 +226,7 @@ describe('POST /ai/voice-note', () => {
 
   beforeEach(() => {
     execute.mockReset();
+    resolve.mockReset().mockResolvedValue(execution);
   });
 
   function postRecording(bytes: number) {
@@ -199,6 +250,19 @@ describe('POST /ai/voice-note', () => {
     expect(response.ok).toBe(true);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0]?.[0].audio.length).toBe(MAX_VOICE_NOTE_BYTES);
+  });
+
+  it("hands the handler the caller's resolved execution context", async () => {
+    execute.mockResolvedValue(
+      ok({ title: 'Note', content: '<p>Hi</p>', transcript: 'Hi' })
+    );
+
+    await postRecording(1);
+
+    expect(resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', isAnonymous: false })
+    );
+    expect(execute.mock.calls[0]?.[0].execution).toBe(execution);
   });
 
   it('refuses a recording over MAX_VOICE_NOTE_BYTES with 413 before the handler runs', async () => {

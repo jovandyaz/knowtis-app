@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AIErrorCodes } from '../../../domain/errors/ai.errors';
 import type { AIStructuredOutputProvider } from '../../../domain/ports/ai-structured-output.port';
 import type { AIUsageRepository } from '../../../domain/ports/ai-usage.repository';
+import { createExecutionContext } from '../../../testing/create-execution-context';
 import { createMockConfig } from '../../../testing/create-mock-config';
 import { createTestCatalog } from '../../../testing/create-test-catalog';
 import type { AIConfigService } from '../../services/ai-config.service';
@@ -99,7 +100,7 @@ describe('VoiceNoteHandler', () => {
     });
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -133,7 +134,7 @@ describe('VoiceNoteHandler', () => {
     });
 
     await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -157,7 +158,7 @@ describe('VoiceNoteHandler', () => {
     ).mockRejectedValue(new Error('skip structuring'));
 
     await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio,
       mode: 'create-note',
     });
@@ -178,7 +179,7 @@ describe('VoiceNoteHandler', () => {
     );
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -198,7 +199,7 @@ describe('VoiceNoteHandler', () => {
     });
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -215,7 +216,7 @@ describe('VoiceNoteHandler', () => {
     );
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -232,7 +233,7 @@ describe('VoiceNoteHandler', () => {
     );
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -256,7 +257,7 @@ describe('VoiceNoteHandler', () => {
     ).mockRejectedValue(new Error('Claude API error'));
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
     });
@@ -291,7 +292,7 @@ describe('VoiceNoteHandler', () => {
     });
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       audio: Buffer.from('fake-audio'),
       mode: 'create-note',
       language: 'es',

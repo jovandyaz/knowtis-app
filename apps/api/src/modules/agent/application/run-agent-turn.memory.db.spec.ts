@@ -43,6 +43,10 @@ const FIRST_TURN = '00000000-0000-4000-8000-0000000007a1';
 const SECOND_TURN = '00000000-0000-4000-8000-0000000007a2';
 const REPLAYED_TURN = '00000000-0000-4000-8000-0000000007a3';
 const MODEL = 'anthropic:claude-haiku-4-5';
+const ALLOWED = {
+  allowed: true,
+  reservation: { estimate: { tokens: 0, costUsd: 0 } },
+};
 
 const noMemories = {
   searchForUser: vi.fn().mockResolvedValue([]),
@@ -142,7 +146,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
 
   it('reconstructs turn 1 on turn 2 from only conversationId + message', async () => {
     const rateLimit = {
-      checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      checkLimit: vi.fn().mockResolvedValue(ALLOWED),
       dailyAllowance: vi
         .fn()
         .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
@@ -222,7 +226,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     });
 
     const rateLimit = {
-      checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      checkLimit: vi.fn().mockResolvedValue(ALLOWED),
       dailyAllowance: vi
         .fn()
         .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
@@ -276,7 +280,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       checkLimit: vi
         .fn()
         .mockResolvedValueOnce({ allowed: false, reason: 'limit' })
-        .mockResolvedValue({ allowed: true }),
+        .mockResolvedValue(ALLOWED),
       dailyAllowance: vi
         .fn()
         .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),

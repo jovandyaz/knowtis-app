@@ -26,7 +26,10 @@ import {
   type DroppedUserTurn,
   type InputDetectionRow,
 } from '../../ai/application/services/ai-input-guard.policy';
-import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import {
+  AIRateLimitService,
+  type Reservation,
+} from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { TierResolver } from '../../ai/application/services/tier-resolver.service';
@@ -105,7 +108,10 @@ interface RunAgentTurnInput {
   readonly effort?: ReasoningEffort;
 }
 
-type TurnInput = Omit<RunAgentTurnInput, 'isAnonymous' | 'clientIp'> & {
+type TurnInput = Omit<
+  RunAgentTurnInput,
+  'userId' | 'isAnonymous' | 'clientIp'
+> & {
   readonly execution: AiExecutionContext;
 };
 
@@ -134,11 +140,9 @@ export interface RunAgentTurnCallbacks {
 type TurnEventOutcome = 'continue' | 'stop';
 
 interface TurnLoopContext {
-  readonly estimatedTokens: number;
-  readonly estimatedCostUsd: number;
+  readonly execution: AiExecutionContext;
+  readonly reservation: Reservation;
   readonly model: string;
-  readonly isByok: boolean;
-  readonly reservedIpSubject?: string;
   reconciled: boolean;
 }
 
@@ -252,16 +256,15 @@ export class RunAgentTurnHandler {
   }
 
   private executePolicy(
-    userId: string,
     callbacks: RunAgentTurnCallbacks,
     persistence: PersistenceContext
   ): TurnLoopPolicy {
     return {
       onProposal: async (event, ctx) => {
-        await this.recordUsage(userId, ctx, event.usage);
+        await this.recordUsage(ctx, event.usage);
         ctx.reconciled = true;
         await this.pendingStore.save({
-          userId,
+          userId: ctx.execution.subject.userId,
           turnId: persistence.turnId,
           mutation: event.proposal,
           conversationId: persistence.conversationId,
@@ -307,7 +310,6 @@ export class RunAgentTurnHandler {
       message.content
     );
     const synthInput: TurnInput = {
-      userId: input.userId,
       turnId: input.turnId,
       messages,
       message,
@@ -329,7 +331,7 @@ export class RunAgentTurnHandler {
       undefined,
       callbacks,
       signal,
-      this.executePolicy(input.userId, callbacks, persistence),
+      this.executePolicy(callbacks, persistence),
       persistence
     );
   }
@@ -472,7 +474,6 @@ export class RunAgentTurnHandler {
   }
 
   private resumePolicy(
-    userId: string,
     callbacks: Pick<
       RunAgentTurnCallbacks,
       'onChunk' | 'onDone' | 'onError' | 'onThinking'
@@ -482,11 +483,11 @@ export class RunAgentTurnHandler {
       onProposal: async (event, ctx) => {
         this.logger.warn({
           event: 'agent.resume.proposal_dropped',
-          userId,
+          userId: ctx.execution.subject.userId,
           proposalId: event.proposal.id,
           summary: event.proposal.summary,
         });
-        const costUsd = await this.recordUsage(userId, ctx, event.usage);
+        const costUsd = await this.recordUsage(ctx, event.usage);
         ctx.reconciled = true;
         callbacks.onDone({
           inputTokens: event.usage.inputTokens,
@@ -540,7 +541,6 @@ export class RunAgentTurnHandler {
     const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
-      userId: input.userId,
       turnId: input.turnId,
       messages: history,
       knownNotes,
@@ -555,7 +555,7 @@ export class RunAgentTurnHandler {
       input.resume,
       callbacks,
       signal,
-      this.resumePolicy(input.userId, callbacks),
+      this.resumePolicy(callbacks),
       { conversationId: input.conversationId, turnId: input.turnId }
     );
   }
@@ -574,6 +574,7 @@ export class RunAgentTurnHandler {
     if (signal?.aborted) {
       return;
     }
+    const { userId } = input.execution.subject;
     const inputMessages = input.messages ?? [];
     const freshUserMessage: AgentMessage | undefined =
       resume === undefined && input.message
@@ -586,7 +587,7 @@ export class RunAgentTurnHandler {
       }
       const verdict = await this.injectionGuard.guard(
         freshUserMessage.content,
-        input.userId
+        userId
       );
       if (!verdict.safe) {
         callbacks.onError(AIErrors.promptInjectionDetected());
@@ -597,7 +598,7 @@ export class RunAgentTurnHandler {
     const fitted = await this.fitGuardedHistory(
       sanitized.messages,
       freshUserMessage,
-      input.userId
+      userId
     );
     logInputDetections(
       this.logger,
@@ -607,7 +608,7 @@ export class RunAgentTurnHandler {
       ],
       {
         surface: 'history',
-        userId: input.userId,
+        userId,
         ...(persistence ? { conversationId: persistence.conversationId } : {}),
       },
       fitted.dropped
@@ -628,7 +629,7 @@ export class RunAgentTurnHandler {
     } catch (error) {
       this.logger.error({
         event: 'agent.model_resolution_failed',
-        userId: input.userId,
+        userId,
         error: reasonOf(error),
       });
       callbacks.onError(AIErrors.providerError('Model resolution failed'));
@@ -652,11 +653,12 @@ export class RunAgentTurnHandler {
       : 0;
 
     const execution = billingFor(input.execution, providerOf(model));
-    const { billing } = execution;
-    const isByok = billing.kind === 'byok';
     let byokApiKey: string | null = null;
-    if (billing.kind === 'byok') {
-      byokApiKey = await this.byok.getApiKey(input.userId, billing.provider);
+    if (execution.billing.kind === 'byok') {
+      byokApiKey = await this.byok.getApiKey(
+        userId,
+        execution.billing.provider
+      );
       // Fail closed: the model was selectable on the user's key, so never bill
       // the server's key as a silent fallback when that key is unavailable.
       if (!byokApiKey) {
@@ -684,28 +686,20 @@ export class RunAgentTurnHandler {
         this.aiConfig.getOpenRouterIgnoredProviders(),
       ]);
 
-    const limit = await this.rateLimit.checkLimit(
-      input.userId,
-      estimatedTokens,
-      execution.tier === 'anonymous',
-      isByok,
-      estimatedCostUsd,
-      execution.subject.clientIp
-    );
+    const limit = await this.rateLimit.checkLimit(execution, {
+      tokens: estimatedTokens,
+      costUsd: estimatedCostUsd,
+    });
     if (!limit.allowed) {
       callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
       return;
     }
 
     const ctx: TurnLoopContext = {
-      estimatedTokens,
-      estimatedCostUsd,
+      execution,
+      reservation: limit.reservation,
       model,
-      isByok,
       reconciled: false,
-      ...(limit.reservedIpSubject
-        ? { reservedIpSubject: limit.reservedIpSubject }
-        : {}),
     };
 
     const turnMessages: AgentMessage[] = [];
@@ -728,7 +722,7 @@ export class RunAgentTurnHandler {
       );
     };
     if (signal?.aborted) {
-      await this.recordUsageSafe(input.userId, ctx, {
+      await this.recordUsageSafe(ctx, {
         inputTokens: 0,
         outputTokens: 0,
         model,
@@ -738,7 +732,7 @@ export class RunAgentTurnHandler {
     callbacks.onModelStart?.();
     try {
       for await (const event of this.orchestrator.run({
-        userId: input.userId,
+        userId,
         messages,
         model,
         maxSteps,
@@ -770,7 +764,6 @@ export class RunAgentTurnHandler {
             break;
           case 'error':
             await this.recordUsageSafe(
-              input.userId,
               ctx,
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
@@ -779,19 +772,19 @@ export class RunAgentTurnHandler {
             callbacks.onError(event.error);
             return;
           case 'aborted':
-            await this.recordUsageSafe(input.userId, ctx, event.usage);
+            await this.recordUsageSafe(ctx, event.usage);
             ctx.reconciled = true;
             await persistTurnOnce([], 'aborted');
             return;
           case 'done': {
             let costUsd: number;
             try {
-              costUsd = await this.recordUsage(input.userId, ctx, event.usage);
+              costUsd = await this.recordUsage(ctx, event.usage);
               ctx.reconciled = true;
             } catch (error) {
               this.logger.warn({
                 event: 'agent.usage.record_failed',
-                userId: input.userId,
+                userId,
                 error: reasonOf(error),
               });
               costUsd = TokenUsage.create(
@@ -805,8 +798,11 @@ export class RunAgentTurnHandler {
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
             }
-            if (billing.kind === 'byok') {
-              void this.byok.markUsed(input.userId, billing.provider);
+            if (execution.billing.kind === 'byok') {
+              void this.byok.markUsed(
+                execution.subject.userId,
+                execution.billing.provider
+              );
             }
             await persistTurnOnce(event.sources, event.stopReason);
             callbacks.onDone({
@@ -843,10 +839,10 @@ export class RunAgentTurnHandler {
       }
       this.logger.error({
         event: 'agent.turn.no_terminal',
-        userId: input.userId,
+        userId,
       });
       if (!ctx.reconciled) {
-        await this.recordUsageSafe(input.userId, ctx, {
+        await this.recordUsageSafe(ctx, {
           inputTokens: 0,
           outputTokens: 0,
           model: ctx.model,
@@ -860,7 +856,7 @@ export class RunAgentTurnHandler {
       await persistTurnOnce([], signal?.aborted ? 'aborted' : 'error');
       if (signal?.aborted) {
         if (!ctx.reconciled) {
-          await this.recordUsageSafe(input.userId, ctx, {
+          await this.recordUsageSafe(ctx, {
             inputTokens: 0,
             outputTokens: 0,
             model: ctx.model,
@@ -870,11 +866,11 @@ export class RunAgentTurnHandler {
       }
       this.logger.error({
         event: 'agent.turn.unexpected_error',
-        userId: input.userId,
+        userId,
         error: reasonOf(error),
       });
       if (!ctx.reconciled) {
-        await this.recordUsageSafe(input.userId, ctx, {
+        await this.recordUsageSafe(ctx, {
           inputTokens: 0,
           outputTokens: 0,
           model: ctx.model,
@@ -912,6 +908,7 @@ export class RunAgentTurnHandler {
     resuming: boolean
   ): Promise<string | null> {
     const { byokProviders } = input.execution;
+    const { userId } = input.execution.subject;
     if (input.model) {
       if (
         !(await this.modelPreference.isSelectableWith(
@@ -922,17 +919,13 @@ export class RunAgentTurnHandler {
         this.logger.warn({
           event: 'ai.model.access_denied',
           model: input.model,
-          userId: input.userId,
+          userId,
         });
         callbacks.onError(AIErrors.invalidModel(input.model));
         return null;
       }
       if (conversationId) {
-        await this.conversations.setModel(
-          conversationId,
-          input.userId,
-          input.model
-        );
+        await this.conversations.setModel(conversationId, userId, input.model);
       }
       return input.model;
     }
@@ -946,41 +939,29 @@ export class RunAgentTurnHandler {
     ) {
       return stored;
     }
-    return this.modelPreference.getEffectiveDefault(
-      input.userId,
-      byokProviders
-    );
+    return this.modelPreference.getEffectiveDefault(userId, byokProviders);
   }
 
   private async recordUsageSafe(
-    userId: string,
     ctx: TurnLoopContext,
     usage: AgentTurnUsage
   ): Promise<void> {
     if (usage.inputTokens + usage.outputTokens === 0) {
-      if (!ctx.isByok) {
-        await this.rateLimit.releaseReservation(
-          userId,
-          ctx.estimatedTokens,
-          ctx.estimatedCostUsd,
-          ctx.reservedIpSubject
-        );
-      }
+      await this.rateLimit.releaseReservation(ctx.execution, ctx.reservation);
       return;
     }
     try {
-      await this.recordUsage(userId, ctx, usage);
+      await this.recordUsage(ctx, usage);
     } catch (error) {
       this.logger.warn({
         event: 'agent.usage.record_failed',
-        userId,
+        userId: ctx.execution.subject.userId,
         error: reasonOf(error),
       });
     }
   }
 
   private async recordUsage(
-    userId: string,
     ctx: TurnLoopContext,
     usage: AgentTurnUsage
   ): Promise<number> {
@@ -995,19 +976,12 @@ export class RunAgentTurnHandler {
       },
       pricing
     );
-    await this.rateLimit.recordUsage({
-      userId,
+    await this.rateLimit.recordUsage(ctx.execution, ctx.reservation, {
       action: 'agent',
+      model: usage.model,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
-      model: usage.model,
       costUsd: tokenUsage.costUsd,
-      estimatedTokens: ctx.estimatedTokens,
-      estimatedCostUsd: ctx.estimatedCostUsd,
-      byok: ctx.isByok,
-      ...(ctx.reservedIpSubject
-        ? { reservedIpSubject: ctx.reservedIpSubject }
-        : {}),
     });
     return tokenUsage.costUsd;
   }

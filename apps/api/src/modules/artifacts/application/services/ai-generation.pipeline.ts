@@ -13,6 +13,7 @@ import {
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import {
   AI_STRUCTURED_OUTPUT_PROVIDER,
   type AIStructuredOutputProvider,
@@ -22,7 +23,7 @@ import { TokenUsage } from '../../../ai/domain/value-objects/token-usage.vo';
 import { ArtifactErrors, type ArtifactDomainError } from '../../domain/errors';
 
 export interface GenerationRequest<T> {
-  userId: string;
+  execution: AiExecutionContext;
   action: SupportedAIAction;
   prompt: string;
   schema: ZodType<T>;
@@ -60,6 +61,8 @@ export class AIGenerationPipeline {
   ): Promise<Result<GenerationResult<T>, ArtifactDomainError>> {
     const requestId = randomUUID();
     const startTime = Date.now();
+    const { execution } = request;
+    const { userId } = execution.subject;
 
     const modelResult = await this.orchestrator.selectModel(request.action);
     if (modelResult.isErr()) {
@@ -77,18 +80,15 @@ export class AIGenerationPipeline {
         )
       : 0;
 
-    const rateLimitCheck = await this.rateLimitService.checkLimit(
-      request.userId,
-      request.estimatedTokens,
-      false,
-      false,
-      estimatedCostUsd
-    );
+    const rateLimitCheck = await this.rateLimitService.checkLimit(execution, {
+      tokens: request.estimatedTokens,
+      costUsd: estimatedCostUsd,
+    });
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
         event: 'ai.generation.rejected',
         requestId,
-        userId: request.userId,
+        userId,
         action: request.action,
         reason: rateLimitCheck.reason,
         ...request.logContext,
@@ -99,11 +99,12 @@ export class AIGenerationPipeline {
         )
       );
     }
+    const { reservation } = rateLimitCheck;
 
     this.logger.log({
       event: 'ai.generation.start',
       requestId,
-      userId: request.userId,
+      userId,
       action: request.action,
       estimatedTokens: request.estimatedTokens,
       ...request.logContext,
@@ -120,7 +121,7 @@ export class AIGenerationPipeline {
           timeoutMs: GENERATION_TIMEOUT_MS,
           telemetry: {
             functionId: `artifact:${request.action}`,
-            userId: request.userId,
+            userId,
           },
         }
       );
@@ -132,12 +133,9 @@ export class AIGenerationPipeline {
       );
 
       this.rateLimitService
-        .recordUsage({
-          userId: request.userId,
+        .recordUsage(execution, reservation, {
           action: request.action,
           model: servedModel,
-          estimatedTokens: request.estimatedTokens,
-          estimatedCostUsd,
           inputTokens,
           outputTokens,
           costUsd: usage.costUsd,
@@ -146,7 +144,7 @@ export class AIGenerationPipeline {
           this.logger.warn({
             event: 'ai.usage.record_failed',
             requestId,
-            userId: request.userId,
+            userId,
             error: reasonOf(error),
           })
         );
@@ -154,7 +152,7 @@ export class AIGenerationPipeline {
       this.logger.log({
         event: 'ai.generation.complete',
         requestId,
-        userId: request.userId,
+        userId,
         action: request.action,
         model,
         inputTokens,
@@ -174,18 +172,14 @@ export class AIGenerationPipeline {
       this.logger.error({
         event: 'ai.generation.error',
         requestId,
-        userId: request.userId,
+        userId,
         action: request.action,
         error: reasonOf(error),
         latencyMs: Date.now() - startTime,
         ...request.logContext,
       });
 
-      await this.rateLimitService.releaseReservation(
-        request.userId,
-        request.estimatedTokens,
-        estimatedCostUsd
-      );
+      await this.rateLimitService.releaseReservation(execution, reservation);
 
       return err(ArtifactErrors.generationFailed(GENERATION_FAILED_MESSAGE));
     }

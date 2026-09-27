@@ -34,7 +34,9 @@ import {
 } from '../websocket/socket-auth';
 import { SocketTokenExpiry } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
+import { TierResolver } from './application/services/tier-resolver.service';
 import { AIErrors } from './domain/errors/ai.errors';
+import type { AiExecutionContext } from './domain/execution-context/ai-execution-context';
 
 const aiCompletePayloadSchema = z.object({
   action: z.enum(COMPLETION_AI_ACTIONS),
@@ -59,6 +61,7 @@ export class AIGateway
 
   constructor(
     private readonly streamTextHandler: StreamTextHandler,
+    private readonly tierResolver: TierResolver,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
     configService: ConfigService<EnvConfig, true>
@@ -170,8 +173,13 @@ export class AIGateway
     const { action, content, selection, suffix, targetLanguage, targetTone } =
       parsed.data;
 
-    // A disconnect handled during the flag read found no stream to abort, so a
-    // stream started now would be billed and sent to nobody.
+    const execution = await this.resolveExecution(client, userId);
+    if (!execution) {
+      return;
+    }
+
+    // A disconnect handled during the flag read or the tier resolution found no
+    // stream to abort, so a stream started now would be billed and sent to nobody.
     if (!client.connected) {
       return;
     }
@@ -190,15 +198,13 @@ export class AIGateway
     try {
       await this.streamTextHandler.execute(
         {
-          userId,
+          execution,
           action,
           content,
           ...(selection !== undefined && { selection }),
           ...(suffix !== undefined && { suffix }),
           ...(targetLanguage !== undefined && { targetLanguage }),
           ...(targetTone !== undefined && { targetTone }),
-          ...(client.data.isAnonymous && { isAnonymous: true }),
-          ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
         },
         {
           onChunk: (text) => client.emit('ai:chunk', { text }),
@@ -223,6 +229,30 @@ export class AIGateway
     } finally {
       this.streams.release(userId, client.id, streamId);
       this.tokenExpiry.afterSlotRelease(client);
+    }
+  }
+
+  private async resolveExecution(
+    client: AuthenticatedSocket,
+    userId: string
+  ): Promise<AiExecutionContext | null> {
+    try {
+      return await this.tierResolver.resolve({
+        userId,
+        isAnonymous: client.data.isAnonymous === true,
+        ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.tier.resolve_failed',
+        userId,
+        error: reasonOf(error),
+      });
+      client.emit(
+        'ai:error',
+        AIErrors.providerError('Model resolution failed')
+      );
+      return null;
     }
   }
 }

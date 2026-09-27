@@ -12,7 +12,9 @@ import {
   type RetrievalPort,
 } from '../../agent/domain/ports/retrieval.port';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchController } from '../search.controller';
 import { SearchModule } from '../search.module';
@@ -55,9 +57,15 @@ describe('SearchModule wiring', () => {
 
         expect(rateLimit).toBeInstanceOf(AIRateLimitService);
 
+        vi.spyOn(moduleRef.get(TierResolver), 'resolve').mockResolvedValue(
+          createExecutionContext({ userId: 'user-1' })
+        );
         const checkLimitSpy = vi
           .spyOn(rateLimit, 'checkLimit')
-          .mockResolvedValue({ allowed: true });
+          .mockResolvedValue({
+            allowed: true,
+            reservation: { estimate: { tokens: 3, costUsd: 0 } },
+          });
         const releaseSpy = vi
           .spyOn(rateLimit, 'releaseReservation')
           .mockResolvedValue(undefined);
