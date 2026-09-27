@@ -1,11 +1,9 @@
 import { vi } from 'vitest';
 
-import type { FeatureFlagsService } from '../modules/feature-flags/feature-flags.service';
 import type { UsersService } from '../modules/users/users.service';
 import { VerifiedIdentityPolicy } from '../modules/users/verified-identity.policy';
 
 export const IDENTITY_STATE = {
-  GATE_OFF: 'gate-off',
   ANONYMOUS: 'anonymous',
   UNVERIFIED: 'unverified',
   VERIFIED: 'verified',
@@ -15,13 +13,10 @@ export type IdentityState =
   (typeof IDENTITY_STATE)[keyof typeof IDENTITY_STATE];
 
 /**
- * A real `VerifiedIdentityPolicy` over stub collaborators, so a spec exercises
+ * A real `VerifiedIdentityPolicy` over a stub users service, so a spec exercises
  * the gate itself instead of a mocked verdict.
  */
 export function policyFor(state: IdentityState): VerifiedIdentityPolicy {
-  const featureFlags = {
-    isEnabled: vi.fn().mockResolvedValue(state !== IDENTITY_STATE.GATE_OFF),
-  };
   const usersService = {
     findById: vi.fn().mockResolvedValue({
       id: 'user-1',
@@ -34,8 +29,5 @@ export function policyFor(state: IdentityState): VerifiedIdentityPolicy {
     }),
   };
 
-  return new VerifiedIdentityPolicy(
-    usersService as unknown as UsersService,
-    featureFlags as unknown as FeatureFlagsService
-  );
+  return new VerifiedIdentityPolicy(usersService as unknown as UsersService);
 }

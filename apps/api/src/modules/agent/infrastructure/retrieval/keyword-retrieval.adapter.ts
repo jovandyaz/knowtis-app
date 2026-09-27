@@ -2,9 +2,7 @@ import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { htmlToMarkdown } from '@knowtis/note-markdown';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { NoteEntity } from '../../../notes/domain/entities/note.entity';
 import {
   NOTE_READ_REPOSITORY,
@@ -16,6 +14,7 @@ import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import {
   MAX_NOTE_CONTENT_CHARS,
   TRUNCATION_MARKER,
+  WITHHELD_CONTENT,
   type AgentNote,
   type NoteBody,
   type NoteContentStatus,
@@ -26,8 +25,6 @@ import { htmlToPlainText } from '../sanitize/html-sanitizer';
 import { toNoteHit } from './note-hit.mapper';
 
 const MAX_SEARCH_HITS = 20;
-const WITHHELD_CONTENT =
-  '[Note content withheld: it failed the injection safety check]';
 
 interface BoundedText {
   readonly text: string;
@@ -46,7 +43,6 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
   constructor(
     @Inject(NOTE_READ_REPOSITORY)
     private readonly noteReadRepository: NoteReadRepository,
-    private readonly featureFlags: FeatureFlagsService,
     private readonly injectionGuard: InjectionGuardService
   ) {}
 
@@ -148,26 +144,24 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     noteId: string
   ): Promise<ToolContent> {
     const markdown = this.bound(htmlToMarkdown(html));
-    if (await this.scanFlagOn()) {
-      // The heuristics match instruction phrases as contiguous text, so one
-      // emphasised word inside a phrase hides it from a Markdown scan; the
-      // plain text drops href values, hiding an exfiltration link from a
-      // plain-text scan. Neither view covers the other.
-      const plain = this.bound(htmlToPlainText(html));
-      const views =
-        plain.text === markdown.text
-          ? [markdown.text]
-          : [markdown.text, plain.text];
-      for (const text of views) {
-        const verdict = await this.injectionGuard.guard(text, userId);
-        if (!verdict.safe) {
-          this.logger.warn({
-            event: 'agent.retrieval.content_blocked',
-            noteId,
-            score: verdict.score,
-          });
-          return { content: WITHHELD_CONTENT, contentStatus: 'withheld' };
-        }
+    // The heuristics match instruction phrases as contiguous text, so one
+    // emphasised word inside a phrase hides it from a Markdown scan; the
+    // plain text drops href values, hiding an exfiltration link from a
+    // plain-text scan. Neither view covers the other.
+    const plain = this.bound(htmlToPlainText(html));
+    const views =
+      plain.text === markdown.text
+        ? [markdown.text]
+        : [markdown.text, plain.text];
+    for (const text of views) {
+      const verdict = await this.injectionGuard.guard(text, userId);
+      if (!verdict.safe) {
+        this.logger.warn({
+          event: 'agent.retrieval.content_blocked',
+          noteId,
+          score: verdict.score,
+        });
+        return { content: WITHHELD_CONTENT, contentStatus: 'withheld' };
       }
     }
     return {
@@ -183,19 +177,6 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
           text: `${text.slice(0, MAX_NOTE_CONTENT_CHARS).replace(/[\uD800-\uDBFF]$/, '')}${TRUNCATION_MARKER}`,
           truncated: true,
         };
-  }
-
-  private async scanFlagOn(): Promise<boolean> {
-    try {
-      return await this.featureFlags.isEnabled(
-        FEATURE_FLAG_KEYS.AGENT_SCAN_RETRIEVED_NOTES
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Scan flag lookup failed, treating as off: ${error instanceof Error ? error.message : 'unknown'}`
-      );
-      return false;
-    }
   }
 
   private brandUser(userId: string, op: string): UserId | null {

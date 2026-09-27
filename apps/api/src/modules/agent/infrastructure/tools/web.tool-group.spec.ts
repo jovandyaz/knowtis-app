@@ -53,10 +53,20 @@ function run(
 }
 
 describe('WebToolGroup', () => {
-  it('should be gated by the agent_web_search flag and available in both phases', () => {
-    const g = makeGroup({} as WebSearchPort, {} as AIRateLimitService);
-    expect(g.flag).toBe('agent_web_search');
+  it('is available when web search is configured', () => {
+    const g = makeGroup(
+      { isConfigured: () => true } as WebSearchPort,
+      {} as AIRateLimitService
+    );
     expect(g.availableIn()).toBe(true);
+  });
+
+  it('is unavailable when web search is not configured', () => {
+    const g = makeGroup(
+      { isConfigured: () => false } as WebSearchPort,
+      {} as AIRateLimitService
+    );
+    expect(g.availableIn()).toBe(false);
   });
 
   it('webSearch should filter injection hits, collect sources, and record cost', async () => {

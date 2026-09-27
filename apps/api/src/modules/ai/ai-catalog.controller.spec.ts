@@ -184,7 +184,7 @@ describe('AiCatalogController', () => {
   it('passes a skipped sync through instead of dressing it as a success', async () => {
     catalog.sync.mockResolvedValue({
       status: 'skipped',
-      skippedReason: 'flag_disabled',
+      skippedReason: 'locked',
       upstream: 0,
       candidates: 0,
       alerts: 0,
@@ -193,7 +193,7 @@ describe('AiCatalogController', () => {
 
     await expect(controller.sync(ACTOR)).resolves.toEqual({
       status: 'skipped',
-      skippedReason: 'flag_disabled',
+      skippedReason: 'locked',
       upstream: 0,
       candidates: 0,
       alerts: 0,

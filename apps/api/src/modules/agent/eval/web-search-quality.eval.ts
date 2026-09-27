@@ -13,7 +13,6 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
 import { DatabaseModule } from '../../../database';
-import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import { AgentModule } from '../agent.module';
 import type { AgentEvent, WebSource } from '../domain/agent-event';
 import {
@@ -54,12 +53,7 @@ describe.runIf(GATE)('web search tool quality', () => {
         DatabaseModule,
         AgentModule,
       ],
-    })
-      .overrideProvider(FeatureFlagsService)
-      .useValue({
-        isEnabled: (key: string) => Promise.resolve(key === 'agent_web_search'),
-      })
-      .compile();
+    }).compile();
     await moduleRef.init();
     moduleClose = () => moduleRef.close();
 

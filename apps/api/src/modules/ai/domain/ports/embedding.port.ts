@@ -10,6 +10,8 @@ export interface EmbeddingResult {
 }
 
 export interface EmbeddingPort {
+  /** False when the provider has no API key; callers skip embeddings instead of failing per request. */
+  isConfigured(): boolean;
   embedQuery(text: string): Promise<QueryEmbedding>;
   embedDocuments(texts: string[]): Promise<EmbeddingResult>;
 }

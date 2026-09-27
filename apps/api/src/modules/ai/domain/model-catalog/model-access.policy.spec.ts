@@ -16,128 +16,77 @@ const curatedPremium = CURATED_MODELS.find((m) => m.tier !== 'open')!;
 function candidate(overrides: Partial<AccessCandidate> = {}): AccessCandidate {
   return {
     id: PROMOTED_ID,
-    tier: 'open',
     outputCostPerToken: CHEAP_OUTPUT_COST,
     ...overrides,
   };
 }
 
 const open = candidate({ id: curatedOpen.id });
-const premium = candidate({ id: curatedPremium.id, tier: curatedPremium.tier });
+const premium = candidate({ id: curatedPremium.id });
 
 describe('accessFor', () => {
-  it('should grant everything curated while the flag is off', () => {
-    expect(accessFor(premium, NONE, false)).toBe('granted');
+  it('should grant everything curated, as prod does today', () => {
+    expect(accessFor(open, NONE)).toBe('granted');
+    expect(accessFor(premium, NONE)).toBe('granted');
     expect(
       accessFor(
         { ...premium, outputCostPerToken: ABOVE_CEILING_OUTPUT_COST },
-        NONE,
-        false
+        NONE
       )
     ).toBe('granted');
   });
 
-  it('should grant the open tier to users without any key', () => {
-    expect(accessFor(open, NONE, true)).toBe('granted');
-  });
-
-  it('should gate a premium tier behind the caller’s own provider key', () => {
-    expect(accessFor(premium, NONE, true)).toBe('requires_byok');
-    expect(
-      accessFor(premium, new Set([curatedPremium.id.split(':')[0]]), true)
-    ).toBe('granted');
-  });
-
-  it('should gate an open-tier model priced above the free ceiling', () => {
-    const expensive = candidate({
-      outputCostPerToken: ABOVE_CEILING_OUTPUT_COST,
-    });
-
-    expect(accessFor(expensive, NONE, true)).toBe('requires_byok');
-    expect(accessFor(expensive, new Set(['openrouter']), true)).toBe('granted');
-  });
-
-  it('should hold the ceiling for a promoted model even while the flag is off', () => {
-    const expensive = candidate({
-      outputCostPerToken: ABOVE_CEILING_OUTPUT_COST,
-    });
-
-    expect(accessFor(expensive, NONE, false)).toBe('requires_byok');
-    expect(accessFor(expensive, new Set(['openrouter']), false)).toBe(
-      'granted'
+  it('should gate a model the catalog cannot price', () => {
+    expect(accessFor(candidate({ outputCostPerToken: null }), NONE)).toBe(
+      'requires_byok'
     );
   });
 
-  it('should grant a promoted model under the ceiling while the flag is off', () => {
-    expect(accessFor(candidate(), NONE, false)).toBe('granted');
+  it('should gate a model stored with a negative price, which is not free either', () => {
+    const negative = candidate({ outputCostPerToken: -CHEAP_OUTPUT_COST });
+
+    expect(accessFor(negative, NONE)).toBe('requires_byok');
+    expect(accessFor(negative, new Set(['openrouter']))).toBe('granted');
   });
 
-  it('should keep the free tier to models at or under the shipped ceiling', () => {
-    const atTheLine = candidate({
-      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-    });
-    const overTheLine = candidate({
-      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 1.025,
+  it('should gate a promoted model priced above the free ceiling', () => {
+    const expensive = candidate({
+      outputCostPerToken: ABOVE_CEILING_OUTPUT_COST,
     });
 
-    expect(accessFor(atTheLine, NONE, true)).toBe('granted');
-    expect(accessFor(overTheLine, NONE, true)).toBe('requires_byok');
-    expect(accessFor(overTheLine, NONE, false)).toBe('requires_byok');
+    expect(accessFor(expensive, NONE)).toBe('requires_byok');
+    expect(accessFor(expensive, new Set(['openrouter']))).toBe('granted');
+  });
+
+  it('should grant a promoted model under the ceiling', () => {
+    expect(accessFor(candidate(), NONE)).toBe('granted');
   });
 
   it('should grant a model priced exactly at the free ceiling', () => {
     expect(
       accessFor(
         candidate({ outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN }),
-        NONE,
-        true
+        NONE
       )
     ).toBe('granted');
+  });
+
+  it('should gate a model priced just over the shipped ceiling', () => {
+    const overTheLine = candidate({
+      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 1.025,
+    });
+
+    expect(accessFor(overTheLine, NONE)).toBe('requires_byok');
   });
 
   it('should apply a tightened ceiling passed in by the caller', () => {
     const tightened = 0.000002;
     const midRange = candidate({ outputCostPerToken: 0.000003 });
 
-    expect(accessFor(midRange, NONE, true)).toBe('granted');
-    expect(accessFor(midRange, NONE, true, tightened)).toBe('requires_byok');
-    expect(accessFor(midRange, new Set(['openrouter']), true, tightened)).toBe(
+    expect(accessFor(midRange, NONE)).toBe('granted');
+    expect(accessFor(midRange, NONE, tightened)).toBe('requires_byok');
+    expect(accessFor(midRange, new Set(['openrouter']), tightened)).toBe(
       'granted'
-    );
-  });
-
-  // glm-5.2 is curated and open-weight but priced above the ceiling, so gating
-  // is what moves it behind BYOK. Pinned so the shift is a decision, not a surprise.
-  it('should put a curated open model priced over the ceiling behind BYOK once gating is on', () => {
-    const overCeiling = candidate({
-      id: curatedOpen.id,
-      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 1.1,
-    });
-
-    expect(accessFor(overCeiling, NONE, false)).toBe('granted');
-    expect(accessFor(overCeiling, NONE, true)).toBe('requires_byok');
-  });
-
-  it('should gate a model the catalog cannot price', () => {
-    expect(accessFor(candidate({ outputCostPerToken: null }), NONE, true)).toBe(
-      'requires_byok'
-    );
-    expect(
-      accessFor(candidate({ outputCostPerToken: null }), NONE, false)
-    ).toBe('requires_byok');
-  });
-
-  it('should gate a model stored with a negative price, which is not free either', () => {
-    const negative = candidate({ outputCostPerToken: -CHEAP_OUTPUT_COST });
-
-    expect(accessFor(negative, NONE, true)).toBe('requires_byok');
-    expect(accessFor(negative, NONE, false)).toBe('requires_byok');
-    expect(accessFor(negative, new Set(['openrouter']), true)).toBe('granted');
-  });
-
-  it('should gate a promoted model of a paid tier regardless of how cheap it is', () => {
-    expect(accessFor(candidate({ tier: 'fast' }), NONE, true)).toBe(
-      'requires_byok'
     );
   });
 });

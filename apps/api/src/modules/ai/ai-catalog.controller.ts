@@ -23,12 +23,13 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import type {
-  AssignableModelDto,
-  CatalogModelDto,
-  CatalogOverviewDto,
-  CatalogSyncResultDto,
-  PaginatedCandidatesDto,
+import {
+  FEATURE_FLAG_KEYS,
+  type AssignableModelDto,
+  type CatalogModelDto,
+  type CatalogOverviewDto,
+  type CatalogSyncResultDto,
+  type PaginatedCandidatesDto,
 } from '@knowtis/shared-types';
 
 import {
@@ -56,7 +57,7 @@ const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 @ApiTags('AI')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
-@RequireFeatureFlag('ai_enabled')
+@RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Roles('admin')
 @Controller('ai/catalog')
 export class AiCatalogController {
@@ -113,7 +114,7 @@ export class AiCatalogController {
   @ApiOperation({
     summary: 'Sync the catalog from upstream now',
     description:
-      'Runs the pass the daily cron would run. Reports what it wrote, or why it skipped: the feature flag is off, or another run holds the lock.',
+      'Runs the pass the daily cron would run. Reports what it wrote, or why it skipped: another instance holds the sync lock.',
   })
   @ApiResponse({ status: 200, description: 'What the sync pass did' })
   @ApiAuthErrors(AI_DISABLED)

@@ -1,11 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Matches, MaxLength } from 'class-validator';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 export class FeatureFlagKeyParam {
   @ApiProperty({
     description:
       'The feature flag key (lowercase alphanumeric with underscores)',
-    example: 'ai_enabled',
+    example: FEATURE_FLAG_KEYS.AI_ENABLED,
     pattern: '^[a-z0-9_]+$',
     maxLength: 100,
   })

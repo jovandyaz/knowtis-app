@@ -73,7 +73,7 @@ export interface PaginatedCandidatesDto {
 export const CATALOG_SYNC_STATUSES = ['completed', 'skipped'] as const;
 export type CatalogSyncStatus = (typeof CATALOG_SYNC_STATUSES)[number];
 
-export const CATALOG_SYNC_SKIP_REASONS = ['flag_disabled', 'locked'] as const;
+export const CATALOG_SYNC_SKIP_REASONS = ['locked'] as const;
 export type CatalogSyncSkipReason = (typeof CATALOG_SYNC_SKIP_REASONS)[number];
 
 /** What one sync pass did. Counts are zero when `status` is `skipped`, and `skippedReason` is set only then. */

@@ -101,17 +101,11 @@ export class SelectableModelsService {
   private selectable(
     model: OfferedModel,
     byokProviders: ReadonlySet<string>,
-    tierGatingOn: boolean,
     maxOutputCostPerToken?: number
   ): boolean {
     return (
       this.invocable(model, byokProviders) &&
-      this.accessFor(
-        model,
-        byokProviders,
-        tierGatingOn,
-        maxOutputCostPerToken
-      ) === 'granted'
+      this.accessFor(model, byokProviders, maxOutputCostPerToken) === 'granted'
     );
   }
 
@@ -119,21 +113,14 @@ export class SelectableModelsService {
   private accessFor(
     model: OfferedModel,
     byokProviders: ReadonlySet<string>,
-    tierGatingOn: boolean,
     maxOutputCostPerToken?: number
   ): ModelAccess {
     const candidate: AccessCandidate = {
       id: model.id,
-      tier: model.tier,
       outputCostPerToken:
         this.catalog.getPricing(model.id)?.outputCostPerToken ?? null,
     };
-    return accessFor(
-      candidate,
-      byokProviders,
-      tierGatingOn,
-      maxOutputCostPerToken
-    );
+    return accessFor(candidate, byokProviders, maxOutputCostPerToken);
   }
 
   private costClass(id: string): 1 | 2 | 3 {
@@ -154,7 +141,6 @@ export class SelectableModelsService {
     systemDefault: string,
     configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string> = NO_BYOK,
-    tierGatingOn = false,
     maxOutputCostPerToken?: number,
     intentModels?: Readonly<Record<ModelIntent, string>>
   ): SelectableModel[] {
@@ -178,12 +164,7 @@ export class SelectableModelsService {
           isDefault: m.id === systemDefault,
           billedToUser,
           routableByServer: this.registry.isModelAvailable(m.id),
-          access: this.accessFor(
-            m,
-            byokProviders,
-            tierGatingOn,
-            maxOutputCostPerToken
-          ),
+          access: this.accessFor(m, byokProviders, maxOutputCostPerToken),
           ...(reasoning ? { reasoning } : {}),
           ...(servesIntent ? { servesIntent } : {}),
         };
@@ -194,7 +175,6 @@ export class SelectableModelsService {
     modelId: string,
     configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string> = NO_BYOK,
-    tierGatingOn = false,
     maxOutputCostPerToken?: number
   ): boolean {
     const offered = this.catalogUnion(configured, byokProviders).find(
@@ -202,26 +182,7 @@ export class SelectableModelsService {
     );
     return (
       !!offered &&
-      this.selectable(
-        offered,
-        byokProviders,
-        tierGatingOn,
-        maxOutputCostPerToken
-      )
-    );
-  }
-
-  /** First offered model this caller may actually run, or null when none — the landing spot when a configured default is gated. */
-  firstSelectable(
-    configured: ReadonlySet<string>,
-    byokProviders: ReadonlySet<string> = NO_BYOK,
-    tierGatingOn = false,
-    maxOutputCostPerToken?: number
-  ): string | null {
-    return (
-      this.catalogUnion(configured, byokProviders).find((m) =>
-        this.selectable(m, byokProviders, tierGatingOn, maxOutputCostPerToken)
-      )?.id ?? null
+      this.selectable(offered, byokProviders, maxOutputCostPerToken)
     );
   }
 

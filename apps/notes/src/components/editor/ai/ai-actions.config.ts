@@ -224,19 +224,10 @@ export const SUPPORTED_TONES: readonly ToneOption[] = [
   { value: 'creative', labelKey: 'ai.tones.creative' },
 ] as const;
 
-interface AIActionAvailability {
-  voiceNotesEnabled: boolean;
-}
-
 export function getAIActionsForContext(
-  context: AIMenuContext,
-  { voiceNotesEnabled }: AIActionAvailability
+  context: AIMenuContext
 ): AIMenuActionConfig[] {
-  return AI_MENU_ACTIONS.filter(
-    (action) =>
-      action.contexts.includes(context) &&
-      (action.kind !== 'voiceNote' || voiceNotesEnabled)
-  );
+  return AI_MENU_ACTIONS.filter((action) => action.contexts.includes(context));
 }
 
 interface ExecuteAIActionParams {

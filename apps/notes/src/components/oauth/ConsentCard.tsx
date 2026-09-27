@@ -25,6 +25,7 @@ const DECISION_ERROR_KEYS = {
   alreadyResolved: 'oauth.decisionError.alreadyResolved',
   expired: 'oauth.decisionError.expired',
   sessionExpired: 'oauth.decisionError.sessionExpired',
+  emailNotVerified: 'oauth.decisionError.emailNotVerified',
   retryable: 'oauth.decisionError.retryable',
 } as const satisfies Record<ConsentDecisionErrorKind, string>;
 

@@ -60,7 +60,6 @@ vi.mock('@/stores/ai.store', () => ({
   useAIStore: () => false,
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
-  useFeatureFlag: () => false,
   useFeatureFlags: () => ({ isPending: false }),
 }));
 

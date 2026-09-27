@@ -30,7 +30,6 @@ import { DrizzleConversationRepository } from './infrastructure/persistence/driz
 import { DrizzleMemoryRepository } from './infrastructure/persistence/drizzle-memory.repository';
 import { DrizzleNoteEmbeddingRepository } from './infrastructure/retrieval/drizzle-note-embedding.repository';
 import { EmbeddingReconcileTask } from './infrastructure/retrieval/embedding-reconcile.task';
-import { FeatureFlaggedRetrievalAdapter } from './infrastructure/retrieval/feature-flagged-retrieval.adapter';
 import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
 import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retrieval.adapter';
 import {
@@ -62,7 +61,7 @@ import { MemoryController } from './memory.controller';
   providers: [
     KeywordRetrievalAdapter,
     HybridRetrievalAdapter,
-    { provide: RETRIEVAL_PORT, useClass: FeatureFlaggedRetrievalAdapter },
+    { provide: RETRIEVAL_PORT, useExisting: HybridRetrievalAdapter },
     { provide: AGENT_ORCHESTRATOR, useClass: AiSdkAgentOrchestrator },
     { provide: PENDING_MUTATION_STORE, useClass: RedisPendingMutationStore },
     {

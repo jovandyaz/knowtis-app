@@ -6,6 +6,7 @@ export {
 export {
   AI_INPUT_DISPOSITION,
   detectAiInput,
+  locateInjectionSpans,
   MAX_GUARD_SCAN_CHARS,
   type AiInputDetection,
   type AiInputDisposition,

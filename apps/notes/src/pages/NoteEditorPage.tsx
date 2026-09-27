@@ -42,16 +42,12 @@ import { toast } from 'sonner';
 import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useArtifacts } from '@knowtis/data-access-artifacts';
-import {
-  useFeatureFlag,
-  useFeatureFlags,
-} from '@knowtis/data-access-feature-flags';
+import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { Button, ErrorState, Input } from '@knowtis/design-system';
 import { useDebouncedMerge, useLatestRef } from '@knowtis/shared-hooks';
 import {
   ACCESS,
-  FEATURE_FLAG_KEYS,
   type GeneralAccessLevel,
   type NoteAccessLevel,
   type ParaBucket,
@@ -123,12 +119,7 @@ function NoteEditor({
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const isOwner = accessLevel === ACCESS.OWNER;
   const aiEnabled = useAIStore((s) => s.aiEnabled);
-  const voiceNotesEnabled = useAIStore((s) => s.voiceNotesEnabled);
-  const autoOrganizeEnabled = useFeatureFlag(
-    FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE
-  );
-  const suggestionsEnabled =
-    aiEnabled && autoOrganizeEnabled && !isAnonymous && isOwner;
+  const suggestionsEnabled = aiEnabled && !isAnonymous && isOwner;
   const suggestion = useNoteSuggestion({
     noteId,
     bucket,
@@ -349,7 +340,7 @@ function NoteEditor({
   }, [voiceNoteEditorOpen, t]);
 
   const openShareDialog = () => setIsShareDialogOpen(true);
-  const showVoiceNote = canEdit && aiEnabled && voiceNotesEnabled;
+  const showVoiceNote = canEdit && aiEnabled;
 
   return (
     <div className="mx-auto max-w-4xl">

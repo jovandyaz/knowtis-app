@@ -15,12 +15,7 @@ describe('AiOrganizationController', () => {
       AiOrganizationController,
     ]);
 
-  it('requires both the AI kill switch and the capability flag', () => {
-    expect(requiredFlags()).toEqual(
-      expect.arrayContaining([
-        FEATURE_FLAG_KEYS.AI_ENABLED,
-        FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE,
-      ])
-    );
+  it('requires only the AI kill switch', () => {
+    expect(requiredFlags()).toEqual([FEATURE_FLAG_KEYS.AI_ENABLED]);
   });
 });

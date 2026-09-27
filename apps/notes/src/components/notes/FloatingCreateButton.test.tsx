@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FloatingCreateButton } from './FloatingCreateButton';
 
-const aiState = { aiEnabled: false, voiceNotesEnabled: false };
+const aiState = { aiEnabled: false };
 
 vi.mock('@/stores/ai.store', () => ({
   useAIStore: (selector: (s: typeof aiState) => unknown) => selector(aiState),
@@ -38,7 +38,6 @@ describe('FloatingCreateButton', () => {
 
   beforeEach(() => {
     aiState.aiEnabled = false;
-    aiState.voiceNotesEnabled = false;
     slot = document.createElement('div');
     slot.id = MOBILE_FAB_SLOT_ID;
     document.body.appendChild(slot);
@@ -57,9 +56,8 @@ describe('FloatingCreateButton', () => {
     ).toBeInTheDocument();
   });
 
-  it('offers the voice recorder when AI and voice notes are both enabled', () => {
+  it('offers the voice recorder when AI is on', () => {
     aiState.aiEnabled = true;
-    aiState.voiceNotesEnabled = true;
 
     render(<FloatingCreateButton onCreateNote={vi.fn()} />);
 
@@ -68,20 +66,8 @@ describe('FloatingCreateButton', () => {
     ).toBeInTheDocument();
   });
 
-  it('hides the voice recorder when voice notes are disabled', () => {
-    aiState.aiEnabled = true;
-    aiState.voiceNotesEnabled = false;
-
-    render(<FloatingCreateButton onCreateNote={vi.fn()} />);
-
-    expect(
-      screen.queryByRole('button', { name: 'voice-note-recorder' })
-    ).not.toBeInTheDocument();
-  });
-
   it('hides the voice recorder when AI is disabled', () => {
     aiState.aiEnabled = false;
-    aiState.voiceNotesEnabled = true;
 
     render(<FloatingCreateButton onCreateNote={vi.fn()} />);
 

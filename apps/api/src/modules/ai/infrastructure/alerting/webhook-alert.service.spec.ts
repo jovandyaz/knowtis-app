@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockConfig } from '../../testing/create-mock-config';
@@ -14,6 +15,36 @@ describe('WebhookAlertService', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('logs ai.capability.unavailable once at init when AI_ALERT_WEBHOOK_URL is missing', () => {
+    const service = new WebhookAlertService(createMockConfig());
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    service.onModuleInit();
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith({
+      event: 'ai.capability.unavailable',
+      capability: 'alerts',
+      env: 'AI_ALERT_WEBHOOK_URL',
+    });
+  });
+
+  it('stays quiet at init when AI_ALERT_WEBHOOK_URL is set', () => {
+    const service = new WebhookAlertService(
+      createMockConfig({ AI_ALERT_WEBHOOK_URL: 'https://alerts.example/hook' })
+    );
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    service.onModuleInit();
+
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('should be a no-op when AI_ALERT_WEBHOOK_URL is not configured', () => {

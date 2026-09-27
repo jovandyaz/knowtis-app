@@ -52,7 +52,6 @@ vi.mock('@knowtis/crdt', () => ({
   docStateToBase64: vi.fn(),
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
-  useFeatureFlag: () => false,
   useFeatureFlags: () => ({ isPending: false }),
 }));
 vi.mock('@/components/editor/CollaborativeEditor', () => ({

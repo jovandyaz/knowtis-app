@@ -14,11 +14,7 @@ import {
   runEvalSuite,
   writeEvalSummary,
 } from './runtime/eval-runtime';
-import {
-  FIXTURE_SET,
-  REPLAY_GUARD_CASES,
-  REPLAY_KNOWN_FAILURES,
-} from './transcript-replay.fixtures';
+import { FIXTURE_SET, REPLAY_GUARD_CASES } from './transcript-replay.fixtures';
 
 loadEnv({ path: '.env.local', quiet: true });
 loadEnv({ path: '.env', quiet: true });
@@ -83,8 +79,6 @@ describe.runIf(evalGateOpen())('transcript replay', () => {
     }
     expect(stats.providerErrors).toBe(0);
     expect(stats.cases).toHaveLength(REPLAY_GUARD_CASES.length);
-    expect(stats.casesBelowThreshold.map((item) => item.key)).toEqual(
-      REPLAY_KNOWN_FAILURES.map((id) => caseKeyOf({ id }))
-    );
+    expect(stats.casesBelowThreshold).toEqual([]);
   }, 300_000);
 });
