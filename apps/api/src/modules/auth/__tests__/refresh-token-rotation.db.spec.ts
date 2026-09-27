@@ -2,6 +2,7 @@ import {
   createSessionWithTokens,
   RefreshTokensHandler,
   TokenHasher,
+  type SessionEntity,
 } from '@jovandyaz/auth-nestjs';
 import { AuthErrorCodes, REFRESH_TOKEN_GRACE_MS } from '@jovandyaz/auth/server';
 import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth/server';
@@ -50,16 +51,54 @@ function outcome(result: Result<AuthTokens, AuthDomainError>): string {
   return result.isOk() ? REFRESHED : result.error.code;
 }
 
+class TwoReadBarrierSessionRepository extends DrizzleSessionRepository {
+  readonly reads: (SessionEntity | null)[] = [];
+  private releaseReaders: () => void = () => undefined;
+  private readonly bothRead = new Promise<void>((resolve) => {
+    this.releaseReaders = resolve;
+  });
+
+  override async findByRefreshTokenHash(
+    hash: string
+  ): Promise<SessionEntity | null> {
+    const session = await super.findByRefreshTokenHash(hash);
+    this.reads.push(session);
+    if (this.reads.length === 2) {
+      this.releaseReaders();
+    }
+    await this.bothRead;
+    return session;
+  }
+}
+
 describe.runIf(DB_AVAILABLE)('Refresh token rotation (database)', () => {
   let moduleRef: TestingModule;
   let db: Database;
   let tokenService: JwtTokenService;
   let sessionRepository: DrizzleSessionRepository;
   let tokenHasher: TokenHasher;
+  let userRepository: DrizzleUserRepository;
   let handler: RefreshTokensHandler;
+
+  const createHandler = (sessionStore: DrizzleSessionRepository) =>
+    new RefreshTokensHandler(
+      userRepository,
+      tokenService,
+      sessionStore,
+      tokenHasher,
+      new EventEmitter2()
+    );
 
   const refreshToken = (result: Result<AuthTokens, AuthDomainError>) =>
     result._unsafeUnwrap().refreshToken;
+
+  const familyTokenHashes = async () =>
+    (
+      await db
+        .select({ hash: sessions.refreshTokenHash })
+        .from(sessions)
+        .where(eq(sessions.familyId, FAMILY_ID))
+    ).map((row) => row.hash);
 
   const familySessionCount = async () =>
     (
@@ -89,6 +128,16 @@ describe.runIf(DB_AVAILABLE)('Refresh token rotation (database)', () => {
     return { rotated: refreshToken(first), live: refreshToken(second) };
   };
 
+  const refreshFromTwoTabsAtOnce = async (token: string) => {
+    const barrier = new TwoReadBarrierSessionRepository(db);
+    const overlapping = createHandler(barrier);
+    const tabs = await Promise.all([
+      overlapping.execute(token),
+      overlapping.execute(token),
+    ]);
+    return { tabs, reads: barrier.reads };
+  };
+
   const passGraceWindow = () =>
     vi.setSystemTime(Date.now() + REFRESH_TOKEN_GRACE_MS + ONE_SECOND_MS);
 
@@ -109,13 +158,10 @@ describe.runIf(DB_AVAILABLE)('Refresh token rotation (database)', () => {
     tokenService = new JwtTokenService(new JwtService(), config);
     sessionRepository = new DrizzleSessionRepository(db);
     tokenHasher = new TokenHasher(config.getOrThrow('TOKEN_HASH_KEY'));
-    handler = new RefreshTokensHandler(
-      new DrizzleUserRepository(new UsersService(new UsersRepository(db))),
-      tokenService,
-      sessionRepository,
-      tokenHasher,
-      new EventEmitter2()
+    userRepository = new DrizzleUserRepository(
+      new UsersService(new UsersRepository(db))
     );
+    handler = createHandler(sessionRepository);
 
     await db
       .insert(users)
@@ -167,7 +213,33 @@ describe.runIf(DB_AVAILABLE)('Refresh token rotation (database)', () => {
     expect(await familySessionCount()).toBe(0);
   });
 
-  it('detects reuse of a rotated token after two tabs refreshed it concurrently in one second', async () => {
+  it('issues distinct live tokens to two tabs whose refreshes both read the session before either rotated it', async () => {
+    const { tabs, reads } = await refreshFromTwoTabsAtOnce(
+      refreshToken(await logIn())
+    );
+
+    expect(reads.map((session) => session?.rotatedAt)).toEqual([null, null]);
+    expect(tabs.map(outcome)).toEqual([REFRESHED, REFRESHED]);
+    expect(refreshToken(tabs[0])).not.toBe(refreshToken(tabs[1]));
+    const hashes = await familyTokenHashes();
+    expect(hashes).toHaveLength(1 + tabs.length);
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
+  it('detects reuse of the token two overlapping tabs rotated once the prune removed its session', async () => {
+    const original = refreshToken(await logIn());
+    const { tabs } = await refreshFromTwoTabsAtOnce(original);
+    passGraceWindow();
+    expect(outcome(await handler.execute(refreshToken(tabs[0])))).toBe(
+      REFRESHED
+    );
+    expect(await sessionsHoldingToken(original)).toBe(0);
+
+    expect(outcome(await handler.execute(original))).toBe(REUSE_DETECTED);
+    expect(await familySessionCount()).toBe(0);
+  });
+
+  it("detects reuse of the first tab's rotated token after a second tab refreshed the same login token through the grace window", async () => {
     const login = await logIn();
     const firstTab = await handler.execute(refreshToken(login));
     const secondTab = await handler.execute(refreshToken(login));
