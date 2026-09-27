@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
 import { classifyConsentError, isOauthDisabledError } from './oauth.errors';
 
@@ -30,6 +31,21 @@ describe('classifyConsentError', () => {
     expect(
       classifyConsentError(new ApiClientError('Unauthorized', 401))
     ).toEqual({ kind: 'sessionExpired', terminal: true });
+  });
+
+  it('marks a 403 EMAIL_NOT_VERIFIED as a non-terminal verification refusal', () => {
+    expect(
+      classifyConsentError(
+        new ApiClientError('Forbidden', 403, EMAIL_NOT_VERIFIED_CODE)
+      )
+    ).toEqual({ kind: 'emailNotVerified', terminal: false });
+  });
+
+  it('keeps a 403 without the verification code retryable', () => {
+    expect(classifyConsentError(new ApiClientError('Forbidden', 403))).toEqual({
+      kind: 'retryable',
+      terminal: false,
+    });
   });
 
   it('marks a 5xx as retryable', () => {

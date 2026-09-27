@@ -93,7 +93,6 @@ vi.mock('@knowtis/data-access-artifacts', () => ({ useArtifacts }));
 
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlags: () => ({ isPending: flagsState.isPending }),
-  useFeatureFlag: () => false,
 }));
 
 vi.mock('@knowtis/data-access-notes', () => ({

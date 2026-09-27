@@ -61,7 +61,6 @@ export class AiOrganizationController {
   @ApiResponse({ status: HttpStatus.OK, description: 'One entry per note' })
   @ApiBadRequest('more notes than the bulk cap, or a malformed id')
   @ApiAuthErrors('a note in the request is not owned by the caller')
-  @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE)
   @Post('suggest')
   @HttpCode(HttpStatus.OK)
   @Throttle(SUGGEST_THROTTLE)

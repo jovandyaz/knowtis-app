@@ -16,7 +16,7 @@ import type Provider from 'oidc-provider';
 import type { Interaction, InteractionResults } from 'oidc-provider';
 
 import { DATABASE_CONNECTION, type Database } from '../../database';
-import { FeatureFlagsService } from '../feature-flags';
+import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
 import { findGrantIdsByAccountAndClient } from './drizzle-oidc.adapter';
 import { ConsentDecisionDto } from './dto/consent-decision.dto';
 import {
@@ -24,7 +24,6 @@ import {
   OAUTH_RUNTIME,
   type OauthRuntime,
 } from './oauth.tokens';
-import { MCP_OAUTH_FLAG } from './oidc-mount.middleware';
 import type { OidcProviderHandle } from './oidc-provider.factory';
 
 interface InteractionDescription {
@@ -74,12 +73,12 @@ export class OauthInteractionController {
     private readonly runtime: OauthRuntime | null,
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database,
-    private readonly featureFlags: FeatureFlagsService
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   @Get(':uid')
   async describe(@Param('uid') uid: string): Promise<InteractionDescription> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const interaction = await this.findInteraction(provider, uid);
 
     const { params } = interaction;
@@ -102,8 +101,12 @@ export class OauthInteractionController {
     @Body() decision: ConsentDecisionDto,
     @CurrentUser() user: RequestUser
   ): Promise<{ returnTo: string }> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const resourceUrl = this.resolveResourceUrl();
+    await this.verifiedIdentity.assertVerified(
+      user.id,
+      'Verify your email address to connect apps'
+    );
     const interaction = await this.findInteraction(provider, uid);
 
     const { params } = interaction;
@@ -164,7 +167,7 @@ export class OauthInteractionController {
 
   @Post(':uid/abort')
   async abort(@Param('uid') uid: string): Promise<{ returnTo: string }> {
-    const provider = await this.resolveProvider();
+    const provider = this.resolveProvider();
     const interaction = await this.findInteraction(provider, uid);
 
     this.logger.log({
@@ -182,11 +185,8 @@ export class OauthInteractionController {
     );
   }
 
-  private async resolveProvider(): Promise<Provider> {
+  private resolveProvider(): Provider {
     if (!this.handle) {
-      throw new NotFoundException();
-    }
-    if (!(await this.featureFlags.isEnabled(MCP_OAUTH_FLAG))) {
       throw new NotFoundException();
     }
     return this.handle.provider;

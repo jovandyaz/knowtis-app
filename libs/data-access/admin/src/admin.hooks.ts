@@ -164,15 +164,6 @@ export function useUpsertFeatureFlag() {
   });
 }
 
-export function useDeleteFeatureFlag() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (key: string) =>
-      httpClient.delete(`/flags/${encodeURIComponent(key)}`),
-    onSettled: () => invalidateFlagDependents(queryClient),
-  });
-}
-
 /** Returned so the mutation stays pending until the refetches land — a caller disabling buttons on `isPending` would otherwise re-enable them over stale rows. */
 function invalidateAiConfigDependents(queryClient: QueryClient) {
   return Promise.all([

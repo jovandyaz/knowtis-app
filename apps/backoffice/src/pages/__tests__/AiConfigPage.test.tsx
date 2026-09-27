@@ -4,11 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DataAccessAdmin from '@knowtis/data-access-admin';
 import type * as DataAccessFeatureFlags from '@knowtis/data-access-feature-flags';
-import {
-  FEATURE_FLAG_CATALOG,
-  FEATURE_FLAG_KEYS,
-  FLAG_DOMAIN,
-} from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { AiConfigPage } from '../AiConfigPage';
 
@@ -148,13 +144,7 @@ describe('AiConfigPage', () => {
       refetch: vi.fn(),
     });
     useFeatureFlagsMock.mockReturnValue({
-      data: [
-        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
-        flagRow(FEATURE_FLAG_KEYS.AI_GLOBAL_SPEND_BREAKER, true),
-        flagRow(FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH, true),
-        flagRow(FEATURE_FLAG_KEYS.AGENT_BYOK, false),
-        flagRow(FEATURE_FLAG_KEYS.VOICE_NOTES_ENABLED, false),
-      ],
+      data: [flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true)],
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
@@ -427,6 +417,39 @@ describe('AiConfigPage', () => {
     expect(screen.getByRole('switch', { name: 'AI enabled' })).toBeChecked();
   });
 
+  it('offers only the Models and Providers tabs', () => {
+    renderPage();
+
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Models',
+      'Providers',
+    ]);
+  });
+
+  it('renders no toggle for flag rows other than the master switch', async () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: [
+        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
+        flagRow('retired_flag', true),
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    for (const tab of screen.getAllByRole('tab')) {
+      await userEvent.click(tab);
+      expect(
+        screen.getByRole('switch', { name: 'AI enabled' })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('switch', { name: /retired_flag/i })
+      ).toBeNull();
+    }
+  });
+
   it('offers the model catalog alongside the models', () => {
     renderPage();
 
@@ -435,130 +458,6 @@ describe('AiConfigPage', () => {
         name: /model catalog/i,
       })
     ).toBeInTheDocument();
-  });
-
-  it('shows guardrail flags under the Guardrails & Limits tab', async () => {
-    renderPage();
-    await userEvent.click(
-      screen.getByRole('tab', { name: 'Guardrails & Limits' })
-    );
-    expect(screen.getByText('Global spend breaker')).toBeInTheDocument();
-    expect(screen.queryByText('Web search')).not.toBeInTheDocument();
-  });
-
-  it('explains the empty guardrail panel when no guardrail flag exists yet', async () => {
-    useFeatureFlagsMock.mockReturnValue({
-      data: [
-        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
-        flagRow(FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH, true),
-      ],
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
-
-    renderPage();
-    await userEvent.click(
-      screen.getByRole('tab', { name: 'Guardrails & Limits' })
-    );
-
-    const panel = within(screen.getByRole('tabpanel'));
-    expect(
-      panel.getByRole('heading', { name: 'No flags in this area' })
-    ).toBeInTheDocument();
-    expect(panel.queryByRole('switch')).not.toBeInTheDocument();
-  });
-
-  it('keeps the Access section when only access flags exist', async () => {
-    useFeatureFlagsMock.mockReturnValue({
-      data: [
-        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
-        flagRow(FEATURE_FLAG_KEYS.AGENT_BYOK, false),
-      ],
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
-
-    renderPage();
-    await userEvent.click(
-      screen.getByRole('tab', { name: 'Capabilities & Access' })
-    );
-
-    const panel = within(screen.getByRole('tabpanel'));
-    expect(panel.getByRole('heading', { name: 'Access' })).toBeInTheDocument();
-    expect(
-      panel.getByRole('switch', { name: 'Bring your own key' })
-    ).toBeInTheDocument();
-    expect(
-      panel.queryByRole('heading', { name: 'No flags in this area' })
-    ).not.toBeInTheDocument();
-    expect(
-      panel.queryByRole('heading', { name: 'Capabilities' })
-    ).not.toBeInTheDocument();
-    expect(
-      panel.queryByRole('heading', { name: 'Rollouts' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows an error state and retries the flags query from the Guardrails tab', async () => {
-    const refetch = vi.fn();
-    useFeatureFlagsMock.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      isError: true,
-      error: new Error('Network error'),
-      refetch,
-    });
-
-    renderPage();
-    await userEvent.click(
-      screen.getByRole('tab', { name: 'Guardrails & Limits' })
-    );
-
-    expect(
-      screen.getByText('Could not load feature flags.')
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
-    expect(refetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows a loading state while the flags query is in flight', async () => {
-    useFeatureFlagsMock.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      isError: false,
-      refetch: vi.fn(),
-    });
-
-    renderPage();
-    await userEvent.click(
-      screen.getByRole('tab', { name: 'Guardrails & Limits' })
-    );
-
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
-    expect(
-      screen.queryByText('Could not load feature flags.')
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows exactly the capability and access flags, with env chips and nothing from other groups', async () => {
-    renderPage();
-    await userEvent.click(
-      screen.getByRole('tab', { name: 'Capabilities & Access' })
-    );
-
-    const panel = within(screen.getByRole('tabpanel'));
-    expect(panel.getByText('requires TAVILY_API_KEY')).toBeInTheDocument();
-    expect(
-      panel
-        .getAllByRole('switch')
-        .map((toggle) => toggle.getAttribute('aria-label'))
-    ).toEqual([
-      FEATURE_FLAG_CATALOG[FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH].label,
-      FEATURE_FLAG_CATALOG[FEATURE_FLAG_KEYS.AGENT_BYOK].label,
-    ]);
   });
 
   it('surfaces the config error on the Providers tab while keeping the provider list', async () => {
@@ -650,43 +549,6 @@ describe('AiConfigPage', () => {
       ).not.toBeInTheDocument();
     }
   );
-
-  it('reaches every AI-domain catalog flag from the header or one of the tabs', async () => {
-    const aiFlags = Object.entries(FEATURE_FLAG_CATALOG).filter(
-      ([, meta]) => meta.domain === FLAG_DOMAIN.AI
-    );
-    useFeatureFlagsMock.mockReturnValue({
-      data: aiFlags.map(([key]) => flagRow(key, false)),
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
-
-    renderPage();
-
-    const masterLabel =
-      FEATURE_FLAG_CATALOG[FEATURE_FLAG_KEYS.AI_ENABLED].label;
-    expect(
-      screen.getByRole('switch', { name: masterLabel })
-    ).toBeInTheDocument();
-
-    const unreached = new Set(
-      aiFlags
-        .map(([, meta]) => meta.label)
-        .filter((label) => label !== masterLabel)
-    );
-    for (const tab of screen.getAllByRole('tab')) {
-      await userEvent.click(tab);
-      const panel = within(screen.getByRole('tabpanel'));
-      for (const label of [...unreached]) {
-        if (panel.queryByRole('switch', { name: label })) {
-          unreached.delete(label);
-        }
-      }
-    }
-
-    expect([...unreached]).toEqual([]);
-  });
 
   it('pairs routing and reasoning in a two-column grid at xl', async () => {
     useAiConfigMock.mockReturnValue({
