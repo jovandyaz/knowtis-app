@@ -321,14 +321,24 @@ describe('TurnEffortResolver', () => {
   });
 
   describe('with the real model preference service', () => {
-    it("resolves a turn's effort from the turn's key providers, never re-reading the key store", async () => {
+    function makeReal() {
       const byok = { enabledProviders: vi.fn() };
-      const list = vi.fn().mockReturnValue([
-        {
-          id: DIRECT_MODEL,
-          reasoning: { levels: ['low', 'medium', 'high'], mandatory: false },
-        },
-      ]);
+      const list = (
+        _systemDefault: string,
+        _configured: ReadonlySet<string>,
+        byokProviders: ReadonlySet<string>
+      ) =>
+        byokProviders.has(providerOf(DIRECT_MODEL))
+          ? [
+              {
+                id: DIRECT_MODEL,
+                reasoning: {
+                  levels: ['low', 'medium', 'high'],
+                  mandatory: false,
+                },
+              },
+            ]
+          : [];
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),
         getDefaultModel: vi.fn().mockResolvedValue(MODEL),
@@ -342,10 +352,14 @@ describe('TurnEffortResolver', () => {
         aiConfig as never,
         byok as never
       );
-      const resolver = new TurnEffortResolver(
-        aiConfig as never,
-        modelPreference
-      );
+      return {
+        byok,
+        resolver: new TurnEffortResolver(aiConfig as never, modelPreference),
+      };
+    }
+
+    it("applies the declared level of a model the turn's key unlocks, never re-reading the key store", async () => {
+      const { resolver, byok } = makeReal();
       const execution = billedToKey(DIRECT_MODEL);
 
       await expect(
@@ -354,15 +368,23 @@ describe('TurnEffortResolver', () => {
       await expect(
         resolver.resolve({ execution, model: DIRECT_MODEL })
       ).resolves.toBe(GLOBAL_DEFAULT);
-
       expect(byok.enabledProviders).not.toHaveBeenCalled();
-      expect(list).toHaveBeenCalledWith(
-        MODEL,
-        new Set([MODEL]),
-        execution.byokProviders,
-        0.001,
-        {}
-      );
+    });
+
+    it('sends no effort to a model the turn holds no key for, never re-reading the key store', async () => {
+      const { resolver, byok } = makeReal();
+
+      await expect(
+        resolver.resolve({
+          execution: FREE_CALLER,
+          model: DIRECT_MODEL,
+          requested: 'high',
+        })
+      ).resolves.toBeUndefined();
+      await expect(
+        resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
+      ).resolves.toBeUndefined();
+      expect(byok.enabledProviders).not.toHaveBeenCalled();
     });
   });
 });

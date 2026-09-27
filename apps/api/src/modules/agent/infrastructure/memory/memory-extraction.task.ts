@@ -91,17 +91,17 @@ export class MemoryExtractionTask {
 
   private async reconcileLocked(): Promise<void> {
     try {
-      if (await this.rateLimit.isGlobalSpendExhausted()) {
-        this.logger.debug({
-          event: 'agent.memory.extraction_skipped',
-          reason: 'global_breaker',
-        });
+      if (await this.globalSpendExhausted()) {
         return;
       }
       const quiet = this.config.get('AI_MEMORY_QUIET_SECONDS');
       const batch = this.config.get('AI_MEMORY_BATCH_SIZE');
       const candidates = await this.conversations.findExtractable(quiet, batch);
+      let processed = 0;
       for (const conv of candidates) {
+        if (processed > 0 && (await this.globalSpendExhausted())) {
+          break;
+        }
         try {
           await this.extractOne(conv.id, conv.userId);
         } catch (error) {
@@ -110,15 +110,28 @@ export class MemoryExtractionTask {
             stackOf(error)
           );
         }
+        processed++;
       }
-      if (candidates.length > 0) {
+      if (processed > 0) {
         this.logger.log(
-          `Memory extraction processed ${candidates.length} conversations`
+          `Memory extraction processed ${processed} conversations`
         );
       }
     } catch (error) {
       this.logger.error('Memory extraction reconcile failed', stackOf(error));
     }
+  }
+
+  /** Unmarked conversations stay eligible, so a later tick retries them. */
+  private async globalSpendExhausted(): Promise<boolean> {
+    if (!(await this.rateLimit.isGlobalSpendExhausted())) {
+      return false;
+    }
+    this.logger.debug({
+      event: 'agent.memory.extraction_skipped',
+      reason: 'global_breaker',
+    });
+    return true;
   }
 
   private async extractOne(
@@ -154,8 +167,8 @@ export class MemoryExtractionTask {
         fallbackScope: MEMORY_FALLBACK_SCOPE,
       }
     );
-    void this.rateLimit
-      .recordUsage(execution, null, {
+    try {
+      await this.rateLimit.recordUsage(execution, null, {
         action: 'memory_extraction',
         model: result.model,
         inputTokens: result.inputTokens,
@@ -168,14 +181,14 @@ export class MemoryExtractionTask {
           },
           this.modelCatalog.getPricing(result.model)
         ).costUsd,
-      })
-      .catch((error: unknown) =>
-        this.logger.warn({
-          event: 'ai.usage.record_failed',
-          userId,
-          error: reasonOf(error),
-        })
-      );
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.usage.record_failed',
+        userId,
+        error: reasonOf(error),
+      });
+    }
     const { object } = result;
     const { adds, updates, deletes } = partitionOps(
       object.operations,
@@ -200,7 +213,7 @@ export class MemoryExtractionTask {
     if (safeAdds.length + safeUpdates.length > 0) {
       const texts = [...safeAdds, ...safeUpdates.map((u) => u.content)];
       const { embeddings, costUsd } = await this.embed.embedDocuments(texts);
-      void this.rateLimit.recordSideCost(execution, {
+      await this.rateLimit.recordSideCost(execution, {
         action: 'embedding',
         model: this.config.get('AI_EMBEDDING_MODEL'),
         costUsd,

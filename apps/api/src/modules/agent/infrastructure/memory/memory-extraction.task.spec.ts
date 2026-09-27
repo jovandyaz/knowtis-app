@@ -249,6 +249,51 @@ describe('MemoryExtractionTask', () => {
     expect(conversations.markExtracted).not.toHaveBeenCalled();
   });
 
+  it('stops the batch once an extraction exhausts global spend, leaving the rest unmarked', async () => {
+    const debug = vi
+      .spyOn(Logger.prototype, 'debug')
+      .mockImplementation(() => undefined);
+    const { task, rateLimit, conversations, structured } = make();
+    conversations.findExtractable.mockResolvedValue([
+      { id: 'c1', userId: 'u1' },
+      { id: 'c2', userId: 'u2' },
+    ]);
+    rateLimit.isGlobalSpendExhausted.mockImplementation(
+      async () => rateLimit.recordUsage.mock.calls.length > 0
+    );
+
+    await task.reconcile();
+
+    expect(structured.generateStructuredOutput).toHaveBeenCalledTimes(1);
+    expect(conversations.loadMessages).not.toHaveBeenCalledWith(
+      'c2',
+      'u2',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(conversations.markExtracted).toHaveBeenCalledTimes(1);
+    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+    expect(debug).toHaveBeenCalledWith({
+      event: 'agent.memory.extraction_skipped',
+      reason: 'global_breaker',
+    });
+  });
+
+  it('finishes recording an extraction spend before the run resolves', async () => {
+    const { task, rateLimit } = make();
+    const recorded: string[] = [];
+    const settleLater = (label: string) => async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      recorded.push(label);
+    };
+    rateLimit.recordUsage.mockImplementation(settleLater('usage'));
+    rateLimit.recordSideCost.mockImplementation(settleLater('embedding'));
+
+    await task.reconcile();
+
+    expect(recorded).toEqual(['usage', 'embedding']);
+  });
+
   it('resolves the conversation owner as a registered caller', async () => {
     const { task, tierResolver } = make();
 
