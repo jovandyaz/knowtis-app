@@ -31,12 +31,20 @@ export interface AiExecutionContext {
 
 export const PLATFORM_BILLING: Billing = { kind: 'platform' };
 
-export function billedByKey(
+function holdsKeyFor(
+  keyed: ReadonlySet<ByokProvider>,
+  provider: string
+): provider is ByokProvider {
+  const held: ReadonlySet<string> = keyed;
+  return held.has(provider);
+}
+
+/** The context billed to the caller's stored key for `provider`, or the context unchanged when the caller holds no key for it. */
+export function billingFor(
   execution: AiExecutionContext,
-  provider: ByokProvider
+  provider: string
 ): AiExecutionContext {
-  if (!execution.byokProviders.has(provider)) {
-    throw new Error(`no stored key for ${provider}`);
-  }
-  return { ...execution, billing: { kind: 'byok', provider } };
+  return holdsKeyFor(execution.byokProviders, provider)
+    ? { ...execution, billing: { kind: 'byok', provider } }
+    : execution;
 }

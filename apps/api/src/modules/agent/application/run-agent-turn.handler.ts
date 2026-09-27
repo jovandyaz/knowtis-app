@@ -13,7 +13,6 @@ import {
   AGENT_STOP_REASON,
   deriveConversationTitle,
   type AgentStopReason,
-  type ByokProvider,
   type MessageStopReason,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
@@ -37,7 +36,7 @@ import {
 } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
-  billedByKey,
+  billingFor,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
 import { segmentLimits } from '../../ai/domain/execution-context/segment-policy';
@@ -652,19 +651,12 @@ export class RunAgentTurnHandler {
         )
       : 0;
 
-    const provider = providerOf(model);
-    const execution = input.execution.byokProviders.has(
-      provider as ByokProvider
-    )
-      ? billedByKey(input.execution, provider as ByokProvider)
-      : input.execution;
-    const isByok = execution.billing.kind === 'byok';
+    const execution = billingFor(input.execution, providerOf(model));
+    const { billing } = execution;
+    const isByok = billing.kind === 'byok';
     let byokApiKey: string | null = null;
-    if (isByok) {
-      byokApiKey = await this.byok.getApiKey(
-        input.userId,
-        provider as ByokProvider
-      );
+    if (billing.kind === 'byok') {
+      byokApiKey = await this.byok.getApiKey(input.userId, billing.provider);
       // Fail closed: the model was selectable on the user's key, so never bill
       // the server's key as a silent fallback when that key is unavailable.
       if (!byokApiKey) {
@@ -813,8 +805,8 @@ export class RunAgentTurnHandler {
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
             }
-            if (isByok) {
-              void this.byok.markUsed(input.userId, provider as ByokProvider);
+            if (billing.kind === 'byok') {
+              void this.byok.markUsed(input.userId, billing.provider);
             }
             await persistTurnOnce(event.sources, event.stopReason);
             callbacks.onDone({
