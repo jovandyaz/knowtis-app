@@ -200,6 +200,35 @@ describe('active access leases', () => {
     expect(connection.close).not.toHaveBeenCalled();
   });
 
+  it('serves a handshake that joins while a read awaits its snapshot without another read', async () => {
+    const [first, second] = await Promise.all([
+      service.acquire('note', owner),
+      service.acquire('note', guest),
+    ]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(first.effectiveAccess).toBe('owner');
+    expect(second.effectiveAccess).toBe('editor');
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves a handshake that joins after a read applied but before it settled', async () => {
+    const outcome = vi.fn();
+    // Apply resolves the first lease, so this continuation acquires before
+    // that read's finally clears its reading flag.
+    void service
+      .acquire('note', owner)
+      .then(() => service.acquire('note', guest))
+      .then(outcome, outcome);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(outcome).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ effectiveAccess: 'editor', closed: false })
+    );
+    expect(reads).toHaveBeenCalledTimes(2);
+  });
+
   it('closes a connection registered after revocation with the original reason', async () => {
     const lease = await service.acquire('note', guest);
     snapshot = { ...initial, directPermissions: [] };

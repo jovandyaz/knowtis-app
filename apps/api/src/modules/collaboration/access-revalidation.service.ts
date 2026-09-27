@@ -56,6 +56,7 @@ interface NoteState {
   readonly sessions: Set<AccessLease>;
   generation: number;
   reading: boolean;
+  settling: boolean;
   dirty: boolean;
   readStartedAt: number;
   queuedAt?: number;
@@ -134,6 +135,7 @@ export class AccessRevalidationService
         sessions: new Set(),
         generation: 0,
         reading: false,
+        settling: false,
         dirty: false,
         readStartedAt: Number.NEGATIVE_INFINITY,
       };
@@ -168,10 +170,8 @@ export class AccessRevalidationService
     } else {
       const state = this.notes.get(lease.noteId);
       // A read that ran while this connection hydrated skipped its lease, so
-      // the renewal schedule no longer reaches it before it expires. Dirty
-      // re-reads even when that read has applied but not yet settled.
+      // the renewal schedule no longer reaches it before it expires.
       if (state && lease.expiresAt < state.readStartedAt + LEASE_MS) {
-        state.dirty = true;
         this.requestRead(state);
       }
     }
@@ -226,12 +226,15 @@ export class AccessRevalidationService
   }
 
   private requestRead(state: NoteState): void {
-    if (
-      this.stopped ||
-      state.reading ||
-      this.queue.has(state) ||
-      !state.sessions.size
-    ) {
+    if (state.reading) {
+      // A read still waiting on its snapshot serves every session present when
+      // it arrives; one already settling cannot, so read again after it.
+      if (state.settling) {
+        state.dirty = true;
+      }
+      return;
+    }
+    if (this.stopped || this.queue.has(state) || !state.sessions.size) {
       return;
     }
     if (this.activeReads < MAX_READS) {
@@ -273,6 +276,7 @@ export class AccessRevalidationService
     const generation = state.generation;
     state.readStartedAt = startedAt;
     state.reading = true;
+    state.settling = false;
     state.dirty = false;
     this.activeReads++;
     this.peakReads = Math.max(this.peakReads, this.activeReads);
@@ -288,6 +292,7 @@ export class AccessRevalidationService
     void Promise.resolve()
       .then(() => this.repository.findAccessSnapshot(state.noteId))
       .then((snapshot) => {
+        state.settling = true;
         if (
           this.stopped ||
           timedOut ||
@@ -299,6 +304,7 @@ export class AccessRevalidationService
         this.apply(state, snapshot, startedAt + LEASE_MS);
       })
       .catch(() => {
+        state.settling = true;
         this.reportReadFailure('query_failed');
         this.closeNote(state, COLLABORATION_CLOSE_REASON.ACCESS_UNAVAILABLE);
       })
