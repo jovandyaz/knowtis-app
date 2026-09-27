@@ -13,13 +13,14 @@ function resolverWith(providers: readonly string[]) {
 
 describe('TierResolver', () => {
   it('resolves an anonymous caller to the anonymous tier without key providers', async () => {
-    const { resolver, enabledProviders } = resolverWith([]);
+    const { resolver, enabledProviders } = resolverWith(['anthropic']);
     const context = await resolver.resolve({
       userId: 'anon-1',
       isAnonymous: true,
       clientIp: '203.0.113.9',
     });
-    expect(enabledProviders).toHaveBeenCalledWith('anon-1', true);
+    expect(enabledProviders).not.toHaveBeenCalled();
+    expect(context.tier).toBe('anonymous');
     expect(context).toMatchObject({
       subject: { userId: 'anon-1', clientIp: '203.0.113.9' },
       tier: 'anonymous',
@@ -30,21 +31,23 @@ describe('TierResolver', () => {
   });
 
   it('resolves a registered caller without keys to free', async () => {
-    const { resolver } = resolverWith([]);
+    const { resolver, enabledProviders } = resolverWith([]);
     const context = await resolver.resolve({
       userId: 'u-1',
       isAnonymous: false,
     });
+    expect(enabledProviders).toHaveBeenCalledWith('u-1');
     expect(context.tier).toBe('free');
     expect(context.subject).toEqual({ userId: 'u-1' });
   });
 
   it('resolves a registered caller with a stored key to byok, still billed to the platform', async () => {
-    const { resolver } = resolverWith(['anthropic']);
+    const { resolver, enabledProviders } = resolverWith(['anthropic']);
     const context = await resolver.resolve({
       userId: 'u-1',
       isAnonymous: false,
     });
+    expect(enabledProviders).toHaveBeenCalledWith('u-1');
     expect(context.tier).toBe('byok');
     expect(context.billing).toEqual({ kind: 'platform' });
     expect([...context.byokProviders]).toEqual(['anthropic']);

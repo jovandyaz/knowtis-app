@@ -2,8 +2,8 @@ import type { RateLimits } from '../ports/rate-limit.port';
 
 export type AccessTier = 'anonymous' | 'free' | 'byok';
 
-export const FULL_ALLOWANCE = 'full' as const;
-export const ANONYMOUS_SHARE_ALLOWANCE = 'anonymous-share' as const;
+const FULL_ALLOWANCE = 'full';
+export const ANONYMOUS_SHARE_ALLOWANCE = 'anonymous-share';
 export type DailyAllowanceKind =
   | typeof FULL_ALLOWANCE
   | typeof ANONYMOUS_SHARE_ALLOWANCE;

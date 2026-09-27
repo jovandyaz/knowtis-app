@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+import type { ByokProvider } from '@knowtis/shared-types';
+
 import {
   PLATFORM_BILLING,
   type AiCaller,
@@ -17,10 +19,9 @@ export class TierResolver {
   constructor(private readonly byok: ByokService) {}
 
   async resolve(caller: AiCaller): Promise<AiExecutionContext> {
-    const byokProviders = await this.byok.enabledProviders(
-      caller.userId,
-      caller.isAnonymous
-    );
+    const byokProviders = caller.isAnonymous
+      ? new Set<ByokProvider>()
+      : await this.byok.enabledProviders(caller.userId);
     const tier: AccessTier = caller.isAnonymous
       ? 'anonymous'
       : byokProviders.size > 0
