@@ -62,4 +62,29 @@ describe('stackOf', () => {
       'DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)'
     );
   });
+
+  it('heads an error wrapping a failed query with the diagnostics and keeps the wrapper frames', () => {
+    const wrapped = new Error(`Lookup failed: ${SECRET_PARAM}`, {
+      cause: failedQuery([SECRET_PARAM]),
+    });
+
+    const stack = stackOf(wrapped);
+
+    expect(stack).not.toContain(SECRET_PARAM);
+    expect(stack.split('\n')[0]).toBe(
+      'Error (failureCategory=unclassified, sqlState=40P01)'
+    );
+    expect(stack).toContain('stack-of.spec.ts');
+  });
+
+  it('keeps the frames of a wrapper that has no message of its own', () => {
+    const wrapped = new Error('', { cause: failedQuery([SECRET_PARAM]) });
+
+    const lines = stackOf(wrapped).split('\n');
+
+    expect(lines[0]).toBe(
+      'Error (failureCategory=unclassified, sqlState=40P01)'
+    );
+    expect(lines[1]).toMatch(/^\s+at /);
+  });
 });

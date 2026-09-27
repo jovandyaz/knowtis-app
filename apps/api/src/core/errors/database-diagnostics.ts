@@ -30,19 +30,39 @@ const FAILURE_CATEGORY_BY_CODE = new Map<unknown, FailureCategory>([
   ['55P03', 'transaction_conflict'],
 ]);
 
-/** Whether the error came from a query, so its message and fields may carry query values. */
-export function isDatabaseError(
+function queryFailureIn(
   error: unknown
-): error is DrizzleQueryError | postgres.PostgresError {
-  return (
-    error instanceof DrizzleQueryError ||
-    error instanceof postgres.PostgresError
-  );
+): DrizzleQueryError | postgres.PostgresError | undefined {
+  const visited = new Set<Error>();
+  for (
+    let current: unknown = error;
+    current instanceof Error && !visited.has(current);
+    current = current.cause
+  ) {
+    if (
+      current instanceof DrizzleQueryError ||
+      current instanceof postgres.PostgresError
+    ) {
+      return current;
+    }
+    visited.add(current);
+  }
+  return undefined;
 }
 
-/** The whitelisted facts of whatever a query threw; any other error reports only its name. */
+/**
+ * Whether the error came from a query, or wraps one as its cause, so it may
+ * carry query values: in its message, its fields, or the cause a formatter
+ * prints along with it.
+ */
+export function isDatabaseError(error: unknown): boolean {
+  return queryFailureIn(error) !== undefined;
+}
+
+/** The whitelisted facts of whatever a query threw, read through any error wrapping it; any other error reports only its name. */
 export function databaseDiagnostics(error: unknown): DatabaseDiagnostics {
-  const cause = error instanceof DrizzleQueryError ? error.cause : error;
+  const failure = queryFailureIn(error) ?? error;
+  const cause = failure instanceof DrizzleQueryError ? failure.cause : failure;
   const code =
     typeof cause === 'object' && cause !== null && 'code' in cause
       ? cause.code

@@ -52,32 +52,44 @@ function firstNonEmptyText(candidates: unknown[]): string | undefined {
   );
 }
 
+// inspect expands containers down to UNSERIALIZABLE_INSPECT_DEPTH and can still
+// print an error's message one level below them, so that level is the last one
+// checked; nothing deeper reaches the log.
 function withDatabaseErrorsDescribed(
   value: unknown,
-  copies = new WeakMap<object, unknown>()
+  level = 0,
+  ancestors = new Map<object, unknown>()
 ): unknown {
   if (isDatabaseError(value)) {
     return stackOf(value);
   }
-  if (!Array.isArray(value) && !isPlainObject(value)) {
+  if (
+    level > UNSERIALIZABLE_INSPECT_DEPTH ||
+    (!Array.isArray(value) && !isPlainObject(value))
+  ) {
     return value;
   }
-  if (copies.has(value)) {
-    return copies.get(value);
+  const ancestor = ancestors.get(value);
+  if (ancestor !== undefined) {
+    return ancestor;
   }
+  const describe = (nested: unknown) =>
+    withDatabaseErrorsDescribed(nested, level + 1, ancestors);
   if (Array.isArray(value)) {
     const copy: unknown[] = [];
-    copies.set(value, copy);
+    ancestors.set(value, copy);
     for (const nested of value) {
-      copy.push(withDatabaseErrorsDescribed(nested, copies));
+      copy.push(describe(nested));
     }
+    ancestors.delete(value);
     return copy;
   }
   const copy: Record<string, unknown> = {};
-  copies.set(value, copy);
+  ancestors.set(value, copy);
   for (const [key, nested] of Object.entries(value)) {
-    copy[key] = withDatabaseErrorsDescribed(nested, copies);
+    copy[key] = describe(nested);
   }
+  ancestors.delete(value);
   return copy;
 }
 

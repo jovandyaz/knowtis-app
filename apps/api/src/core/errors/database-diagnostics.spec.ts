@@ -33,6 +33,23 @@ describe('databaseDiagnostics', () => {
     expect(JSON.stringify(diagnostics)).not.toContain(SECRET_PARAM);
   });
 
+  it('reads the query failure a wrapping error carries as its cause, naming the wrapper', () => {
+    const wrapped = new Error(SECRET_PARAM, {
+      cause: failedQuery(QUOTED_PARAMS, uniqueViolation),
+    });
+
+    const diagnostics = databaseDiagnostics(wrapped);
+
+    expect(diagnostics).toStrictEqual({
+      errorName: 'Error',
+      failureCategory: 'unique_violation',
+      sqlState: '23505',
+      table: 'users',
+      constraint: 'users_email_unique',
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain(SECRET_PARAM);
+  });
+
   it('names the column of a raw Postgres error that reports one', () => {
     const notNull = postgresError({
       message:
@@ -101,8 +118,26 @@ describe('isDatabaseError', () => {
     expect(isDatabaseError(uniqueViolation)).toBe(true);
   });
 
+  it('recognizes an error that wraps a failed query somewhere down its cause chain', () => {
+    const wrapped = new Error('outer', {
+      cause: new Error('inner', {
+        cause: failedQuery(QUOTED_PARAMS, uniqueViolation),
+      }),
+    });
+
+    expect(isDatabaseError(wrapped)).toBe(true);
+  });
+
   it('leaves every other error alone', () => {
     expect(isDatabaseError(new Error('connect ECONNREFUSED'))).toBe(false);
     expect(isDatabaseError('timeout')).toBe(false);
+  });
+
+  it('ends on a cause chain that loops back on itself', () => {
+    const first = new Error('first');
+    const second = new Error('second', { cause: first });
+    first.cause = second;
+
+    expect(isDatabaseError(first)).toBe(false);
   });
 });

@@ -244,6 +244,8 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
     const SECRET_PARAM = '$argon2id$v=19$m=65536,t=3,p=4$sentinel-hash';
     const DIAGNOSTICS =
       'DrizzleQueryError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)';
+    const WRAPPER_DIAGNOSTICS =
+      'Error (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)';
 
     function uniqueViolation() {
       return postgresError({
@@ -303,6 +305,62 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
       expect(String(entry.cause).split('\n')[0]).toBe(DIAGNOSTICS);
     });
 
+    it('describes an error wrapping it by its diagnostics when nested in a payload', () => {
+      new Logger('Probe').warn({
+        event: 'probe',
+        error: new Error('x', { cause: rejectedSignUp() }),
+      });
+
+      const entry = onlyEntry(stdout);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(String(entry.error).split('\n')[0]).toBe(WRAPPER_DIAGNOSTICS);
+    });
+
+    it('describes an error wrapping it by its diagnostics inside a circular payload', () => {
+      const payload: Record<string, unknown> = {
+        event: 'probe',
+        error: new Error('x', { cause: rejectedSignUp() }),
+      };
+      payload.self = payload;
+
+      new Logger('Probe').warn(payload);
+
+      const entry = onlyEntry(stdout);
+      expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
+      expect(String(entry.payload)).toContain(WRAPPER_DIAGNOSTICS);
+    });
+
+    const NESTED_FAILURES = {
+      'a failed query': () => rejectedSignUp(),
+      'an error quoting the failed query it wraps': () => {
+        const failure = rejectedSignUp();
+        return new Error(`Lookup failed: ${failure.message}`, {
+          cause: failure,
+        });
+      },
+    };
+
+    it.each(
+      [1, 2, 3, 4, 5, 6, 7].flatMap((level) =>
+        Object.keys(NESTED_FAILURES).map((kind) => [kind, level] as const)
+      )
+    )(
+      'keeps %s out of a circular payload at nesting level %i',
+      (kind, level) => {
+        let nested: unknown =
+          NESTED_FAILURES[kind as keyof typeof NESTED_FAILURES]();
+        for (let wrap = 1; wrap < level; wrap += 1) {
+          nested = { nested };
+        }
+        const payload: Record<string, unknown> = { event: 'probe', nested };
+        payload.self = payload;
+
+        new Logger('Probe').warn(payload);
+
+        expect(JSON.stringify(onlyEntry(stdout))).not.toContain(SECRET_PARAM);
+      }
+    );
+
     it('is described by its diagnostics inside a circular payload', () => {
       const payload: Record<string, unknown> = {
         event: 'probe',
@@ -317,6 +375,24 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
       expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
       expect(String(entry.payload)).toContain('[Circular');
       expect(String(entry.payload)).toContain(DIAGNOSTICS);
+    });
+  });
+
+  it('logs a circular payload nested far beyond what it prints without throwing into the caller', () => {
+    const DEPTH_BEYOND_THE_CALL_STACK = 100_000;
+    const payload: Record<string, unknown> = { event: 'probe' };
+    let innermost = payload;
+    for (let level = 0; level < DEPTH_BEYOND_THE_CALL_STACK; level += 1) {
+      const next: Record<string, unknown> = {};
+      innermost.next = next;
+      innermost = next;
+    }
+    innermost.root = payload;
+
+    expect(() => new Logger('Probe').warn(payload)).not.toThrow();
+    expect(onlyEntry(stdout)).toMatchObject({
+      level: 'warn',
+      message: 'probe',
     });
   });
 

@@ -49,4 +49,14 @@ describe('reasonOf', () => {
       'PostgresError (failureCategory=unclassified, sqlState=22P02)'
     );
   });
+
+  it('describes an error wrapping a failed query by that query, never by its own message or the parameters', () => {
+    const wrapped = new Error(`Lookup failed: ${SECRET_PARAM}`, {
+      cause: failedQuery([SECRET_PARAM]),
+    });
+
+    expect(reasonOf(wrapped)).toBe(
+      'Error (failureCategory=unclassified, sqlState=40P01)'
+    );
+  });
 });
