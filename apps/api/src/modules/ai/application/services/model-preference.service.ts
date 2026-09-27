@@ -36,7 +36,9 @@ export class ModelPreferenceService {
     id: string;
     isAnonymous?: boolean;
   }): Promise<SelectableModel[]> {
-    const models = await this.offeredModels(user);
+    const models = await this.offeredModels(
+      await this.byok.enabledProviders(user.id, user.isAnonymous === true)
+    );
     if (user.isAnonymous !== true) {
       return models;
     }
@@ -47,15 +49,13 @@ export class ModelPreferenceService {
       .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
   }
 
-  private async offeredModels(user: {
-    id: string;
-    isAnonymous?: boolean;
-  }): Promise<SelectableModel[]> {
-    const [systemDefault, configured, byokProviders, ceiling, intentModels] =
+  private async offeredModels(
+    byokProviders: ReadonlySet<string>
+  ): Promise<SelectableModel[]> {
+    const [systemDefault, configured, ceiling, intentModels] =
       await Promise.all([
         this.aiConfig.getDefaultModel(),
         this.aiConfig.getConfiguredModelIds(),
-        this.byok.enabledProviders(user.id, user.isAnonymous === true),
         this.aiConfig.getFreeTierMaxOutputCostPerToken(),
         this.aiConfig.getIntentModels(),
       ]);
@@ -69,16 +69,17 @@ export class ModelPreferenceService {
   }
 
   /**
-   * Declared reasoning of a model this user is offered, trimmed to what their
-   * tier may spend. A ladder is a capability statement, so it reads the offered
-   * union itself, never the anonymous menu view: a chain candidate the upsell
-   * menu hides still declares what it can do. Null when unoffered or undeclared.
+   * Declared reasoning of a model offered to a caller holding keys for
+   * `byokProviders`, trimmed to what their tier may spend. A ladder is a
+   * capability statement, so it reads the offered union itself, never the
+   * anonymous menu view: a chain candidate the upsell menu hides still declares
+   * what it can do. Null when unoffered or undeclared.
    */
   async reasoningFor(
     modelId: string,
-    user: { id: string; isAnonymous?: boolean }
+    byokProviders: ReadonlySet<string>
   ): Promise<ModelReasoning | null> {
-    const models = await this.offeredModels(user);
+    const models = await this.offeredModels(byokProviders);
     return models.find((model) => model.id === modelId)?.reasoning ?? null;
   }
 
