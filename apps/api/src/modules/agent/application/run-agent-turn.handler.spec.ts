@@ -1983,8 +1983,14 @@ describe('RunAgentTurnHandler', () => {
     });
 
     it('bills the key, lifts the budget and widens the steps when the model runs on the caller key', async () => {
-      const { handler, orchestrator, tierResolver, callbacks } =
-        makeContextHandler();
+      const {
+        handler,
+        orchestrator,
+        rateLimit,
+        byok,
+        tierResolver,
+        callbacks,
+      } = makeContextHandler();
       vi.mocked(tierResolver.resolve).mockResolvedValue(
         createExecutionContext({
           userId: USER,
@@ -2000,6 +2006,15 @@ describe('RunAgentTurnHandler', () => {
           maxSteps: 20,
           maxTurnTokens: Number.POSITIVE_INFINITY,
         })
+      );
+      expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'anthropic');
+      expect(rateLimit.checkLimit).toHaveBeenCalledWith(
+        USER,
+        expect.any(Number),
+        false,
+        true,
+        expect.any(Number),
+        undefined
       );
     });
 
