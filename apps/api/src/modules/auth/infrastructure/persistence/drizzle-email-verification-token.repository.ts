@@ -9,6 +9,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { desc, eq, lt, sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import {
   DATABASE_CONNECTION,
   emailVerificationTokens,
@@ -44,11 +45,14 @@ export class DrizzleEmailVerificationTokenRepository implements EmailVerificatio
       const token = result[0];
       return ok(this.mapToEntity(token));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to create email verification token: ${message}`
+      this.logger.error({
+        operation: 'createEmailVerificationToken',
+        userId: data.userId,
+        ...databaseDiagnostics(error),
+      });
+      return err(
+        AuthErrors.internalError('Failed to create email verification token')
       );
-      return err(AuthErrors.internalError(message));
     }
   }
 
@@ -83,11 +87,14 @@ export class DrizzleEmailVerificationTokenRepository implements EmailVerificatio
 
       return ok(rows[0] ? this.mapToEntity(rows[0]) : null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to replace email verification token: ${message}`
+      this.logger.error({
+        operation: 'replaceEmailVerificationToken',
+        userId: data.userId,
+        ...databaseDiagnostics(error),
+      });
+      return err(
+        AuthErrors.internalError('Failed to replace email verification token')
       );
-      return err(AuthErrors.internalError(message));
     }
   }
 

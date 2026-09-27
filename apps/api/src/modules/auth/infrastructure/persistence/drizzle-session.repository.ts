@@ -9,6 +9,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, gt, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import {
   DATABASE_CONNECTION,
   sessions,
@@ -43,9 +44,12 @@ export class DrizzleSessionRepository implements SessionRepository {
       const session = result[0];
       return ok(this.mapToEntity(session));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to create session: ${message}`);
-      return err(AuthErrors.internalError(message));
+      this.logger.error({
+        operation: 'createSession',
+        userId: data.userId,
+        ...databaseDiagnostics(error),
+      });
+      return err(AuthErrors.internalError('Failed to create session'));
     }
   }
 

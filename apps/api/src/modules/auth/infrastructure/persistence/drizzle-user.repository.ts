@@ -13,6 +13,7 @@ import type {
 import { Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
+import { databaseDiagnostics } from '../../../../core/errors/database-diagnostics';
 import { UsersService } from '../../../users';
 
 @Injectable()
@@ -35,10 +36,11 @@ export class DrizzleUserRepository implements UserRepository {
       const user = await this.usersService.findById(id.value);
       return user ? this.mapToEntity(user) : null;
     } catch (error) {
-      this.logger.error(
-        `Failed to find user by id ${id.value}`,
-        error instanceof Error ? error.stack : error
-      );
+      this.logger.error({
+        operation: 'findUserById',
+        userId: id.value,
+        ...databaseDiagnostics(error),
+      });
       return null;
     }
   }
@@ -55,8 +57,11 @@ export class DrizzleUserRepository implements UserRepository {
 
       return ok(this.mapToEntity(user));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      return err(AuthErrors.internalError(message));
+      this.logger.error({
+        operation: 'createUser',
+        ...databaseDiagnostics(error),
+      });
+      return err(AuthErrors.internalError('Failed to create user'));
     }
   }
 
@@ -77,11 +82,12 @@ export class DrizzleUserRepository implements UserRepository {
       }
       return ok(undefined);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to update password hash for user ${userId.value}: ${message}`
-      );
-      return err(AuthErrors.internalError(message));
+      this.logger.error({
+        operation: 'updatePasswordHash',
+        userId: userId.value,
+        ...databaseDiagnostics(error),
+      });
+      return err(AuthErrors.internalError('Failed to update password hash'));
     }
   }
 
@@ -98,11 +104,12 @@ export class DrizzleUserRepository implements UserRepository {
       }
       return ok(undefined);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to mark email verified for user ${userId.value}: ${message}`
-      );
-      return err(AuthErrors.internalError(message));
+      this.logger.error({
+        operation: 'markEmailVerified',
+        userId: userId.value,
+        ...databaseDiagnostics(error),
+      });
+      return err(AuthErrors.internalError('Failed to mark email verified'));
     }
   }
 
