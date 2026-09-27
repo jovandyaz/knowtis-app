@@ -3,8 +3,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
-
 import { AIAssistantSection } from './AIAssistantSection';
 
 const update = vi.fn();
@@ -12,12 +10,8 @@ const modelsData = vi.fn();
 const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
-const featureFlag = vi.fn<(key: string) => boolean>();
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
-}));
-vi.mock('@knowtis/data-access-feature-flags', () => ({
-  useFeatureFlag: (key: string) => featureFlag(key),
 }));
 vi.mock('./AIKeysManager', () => ({
   AIKeysManager: ({ focusFirstField }: { focusFirstField?: boolean }) => (
@@ -92,15 +86,10 @@ const byokModel = {
 const withLockedModel = [...grantedModels, lockedModel];
 const withByokModel = [...grantedModels, lockedModel, byokModel];
 
-function enableFlags(...keys: string[]) {
-  featureFlag.mockImplementation((key) => keys.includes(key));
-}
-
 describe('AIAssistantSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSettingsStore.setState({ focusTarget: null });
-    enableFlags(FEATURE_FLAG_KEYS.AGENT_BYOK);
     modelsData.mockReturnValue(grantedModels);
     modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
@@ -144,15 +133,6 @@ describe('AIAssistantSection', () => {
     render(<AIAssistantSection />);
 
     expect(screen.getByText('byok-keys-manager-focused')).toBeInTheDocument();
-  });
-
-  it('renders the chips without the keys manager when key management is off', () => {
-    enableFlags();
-    modelsData.mockReturnValue(withByokModel);
-    render(<AIAssistantSection />);
-
-    expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(screen.queryByText('byok-keys-manager')).not.toBeInTheDocument();
   });
 
   it('activates the default intent when the account has none stored', () => {

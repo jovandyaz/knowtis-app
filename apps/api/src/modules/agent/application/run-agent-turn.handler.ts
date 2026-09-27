@@ -12,7 +12,6 @@ import {
 import {
   AGENT_STOP_REASON,
   deriveConversationTitle,
-  FEATURE_FLAG_KEYS,
   type AgentStopReason,
   type ByokProvider,
   type MessageStopReason,
@@ -23,8 +22,8 @@ import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import {
   logInputDetections,
-  resolveInputEnforcement,
   type DroppedUserTurn,
+  type InputDetectionRow,
 } from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
@@ -40,7 +39,6 @@ import {
 } from '../../ai/domain/ports/embedding.port';
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
-import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import { AgentErrors } from '../domain/agent-errors';
 import type {
   AgentSource,
@@ -50,7 +48,6 @@ import type {
 import type { AgentMessage } from '../domain/agent-message';
 import {
   COALESCED_MESSAGE_SEPARATOR,
-  coalesceMessages,
   seamHead,
   seamTail,
 } from '../domain/coalesce-messages';
@@ -76,7 +73,11 @@ import {
   fitHistoryToBudget,
   pruneTranscript,
 } from '../domain/prune-transcript';
-import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
+import {
+  coalesceReplayHistory,
+  sanitizeReplayHistory,
+  type ReplayDetection,
+} from '../domain/replay-input-sanitizer';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
@@ -147,6 +148,18 @@ const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
+function detectionRows(
+  detections: readonly ReplayDetection[],
+  messages: readonly AgentMessage[]
+): InputDetectionRow[] {
+  return detections.map(({ index, detection, disposition, redactedSpans }) => ({
+    detection,
+    disposition,
+    redactedSpans,
+    role: messages[index].role,
+  }));
+}
+
 function messageTooLongError() {
   return AIErrors.invalidInput(
     `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
@@ -172,7 +185,6 @@ export class RunAgentTurnHandler {
     private readonly memory: MemoryRepository,
     @Inject(EMBEDDING_PORT)
     private readonly embed: EmbeddingPort,
-    private readonly featureFlags: FeatureFlagsService,
     private readonly modelPreference: ModelPreferenceService,
     private readonly byok: ByokService,
     private readonly injectionGuard: InjectionGuardService,
@@ -303,11 +315,7 @@ export class RunAgentTurnHandler {
       return [];
     }
     try {
-      if (
-        !(await this.featureFlags.isEnabled(
-          FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
-        ))
-      ) {
+      if (!this.embed.isConfigured()) {
         return [];
       }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
@@ -550,14 +558,7 @@ export class RunAgentTurnHandler {
         return;
       }
     }
-    const enforced = await resolveInputEnforcement(
-      this.featureFlags,
-      FEATURE_FLAG_KEYS.AGENT_HISTORY_INJECTION_ENFORCEMENT,
-      this.logger
-    );
-    const sanitized = sanitizeReplayHistory(inputMessages, {
-      enforceAssistantAndTool: enforced,
-    });
+    const sanitized = sanitizeReplayHistory(inputMessages);
     const fitted = await this.fitGuardedHistory(
       sanitized.messages,
       freshUserMessage,
@@ -565,11 +566,10 @@ export class RunAgentTurnHandler {
     );
     logInputDetections(
       this.logger,
-      sanitized.detections.map(({ index, detection, disposition }) => ({
-        detection,
-        disposition,
-        role: inputMessages[index].role,
-      })),
+      [
+        ...detectionRows(sanitized.detections, inputMessages),
+        ...detectionRows(fitted.detections, fitted.messages),
+      ],
       {
         surface: 'history',
         userId: input.userId,
@@ -598,8 +598,6 @@ export class RunAgentTurnHandler {
       return;
     }
 
-    const tierGatingOn = await this.modelPreference.tierGatingOn();
-
     let model: string | null;
     try {
       model = await this.resolveModel(
@@ -607,7 +605,6 @@ export class RunAgentTurnHandler {
         persistence?.conversationId,
         callbacks,
         byokProviders,
-        tierGatingOn,
         Boolean(resume)
       );
     } catch (error) {
@@ -898,15 +895,13 @@ export class RunAgentTurnHandler {
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
     byokProviders: ReadonlySet<string>,
-    tierGatingOn: boolean,
     resuming: boolean
   ): Promise<string | null> {
     if (input.model) {
       if (
         !(await this.modelPreference.isSelectableWith(
           input.model,
-          byokProviders,
-          tierGatingOn
+          byokProviders
         ))
       ) {
         this.logger.warn({
@@ -932,18 +927,13 @@ export class RunAgentTurnHandler {
     if (
       stored &&
       resuming &&
-      (await this.modelPreference.isSelectableWith(
-        stored,
-        byokProviders,
-        tierGatingOn
-      ))
+      (await this.modelPreference.isSelectableWith(stored, byokProviders))
     ) {
       return stored;
     }
     return this.modelPreference.getEffectiveDefault(
       input.userId,
-      byokProviders,
-      tierGatingOn
+      byokProviders
     );
   }
 
@@ -1014,7 +1004,11 @@ export class RunAgentTurnHandler {
     history: readonly AgentMessage[],
     fresh: AgentMessage | undefined,
     userId: string
-  ): Promise<{ messages: AgentMessage[]; dropped?: DroppedUserTurn }> {
+  ): Promise<{
+    messages: AgentMessage[];
+    detections: ReplayDetection[];
+    dropped?: DroppedUserTurn;
+  }> {
     const withFresh = (messages: readonly AgentMessage[]) =>
       fresh ? [...messages, fresh] : [...messages];
     let replay = history;
@@ -1038,7 +1032,7 @@ export class RunAgentTurnHandler {
         ? fitHistoryToBudget(guarded.messages, AGENT_HISTORY_TOKEN_BUDGET)
         : fitted;
       return {
-        messages: coalesceMessages(settled),
+        ...coalesceReplayHistory(settled),
         ...(firstDrop ? { dropped: firstDrop } : {}),
       };
     }

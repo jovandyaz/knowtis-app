@@ -113,7 +113,7 @@ export class AiCatalogController {
   @ApiOperation({
     summary: 'Sync the catalog from upstream now',
     description:
-      'Runs the pass the daily cron would run. Reports what it wrote, or why it skipped: the feature flag is off, or another run holds the lock.',
+      'Runs the pass the daily cron would run. Reports what it wrote, or why it skipped: another instance holds the sync lock.',
   })
   @ApiResponse({ status: 200, description: 'What the sync pass did' })
   @ApiAuthErrors(AI_DISABLED)

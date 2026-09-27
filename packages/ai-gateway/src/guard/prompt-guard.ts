@@ -225,6 +225,26 @@ export interface InjectionPatternHit {
 
 export type InjectionScanScope = 'all' | 'windowed' | 'run-anchored';
 
+/** Half-open `[start, end)` UTF-16 offsets of one injection-pattern match. */
+export interface InjectionSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+function inScope(
+  scope: InjectionScanScope,
+  runAnchored: boolean | undefined
+): boolean {
+  return scope === 'all' || (scope === 'run-anchored') === Boolean(runAnchored);
+}
+
+const GLOBAL_INJECTION_PATTERNS = INJECTION_PATTERNS.map(
+  ({ pattern, runAnchored }) => ({
+    pattern: new RegExp(pattern.source, `${pattern.flags}g`),
+    runAnchored,
+  })
+);
+
 /** Patterns matching already-normalized text; `id` identifies the pattern so hits from overlapping scans deduplicate. Run-anchored patterns must see a whole character run, so a windowed caller scans them separately over the full text. */
 export function matchInjectionPatterns(
   normalized: string,
@@ -235,13 +255,27 @@ export function matchInjectionPatterns(
     id,
     { pattern, weight, reason, runAnchored },
   ] of INJECTION_PATTERNS.entries()) {
-    const inScope =
-      scope === 'all' || (scope === 'run-anchored') === Boolean(runAnchored);
-    if (inScope && pattern.test(normalized)) {
+    if (inScope(scope, runAnchored) && pattern.test(normalized)) {
       hits.push({ id, weight, reason });
     }
   }
   return hits;
+}
+
+/** Every match of every pattern `matchInjectionPatterns` would test in `scope`, as offsets into `normalized`. */
+export function locateInjectionPatterns(
+  normalized: string,
+  scope: InjectionScanScope
+): InjectionSpan[] {
+  const spans: InjectionSpan[] = [];
+  for (const { pattern, runAnchored } of GLOBAL_INJECTION_PATTERNS) {
+    if (inScope(scope, runAnchored)) {
+      for (const match of normalized.matchAll(pattern)) {
+        spans.push({ start: match.index, end: match.index + match[0].length });
+      }
+    }
+  }
+  return spans;
 }
 
 /** Cumulative verdict for hits that are already unique per pattern. */

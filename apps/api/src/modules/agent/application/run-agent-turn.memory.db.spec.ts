@@ -25,7 +25,6 @@ import type { ModelPreferenceService } from '../../ai/application/services/model
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
-import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
@@ -43,22 +42,21 @@ const SECOND_TURN = '00000000-0000-4000-8000-0000000007a2';
 const REPLAYED_TURN = '00000000-0000-4000-8000-0000000007a3';
 const MODEL = 'anthropic:claude-haiku-4-5';
 
-const memoryOff = {
+const noMemories = {
   searchForUser: vi.fn().mockResolvedValue([]),
 } as unknown as MemoryRepository;
 const embedStub = {
-  embedQuery: vi.fn().mockResolvedValue(new Array(1024).fill(0)),
+  isConfigured: () => true,
+  embedQuery: vi
+    .fn()
+    .mockResolvedValue({ vector: new Array(1024).fill(0), costUsd: 0 }),
 } as unknown as EmbeddingPort;
-const flagsOff = {
-  isEnabled: vi.fn().mockResolvedValue(false),
-} as unknown as FeatureFlagsService;
 const modelPreferenceStub = {
   getEffectiveDefault: vi.fn().mockResolvedValue(MODEL),
   assertSelectable: vi.fn(),
   isSelectable: vi.fn().mockReturnValue(true),
   isSelectableWith: vi.fn().mockReturnValue(true),
   byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
-  tierGatingOn: vi.fn().mockResolvedValue(false),
 } as unknown as ModelPreferenceService;
 const byokStub = {
   getApiKey: vi.fn().mockResolvedValue(null),
@@ -145,6 +143,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
         .mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
+      recordSideCost: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;
     const pendingStore = {
       save: vi.fn(),
@@ -157,9 +156,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       pendingStore,
       createTestCatalog(),
       new DrizzleConversationRepository(db),
-      memoryOff,
+      noMemories,
       embedStub,
-      flagsOff,
       modelPreferenceStub,
       byokStub,
       guardStub,
@@ -224,6 +222,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
         .mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
+      recordSideCost: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;
     const pendingStore = {
       save: vi.fn(),
@@ -236,9 +235,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       pendingStore,
       createTestCatalog(),
       repo,
-      memoryOff,
+      noMemories,
       embedStub,
-      flagsOff,
       modelPreferenceStub,
       byokStub,
       guardStub,
@@ -277,6 +275,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
         .mockReturnValue({ maxSteps: 8, maxTurnTokens: 150000 }),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
+      recordSideCost: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;
     const pendingStore = {
       save: vi.fn(),
@@ -289,9 +288,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       pendingStore,
       createTestCatalog(),
       new DrizzleConversationRepository(db),
-      memoryOff,
+      noMemories,
       embedStub,
-      flagsOff,
       modelPreferenceStub,
       byokStub,
       guardStub,

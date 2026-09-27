@@ -25,8 +25,6 @@ const REPLAY_FILLER_LINE =
 export const REPLAY_LONG_FACT = `The rollout notes name the standby plan ${REPLAY_LONG_DETAIL}. ${REPLAY_FILLER_LINE.repeat(
   Math.ceil((MAX_GUARD_INPUT_CHARS + 1) / REPLAY_FILLER_LINE.length)
 )}`;
-/** Cases the current heuristic calibration cannot pass: the guard drops the row quoting the attack phrase. */
-export const REPLAY_KNOWN_FAILURES = ['legitimate-quote'] as const;
 const call: AgentMessage = {
   role: 'assistant',
   content: '',

@@ -1,7 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import type { RateLimitProvider } from '../../domain/ports/rate-limit.port';
 import type { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
@@ -206,6 +205,7 @@ describe('AIRateLimitService', () => {
     let mockRateLimitProvider: RateLimitProvider;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       mockRateLimitProvider = {
         checkRpm: vi.fn(),
         checkAndIncrement: vi.fn(),
@@ -222,6 +222,10 @@ describe('AIRateLimitService', () => {
         mockConfig,
         mockRateLimitProvider
       );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('should release a reservation by correcting usage to zero', async () => {
@@ -343,6 +347,7 @@ describe('AIRateLimitService', () => {
     let warningService: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       alerts = { notify: vi.fn() };
       warningService = new AIRateLimitService(
         mockUsageRepo,
@@ -351,6 +356,10 @@ describe('AIRateLimitService', () => {
         alerts as unknown as WebhookAlertService
       );
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     const usageRecord = {
@@ -578,7 +587,7 @@ describe('AIRateLimitService', () => {
     });
   });
 
-  describe('cost reserve flag (ai_cost_reserve)', () => {
+  describe('estimated cost reservation', () => {
     let mockRateLimitProvider: RateLimitProvider;
 
     beforeEach(() => {
@@ -609,24 +618,41 @@ describe('AIRateLimitService', () => {
       });
     });
 
-    function makeFlags(enabled: boolean) {
-      return {
-        isEnabled: vi.fn().mockResolvedValue(enabled),
-      } as unknown as FeatureFlagsService;
-    }
-
-    function makeService(featureFlags?: FeatureFlagsService) {
+    function makeService() {
       return new AIRateLimitService(
         mockUsageRepo,
         createMockConfig(),
-        mockRateLimitProvider,
-        undefined,
-        featureFlags
+        mockRateLimitProvider
       );
     }
 
-    it('forwards the estimated cost to the reserve when the flag is on', async () => {
-      const svc = makeService(makeFlags(true));
+    it('reserves the estimated cost, runs the IP budget, the BYOK ceiling and the global breaker', async () => {
+      const svc = makeService();
+
+      await svc.checkLimit('user-1', 100, true, false, 0.01, '203.0.113.9');
+      await svc.checkLimit('user-2', 100, false, true);
+
+      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
+        'user-1',
+        100,
+        0.01,
+        expect.anything()
+      );
+      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
+        expect.stringMatching(/^ip:/),
+        expect.anything(),
+        0.01,
+        expect.anything(),
+        false
+      );
+      expect(mockRateLimitProvider.getByokCostUsd).toHaveBeenCalledWith(
+        'user-2'
+      );
+      expect(mockRateLimitProvider.getGlobalSpendUsd).toHaveBeenCalled();
+    });
+
+    it('forwards the estimated cost to the reserve', async () => {
+      const svc = makeService();
 
       await svc.checkLimit('user-1', 1000, false, false, 0.25);
 
@@ -638,23 +664,10 @@ describe('AIRateLimitService', () => {
       );
     });
 
-    it('zeroes the estimated cost when the flag is off', async () => {
-      const svc = makeService(makeFlags(false));
+    it('clamps a negative estimated cost to zero', async () => {
+      const svc = makeService();
 
-      await svc.checkLimit('user-1', 1000, false, false, 0.25);
-
-      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
-        'user-1',
-        1000,
-        0,
-        expect.anything()
-      );
-    });
-
-    it('treats a missing flags service as flag off', async () => {
-      const svc = makeService(undefined);
-
-      await svc.checkLimit('user-1', 1000, false, false, 0.25);
+      await svc.checkLimit('user-1', 1000, false, false, -0.25);
 
       expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
         'user-1',
@@ -664,24 +677,8 @@ describe('AIRateLimitService', () => {
       );
     });
 
-    it('treats a failing flag lookup as flag off', async () => {
-      const failingFlags = {
-        isEnabled: vi.fn().mockRejectedValue(new Error('db down')),
-      } as unknown as FeatureFlagsService;
-      const svc = makeService(failingFlags);
-
-      await svc.checkLimit('user-1', 1000, false, false, 0.25);
-
-      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
-        'user-1',
-        1000,
-        0,
-        expect.anything()
-      );
-    });
-
-    it('reconciles against the estimated cost in recordUsage when the flag is on', async () => {
-      const svc = makeService(makeFlags(true));
+    it('reconciles against the estimated cost in recordUsage', async () => {
+      const svc = makeService();
 
       await svc.recordUsage({
         userId: 'user-1',
@@ -703,31 +700,8 @@ describe('AIRateLimitService', () => {
       );
     });
 
-    it('zeroes the estimated cost in recordUsage when the flag is off', async () => {
-      const svc = makeService(makeFlags(false));
-
-      await svc.recordUsage({
-        userId: 'user-1',
-        action: 'agent',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        inputTokens: 100,
-        outputTokens: 50,
-        costUsd: 0.4,
-        estimatedTokens: 200,
-        estimatedCostUsd: 0.25,
-      });
-
-      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
-        'user-1',
-        200,
-        150,
-        0,
-        0.4
-      );
-    });
-
-    it('releases the reserved cost when the flag is on', async () => {
-      const svc = makeService(makeFlags(true));
+    it('releases the reserved cost', async () => {
+      const svc = makeService();
 
       await svc.releaseReservation('user-1', 200, 0.25);
 
@@ -736,20 +710,6 @@ describe('AIRateLimitService', () => {
         200,
         0,
         0.25,
-        0
-      );
-    });
-
-    it('releases only tokens when the flag is off', async () => {
-      const svc = makeService(makeFlags(false));
-
-      await svc.releaseReservation('user-1', 200, 0.25);
-
-      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
-        'user-1',
-        200,
-        0,
-        0,
         0
       );
     });
@@ -761,46 +721,20 @@ describe('AIRateLimitService', () => {
         totalCostUsd: 0.9,
         requestCount: 1,
       });
-      const svc = new AIRateLimitService(
-        mockUsageRepo,
-        createMockConfig(),
-        undefined,
-        undefined,
-        makeFlags(true)
-      );
+      const svc = new AIRateLimitService(mockUsageRepo, createMockConfig());
 
       const result = await svc.checkLimit('user-1', 100, false, false, 0.2);
 
       expect(result.allowed).toBe(false);
     });
-
-    it('keeps the PG fallback decision unchanged when the flag is off', async () => {
-      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalCostUsd: 0.9,
-        requestCount: 1,
-      });
-      const svc = new AIRateLimitService(
-        mockUsageRepo,
-        createMockConfig(),
-        undefined,
-        undefined,
-        makeFlags(false)
-      );
-
-      const result = await svc.checkLimit('user-1', 100, false, false, 0.2);
-
-      expect(result.allowed).toBe(true);
-    });
   });
 
   describe('BYOK side-cost ceiling and recordSideCost', () => {
     let provider: RateLimitProvider;
-    let flags: { isEnabled: ReturnType<typeof vi.fn> };
     let gated: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       provider = {
         checkRpm: vi.fn().mockResolvedValue({
           allowed: true,
@@ -815,18 +749,19 @@ describe('AIRateLimitService', () => {
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
         claimDailyFlag: vi.fn().mockResolvedValue(true),
       };
-      flags = { isEnabled: vi.fn().mockResolvedValue(true) };
       gated = new AIRateLimitService(
         mockUsageRepo,
         createMockConfig(),
-        provider,
-        undefined,
-        flags as unknown as FeatureFlagsService
+        provider
       );
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
     });
 
-    it('refuses a byok turn at the byok cost ceiling when the gate flag is on', async () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('refuses a byok turn at the byok cost ceiling', async () => {
       vi.mocked(provider.getByokCostUsd).mockResolvedValue(1.0);
 
       const result = await gated.checkLimit('user-123', 100, false, true);
@@ -834,16 +769,6 @@ describe('AIRateLimitService', () => {
       expect(result.allowed).toBe(false);
       expect(result.reason).toMatch(/cost/i);
       expect(provider.checkAndIncrement).not.toHaveBeenCalled();
-    });
-
-    it('allows the byok turn under the same counter state when the gate flag is off', async () => {
-      flags.isEnabled.mockResolvedValue(false);
-      vi.mocked(provider.getByokCostUsd).mockResolvedValue(1.0);
-
-      const result = await gated.checkLimit('user-123', 100, false, true);
-
-      expect(result.allowed).toBe(true);
-      expect(provider.getByokCostUsd).not.toHaveBeenCalled();
     });
 
     it('allows the byok turn when side costs sit under the ceiling', async () => {
@@ -938,16 +863,16 @@ describe('AIRateLimitService', () => {
     });
   });
 
-  describe('per-IP anonymous budget (ai_anon_ip_budget)', () => {
+  describe('per-IP anonymous budget', () => {
     const CLIENT_IP = '203.0.113.7';
     const IP_SUBJECT = 'ip:fec52565aa0cf18f';
     const ANON_LIMITS = { tokenLimit: 33000, costLimit: 0.33 };
 
     let provider: RateLimitProvider;
-    let flags: { isEnabled: ReturnType<typeof vi.fn> };
     let svc: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       provider = {
         checkRpm: vi.fn().mockResolvedValue({
           allowed: true,
@@ -966,14 +891,7 @@ describe('AIRateLimitService', () => {
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
         claimDailyFlag: vi.fn().mockResolvedValue(true),
       };
-      flags = { isEnabled: vi.fn().mockResolvedValue(true) };
-      svc = new AIRateLimitService(
-        mockUsageRepo,
-        createMockConfig(),
-        provider,
-        undefined,
-        flags as unknown as FeatureFlagsService
-      );
+      svc = new AIRateLimitService(mockUsageRepo, createMockConfig(), provider);
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
       vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
         totalInputTokens: 0,
@@ -981,6 +899,10 @@ describe('AIRateLimitService', () => {
         totalCostUsd: 0,
         requestCount: 0,
       });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('reserves against both the user and the hashed IP subject for anonymous turns', async () => {
@@ -1046,28 +968,6 @@ describe('AIRateLimitService', () => {
         0,
         0,
         0
-      );
-    });
-
-    it('runs a single user-subject reservation when the flag is off', async () => {
-      flags.isEnabled.mockResolvedValue(false);
-
-      const result = await svc.checkLimit(
-        'anon-1',
-        1000,
-        true,
-        false,
-        0,
-        CLIENT_IP
-      );
-
-      expect(result.allowed).toBe(true);
-      expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
-      expect(provider.checkAndIncrement).toHaveBeenCalledWith(
-        'anon-1',
-        1000,
-        0,
-        expect.anything()
       );
     });
 
@@ -1186,33 +1086,6 @@ describe('AIRateLimitService', () => {
       );
     });
 
-    it('reconciles the receipt IP subject without re-reading the flag', async () => {
-      flags.isEnabled.mockResolvedValue(false);
-
-      await svc.recordUsage({
-        userId: 'anon-1',
-        action: 'agent',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        inputTokens: 100,
-        outputTokens: 50,
-        costUsd: 0.4,
-        estimatedTokens: 200,
-        estimatedCostUsd: 0,
-        reservedIpSubject: IP_SUBJECT,
-      });
-
-      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
-      expect(provider.correctUsage).toHaveBeenNthCalledWith(
-        2,
-        IP_SUBJECT,
-        200,
-        150,
-        0,
-        0.4,
-        false
-      );
-    });
-
     it('releases both subjects when releasing a dual reservation', async () => {
       await svc.releaseReservation('anon-1', 200, 0, IP_SUBJECT);
 
@@ -1235,15 +1108,38 @@ describe('AIRateLimitService', () => {
         false
       );
     });
+
+    it('releases both subjects with the reserved cost when releasing a dual reservation', async () => {
+      await svc.releaseReservation('anon-1', 200, 0.02, IP_SUBJECT);
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        200,
+        0,
+        0.02,
+        0
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        0,
+        0.02,
+        0,
+        false
+      );
+    });
   });
 
-  describe('global daily-spend breaker (ai_global_spend_breaker)', () => {
+  describe('global daily-spend breaker', () => {
     let provider: RateLimitProvider;
-    let flags: { isEnabled: ReturnType<typeof vi.fn> };
     let alerts: { notify: ReturnType<typeof vi.fn> };
     let breakered: AIRateLimitService;
 
     beforeEach(() => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       provider = {
         checkRpm: vi.fn().mockResolvedValue({
           allowed: true,
@@ -1265,15 +1161,17 @@ describe('AIRateLimitService', () => {
           .mockResolvedValueOnce(true)
           .mockResolvedValue(false),
       };
-      flags = { isEnabled: vi.fn().mockResolvedValue(true) };
       alerts = { notify: vi.fn() };
       breakered = new AIRateLimitService(
         mockUsageRepo,
         createMockConfig(),
         provider,
-        alerts as unknown as WebhookAlertService,
-        flags as unknown as FeatureFlagsService
+        alerts as unknown as WebhookAlertService
       );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('rejects a server-billed turn once global spend reaches the limit', async () => {
@@ -1339,16 +1237,6 @@ describe('AIRateLimitService', () => {
       const result = await breakered.checkLimit('user-1', 1000);
 
       expect(result.allowed).toBe(true);
-    });
-
-    it('never reads the global counter when the flag is off', async () => {
-      flags.isEnabled.mockResolvedValue(false);
-      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(100);
-
-      const result = await breakered.checkLimit('user-1', 1000);
-
-      expect(result.allowed).toBe(true);
-      expect(provider.getGlobalSpendUsd).not.toHaveBeenCalled();
     });
 
     it('degrades open when the global spend lookup fails', async () => {

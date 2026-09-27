@@ -283,58 +283,13 @@ describe('SelectableModelsService', () => {
     expect(byId['anthropic:claude-opus-5']).toBe(3);
   });
 
-  it('should keep a gated premium model visible but marked requires_byok', () => {
-    const service = makeOpenService();
-    const models = service.list(
-      'openrouter:deepseek/deepseek-v3.2',
-      ALL_CURATED,
-      NO_BYOK,
-      true
-    );
-    const premium = models.find((m) => m.tier !== 'open');
-    expect(premium?.access).toBe('requires_byok');
-  });
-
-  it('should refuse to select a gated model and accept it with the key', () => {
-    const service = makeOpenService();
-    const premiumId = 'anthropic:claude-haiku-4-5';
-    expect(service.isSelectable(premiumId, ALL_CURATED, NO_BYOK, true)).toBe(
-      false
-    );
-    expect(
-      service.isSelectable(premiumId, ALL_CURATED, new Set(['anthropic']), true)
-    ).toBe(true);
-  });
-
-  it('should change nothing while the flag is off', () => {
+  it('grants every offered model access, as prod runs today', () => {
     const service = makeOpenService();
     expect(
       service
-        .list('openrouter:deepseek/deepseek-v3.2', ALL_CURATED, NO_BYOK, false)
+        .list('openrouter:deepseek/deepseek-v3.2', ALL_CURATED, NO_BYOK)
         .every((m) => m.access === 'granted')
     ).toBe(true);
-  });
-
-  it('offers the first open model as fallback for a gated keyless caller', () => {
-    const service = makeOpenService();
-    expect(service.firstSelectable(ALL_CURATED, NO_BYOK, true)).toBe(
-      'openrouter:deepseek/deepseek-v3.2'
-    );
-  });
-
-  it('offers the first curated model as fallback while the flag is off', () => {
-    const service = makeOpenService();
-    expect(service.firstSelectable(ALL_CURATED, NO_BYOK, false)).toBe(
-      'anthropic:claude-haiku-4-5'
-    );
-  });
-
-  it('returns null when no curated model is selectable', () => {
-    const service = makeService({
-      supported: new Set(),
-      available: new Set(),
-    });
-    expect(service.firstSelectable(ALL_CURATED, NO_BYOK, true)).toBeNull();
   });
 
   describe('promoted catalog models', () => {
@@ -355,7 +310,7 @@ describe('SelectableModelsService', () => {
         }),
       ]);
 
-      const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, true);
+      const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED);
       const promoted = listed.find((m) => m.id === PROMOTED_ID);
 
       expect(listed.map((m) => m.id)).toEqual([
@@ -492,29 +447,19 @@ describe('SelectableModelsService', () => {
         );
       }
 
-      it('is unreachable without a key even though its tier is open', async () => {
+      it('is unreachable without a key even though it stays above the ceiling', async () => {
         const service = await serviceWithPromotedPrice(
           ABOVE_CEILING_OUTPUT_COST
         );
 
-        expect(
-          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
-        ).toBe(false);
+        expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
+          false
+        );
         expect(
           service
-            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, true)
+            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
             .find((m) => m.id === PROMOTED_ID)?.access
         ).toBe('requires_byok');
-      });
-
-      it('stays unreachable without a key while tier gating is off', async () => {
-        const service = await serviceWithPromotedPrice(
-          ABOVE_CEILING_OUTPUT_COST
-        );
-
-        expect(
-          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, false)
-        ).toBe(false);
       });
 
       it('opens up to the caller who brings the provider key', async () => {
@@ -526,8 +471,7 @@ describe('SelectableModelsService', () => {
           service.isSelectable(
             PROMOTED_ID,
             ALL_CURATED,
-            new Set(['openrouter']),
-            true
+            new Set(['openrouter'])
           )
         ).toBe(true);
       });
@@ -535,35 +479,26 @@ describe('SelectableModelsService', () => {
       it('stays free when the stored price is under the ceiling', async () => {
         const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
 
-        expect(
-          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
-        ).toBe(true);
+        expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
+          true
+        );
       });
 
       it('honours a tightened ceiling the operator configured', async () => {
         const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
         const tightened = FREE_TIER_OUTPUT_COST / 2;
 
+        expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
+          true
+        );
         expect(
-          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
-        ).toBe(true);
-        expect(
-          service.isSelectable(
-            PROMOTED_ID,
-            ALL_CURATED,
-            NO_BYOK,
-            true,
-            tightened
-          )
+          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, tightened)
         ).toBe(false);
         expect(
           service
-            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, true, tightened)
+            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, tightened)
             .find((m) => m.id === PROMOTED_ID)?.access
         ).toBe('requires_byok');
-        expect(
-          service.firstSelectable(ALL_CURATED, NO_BYOK, true, tightened)
-        ).not.toBe(PROMOTED_ID);
       });
     });
 
@@ -574,11 +509,8 @@ describe('SelectableModelsService', () => {
         promoted: [createCatalogModel({ id: PROMOTED_ID })],
       });
 
-      expect(
-        service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
-      ).toBe(true);
-      expect(service.firstSelectable(ALL_CURATED, NO_BYOK, true)).toBe(
-        PROMOTED_ID
+      expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
+        true
       );
     });
 
@@ -624,7 +556,6 @@ describe('SelectableModelsService', () => {
         SYSTEM_DEFAULT,
         ALL_CURATED,
         NO_BYOK,
-        false,
         undefined,
         INTENTS
       );
@@ -721,7 +652,6 @@ describe('SelectableModelsService', () => {
         SYSTEM_DEFAULT,
         ALL_CURATED,
         NO_BYOK,
-        false,
         undefined,
         {
           fast: 'openrouter:vendor/not-offered',

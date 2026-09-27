@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +13,10 @@ function makeConfig(
   } as unknown as ConfigService<EnvConfig, true>;
 }
 
+function makeAdapter(values: Record<string, unknown>): VoyageEmbeddingAdapter {
+  return new VoyageEmbeddingAdapter(makeConfig(values));
+}
+
 describe('VoyageEmbeddingAdapter', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -19,8 +24,7 @@ describe('VoyageEmbeddingAdapter', () => {
     fetchSpy = vi.spyOn(globalThis, 'fetch');
   });
   afterEach(() => {
-    fetchSpy.mockRestore();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   function ok(embeddings: number[][], tokens: number): Response {
@@ -33,6 +37,36 @@ describe('VoyageEmbeddingAdapter', () => {
         }),
     } as unknown as Response;
   }
+
+  it('reports configured only when VOYAGE_API_KEY is set', () => {
+    expect(makeAdapter({ VOYAGE_API_KEY: 'k' }).isConfigured()).toBe(true);
+    expect(makeAdapter({ VOYAGE_API_KEY: undefined }).isConfigured()).toBe(
+      false
+    );
+  });
+
+  it('logs ai.capability.unavailable once at init when the key is missing', () => {
+    const adapter = makeAdapter({ VOYAGE_API_KEY: undefined });
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    adapter.onModuleInit();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith({
+      event: 'ai.capability.unavailable',
+      capability: 'embeddings',
+      env: 'VOYAGE_API_KEY',
+    });
+  });
+
+  it('stays quiet at init when the key is set', () => {
+    const adapter = makeAdapter({ VOYAGE_API_KEY: 'k' });
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    adapter.onModuleInit();
+    expect(warn).not.toHaveBeenCalled();
+  });
 
   it('embedQuery sends input_type=query and returns the single vector', async () => {
     fetchSpy.mockResolvedValue(ok([[0.1, 0.2]], 3));

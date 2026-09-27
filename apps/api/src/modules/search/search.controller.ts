@@ -38,7 +38,8 @@ export class SearchController {
     summary: 'Search accessible notes',
     description:
       'Hybrid full-text + semantic search over the notes the user can access. ' +
-      'Falls back to keyword search when hybrid retrieval is disabled.',
+      'Runs full-text only when no embedding provider is configured, and ' +
+      'falls back to keyword search when hybrid retrieval fails.',
   })
   @ApiOkResponse({
     schema: {
