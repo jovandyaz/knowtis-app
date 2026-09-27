@@ -361,6 +361,104 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
       }
     );
 
+    const HOLDERS = {
+      'an error holding it in a property': (failure: Error) =>
+        Object.assign(new Error('outer failure'), { original: failure }),
+      'an AggregateError listing it': (failure: Error) =>
+        new AggregateError([failure], 'outer failure'),
+      'a Map holding it as a value': (failure: Error) =>
+        new Map([['failure', failure]]),
+      'a Map keyed by it': (failure: Error) => new Map([[failure, 'failure']]),
+      'a Set holding it': (failure: Error) => new Set([failure]),
+    };
+
+    const PAYLOADS = {
+      'a payload': (holder: unknown) => ({ event: 'probe', holder }),
+      'a circular payload': (holder: unknown) => {
+        const payload: Record<string, unknown> = { event: 'probe', holder };
+        payload.self = payload;
+        return payload;
+      },
+    };
+
+    it.each(
+      Object.keys(HOLDERS).flatMap((holder) =>
+        Object.keys(PAYLOADS).map((payload) => [holder, payload] as const)
+      )
+    )(
+      'describes it by its diagnostics inside %s in %s, keeping its frames',
+      (holderKind, payloadKind) => {
+        const holder =
+          HOLDERS[holderKind as keyof typeof HOLDERS](rejectedSignUp());
+
+        new Logger('Probe').warn(
+          PAYLOADS[payloadKind as keyof typeof PAYLOADS](holder)
+        );
+
+        const logged = JSON.stringify(onlyEntry(stdout));
+        expect(logged).not.toContain(SECRET_PARAM);
+        expect(logged).toContain(DIAGNOSTICS);
+        expect(logged).toContain('database-errors.ts');
+      }
+    );
+
+    it.each([
+      'an error holding it in a property',
+      'an AggregateError listing it',
+    ])('keeps the message and the stack of %s', (holderKind) => {
+      const holder =
+        HOLDERS[holderKind as keyof typeof HOLDERS](rejectedSignUp());
+
+      new Logger('Probe').warn({ event: 'probe', holder });
+
+      const logged = String(onlyEntry(stdout).holder);
+      expect(logged).toContain('outer failure');
+      expect(logged).toContain('json-console-logger.spec.ts');
+    });
+
+    it('leaves the logged values holding the very errors they held', () => {
+      const failure = rejectedSignUp();
+      const property = Object.assign(new Error('outer'), { original: failure });
+      const aggregate = new AggregateError([failure], 'outer');
+      const map = new Map<unknown, unknown>([
+        ['failure', failure],
+        [failure, 'failure'],
+      ]);
+      const set = new Set([failure]);
+      const payload: Record<string, unknown> = {
+        event: 'probe',
+        holders: [property, aggregate, map, set],
+      };
+
+      new Logger('Probe').warn(payload);
+      payload.self = payload;
+      new Logger('Probe').warn(payload);
+
+      expect(property.original).toBe(failure);
+      expect(aggregate.errors).toEqual([failure]);
+      expect(map.get('failure')).toBe(failure);
+      expect(map.get(failure)).toBe('failure');
+      expect(set.has(failure)).toBe(true);
+      expect(payload.holders).toEqual([property, aggregate, map, set]);
+    });
+
+    it.each([1, 2, 3, 4, 5, 6, 7])(
+      'keeps it out of a Map in a payload at nesting level %i below the Map',
+      (level) => {
+        let nested: unknown = rejectedSignUp();
+        for (let wrap = 1; wrap < level; wrap += 1) {
+          nested = { nested };
+        }
+
+        new Logger('Probe').warn({
+          event: 'probe',
+          holder: new Map([['nested', nested]]),
+        });
+
+        expect(JSON.stringify(onlyEntry(stdout))).not.toContain(SECRET_PARAM);
+      }
+    );
+
     it('is described by its diagnostics inside a circular payload', () => {
       const payload: Record<string, unknown> = {
         event: 'probe',
@@ -390,6 +488,32 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
     innermost.root = payload;
 
     expect(() => new Logger('Probe').warn(payload)).not.toThrow();
+    expect(onlyEntry(stdout)).toMatchObject({
+      level: 'warn',
+      message: 'probe',
+    });
+  });
+
+  it('logs a payload holding a revoked proxy instead of throwing into the caller', () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+
+    expect(() =>
+      new Logger('Probe').warn({ event: 'probe', proxy })
+    ).not.toThrow();
+    expect(onlyEntry(stdout)).toMatchObject({
+      level: 'warn',
+      message: 'probe',
+    });
+  });
+
+  it('logs a payload whose stack field is circular instead of throwing into the caller', () => {
+    const stack: Record<string, unknown> = {};
+    stack.self = stack;
+
+    expect(() =>
+      new Logger('Probe').warn({ event: 'probe', stack })
+    ).not.toThrow();
     expect(onlyEntry(stdout)).toMatchObject({
       level: 'warn',
       message: 'probe',

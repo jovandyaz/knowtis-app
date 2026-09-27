@@ -5,6 +5,7 @@ import { ConsoleLogger, type LogLevel } from '@nestjs/common';
 import { isDatabaseError } from '../errors/database-diagnostics';
 import { reasonOf } from '../errors/reason-of';
 import { stackOf } from '../errors/stack-of';
+import { rewriteDatabaseErrors } from './rewrite-database-errors';
 
 const SEVERITY = {
   DEBUG: 'debug',
@@ -30,6 +31,8 @@ const MESSAGE_FIELDS = ['message', 'event', 'operation'] as const;
 
 const UNSERIALIZABLE_INSPECT_DEPTH = 4;
 
+const UNSERIALIZABLE_PAYLOAD = '[unserializable payload]';
+
 type WriteStream = 'stdout' | 'stderr';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -52,47 +55,6 @@ function firstNonEmptyText(candidates: unknown[]): string | undefined {
   );
 }
 
-// inspect expands containers down to UNSERIALIZABLE_INSPECT_DEPTH and can still
-// print an error's message one level below them, so that level is the last one
-// checked; nothing deeper reaches the log.
-function withDatabaseErrorsDescribed(
-  value: unknown,
-  level = 0,
-  ancestors = new Map<object, unknown>()
-): unknown {
-  if (isDatabaseError(value)) {
-    return stackOf(value);
-  }
-  if (
-    level > UNSERIALIZABLE_INSPECT_DEPTH ||
-    (!Array.isArray(value) && !isPlainObject(value))
-  ) {
-    return value;
-  }
-  const ancestor = ancestors.get(value);
-  if (ancestor !== undefined) {
-    return ancestor;
-  }
-  const describe = (nested: unknown) =>
-    withDatabaseErrorsDescribed(nested, level + 1, ancestors);
-  if (Array.isArray(value)) {
-    const copy: unknown[] = [];
-    ancestors.set(value, copy);
-    for (const nested of value) {
-      copy.push(describe(nested));
-    }
-    ancestors.delete(value);
-    return copy;
-  }
-  const copy: Record<string, unknown> = {};
-  ancestors.set(value, copy);
-  for (const [key, nested] of Object.entries(value)) {
-    copy[key] = describe(nested);
-  }
-  ancestors.delete(value);
-  return copy;
-}
-
 function errorFields(error: Error): Record<string, unknown> {
   if (isDatabaseError(error)) {
     return { name: error.name, message: reasonOf(error) };
@@ -112,9 +74,10 @@ function errorFields(error: Error): Record<string, unknown> {
  * parses: a non-empty string `message`, a `level` of debug/info/warn/error, and
  * the fields of object payloads at the top level, filterable as `@field:value`.
  * An `Error` argument becomes an `error` field and supplies `stack`; a database
- * error, there or nested in a payload, is told by its diagnostics rather than
+ * error, there or anywhere in a payload, is told by its diagnostics rather than
  * by a message that can quote query values. `level`, `message`, `timestamp` and
- * `context` always come from the call, never from a payload.
+ * `context` always come from the call, never from a payload, and a payload that
+ * cannot be written never turns the call into a throw.
  */
 export class JsonConsoleLogger extends ConsoleLogger {
   constructor() {
@@ -163,10 +126,20 @@ export class JsonConsoleLogger extends ConsoleLogger {
     );
   }
 
+  // Nest's replacer hands Maps, Sets and errors to inspect whole, so JSON never
+  // visits what they hold.
   protected override stringifyReplacer(key: string, value: unknown): unknown {
-    return isDatabaseError(value)
-      ? stackOf(value)
-      : super.stringifyReplacer(key, value);
+    const renderedWhole =
+      value instanceof Map || value instanceof Set || value instanceof Error;
+    return super.stringifyReplacer(
+      key,
+      renderedWhole
+        ? rewriteDatabaseErrors(
+            value,
+            this.inspectOptions.depth ?? Number.POSITIVE_INFINITY
+          )
+        : value
+    );
   }
 
   private serialize(
@@ -178,13 +151,24 @@ export class JsonConsoleLogger extends ConsoleLogger {
     try {
       return JSON.stringify(entry, replacer);
     } catch {
-      // A circular payload must not turn the log call into a throw inside the
-      // caller's catch block, which would hide the error being reported.
-      const payload = inspect(withDatabaseErrorsDescribed(entry), {
-        depth: UNSERIALIZABLE_INSPECT_DEPTH,
-        breakLength: Infinity,
-      });
-      return JSON.stringify({ ...envelope, payload }, replacer);
+      // A payload that cannot be written must not turn the log call into a
+      // throw inside the caller's catch block, hiding the error it reports.
+      try {
+        const payload = inspect(
+          rewriteDatabaseErrors(entry, UNSERIALIZABLE_INSPECT_DEPTH),
+          { depth: UNSERIALIZABLE_INSPECT_DEPTH, breakLength: Infinity }
+        );
+        return JSON.stringify({ ...envelope, payload }, replacer);
+      } catch {
+        const { level, message, timestamp, context } = envelope;
+        return JSON.stringify({
+          level,
+          message,
+          timestamp,
+          context,
+          payload: UNSERIALIZABLE_PAYLOAD,
+        });
+      }
     }
   }
 }
