@@ -210,6 +210,21 @@ describe('rewriteDatabaseErrors', () => {
     }
   );
 
+  it('keeps a failed query past the breadth out when holes let inspect print that far', () => {
+    const LEADING_HOLES = 10;
+    const source: unknown[] = [];
+    for (let index = LEADING_HOLES; index < DEFAULT_BREADTH; index += 1) {
+      source[index] = index;
+    }
+    source[DEFAULT_BREADTH] = failedQuery([SECRET_PARAM]);
+
+    const output = rendered(source);
+
+    expect(inspect(source, OPTIONS)).toContain(SECRET_PARAM);
+    expect(output).not.toContain(SECRET_PARAM);
+    expect(output).toContain('<10 empty items>');
+  });
+
   it('follows the breadth of the options it is given', () => {
     const items = Array.from({ length: 5 }, () => failedQuery([SECRET_PARAM]));
     const options: InspectOptions = { ...OPTIONS, maxArrayLength: 3 };

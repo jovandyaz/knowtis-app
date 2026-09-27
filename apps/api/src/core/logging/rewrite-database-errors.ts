@@ -93,9 +93,11 @@ function copyOwnProperties(source: object, copy: object, rewrite: Rewrite) {
   }
 }
 
-// Only the first `breadth` entries are printed. Past them the length alone
-// yields inspect's "... more items" count, and the first unprinted entry is
-// kept because inspect reads its type to align a column of numbers.
+// Only the first `breadth` entries are printed; the length alone yields the
+// "... n more items" count. Node's groupArrayElements also checks `typeof
+// value[i]` for every output line, the count line included, so it reads index
+// `breadth` to pad a column of numbers: a dense head carries that entry over,
+// unprinted. After a hole formatSpecialArray could print it, so it stays out.
 function fillArray(
   source: unknown[],
   copy: unknown[],
