@@ -1,4 +1,3 @@
--- Custom SQL migration file, put your code below! --
 DELETE FROM feature_flags WHERE key IN (
   'voice_notes_enabled', 'agent_hybrid_retrieval', 'agent_web_search', 'agent_byok',
   'agent_longterm_memory', 'agent_injection_classifier', 'agent_history_injection_enforcement',
