@@ -53,6 +53,7 @@ function outcome(result: Result<AuthTokens, AuthDomainError>): string {
 
 class TwoReadBarrierSessionRepository extends DrizzleSessionRepository {
   readonly reads: (SessionEntity | null)[] = [];
+  private arrivals = 0;
   private releaseReaders: () => void = () => undefined;
   private readonly bothRead = new Promise<void>((resolve) => {
     this.releaseReaders = resolve;
@@ -61,13 +62,19 @@ class TwoReadBarrierSessionRepository extends DrizzleSessionRepository {
   override async findByRefreshTokenHash(
     hash: string
   ): Promise<SessionEntity | null> {
-    const session = await super.findByRefreshTokenHash(hash);
+    const session = await super
+      .findByRefreshTokenHash(hash)
+      .finally(() => this.arrive());
     this.reads.push(session);
-    if (this.reads.length === 2) {
-      this.releaseReaders();
-    }
     await this.bothRead;
     return session;
+  }
+
+  private arrive(): void {
+    this.arrivals += 1;
+    if (this.arrivals === 2) {
+      this.releaseReaders();
+    }
   }
 }
 
