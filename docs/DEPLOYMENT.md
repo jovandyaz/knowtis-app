@@ -235,19 +235,13 @@ The backoffice project needs `VITE_API_URL` only (`apps/backoffice/.env.example`
 
 ---
 
-## Feature Flag Rollouts
+## Feature Flag
 
-AI-domain flags are rolled out from the backoffice **AI Config** page rather than the Feature Flags page, and each one's prerequisites (`agent_health_alerts` needs `AI_ALERT_WEBHOOK_URL`, `ai_tier_gating` changes who may run which model, `ai_catalog_sync` starts the daily OpenRouter sync) are documented in [AI.md → Feature Flags (DB-backed)](AI.md#feature-flags-db-backed).
+`ai_enabled` is the only feature flag left in the system, rolled out from the backoffice **AI Config** page's status header. Every other AI/agent capability that used to sit behind a flag is now either always on or gated by whether its env var is configured — `AI_ALERT_WEBHOOK_URL` for agent health alerts, `VOYAGE_API_KEY` for hybrid retrieval and long-term memory, `TAVILY_API_KEY` for web search — see [AI.md → Feature flag](AI.md#feature-flag) for the full table.
 
-### Email verification gate (`email_verification_gate`)
+### Email verification gate
 
-Seeded `false` by migration `0037`. While off, `VerifiedIdentityPolicy` allows everyone and the app only nudges — the banner shows for every unverified account regardless of the flag, so accounts verify before enforcement. On, a verified non-anonymous account is required to open a note to anyone with the link, give link holders edit rights, create MCP API keys, store BYOK provider keys and approve a copilot share proposal (`403 EMAIL_NOT_VERIFIED`, see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)).
-
-1. **Prerequisites:** `TOKEN_HASH_KEY` set on Railway and a frontend build that ships the banner and the in-place dialog.
-2. **Give accounts time.** The banner is live as soon as that frontend deploys; flip only after the verification rate has moved — `auth.email.verified` events in the audit log, by `source`.
-3. **Flip it** in the backoffice (**Feature flags** → `email_verification_gate`). The API caches flags in-process for 30 seconds; the banner copy switches to "what verification unlocks" on the next `/flags` read.
-4. **Expect the deliberate side effect:** `isVerified()` also refuses anonymous accounts, so **anonymous visitors lose link-sharing at once** and are pointed at creating an account.
-5. **Rollback** is the same switch: nothing is persisted on the way, and the policy allows again within 30 seconds.
+Always enforced — no flag, no rollout to run. A verified non-anonymous account is required to open a note to anyone with the link, give link holders edit rights, create MCP API keys, store BYOK provider keys and approve a copilot share proposal (`403 EMAIL_NOT_VERIFIED`, see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). `TOKEN_HASH_KEY` must be set on Railway for the verification-code flow itself to work; `VerifyEmailBanner` nudges every unverified account regardless.
 
 ---
 

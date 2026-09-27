@@ -140,9 +140,9 @@ Notes shared via "Anyone with the link" from other users are **excluded** from t
 
 Separate from the CASL owner/editor/viewer checks above, a second gate can require a **verified, non-anonymous account** before specific actions succeed. It lives in `VerifiedIdentityPolicy` (`apps/api/src/modules/users/verified-identity.policy.ts`) and does not use CASL — it reads `email_verified_at` and `is_anonymous` from `users` fresh on every call, because the copilot's WebSocket handshake only ever captures `userId`/`isAnonymous`, so a cached verified claim would go stale for the life of the socket.
 
-### Feature flag: dark by default
+### Always enforced
 
-The gate is controlled by the `EMAIL_VERIFICATION_GATE` feature flag (`email_verification_gate`), seeded `false` by migration `0037_seed_email_verification_gate_flag.sql`. `VerifiedIdentityPolicy.isVerified()` returns `true` (allow) without checking the user at all when the flag is off, so the gate is fully inert until it is turned on.
+There is no feature flag for this gate — `VerifiedIdentityPolicy.isVerified()` always checks the user.
 
 ### What it covers
 
@@ -184,8 +184,7 @@ unverified owner unable to undo their own sharing.
 `POST /auth/resend-verification` (`AuthAccountController.resendVerification` in
 `apps/api/src/modules/auth/auth-account.controller.ts`) does not go
 through `VerifiedIdentityPolicy` at all, even though it is the email-verification
-flow itself. It refuses an **anonymous** session outright, unconditional on the
-`EMAIL_VERIFICATION_GATE` flag: an anonymous account's address is the synthetic
+flow itself. It refuses an **anonymous** session outright: an anonymous account's address is the synthetic
 `@anonymous.knowtis.local` one, mailing it bounces, and bounces damage a
 freshly-provisioned sending domain's reputation. The refusal is a plain
 `ForbiddenException` (403) with no structured error code — it is not the
@@ -204,7 +203,7 @@ will not recognize this site's refusal.
 ### Frontend gate handling
 
 - `useVerifyEmailGate()` (`apps/notes/src/hooks/useVerifyEmailGate.ts`) is the single place that decides what a refusal offers: `canVerify` is `false` for an anonymous visitor and for a visitor with no session at all, `prompt()` opens the verify dialog for an account and toasts `auth:verifyEmail.gateSignUpToast` for a visitor, and `handleError()` recognizes `isEmailNotVerifiedError()` and calls `prompt()`. It returns `true` for either audience — the refusal is answered — and `false` only for a failure that is not this gate's, which the caller then reports itself.
-- `VerifyEmailBanner` and `VerifyEmailDialog` (`apps/notes/src/components/auth/`) render the persistent nudge and the in-place OTP verification flow described in [AUTH.md](AUTH.md#email-verification). The banner is shown to every unverified account regardless of `EMAIL_VERIFICATION_GATE` — nudging precedes enforcing, so accounts verify before the flag flips — and once the flag is on its copy names what verification unlocks (`auth:verifyEmail.bannerTextGated`) instead of only stating the status.
+- `VerifyEmailBanner` and `VerifyEmailDialog` (`apps/notes/src/components/auth/`) render the persistent nudge and the in-place OTP verification flow described in [AUTH.md](AUTH.md#email-verification). The banner is shown to every unverified account, and its copy names what verification unlocks (`auth:verifyEmail.bannerTextGated`).
 - `AgentCopilotPanel` answers `AGENT_EMAIL_NOT_VERIFIED` with the same offer even though it arrives over the WebSocket rather than as an HTTP error: it names the reason in the retry banner _and_ calls `prompt()`. Only the transport differs, not what the user is offered. The agent store remembers which failure was already answered, so re-mounting the panel does not re-open the dialog for a refusal the user has already seen.
 
 ---

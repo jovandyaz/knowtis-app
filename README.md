@@ -20,7 +20,7 @@ Knowtis is a local-first, real-time notes workspace where AI is a collaborator r
 
 ## Features
 
-**Write.** A Tiptap editor with slash commands, ghost-text suggestions, and inline AI actions to rewrite, summarize, translate, or expand a selection. Voice notes are recorded and transcribed in place.
+**Write.** A Tiptap editor with slash commands, ghost-text suggestions, and inline AI actions to rewrite, summarize, translate, or adjust the tone of a selection. Voice notes are recorded and transcribed in place.
 
 **Collaborate.** Yjs CRDT sync with live presence and remote cursors. Notes persist to IndexedDB, so editing works offline and reconciles when you reconnect.
 
