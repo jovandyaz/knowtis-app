@@ -23,6 +23,7 @@ import {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
@@ -240,7 +241,7 @@ export class SuggestOrganizationHandler {
     } catch (error) {
       this.logger.warn({
         event: 'ai.suggest-organization.vocabulary-failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
       });
       return [];
     }
@@ -358,7 +359,7 @@ export class SuggestOrganizationHandler {
         event: 'ai.suggest-organization.note-failed',
         requestId,
         noteId: note.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
       });
       await this.rateLimitService.releaseReservation(
         userId,
@@ -402,7 +403,7 @@ export class SuggestOrganizationHandler {
           event: 'ai.usage.record_failed',
           requestId: params.requestId,
           userId: params.userId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: reasonOf(error),
         })
       );
   }
@@ -456,7 +457,7 @@ export class SuggestOrganizationHandler {
       this.logger.warn({
         event: 'ai.suggest-organization.related-failed',
         noteId: note.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
       });
       return [];
     }

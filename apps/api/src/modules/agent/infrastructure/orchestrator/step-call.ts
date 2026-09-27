@@ -11,6 +11,7 @@ import {
 
 import { isOverloadedError } from '@knowtis/ai-gateway';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import {
   AIErrors,
   type AIDomainError,
@@ -48,7 +49,7 @@ export function errorMessage(error: unknown, redact: boolean): string {
   if (redact) {
     return 'BYOK provider request failed';
   }
-  return error instanceof Error ? error.message : 'Agent run failed';
+  return error instanceof Error ? reasonOf(error) : 'Agent run failed';
 }
 
 function describeToolError(error: unknown): { code: string; error: string } {
@@ -60,7 +61,7 @@ function describeToolError(error: unknown): { code: string; error: string } {
   }
   const message =
     error instanceof Error
-      ? error.message
+      ? reasonOf(error)
       : typeof error === 'string'
         ? error
         : 'non-Error value thrown';

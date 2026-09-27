@@ -24,6 +24,7 @@ import {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
+import { reasonOf } from '../../core/errors/reason-of';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
 import {
@@ -214,7 +215,7 @@ export class AIGateway
       this.logger.error({
         event: 'ai.stream.unexpected_error',
         userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
       });
       if (!controller.signal.aborted) {
         client.emit('ai:error', AIErrors.providerError('AI streaming failed'));

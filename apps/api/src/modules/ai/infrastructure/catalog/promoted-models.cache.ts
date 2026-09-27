@@ -3,6 +3,7 @@ import { Interval } from '@nestjs/schedule';
 
 import { PROMOTED_STATUS } from '@knowtis/shared-types';
 
+import { stackOf } from '../../../../core/errors/stack-of';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import {
   AI_CATALOG_REPOSITORY,
@@ -45,7 +46,7 @@ export class PromotedModelsCache implements OnModuleInit {
     } catch (error) {
       this.logger.warn(
         `Failed to refresh promoted models, keeping ${this.promoted.length} cached`,
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
     }
   }

@@ -10,6 +10,7 @@ import {
   type PermissionLevel as PermissionLevelType,
 } from '@knowtis/shared-types';
 
+import { stackOf } from '../../../../core/errors/stack-of';
 import {
   DATABASE_CONNECTION,
   notePermissions,
@@ -178,7 +179,7 @@ export class DrizzlePermissionRepository implements PermissionRepository {
     } catch (error) {
       this.logger.error(
         `Failed to upsert permission for note ${data.noteId}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       return err(NoteErrors.persistenceError('upsertPermission', data.noteId));
     }
@@ -206,7 +207,7 @@ export class DrizzlePermissionRepository implements PermissionRepository {
     } catch (error) {
       this.logger.error(
         `Failed to delete permission for note ${noteId}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       return err(NoteErrors.persistenceError('deletePermission', noteId));
     }

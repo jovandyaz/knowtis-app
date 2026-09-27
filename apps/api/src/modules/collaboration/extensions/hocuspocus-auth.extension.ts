@@ -15,6 +15,7 @@ import {
   HANDSHAKE_FAILURE,
 } from '@knowtis/shared-types';
 
+import { stackOf } from '../../../core/errors/stack-of';
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../../mcp/mcp-token';
 import type {
   AccessSnapshot,
@@ -219,7 +220,7 @@ export class HocuspocusAuthExtension {
     } catch (error) {
       this.logger.error(
         `Failed to load user ${payload.sub} during auth for note ${documentName}`,
-        error instanceof Error ? error.stack : error
+        stackOf(error)
       );
       throw new HandshakeError(HANDSHAKE_FAILURE.INVALID_TOKEN);
     }

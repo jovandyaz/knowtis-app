@@ -19,6 +19,8 @@ import {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
+import { reasonOf } from '../../../core/errors/reason-of';
+import { stackOf } from '../../../core/errors/stack-of';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import {
   logInputDetections,
@@ -334,7 +336,7 @@ export class RunAgentTurnHandler {
     } catch (error) {
       this.logger.warn(
         'Long-term memory retrieval failed; proceeding without it',
-        error instanceof Error ? error.stack : String(error)
+        stackOf(error)
       );
       return [];
     }
@@ -430,7 +432,7 @@ export class RunAgentTurnHandler {
       this.logger.error({
         event: 'agent.conversation.persist_failed',
         conversationId: persistence.conversationId,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
     }
   }
@@ -592,7 +594,7 @@ export class RunAgentTurnHandler {
       this.logger.warn({
         event: 'agent.byok.providers_lookup_failed',
         userId: input.userId,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
       callbacks.onError(AIErrors.providerError('Model resolution failed'));
       return;
@@ -611,7 +613,7 @@ export class RunAgentTurnHandler {
       this.logger.error({
         event: 'agent.model_resolution_failed',
         userId: input.userId,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
       callbacks.onError(AIErrors.providerError('Model resolution failed'));
       return;
@@ -777,7 +779,7 @@ export class RunAgentTurnHandler {
               this.logger.warn({
                 event: 'agent.usage.record_failed',
                 userId: input.userId,
-                error: error instanceof Error ? error.message : 'unknown',
+                error: reasonOf(error),
               });
               costUsd = TokenUsage.create(
                 {
@@ -856,7 +858,7 @@ export class RunAgentTurnHandler {
       this.logger.error({
         event: 'agent.turn.unexpected_error',
         userId: input.userId,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
       if (!ctx.reconciled) {
         await this.recordUsageSafe(input.userId, ctx, {
@@ -884,7 +886,7 @@ export class RunAgentTurnHandler {
       this.logger.warn({
         event: 'agent.effort_lookup_failed',
         model: request.model,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
       return undefined;
     }
@@ -959,7 +961,7 @@ export class RunAgentTurnHandler {
       this.logger.warn({
         event: 'agent.usage.record_failed',
         userId,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: reasonOf(error),
       });
     }
   }

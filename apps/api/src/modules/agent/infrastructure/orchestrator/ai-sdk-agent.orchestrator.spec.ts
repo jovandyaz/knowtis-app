@@ -4,6 +4,7 @@ import { streamText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { failedQuery } from '../../../../test-support/database-errors';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
@@ -3549,5 +3550,38 @@ describe('AiSdkAgentOrchestrator', () => {
     });
     warnSpy.mockRestore();
     logSpy.mockRestore();
+  });
+
+  it('logs a tool that failed on a query by its diagnostics, never by the query parameters', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const secret = 'sentinel-note-query-value';
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'proposeEditNote',
+          input: { noteId: 'n1' },
+          error: failedQuery([secret]),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        code: 'UNCLASSIFIED',
+        error:
+          'DrizzleQueryError (failureCategory=unclassified, sqlState=40P01)',
+      })
+    );
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(secret);
+    warnSpy.mockRestore();
   });
 });

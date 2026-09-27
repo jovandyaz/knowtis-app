@@ -10,6 +10,7 @@ import {
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
@@ -146,7 +147,7 @@ export class AIGenerationPipeline {
             event: 'ai.usage.record_failed',
             requestId,
             userId: request.userId,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: reasonOf(error),
           })
         );
 
@@ -175,7 +176,7 @@ export class AIGenerationPipeline {
         requestId,
         userId: request.userId,
         action: request.action,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: reasonOf(error),
         latencyMs: Date.now() - startTime,
         ...request.logContext,
       });

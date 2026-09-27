@@ -6,6 +6,7 @@ import type { Sql } from 'postgres';
 import { detectPromptInjection } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { stackOf } from '../../../../core/errors/stack-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { AIConfigService } from '../../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
@@ -90,7 +91,7 @@ export class MemoryExtractionTask {
         } catch (error) {
           this.logger.warn(
             `Memory extraction failed for conversation ${conv.id}`,
-            error instanceof Error ? error.stack : String(error)
+            stackOf(error)
           );
         }
       }
@@ -100,10 +101,7 @@ export class MemoryExtractionTask {
         );
       }
     } catch (error) {
-      this.logger.error(
-        'Memory extraction reconcile failed',
-        error instanceof Error ? error.stack : String(error)
-      );
+      this.logger.error('Memory extraction reconcile failed', stackOf(error));
     }
   }
 
