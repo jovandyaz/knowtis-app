@@ -294,6 +294,23 @@ describe('active access leases', () => {
     expect(session.closed).toBe(true);
   });
 
+  it('serves a handshake that joined a timed-out read on the first sweep after it settles', async () => {
+    const stalled = deferred<AccessSnapshot>();
+    reads.mockImplementationOnce(() => stalled.promise);
+    const abandoned = service.acquire('note', owner).catch(() => null);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await abandoned).toBeNull();
+    const outcome = vi.fn();
+    void service.acquire('note', guest).then(outcome, outcome);
+
+    stalled.resolve(initial);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(outcome).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ effectiveAccess: 'editor', closed: false })
+    );
+  });
+
   it('retains SQL admission after caller timeout and bounds the waiting queue', async () => {
     const pending = deferred<AccessSnapshot>();
     reads.mockImplementation(() => pending.promise);

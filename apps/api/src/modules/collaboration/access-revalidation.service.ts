@@ -226,6 +226,9 @@ export class AccessRevalidationService
   }
 
   private requestRead(state: NoteState): void {
+    if (this.stopped) {
+      return;
+    }
     if (state.reading) {
       // A read still waiting on its snapshot serves every session present when
       // it arrives; one already settling cannot, so read again after it.
@@ -234,7 +237,7 @@ export class AccessRevalidationService
       }
       return;
     }
-    if (this.stopped || this.queue.has(state) || !state.sessions.size) {
+    if (this.queue.has(state) || !state.sessions.size) {
       return;
     }
     if (this.activeReads < MAX_READS) {
@@ -276,7 +279,6 @@ export class AccessRevalidationService
     const generation = state.generation;
     state.readStartedAt = startedAt;
     state.reading = true;
-    state.settling = false;
     state.dirty = false;
     this.activeReads++;
     this.peakReads = Math.max(this.peakReads, this.activeReads);
@@ -314,6 +316,7 @@ export class AccessRevalidationService
         this.completedReads++;
         this.totalReadMs += performance.now() - startedAt;
         state.reading = false;
+        state.settling = false;
         if (!this.stopped && state.dirty && state.sessions.size) {
           this.requestRead(state);
         }
