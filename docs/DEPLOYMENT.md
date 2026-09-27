@@ -241,7 +241,7 @@ The backoffice project needs `VITE_API_URL` only (`apps/backoffice/.env.example`
 
 ### Email verification gate
 
-Always enforced — no flag, no rollout to run. A verified non-anonymous account is required to open a note to anyone with the link, give link holders edit rights, create MCP API keys, store BYOK provider keys, approve a copilot share proposal and approve an OAuth client's requested scopes (`403 EMAIL_NOT_VERIFIED`, see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). `TOKEN_HASH_KEY` must be set on Railway for the verification-code flow itself to work; `VerifyEmailBanner` nudges every unverified account regardless.
+Always enforced — no flag, no rollout to run. A verified non-anonymous account is required for the five sites the gate covers: widening a note's sharing (a brand-new grant, or upgrading an existing viewer to editor — `POST /notes/:id/share` directly, or a copilot share proposal once approved, both reach the same check), an owner widening a note's link exposure (opening it, or letting an open link write), creating MCP API keys, storing BYOK provider keys, and approving an OAuth client's requested scopes (`403 EMAIL_NOT_VERIFIED`, see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). Narrowing access, revoking it, or re-granting the same level is never gated. `TOKEN_HASH_KEY` must be set on Railway for the verification-code flow itself to work; `VerifyEmailBanner` nudges every unverified account regardless.
 
 ---
 
