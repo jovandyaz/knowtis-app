@@ -298,7 +298,7 @@ describe('AICompletionPipeline', () => {
       }
       const { context } = preflight.value;
 
-      pipeline.releaseReservation(context, baseInput);
+      await pipeline.releaseReservation(context, baseInput);
 
       expect(releaseReservation).toHaveBeenCalledWith(
         'user-1',
@@ -306,6 +306,31 @@ describe('AICompletionPipeline', () => {
         context.estimatedCostUsd,
         undefined
       );
+    });
+
+    it('should settle the release only once the rate limiter has released it', async () => {
+      const release = Promise.withResolvers<undefined>();
+      const { pipeline } = createPipeline({
+        releaseReservation: vi.fn().mockReturnValue(release.promise),
+      });
+
+      const preflight = await pipeline.preflight(baseInput);
+      if (preflight.isErr() || preflight.value.kind !== 'ready') {
+        throw new Error('expected ready preflight');
+      }
+      let settled = false;
+
+      const pending = pipeline
+        .releaseReservation(preflight.value.context, baseInput)
+        .then(() => {
+          settled = true;
+        });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(settled).toBe(false);
+      release.resolve(undefined);
+      await pending;
+      expect(settled).toBe(true);
     });
 
     it('should forward the reserved IP subject into usage recording', async () => {
@@ -361,7 +386,7 @@ describe('AICompletionPipeline', () => {
       }
       const { context } = preflight.value;
 
-      pipeline.releaseReservation(context, input);
+      await pipeline.releaseReservation(context, input);
 
       expect(releaseReservation).toHaveBeenCalledWith(
         'user-1',

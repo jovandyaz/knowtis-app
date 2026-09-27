@@ -455,6 +455,122 @@ describe('StreamTextHandler', () => {
     );
   });
 
+  it('reports a provider failure only after the reservation is released', async () => {
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: (async function* () {
+        yield 'partial';
+        throw new Error('provider exploded');
+      })(),
+      usage: Promise.resolve({
+        promptTokens: 0,
+        completionTokens: 0,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+    const release = Promise.withResolvers<undefined>();
+    const releaseSpy = vi
+      .spyOn(pipeline, 'releaseReservation')
+      .mockReturnValue(release.promise);
+    let settled = false;
+
+    const pending = handler
+      .execute(
+        {
+          userId: 'user-123',
+          action: AI_ACTION.SUMMARIZE,
+          content: 'Some content',
+        },
+        callbacks
+      )
+      .finally(() => {
+        settled = true;
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(releaseSpy).toHaveBeenCalledTimes(1);
+    expect(errorResult).toBeNull();
+    expect(settled).toBe(false);
+    release.resolve(undefined);
+    await pending;
+    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
+  });
+
+  it('settles the budget once when delivering the finished stream throws', async () => {
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      {
+        ...callbacks,
+        onDone: () => {
+          throw new Error('socket write failed');
+        },
+        onError,
+      }
+    );
+
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 80, outputTokens: 30 })
+    );
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not record a settled stream again when the client aborts afterwards', async () => {
+    const controller = new AbortController();
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      {
+        ...callbacks,
+        onDone: () => {
+          controller.abort();
+          throw new Error('socket closed');
+        },
+      },
+      controller.signal
+    );
+
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 80, outputTokens: 30 })
+    );
+    expect(releaseSpy).not.toHaveBeenCalled();
+  });
+
+  it('releases the reservation once when a chunk cannot be delivered', async () => {
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      {
+        ...callbacks,
+        onChunk: () => {
+          throw new Error('socket write failed');
+        },
+      }
+    );
+
+    expect(releaseSpy).toHaveBeenCalledTimes(1);
+    expect(mockUsageRepo.recordUsage).not.toHaveBeenCalled();
+    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
+  });
+
   it('records estimated partial usage instead of {0,0} when the client aborts', async () => {
     const controller = new AbortController();
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
@@ -469,10 +585,15 @@ describe('StreamTextHandler', () => {
         model: 'anthropic:claude-sonnet-4-20250514',
       }),
     });
-    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+    const cache = {
+      isCacheable: vi.fn().mockReturnValue(true),
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AICache;
+    const cachedHandler = buildHandler(cache);
     const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
 
-    await handler.execute(
+    await cachedHandler.execute(
       {
         userId: 'user-123',
         action: AI_ACTION.SUMMARIZE,
@@ -482,14 +603,12 @@ describe('StreamTextHandler', () => {
       controller.signal
     );
 
-    expect(recordSpy).toHaveBeenCalledTimes(1);
-    expect(releaseSpy).not.toHaveBeenCalled();
-    const recorded = recordSpy.mock.calls[0][2];
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+    const [recorded] = vi.mocked(mockUsageRepo.recordUsage).mock.calls[0];
     expect(recorded.inputTokens).toBeGreaterThan(0);
     expect(recorded.outputTokens).toBeGreaterThan(0);
-    expect(recordSpy.mock.calls[0][3]).toEqual(
-      expect.objectContaining({ aborted: true })
-    );
+    expect(cache.set).not.toHaveBeenCalled();
+    expect(releaseSpy).not.toHaveBeenCalled();
   });
 
   it('should build tone prompt correctly', async () => {

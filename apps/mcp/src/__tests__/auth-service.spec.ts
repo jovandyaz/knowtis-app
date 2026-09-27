@@ -165,7 +165,9 @@ describe('AuthService', () => {
       status: 429,
       statusText: 'Too Many Requests',
       headers: new Headers({ 'Retry-After': '42' }),
-      json: async () => ({ message: 'ThrottlerException: Too Many Requests' }),
+      json: async () => ({
+        message: 'Too many requests. Please slow down and try again shortly.',
+      }),
     });
     const service = new AuthService(EXCHANGE_URL);
 

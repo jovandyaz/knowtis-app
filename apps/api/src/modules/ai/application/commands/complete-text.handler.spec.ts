@@ -175,6 +175,33 @@ describe('CompleteTextHandler', () => {
     );
   });
 
+  it('does not answer a failed completion until the reservation is released', async () => {
+    vi.spyOn(mockProvider, 'generateCompletion').mockRejectedValue(
+      new Error('provider exploded')
+    );
+    const release = Promise.withResolvers<undefined>();
+    const releaseSpy = vi
+      .spyOn(pipeline, 'releaseReservation')
+      .mockReturnValue(release.promise);
+    let settled = false;
+
+    const pending = handler
+      .execute({
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      })
+      .finally(() => {
+        settled = true;
+      });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(releaseSpy).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    release.resolve(undefined);
+    expect((await pending).isErr()).toBe(true);
+  });
+
   it('should fail for invalid action', async () => {
     const result = await handler.execute({
       userId: 'user-123',
