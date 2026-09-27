@@ -799,10 +799,7 @@ export class RunAgentTurnHandler {
               ).costUsd;
             }
             if (execution.billing.kind === 'byok') {
-              void this.byok.markUsed(
-                execution.subject.userId,
-                execution.billing.provider
-              );
+              void this.byok.markUsed(userId, execution.billing.provider);
             }
             await persistTurnOnce(event.sources, event.stopReason);
             callbacks.onDone({
