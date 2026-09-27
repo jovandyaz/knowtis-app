@@ -47,14 +47,15 @@ export class HybridRetrievalAdapter implements RetrievalPort {
 
   async search(
     execution: AiExecutionContext,
-    query: string
+    query: string,
+    options?: { readonly semantic?: boolean }
   ): Promise<NoteHit[]> {
     const branded = UserId.create(execution.subject.userId);
     if (branded.isErr()) {
       return [];
     }
     try {
-      return await this.fuse(branded.value, execution, query);
+      return await this.fuse(branded.value, execution, query, options);
     } catch (error) {
       this.logger.warn(
         'Hybrid retrieval failed; degrading to keyword',
@@ -67,7 +68,8 @@ export class HybridRetrievalAdapter implements RetrievalPort {
   private async fuse(
     user: UserId,
     execution: AiExecutionContext,
-    query: string
+    query: string,
+    options?: { readonly semantic?: boolean }
   ): Promise<NoteHit[]> {
     const { userId } = execution.subject;
     const lexicalRows = await this.notes.findAccessibleNotesByLexicalRank(
@@ -76,7 +78,7 @@ export class HybridRetrievalAdapter implements RetrievalPort {
       CANDIDATES_PER_LEG
     );
     const lexical = lexicalRows.map((r) => toNoteHit(r, userId));
-    if (!this.embed.isConfigured()) {
+    if (!this.embed.isConfigured() || options?.semantic === false) {
       return lexical.slice(0, MAX_HITS);
     }
 

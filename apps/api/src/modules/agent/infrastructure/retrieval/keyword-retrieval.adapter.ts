@@ -49,7 +49,8 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
 
   async search(
     execution: AiExecutionContext,
-    query: string
+    query: string,
+    _options?: { readonly semantic?: boolean }
   ): Promise<NoteHit[]> {
     const { userId } = execution.subject;
     const branded = this.brandUser(userId, 'search');

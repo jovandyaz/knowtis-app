@@ -2,8 +2,12 @@ import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai
 import type { AgentNote, NoteBody, NoteHit, NotesOverview } from '../retrieval';
 
 export interface RetrievalPort {
-  /** Bills the query embedding to `execution`. */
-  search(execution: AiExecutionContext, query: string): Promise<NoteHit[]>;
+  /** Bills the query embedding to `execution` unless `semantic` is `false`. */
+  search(
+    execution: AiExecutionContext,
+    query: string,
+    options?: { readonly semantic?: boolean }
+  ): Promise<NoteHit[]>;
   /** Accessible notes semantic search cannot reach yet. Empty whenever the
    * vector leg is not running, so callers never promise indexing that is off. */
   listUnindexed(userId: string, limit: number): Promise<NoteHit[]>;

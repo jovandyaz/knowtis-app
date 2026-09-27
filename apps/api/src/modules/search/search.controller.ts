@@ -4,30 +4,19 @@ import {
   PoliciesGuard,
   RequirePermission,
 } from '@jovandyaz/permissions-nestjs';
-import {
-  Controller,
-  Get,
-  HttpStatus,
-  Inject,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Inject, Query, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
-  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { err, ok } from 'neverthrow';
 
 import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { SUBJECTS } from '@knowtis/authorization';
 
 import { clientIpOf } from '../../core/http/client-ip';
-import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
@@ -35,16 +24,20 @@ import {
 import type { NoteHit } from '../agent/domain/retrieval';
 import { AIRateLimitService } from '../ai/application/services/ai-rate-limit.service';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
-import { AIErrorCodes, AIErrors } from '../ai/domain/errors/ai.errors';
+import {
+  EMBEDDING_PORT,
+  type EmbeddingPort,
+} from '../ai/domain/ports/embedding.port';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { MCP_SCOPES } from '../mcp/mcp-token';
 import { SearchQueryDto } from './dto/search-query.dto';
 
 const DEFAULT_LIMIT = 20;
 
-const RATE_LIMIT_STATUS_MAP: Record<string, HttpStatus> = {
-  [AIErrorCodes.RATE_LIMIT_EXCEEDED]: HttpStatus.TOO_MANY_REQUESTS,
-};
+const SEARCH_MODES = ['hybrid', 'lexical'] as const;
+type SearchMode = (typeof SEARCH_MODES)[number];
+const HYBRID_MODE: SearchMode = SEARCH_MODES[0];
+const LEXICAL_MODE: SearchMode = SEARCH_MODES[1];
 
 @ApiTags('Search')
 @ApiBearerAuth()
@@ -53,6 +46,7 @@ const RATE_LIMIT_STATUS_MAP: Record<string, HttpStatus> = {
 export class SearchController {
   constructor(
     @Inject(RETRIEVAL_PORT) private readonly retrieval: RetrievalPort,
+    @Inject(EMBEDDING_PORT) private readonly embedding: EmbeddingPort,
     private readonly rateLimit: AIRateLimitService,
     private readonly tierResolver: TierResolver
   ) {}
@@ -61,8 +55,8 @@ export class SearchController {
     summary: 'Search accessible notes',
     description:
       'Hybrid full-text + semantic search over the notes the user can access. ' +
-      'Runs full-text only when no embedding provider is configured, and ' +
-      'falls back to keyword search when hybrid retrieval fails.',
+      'Runs full-text only when no embedding provider is configured, when ' +
+      'the AI budget refuses the embed leg, or when hybrid retrieval fails.',
   })
   @ApiOkResponse({
     schema: {
@@ -82,12 +76,9 @@ export class SearchController {
             },
           },
         },
+        mode: { type: 'string', enum: [...SEARCH_MODES] },
       },
     },
-  })
-  @ApiResponse({
-    status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'AI rate or budget limit exceeded',
   })
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
@@ -96,27 +87,31 @@ export class SearchController {
     @CurrentUser() user: RequestUser,
     @Query() query: SearchQueryDto,
     @Req() req: Request
-  ): Promise<{ hits: NoteHit[] }> {
+  ): Promise<{ hits: NoteHit[]; mode: SearchMode }> {
     const execution = await this.tierResolver.resolve({
       userId: user.id,
       isAnonymous: user.isAnonymous === true,
       clientIp: clientIpOf(req),
     });
-    const check = await this.rateLimit.checkLimit(execution, {
-      tokens: estimateTokenCount(query.q),
-      costUsd: 0,
-    });
-    const reservation = unwrapOrThrow(
-      check.allowed
-        ? ok(check.reservation)
-        : err(AIErrors.rateLimitExceeded(check.reason)),
-      RATE_LIMIT_STATUS_MAP
-    );
+    const check = this.embedding.isConfigured()
+      ? await this.rateLimit.checkLimit(execution, {
+          tokens: estimateTokenCount(query.q),
+          costUsd: 0,
+        })
+      : null;
+    const semantic = check?.allowed === true;
     try {
-      const hits = await this.retrieval.search(execution, query.q);
-      return { hits: hits.slice(0, query.limit ?? DEFAULT_LIMIT) };
+      const hits = await this.retrieval.search(execution, query.q, {
+        semantic,
+      });
+      return {
+        hits: hits.slice(0, query.limit ?? DEFAULT_LIMIT),
+        mode: semantic ? HYBRID_MODE : LEXICAL_MODE,
+      };
     } finally {
-      await this.rateLimit.releaseReservation(execution, reservation);
+      if (check?.allowed) {
+        await this.rateLimit.releaseReservation(execution, check.reservation);
+      }
     }
   }
 }
