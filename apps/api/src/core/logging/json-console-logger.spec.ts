@@ -1,6 +1,4 @@
 import { ConsoleLogger, Logger, type LogLevel } from '@nestjs/common';
-import { DrizzleQueryError } from 'drizzle-orm';
-import postgres from 'postgres';
 import {
   afterEach,
   beforeEach,
@@ -11,6 +9,7 @@ import {
   type MockInstance,
 } from 'vitest';
 
+import { failedQuery, postgresError } from '../../test-support/database-errors';
 import { JsonConsoleLogger } from './json-console-logger';
 
 type WriteSpy = MockInstance<typeof process.stdout.write>;
@@ -243,14 +242,11 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
 
   describe('a database error', () => {
     const SECRET_PARAM = '$argon2id$v=19$m=65536,t=3,p=4$sentinel-hash';
-    const PostgresError = postgres.PostgresError as unknown as new (
-      fields: Partial<postgres.PostgresError>
-    ) => postgres.PostgresError;
     const DIAGNOSTICS =
       'DrizzleQueryError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)';
 
     function uniqueViolation() {
-      return new PostgresError({
+      return postgresError({
         message:
           'duplicate key value violates unique constraint "users_email_unique"',
         code: '23505',
@@ -260,16 +256,15 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
       });
     }
 
-    function failedQuery() {
-      return new DrizzleQueryError(
-        'insert into "users" ("email", "password_hash") values ($1, $2)',
+    function rejectedSignUp() {
+      return failedQuery(
         ['someone@example.com', SECRET_PARAM],
         uniqueViolation()
       );
     }
 
     it('is described by its diagnostics next to a text message, never by its parameters', () => {
-      new Logger('Users').error('Failed to create user', failedQuery());
+      new Logger('Users').error('Failed to create user', rejectedSignUp());
 
       const entry = onlyEntry(stderr);
       expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
@@ -281,7 +276,7 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
     });
 
     it('is described by its diagnostics when a framework logs it on its own', () => {
-      new Logger('WsExceptionsHandler').error(failedQuery());
+      new Logger('WsExceptionsHandler').error(rejectedSignUp());
 
       const entry = onlyEntry(stderr);
       expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);
@@ -301,7 +296,7 @@ describe('JsonConsoleLogger behind Nest Logger', () => {
     });
 
     it('is described by its diagnostics when nested in a payload', () => {
-      new Logger('Probe').warn({ event: 'probe', cause: failedQuery() });
+      new Logger('Probe').warn({ event: 'probe', cause: rejectedSignUp() });
 
       const entry = onlyEntry(stdout);
       expect(JSON.stringify(entry)).not.toContain(SECRET_PARAM);

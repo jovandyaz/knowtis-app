@@ -1,14 +1,9 @@
-import { DrizzleQueryError } from 'drizzle-orm';
-import postgres from 'postgres';
 import { describe, expect, it } from 'vitest';
 
+import { failedQuery, postgresError } from '../../test-support/database-errors';
 import { reasonOf } from './reason-of';
 
 const SECRET_PARAM = '$argon2id$v=19$m=65536,t=3,p=4$sentinel-hash';
-
-const PostgresError = postgres.PostgresError as unknown as new (
-  fields: Partial<postgres.PostgresError>
-) => postgres.PostgresError;
 
 describe('reasonOf', () => {
   it('reads the message of an Error', () => {
@@ -23,10 +18,9 @@ describe('reasonOf', () => {
   });
 
   it('describes a failed query by its diagnostics, never by its bound parameters', () => {
-    const failedQuery = new DrizzleQueryError(
-      'insert into "users" ("email", "password_hash") values ($1, $2)',
+    const rejected = failedQuery(
       ['someone@example.com', SECRET_PARAM],
-      new PostgresError({
+      postgresError({
         message:
           'duplicate key value violates unique constraint "users_email_unique"',
         code: '23505',
@@ -36,7 +30,7 @@ describe('reasonOf', () => {
       })
     );
 
-    const reason = reasonOf(failedQuery);
+    const reason = reasonOf(rejected);
 
     expect(reason).toBe(
       'DrizzleQueryError (failureCategory=unique_violation, sqlState=23505, table=users, constraint=users_email_unique)'
@@ -46,7 +40,7 @@ describe('reasonOf', () => {
   });
 
   it('keeps the input a raw Postgres error echoes out of its reason', () => {
-    const rejectedInput = new PostgresError({
+    const rejectedInput = postgresError({
       message: `invalid input syntax for type uuid: "${SECRET_PARAM}"`,
       code: '22P02',
     });

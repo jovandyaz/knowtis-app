@@ -1,16 +1,13 @@
-import { DrizzleQueryError } from 'drizzle-orm';
-import postgres from 'postgres';
 import { describe, expect, it } from 'vitest';
 
+import { failedQuery, postgresError } from '../../test-support/database-errors';
 import { databaseDiagnostics, isDatabaseError } from './database-diagnostics';
 
 const SECRET_PARAM = '$argon2id$v=19$m=65536,t=3,p=4$sentinel-hash';
 
-const PostgresError = postgres.PostgresError as unknown as new (
-  fields: Partial<postgres.PostgresError>
-) => postgres.PostgresError;
+const QUOTED_PARAMS = ['someone@example.com', SECRET_PARAM];
 
-const uniqueViolation = new PostgresError({
+const uniqueViolation = postgresError({
   message:
     'duplicate key value violates unique constraint "users_email_unique"',
   code: '23505',
@@ -20,17 +17,11 @@ const uniqueViolation = new PostgresError({
   detail: `Key (email)=(${SECRET_PARAM}) already exists.`,
 });
 
-function failedQuery(cause: unknown) {
-  return new DrizzleQueryError(
-    'insert into "users" ("email", "password_hash") values ($1, $2)',
-    ['someone@example.com', SECRET_PARAM],
-    cause as Error
-  );
-}
-
 describe('databaseDiagnostics', () => {
   it('names the SQLSTATE and the schema objects of the Postgres error a failed query wraps', () => {
-    const diagnostics = databaseDiagnostics(failedQuery(uniqueViolation));
+    const diagnostics = databaseDiagnostics(
+      failedQuery(QUOTED_PARAMS, uniqueViolation)
+    );
 
     expect(diagnostics).toStrictEqual({
       errorName: 'DrizzleQueryError',
@@ -43,7 +34,7 @@ describe('databaseDiagnostics', () => {
   });
 
   it('names the column of a raw Postgres error that reports one', () => {
-    const notNull = new PostgresError({
+    const notNull = postgresError({
       message:
         'null value in column "password_hash" of relation "users" violates not-null constraint',
       code: '23502',
@@ -75,7 +66,9 @@ describe('databaseDiagnostics', () => {
         constraint_name: SECRET_PARAM,
       });
 
-      const diagnostics = databaseDiagnostics(failedQuery(cause));
+      const diagnostics = databaseDiagnostics(
+        failedQuery(QUOTED_PARAMS, cause)
+      );
 
       expect(diagnostics).toStrictEqual({
         errorName: 'DrizzleQueryError',
@@ -102,7 +95,9 @@ describe('databaseDiagnostics', () => {
 
 describe('isDatabaseError', () => {
   it('recognizes a failed query and a raw Postgres error', () => {
-    expect(isDatabaseError(failedQuery(uniqueViolation))).toBe(true);
+    expect(isDatabaseError(failedQuery(QUOTED_PARAMS, uniqueViolation))).toBe(
+      true
+    );
     expect(isDatabaseError(uniqueViolation)).toBe(true);
   });
 

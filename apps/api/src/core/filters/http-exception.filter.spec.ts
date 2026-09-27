@@ -6,9 +6,9 @@ import {
   type ArgumentsHost,
 } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
-import { DrizzleQueryError } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { failedQuery } from '../../test-support/database-errors';
 import { RetryAfterHttpException } from '../http/retry-after.exception';
 import { GlobalExceptionFilter } from './http-exception.filter';
 
@@ -90,15 +90,14 @@ describe('GlobalExceptionFilter', () => {
   it('logs an uncaught failed query by its diagnostics, never by its parameters', () => {
     const { host, getBody } = createHost();
     const refreshTokenHash = 'sentinel-refresh-token-hash';
-    const failedQuery = new DrizzleQueryError(
-      'select * from "sessions" where "refresh_token_hash" = $1',
+    const unreachable = failedQuery(
       [refreshTokenHash],
       Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
         code: 'ECONNREFUSED',
       })
     );
 
-    filter.catch(failedQuery, host);
+    filter.catch(unreachable, host);
 
     const [line, stack] = loggerError.mock.calls[0].map(String);
     expect(line).toBe(
