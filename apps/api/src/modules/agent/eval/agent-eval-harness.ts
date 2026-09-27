@@ -8,6 +8,7 @@ import { I18nModule } from 'nestjs-i18n';
 import {
   computeTokenCostUsd,
   MODEL_CATALOG,
+  type AiInputDisposition,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
 import type { ReasoningEffort } from '@knowtis/shared-types';
@@ -26,7 +27,10 @@ import {
 } from '../domain/ports/agent-orchestrator.port';
 import { PENDING_MUTATION_STORE } from '../domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from '../domain/ports/retrieval.port';
-import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
+import {
+  coalesceReplayHistory,
+  sanitizeReplayHistory,
+} from '../domain/replay-input-sanitizer';
 import type { NoteFixtureSetName } from './fixtures/note-sets';
 import { resolveFixtureSet } from './fixtures/note-sets';
 import {
@@ -46,6 +50,12 @@ export interface EvalTurnSettings {
   openRouterProviderOrder(): Promise<readonly string[]>;
   openRouterIgnoredProviders(): Promise<readonly string[]>;
   effortFor(model: string): Promise<ReasoningEffort | undefined>;
+}
+
+interface ReplayOutcomes {
+  readonly dropped: number;
+  readonly withheld: number;
+  readonly redacted: number;
 }
 
 const NOOP_PENDING_STORE = {
@@ -207,24 +217,23 @@ export class AgentEvalHarness {
     latestUserContent: string,
     fixtureSet: NoteFixtureSetName,
     model: string
-  ): Promise<
-    EvalTranscript & { replay: { detected: number; dropped: number } }
-  > {
-    const sanitized = sanitizeReplayHistory(history, {
-      enforceAssistantAndTool: true,
-    });
+  ): Promise<EvalTranscript & { replay: ReplayOutcomes }> {
+    const sanitized = sanitizeReplayHistory(history);
+    const replayed = coalesceReplayHistory(sanitized.messages);
     const transcript = await this.runConversation(
-      [...sanitized.messages, { role: 'user', content: latestUserContent }],
+      [...replayed.messages, { role: 'user', content: latestUserContent }],
       fixtureSet,
       model
     );
+    const detections = [...sanitized.detections, ...replayed.detections];
+    const count = (disposition: AiInputDisposition) =>
+      detections.filter((entry) => entry.disposition === disposition).length;
     return {
       ...transcript,
       replay: {
-        detected: sanitized.detections.length,
-        dropped: sanitized.detections.filter(
-          (entry) => entry.disposition === 'block'
-        ).length,
+        dropped: count('block'),
+        withheld: count('withhold'),
+        redacted: count('redact'),
       },
     };
   }

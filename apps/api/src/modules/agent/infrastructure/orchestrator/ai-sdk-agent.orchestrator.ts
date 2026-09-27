@@ -3,14 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import type { ModelMessage, ToolSet } from 'ai';
 
 import { streamWithChain } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { reasonOf } from '../../../../core/errors/reason-of';
 import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import { buildRedactedTelemetry } from '../../../ai/infrastructure/providers/redacted-telemetry';
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type {
   AgentOrchestrator,
@@ -45,8 +42,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly toolRegistry: AgentToolRegistry,
     private readonly providerRegistry: ProviderRegistryFactory,
-    private readonly fallbackChain: FallbackChainService,
-    private readonly featureFlags: FeatureFlagsService
+    private readonly fallbackChain: FallbackChainService
   ) {}
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
@@ -126,8 +122,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     let instructions: string;
     let initialMessages: ModelMessage[];
     try {
-      tools = await this.toolRegistry.resolve(toolContext);
-      cache = !input.byokApiKey && (await this.promptCachingEnabled());
+      tools = this.toolRegistry.resolve(toolContext);
+      cache = !input.byokApiKey;
       instructions = this.buildSystemPrompt(
         input.noteId,
         input.knownNotes,
@@ -195,20 +191,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       proposals,
       webSources,
     });
-  }
-
-  private async promptCachingEnabled(): Promise<boolean> {
-    try {
-      return await this.featureFlags.isEnabled(
-        FEATURE_FLAG_KEYS.AGENT_PROMPT_CACHING
-      );
-    } catch (error) {
-      this.logger.warn(
-        'Prompt caching flag lookup failed, treating as off',
-        reasonOf(error)
-      );
-      return false;
-    }
   }
 
   private buildSystemPrompt(

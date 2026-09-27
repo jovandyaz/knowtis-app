@@ -4,7 +4,6 @@ import { Interval } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
 import { detectPromptInjection } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
@@ -18,7 +17,6 @@ import {
   EMBEDDING_PORT,
   type EmbeddingPort,
 } from '../../../ai/domain/ports/embedding.port';
-import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
   buildReconcilePrompt,
   MEMORY_RECONCILE_SYSTEM,
@@ -55,7 +53,6 @@ export class MemoryExtractionTask {
     @Inject(DATABASE_CLIENT) private readonly client: Sql,
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly aiConfig: AIConfigService,
-    private readonly flags: FeatureFlagsService,
     @Inject(CONVERSATION_REPOSITORY)
     private readonly conversations: ConversationRepository,
     @Inject(MEMORY_REPOSITORY) private readonly memory: MemoryRepository,
@@ -67,12 +64,7 @@ export class MemoryExtractionTask {
 
   @Interval(INTERVAL_MS)
   async reconcile(): Promise<void> {
-    if (!this.config.get('VOYAGE_API_KEY')) {
-      return;
-    }
-    if (
-      !(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY))
-    ) {
+    if (!this.embed.isConfigured()) {
       return;
     }
     const { acquired } = await runWithAdvisoryLock(

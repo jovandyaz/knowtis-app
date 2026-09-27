@@ -32,7 +32,6 @@ const masterKeyB64 = randomBytes(32).toString('base64');
 const masterKey = Buffer.from(masterKeyB64, 'base64');
 
 interface MakeOverrides {
-  flagOn?: boolean;
   identity?: IdentityState;
   validate?: (provider: ByokProvider, key: string) => Promise<void>;
   repo?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
@@ -55,9 +54,6 @@ function makeService(overrides: MakeOverrides) {
     touchLastUsed: vi.fn(),
     ...overrides.repo,
   };
-  const flags = {
-    isEnabled: vi.fn().mockResolvedValue(overrides.flagOn ?? true),
-  };
   const config = {
     get: (k: string) =>
       k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
@@ -74,7 +70,6 @@ function makeService(overrides: MakeOverrides) {
   };
   const service = new ByokService(
     repo as never,
-    flags as never,
     config as never,
     registry as never,
     policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED),
@@ -82,7 +77,7 @@ function makeService(overrides: MakeOverrides) {
   );
   const validateKey = vi.fn(overrides.validate ?? (async () => undefined));
   (service as never as { validateKey: unknown }).validateKey = validateKey;
-  return { service, repo, flags, store, validateKey, settings };
+  return { service, repo, store, validateKey, settings };
 }
 
 describe('ByokService', () => {
@@ -118,11 +113,16 @@ describe('ByokService', () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it('enabledProviders is empty when anonymous or flag off', async () => {
-    const off = makeService({ flagOn: false });
-    expect((await off.service.enabledProviders('u1')).size).toBe(0);
-    const on = makeService({ flagOn: true });
-    expect((await on.service.enabledProviders('u1', true)).size).toBe(0);
+  it('enabledProviders is empty when anonymous', async () => {
+    const { service } = makeService({});
+    expect((await service.enabledProviders('u1', true)).size).toBe(0);
+  });
+
+  it('enabledProviders lists the stored providers for a registered user', async () => {
+    const { service } = makeService({
+      repo: { getEnabledProviders: vi.fn().mockResolvedValue(['openai']) },
+    });
+    expect([...(await service.enabledProviders('u1'))]).toEqual(['openai']);
   });
 
   it('getApiKey decrypts a stored key', async () => {
@@ -133,7 +133,6 @@ describe('ByokService', () => {
           keyPrefix: 'sk-live',
         }),
       },
-      flagOn: true,
     });
     expect(await service.getApiKey('u1', 'anthropic')).toBe('sk-live');
   });
@@ -148,7 +147,6 @@ describe('ByokService', () => {
           keyPrefix: 'p',
         }),
       },
-      flagOn: true,
     });
     expect(await service.getApiKey('u1', 'anthropic')).toBeNull();
   });
@@ -183,7 +181,6 @@ describe('ByokService', () => {
       remove: vi.fn(),
       touchLastUsed: vi.fn(),
     };
-    const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
     const config = {
       get: (k: string) =>
         k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
@@ -191,7 +188,6 @@ describe('ByokService', () => {
     const registry = { languageModel: vi.fn().mockReturnValue({}) };
     const service = new ByokService(
       repo as never,
-      flags as never,
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
@@ -225,10 +221,8 @@ describe('ByokService', () => {
       remove: vi.fn(),
       touchLastUsed: vi.fn(),
     };
-    const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
     const service = new ByokService(
       repo as never,
-      flags as never,
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),

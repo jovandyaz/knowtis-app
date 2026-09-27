@@ -6,30 +6,18 @@ import type {
   AiInputSurface,
 } from '@knowtis/ai-gateway';
 
-import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
+type InputRole = 'user' | 'assistant' | 'tool';
 
 export interface InputDetectionRow {
   readonly detection: AiInputDetection;
   readonly disposition: AiInputDisposition;
-  readonly role?: 'user' | 'assistant' | 'tool';
+  readonly role: InputRole;
+  readonly redactedSpans: number;
 }
 
 export interface DroppedUserTurn {
   readonly score: number;
   readonly contentLength: number;
-}
-
-export async function resolveInputEnforcement(
-  flags: Pick<FeatureFlagsService, 'isEnabled'>,
-  key: string,
-  logger: Pick<Logger, 'warn'>
-): Promise<boolean> {
-  try {
-    return await flags.isEnabled(key);
-  } catch {
-    logger.warn({ event: 'ai.input_guard.flag_unavailable', key });
-    return false;
-  }
 }
 
 /** Emits at most one event per outcome per turn: history rows are rescanned on every replay, so per-row warnings would never stop. */
@@ -43,7 +31,17 @@ export function logInputDetections(
   },
   droppedUserTurn?: DroppedUserTurn
 ): void {
-  const blocked = rows.filter((row) => row.disposition === 'block').length;
+  const count = (disposition: AiInputDisposition) =>
+    rows.filter((row) => row.disposition === disposition).length;
+  const blocked = count('block');
+  const withheld = count('withhold');
+  const redacted = count('redact');
+  const droppedRoles: Partial<Record<InputRole, number>> = {};
+  for (const row of rows) {
+    if (row.disposition === 'block') {
+      droppedRoles[row.role] = (droppedRoles[row.role] ?? 0) + 1;
+    }
+  }
   const metadata = {
     surface: context.surface,
     userId: context.userId,
@@ -55,14 +53,14 @@ export function logInputDetections(
     logger.warn({
       event: 'ai.input_guard.detected',
       ...metadata,
-      observed: rows.length - blocked,
       blocked,
       rows: rows.map((row) => ({
-        ...(row.role ? { role: row.role } : {}),
+        role: row.role,
         disposition: row.disposition,
         score: row.detection.score,
         contentLength: row.detection.contentLength,
         reasonCode: row.detection.reasonCode,
+        redactedSpans: row.redactedSpans,
       })),
     });
   }
@@ -71,6 +69,15 @@ export function logInputDetections(
       event: 'agent.history.message_dropped',
       ...metadata,
       blocked,
+      roles: droppedRoles,
+    });
+  }
+  if (withheld + redacted > 0) {
+    logger.warn({
+      event: 'agent.history.content_neutralized',
+      ...metadata,
+      withheld,
+      redacted,
     });
   }
   if (droppedUserTurn) {

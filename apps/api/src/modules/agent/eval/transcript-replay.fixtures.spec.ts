@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
+import { detectAiInput, MAX_GUARD_INPUT_CHARS } from '@knowtis/ai-gateway';
 
 import { AGENT_HISTORY_TOKEN_BUDGET } from '../application/run-agent-turn.handler';
+import type { AgentMessage } from '../domain/agent-message';
 import { estimateMessageTokens } from '../domain/message-tokens';
-import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
+import {
+  projectReplayText,
+  REPLAY_REDACTION_MARKER,
+  sanitizeReplayHistory,
+} from '../domain/replay-input-sanitizer';
+import { NOTE_CONTENT_NOTE, WITHHELD_CONTENT } from '../domain/retrieval';
 import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';
 import {
   assertReplayNotObeyed,
@@ -16,9 +22,18 @@ import {
   REPLAY_LONG_DETAIL,
   REPLAY_LONG_FACT,
   REPLAY_QUOTED_DETAIL,
+  REPLAY_QUOTED_FACT,
   REPLAY_SAFE_DETAIL,
   REPLAY_SENTINEL,
 } from './transcript-replay.fixtures';
+
+function historyOf(id: string): readonly AgentMessage[] {
+  const item = REPLAY_GUARD_CASES.find((candidate) => candidate.id === id);
+  if (!item) {
+    throw new Error(`Unknown replay case ${id}`);
+  }
+  return item.history;
+}
 
 function replayOutput(text: string): string {
   return JSON.stringify({
@@ -47,16 +62,14 @@ describe('transcript replay fixtures', () => {
       ).toBe(true);
     }
   });
-  it('replays an oversized legitimate tool result to the model with enforcement on', () => {
+  it('replays an oversized legitimate tool result to the model', () => {
     const oversized = REPLAY_GUARD_CASES.find(
       (item) => item.id === 'oversized-tool'
     );
     expect(oversized).toBeDefined();
     expect(REPLAY_LONG_FACT.length).toBeGreaterThan(MAX_GUARD_INPUT_CHARS);
     const history = oversized?.history ?? [];
-    const { messages, detections } = sanitizeReplayHistory(history, {
-      enforceAssistantAndTool: true,
-    });
+    const { messages, detections } = sanitizeReplayHistory(history);
     expect(detections).toEqual([]);
     expect(JSON.stringify(toModelMessages(messages))).toContain(
       REPLAY_LONG_DETAIL
@@ -65,6 +78,75 @@ describe('transcript replay fixtures', () => {
       history.reduce((total, m) => total + estimateMessageTokens(m), 0)
     ).toBeLessThan(AGENT_HISTORY_TOKEN_BUDGET);
   });
+});
+
+describe('transcript replay fixtures through the replay guard', () => {
+  it('keeps the benign sentence of a legitimate quote and redacts the quote', () => {
+    const history = historyOf('legitimate-quote');
+    const { messages, detections } = sanitizeReplayHistory(history);
+    expect(messages).toEqual([
+      history[0],
+      {
+        role: 'assistant',
+        content: `${REPLAY_QUOTED_FACT} ${REPLAY_REDACTION_MARKER}`,
+      },
+    ]);
+    expect(detections).toEqual([
+      expect.objectContaining({ disposition: 'redact', redactedSpans: 1 }),
+    ]);
+  });
+  it('replaces a single-sentence poisoned answer with the marker alone', () => {
+    const history = historyOf('poisoned-assistant');
+    expect(sanitizeReplayHistory(history).messages).toEqual([
+      history[0],
+      { role: 'assistant', content: REPLAY_REDACTION_MARKER },
+    ]);
+  });
+  it('withholds a poisoned tool result and keeps its call', () => {
+    const history = historyOf('poisoned-tool');
+    const { messages, detections } = sanitizeReplayHistory(history);
+    expect(messages).toEqual([
+      history[0],
+      history[1],
+      {
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'replay-read',
+            toolName: 'getNote',
+            outputType: 'json',
+            output: {
+              note: NOTE_CONTENT_NOTE,
+              contentStatus: 'withheld',
+              content: WITHHELD_CONTENT,
+            },
+          },
+        ],
+      },
+    ]);
+    expect(detections).toEqual([
+      expect.objectContaining({ disposition: 'withhold', redactedSpans: 0 }),
+    ]);
+  });
+  it.each(['safe-tool', 'oversized-tool'])('replays %s unchanged', (id) => {
+    const history = historyOf(id);
+    expect(sanitizeReplayHistory(history)).toEqual({
+      messages: history,
+      detections: [],
+    });
+  });
+  it.each(REPLAY_GUARD_CASES.map((item) => item.id))(
+    'replays only content the detector passes for %s',
+    (id) => {
+      const { messages } = sanitizeReplayHistory(historyOf(id));
+      expect(JSON.stringify(messages)).not.toContain(REPLAY_ATTACK);
+      for (const message of messages) {
+        expect(detectAiInput(projectReplayText(message)).safe).toBe(true);
+      }
+    }
+  );
 });
 
 it('categorizes replay security separately and keeps utility checks for benign and quoted cases', () => {

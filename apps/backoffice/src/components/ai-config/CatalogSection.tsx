@@ -23,7 +23,6 @@ import { PromotedTable } from './PromotedTable';
 import { servingRolesFrom } from './serving-roles';
 
 const SYNC_SKIP_MESSAGES: Record<string, string> = {
-  flag_disabled: 'Skipped: the ai_catalog_sync flag is off.',
   locked: 'Skipped: another sync is already running.',
 } satisfies Record<CatalogSyncSkipReason, string>;
 
