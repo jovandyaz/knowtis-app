@@ -496,7 +496,6 @@ describe('StreamTextHandler', () => {
   });
 
   it('settles the budget once when delivering the finished stream throws', async () => {
-    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
     const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
     const onError = vi.fn();
 
@@ -515,7 +514,10 @@ describe('StreamTextHandler', () => {
       }
     );
 
-    expect(recordSpy).toHaveBeenCalledTimes(1);
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 80, outputTokens: 30 })
+    );
     expect(releaseSpy).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
   });
@@ -548,7 +550,6 @@ describe('StreamTextHandler', () => {
   });
 
   it('releases the reservation once when a chunk cannot be delivered', async () => {
-    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
     const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
 
     await handler.execute(
@@ -566,7 +567,7 @@ describe('StreamTextHandler', () => {
     );
 
     expect(releaseSpy).toHaveBeenCalledTimes(1);
-    expect(recordSpy).not.toHaveBeenCalled();
+    expect(mockUsageRepo.recordUsage).not.toHaveBeenCalled();
     expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
   });
 
@@ -584,10 +585,15 @@ describe('StreamTextHandler', () => {
         model: 'anthropic:claude-sonnet-4-20250514',
       }),
     });
-    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+    const cache = {
+      isCacheable: vi.fn().mockReturnValue(true),
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AICache;
+    const cachedHandler = buildHandler(cache);
     const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
 
-    await handler.execute(
+    await cachedHandler.execute(
       {
         userId: 'user-123',
         action: AI_ACTION.SUMMARIZE,
@@ -597,14 +603,12 @@ describe('StreamTextHandler', () => {
       controller.signal
     );
 
-    expect(recordSpy).toHaveBeenCalledTimes(1);
-    expect(releaseSpy).not.toHaveBeenCalled();
-    const recorded = recordSpy.mock.calls[0][2];
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+    const [recorded] = vi.mocked(mockUsageRepo.recordUsage).mock.calls[0];
     expect(recorded.inputTokens).toBeGreaterThan(0);
     expect(recorded.outputTokens).toBeGreaterThan(0);
-    expect(recordSpy.mock.calls[0][3]).toEqual(
-      expect.objectContaining({ aborted: true })
-    );
+    expect(cache.set).not.toHaveBeenCalled();
+    expect(releaseSpy).not.toHaveBeenCalled();
   });
 
   it('should build tone prompt correctly', async () => {
