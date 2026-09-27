@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   JWT_AUDIENCE_ACCESS,
   JWT_AUDIENCE_REFRESH,
@@ -50,6 +52,7 @@ export class JwtTokenService implements TokenService {
           algorithm: 'HS256',
           issuer: JWT_ISSUER,
           audience: JWT_AUDIENCE_REFRESH,
+          jwtid: randomUUID(),
         }),
       ]);
 
