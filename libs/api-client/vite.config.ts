@@ -1,4 +1,5 @@
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import { isAgent } from 'std-env';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -36,7 +37,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    reporters: ['default'],
+    reporters: [isAgent ? 'agent' : 'default'],
     coverage: {
       reportsDirectory: '../../../coverage/libs/api-client',
       provider: 'v8',
