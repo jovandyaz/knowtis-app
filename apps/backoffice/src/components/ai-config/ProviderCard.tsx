@@ -156,6 +156,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
           onChange={(event) => setDraft(event.target.value)}
         />
         <LoadingButton
+          aria-label={`Save key: ${label}`}
           loading={setProvider.isPending}
           loadingText="Verifying…"
           disabled={draft.trim().length === 0 || isBusy}
@@ -172,6 +173,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 
       <div className="flex flex-wrap gap-2">
         <LoadingButton
+          aria-label={`Test connection: ${label}`}
           variant="outline"
           size="sm"
           loading={testProvider.isPending}
@@ -183,6 +185,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
         </LoadingButton>
         {provider.keySource === 'database' || provider.storedKeyUnreadable ? (
           <Button
+            aria-label={`Clear stored key: ${label}`}
             variant="ghost"
             size="sm"
             disabled={isBusy}
