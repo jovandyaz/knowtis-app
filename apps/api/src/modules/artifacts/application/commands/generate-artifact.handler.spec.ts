@@ -8,6 +8,7 @@ import type { AIOrchestrator } from '../../../ai/application/services/ai-orchest
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { AIModel } from '../../../ai/domain/value-objects/ai-model.vo';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createTestCatalog } from '../../../ai/testing/create-test-catalog';
 import { ArtifactErrorCodes } from '../../domain/errors/artifact.errors';
 import type {
@@ -20,6 +21,11 @@ import { GenerateArtifactHandler } from './generate-artifact.handler';
 const MOCK_USER_ID = 'user-123';
 const MOCK_NOTE_ID = 'note-456';
 const MOCK_MODEL = 'anthropic:claude-sonnet-4-20250514';
+const MOCK_EXECUTION = createExecutionContext({ userId: MOCK_USER_ID });
+const ALLOWED = {
+  allowed: true,
+  reservation: { estimate: { tokens: 0, costUsd: 0 } },
+};
 
 function createMockArtifactEntity(
   overrides: Partial<ArtifactEntity> = {}
@@ -95,7 +101,7 @@ describe('GenerateArtifactHandler', () => {
   });
 
   const baseInput = {
-    userId: MOCK_USER_ID,
+    execution: MOCK_EXECUTION,
     noteId: MOCK_NOTE_ID,
     noteContent:
       '<p>Photosynthesis is the process by which plants convert sunlight into energy.</p>',
@@ -119,7 +125,7 @@ describe('GenerateArtifactHandler', () => {
         content: flashcardContent,
       });
 
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );
@@ -143,13 +149,10 @@ describe('GenerateArtifactHandler', () => {
         expect(result.value.type).toBe('flashcard_deck');
       }
 
-      expect(rateLimitService.checkLimit).toHaveBeenCalledWith(
-        MOCK_USER_ID,
-        expect.any(Number),
-        false,
-        false,
-        expect.any(Number)
-      );
+      expect(rateLimitService.checkLimit).toHaveBeenCalledWith(MOCK_EXECUTION, {
+        tokens: expect.any(Number),
+        costUsd: expect.any(Number),
+      });
       expect(orchestrator.selectModel).toHaveBeenCalledWith(
         AI_ACTION.GENERATE_FLASHCARDS
       );
@@ -176,7 +179,7 @@ describe('GenerateArtifactHandler', () => {
     });
 
     it('should pass telemetry context with the artifact action and user', async () => {
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );
@@ -205,7 +208,7 @@ describe('GenerateArtifactHandler', () => {
     });
 
     it('should not block note content that contains injection-like phrasing', async () => {
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );
@@ -234,7 +237,7 @@ describe('GenerateArtifactHandler', () => {
         cards: [{ front: 'Q', back: 'A', difficulty: 'easy' as const }],
       };
 
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );
@@ -253,8 +256,9 @@ describe('GenerateArtifactHandler', () => {
       await handler.execute(baseInput);
 
       expect(rateLimitService.recordUsage).toHaveBeenCalledWith(
+        MOCK_EXECUTION,
+        ALLOWED.reservation,
         expect.objectContaining({
-          userId: MOCK_USER_ID,
           action: AI_ACTION.GENERATE_FLASHCARDS,
           model: MOCK_MODEL,
           inputTokens: 50,
@@ -271,7 +275,7 @@ describe('GenerateArtifactHandler', () => {
         { emit } as unknown as EventEmitter2
       );
 
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );
@@ -287,7 +291,7 @@ describe('GenerateArtifactHandler', () => {
       repository.create.mockResolvedValue(ok(created));
 
       await emitting.execute({
-        userId: MOCK_USER_ID,
+        execution: MOCK_EXECUTION,
         noteId: MOCK_NOTE_ID,
         noteContent: 'Enough content to generate from.',
         noteTitle: 'Test Note',
@@ -345,7 +349,7 @@ describe('GenerateArtifactHandler', () => {
 
   describe('AI provider error', () => {
     it('should return a generic generation error without leaking the provider message', async () => {
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );
@@ -382,7 +386,7 @@ describe('GenerateArtifactHandler', () => {
     });
 
     it('should still accept content at the limit boundary', async () => {
-      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      rateLimitService.checkLimit.mockResolvedValue(ALLOWED);
       orchestrator.selectModel.mockResolvedValue(
         AIModel.create(MOCK_MODEL, createTestCatalog())
       );

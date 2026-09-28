@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type { AgentNote, NoteHit } from '../../domain/retrieval';
 import { ProposalCollector } from '../orchestrator/proposal-collector';
@@ -12,7 +13,7 @@ function ctx(): AgentToolContext {
   return {
     userId: 'u1',
     phase: 'full',
-    byokTurn: false,
+    execution: createExecutionContext({ userId: 'u1' }),
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),
@@ -56,6 +57,32 @@ describe('NoteReadToolGroup', () => {
       message: expect.not.stringContaining('relation'),
     });
     expect((thrown as Error).cause).toBe(upstream);
+  });
+});
+
+describe('NoteReadToolGroup turn context', () => {
+  it('searches and reads notes on the turn context, so their side costs reach its payer', async () => {
+    const retrieval: RetrievalPort = {
+      search: vi.fn().mockResolvedValue([]),
+      listUnindexed: vi.fn().mockResolvedValue([]),
+      getById: vi.fn().mockResolvedValue(null),
+      getBody: vi.fn(),
+      listRecent: vi.fn(),
+      overview: vi.fn(),
+    };
+    const group = new NoteReadToolGroup(retrieval);
+    const c = ctx();
+
+    await run(group, c, 'searchNotes', { query: 'x' });
+    await run(group, c, 'getNote', {
+      noteId: '11111111-1111-4111-8111-111111111111',
+    });
+
+    expect(retrieval.search).toHaveBeenCalledWith(c.execution, 'x');
+    expect(retrieval.getById).toHaveBeenCalledWith(
+      c.execution,
+      '11111111-1111-4111-8111-111111111111'
+    );
   });
 });
 

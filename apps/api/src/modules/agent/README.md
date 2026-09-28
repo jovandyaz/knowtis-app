@@ -50,7 +50,7 @@ Framework-free core: messages (`agent-message`, `coalesce-messages` for provider
 
 - `run-agent-turn.handler.ts` — orchestrates a turn: resolves the server-authoritative conversation, loads history + `knownNotes`, runs retrieval + memory, drives the orchestrator, and on a proposal saves it to the pending store before emitting `onProposal`. `resumeTurn` continues a turn after an approve or reject.
 - `approve-mutation.handler.ts` / `reject-mutation.handler.ts` — HITL resolution; approve applies the mutation and emits `agent:committed`.
-- `injection-guard.service.ts` — `guard(text, userId)`: heuristic `detectPromptInjection`, then always a second opinion from the model classifier for gray-zone scores. Shared by the turn handler, the `webFetch` tool, and retrieved-note scanning.
+- `injection-guard.service.ts` — `guard(text, execution)`: heuristic `detectPromptInjection`, then always a second opinion from the model classifier for gray-zone scores. Shared by the turn handler, the `webFetch` tool, and retrieved-note scanning.
 
 ### `infrastructure/`
 

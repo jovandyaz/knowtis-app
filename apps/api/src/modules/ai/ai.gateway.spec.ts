@@ -10,6 +10,9 @@ import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AIGateway } from './ai.gateway';
 import type { StreamTextCallbacks } from './application/commands/stream-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
+import type { TierResolver } from './application/services/tier-resolver.service';
+import type { AiCaller } from './domain/execution-context/ai-execution-context';
+import { createExecutionContext } from './testing/create-execution-context';
 
 function createMockAISocket(overrides: Record<string, unknown> = {}) {
   return {
@@ -21,6 +24,18 @@ function createMockAISocket(overrides: Record<string, unknown> = {}) {
     handshake: { auth: {}, headers: {} },
     ...overrides,
   } as unknown as Parameters<AIGateway['handleConnection']>[0];
+}
+
+function makeTierResolver() {
+  return {
+    resolve: vi.fn(async (caller: AiCaller) =>
+      createExecutionContext({
+        userId: caller.userId,
+        tier: caller.isAnonymous ? 'anonymous' : 'free',
+        ...(caller.clientIp ? { clientIp: caller.clientIp } : {}),
+      })
+    ),
+  } as unknown as TierResolver;
 }
 
 function flushAsync() {
@@ -82,8 +97,11 @@ describe('AIGateway', () => {
   let mockStreamHandler: StreamTextHandler;
   let mockJwtService: JwtService;
   let mockFeatureFlags: FeatureFlagsService;
+  let tierResolver: TierResolver;
 
   beforeEach(() => {
+    tierResolver = makeTierResolver();
+
     mockStreamHandler = {
       execute: vi.fn().mockResolvedValue(undefined),
     } as unknown as StreamTextHandler;
@@ -98,6 +116,7 @@ describe('AIGateway', () => {
 
     gateway = new AIGateway(
       mockStreamHandler,
+      tierResolver,
       mockJwtService,
       mockFeatureFlags,
       createMockConfigService()
@@ -291,7 +310,10 @@ describe('AIGateway', () => {
 
       expect(mockStreamHandler.execute).toHaveBeenCalledWith(
         expect.objectContaining({
-          userId: 'user-123',
+          execution: expect.objectContaining({
+            subject: { userId: 'user-123' },
+            tier: 'free',
+          }),
           action: AI_ACTION.SUMMARIZE,
           content: 'Some note content to summarize',
         }),
@@ -304,9 +326,10 @@ describe('AIGateway', () => {
       );
     });
 
-    it('should forward the client IP to the stream handler', async () => {
+    it("streams on the anonymous caller's resolved execution context", async () => {
       const client = createMockAISocket();
       client.data.userId = 'user-123';
+      client.data.isAnonymous = true;
       client.data.clientIp = '203.0.113.7';
 
       await gateway.handleComplete(client, {
@@ -314,11 +337,71 @@ describe('AIGateway', () => {
         content: 'Some note content to summarize',
       });
 
+      expect(tierResolver.resolve).toHaveBeenCalledWith({
+        userId: 'user-123',
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      });
+      const resolved = await vi.mocked(tierResolver.resolve).mock.results[0]
+        ?.value;
       expect(mockStreamHandler.execute).toHaveBeenCalledWith(
-        expect.objectContaining({ clientIp: '203.0.113.7' }),
+        expect.objectContaining({ execution: resolved }),
         expect.anything(),
         expect.any(AbortSignal)
       );
+    });
+
+    it('emits a provider error and never streams when tier resolution fails', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      vi.mocked(tierResolver.resolve).mockRejectedValue(new Error('db down'));
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      await gateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some note content to summarize',
+      });
+
+      expect(client.emit).toHaveBeenCalledWith('ai:error', {
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Model resolution failed',
+      });
+      expect(warn).toHaveBeenCalledWith({
+        event: 'ai.tier.resolve_failed',
+        userId: 'user-123',
+        error: 'db down',
+      });
+      expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('frees the stream slot when tier resolution fails', async () => {
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      vi.mocked(tierResolver.resolve)
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockImplementation(async () => createExecutionContext());
+      const singleStreamGateway = new AIGateway(
+        mockStreamHandler,
+        tierResolver,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(1)
+      );
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      await singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'first',
+      });
+      await singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'second',
+      });
+
+      expect(mockStreamHandler.execute).toHaveBeenCalledTimes(1);
     });
 
     it('should emit validation error for invalid action', async () => {
@@ -422,6 +505,7 @@ describe('AIGateway', () => {
       const blocking = createBlockingExecute();
       const singleStreamGateway = new AIGateway(
         { execute: blocking.fn } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService(1)
@@ -456,6 +540,7 @@ describe('AIGateway', () => {
       const blocking = createBlockingExecute();
       const singleStreamGateway = new AIGateway(
         { execute: blocking.fn } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService(1)
@@ -492,6 +577,7 @@ describe('AIGateway', () => {
             .mockRejectedValueOnce(new Error('unexpected failure'))
             .mockResolvedValue(undefined),
         } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService(1)
@@ -528,6 +614,7 @@ describe('AIGateway', () => {
               new Error('connection to 10.0.0.5:5432 refused')
             ),
         } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService(1)
@@ -573,6 +660,7 @@ describe('AIGateway', () => {
       const blocking = createBlockingExecute();
       const gw = new AIGateway(
         { execute: blocking.fn } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService()
@@ -600,6 +688,7 @@ describe('AIGateway', () => {
       const blocking = createBlockingExecute();
       const singleStreamGateway = new AIGateway(
         { execute: blocking.fn } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService(1)
@@ -637,6 +726,7 @@ describe('AIGateway', () => {
       const blocking = createBlockingExecute();
       const gw = new AIGateway(
         { execute: blocking.fn } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService()
@@ -663,6 +753,7 @@ describe('AIGateway', () => {
       const blocking = createBlockingExecute();
       const twoStreamGateway = new AIGateway(
         { execute: blocking.fn } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService(2)
@@ -761,6 +852,7 @@ describe('AIGateway', () => {
       } as never);
       const gw = new AIGateway(
         { execute } as unknown as StreamTextHandler,
+        tierResolver,
         mockJwtService,
         mockFeatureFlags,
         createMockConfigService()

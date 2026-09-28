@@ -1,5 +1,6 @@
 import { markdownToHtml } from '@knowtis/note-markdown';
 
+import type { AiExecutionContext } from '../../ai/domain/execution-context/ai-execution-context';
 import type { RetrievalPort } from '../domain/ports/retrieval.port';
 import type {
   AgentNote,
@@ -47,7 +48,10 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
     return [...this.calls];
   }
 
-  async search(_userId: string, query: string): Promise<NoteHit[]> {
+  async search(
+    _execution: AiExecutionContext,
+    query: string
+  ): Promise<NoteHit[]> {
     this.calls.push({ name: 'searchNotes', args: { query } });
     const needle = query.toLowerCase();
     return this.notes
@@ -63,7 +67,10 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
     return [];
   }
 
-  async getById(_userId: string, noteId: string): Promise<AgentNote | null> {
+  async getById(
+    _execution: AiExecutionContext,
+    noteId: string
+  ): Promise<AgentNote | null> {
     this.calls.push({ name: 'getNote', args: { noteId } });
     const fixture = this.notes.find((n) => n.id === noteId);
     return fixture ? toAgentNote(fixture) : null;

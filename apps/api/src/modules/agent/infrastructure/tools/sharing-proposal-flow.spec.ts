@@ -7,6 +7,7 @@ import {
   policyFor,
   type IdentityState,
 } from '../../../../test-support/verified-identity';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { AppAbilityFactory } from '../../../authorization/ability.factory';
 import { ShareNoteHandler } from '../../../notes/application/commands/share-note.handler';
 import type { NoteRepository } from '../../../notes/domain/ports';
@@ -74,7 +75,7 @@ function flow(
   ).build({
     userId: 'u1',
     phase: 'full',
-    byokTurn: false,
+    execution: createExecutionContext({ userId: 'u1' }),
     proposals,
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),

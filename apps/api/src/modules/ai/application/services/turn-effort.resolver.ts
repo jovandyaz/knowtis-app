@@ -37,16 +37,16 @@ export class TurnEffortResolver {
     model,
     requested,
   }: TurnEffortRequest): Promise<ReasoningEffort | undefined> {
-    const user = {
-      id: execution.subject.userId,
-      isAnonymous: execution.tier === 'anonymous',
-    };
+    const { byokProviders } = execution;
     if (!requested) {
-      return this.defaultFor(model, user);
+      return this.defaultFor(model, byokProviders);
     }
     const audience: Exclude<EffortAudience, 'anonymous'> =
       execution.billing.kind === 'byok' ? 'byok' : 'free';
-    const declared = await this.modelPreference.reasoningFor(model, user);
+    const declared = await this.modelPreference.reasoningFor(
+      model,
+      byokProviders
+    );
     const clamped = clampEffort(requested, declared, audience);
     if (clamped === null) {
       this.logger.warn({
@@ -54,7 +54,7 @@ export class TurnEffortResolver {
         model,
         requested,
       });
-      return this.defaultFor(model, user, declared);
+      return this.defaultFor(model, byokProviders, declared);
     }
     if (clamped !== requested) {
       this.logger.warn({
@@ -75,7 +75,7 @@ export class TurnEffortResolver {
    */
   private async defaultFor(
     model: string,
-    user: { id: string; isAnonymous?: boolean },
+    byokProviders: ReadonlySet<string>,
     declared?: ModelReasoning | null
   ): Promise<ReasoningEffort | undefined> {
     if (providerOf(model) === OPENROUTER_PROVIDER) {
@@ -84,7 +84,9 @@ export class TurnEffortResolver {
     const [fallback, levels] = await Promise.all([
       this.aiConfig.getReasoningEffort(),
       declared === undefined
-        ? this.modelPreference.reasoningFor(model, user).then((r) => r?.levels)
+        ? this.modelPreference
+            .reasoningFor(model, byokProviders)
+            .then((r) => r?.levels)
         : Promise.resolve(declared?.levels),
     ]);
     return levels?.includes(fallback) ? fallback : undefined;

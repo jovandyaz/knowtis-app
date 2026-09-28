@@ -34,6 +34,7 @@ import {
 } from '../agent/domain/ports/retrieval.port';
 import type { NoteHit } from '../agent/domain/retrieval';
 import { AIRateLimitService } from '../ai/application/services/ai-rate-limit.service';
+import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrorCodes, AIErrors } from '../ai/domain/errors/ai.errors';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { MCP_SCOPES } from '../mcp/mcp-token';
@@ -52,7 +53,8 @@ const RATE_LIMIT_STATUS_MAP: Record<string, HttpStatus> = {
 export class SearchController {
   constructor(
     @Inject(RETRIEVAL_PORT) private readonly retrieval: RetrievalPort,
-    private readonly rateLimit: AIRateLimitService
+    private readonly rateLimit: AIRateLimitService,
+    private readonly tierResolver: TierResolver
   ) {}
 
   @ApiOperation({
@@ -95,29 +97,26 @@ export class SearchController {
     @Query() query: SearchQueryDto,
     @Req() req: Request
   ): Promise<{ hits: NoteHit[] }> {
-    const estimatedTokens = estimateTokenCount(query.q);
-    const check = await this.rateLimit.checkLimit(
-      user.id,
-      estimatedTokens,
-      user.isAnonymous === true,
-      false,
-      0,
-      clientIpOf(req)
-    );
+    const execution = await this.tierResolver.resolve({
+      userId: user.id,
+      isAnonymous: user.isAnonymous === true,
+      clientIp: clientIpOf(req),
+    });
+    const check = await this.rateLimit.checkLimit(execution, {
+      tokens: estimateTokenCount(query.q),
+      costUsd: 0,
+    });
     const reservation = unwrapOrThrow(
-      check.allowed ? ok(check) : err(AIErrors.rateLimitExceeded(check.reason)),
+      check.allowed
+        ? ok(check.reservation)
+        : err(AIErrors.rateLimitExceeded(check.reason)),
       RATE_LIMIT_STATUS_MAP
     );
     try {
-      const hits = await this.retrieval.search(user.id, query.q);
+      const hits = await this.retrieval.search(execution, query.q);
       return { hits: hits.slice(0, query.limit ?? DEFAULT_LIMIT) };
     } finally {
-      await this.rateLimit.releaseReservation(
-        user.id,
-        estimatedTokens,
-        0,
-        reservation.reservedIpSubject
-      );
+      await this.rateLimit.releaseReservation(execution, reservation);
     }
   }
 }

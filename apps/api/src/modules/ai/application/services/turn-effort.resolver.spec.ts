@@ -9,7 +9,7 @@ import type {
 
 import { createExecutionContext } from '../../testing/create-execution-context';
 import type { AIConfigService } from './ai-config.service';
-import type { ModelPreferenceService } from './model-preference.service';
+import { ModelPreferenceService } from './model-preference.service';
 import { TurnEffortResolver } from './turn-effort.resolver';
 
 const USER = 'user-1';
@@ -163,22 +163,23 @@ describe('TurnEffortResolver', () => {
       levels: ['low', 'high'],
       mandatory: false,
     });
+    const execution = billedToKey(DIRECT_MODEL);
 
     await expect(
       resolver.resolve({
-        execution: billedToKey(DIRECT_MODEL),
+        execution,
         model: DIRECT_MODEL,
         requested: 'xhigh',
       })
     ).resolves.toBeUndefined();
     expect(modelPreference.reasoningFor).toHaveBeenCalledTimes(1);
-    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(DIRECT_MODEL, {
-      id: USER,
-      isAnonymous: false,
-    });
+    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(
+      DIRECT_MODEL,
+      execution.byokProviders
+    );
   });
 
-  it('reads the declaration as an anonymous caller on an anonymous turn', async () => {
+  it('reads the declaration with no key providers on an anonymous turn', async () => {
     const { resolver, modelPreference } = make({
       levels: ['low', 'medium', 'high'],
       mandatory: false,
@@ -190,10 +191,10 @@ describe('TurnEffortResolver', () => {
         model: DIRECT_MODEL,
       })
     ).resolves.toBe(GLOBAL_DEFAULT);
-    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(DIRECT_MODEL, {
-      id: USER,
-      isAnonymous: true,
-    });
+    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(
+      DIRECT_MODEL,
+      new Set()
+    );
   });
 
   it('falls back when a free caller has no level at or under the ceiling', async () => {
@@ -317,5 +318,73 @@ describe('TurnEffortResolver', () => {
     });
 
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  describe('with the real model preference service', () => {
+    function makeReal() {
+      const byok = { enabledProviders: vi.fn() };
+      const list = (
+        _systemDefault: string,
+        _configured: ReadonlySet<string>,
+        byokProviders: ReadonlySet<string>
+      ) =>
+        byokProviders.has(providerOf(DIRECT_MODEL))
+          ? [
+              {
+                id: DIRECT_MODEL,
+                reasoning: {
+                  levels: ['low', 'medium', 'high'],
+                  mandatory: false,
+                },
+              },
+            ]
+          : [];
+      const aiConfig = {
+        getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),
+        getDefaultModel: vi.fn().mockResolvedValue(MODEL),
+        getConfiguredModelIds: vi.fn().mockResolvedValue(new Set([MODEL])),
+        getFreeTierMaxOutputCostPerToken: vi.fn().mockResolvedValue(0.001),
+        getIntentModels: vi.fn().mockResolvedValue({}),
+      };
+      const modelPreference = new ModelPreferenceService(
+        {} as never,
+        { list } as never,
+        aiConfig as never,
+        byok as never
+      );
+      return {
+        byok,
+        resolver: new TurnEffortResolver(aiConfig as never, modelPreference),
+      };
+    }
+
+    it("applies the declared level of a model the turn's key unlocks, never re-reading the key store", async () => {
+      const { resolver, byok } = makeReal();
+      const execution = billedToKey(DIRECT_MODEL);
+
+      await expect(
+        resolver.resolve({ execution, model: DIRECT_MODEL, requested: 'high' })
+      ).resolves.toBe('high');
+      await expect(
+        resolver.resolve({ execution, model: DIRECT_MODEL })
+      ).resolves.toBe(GLOBAL_DEFAULT);
+      expect(byok.enabledProviders).not.toHaveBeenCalled();
+    });
+
+    it('sends no effort to a model the turn holds no key for, never re-reading the key store', async () => {
+      const { resolver, byok } = makeReal();
+
+      await expect(
+        resolver.resolve({
+          execution: FREE_CALLER,
+          model: DIRECT_MODEL,
+          requested: 'high',
+        })
+      ).resolves.toBeUndefined();
+      await expect(
+        resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
+      ).resolves.toBeUndefined();
+      expect(byok.enabledProviders).not.toHaveBeenCalled();
+    });
   });
 });

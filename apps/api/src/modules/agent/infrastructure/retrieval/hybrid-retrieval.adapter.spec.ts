@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { EmbeddingPort } from '../../../ai/domain/ports/embedding.port';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import type { NoteReadRepository } from '../../../notes/domain/ports/note-read.repository';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
 import type { AgentNote, NoteBody, NoteHit } from '../../domain/retrieval';
 import { HybridRetrievalAdapter } from './hybrid-retrieval.adapter';
 import type { KeywordRetrievalAdapter } from './keyword-retrieval.adapter';
+
+const EXECUTION = createExecutionContext({ userId: 'u1' });
 
 const KEYWORD_HIT: NoteHit = {
   id: 'kw',
@@ -106,20 +109,31 @@ function make(
 describe('HybridRetrievalAdapter.search', () => {
   it('fuses both legs (note in both legs ranks first)', async () => {
     const { adapter } = make({ lexical: ['a', 'b'], vector: ['b', 'c'] });
-    const hits = await adapter.search('u1', 'q');
+    const hits = await adapter.search(EXECUTION, 'q');
     expect(hits[0].id).toBe('b');
   });
 
-  it('records the query-embedding side cost against the requesting user', async () => {
+  it('records the query-embedding side cost the embedder reported', async () => {
     const { adapter, rateLimit } = make({ lexical: ['a'], vector: ['a'] });
-    await adapter.search('u1', 'q');
-    expect(rateLimit.recordSideCost).toHaveBeenCalledWith({
-      userId: 'u1',
+    await adapter.search(EXECUTION, 'q');
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith(EXECUTION, {
       action: 'embedding',
       model: 'voyage-4',
       costUsd: 0.001,
-      byokTurn: false,
     });
+  });
+
+  it('records the embedding cost against the caller context it was given', async () => {
+    const { adapter, rateLimit } = make({ lexical: ['a'], vector: ['a'] });
+    const execution = createExecutionContext({
+      tier: 'byok',
+      billing: { kind: 'byok', provider: 'openai' },
+    });
+    await adapter.search(execution, 'quarterly plan');
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith(
+      execution,
+      expect.objectContaining({ action: 'embedding' })
+    );
   });
 
   it('falls back to lexical-only when embedding fails', async () => {
@@ -128,7 +142,7 @@ describe('HybridRetrievalAdapter.search', () => {
       vector: [],
       embedThrows: true,
     });
-    const hits = await adapter.search('u1', 'q');
+    const hits = await adapter.search(EXECUTION, 'q');
     expect(hits.map((h) => h.id)).toEqual(['a']);
     expect(repo.findAccessibleNotesByEmbedding).not.toHaveBeenCalled();
   });
@@ -139,7 +153,7 @@ describe('HybridRetrievalAdapter.search', () => {
       vector: ['c'],
       configured: false,
     });
-    const hits = await adapter.search('u1', 'query');
+    const hits = await adapter.search(EXECUTION, 'query');
     expect(embed.embedQuery).not.toHaveBeenCalled();
     expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
     expect(repo.findAccessibleNotesByEmbedding).not.toHaveBeenCalled();
@@ -152,7 +166,10 @@ describe('HybridRetrievalAdapter.search', () => {
       new Error('db down')
     );
     vi.mocked(keyword.search).mockResolvedValue([KEYWORD_HIT]);
-    await expect(adapter.search('u1', 'q')).resolves.toEqual([KEYWORD_HIT]);
+    await expect(adapter.search(EXECUTION, 'q')).resolves.toEqual([
+      KEYWORD_HIT,
+    ]);
+    expect(keyword.search).toHaveBeenCalledWith(EXECUTION, 'q');
   });
 
   it('does not record a side cost when the embedding call fails', async () => {
@@ -161,7 +178,7 @@ describe('HybridRetrievalAdapter.search', () => {
       vector: [],
       embedThrows: true,
     });
-    await adapter.search('u1', 'q');
+    await adapter.search(EXECUTION, 'q');
     expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
   });
 });
@@ -252,8 +269,8 @@ describe('HybridRetrievalAdapter note reads', () => {
   it('delegates getById to the keyword adapter, never to the vector leg', async () => {
     const { adapter, keyword, embed } = make();
 
-    expect(await adapter.getById('u1', 'n1')).toBe(KEYWORD_NOTE);
-    expect(keyword.getById).toHaveBeenCalledWith('u1', 'n1');
+    expect(await adapter.getById(EXECUTION, 'n1')).toBe(KEYWORD_NOTE);
+    expect(keyword.getById).toHaveBeenCalledWith(EXECUTION, 'n1');
     expect(embed.embedQuery).not.toHaveBeenCalled();
   });
 });

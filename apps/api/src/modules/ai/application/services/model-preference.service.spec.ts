@@ -92,6 +92,7 @@ function make(
 
 const USER = { id: 'u1' };
 const ANON = { id: 'anon-1', isAnonymous: true };
+const NO_KEYS: ReadonlySet<string> = new Set();
 const CURATED_DIRECT_MODEL = 'anthropic:claude-opus-5';
 
 function entry(
@@ -361,6 +362,12 @@ describe('ModelPreferenceService', () => {
       expect(ids).not.toContain('google:byok-model');
     });
 
+    it('keeps an anonymous listing off the stored byok providers', async () => {
+      const { svc, byok } = makeWithListing();
+      await svc.listModels(ANON);
+      expect(byok.enabledProviders).toHaveBeenCalledWith(ANON.id, true);
+    });
+
     it('setUserPreferences rejects anonymous users', async () => {
       const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
       await expect(
@@ -379,7 +386,7 @@ describe('ModelPreferenceService', () => {
 
     it('reads the declaration from the same union listModels serves', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(INTENT_MODELS.fast, USER)).toEqual({
+      expect(await svc.reasoningFor(INTENT_MODELS.fast, NO_KEYS)).toEqual({
         levels: ['low', 'medium', 'high'],
         mandatory: false,
       });
@@ -387,26 +394,35 @@ describe('ModelPreferenceService', () => {
 
     it('returns null for an offered model with no declaration', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(SYSTEM_DEFAULT, USER)).toBe(null);
+      expect(await svc.reasoningFor(SYSTEM_DEFAULT, NO_KEYS)).toBe(null);
     });
 
     it('returns null for a model outside the offered union', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor('openai:not-offered', USER)).toBe(null);
+      expect(await svc.reasoningFor('openai:not-offered', NO_KEYS)).toBe(null);
     });
 
-    it('keeps an anonymous lookup off the stored byok providers', async () => {
-      const { svc, byok } = makeWithListing();
-      expect(await svc.reasoningFor(INTENT_MODELS.fast, ANON)).toEqual({
-        levels: ['low', 'medium', 'high'],
-        mandatory: false,
-      });
-      expect(byok.enabledProviders).toHaveBeenCalledWith(ANON.id, true);
+    it('lists the offered union for the given key providers without reading the key store', async () => {
+      const { svc, byok, selectableSvc } = makeWithListing();
+      const list = vi.fn(() => FULL_LISTING);
+      selectableSvc.list = list;
+      const keyed = new Set(['google']);
+
+      await svc.reasoningFor(INTENT_MODELS.fast, keyed);
+
+      expect(byok.enabledProviders).not.toHaveBeenCalled();
+      expect(list).toHaveBeenCalledWith(
+        SYSTEM_DEFAULT,
+        expect.any(Set),
+        keyed,
+        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+        INTENT_MODELS
+      );
     });
 
     it('serves the declared ladder of an offered model the anonymous menu hides', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(CURATED_DIRECT_MODEL, ANON)).toEqual({
+      expect(await svc.reasoningFor(CURATED_DIRECT_MODEL, NO_KEYS)).toEqual({
         levels: ['low', 'medium', 'high'],
         mandatory: false,
       });

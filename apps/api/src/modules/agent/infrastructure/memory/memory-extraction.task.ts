@@ -3,13 +3,19 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
-import { detectPromptInjection } from '@knowtis/ai-gateway';
+import {
+  detectPromptInjection,
+  MODEL_CATALOG,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { stackOf } from '../../../../core/errors/stack-of';
 import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { AIConfigService } from '../../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
+import { TierResolver } from '../../../ai/application/services/tier-resolver.service';
 import {
   AI_STRUCTURED_OUTPUT_PROVIDER,
   type AIStructuredOutputProvider,
@@ -18,6 +24,7 @@ import {
   EMBEDDING_PORT,
   type EmbeddingPort,
 } from '../../../ai/domain/ports/embedding.port';
+import { TokenUsage } from '../../../ai/domain/value-objects/token-usage.vo';
 import {
   buildReconcilePrompt,
   MEMORY_RECONCILE_SYSTEM,
@@ -60,7 +67,9 @@ export class MemoryExtractionTask {
     @Inject(AI_STRUCTURED_OUTPUT_PROVIDER)
     private readonly structured: AIStructuredOutputProvider,
     @Inject(EMBEDDING_PORT) private readonly embed: EmbeddingPort,
-    private readonly rateLimit: AIRateLimitService
+    private readonly rateLimit: AIRateLimitService,
+    private readonly tierResolver: TierResolver,
+    @Inject(MODEL_CATALOG) private readonly modelCatalog: ModelCatalog
   ) {}
 
   @Interval(INTERVAL_MS)
@@ -82,10 +91,17 @@ export class MemoryExtractionTask {
 
   private async reconcileLocked(): Promise<void> {
     try {
+      if (await this.globalSpendExhausted()) {
+        return;
+      }
       const quiet = this.config.get('AI_MEMORY_QUIET_SECONDS');
       const batch = this.config.get('AI_MEMORY_BATCH_SIZE');
       const candidates = await this.conversations.findExtractable(quiet, batch);
+      let processed = 0;
       for (const conv of candidates) {
+        if (processed > 0 && (await this.globalSpendExhausted())) {
+          break;
+        }
         try {
           await this.extractOne(conv.id, conv.userId);
         } catch (error) {
@@ -94,15 +110,27 @@ export class MemoryExtractionTask {
             stackOf(error)
           );
         }
+        processed++;
       }
-      if (candidates.length > 0) {
+      if (processed > 0) {
         this.logger.log(
-          `Memory extraction processed ${candidates.length} conversations`
+          `Memory extraction processed ${processed} conversations`
         );
       }
     } catch (error) {
       this.logger.error('Memory extraction reconcile failed', stackOf(error));
     }
+  }
+
+  private async globalSpendExhausted(): Promise<boolean> {
+    if (!(await this.rateLimit.isGlobalSpendExhausted())) {
+      return false;
+    }
+    this.logger.debug({
+      event: 'agent.memory.extraction_skipped',
+      reason: 'global_breaker',
+    });
+    return true;
   }
 
   private async extractOne(
@@ -124,7 +152,11 @@ export class MemoryExtractionTask {
       .map((m) => `${m.role}: ${m.content}`)
       .join('\n');
     const existing = await this.memory.listForUser(userId, max);
-    const { object } = await this.structured.generateStructuredOutput(
+    const execution = await this.tierResolver.resolve({
+      userId,
+      isAnonymous: false,
+    });
+    const result = await this.structured.generateStructuredOutput(
       buildReconcilePrompt(transcript, existing),
       MemoryReconcileSchema,
       {
@@ -134,6 +166,29 @@ export class MemoryExtractionTask {
         fallbackScope: MEMORY_FALLBACK_SCOPE,
       }
     );
+    try {
+      await this.rateLimit.recordUsage(execution, null, {
+        action: 'memory_extraction',
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        costUsd: TokenUsage.create(
+          {
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            model: result.model,
+          },
+          this.modelCatalog.getPricing(result.model)
+        ).costUsd,
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.usage.record_failed',
+        userId,
+        error: reasonOf(error),
+      });
+    }
+    const { object } = result;
     const { adds, updates, deletes } = partitionOps(
       object.operations,
       existing.map((m) => m.id)
@@ -157,7 +212,11 @@ export class MemoryExtractionTask {
     if (safeAdds.length + safeUpdates.length > 0) {
       const texts = [...safeAdds, ...safeUpdates.map((u) => u.content)];
       const { embeddings, costUsd } = await this.embed.embedDocuments(texts);
-      void this.rateLimit.recordGlobalCost(costUsd);
+      await this.rateLimit.recordSideCost(execution, {
+        action: 'embedding',
+        model: this.config.get('AI_EMBEDDING_MODEL'),
+        costUsd,
+      });
       const count = await this.memory.countForUser(userId);
       const capacity = Math.max(0, max - (count - deletes.length));
       let i = 0;

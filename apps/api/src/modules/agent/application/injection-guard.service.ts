@@ -6,6 +6,7 @@ import {
   INJECTION_GRAY_ZONE_MIN,
   InjectionClassifierService,
 } from '../../ai/application/services/injection-classifier.service';
+import type { AiExecutionContext } from '../../ai/domain/execution-context/ai-execution-context';
 
 /** Verdict from {@link InjectionGuardService.guard}: `score` is the heuristic injection score (0–1) that drove `safe`. */
 export interface InjectionVerdict {
@@ -24,13 +25,16 @@ export class InjectionGuardService {
     private readonly injectionClassifier: InjectionClassifierService
   ) {}
 
-  async guard(text: string, userId: string): Promise<InjectionVerdict> {
+  async guard(
+    text: string,
+    execution: AiExecutionContext
+  ): Promise<InjectionVerdict> {
     const check = detectPromptInjection(text);
     if (!check.safe) {
       return { safe: false, score: check.score };
     }
     if (check.score >= INJECTION_GRAY_ZONE_MIN) {
-      const verdict = await this.injectionClassifier.classify(text, userId);
+      const verdict = await this.injectionClassifier.classify(text, execution);
       return { safe: verdict.safe, score: check.score };
     }
     return { safe: true, score: check.score };

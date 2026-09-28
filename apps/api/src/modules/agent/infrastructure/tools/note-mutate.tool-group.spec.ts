@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { failedQuery } from '../../../../test-support/database-errors';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { AgentErrors } from '../../domain/agent-errors';
 import type {
   CreateProposedMutation,
@@ -20,7 +21,7 @@ function ctx(): AgentToolContext {
   return {
     userId: 'u1',
     phase: 'full',
-    byokTurn: false,
+    execution: createExecutionContext({ userId: 'u1' }),
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),
@@ -129,6 +130,9 @@ describe('NoteMutateToolGroup', () => {
     });
     expect(JSON.stringify(out)).not.toContain('payload');
     expect(c.proposals.captured).toBe(updateProposal);
+    expect(builder.buildUpdate).toHaveBeenCalledWith(c.execution, 'n1', {
+      title: 'New title',
+    });
   });
 
   it('proposeShareNote returns {error} and captures nothing when the builder fails', async () => {

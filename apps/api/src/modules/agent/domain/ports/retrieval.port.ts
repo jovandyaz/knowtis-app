@@ -1,11 +1,17 @@
+import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
 import type { AgentNote, NoteBody, NoteHit, NotesOverview } from '../retrieval';
 
 export interface RetrievalPort {
-  search(userId: string, query: string): Promise<NoteHit[]>;
+  /** Bills the query embedding to `execution`. */
+  search(execution: AiExecutionContext, query: string): Promise<NoteHit[]>;
   /** Accessible notes semantic search cannot reach yet. Empty whenever the
    * vector leg is not running, so callers never promise indexing that is off. */
   listUnindexed(userId: string, limit: number): Promise<NoteHit[]>;
-  getById(userId: string, noteId: string): Promise<AgentNote | null>;
+  /** Screens the body for injection, billing any classifier call to `execution`. */
+  getById(
+    execution: AiExecutionContext,
+    noteId: string
+  ): Promise<AgentNote | null>;
   getBody(userId: string, noteId: string): Promise<NoteBody | null>;
   listRecent(userId: string, limit: number): Promise<NoteHit[]>;
   overview(userId: string): Promise<NotesOverview>;

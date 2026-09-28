@@ -1,10 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
+import type { AiCaller } from '../../../ai/domain/execution-context/ai-execution-context';
+import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import type { ConversationMessageRow } from '../../domain/ports/conversation.repository';
 import { MemoryExtractionTask } from './memory-extraction.task';
 
 const TOOL_ONLY_MARKER = 'tool-call-only-marker';
+const SERVED_MODEL = 'openrouter:fast';
+const EMBEDDING_MODEL = 'voyage-4';
+const INPUT_COST_PER_TOKEN = 0.000001;
+const OUTPUT_COST_PER_TOKEN = 0.000004;
 
 // Mirrors what the text-only SQL returns: no tool rows, but an assistant row
 // carrying tool-call parts beside its text still comes back whole.
@@ -54,6 +61,7 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
           AI_MEMORY_QUIET_SECONDS: 180,
           AI_MEMORY_BATCH_SIZE: 20,
           AI_MEMORY_MAX_PER_USER: 100,
+          AI_EMBEDDING_MODEL: EMBEDDING_MODEL,
         }) as Record<string, unknown>
       )[k],
   };
@@ -93,7 +101,23 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
       costUsd: 0.004,
     }),
   };
-  const rateLimit = { recordGlobalCost: vi.fn().mockResolvedValue(undefined) };
+  const rateLimit = {
+    isGlobalSpendExhausted: vi.fn().mockResolvedValue(false),
+    recordUsage: vi.fn().mockResolvedValue(undefined),
+    recordSideCost: vi.fn().mockResolvedValue(undefined),
+    recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+  };
+  const tierResolver = {
+    resolve: vi.fn(async (caller: AiCaller) =>
+      createExecutionContext({ userId: caller.userId })
+    ),
+  };
+  const modelCatalog = {
+    getPricing: vi.fn().mockReturnValue({
+      inputCostPerToken: INPUT_COST_PER_TOKEN,
+      outputCostPerToken: OUTPUT_COST_PER_TOKEN,
+    }),
+  };
   const task = new MemoryExtractionTask(
     client,
     config as never,
@@ -102,7 +126,9 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
     memory as never,
     structured as never,
     embed as never,
-    rateLimit as never
+    rateLimit as never,
+    tierResolver as never,
+    modelCatalog as never
   );
   return {
     task,
@@ -112,10 +138,16 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
     structured,
     embed,
     rateLimit,
+    tierResolver,
+    modelCatalog,
   };
 }
 
 describe('MemoryExtractionTask', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('extracts, persists an ADD, and marks the conversation', async () => {
     const { task, memory, conversations } = make();
     await task.reconcile();
@@ -195,13 +227,146 @@ describe('MemoryExtractionTask', () => {
     );
   });
 
-  it('records the embedding cost against the global spend counter only', async () => {
-    const { task, rateLimit } = make();
+  it('skips the run while global spend is exhausted, marking nothing', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const debug = vi
+      .spyOn(Logger.prototype, 'debug')
+      .mockImplementation(() => undefined);
+    const { task, rateLimit, conversations, structured } = make();
+    rateLimit.isGlobalSpendExhausted.mockResolvedValue(true);
+
     await task.reconcile();
-    expect(rateLimit.recordGlobalCost).toHaveBeenCalledWith(0.004);
+
+    expect(debug).toHaveBeenCalledWith({
+      event: 'agent.memory.extraction_skipped',
+      reason: 'global_breaker',
+    });
+    expect(warn).not.toHaveBeenCalled();
+    expect(conversations.findExtractable).not.toHaveBeenCalled();
+    expect(structured.generateStructuredOutput).not.toHaveBeenCalled();
+    expect(conversations.markExtracted).not.toHaveBeenCalled();
   });
 
-  it('records no cost when injection screening filters out every operation', async () => {
+  it('stops the batch once an extraction exhausts global spend, leaving the rest unmarked', async () => {
+    const debug = vi
+      .spyOn(Logger.prototype, 'debug')
+      .mockImplementation(() => undefined);
+    const { task, rateLimit, conversations, structured } = make();
+    conversations.findExtractable.mockResolvedValue([
+      { id: 'c1', userId: 'u1' },
+      { id: 'c2', userId: 'u2' },
+    ]);
+    rateLimit.isGlobalSpendExhausted.mockImplementation(
+      async () => rateLimit.recordUsage.mock.calls.length > 0
+    );
+
+    await task.reconcile();
+
+    expect(structured.generateStructuredOutput).toHaveBeenCalledTimes(1);
+    expect(conversations.loadMessages).not.toHaveBeenCalledWith(
+      'c2',
+      'u2',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(conversations.markExtracted).toHaveBeenCalledTimes(1);
+    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+    expect(debug).toHaveBeenCalledWith({
+      event: 'agent.memory.extraction_skipped',
+      reason: 'global_breaker',
+    });
+  });
+
+  it('finishes recording an extraction spend before the run resolves', async () => {
+    const { task, rateLimit } = make();
+    const recorded: string[] = [];
+    const settleLater = (label: string) => async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      recorded.push(label);
+    };
+    rateLimit.recordUsage.mockImplementation(settleLater('usage'));
+    rateLimit.recordSideCost.mockImplementation(settleLater('embedding'));
+
+    await task.reconcile();
+
+    expect(recorded).toEqual(['usage', 'embedding']);
+  });
+
+  it('resolves the conversation owner as a registered caller', async () => {
+    const { task, tierResolver } = make();
+
+    await task.reconcile();
+
+    expect(tierResolver.resolve).toHaveBeenCalledWith({
+      userId: 'u1',
+      isAnonymous: false,
+    });
+  });
+
+  it('meters the reconcile call as the user after the fact, priced by the served model', async () => {
+    const { task, rateLimit, structured, modelCatalog } = make();
+    structured.generateStructuredOutput.mockResolvedValue({
+      object: { operations: [] },
+      inputTokens: 120,
+      outputTokens: 30,
+      model: SERVED_MODEL,
+    });
+
+    await task.reconcile();
+
+    expect(modelCatalog.getPricing).toHaveBeenCalledWith(SERVED_MODEL);
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: { userId: 'u1' },
+        billing: { kind: 'platform' },
+      }),
+      null,
+      {
+        action: 'memory_extraction',
+        model: SERVED_MODEL,
+        inputTokens: 120,
+        outputTokens: 30,
+        costUsd: expect.closeTo(
+          120 * INPUT_COST_PER_TOKEN + 30 * OUTPUT_COST_PER_TOKEN,
+          12
+        ),
+      }
+    );
+  });
+
+  it('logs a metering failure and still persists and marks the conversation', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { task, rateLimit, memory, conversations } = make();
+    rateLimit.recordUsage.mockRejectedValue(new Error('db down'));
+
+    await task.reconcile();
+
+    expect(warn).toHaveBeenCalledWith({
+      event: 'ai.usage.record_failed',
+      userId: 'u1',
+      error: 'db down',
+    });
+    expect(memory.applyReconcile).toHaveBeenCalled();
+    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+  });
+
+  it('attributes the memory embedding cost to the user, not the global counter', async () => {
+    const { task, rateLimit } = make();
+
+    await task.reconcile();
+
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: { userId: 'u1' } }),
+      { action: 'embedding', model: EMBEDDING_MODEL, costUsd: 0.004 }
+    );
+    expect(rateLimit.recordGlobalCost).not.toHaveBeenCalled();
+  });
+
+  it('records no embedding cost when injection screening filters out every operation', async () => {
     const { task, rateLimit, structured } = make();
     structured.generateStructuredOutput.mockResolvedValue({
       object: {
@@ -217,7 +382,7 @@ describe('MemoryExtractionTask', () => {
       model: 'm',
     });
     await task.reconcile();
-    expect(rateLimit.recordGlobalCost).not.toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
   });
 
   it('does not mark the conversation extracted when persistence fails', async () => {

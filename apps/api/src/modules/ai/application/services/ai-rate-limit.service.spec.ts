@@ -8,6 +8,41 @@ import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { AIRateLimitService } from './ai-rate-limit.service';
 
+const BYOK_BILLING = { kind: 'byok', provider: 'anthropic' } as const;
+
+function free(userId: string, clientIp?: string) {
+  return createExecutionContext({ userId, ...(clientIp ? { clientIp } : {}) });
+}
+
+function anonymous(userId: string, clientIp?: string) {
+  return createExecutionContext({
+    userId,
+    tier: 'anonymous',
+    ...(clientIp ? { clientIp } : {}),
+  });
+}
+
+function byokBilled(userId: string) {
+  return createExecutionContext({
+    userId,
+    tier: 'byok',
+    billing: BYOK_BILLING,
+  });
+}
+
+function estimate(tokens: number, costUsd = 0) {
+  return { tokens, costUsd };
+}
+
+function expectDenial(
+  result: Awaited<ReturnType<AIRateLimitService['checkLimit']>>
+) {
+  if (result.allowed) {
+    throw new Error('expected a denial');
+  }
+  return result;
+}
+
 describe('AIRateLimitService', () => {
   let service: AIRateLimitService;
   let mockUsageRepo: AIUsageRepository;
@@ -32,7 +67,7 @@ describe('AIRateLimitService', () => {
       totalCostUsd: 0.01,
       requestCount: 1,
     });
-    const result = await service.checkLimit('user-123', 1000);
+    const result = await service.checkLimit(free('user-123'), estimate(1000));
     expect(result.allowed).toBe(true);
   });
 
@@ -44,11 +79,14 @@ describe('AIRateLimitService', () => {
       requestCount: 1,
     });
 
-    const authed = await service.checkLimit('user-123', 1000);
+    const authed = await service.checkLimit(free('user-123'), estimate(1000));
     expect(authed.allowed).toBe(true);
 
-    const anonymous = await service.checkLimit('anon-123', 1000, true);
-    expect(anonymous.allowed).toBe(false);
+    const anon = await service.checkLimit(
+      anonymous('anon-123'),
+      estimate(1000)
+    );
+    expect(anon.allowed).toBe(false);
   });
 
   describe('dailyAllowance', () => {
@@ -59,12 +97,12 @@ describe('AIRateLimitService', () => {
     });
 
     it('gives an anonymous caller the configured share', () => {
-      const anonymous = new AIRateLimitService(
+      const halfShare = new AIRateLimitService(
         mockUsageRepo,
         createMockConfig({ AI_ANONYMOUS_DAILY_LIMIT_PCT: 0.5 })
       );
       expect(
-        anonymous.dailyAllowance(createExecutionContext({ tier: 'anonymous' }))
+        halfShare.dailyAllowance(createExecutionContext({ tier: 'anonymous' }))
       ).toEqual({ tokenLimit: 50000, costLimit: 0.5 });
     });
   });
@@ -76,13 +114,13 @@ describe('AIRateLimitService', () => {
       totalCostUsd: 0.5,
       requestCount: 5,
     });
-    const result = await service.checkLimit('user-123', 2000);
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toBe(
+    const result = await service.checkLimit(free('user-123'), estimate(2000));
+    const { reason } = expectDenial(result);
+    expect(reason).toBe(
       'Daily usage limit exceeded. Please try again tomorrow.'
     );
-    expect(result.reason).not.toMatch(/\d+\/\d+/);
-    expect(result.reason).not.toMatch(/\$/);
+    expect(reason).not.toMatch(/\d+\/\d+/);
+    expect(reason).not.toMatch(/\$/);
   });
 
   it('should deny request when cost limit exceeded', async () => {
@@ -92,13 +130,13 @@ describe('AIRateLimitService', () => {
       totalCostUsd: 1.01,
       requestCount: 10,
     });
-    const result = await service.checkLimit('user-123', 100);
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toBe(
+    const result = await service.checkLimit(free('user-123'), estimate(100));
+    const { reason } = expectDenial(result);
+    expect(reason).toBe(
       'Daily usage limit exceeded. Please try again tomorrow.'
     );
-    expect(result.reason).not.toMatch(/\d+\/\d+/);
-    expect(result.reason).not.toMatch(/\$/);
+    expect(reason).not.toMatch(/\d+\/\d+/);
+    expect(reason).not.toMatch(/\$/);
   });
 
   describe('PG-fallback RPM limit (no Redis provider)', () => {
@@ -122,48 +160,56 @@ describe('AIRateLimitService', () => {
 
     it('should deny once the per-minute request limit is exceeded', async () => {
       for (let i = 0; i < RPM_LIMIT; i++) {
-        const result = await service.checkLimit('user-rpm', 100);
+        const result = await service.checkLimit(
+          free('user-rpm'),
+          estimate(100)
+        );
         expect(result.allowed).toBe(true);
       }
 
-      const denied = await service.checkLimit('user-rpm', 100);
-      expect(denied.allowed).toBe(false);
-      expect(denied.reason).toMatch(/Too many requests/);
+      const denied = await service.checkLimit(free('user-rpm'), estimate(100));
+      expect(expectDenial(denied).reason).toMatch(/Too many requests/);
     });
 
     it('should reset the counter in a new minute', async () => {
       for (let i = 0; i < RPM_LIMIT; i++) {
-        await service.checkLimit('user-rpm', 100);
+        await service.checkLimit(free('user-rpm'), estimate(100));
       }
-      const denied = await service.checkLimit('user-rpm', 100);
+      const denied = await service.checkLimit(free('user-rpm'), estimate(100));
       expect(denied.allowed).toBe(false);
 
       vi.setSystemTime(START + 61_000);
 
-      const afterReset = await service.checkLimit('user-rpm', 100);
+      const afterReset = await service.checkLimit(
+        free('user-rpm'),
+        estimate(100)
+      );
       expect(afterReset.allowed).toBe(true);
     });
 
     it('should count requests per-user independently', async () => {
       for (let i = 0; i < RPM_LIMIT; i++) {
-        await service.checkLimit('user-a', 100);
+        await service.checkLimit(free('user-a'), estimate(100));
       }
-      const deniedA = await service.checkLimit('user-a', 100);
+      const deniedA = await service.checkLimit(free('user-a'), estimate(100));
       expect(deniedA.allowed).toBe(false);
 
-      const allowedB = await service.checkLimit('user-b', 100);
+      const allowedB = await service.checkLimit(free('user-b'), estimate(100));
       expect(allowedB.allowed).toBe(true);
     });
 
     it('should evict stale entries once the counter map exceeds the sweep threshold', async () => {
       for (let i = 0; i < 1000; i++) {
-        await service.checkLimit(`user-${i}`, 100);
+        await service.checkLimit(free(`user-${i}`), estimate(100));
       }
       const counters = service['pgRpmCounters'];
       expect(counters.size).toBe(1000);
 
       vi.setSystemTime(START + 61_000);
-      const result = await service.checkLimit('fresh-user', 100);
+      const result = await service.checkLimit(
+        free('fresh-user'),
+        estimate(100)
+      );
 
       expect(result.allowed).toBe(true);
       expect(counters.size).toBe(1);
@@ -172,11 +218,11 @@ describe('AIRateLimitService', () => {
 
     it('should keep current-minute entries when sweeping', async () => {
       for (let i = 0; i < 1000; i++) {
-        await service.checkLimit(`stale-${i}`, 100);
+        await service.checkLimit(free(`stale-${i}`), estimate(100));
       }
       vi.setSystemTime(START + 61_000);
-      await service.checkLimit('active-1', 100);
-      await service.checkLimit('active-2', 100);
+      await service.checkLimit(free('active-1'), estimate(100));
+      await service.checkLimit(free('active-2'), estimate(100));
 
       const counters = service['pgRpmCounters'];
       expect(counters.has('active-1')).toBe(true);
@@ -212,7 +258,9 @@ describe('AIRateLimitService', () => {
     });
 
     it('should release a reservation by correcting usage to zero', async () => {
-      await service.releaseReservation('user-123', 1700);
+      await service.releaseReservation(free('user-123'), {
+        estimate: estimate(1700),
+      });
 
       expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
         'user-123',
@@ -230,7 +278,9 @@ describe('AIRateLimitService', () => {
       );
 
       await expect(
-        service.releaseReservation('user-123', 1700)
+        service.releaseReservation(free('user-123'), {
+          estimate: estimate(1700),
+        })
       ).resolves.toBeUndefined();
     });
 
@@ -246,7 +296,7 @@ describe('AIRateLimitService', () => {
         currentCostUsd: 0.01,
       });
 
-      const result = await service.checkLimit('user-123', 1000);
+      const result = await service.checkLimit(free('user-123'), estimate(1000));
       expect(result.allowed).toBe(true);
       expect(mockRateLimitProvider.checkRpm).toHaveBeenCalledWith('user-123');
     });
@@ -259,9 +309,10 @@ describe('AIRateLimitService', () => {
         currentCostUsd: 0,
       });
 
-      const result = await service.checkLimit('user-123', 1000);
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toBe('Rate limit exceeded (15 requests/min)');
+      const result = await service.checkLimit(free('user-123'), estimate(1000));
+      expect(expectDenial(result).reason).toBe(
+        'Rate limit exceeded (15 requests/min)'
+      );
       // Should NOT call daily check when RPM is exceeded
       expect(mockRateLimitProvider.checkAndIncrement).not.toHaveBeenCalled();
     });
@@ -276,7 +327,7 @@ describe('AIRateLimitService', () => {
         currentCostUsd: 0.01,
       });
 
-      const result = await service.checkLimit('user-123', 1000);
+      const result = await service.checkLimit(free('user-123'), estimate(1000));
       expect(result.allowed).toBe(true);
     });
 
@@ -294,7 +345,7 @@ describe('AIRateLimitService', () => {
           currentCostUsd: 0,
         });
 
-      await service.checkLimit('anon-1', 1000, true);
+      await service.checkLimit(anonymous('anon-1'), estimate(1000));
 
       expect(checkAndIncrement).toHaveBeenCalledWith('anon-1', 1000, 0, {
         tokenLimit: 33000,
@@ -316,7 +367,7 @@ describe('AIRateLimitService', () => {
           currentCostUsd: 0,
         });
 
-      await service.checkLimit('user-123', 1000);
+      await service.checkLimit(free('user-123'), estimate(1000));
 
       expect(checkAndIncrement).toHaveBeenCalledWith('user-123', 1000, 0, {
         tokenLimit: 100000,
@@ -345,14 +396,14 @@ describe('AIRateLimitService', () => {
       vi.restoreAllMocks();
     });
 
-    const usageRecord = {
-      userId: 'user-123',
+    const caller = free('user-123');
+    const reserved = { estimate: estimate(150) };
+    const usage = {
       action: 'summarize',
       model: 'anthropic:claude-sonnet-4-20250514',
       inputTokens: 100,
       outputTokens: 50,
       costUsd: 0.01,
-      estimatedTokens: 150,
     };
 
     it('should emit a warning and webhook once when usage crosses 80% of the daily budget', async () => {
@@ -363,8 +414,8 @@ describe('AIRateLimitService', () => {
         requestCount: 10,
       });
 
-      await warningService.recordUsage(usageRecord);
-      await warningService.recordUsage(usageRecord);
+      await warningService.recordUsage(caller, reserved, usage);
+      await warningService.recordUsage(caller, reserved, usage);
 
       expect(alerts.notify).toHaveBeenCalledTimes(1);
       expect(alerts.notify).toHaveBeenCalledWith(
@@ -405,7 +456,7 @@ describe('AIRateLimitService', () => {
         requestCount: 10,
       });
 
-      await svc.recordUsage(usageRecord);
+      await svc.recordUsage(caller, reserved, usage);
 
       expect(provider.claimDailyFlag).toHaveBeenCalledWith(
         'budget-warned:user-123'
@@ -421,7 +472,7 @@ describe('AIRateLimitService', () => {
         requestCount: 10,
       });
 
-      await warningService.recordUsage(usageRecord);
+      await warningService.recordUsage(caller, reserved, usage);
 
       expect(alerts.notify).toHaveBeenCalledWith(
         'budget.warning',
@@ -437,7 +488,7 @@ describe('AIRateLimitService', () => {
         requestCount: 3,
       });
 
-      await warningService.recordUsage(usageRecord);
+      await warningService.recordUsage(caller, reserved, usage);
 
       expect(alerts.notify).not.toHaveBeenCalled();
     });
@@ -448,7 +499,7 @@ describe('AIRateLimitService', () => {
       );
 
       await expect(
-        warningService.recordUsage(usageRecord)
+        warningService.recordUsage(caller, reserved, usage)
       ).resolves.toBeUndefined();
       expect(alerts.notify).not.toHaveBeenCalled();
     });
@@ -459,14 +510,13 @@ describe('AIRateLimitService', () => {
     let alerts: { notify: ReturnType<typeof vi.fn> };
     let byokService: AIRateLimitService;
 
-    const usageRecord = {
-      userId: 'user-123',
+    const reserved = { estimate: estimate(200) };
+    const usage = {
       action: 'agent',
       model: 'google:gemini-2.0-flash',
       inputTokens: 100,
       outputTokens: 50,
       costUsd: 9.0,
-      estimatedTokens: 200,
     };
 
     beforeEach(() => {
@@ -500,7 +550,7 @@ describe('AIRateLimitService', () => {
           requestCount: 10,
         });
 
-      await byokService.recordUsage({ ...usageRecord, byok: true });
+      await byokService.recordUsage(byokBilled('user-123'), reserved, usage);
 
       expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
         expect.objectContaining({ byok: true })
@@ -519,10 +569,8 @@ describe('AIRateLimitService', () => {
       const getDaily = vi.spyOn(mockUsageRepo, 'getDailyUsage');
 
       const result = await byokService.checkLimit(
-        'user-123',
-        1000,
-        false,
-        true
+        byokBilled('user-123'),
+        estimate(1000)
       );
 
       expect(result.allowed).toBe(true);
@@ -540,10 +588,8 @@ describe('AIRateLimitService', () => {
       });
 
       const result = await byokService.checkLimit(
-        'user-123',
-        1000,
-        false,
-        true
+        byokBilled('user-123'),
+        estimate(1000)
       );
 
       expect(result.allowed).toBe(false);
@@ -558,7 +604,7 @@ describe('AIRateLimitService', () => {
         requestCount: 3,
       });
 
-      await byokService.recordUsage({ ...usageRecord, byok: false });
+      await byokService.recordUsage(free('user-123'), reserved, usage);
 
       expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
         'user-123',
@@ -566,6 +612,62 @@ describe('AIRateLimitService', () => {
         150,
         0,
         9.0
+      );
+    });
+
+    it('never releases a reservation for a byok-billed caller', async () => {
+      const execution = createExecutionContext({
+        tier: 'byok',
+        billing: { kind: 'byok', provider: 'anthropic' },
+      });
+      await byokService.releaseReservation(execution, {
+        estimate: { tokens: 1000, costUsd: 0.01 },
+      });
+      expect(mockRateLimitProvider.correctUsage).not.toHaveBeenCalled();
+    });
+
+    it('records the usage row as byok and skips counter correction for a byok-billed caller', async () => {
+      const execution = createExecutionContext({
+        tier: 'byok',
+        billing: { kind: 'byok', provider: 'anthropic' },
+      });
+      await byokService.recordUsage(
+        execution,
+        { estimate: { tokens: 0, costUsd: 0 } },
+        {
+          action: 'agent',
+          model: 'anthropic:claude-x',
+          inputTokens: 10,
+          outputTokens: 5,
+          costUsd: 0.1,
+        }
+      );
+      expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', byok: true })
+      );
+      expect(mockRateLimitProvider.correctUsage).not.toHaveBeenCalled();
+    });
+
+    it('meters usage with nothing reserved as actual-only corrections', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0,
+        requestCount: 0,
+      });
+      await byokService.recordUsage(createExecutionContext(), null, {
+        action: 'memory_extraction',
+        model: 'm',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.002,
+      });
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-1',
+        0,
+        150,
+        0,
+        0.002
       );
     });
   });
@@ -612,8 +714,11 @@ describe('AIRateLimitService', () => {
     it('reserves the estimated cost, runs the IP budget, the BYOK ceiling and the global breaker', async () => {
       const svc = makeService();
 
-      await svc.checkLimit('user-1', 100, true, false, 0.01, '203.0.113.9');
-      await svc.checkLimit('user-2', 100, false, true);
+      await svc.checkLimit(
+        anonymous('user-1', '203.0.113.9'),
+        estimate(100, 0.01)
+      );
+      await svc.checkLimit(byokBilled('user-2'), estimate(100));
 
       expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
         'user-1',
@@ -637,7 +742,7 @@ describe('AIRateLimitService', () => {
     it('forwards the estimated cost to the reserve', async () => {
       const svc = makeService();
 
-      await svc.checkLimit('user-1', 1000, false, false, 0.25);
+      await svc.checkLimit(free('user-1'), estimate(1000, 0.25));
 
       expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
         'user-1',
@@ -650,7 +755,10 @@ describe('AIRateLimitService', () => {
     it('clamps a negative estimated cost to zero', async () => {
       const svc = makeService();
 
-      await svc.checkLimit('user-1', 1000, false, false, -0.25);
+      const result = await svc.checkLimit(
+        free('user-1'),
+        estimate(1000, -0.25)
+      );
 
       expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
         'user-1',
@@ -658,21 +766,26 @@ describe('AIRateLimitService', () => {
         0,
         expect.anything()
       );
+      expect(result).toEqual({
+        allowed: true,
+        reservation: { estimate: estimate(1000, 0) },
+      });
     });
 
     it('reconciles against the estimated cost in recordUsage', async () => {
       const svc = makeService();
 
-      await svc.recordUsage({
-        userId: 'user-1',
-        action: 'agent',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        inputTokens: 100,
-        outputTokens: 50,
-        costUsd: 0.4,
-        estimatedTokens: 200,
-        estimatedCostUsd: 0.25,
-      });
+      await svc.recordUsage(
+        free('user-1'),
+        { estimate: estimate(200, 0.25) },
+        {
+          action: 'agent',
+          model: 'anthropic:claude-sonnet-4-20250514',
+          inputTokens: 100,
+          outputTokens: 50,
+          costUsd: 0.4,
+        }
+      );
 
       expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
         'user-1',
@@ -686,7 +799,9 @@ describe('AIRateLimitService', () => {
     it('releases the reserved cost', async () => {
       const svc = makeService();
 
-      await svc.releaseReservation('user-1', 200, 0.25);
+      await svc.releaseReservation(free('user-1'), {
+        estimate: estimate(200, 0.25),
+      });
 
       expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
         'user-1',
@@ -706,7 +821,7 @@ describe('AIRateLimitService', () => {
       });
       const svc = new AIRateLimitService(mockUsageRepo, createMockConfig());
 
-      const result = await svc.checkLimit('user-1', 100, false, false, 0.2);
+      const result = await svc.checkLimit(free('user-1'), estimate(100, 0.2));
 
       expect(result.allowed).toBe(false);
     });
@@ -747,17 +862,22 @@ describe('AIRateLimitService', () => {
     it('refuses a byok turn at the byok cost ceiling', async () => {
       vi.mocked(provider.getByokCostUsd).mockResolvedValue(1.0);
 
-      const result = await gated.checkLimit('user-123', 100, false, true);
+      const result = await gated.checkLimit(
+        byokBilled('user-123'),
+        estimate(100)
+      );
 
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toMatch(/cost/i);
+      expect(expectDenial(result).reason).toMatch(/cost/i);
       expect(provider.checkAndIncrement).not.toHaveBeenCalled();
     });
 
     it('allows the byok turn when side costs sit under the ceiling', async () => {
       vi.mocked(provider.getByokCostUsd).mockResolvedValue(0.4);
 
-      const result = await gated.checkLimit('user-123', 100, false, true);
+      const result = await gated.checkLimit(
+        byokBilled('user-123'),
+        estimate(100)
+      );
 
       expect(result.allowed).toBe(true);
     });
@@ -767,24 +887,107 @@ describe('AIRateLimitService', () => {
         new Error('redis down')
       );
 
-      const result = await gated.checkLimit('user-123', 100, false, true);
+      const result = await gated.checkLimit(
+        byokBilled('user-123'),
+        estimate(100)
+      );
 
       expect(result.allowed).toBe(true);
     });
 
-    it('routes a byok-turn side cost to the dedicated byok counter, never the shared key', async () => {
-      await gated.recordSideCost({
-        userId: 'u1',
-        action: 'agent_web_search',
-        model: 'tavily',
-        costUsd: 0.008,
-        byokTurn: true,
+    describe('recordSideCost', () => {
+      const EMBEDDING_COST = {
+        action: 'embedding',
+        model: 'voyage',
+        costUsd: 0.001,
+      };
+
+      it('routes a byok-billed side cost to the byok ceiling, never the platform budget', async () => {
+        const execution = createExecutionContext({
+          tier: 'byok',
+          billing: { kind: 'byok', provider: 'anthropic' },
+        });
+        await gated.recordSideCost(execution, EMBEDDING_COST);
+        expect(provider.recordByokCost).toHaveBeenCalledWith('user-1', 0.001);
+        expect(provider.correctUsage).not.toHaveBeenCalled();
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+          expect.objectContaining({ byok: false })
+        );
       });
 
-      expect(provider.recordByokCost).toHaveBeenCalledWith('u1', 0.008);
-      expect(provider.correctUsage).not.toHaveBeenCalled();
-      expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
-        expect.objectContaining({
+      it('charges an anonymous side cost to the user and the IP subject, counting global spend once', async () => {
+        const execution = createExecutionContext({
+          tier: 'anonymous',
+          clientIp: '203.0.113.9',
+        });
+        await gated.recordSideCost(execution, EMBEDDING_COST);
+        expect(provider.correctUsage).toHaveBeenNthCalledWith(
+          1,
+          'user-1',
+          0,
+          0,
+          0,
+          0.001
+        );
+        expect(provider.correctUsage).toHaveBeenNthCalledWith(
+          2,
+          expect.stringMatching(/^ip:[0-9a-f]{16}$/),
+          0,
+          0,
+          0,
+          0.001,
+          false
+        );
+      });
+
+      it('still charges the IP subject when the user-subject correction fails', async () => {
+        vi.mocked(provider.correctUsage).mockRejectedValueOnce(
+          new Error('redis down')
+        );
+        const execution = createExecutionContext({
+          tier: 'anonymous',
+          clientIp: '203.0.113.9',
+        });
+
+        await expect(
+          gated.recordSideCost(execution, EMBEDDING_COST)
+        ).resolves.toBeUndefined();
+
+        expect(provider.correctUsage).toHaveBeenCalledWith(
+          expect.stringMatching(/^ip:[0-9a-f]{16}$/),
+          0,
+          0,
+          0,
+          0.001,
+          false
+        );
+      });
+
+      it('charges only the user subject for an anonymous caller without an IP', async () => {
+        await gated.recordSideCost(
+          createExecutionContext({ tier: 'anonymous' }),
+          EMBEDDING_COST
+        );
+        expect(provider.correctUsage).toHaveBeenCalledTimes(1);
+      });
+
+      it('routes a platform-billed side cost into the shared cost key and records a server-paid row', async () => {
+        await gated.recordSideCost(free('u1'), {
+          action: 'agent_web_search',
+          model: 'tavily',
+          costUsd: 0.008,
+        });
+
+        expect(provider.correctUsage).toHaveBeenCalledOnce();
+        expect(provider.correctUsage).toHaveBeenCalledWith(
+          'u1',
+          0,
+          0,
+          0,
+          0.008
+        );
+        expect(provider.recordByokCost).not.toHaveBeenCalled();
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith({
           userId: 'u1',
           action: 'agent_web_search',
           model: 'tavily',
@@ -792,57 +995,38 @@ describe('AIRateLimitService', () => {
           inputTokens: 0,
           outputTokens: 0,
           byok: false,
-        })
-      );
-    });
-
-    it('routes a server-turn side cost into the shared cost key', async () => {
-      await gated.recordSideCost({
-        userId: 'u1',
-        action: 'embedding',
-        model: 'voyage-3.5',
-        costUsd: 0.002,
-        byokTurn: false,
+        });
       });
 
-      expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
-      expect(provider.recordByokCost).not.toHaveBeenCalled();
-    });
+      it('still persists the PG row when Redis routing fails', async () => {
+        vi.mocked(provider.correctUsage).mockRejectedValue(
+          new Error('redis down')
+        );
 
-    it('still persists the PG row when Redis routing fails', async () => {
-      vi.mocked(provider.correctUsage).mockRejectedValue(
-        new Error('redis down')
-      );
+        await expect(
+          gated.recordSideCost(free('u1'), EMBEDDING_COST)
+        ).resolves.toBeUndefined();
 
-      await expect(
-        gated.recordSideCost({
-          userId: 'u1',
-          action: 'embedding',
-          model: 'voyage-3.5',
-          costUsd: 0.002,
-          byokTurn: false,
-        })
-      ).resolves.toBeUndefined();
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalled();
+      });
 
-      expect(mockUsageRepo.recordUsage).toHaveBeenCalled();
-    });
+      it('never throws when the PG write fails and still routes the Redis cost', async () => {
+        vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
+          new Error('db down')
+        );
 
-    it('never throws when the PG write fails and still routes the Redis cost', async () => {
-      vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
-        new Error('db down')
-      );
+        await expect(
+          gated.recordSideCost(free('u1'), EMBEDDING_COST)
+        ).resolves.toBeUndefined();
 
-      await expect(
-        gated.recordSideCost({
-          userId: 'u1',
-          action: 'embedding',
-          model: 'voyage-3.5',
-          costUsd: 0.002,
-          byokTurn: false,
-        })
-      ).resolves.toBeUndefined();
-
-      expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
+        expect(provider.correctUsage).toHaveBeenCalledWith(
+          'u1',
+          0,
+          0,
+          0,
+          0.001
+        );
+      });
     });
   });
 
@@ -850,6 +1034,13 @@ describe('AIRateLimitService', () => {
     const CLIENT_IP = '203.0.113.7';
     const IP_SUBJECT = 'ip:fec52565aa0cf18f';
     const ANON_LIMITS = { tokenLimit: 33000, costLimit: 0.33 };
+    const AGENT_USAGE = {
+      action: 'agent',
+      model: 'anthropic:claude-sonnet-4-20250514',
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 0.4,
+    };
 
     let provider: RateLimitProvider;
     let svc: AIRateLimitService;
@@ -890,16 +1081,14 @@ describe('AIRateLimitService', () => {
 
     it('reserves against both the user and the hashed IP subject for anonymous turns', async () => {
       const result = await svc.checkLimit(
-        'anon-1',
-        1000,
-        true,
-        false,
-        0,
-        CLIENT_IP
+        anonymous('anon-1', CLIENT_IP),
+        estimate(1000)
       );
 
-      expect(result.allowed).toBe(true);
-      expect(result.reservedIpSubject).toBe(IP_SUBJECT);
+      if (!result.allowed) {
+        throw new Error('expected an allowance');
+      }
+      expect(result.reservation.reservedIpSubject).toBe(IP_SUBJECT);
       expect(provider.checkAndIncrement).toHaveBeenCalledTimes(2);
       expect(provider.checkAndIncrement).toHaveBeenNthCalledWith(
         1,
@@ -933,16 +1122,11 @@ describe('AIRateLimitService', () => {
       );
 
       const result = await svc.checkLimit(
-        'anon-1',
-        1000,
-        true,
-        false,
-        0,
-        CLIENT_IP
+        anonymous('anon-1', CLIENT_IP),
+        estimate(1000)
       );
 
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toBe(
+      expect(expectDenial(result).reason).toBe(
         'Daily usage limit exceeded. Please try again tomorrow.'
       );
       expect(provider.correctUsage).toHaveBeenCalledWith(
@@ -955,7 +1139,7 @@ describe('AIRateLimitService', () => {
     });
 
     it('never checks the IP subject for authenticated users', async () => {
-      await svc.checkLimit('user-1', 1000, false, false, 0, CLIENT_IP);
+      await svc.checkLimit(free('user-1', CLIENT_IP), estimate(1000));
 
       expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
       expect(provider.checkAndIncrement).toHaveBeenCalledWith(
@@ -967,7 +1151,7 @@ describe('AIRateLimitService', () => {
     });
 
     it('never checks the IP subject when no client IP is available', async () => {
-      await svc.checkLimit('anon-1', 1000, true);
+      await svc.checkLimit(anonymous('anon-1'), estimate(1000));
 
       expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
     });
@@ -983,31 +1167,18 @@ describe('AIRateLimitService', () => {
       );
 
       const result = await svc.checkLimit(
-        'anon-1',
-        1000,
-        true,
-        false,
-        0,
-        CLIENT_IP
+        anonymous('anon-1', CLIENT_IP),
+        estimate(1000)
       );
 
-      expect(result.allowed).toBe(true);
-      expect(result.reservedIpSubject).toBeUndefined();
+      if (!result.allowed) {
+        throw new Error('expected an allowance');
+      }
+      expect(result.reservation.reservedIpSubject).toBeUndefined();
 
-      await svc.recordUsage({
-        userId: 'anon-1',
-        action: 'agent',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        inputTokens: 100,
-        outputTokens: 50,
-        costUsd: 0.4,
-        estimatedTokens: 1000,
-        estimatedCostUsd: 0,
-        ...(result.reservedIpSubject
-          ? { reservedIpSubject: result.reservedIpSubject }
-          : {}),
-      });
-      await svc.releaseReservation('anon-1', 1000, 0, result.reservedIpSubject);
+      const execution = anonymous('anon-1', CLIENT_IP);
+      await svc.recordUsage(execution, result.reservation, AGENT_USAGE);
+      await svc.releaseReservation(execution, result.reservation);
 
       for (const call of vi.mocked(provider.correctUsage).mock.calls) {
         expect(call[0]).toBe('anon-1');
@@ -1015,17 +1186,11 @@ describe('AIRateLimitService', () => {
     });
 
     it('reconciles both subjects in recordUsage for a dual reservation', async () => {
-      await svc.recordUsage({
-        userId: 'anon-1',
-        action: 'agent',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        inputTokens: 100,
-        outputTokens: 50,
-        costUsd: 0.4,
-        estimatedTokens: 200,
-        estimatedCostUsd: 0,
-        reservedIpSubject: IP_SUBJECT,
-      });
+      await svc.recordUsage(
+        anonymous('anon-1', CLIENT_IP),
+        { estimate: estimate(200), reservedIpSubject: IP_SUBJECT },
+        AGENT_USAGE
+      );
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(2);
       expect(provider.correctUsage).toHaveBeenNthCalledWith(
@@ -1048,16 +1213,11 @@ describe('AIRateLimitService', () => {
     });
 
     it('reconciles only the user subject in recordUsage without a reserved IP subject', async () => {
-      await svc.recordUsage({
-        userId: 'anon-1',
-        action: 'agent',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        inputTokens: 100,
-        outputTokens: 50,
-        costUsd: 0.4,
-        estimatedTokens: 200,
-        estimatedCostUsd: 0,
-      });
+      await svc.recordUsage(
+        anonymous('anon-1', CLIENT_IP),
+        { estimate: estimate(200) },
+        AGENT_USAGE
+      );
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(1);
       expect(provider.correctUsage).toHaveBeenCalledWith(
@@ -1069,8 +1229,67 @@ describe('AIRateLimitService', () => {
       );
     });
 
+    it('still reconciles every reserved subject when the usage row fails, then rejects', async () => {
+      vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
+        new Error('db down')
+      );
+
+      await expect(
+        svc.recordUsage(
+          anonymous('anon-1', CLIENT_IP),
+          { estimate: estimate(200), reservedIpSubject: IP_SUBJECT },
+          AGENT_USAGE
+        )
+      ).rejects.toThrow('db down');
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        200,
+        150,
+        0,
+        0.4
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
+    it('charges an anonymous caller and its IP subject for usage metered with nothing reserved', async () => {
+      await svc.recordUsage(anonymous('anon-1', CLIENT_IP), null, AGENT_USAGE);
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        0,
+        150,
+        0,
+        0.4
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        0,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
     it('releases both subjects when releasing a dual reservation', async () => {
-      await svc.releaseReservation('anon-1', 200, 0, IP_SUBJECT);
+      await svc.releaseReservation(anonymous('anon-1', CLIENT_IP), {
+        estimate: estimate(200),
+        reservedIpSubject: IP_SUBJECT,
+      });
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(2);
       expect(provider.correctUsage).toHaveBeenNthCalledWith(
@@ -1093,7 +1312,10 @@ describe('AIRateLimitService', () => {
     });
 
     it('releases both subjects with the reserved cost when releasing a dual reservation', async () => {
-      await svc.releaseReservation('anon-1', 200, 0.02, IP_SUBJECT);
+      await svc.releaseReservation(anonymous('anon-1', CLIENT_IP), {
+        estimate: estimate(200, 0.02),
+        reservedIpSubject: IP_SUBJECT,
+      });
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(2);
       expect(provider.correctUsage).toHaveBeenNthCalledWith(
@@ -1160,10 +1382,9 @@ describe('AIRateLimitService', () => {
     it('rejects a server-billed turn once global spend reaches the limit', async () => {
       vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
 
-      const result = await breakered.checkLimit('user-1', 1000);
+      const result = await breakered.checkLimit(free('user-1'), estimate(1000));
 
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toBe(
+      expect(expectDenial(result).reason).toBe(
         'Daily usage limit exceeded. Please try again tomorrow.'
       );
       expect(provider.checkAndIncrement).not.toHaveBeenCalled();
@@ -1172,7 +1393,10 @@ describe('AIRateLimitService', () => {
     it('rejects byok turns too — server side-costs are still at stake', async () => {
       vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(30);
 
-      const result = await breakered.checkLimit('user-1', 1000, false, true);
+      const result = await breakered.checkLimit(
+        byokBilled('user-1'),
+        estimate(1000)
+      );
 
       expect(result.allowed).toBe(false);
       expect(provider.getByokCostUsd).not.toHaveBeenCalled();
@@ -1181,8 +1405,8 @@ describe('AIRateLimitService', () => {
     it('fires the breaker alert exactly once across consecutive rejections', async () => {
       vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
 
-      await breakered.checkLimit('user-1', 1000);
-      await breakered.checkLimit('user-2', 1000);
+      await breakered.checkLimit(free('user-1'), estimate(1000));
+      await breakered.checkLimit(free('user-2'), estimate(1000));
 
       expect(alerts.notify).toHaveBeenCalledTimes(1);
       expect(alerts.notify).toHaveBeenCalledWith(
@@ -1194,7 +1418,7 @@ describe('AIRateLimitService', () => {
     it('claims the daily breaker flag through the rate-limit provider', async () => {
       vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
 
-      await breakered.checkLimit('user-1', 1000);
+      await breakered.checkLimit(free('user-1'), estimate(1000));
 
       expect(provider.claimDailyFlag).toHaveBeenCalledWith(
         'global-breaker-fired'
@@ -1207,8 +1431,8 @@ describe('AIRateLimitService', () => {
         .mockImplementation(() => undefined);
       vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
 
-      await breakered.checkLimit('user-1', 1000);
-      await breakered.checkLimit('user-2', 1000);
+      await breakered.checkLimit(free('user-1'), estimate(1000));
+      await breakered.checkLimit(free('user-2'), estimate(1000));
 
       expect(errorSpy).toHaveBeenCalledTimes(1);
       errorSpy.mockRestore();
@@ -1217,7 +1441,7 @@ describe('AIRateLimitService', () => {
     it('allows turns while global spend sits under the limit', async () => {
       vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(24.99);
 
-      const result = await breakered.checkLimit('user-1', 1000);
+      const result = await breakered.checkLimit(free('user-1'), estimate(1000));
 
       expect(result.allowed).toBe(true);
     });
@@ -1227,9 +1451,21 @@ describe('AIRateLimitService', () => {
         new Error('redis down')
       );
 
-      const result = await breakered.checkLimit('user-1', 1000);
+      const result = await breakered.checkLimit(free('user-1'), estimate(1000));
 
       expect(result.allowed).toBe(true);
+    });
+
+    it('reports global spend exhausted at the configured ceiling', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
+
+      await expect(breakered.isGlobalSpendExhausted()).resolves.toBe(true);
+    });
+
+    it('reports global spend available under the ceiling', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(24.99);
+
+      await expect(breakered.isGlobalSpendExhausted()).resolves.toBe(false);
     });
 
     it('records a non-attributed global cost through the provider', async () => {

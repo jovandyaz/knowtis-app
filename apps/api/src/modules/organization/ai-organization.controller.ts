@@ -23,8 +23,10 @@ import {
   type OrganizationSuggestion,
 } from '@knowtis/shared-types';
 
+import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { SuggestOrganizationHandler } from './application/commands/suggest-organization.handler';
@@ -51,7 +53,10 @@ const SUGGEST_THROTTLE = { default: { limit: 10, ttl: 60000 } };
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Controller('ai/organization')
 export class AiOrganizationController {
-  constructor(private readonly suggestHandler: SuggestOrganizationHandler) {}
+  constructor(
+    private readonly suggestHandler: SuggestOrganizationHandler,
+    private readonly tierResolver: TierResolver
+  ) {}
 
   @ApiOperation({
     summary: 'Suggest a bucket and tags for notes the caller owns',
@@ -69,10 +74,14 @@ export class AiOrganizationController {
     @Body() dto: SuggestOrganizationDto,
     @Req() request: Request
   ): Promise<OrganizationSuggestion[]> {
-    const result = await this.suggestHandler.execute({
+    const execution = await this.tierResolver.resolve({
       userId: user.id,
+      isAnonymous: user.isAnonymous === true,
+      clientIp: clientIpOf(request),
+    });
+    const result = await this.suggestHandler.execute({
+      execution,
       noteIds: dto.noteIds,
-      ...(request.ip ? { clientIp: request.ip } : {}),
     });
 
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);

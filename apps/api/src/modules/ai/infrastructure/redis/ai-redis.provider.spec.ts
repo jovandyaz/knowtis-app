@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AIRateLimitService } from '../../application/services/ai-rate-limit.service';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { createUnresponsiveRedis } from '../../testing/create-unresponsive-redis';
 import { RedisRateLimitService } from './redis-rate-limit.service';
@@ -57,7 +58,10 @@ describe('AIRedisProvider against a Redis that stops answering', () => {
         new RedisRateLimitService(redis.provider, config)
       );
 
-      const verdict = await rateLimit.checkLimit('user-1', 1000);
+      const verdict = await rateLimit.checkLimit(
+        createExecutionContext({ userId: 'user-1' }),
+        { tokens: 1000, costUsd: 0 }
+      );
 
       expect(verdict.allowed).toBe(true);
       expect(usage.getDailyUsage).toHaveBeenCalledWith('user-1');

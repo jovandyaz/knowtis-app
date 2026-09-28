@@ -7,6 +7,7 @@ import { AI_ACTION } from '@knowtis/shared-types';
 import type { AICache } from '../../domain/ports/ai-cache.port';
 import type { AICompletionProvider } from '../../domain/ports/ai-provider.port';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { createTestCatalog } from '../../testing/create-test-catalog';
 import { AICompletionPipeline } from '../services/ai-completion-pipeline.service';
@@ -100,7 +101,7 @@ describe('CompleteTextHandler', () => {
     const cachedHandler = buildHandler(cache);
 
     const result = await cachedHandler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       action: AI_ACTION.SUMMARIZE,
       content: 'Some content',
     });
@@ -117,7 +118,7 @@ describe('CompleteTextHandler', () => {
 
   it('should generate a completion and record usage', async () => {
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       action: AI_ACTION.SUMMARIZE,
       content: 'Some long note content...',
     });
@@ -143,7 +144,7 @@ describe('CompleteTextHandler', () => {
       requestCount: 50,
     });
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       action: AI_ACTION.SUMMARIZE,
       content: 'Some content',
     });
@@ -160,7 +161,7 @@ describe('CompleteTextHandler', () => {
     const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
 
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       action: AI_ACTION.SUMMARIZE,
       content: 'Some content',
     });
@@ -170,8 +171,16 @@ describe('CompleteTextHandler', () => {
       expect(result.error.code).toBe('AI_PROVIDER_ERROR');
     }
     expect(releaseSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ estimatedTokens: expect.any(Number) }),
-      expect.objectContaining({ userId: 'user-123' })
+      expect.objectContaining({
+        reservation: expect.objectContaining({
+          estimate: expect.objectContaining({ tokens: expect.any(Number) }),
+        }),
+      }),
+      expect.objectContaining({
+        execution: expect.objectContaining({
+          subject: expect.objectContaining({ userId: 'user-123' }),
+        }),
+      })
     );
   });
 
@@ -187,7 +196,7 @@ describe('CompleteTextHandler', () => {
 
     const pending = handler
       .execute({
-        userId: 'user-123',
+        execution: createExecutionContext({ userId: 'user-123' }),
         action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       })
@@ -204,7 +213,7 @@ describe('CompleteTextHandler', () => {
 
   it('should fail for invalid action', async () => {
     const result = await handler.execute({
-      userId: 'user-123',
+      execution: createExecutionContext({ userId: 'user-123' }),
       action: 'invalid-action',
       content: 'Some content',
     });
@@ -220,7 +229,7 @@ describe('CompleteTextHandler', () => {
     );
 
     const result = await handler.execute({
-      userId: 'user-1',
+      execution: createExecutionContext(),
       action: AI_ACTION.SUMMARIZE,
       content: 'some text to summarize',
     });

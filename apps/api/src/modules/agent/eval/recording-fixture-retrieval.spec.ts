@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { htmlToMarkdown } from '@knowtis/note-markdown';
 
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { MutationProposalBuilder } from '../infrastructure/orchestrator/mutation-proposal.builder';
 import { NOTE_FIXTURE_SETS } from './fixtures/note-sets';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 
 const USER = 'eval-user';
+const EXECUTION = createExecutionContext({ userId: USER });
 const FIDELITY = NOTE_FIXTURE_SETS.fidelity[0];
 const WHOLE_BODY = 'The whole note, every word of it.';
 
@@ -15,7 +17,7 @@ describe('RecordingFixtureRetrieval', () => {
     const adapter = new RecordingFixtureRetrieval();
     adapter.seed(NOTE_FIXTURE_SETS.topic);
 
-    const hits = await adapter.search(USER, 'AURORA');
+    const hits = await adapter.search(EXECUTION, 'AURORA');
 
     expect(hits.map((h) => h.id)).toEqual([
       '44444444-4444-4444-8444-444444444444',
@@ -29,7 +31,7 @@ describe('RecordingFixtureRetrieval', () => {
     const adapter = new RecordingFixtureRetrieval();
     adapter.seed(NOTE_FIXTURE_SETS.empty);
 
-    expect(await adapter.search(USER, 'aurora')).toEqual([]);
+    expect(await adapter.search(EXECUTION, 'aurora')).toEqual([]);
   });
 
   it('getById returns the note or null and records getNote', async () => {
@@ -37,11 +39,11 @@ describe('RecordingFixtureRetrieval', () => {
     adapter.seed(NOTE_FIXTURE_SETS.topic);
 
     const note = await adapter.getById(
-      USER,
+      EXECUTION,
       '44444444-4444-4444-8444-444444444444'
     );
     expect(note?.title).toBe('Project Aurora spec');
-    expect(await adapter.getById(USER, 'missing')).toBeNull();
+    expect(await adapter.getById(EXECUTION, 'missing')).toBeNull();
     expect(adapter.getCalls().map((c) => c.name)).toEqual([
       'getNote',
       'getNote',
@@ -73,7 +75,7 @@ describe('RecordingFixtureRetrieval', () => {
     adapter.seed(NOTE_FIXTURE_SETS.fidelity);
     const builder = new MutationProposalBuilder(adapter);
 
-    const renamed = await builder.buildUpdate(USER, FIDELITY.id, {
+    const renamed = await builder.buildUpdate(EXECUTION, FIDELITY.id, {
       title: 'Renamed',
     });
     const shared = await builder.buildShare(
@@ -112,7 +114,7 @@ describe('RecordingFixtureRetrieval', () => {
       { ...FIDELITY, content: 'a partial view', body: WHOLE_BODY },
     ]);
 
-    const note = await adapter.getById(USER, FIDELITY.id);
+    const note = await adapter.getById(EXECUTION, FIDELITY.id);
 
     expect(note).not.toHaveProperty('body');
     expect(note).toStrictEqual({

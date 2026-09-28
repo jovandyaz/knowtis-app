@@ -12,7 +12,9 @@ import {
   type RetrievalPort,
 } from '../../agent/domain/ports/retrieval.port';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
+import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchController } from '../search.controller';
 import { SearchModule } from '../search.module';
@@ -55,9 +57,16 @@ describe('SearchModule wiring', () => {
 
         expect(rateLimit).toBeInstanceOf(AIRateLimitService);
 
+        const execution = createExecutionContext({ userId: 'user-1' });
+        vi.spyOn(moduleRef.get(TierResolver), 'resolve').mockResolvedValue(
+          execution
+        );
         const checkLimitSpy = vi
           .spyOn(rateLimit, 'checkLimit')
-          .mockResolvedValue({ allowed: true });
+          .mockResolvedValue({
+            allowed: true,
+            reservation: { estimate: { tokens: 3, costUsd: 0 } },
+          });
         const releaseSpy = vi
           .spyOn(rateLimit, 'releaseReservation')
           .mockResolvedValue(undefined);
@@ -77,7 +86,7 @@ describe('SearchModule wiring', () => {
         const allowed = await controller.search(user, dto, req);
 
         expect(allowed.hits).toHaveLength(1);
-        expect(searchSpy).toHaveBeenCalledWith('user-1', 'quarterly report');
+        expect(searchSpy).toHaveBeenCalledWith(execution, 'quarterly report');
         expect(releaseSpy).toHaveBeenCalledTimes(1);
 
         checkLimitSpy.mockResolvedValue({ allowed: false });
