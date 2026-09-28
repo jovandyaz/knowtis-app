@@ -246,6 +246,7 @@
     "prettier": "^3.7.4",
     "promptfoo": "^0.121.15",
     "railway": "^3.11.0",
+    "std-env": "^4.2.0",
     "storybook": "^10.2.10",
     "style-dictionary": "^5.4.4",
     "tslib": "^2.3.0",

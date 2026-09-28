@@ -1,5 +1,6 @@
 import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import { isAgent } from 'std-env';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(() => ({
@@ -12,7 +13,7 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    reporters: ['default'],
+    reporters: [isAgent ? 'agent' : 'default'],
     coverage: {
       reportsDirectory: '../../coverage/packages/auth-nestjs',
       provider: 'v8' as const,

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import { isAgent } from 'std-env';
 import swc from 'unplugin-swc';
 import { configDefaults, defineConfig } from 'vitest/config';
 
@@ -23,7 +24,7 @@ export default defineConfig({
   test: {
     // Not redundant: @nx/vitest:test forces `reporters: []` unless the config
     // sets them, so failures reach CI with no name, file, or assertion.
-    reporters: ['default'],
+    reporters: [isAgent ? 'agent' : 'default'],
     // Each fork boots full Nest apps; concurrent forks exhaust CI runner memory.
     ...(process.env.CI ? { maxWorkers: 1 } : {}),
     // Specs that hit the real database share one schema, so parallel forks let
