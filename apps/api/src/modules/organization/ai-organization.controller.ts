@@ -26,7 +26,11 @@ import {
 
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import {
+  ApiAuthErrors,
+  ApiBadRequest,
+  ApiServiceUnavailable,
+} from '../../core/swagger';
 import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';
@@ -69,6 +73,9 @@ export class AiOrganizationController {
   @ApiResponse({ status: HttpStatus.OK, description: 'One entry per note' })
   @ApiBadRequest('more notes than the bulk cap, or a malformed id')
   @ApiAuthErrors('a note in the request is not owned by the caller')
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Post('suggest')
   @HttpCode(HttpStatus.OK)
   @Throttle(SUGGEST_THROTTLE)

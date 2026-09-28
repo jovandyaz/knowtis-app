@@ -38,7 +38,11 @@ import { AI_CONFIG_SOURCES, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 import { BYTES_PER_MEGABYTE } from '../../core/http/byte-units';
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import {
+  ApiAuthErrors,
+  ApiBadRequest,
+  ApiServiceUnavailable,
+} from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
@@ -275,6 +279,9 @@ export class AIController {
     status: 502,
     description: 'Bad gateway — AI provider error',
   })
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Post('complete')
   async complete(
     @CurrentUser() user: RequestUser,
@@ -333,6 +340,9 @@ export class AIController {
   })
   @ApiBadRequest('invalid audio file or mode')
   @ApiAuthErrors('AI feature is disabled')
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Post('voice-note')
   @UseInterceptors(
     FileInterceptor('audio', { limits: { fileSize: MAX_VOICE_NOTE_BYTES } })

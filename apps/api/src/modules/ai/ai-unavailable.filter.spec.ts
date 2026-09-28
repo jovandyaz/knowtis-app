@@ -5,6 +5,8 @@ import { HttpStatus, Logger, type ArgumentsHost } from '@nestjs/common';
 import { EXCEPTION_FILTERS_METADATA } from '@nestjs/common/constants';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { GlobalExceptionFilter } from '../../core/filters/http-exception.filter';
+import { RetryAfterHttpException } from '../../core/http/retry-after.exception';
 import { RETRY_AFTER_HEADER } from '../../core/http/retry-after.header';
 import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
 import { TierResolver } from './application/services/tier-resolver.service';
@@ -76,8 +78,10 @@ describe('AiUnavailableExceptionFilter', () => {
   });
 
   it('answers a failed tier lookup with a retryable 503 that hides the cause', () => {
-    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     const { host, setHeader, status, body } = createHost();
 
     new AiUnavailableExceptionFilter().catch(
@@ -91,10 +95,29 @@ describe('AiUnavailableExceptionFilter', () => {
       statusCode: HttpStatus.SERVICE_UNAVAILABLE,
     });
     expect(JSON.stringify(body())).not.toContain('10.0.0.5');
+    expect(warnSpy).toHaveBeenCalledWith({
+      event: 'ai.edge.unavailable',
+      dependency: 'tier',
+      error: 'tier unavailable: connect ECONNREFUSED 10.0.0.5:5432',
+    });
+  });
+
+  it('keeps the original error as the cause of the translated 503', () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const catchSpy = vi.spyOn(GlobalExceptionFilter.prototype, 'catch');
+    const { host } = createHost();
+    const original = new AiUnavailableError('tier', 'db down');
+
+    new AiUnavailableExceptionFilter().catch(original, host);
+
+    const translated = catchSpy.mock.calls[0]?.[0];
+    expect(translated).toBeInstanceOf(RetryAfterHttpException);
+    expect((translated as Error).cause).toBe(original);
   });
 
   it(
-    'is bound on every controller that resolves a tier per request',
+    'is bound on every controller that injects TierResolver',
     async () => {
       const controllers = await controllersInjecting(TierResolver);
 

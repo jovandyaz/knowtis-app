@@ -4,5 +4,6 @@ export {
   ApiConflict,
   ApiForbidden,
   ApiNotFound,
+  ApiServiceUnavailable,
   ApiUnauthorized,
 } from './api-responses.decorator';

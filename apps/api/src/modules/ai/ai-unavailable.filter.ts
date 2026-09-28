@@ -4,14 +4,14 @@ import { GlobalExceptionFilter } from '../../core/filters/http-exception.filter'
 import { RetryAfterHttpException } from '../../core/http/retry-after.exception';
 import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
 
-/** A key-store or quota-store blip clears within seconds; a client that honours the header does not retry into it. */
+/** A key-store blip clears within seconds; a client that honours the header does not retry into it. */
 const AI_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
 
 /**
- * Answers a failed tier or quota lookup with a retryable 503 and
- * `Retry-After`, instead of an unmapped 500. Bound per controller, it runs
- * before the global filter and hands it the translated exception, so the
- * body format, the 5xx masking and the `Retry-After` header stay in one place.
+ * Answers a failed tier lookup with a retryable 503 and `Retry-After`,
+ * instead of an unmapped 500. Bound per controller, it runs before the
+ * global filter and hands it the translated exception, so the body format,
+ * the 5xx masking and the `Retry-After` header stay in one place.
  */
 @Catch(AiUnavailableError)
 export class AiUnavailableExceptionFilter extends GlobalExceptionFilter {
@@ -31,7 +31,8 @@ export class AiUnavailableExceptionFilter extends GlobalExceptionFilter {
           message: `${exception.dependency} unavailable`,
         },
         HttpStatus.SERVICE_UNAVAILABLE,
-        AI_UNAVAILABLE_RETRY_AFTER_SECONDS
+        AI_UNAVAILABLE_RETRY_AFTER_SECONDS,
+        { cause: exception }
       ),
       host
     );

@@ -12,6 +12,7 @@ import { Test } from '@nestjs/testing';
 import { ok } from 'neverthrow';
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -231,6 +232,10 @@ describe('POST /ai/voice-note', () => {
     resolve.mockReset().mockResolvedValue(execution);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   function postRecording(bytes: number) {
     const form = new FormData();
     form.append('mode', 'create-note');
@@ -276,6 +281,7 @@ describe('POST /ai/voice-note', () => {
 
   it('answers 503 when the tier cannot be resolved', async () => {
     vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     resolve.mockRejectedValue(new AiUnavailableError('tier', 'db down'));
 
     const response = await postRecording(1024);
@@ -283,5 +289,6 @@ describe('POST /ai/voice-note', () => {
     expect(response.status).toBe(503);
     expect(response.headers.get('retry-after')).toBe('5');
     expect(execute).not.toHaveBeenCalled();
+    expect((await response.json()).message).toBe('Internal server error');
   });
 });

@@ -23,6 +23,7 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
+import { ApiServiceUnavailable } from '../../core/swagger';
 import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
@@ -52,6 +53,9 @@ export class ArtifactsController {
   ) {}
 
   @ApiOperation({ summary: 'Generate an artifact from a note' })
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Post('generate')
   async generate(
     @CurrentUser() user: RequestUser,

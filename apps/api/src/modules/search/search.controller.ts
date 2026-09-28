@@ -25,6 +25,7 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { SUBJECTS } from '@knowtis/authorization';
 
 import { clientIpOf } from '../../core/http/client-ip';
+import { ApiServiceUnavailable } from '../../core/swagger';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
@@ -92,6 +93,9 @@ export class SearchController {
       },
     },
   })
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.READ)
