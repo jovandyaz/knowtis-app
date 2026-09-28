@@ -721,6 +721,9 @@ export class RunAgentTurnHandler {
         outputTokens: 0,
         model,
       });
+      if (!isUserCancel(signal)) {
+        await hold.refund();
+      }
       return;
     }
     callbacks.onModelStart?.();

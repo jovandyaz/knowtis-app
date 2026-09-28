@@ -6697,22 +6697,45 @@ describe('RunAgentTurnHandler daily message quota', () => {
     }
   );
 
-  it('does not refund a user abort before the model starts', async () => {
+  it('keeps the message when the server abort throws after text streamed', async () => {
     const quota = consumedQuota();
     const controller = new AbortController();
-    const guard = {
-      guard: vi.fn(async () => {
-        controller.abort();
-        return { safe: true, score: 0 };
+    const orchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        yield { type: 'chunk', text: 'Hola' } as AgentEvent;
+        controller.abort(TURN_ABORT_REASON.DISCONNECTED);
+        throw new Error('aborted');
       }),
-    } as unknown as InjectionGuardService;
-    const { handler, orchestrator } = build({ quota, guard });
+    };
+    const { handler } = build({ quota, orchestrator });
 
     await handler.execute(turn, callbacks(), controller.signal);
 
-    expect(orchestrator.run).not.toHaveBeenCalled();
     expect(quota.refund).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+  ] as const)(
+    'a %s abort before the model starts %s the message',
+    async (reason, _verb, refunds) => {
+      const quota = consumedQuota();
+      const controller = new AbortController();
+      const guard = {
+        guard: vi.fn(async () => {
+          controller.abort(reason);
+          return { safe: true, score: 0 };
+        }),
+      } as unknown as InjectionGuardService;
+      const { handler, orchestrator } = build({ quota, guard });
+
+      await handler.execute(turn, callbacks(), controller.signal);
+
+      expect(orchestrator.run).not.toHaveBeenCalled();
+      expect(quota.refund).toHaveBeenCalledTimes(refunds);
+    }
+  );
 
   it('does not refund an injection-guard refusal of the user input', async () => {
     const quota = consumedQuota();
