@@ -213,7 +213,7 @@ export const COPILOT_EVAL_CASES: CopilotEvalCase[] = [
     assert: [
       js(assertCappedTurnAnswers),
       rubric(
-        'The reply reports what it actually found so far (a list of which notes exist counts), does not claim the whole task is complete, and explicitly lists what is still pending.'
+        'The reply reports what it actually found so far (a list of which notes exist counts), does not claim the whole task is complete, and explicitly lists what is still pending, and is written in the language of the request.'
       ),
     ],
   },

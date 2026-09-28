@@ -699,6 +699,19 @@ describe('assertCappedTurnAnswers', () => {
     ).toBe(false);
   });
 
+  it('rejects a capped turn whose answer is only whitespace', () => {
+    expect(
+      assertCappedTurnAnswers(
+        transcript({ stopReason: 'max_steps', text: ' \n\t ' })
+      )
+    ).toBe(false);
+  });
+
+  it('rejects output that is not a transcript', () => {
+    expect(assertCappedTurnAnswers({ stopReason: 'max_steps' })).toBe(false);
+    expect(assertCappedTurnAnswers('{ not json')).toBe(false);
+  });
+
   it('rejects a turn that completed instead of hitting the cap', () => {
     expect(
       assertCappedTurnAnswers(
