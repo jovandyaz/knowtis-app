@@ -9,8 +9,8 @@ import { RETRIEVAL_PORT } from '../../agent/domain/ports/retrieval.port';
 import type { NoteHit } from '../../agent/domain/retrieval';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { TierResolver } from '../../ai/application/services/tier-resolver.service';
-import { AIErrorCodes } from '../../ai/domain/errors/ai.errors';
 import type { AiCaller } from '../../ai/domain/execution-context/ai-execution-context';
+import { EMBEDDING_PORT } from '../../ai/domain/ports/embedding.port';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { SearchQueryDto } from '../dto/search-query.dto';
 import { SearchController } from '../search.controller';
@@ -45,6 +45,7 @@ describe('SearchController', () => {
     releaseReservation: vi.fn(),
   };
   const tierResolver = { resolve: vi.fn() };
+  const embedding = { isConfigured: vi.fn() };
 
   beforeEach(async () => {
     search.mockReset();
@@ -52,6 +53,7 @@ describe('SearchController', () => {
       .mockReset()
       .mockResolvedValue({ allowed: true, reservation: RESERVATION });
     rateLimit.releaseReservation.mockReset().mockResolvedValue(undefined);
+    embedding.isConfigured.mockReset().mockReturnValue(true);
     tierResolver.resolve
       .mockReset()
       .mockImplementation(async (caller: AiCaller) =>
@@ -67,6 +69,7 @@ describe('SearchController', () => {
         { provide: RETRIEVAL_PORT, useValue: { search } },
         { provide: AIRateLimitService, useValue: rateLimit },
         { provide: TierResolver, useValue: tierResolver },
+        { provide: EMBEDDING_PORT, useValue: embedding },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -77,7 +80,7 @@ describe('SearchController', () => {
     controller = moduleRef.get(SearchController);
   });
 
-  it('should return retrieval hits for the current user', async () => {
+  it('should return retrieval hits in hybrid mode for the current user', async () => {
     search.mockResolvedValue([hit('a'), hit('b')]);
     const dto = new SearchQueryDto();
     dto.q = 'quarterly report';
@@ -88,8 +91,13 @@ describe('SearchController', () => {
     expect(execution).toMatchObject({
       subject: { userId: 'user-1', clientIp: '203.0.113.9' },
     });
-    expect(search).toHaveBeenCalledWith(execution, 'quarterly report');
-    expect(result).toEqual({ hits: [hit('a'), hit('b')] });
+    expect(search).toHaveBeenCalledWith(execution, 'quarterly report', {
+      semantic: true,
+    });
+    expect(result).toEqual({
+      hits: [hit('a'), hit('b')],
+      mode: 'hybrid',
+    });
   });
 
   it('should cap results at the requested limit', async () => {
@@ -134,43 +142,59 @@ describe('SearchController', () => {
 
     const result = await controller.search(user, dto, req);
 
-    expect(result).toEqual({ hits: [] });
+    expect(result).toEqual({ hits: [], mode: 'hybrid' });
   });
 
-  it('should reject with 429 before searching when the AI budget is exhausted', async () => {
-    rateLimit.checkLimit.mockResolvedValue({ allowed: false });
-    const dto = new SearchQueryDto();
-    dto.q = 'x';
-
-    await expect(controller.search(user, dto, req)).rejects.toMatchObject({
-      status: 429,
-      response: {
-        statusCode: 429,
-        error: AIErrorCodes.RATE_LIMIT_EXCEEDED,
-        code: AIErrorCodes.RATE_LIMIT_EXCEEDED,
-        message: 'Daily AI usage limit exceeded. Please try again tomorrow.',
-      },
-    });
-    expect(search).not.toHaveBeenCalled();
-    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
-  });
-
-  it('should report the limiter reason in the 429 body', async () => {
+  it('returns lexical results with mode lexical when the AI budget refuses the embed leg', async () => {
+    embedding.isConfigured.mockReturnValue(true);
     rateLimit.checkLimit.mockResolvedValue({
       allowed: false,
-      reason: 'Rate limit exceeded (15 requests/min)',
+      reason: 'Too many requests.',
     });
+    search.mockResolvedValue([hit('a')]);
     const dto = new SearchQueryDto();
     dto.q = 'x';
 
-    await expect(controller.search(user, dto, req)).rejects.toMatchObject({
-      status: 429,
-      response: {
-        code: AIErrorCodes.RATE_LIMIT_EXCEEDED,
-        message: 'Rate limit exceeded (15 requests/min)',
-      },
-    });
+    const result = await controller.search(user, dto, req);
+
+    const [execution] = rateLimit.checkLimit.mock.calls[0];
+    expect(result).toEqual({ hits: [hit('a')], mode: 'lexical' });
+    expect(search).toHaveBeenCalledWith(execution, 'x', { semantic: false });
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+  });
+
+  it('reserves nothing when no embedding provider is configured', async () => {
+    embedding.isConfigured.mockReturnValue(false);
+    search.mockResolvedValue([hit('a')]);
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+
+    await controller.search(user, dto, req);
+
+    const execution = await tierResolver.resolve.mock.results[0]?.value;
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(search).toHaveBeenCalledWith(execution, 'x', {
+      semantic: false,
+    });
+  });
+
+  it('runs hybrid and releases the reservation when the budget allows it', async () => {
+    embedding.isConfigured.mockReturnValue(true);
+    const reservation = { estimate: { tokens: 1, costUsd: 0 } };
+    rateLimit.checkLimit.mockResolvedValue({ allowed: true, reservation });
+    search.mockResolvedValue([hit('a')]);
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+
+    const result = await controller.search(user, dto, req);
+
+    const [execution] = rateLimit.checkLimit.mock.calls[0];
+    expect(result).toMatchObject({ mode: 'hybrid' });
+    expect(search).toHaveBeenCalledWith(execution, 'x', { semantic: true });
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      execution,
+      reservation
+    );
   });
 
   it('should reserve with the caller identity and release the reservation after searching', async () => {
@@ -244,7 +268,10 @@ describe('SearchController', () => {
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
     expect(settled).toBe(false);
     release.resolve(undefined);
-    await expect(response).resolves.toEqual({ hits: [hit('a')] });
+    await expect(response).resolves.toEqual({
+      hits: [hit('a')],
+      mode: 'hybrid',
+    });
   });
 
   it('should propagate retrieval errors and still release the reservation', async () => {
@@ -259,5 +286,15 @@ describe('SearchController', () => {
       }),
       RESERVATION
     );
+  });
+
+  it('should propagate retrieval errors without releasing when nothing was reserved', async () => {
+    embedding.isConfigured.mockReturnValue(false);
+    search.mockRejectedValue(new Error('boom'));
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+
+    await expect(controller.search(user, dto, req)).rejects.toThrow('boom');
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 });

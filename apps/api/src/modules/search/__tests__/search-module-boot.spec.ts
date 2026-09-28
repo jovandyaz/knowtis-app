@@ -13,6 +13,10 @@ import {
 } from '../../agent/domain/ports/retrieval.port';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { TierResolver } from '../../ai/application/services/tier-resolver.service';
+import {
+  EMBEDDING_PORT,
+  type EmbeddingPort,
+} from '../../ai/domain/ports/embedding.port';
 import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { SearchQueryDto } from '../dto/search-query.dto';
@@ -24,6 +28,7 @@ const COMPILE_TIMEOUT_MS = 15_000;
 const IMPORTED_TOKENS: readonly unknown[] = [
   RETRIEVAL_PORT,
   AIRateLimitService,
+  EMBEDDING_PORT,
 ];
 
 const mockAllButTheImportedTokens = (token: unknown) =>
@@ -54,9 +59,11 @@ describe('SearchModule wiring', () => {
         const controller = moduleRef.get(SearchController);
         const retrieval = moduleRef.get<RetrievalPort>(RETRIEVAL_PORT);
         const rateLimit = moduleRef.get(AIRateLimitService);
+        const embedding = moduleRef.get<EmbeddingPort>(EMBEDDING_PORT);
 
         expect(rateLimit).toBeInstanceOf(AIRateLimitService);
 
+        vi.spyOn(embedding, 'isConfigured').mockReturnValue(true);
         const execution = createExecutionContext({ userId: 'user-1' });
         vi.spyOn(moduleRef.get(TierResolver), 'resolve').mockResolvedValue(
           execution
@@ -85,18 +92,22 @@ describe('SearchModule wiring', () => {
 
         const allowed = await controller.search(user, dto, req);
 
-        expect(allowed.hits).toHaveLength(1);
-        expect(searchSpy).toHaveBeenCalledWith(execution, 'quarterly report');
+        expect(allowed).toEqual({ hits: [expect.any(Object)], mode: 'hybrid' });
+        expect(searchSpy).toHaveBeenCalledWith(execution, 'quarterly report', {
+          semantic: true,
+        });
         expect(releaseSpy).toHaveBeenCalledTimes(1);
 
         checkLimitSpy.mockResolvedValue({ allowed: false });
         searchSpy.mockClear();
         releaseSpy.mockClear();
 
-        await expect(controller.search(user, dto, req)).rejects.toMatchObject({
-          status: 429,
+        const refused = await controller.search(user, dto, req);
+
+        expect(refused.mode).toBe('lexical');
+        expect(searchSpy).toHaveBeenCalledWith(execution, 'quarterly report', {
+          semantic: false,
         });
-        expect(searchSpy).not.toHaveBeenCalled();
         expect(releaseSpy).not.toHaveBeenCalled();
       } finally {
         await moduleRef.close();

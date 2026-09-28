@@ -50,7 +50,8 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
 
   async search(
     _execution: AiExecutionContext,
-    query: string
+    query: string,
+    _options?: { readonly semantic?: boolean }
   ): Promise<NoteHit[]> {
     this.calls.push({ name: 'searchNotes', args: { query } });
     const needle = query.toLowerCase();
