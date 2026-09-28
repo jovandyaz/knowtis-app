@@ -39,7 +39,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserMessageCountRepository', () => {
     return row.id;
   }
 
-  async function row(
+  async function message(
     conversationId: string,
     role: 'user' | 'assistant',
     createdAt: Date
@@ -68,25 +68,22 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserMessageCountRepository', () => {
     repo = new DrizzleUserMessageCountRepository(db);
     await db.delete(users).where(inArray(users.id, [USER, OTHER, IDLE]));
     for (const id of [USER, OTHER, IDLE]) {
-      await db
-        .insert(users)
-        .values({
-          id,
-          email: `q-${id}@test.local`,
-          name: 'Q',
-          isAnonymous: false,
-        })
-        .onConflictDoNothing();
+      await db.insert(users).values({
+        id,
+        email: `q-${id}@test.local`,
+        name: 'Q',
+        isAnonymous: false,
+      });
     }
     const mine = await conversationOf(USER);
     const another = await conversationOf(USER);
     const theirs = await conversationOf(OTHER);
-    await row(mine, 'user', DAY.start);
-    await row(another, 'user', new Date('2026-09-27T12:00:00.000Z'));
-    await row(mine, 'assistant', new Date('2026-09-27T12:00:01.000Z'));
-    await row(mine, 'user', new Date(DAY.start.getTime() - MS));
-    await row(mine, 'user', DAY.resetsAt);
-    await row(theirs, 'user', new Date('2026-09-27T12:00:00.000Z'));
+    await message(mine, 'user', DAY.start);
+    await message(another, 'user', new Date('2026-09-27T12:00:00.000Z'));
+    await message(mine, 'assistant', new Date('2026-09-27T12:00:01.000Z'));
+    await message(mine, 'user', new Date(DAY.start.getTime() - MS));
+    await message(mine, 'user', DAY.resetsAt);
+    await message(theirs, 'user', new Date('2026-09-27T12:00:00.000Z'));
   });
 
   afterAll(async () => {
