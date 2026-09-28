@@ -24,10 +24,11 @@ export interface SegmentState {
 
 // Every call re-sends the whole history, so one more tool step costs about
 // nextInput and the synthesis after it about nextInput again; the reserve
-// covers both calls' output and the tool results in between.
+// covers both calls' output and the tool results in between. Negated so a NaN
+// anywhere closes the segment instead of running unbudgeted.
 function tokensRunOut(state: SegmentState): boolean {
-  return (
-    state.spentTurnTokens + 2 * state.nextInputTokens + state.reserveTokens >
+  return !(
+    state.spentTurnTokens + 2 * state.nextInputTokens + state.reserveTokens <=
     state.maxTurnTokens
   );
 }
@@ -48,7 +49,7 @@ export function segmentEndAfterToolStep(
   return null;
 }
 
-/** Output tokens the synthesis may spend without the turn passing its budget; 0 when not even a minimal answer fits. */
+/** Output tokens the synthesis may spend without the turn passing its budget; 0 when not even a minimal answer fits, or when the room is NaN. */
 export function synthesisOutputCap(
   state: Pick<
     SegmentState,
@@ -58,7 +59,7 @@ export function synthesisOutputCap(
 ): number {
   const room =
     state.maxTurnTokens - state.spentTurnTokens - state.nextInputTokens;
-  return room < MIN_SYNTHESIS_OUTPUT_TOKENS
+  return !(room >= MIN_SYNTHESIS_OUTPUT_TOKENS)
     ? 0
     : Math.min(maxOutputTokens, room);
 }

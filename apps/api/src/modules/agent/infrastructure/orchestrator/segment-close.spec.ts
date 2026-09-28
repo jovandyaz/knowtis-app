@@ -59,6 +59,39 @@ describe('segmentEndAfterToolStep', () => {
     );
   });
 
+  it('keeps stepping when one more tool step and the synthesis fit exactly', () => {
+    // 100_000 + 2 × 19_000 + 12_000 = 150_000
+    expect(
+      segmentEndAfterToolStep({
+        ...ROOMY,
+        spentTurnTokens: 100_000,
+        nextInputTokens: 19_000,
+      })
+    ).toBeNull();
+  });
+
+  it.each([
+    { field: 'spentTurnTokens' },
+    { field: 'nextInputTokens' },
+    { field: 'reserveTokens' },
+  ] as const)('ends on tokens when $field is not a number', ({ field }) => {
+    expect(segmentEndAfterToolStep({ ...ROOMY, [field]: Number.NaN })).toBe(
+      'token_budget'
+    );
+  });
+
+  it('ends on tokens right after the first tool step when the budget is below the reserve', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...ROOMY,
+        maxTurnTokens: 10_000,
+        reserveTokens: 12_000,
+        spentTurnTokens: 3_000,
+        nextInputTokens: 4_000,
+      })
+    ).toBe('token_budget');
+  });
+
   it('prefers tokens over time over steps when several fire together', () => {
     const all = {
       ...ROOMY,
@@ -100,6 +133,29 @@ describe('synthesisOutputCap', () => {
     ).toBe(8192);
   });
 
+  it('gives a budget below the reserve whatever room its synthesis has left', () => {
+    const anonymous = { maxTurnTokens: 10_000, spentTurnTokens: 3_000 };
+    expect(
+      synthesisOutputCap({ ...anonymous, nextInputTokens: 4_000 }, 8192)
+    ).toBe(3000);
+    expect(
+      synthesisOutputCap({ ...anonymous, nextInputTokens: 6_500 }, 8192)
+    ).toBe(0);
+  });
+
+  it('returns 0 when the room left is not a number', () => {
+    expect(
+      synthesisOutputCap(
+        {
+          spentTurnTokens: Number.NaN,
+          nextInputTokens: 0,
+          maxTurnTokens: 150_000,
+        },
+        8192
+      )
+    ).toBe(0);
+  });
+
   it('returns 0 when not even the minimum synthesis fits', () => {
     expect(
       synthesisOutputCap(
@@ -118,6 +174,25 @@ describe('nextInputTokens', () => {
   it('adds the last call, its answer and the tool results it appended', () => {
     const toolRow = { role: 'tool' as const, content: 'x'.repeat(400) };
     expect(nextInputTokens(1000, 200, [toolRow])).toBe(
+      1200 + estimateMessageTokens(toolRow)
+    );
+  });
+
+  it('counts only the tool rows the step appended, not its assistant row', () => {
+    const assistantRow = {
+      role: 'assistant' as const,
+      content: 'y'.repeat(400),
+      parts: [
+        {
+          type: 'tool-call' as const,
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+        },
+      ],
+    };
+    const toolRow = { role: 'tool' as const, content: 'x'.repeat(400) };
+    expect(nextInputTokens(1000, 200, [assistantRow, toolRow])).toBe(
       1200 + estimateMessageTokens(toolRow)
     );
   });
