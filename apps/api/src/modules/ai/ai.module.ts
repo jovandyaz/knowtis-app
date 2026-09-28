@@ -13,6 +13,7 @@ import { AiCatalogController } from './ai-catalog.controller';
 import { AiKeysController } from './ai-keys.controller';
 import { AiModelsController } from './ai-models.controller';
 import { AiProvidersController } from './ai-providers.controller';
+import { AiQuotaController } from './ai-quota.controller';
 import { AIController } from './ai.controller';
 import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
@@ -27,6 +28,7 @@ import { AIRateLimitService } from './application/services/ai-rate-limit.service
 import { AssignableModelsService } from './application/services/assignable-models.service';
 import { ByokService } from './application/services/byok.service';
 import { InjectionClassifierService } from './application/services/injection-classifier.service';
+import { MessageQuotaService } from './application/services/message-quota.service';
 import { ModelPreferenceService } from './application/services/model-preference.service';
 import {
   PromptLoaderService,
@@ -44,6 +46,10 @@ import { AI_COMPLETION_PROVIDER } from './domain/ports/ai-provider.port';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-output.port';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
+import {
+  MESSAGE_QUOTA_PORT,
+  USER_MESSAGE_COUNT_PORT,
+} from './domain/ports/message-quota.port';
 import { OPENROUTER_MODELS_CLIENT } from './domain/ports/openrouter-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
@@ -63,6 +69,7 @@ import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
 import { DrizzleSystemProviderKeysRepository } from './infrastructure/persistence/drizzle-system-provider-keys.repository';
 import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
+import { DrizzleUserMessageCountRepository } from './infrastructure/persistence/drizzle-user-message-count.repository';
 import { DrizzleUserProviderKeysRepository } from './infrastructure/persistence/drizzle-user-provider-keys.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
@@ -80,6 +87,7 @@ import {
   AIRedisProvider,
 } from './infrastructure/redis/ai-redis.provider';
 import { ExactMatchCacheService } from './infrastructure/redis/exact-match-cache.service';
+import { RedisMessageQuotaAdapter } from './infrastructure/redis/redis-message-quota.adapter';
 import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.service';
 import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-search.adapter';
 
@@ -102,6 +110,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AiKeysController,
     AiProvidersController,
     AiCatalogController,
+    AiQuotaController,
   ],
   providers: [
     SelectableModelsService,
@@ -155,6 +164,12 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     { provide: AI_REDIS, useClass: AIRedisProvider },
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
     { provide: AI_CACHE, useClass: ExactMatchCacheService },
+    { provide: MESSAGE_QUOTA_PORT, useClass: RedisMessageQuotaAdapter },
+    {
+      provide: USER_MESSAGE_COUNT_PORT,
+      useClass: DrizzleUserMessageCountRepository,
+    },
+    MessageQuotaService,
     { provide: PROMPTS_DIR, useValue: join(__dirname, 'prompts') },
     AIConfigService,
     PromptLoaderService,
@@ -182,6 +197,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AIOrchestrator,
     AIRateLimitService,
     InjectionClassifierService,
+    MessageQuotaService,
     AI_STRUCTURED_OUTPUT_PROVIDER,
     AI_REDIS,
     EMBEDDING_PORT,

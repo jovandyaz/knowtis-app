@@ -1,21 +1,17 @@
-import {
-  useResetAiConfig,
-  useSetAiConfig,
-  type AiConfigEntry,
-} from '@knowtis/data-access-admin';
+import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import { Button, MutationErrorAlert } from '@knowtis/design-system';
 import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 interface ReasoningSectionProps {
   entry: AiConfigEntry;
 }
 
 export function ReasoningSection({ entry }: ReasoningSectionProps) {
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
 
@@ -25,8 +21,8 @@ export function ReasoningSection({ entry }: ReasoningSectionProps) {
       description="How much hidden thinking reasoning models spend before answering. This is the global default and covers BYOK turns too. Lower answers faster and cheaper; higher digs deeper."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the reasoning effort."
       />
       <div className="flex flex-wrap items-center gap-2">

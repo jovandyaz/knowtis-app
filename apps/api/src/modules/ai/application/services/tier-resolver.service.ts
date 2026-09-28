@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import type { ByokProvider } from '@knowtis/shared-types';
+import type { AccessTier, ByokProvider } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
@@ -9,10 +9,7 @@ import {
   type AiCaller,
   type AiExecutionContext,
 } from '../../domain/execution-context/ai-execution-context';
-import {
-  TIER_POLICIES,
-  type AccessTier,
-} from '../../domain/execution-context/tier-policy';
+import { TIER_POLICIES } from '../../domain/execution-context/tier-policy';
 import { ByokService } from './byok.service';
 
 /**

@@ -131,6 +131,41 @@ describe('ProviderCard', () => {
     });
   });
 
+  it('gives each provider its own save, test and clear button names', () => {
+    render(
+      <>
+        <ProviderCard
+          provider={providerWith({
+            provider: 'anthropic',
+            keySource: 'database',
+          })}
+        />
+        <ProviderCard
+          provider={providerWith({ provider: 'openai', keySource: 'database' })}
+        />
+      </>
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Save key: Anthropic' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Save key: OpenAI' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Test connection: Anthropic' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Test connection: OpenAI' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Clear stored key: Anthropic' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Clear stored key: OpenAI' })
+    ).toBeInTheDocument();
+  });
+
   it('submits a typed key and clears the field on success', async () => {
     render(<ProviderCard provider={providerWith()} />);
 
@@ -319,7 +354,7 @@ describe('ProviderCard', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Key saved');
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'Clear stored key' })
+      screen.getByRole('button', { name: 'Clear stored key: Anthropic' })
     );
 
     expect(clearMutate).toHaveBeenCalledWith(

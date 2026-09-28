@@ -1,8 +1,4 @@
-import {
-  useResetAiConfig,
-  useSetAiConfig,
-  type AiConfigEntry,
-} from '@knowtis/data-access-admin';
+import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import {
   Button,
   FormField,
@@ -18,6 +14,7 @@ import {
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 import { useForkedDraft } from './useForkedDraft';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 const CEILING_INPUT_ID = 'ai-free-tier-ceiling';
 const MAX_CEILING_USD_PER_MILLION =
@@ -39,8 +36,7 @@ interface CeilingSectionProps {
 }
 
 export function CeilingSection({ entry }: CeilingSectionProps) {
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
   const { value, isDirty, edit, discard } = useForkedDraft(entry.value);
@@ -52,8 +48,8 @@ export function CeilingSection({ entry }: CeilingSectionProps) {
       description="The output price the platform absorbs, in dollars per million tokens. Models at or under it serve every signed-in user; anything above is BYOK only."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the free-tier ceiling."
       />
       <ConfigSourceCell

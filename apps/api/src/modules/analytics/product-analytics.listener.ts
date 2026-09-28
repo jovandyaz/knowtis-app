@@ -6,9 +6,16 @@ import {
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
-import type { QuizScoreBucket } from '@knowtis/shared-types';
+import {
+  QUOTA_LOW_REMAINING_FRACTION,
+  QUOTA_REMAINING_BUCKET,
+  type QuizScoreBucket,
+  type QuotaRemainingBucket,
+} from '@knowtis/shared-types';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
+import { MessageQuotaConsumedEvent } from '../ai/domain/events/message-quota-consumed.event';
+import { MessageQuotaExhaustedEvent } from '../ai/domain/events/message-quota-exhausted.event';
 import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
 import { FlashcardReviewedEvent } from '../artifacts/domain/events/flashcard-reviewed.event';
 import { QuizCompletedEvent } from '../artifacts/domain/events/quiz-completed.event';
@@ -40,6 +47,16 @@ function scoreBucketFor(score: number): QuizScoreBucket {
     return '50-79';
   }
   return '<50';
+}
+
+function remainingBucketFor(used: number, limit: number): QuotaRemainingBucket {
+  const remaining = limit - used;
+  if (remaining <= 0) {
+    return QUOTA_REMAINING_BUCKET.NONE;
+  }
+  return remaining / limit <= QUOTA_LOW_REMAINING_FRACTION
+    ? QUOTA_REMAINING_BUCKET.LOW
+    : QUOTA_REMAINING_BUCKET.PLENTY;
 }
 
 interface UserEventCapture<E extends ServerProductEventName> {
@@ -162,6 +179,34 @@ export class ProductAnalyticsListener {
     );
   }
 
+  @OnEvent(MessageQuotaConsumedEvent.EVENT_NAME, { async: true })
+  async handleQuotaConsumed(event: MessageQuotaConsumedEvent): Promise<void> {
+    await this.captureForUser(
+      MessageQuotaConsumedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'ai quota consumed',
+        properties: {
+          source: 'api',
+          tier: event.tier,
+          remaining_bucket: remainingBucketFor(event.used, event.limit),
+        },
+      })
+    );
+  }
+
+  @OnEvent(MessageQuotaExhaustedEvent.EVENT_NAME, { async: true })
+  async handleQuotaExhausted(event: MessageQuotaExhaustedEvent): Promise<void> {
+    await this.captureForUser(
+      MessageQuotaExhaustedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'ai quota exhausted',
+        properties: { source: 'api', tier: event.tier },
+      })
+    );
+  }
+
   private async captureForUser<E extends ServerProductEventName>(
     eventName: string,
     userId: string,
@@ -183,7 +228,7 @@ export class ProductAnalyticsListener {
         event: capture.event,
         properties: capture.properties,
         actor: {
-          actor_type: 'registered',
+          actor_type: user.isAnonymous ? 'anonymous' : 'registered',
           is_internal: traits.isInternal,
           locale: traits.locale,
         },

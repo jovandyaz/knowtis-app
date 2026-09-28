@@ -1,3 +1,9 @@
+import {
+  AI_QUOTA_EXHAUSTED_CODE,
+  type AgentQuotaExhaustedError,
+  type QuotaUpgrade,
+} from '@knowtis/shared-types';
+
 export interface AIDomainError {
   readonly code: string;
   readonly message: string;
@@ -21,6 +27,8 @@ export const AIErrorCodes = {
 } as const;
 
 type AIErrorCode = (typeof AIErrorCodes)[keyof typeof AIErrorCodes];
+
+export type AIQuotaExhaustedError = Omit<AgentQuotaExhaustedError, 'turnId'>;
 
 function createAIError(code: AIErrorCode, message: string): AIDomainError {
   return { code, message };
@@ -79,4 +87,14 @@ export const AIErrors = {
 
   validationError: (message: string) =>
     createAIError(AIErrorCodes.VALIDATION_ERROR, message),
+
+  quotaExhausted: (
+    resetsAt: Date,
+    upgrade: QuotaUpgrade
+  ): AIQuotaExhaustedError => ({
+    code: AI_QUOTA_EXHAUSTED_CODE,
+    message: "Today's AI messages are used up.",
+    resetsAt: resetsAt.toISOString(),
+    upgrade,
+  }),
 } as const;
