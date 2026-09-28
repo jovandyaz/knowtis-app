@@ -8,6 +8,7 @@ import { createMockConfig } from '../../../ai/testing/create-mock-config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import type { AgentEvent } from '../../domain/agent-event';
 import type { AgentMessage } from '../../domain/agent-message';
+import { estimateMessageTokens } from '../../domain/message-tokens';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import type { ConversationMessageRow } from '../../domain/ports/conversation.repository';
 import { pruneTranscript } from '../../domain/prune-transcript';
@@ -56,6 +57,10 @@ const TOOL_RESULT_TOKENS = nextInputTokens(
   0,
   fromResponseMessages([TOOL_RESULT_MESSAGE])
 );
+const SYNTHESIS_REQUEST_TOKENS = estimateMessageTokens({
+  role: 'user',
+  content: SYNTHESIS_REQUEST,
+});
 
 function usage(input: number | undefined, output: number | undefined): Usage {
   return {
@@ -136,7 +141,7 @@ function fixture(
     AI_AGENT_MAX_MS: 10000,
     AI_AGENT_STALL_MS: 5000,
     AI_AGENT_TTFT_MS: 1000,
-    AI_AGENT_MAX_OUTPUT_TOKENS: 1024,
+    AI_AGENT_MAX_OUTPUT_TOKENS: 1000,
     AI_MAX_RETRIES: 0,
     AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 1000,
     AI_AGENT_SYNTHESIS_RESERVE_MS: 1000,
@@ -180,8 +185,9 @@ async function collect(
   return collected;
 }
 
-// Inputs follow the loop's own prediction and every synthesis spends its whole
-// cap, so a total over the budget can only come from the loop's decisions.
+// Inputs are the history the loop predicts plus, on the synthesis, its
+// request, and every call spends its whole output cap, so a total over the
+// budget can only come from the loop's decisions.
 async function runBudgetedTurn(
   maxTurnTokens: number,
   overrides: Record<string, unknown>
@@ -191,11 +197,12 @@ async function runBudgetedTurn(
   const model = new MockLanguageModelV4({
     doStream: async ({ toolChoice, maxOutputTokens }) => {
       const previous = reported.at(-1);
-      const input = previous
+      const history = previous
         ? nextInputTokens(previous.input, previous.output, lastStepRows)
         : 300;
       const synthesis = toolChoice?.type === 'none';
-      const output = synthesis ? (maxOutputTokens ?? 0) : 100;
+      const input = synthesis ? history + SYNTHESIS_REQUEST_TOKENS : history;
+      const output = maxOutputTokens ?? 0;
       reported.push({ input, output });
       return synthesis
         ? textResponse(usage(input, output))
@@ -203,7 +210,8 @@ async function runBudgetedTurn(
     },
   });
   const { orchestrator } = fixture(model, {
-    AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
+    AI_AGENT_MAX_OUTPUT_TOKENS: 2048,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 3000,
     ...overrides,
   });
   const events: AgentEvent[] = [];
@@ -337,13 +345,14 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
     });
     const { orchestrator } = fixture(model, {
       AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
+      AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 4096,
     });
     const spent = 700;
-    const synthesisInput = spent + TOOL_RESULT_TOKENS;
+    const nextInput = spent + TOOL_RESULT_TOKENS;
     const room = 1500;
     // One more tool step and the synthesis would pass it:
-    // spent + 2 × synthesisInput + the 1000 reserve > budget.
-    const budget = spent + synthesisInput + room;
+    // spent + 2 × nextInput + the request + the 4096 reserve > budget.
+    const budget = spent + nextInput + SYNTHESIS_REQUEST_TOKENS + room;
 
     const events = await collect(
       orchestrator.run({ ...INPUT, maxSteps: 8, maxTurnTokens: budget })
@@ -467,19 +476,53 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
   });
 
   it.each([
-    { budget: 2_000, stopReason: 'token_budget' },
-    { budget: 3_000, stopReason: 'token_budget' },
-    { budget: 5_000, stopReason: 'token_budget' },
-    { budget: 8_000, stopReason: 'token_budget' },
-    { budget: 20_000, stopReason: 'max_steps' },
+    {
+      budget: 3_000,
+      toolSteps: 1,
+      synthesis: false,
+      stopReason: 'token_budget',
+    },
+    {
+      budget: 6_000,
+      toolSteps: 1,
+      synthesis: true,
+      stopReason: 'token_budget',
+    },
+    {
+      budget: 8_000,
+      toolSteps: 1,
+      synthesis: true,
+      stopReason: 'token_budget',
+    },
+    {
+      budget: 12_000,
+      toolSteps: 2,
+      synthesis: false,
+      stopReason: 'token_budget',
+    },
+    {
+      budget: 15_000,
+      toolSteps: 2,
+      synthesis: true,
+      stopReason: 'token_budget',
+    },
+    {
+      budget: 60_000,
+      toolSteps: 6,
+      synthesis: true,
+      stopReason: 'token_budget',
+    },
+    { budget: 100_000, toolSteps: 7, synthesis: true, stopReason: 'max_steps' },
   ])(
     'stays within a $budget-token budget and ends with $stopReason',
-    async ({ budget, stopReason }) => {
+    async ({ budget, toolSteps, synthesis, stopReason }) => {
       const { model, events, spent } = await runBudgetedTurn(budget, {});
 
       expect(spent).toBeLessThanOrEqual(budget);
-      expect(model.doStreamCalls.length).toBeLessThanOrEqual(8);
-      expect(model.doStreamCalls.at(-1)?.toolChoice).toEqual({ type: 'none' });
+      expect(model.doStreamCalls.map((call) => call.toolChoice)).toEqual([
+        ...Array.from({ length: toolSteps }, () => ({ type: 'auto' })),
+        ...(synthesis ? [{ type: 'none' }] : []),
+      ]);
       const done = events.at(-1);
       if (done?.type !== 'done') {
         throw new Error('Expected the turn to end with done');
@@ -491,7 +534,8 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
 
   it.each([
     { budget: 10_000, calls: 2 },
-    { budget: 1_000, calls: 1 },
+    { budget: 6_000, calls: 2 },
+    { budget: 3_000, calls: 1 },
   ])(
     'ends a $budget-token turn below the synthesis reserve on token_budget after $calls call(s)',
     async ({ budget, calls }) => {

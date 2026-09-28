@@ -14,6 +14,7 @@ const ROOMY: SegmentState = {
   maxSteps: 8,
   spentTurnTokens: 10_000,
   nextInputTokens: 12_000,
+  synthesisRequestTokens: 0,
   maxTurnTokens: 150_000,
   reserveTokens: 12_000,
   now: 0,
@@ -70,9 +71,21 @@ describe('segmentEndAfterToolStep', () => {
     ).toBeNull();
   });
 
+  it('ends on tokens when the synthesis request tips the exact fit over the budget', () => {
+    expect(
+      segmentEndAfterToolStep({
+        ...ROOMY,
+        spentTurnTokens: 100_000,
+        nextInputTokens: 19_000,
+        synthesisRequestTokens: 1,
+      })
+    ).toBe('token_budget');
+  });
+
   it.each([
     { field: 'spentTurnTokens' },
     { field: 'nextInputTokens' },
+    { field: 'synthesisRequestTokens' },
     { field: 'reserveTokens' },
   ] as const)('ends on tokens when $field is not a number', ({ field }) => {
     expect(segmentEndAfterToolStep({ ...ROOMY, [field]: Number.NaN })).toBe(
@@ -113,11 +126,26 @@ describe('synthesisOutputCap', () => {
         {
           spentTurnTokens: 130_000,
           nextInputTokens: 15_000,
+          synthesisRequestTokens: 0,
           maxTurnTokens: 150_000,
         },
         8192
       )
     ).toBe(5000);
+  });
+
+  it('shrinks the cap by exactly the tokens of the synthesis request', () => {
+    expect(
+      synthesisOutputCap(
+        {
+          spentTurnTokens: 130_000,
+          nextInputTokens: 15_000,
+          synthesisRequestTokens: 80,
+          maxTurnTokens: 150_000,
+        },
+        8192
+      )
+    ).toBe(5000 - 80);
   });
 
   it('never exceeds the per-call output cap', () => {
@@ -126,6 +154,7 @@ describe('synthesisOutputCap', () => {
         {
           spentTurnTokens: 0,
           nextInputTokens: 0,
+          synthesisRequestTokens: 80,
           maxTurnTokens: Number.POSITIVE_INFINITY,
         },
         8192
@@ -134,7 +163,11 @@ describe('synthesisOutputCap', () => {
   });
 
   it('gives a budget below the reserve whatever room its synthesis has left', () => {
-    const anonymous = { maxTurnTokens: 10_000, spentTurnTokens: 3_000 };
+    const anonymous = {
+      maxTurnTokens: 10_000,
+      spentTurnTokens: 3_000,
+      synthesisRequestTokens: 0,
+    };
     expect(
       synthesisOutputCap({ ...anonymous, nextInputTokens: 4_000 }, 8192)
     ).toBe(3000);
@@ -143,13 +176,18 @@ describe('synthesisOutputCap', () => {
     ).toBe(0);
   });
 
-  it('returns 0 when the room left is not a number', () => {
+  it.each([
+    { field: 'spentTurnTokens' },
+    { field: 'synthesisRequestTokens' },
+  ] as const)('returns 0 when $field is not a number', ({ field }) => {
     expect(
       synthesisOutputCap(
         {
-          spentTurnTokens: Number.NaN,
+          spentTurnTokens: 0,
           nextInputTokens: 0,
+          synthesisRequestTokens: 0,
           maxTurnTokens: 150_000,
+          [field]: Number.NaN,
         },
         8192
       )
@@ -161,7 +199,8 @@ describe('synthesisOutputCap', () => {
       synthesisOutputCap(
         {
           spentTurnTokens: 140_000,
-          nextInputTokens: 10_000 - MIN_SYNTHESIS_OUTPUT_TOKENS + 1,
+          nextInputTokens: 10_000 - MIN_SYNTHESIS_OUTPUT_TOKENS - 80 + 1,
+          synthesisRequestTokens: 80,
           maxTurnTokens: 150_000,
         },
         8192

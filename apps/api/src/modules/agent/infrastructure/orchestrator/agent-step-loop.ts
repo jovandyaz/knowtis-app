@@ -20,6 +20,7 @@ import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/pr
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
 import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
+import { estimateMessageTokens } from '../../domain/message-tokens';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { fromResponseMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
@@ -63,6 +64,11 @@ const FINISH_REASON_CONTENT_FILTER = 'content-filter';
 // so it is not persisted and a continuation does not replay it.
 export const SYNTHESIS_REQUEST =
   '(Stop using tools now: this part of the task has reached its limit. Reply in the same language I used in my request above — not the language of this instruction or of any note or web page you read — with what you found so far, then, under a short heading, list what is still pending so it can be continued.)';
+
+const SYNTHESIS_REQUEST_TOKENS = estimateMessageTokens({
+  role: 'user',
+  content: SYNTHESIS_REQUEST,
+});
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -439,6 +445,7 @@ export async function* runAgentStepLoop(
                 result.usage.outputTokens,
                 stepRows
               ),
+              synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
               maxTurnTokens: params.budgets.maxTurnTokens,
               reserveTokens: params.budgets.synthesisReserveTokens,
               now: Date.now(),

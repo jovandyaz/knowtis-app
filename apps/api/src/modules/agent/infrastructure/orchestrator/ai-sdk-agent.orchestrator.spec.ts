@@ -10,6 +10,7 @@ import {
 } from '../../../../test-support/database-errors';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
+import { estimateMessageTokens } from '../../domain/message-tokens';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
 import {
@@ -2577,7 +2578,8 @@ describe('AiSdkAgentOrchestrator', () => {
     const synthesisCap =
       maxTurnTokens -
       spent -
-      nextInputTokens(10, 5, fromResponseMessages(TOOL_CALL_MESSAGES));
+      nextInputTokens(10, 5, fromResponseMessages(TOOL_CALL_MESSAGES)) -
+      estimateMessageTokens({ role: 'user', content: SYNTHESIS_REQUEST });
     expect(
       streamTextMock.mock.calls.map(([options]) => options.maxOutputTokens)
     ).toEqual([4096, synthesisCap, synthesisCap, synthesisCap]);

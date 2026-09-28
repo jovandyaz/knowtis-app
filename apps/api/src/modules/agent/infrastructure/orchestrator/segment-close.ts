@@ -15,6 +15,7 @@ export interface SegmentState {
   readonly maxSteps: number;
   readonly spentTurnTokens: number;
   readonly nextInputTokens: number;
+  readonly synthesisRequestTokens: number;
   readonly maxTurnTokens: number;
   readonly reserveTokens: number;
   readonly now: number;
@@ -23,12 +24,15 @@ export interface SegmentState {
 }
 
 // Every call re-sends the whole history, so one more tool step costs about
-// nextInput and the synthesis after it about nextInput again; the reserve
-// covers both calls' output and the tool results in between. Negated so a NaN
-// anywhere closes the segment instead of running unbudgeted.
+// nextInput and the synthesis after it about nextInput plus its request; the
+// reserve covers both calls' output and the tool results in between. Negated
+// so a NaN anywhere closes the segment instead of running unbudgeted.
 function tokensRunOut(state: SegmentState): boolean {
   return !(
-    state.spentTurnTokens + 2 * state.nextInputTokens + state.reserveTokens <=
+    state.spentTurnTokens +
+      2 * state.nextInputTokens +
+      state.synthesisRequestTokens +
+      state.reserveTokens <=
     state.maxTurnTokens
   );
 }
@@ -53,12 +57,18 @@ export function segmentEndAfterToolStep(
 export function synthesisOutputCap(
   state: Pick<
     SegmentState,
-    'spentTurnTokens' | 'nextInputTokens' | 'maxTurnTokens'
+    | 'spentTurnTokens'
+    | 'nextInputTokens'
+    | 'synthesisRequestTokens'
+    | 'maxTurnTokens'
   >,
   maxOutputTokens: number
 ): number {
   const room =
-    state.maxTurnTokens - state.spentTurnTokens - state.nextInputTokens;
+    state.maxTurnTokens -
+    state.spentTurnTokens -
+    state.nextInputTokens -
+    state.synthesisRequestTokens;
   return !(room >= MIN_SYNTHESIS_OUTPUT_TOKENS)
     ? 0
     : Math.min(maxOutputTokens, room);

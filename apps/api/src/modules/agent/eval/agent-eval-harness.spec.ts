@@ -89,6 +89,8 @@ function setup() {
     AI_AGENT_STALL_MS: 5000,
     AI_AGENT_TTFT_MS: 1000,
     AI_AGENT_MAX_OUTPUT_TOKENS: 1024,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 1024,
+    AI_AGENT_SYNTHESIS_RESERVE_MS: 1000,
     AI_MAX_RETRIES: 0,
   });
   const { registry, chain } = createTestChain(config, '');
