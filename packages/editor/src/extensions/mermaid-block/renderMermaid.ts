@@ -54,6 +54,10 @@ async function getMermaid(theme: MermaidTheme) {
       securityLevel: 'strict',
       dompurifyConfig: LABEL_SANITIZER_CONFIG,
       secure: STYLE_CONFIG_KEYS,
+      // on a parse error mermaid draws its error diagram into a <div> it
+      // appends to <body> and throws before removing it, so every failed
+      // render leaks one
+      suppressErrorRendering: true,
       theme,
     });
     appliedTheme = theme;

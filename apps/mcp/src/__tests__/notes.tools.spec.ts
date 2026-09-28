@@ -166,6 +166,16 @@ describe('registerNotesTools', () => {
     );
   });
 
+  it('should tell clients to escape a semicolon and a # inside a mermaid diagram', () => {
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    expect(getTool(tools, 'create-note').config.description).toContain('#59;');
+    expect(getTool(tools, 'create-note').config.description).toContain('#35;');
+    expect(getTool(tools, 'update-note').config.description).toContain('#59;');
+    expect(getTool(tools, 'update-note').config.description).toContain('#35;');
+  });
+
   it('should return notes narrowed to id/title/updatedAt from list-notes handler', async () => {
     const fullNote: NoteResponse = {
       id: 'note-1',

@@ -27,6 +27,12 @@ const echo = (text: string): string =>
     ? text
     : `${text.slice(0, MAX_ECHOED_EDIT_CHARS)}…`;
 
+const cutOffMidText = (field: string, maxChars: number): string =>
+  `${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed.`;
+
+const sendShorter = (maxChars: number): string =>
+  `Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`;
+
 export const AgentErrors = {
   invalidProposal: (reason: string) =>
     make('AGENT_INVALID_PROPOSAL', `Invalid proposal: ${reason}`),
@@ -86,6 +92,24 @@ export const AgentErrors = {
     make(
       EDIT_WOULD_LOSE_CONTENT,
       `This note holds an AI block the user has not inserted or discarded yet (${nodes.join(', ')}). The Markdown you read has no form for it, so you never saw it, and this change would delete it; it was refused rather than proposed. Ask the user to insert or discard the AI block in the note, then try again.`
+    ),
+  markdownAtLimit: (field: string, maxChars: number) =>
+    make(
+      'AGENT_MARKDOWN_AT_LIMIT',
+      `${cutOffMidText(field, maxChars)} ${sendShorter(maxChars)}`
+    ),
+  editFieldAtLimit: (
+    position: number,
+    field: 'oldText' | 'newText',
+    maxChars: number
+  ) =>
+    make(
+      'AGENT_MARKDOWN_AT_LIMIT',
+      `Edit ${position}: ${cutOffMidText(field, maxChars)} ${
+        field === 'oldText'
+          ? 'oldText has to stay an exact copy of the note, so do not shorten it by rewording: split the change into several edits, each with a shorter oldText copied exactly from getNote that still appears only once.'
+          : sendShorter(maxChars)
+      }`
     ),
   wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>
     make(
