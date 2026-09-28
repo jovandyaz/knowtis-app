@@ -1,0 +1,2 @@
+ALTER TABLE "conversation_messages" DROP CONSTRAINT "conversation_messages_stop_reason_check";--> statement-breakpoint
+ALTER TABLE "conversation_messages" ADD CONSTRAINT "conversation_messages_stop_reason_check" CHECK ("conversation_messages"."stop_reason" IS NULL OR "conversation_messages"."stop_reason" IN ('completed', 'max_steps', 'length', 'token_budget', 'time_limit', 'content_filter', 'error', 'aborted'));

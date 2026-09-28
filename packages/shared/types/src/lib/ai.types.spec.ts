@@ -73,6 +73,7 @@ describe('stop reasons', () => {
       'max_steps',
       'length',
       'token_budget',
+      'time_limit',
       'content_filter',
       'error',
       'aborted',
@@ -82,6 +83,7 @@ describe('stop reasons', () => {
       'max_steps',
       'length',
       'token_budget',
+      'time_limit',
       'content_filter',
     ]);
   });
