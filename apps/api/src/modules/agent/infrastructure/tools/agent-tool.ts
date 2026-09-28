@@ -8,7 +8,6 @@ import type { WebSourceCollector } from '../orchestrator/web-source.collector';
 export type AgentToolPhase = 'full' | 'readonly';
 
 export interface AgentToolContext {
-  readonly userId: string;
   readonly phase: AgentToolPhase;
   readonly execution: AiExecutionContext;
   readonly proposals: ProposalCollector;

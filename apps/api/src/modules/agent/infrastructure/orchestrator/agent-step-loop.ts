@@ -124,9 +124,10 @@ function stallOutcome(
   stallMs: number,
   logger: Logger
 ): AgentEvent {
+  const { userId } = input.execution.subject;
   logger.warn({
     event: 'agent.turn.stall',
-    userId: input.userId,
+    userId,
     model,
     stallMs,
   });
@@ -178,6 +179,7 @@ export async function* runAgentStepLoop(
   params: AgentStepLoopParams
 ): AsyncGenerator<AgentEvent> {
   const { input, logger } = params;
+  const { userId } = input.execution.subject;
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
 
@@ -244,7 +246,7 @@ export async function* runAgentStepLoop(
         case STEP_CALL_KIND.INTERRUPTED: {
           emitTurnHealth(
             logger,
-            input.userId,
+            userId,
             currentModel,
             result.health,
             input.signal?.aborted
@@ -259,7 +261,7 @@ export async function* runAgentStepLoop(
         case STEP_CALL_KIND.STALLED: {
           emitTurnHealth(
             logger,
-            input.userId,
+            userId,
             currentModel,
             result.health,
             AGENT_TURN_OUTCOME.STALL,
@@ -267,7 +269,7 @@ export async function* runAgentStepLoop(
             modelsUsed
           );
           if (canRetrySilentStep(result.health, attempt)) {
-            logRetry(logger, input.userId, currentModel, attempt + 1, 'ttft');
+            logRetry(logger, userId, currentModel, attempt + 1, 'ttft');
             continue;
           }
           const nextModel = eligibleForStepFailover(
@@ -312,20 +314,14 @@ export async function* runAgentStepLoop(
           if (canRetryTransientStep(result.health, attempt, cause, byok)) {
             emitTurnHealth(
               logger,
-              input.userId,
+              userId,
               currentModel,
               result.health,
               AGENT_TURN_OUTCOME.ERROR,
               result.callStartedAt,
               modelsUsed
             );
-            logRetry(
-              logger,
-              input.userId,
-              currentModel,
-              attempt + 1,
-              'transient'
-            );
+            logRetry(logger, userId, currentModel, attempt + 1, 'transient');
             continue;
           }
           const throwFreshFailure =
@@ -335,7 +331,7 @@ export async function* runAgentStepLoop(
           if (throwFreshFailure) {
             emitTurnHealth(
               logger,
-              input.userId,
+              userId,
               currentModel,
               result.health,
               AGENT_TURN_OUTCOME.ERROR,
@@ -347,14 +343,14 @@ export async function* runAgentStepLoop(
           if (fromStream) {
             logger.error({
               event: 'agent.run.error',
-              userId: input.userId,
+              userId,
               model: currentModel,
               error: errorMessage(cause, byok),
             });
           }
           emitTurnHealth(
             logger,
-            input.userId,
+            userId,
             currentModel,
             result.health,
             AGENT_TURN_OUTCOME.ERROR,
@@ -374,7 +370,7 @@ export async function* runAgentStepLoop(
           if (!hasCompleteUsage(result.usage)) {
             logger.warn({
               event: 'agent.turn.usage_incomplete',
-              userId: input.userId,
+              userId,
               model: currentModel,
               inputTokens: result.usage.inputTokens,
               outputTokens: result.usage.outputTokens,
@@ -386,7 +382,7 @@ export async function* runAgentStepLoop(
           if (captured) {
             emitTurnHealth(
               logger,
-              input.userId,
+              userId,
               currentModel,
               result.health,
               AGENT_TURN_OUTCOME.PROPOSAL,
@@ -413,7 +409,7 @@ export async function* runAgentStepLoop(
           if (willContinue) {
             emitTurnHealth(
               logger,
-              input.userId,
+              userId,
               currentModel,
               result.health,
               AGENT_TURN_OUTCOME.CONTINUED,
@@ -430,7 +426,7 @@ export async function* runAgentStepLoop(
           ) {
             emitTurnHealth(
               logger,
-              input.userId,
+              userId,
               currentModel,
               result.health,
               AGENT_TURN_OUTCOME.EMPTY,
@@ -448,7 +444,7 @@ export async function* runAgentStepLoop(
             stopReason = AGENT_STOP_REASON.TOKEN_BUDGET;
             logger.warn({
               event: 'agent.turn.token_budget_reached',
-              userId: input.userId,
+              userId,
               model: currentModel,
               spentTurnTokens,
               maxTurnTokens: params.budgets.maxTurnTokens,
@@ -457,7 +453,7 @@ export async function* runAgentStepLoop(
             stopReason = AGENT_STOP_REASON.MAX_STEPS;
             logger.warn({
               event: 'agent.turn.max_steps_reached',
-              userId: input.userId,
+              userId,
               model: currentModel,
               maxSteps: input.maxSteps,
             });
@@ -465,7 +461,7 @@ export async function* runAgentStepLoop(
             stopReason = AGENT_STOP_REASON.LENGTH;
             logger.warn({
               event: 'agent.turn.output_truncated',
-              userId: input.userId,
+              userId,
               model: currentModel,
               maxOutputTokens: params.budgets.maxOutputTokens,
             });
@@ -473,13 +469,13 @@ export async function* runAgentStepLoop(
             stopReason = AGENT_STOP_REASON.CONTENT_FILTER;
             logger.warn({
               event: 'agent.turn.content_filtered',
-              userId: input.userId,
+              userId,
               model: currentModel,
             });
           }
           emitTurnHealth(
             logger,
-            input.userId,
+            userId,
             currentModel,
             result.health,
             turn.textDeltas > 0

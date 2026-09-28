@@ -69,7 +69,8 @@ export class NoteMutateToolGroup implements AgentToolGroup {
   }
 
   build(ctx: AgentToolContext): ToolSet {
-    const { userId, execution, proposals } = ctx;
+    const { execution, proposals } = ctx;
+    const { userId } = execution.subject;
     return {
       proposeCreateNote: tool({
         description:

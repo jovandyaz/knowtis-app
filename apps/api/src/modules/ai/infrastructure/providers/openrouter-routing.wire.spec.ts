@@ -165,7 +165,6 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
     );
     const events = [];
     for await (const event of orchestrator.run({
-      userId: 'local-user',
       execution: createExecutionContext({ userId: 'local-user' }),
       messages: [{ role: 'user', content: 'test' }],
       model: PRIMARY,
@@ -239,7 +238,6 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
         );
         const events = [];
         for await (const event of orchestrator.run({
-          userId: 'local-user',
           execution: createExecutionContext({ userId: 'local-user' }),
           messages: [{ role: 'user', content: 'test' }],
           model: PRIMARY,

@@ -195,7 +195,6 @@ export class AgentEvalHarness {
         this.turnSettings.openRouterIgnoredProviders(),
       ]);
     const events = this.orchestrator.run({
-      userId: EVAL_USER_ID,
       execution: EVAL_EXECUTION,
       messages,
       model,

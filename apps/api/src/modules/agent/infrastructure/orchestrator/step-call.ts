@@ -114,7 +114,7 @@ function interruptionEvent(
   if (timeoutSignal.aborted) {
     logger.warn({
       event: 'agent.turn.timeout',
-      userId: input.userId,
+      userId: input.execution.subject.userId,
       model,
       maxMs,
     });
@@ -199,6 +199,7 @@ export async function* runStepCall(
   params: StepCallParams
 ): AsyncGenerator<AgentEvent, StepCallResult> {
   const { logger, input, model, turn } = params;
+  const { userId } = input.execution.subject;
   const { stallMs, ttftMs, maxOutputTokens, maxRetries, maxMs } =
     params.budgets;
   const callStartedAt = Date.now();
@@ -310,7 +311,7 @@ export async function* runStepCall(
           health.toolErrors += 1;
           logger.warn({
             event: 'agent.tool.error',
-            userId: input.userId,
+            userId,
             model,
             toolName: part.toolName,
             ...describeToolError(part.error),

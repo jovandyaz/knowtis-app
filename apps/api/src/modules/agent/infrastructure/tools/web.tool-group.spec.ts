@@ -15,7 +15,6 @@ function ctx(
   execution: AiExecutionContext = createExecutionContext({ userId: 'u1' })
 ): AgentToolContext {
   return {
-    userId: 'u1',
     phase: 'full',
     execution,
     proposals: new ProposalCollector(),

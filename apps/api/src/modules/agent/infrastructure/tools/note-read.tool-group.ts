@@ -47,7 +47,8 @@ export class NoteReadToolGroup implements AgentToolGroup {
   }
 
   build(ctx: AgentToolContext): ToolSet {
-    const { userId, execution } = ctx;
+    const { execution } = ctx;
+    const { userId } = execution.subject;
     return {
       searchNotes: tool({
         description:

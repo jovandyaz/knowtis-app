@@ -725,7 +725,6 @@ export class RunAgentTurnHandler {
     callbacks.onModelStart?.();
     try {
       for await (const event of this.orchestrator.run({
-        userId,
         execution,
         messages: prepared.messages,
         model,

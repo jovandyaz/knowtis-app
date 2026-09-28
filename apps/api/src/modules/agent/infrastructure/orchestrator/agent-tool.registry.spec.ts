@@ -27,7 +27,6 @@ function group(
 
 function ctx(phase: AgentToolPhase): AgentToolContext {
   return {
-    userId: 'u1',
     phase,
     execution: createExecutionContext({ userId: 'u1' }),
     proposals: new ProposalCollector(),

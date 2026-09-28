@@ -150,7 +150,6 @@ function collect(iter: AsyncIterable<unknown>) {
 const TURN_TOKEN_BUDGET = 150000;
 
 const baseInput = {
-  userId: 'u1',
   execution: createExecutionContext({ userId: 'u1' }),
   messages: [{ role: 'user' as const, content: 'hi' }],
   model: MODEL,
@@ -678,12 +677,15 @@ describe('AiSdkAgentOrchestrator', () => {
     const registry = makeToolRegistry((ctx) => contexts.push(ctx));
     const orchestrator = makeOrchestrator(makeConfig(), registry);
 
-    await collect(orchestrator.run({ ...baseInput, userId: 'user-42' }));
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        execution: createExecutionContext({ userId: 'user-42' }),
+      })
+    );
 
-    expect(contexts.at(-1)).toMatchObject({
-      userId: 'user-42',
-      phase: 'full',
-    });
+    expect(contexts.at(-1)?.execution.subject.userId).toBe('user-42');
+    expect(contexts.at(-1)?.phase).toBe('full');
   });
 
   it("hands the tools the turn's billed context, so their side costs reach its payer", async () => {
@@ -802,7 +804,6 @@ describe('AiSdkAgentOrchestrator', () => {
 
     const events = await collect(
       orchestrator.run({
-        userId: 'u1',
         execution: baseInput.execution,
         messages: [{ role: 'user', content: 'resume esa nota' }],
         model: 'anthropic:claude-sonnet-4-20250514',
@@ -842,7 +843,8 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    expect(contexts.at(-1)).toMatchObject({ userId: 'u1', phase: 'readonly' });
+    expect(contexts.at(-1)?.execution.subject.userId).toBe('u1');
+    expect(contexts.at(-1)?.phase).toBe('readonly');
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
     expect(JSON.stringify(opts?.messages)).toContain('created');
   });
