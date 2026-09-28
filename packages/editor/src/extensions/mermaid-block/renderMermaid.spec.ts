@@ -464,4 +464,25 @@ describe('renderMermaid', () => {
       )
     ).toEqual([true]);
   });
+
+  it.each([
+    ['invalid syntax', 'flowchart TD\n  A[unclosed --> B'],
+    [
+      'invalid syntax that asks for the error diagram',
+      withDirective(
+        { suppressErrorRendering: false },
+        'flowchart TD\n  A[unclosed --> B'
+      ),
+    ],
+  ])(
+    'rejects %s without leaving an error diagram in the document',
+    async (_, source) => {
+      await expect(
+        renderMermaid('broken', source, MERMAID_THEME.LIGHT)
+      ).rejects.toThrow();
+
+      expect(document.getElementById('dbroken')).toBeNull();
+      expect(document.getElementById('broken')).toBeNull();
+    }
+  );
 });

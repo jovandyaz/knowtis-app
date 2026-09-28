@@ -38,6 +38,10 @@ const STYLE_CONFIG_KEYS = [
   'marginRight',
 ];
 
+// on a parse error mermaid draws its error diagram into a <div> it appends to
+// <body> and throws before removing it, so every failed render leaks one
+const LOCKED_CONFIG_KEYS = [...STYLE_CONFIG_KEYS, 'suppressErrorRendering'];
+
 let mermaidInstance: typeof mermaidType | null = null;
 let appliedTheme: MermaidTheme | null = null;
 
@@ -53,7 +57,8 @@ async function getMermaid(theme: MermaidTheme) {
       startOnLoad: false,
       securityLevel: 'strict',
       dompurifyConfig: LABEL_SANITIZER_CONFIG,
-      secure: STYLE_CONFIG_KEYS,
+      secure: LOCKED_CONFIG_KEYS,
+      suppressErrorRendering: true,
       theme,
     });
     appliedTheme = theme;
