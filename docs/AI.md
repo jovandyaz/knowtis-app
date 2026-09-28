@@ -501,7 +501,7 @@ Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWith
 
 - A failed candidate advances to the next one; the error from the **last** candidate propagates.
 - "a stream never switches models mid-stream" is preserved; the chain may advance at a step boundary when the current step has emitted zero visible output. Within `streamWithChain` a mid-stream failure — an error after the first visible chunk — propagates instead of switching; the step-boundary advance is the copilot agent's own step loop (see the copilot agent's stall detection).
-- Aborts (user cancel, the `AI_AGENT_MAX_MS` ceiling) never advance the chain. A per-candidate **stall** can: it aborts only that candidate's signal, so when the caller treats the stall as retryable the chain fails over to the next model — a stall that already made progress, or on the final or BYOK candidate, ends the turn with `AI_TIMEOUT` instead (see the copilot agent's stall detection).
+- Aborts (a user cancel, a socket disconnect, the `AI_AGENT_MAX_MS` ceiling) never advance the chain. A per-candidate **stall** can: it aborts only that candidate's signal, so when the caller treats the stall as retryable the chain fails over to the next model — a stall that already made progress, or on the final or BYOK candidate, ends the turn with `AI_TIMEOUT` instead (see the copilot agent's stall detection).
 - Usage, cost, and the `model` reported to clients always reflect the model that **actually served** the request.
 - The copilot agent receives `isLast` per attempt so it can degrade gracefully only on the final candidate.
 
