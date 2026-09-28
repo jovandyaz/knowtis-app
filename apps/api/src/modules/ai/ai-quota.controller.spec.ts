@@ -84,7 +84,7 @@ describe('GET /ai/quota', () => {
     persisted.countUserMessages.mockReset();
   });
 
-  const get = () => fetch(`${base}/ai/quota`);
+  const get = (init?: RequestInit) => fetch(`${base}/ai/quota`, init);
 
   it('reports an anonymous caller under its session and IP, against the anonymous limit', async () => {
     currentUser = { id: 'anon-1', role: 'user', isAnonymous: true };
@@ -97,7 +97,9 @@ describe('GET /ai/quota', () => {
     );
     counters.usage.mockResolvedValue(2);
 
-    const response = await get();
+    const response = await get({
+      headers: { 'x-real-ip': '203.0.113.7' },
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -108,9 +110,11 @@ describe('GET /ai/quota', () => {
         resetsAt: expect.stringMatching(MIDNIGHT_UTC),
       },
     });
-    expect(resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'anon-1', isAnonymous: true })
-    );
+    expect(resolve).toHaveBeenCalledWith({
+      userId: 'anon-1',
+      isAnonymous: true,
+      clientIp: '203.0.113.7',
+    });
     expect(counters.usage).toHaveBeenCalledWith(
       ['anon-1', 'ip:fec52565aa0cf18f'],
       expect.anything()
@@ -128,6 +132,7 @@ describe('GET /ai/quota', () => {
       tier: 'free',
       messages: { used: 12, limit: 30 },
     });
+    expect(counters.usage).toHaveBeenCalledWith(['u1'], expect.anything());
   });
 
   it('reports no message counter to a byok caller', async () => {
@@ -164,7 +169,10 @@ describe('GET /ai/quota', () => {
     currentUser = { id: 'u1', role: 'user' };
     resolve.mockRejectedValue(new AiUnavailableError('tier', 'db down'));
 
-    expect((await get()).status).toBe(503);
+    const response = await get();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('5');
   });
 
   it('answers 503 when an anonymous caller counters are down', async () => {
@@ -174,6 +182,9 @@ describe('GET /ai/quota', () => {
     );
     counters.usage.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    expect((await get()).status).toBe(503);
+    const response = await get();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('5');
   });
 });

@@ -16,7 +16,10 @@ import {
 } from '@knowtis/shared-types';
 
 import { clientIpOf } from '../../core/http/client-ip';
-import { ApiAuthErrors } from '../../core/swagger/api-responses.decorator';
+import {
+  ApiAuthErrors,
+  ApiServiceUnavailable,
+} from '../../core/swagger/api-responses.decorator';
 import {
   FeatureFlagGuard,
   RequireFeatureFlag,
@@ -60,10 +63,9 @@ export class AiQuotaController {
       },
     },
   })
-  @ApiResponse({
-    status: 503,
-    description: 'Tier or quota store temporarily unavailable',
-  })
+  @ApiServiceUnavailable(
+    "the caller's tier or quota store could not be reached; retry after 5s"
+  )
   @ApiAuthErrors('AI feature is disabled')
   @Get('quota')
   async getQuota(
