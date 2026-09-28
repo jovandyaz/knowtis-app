@@ -18,6 +18,7 @@ import {
   MESSAGE_QUOTA_PORT,
   USER_MESSAGE_COUNT_PORT,
   type MessageQuotaPort,
+  type QuotaConsumeResult,
   type QuotaSubjects,
   type QuotaTurn,
   type UserMessageCountPort,
@@ -84,6 +85,7 @@ export class MessageQuotaService {
       this.logger.warn({
         event: 'ai.quota.invalid_limit',
         tier: execution.tier,
+        limit: String(limit),
       });
       return UNAVAILABLE;
     }
@@ -92,30 +94,26 @@ export class MessageQuotaService {
       turnId,
       day: utcDayOf(new Date()),
     };
+    let result: QuotaConsumeResult;
     try {
-      const result = await this.counters.consume(turn, limit);
-      if (!result.allowed) {
-        return this.exhausted(execution, turn.day);
-      }
-      if (!result.replayed) {
-        this.announceConsumed(execution, result.used, limit);
-      }
-      return this.consumed(
-        execution,
-        turn,
-        limit,
-        result.used,
-        QUOTA_STORES.REDIS
-      );
+      result = await this.counters.consume(turn, limit);
     } catch (error) {
-      this.logger.warn({
-        event: 'ai.quota.counters_unavailable',
-        userId: execution.subject.userId,
-        tier: execution.tier,
-        error: reasonOf(error),
-      });
+      this.warnCountersUnavailable(execution, error);
       return this.consumeFromPersisted(execution, turn, limit);
     }
+    if (!result.allowed) {
+      return this.exhausted(execution, turn.day);
+    }
+    if (!result.replayed) {
+      this.announceConsumed(execution, result.used, limit);
+    }
+    return this.consumed(
+      execution,
+      turn,
+      limit,
+      result.used,
+      QUOTA_STORES.REDIS
+    );
   }
 
   /** Gives a consumed message back after a platform-side failure. Never rejects. A turn the fallback counted has nothing to give back: its own persisted row is what the fallback counts. */
@@ -123,18 +121,29 @@ export class MessageQuotaService {
     if (receipt.store === QUOTA_STORES.POSTGRES) {
       return null;
     }
+    let refunded: boolean;
     try {
-      if (!(await this.counters.refund(receipt.turn))) {
-        return null;
-      }
-      // The refund returns the consume day's message, but a turn that crossed
-      // midnight reports today's counter and reset, the quota the caller now has.
-      const today = utcDayOf(new Date());
+      refunded = await this.counters.refund(receipt.turn);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.quota.refund_failed',
+        turnId: receipt.turn.turnId,
+        error: reasonOf(error),
+      });
+      return null;
+    }
+    if (!refunded) {
+      return null;
+    }
+    // The refund returns the consume day's message, but a turn that crossed
+    // midnight reports today's counter and reset, the quota the caller now has.
+    const today = utcDayOf(new Date());
+    try {
       const used = await this.counters.usage(receipt.turn.subjects, today);
       return quotaOf(receipt.tier, used, receipt.limit, today);
     } catch (error) {
       this.logger.warn({
-        event: 'ai.quota.refund_failed',
+        event: 'ai.quota.refund_report_failed',
         turnId: receipt.turn.turnId,
         error: reasonOf(error),
       });
@@ -201,6 +210,7 @@ export class MessageQuotaService {
     try {
       return await this.counters.usage(quotaSubjects(execution), day);
     } catch (error) {
+      this.warnCountersUnavailable(execution, error);
       if (execution.tier === 'anonymous') {
         throw new AiUnavailableError('quota', reasonOf(error), {
           cause: error,
@@ -237,8 +247,7 @@ export class MessageQuotaService {
     execution: AiExecutionContext,
     day: UtcDay
   ): QuotaConsumeOutcome {
-    this.events.emit(
-      MessageQuotaExhaustedEvent.EVENT_NAME,
+    this.announce(
       new MessageQuotaExhaustedEvent(execution.subject.userId, execution.tier)
     );
     return {
@@ -253,8 +262,7 @@ export class MessageQuotaService {
     used: number,
     limit: number
   ): void {
-    this.events.emit(
-      MessageQuotaConsumedEvent.EVENT_NAME,
+    this.announce(
       new MessageQuotaConsumedEvent(
         execution.subject.userId,
         execution.tier,
@@ -262,6 +270,32 @@ export class MessageQuotaService {
         limit
       )
     );
+  }
+
+  private announce(
+    event: MessageQuotaConsumedEvent | MessageQuotaExhaustedEvent
+  ): void {
+    try {
+      this.events.emit(event.name, event);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.quota.announce_failed',
+        domainEvent: event.name,
+        error: reasonOf(error),
+      });
+    }
+  }
+
+  private warnCountersUnavailable(
+    execution: AiExecutionContext,
+    error: unknown
+  ): void {
+    this.logger.warn({
+      event: 'ai.quota.counters_unavailable',
+      userId: execution.subject.userId,
+      tier: execution.tier,
+      error: reasonOf(error),
+    });
   }
 }
 

@@ -16,6 +16,7 @@ import { createExecutionContext } from '../../testing/create-execution-context';
 import type { AIConfigService } from './ai-config.service';
 import {
   MessageQuotaService,
+  QUOTA_STORES,
   type QuotaReceipt,
 } from './message-quota.service';
 
@@ -205,7 +206,7 @@ describe('MessageQuotaService', () => {
       );
     });
 
-    it('does not announce a replayed turn', async () => {
+    it('serves a replayed turn its current count without announcing it', async () => {
       const { service, events } = setup({
         counters: {
           consume: vi
@@ -214,10 +215,53 @@ describe('MessageQuotaService', () => {
         },
       });
 
-      await service.consume(createExecutionContext({ tier: 'free' }), TURN);
+      const outcome = await service.consume(
+        createExecutionContext({ tier: 'free' }),
+        TURN
+      );
 
+      expect(outcome).toMatchObject({
+        kind: 'consumed',
+        receipt: { store: QUOTA_STORES.REDIS },
+        quota: { messages: { used: 3 } },
+      });
       expect(events.emit).not.toHaveBeenCalled();
     });
+
+    it.each([
+      {
+        counted: { allowed: false, used: 30 },
+        expected: { kind: 'exhausted' },
+      },
+      {
+        counted: { allowed: true, used: 7, replayed: false },
+        expected: { kind: 'consumed', receipt: { store: QUOTA_STORES.REDIS } },
+      },
+    ] as const)(
+      'keeps the Redis verdict ($expected.kind) when announcing it throws, never asking Postgres',
+      async ({ counted, expected }) => {
+        const warn = vi
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+        const { service, persisted, events } = setup({
+          counters: { consume: vi.fn().mockResolvedValue(counted) },
+        });
+        vi.mocked(events.emit).mockImplementation(() => {
+          throw new Error('listener failed');
+        });
+
+        const outcome = await service.consume(
+          createExecutionContext({ tier: 'free' }),
+          TURN
+        );
+
+        expect(outcome).toMatchObject(expected);
+        expect(persisted.countUserMessages).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledWith(
+          expect.objectContaining({ event: 'ai.quota.announce_failed' })
+        );
+      }
+    );
 
     it.each([
       { persistedToday: 29, kind: 'consumed' },
@@ -244,6 +288,28 @@ describe('MessageQuotaService', () => {
         expect(outcome.kind).toBe(kind);
       }
     );
+
+    it('counts the fallback turn itself in its quota and its event', async () => {
+      const { service, events } = setup({
+        counters: { consume: down() },
+        persisted: { countUserMessages: vi.fn().mockResolvedValue(29) },
+      });
+
+      const outcome = await service.consume(
+        createExecutionContext({ tier: 'free' }),
+        TURN
+      );
+
+      expect(outcome).toMatchObject({
+        kind: 'consumed',
+        receipt: { store: QUOTA_STORES.POSTGRES },
+        quota: { messages: { used: 30, limit: 30 } },
+      });
+      expect(events.emit).toHaveBeenCalledWith(
+        MessageQuotaConsumedEvent.EVENT_NAME,
+        expect.objectContaining({ used: 30, limit: 30 })
+      );
+    });
 
     it('fails an anonymous caller closed when the counters are down', async () => {
       const { service, persisted } = setup({ counters: { consume: down() } });
@@ -279,10 +345,28 @@ describe('MessageQuotaService', () => {
           expect.objectContaining({
             event: 'ai.quota.invalid_limit',
             tier: 'free',
+            limit: String(limit),
           })
         );
       }
     );
+
+    it('meters a guest against a daily limit of 0, refusing the turn as exhausted', async () => {
+      const { service, counters } = setup({
+        limits: { anonymous: 0, free: 30 },
+        counters: {
+          consume: vi.fn().mockResolvedValue({ allowed: false, used: 0 }),
+        },
+      });
+
+      const outcome = await service.consume(
+        createExecutionContext({ tier: 'anonymous' }),
+        TURN
+      );
+
+      expect(counters.consume).toHaveBeenCalledWith(expect.anything(), 0);
+      expect(outcome).toMatchObject({ kind: 'exhausted', upgrade: 'register' });
+    });
 
     it('fails closed when both stores are down', async () => {
       const { service } = setup({
@@ -322,11 +406,34 @@ describe('MessageQuotaService', () => {
     });
 
     it('never rejects when the counters fail mid-refund', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
       const { service } = setup({ counters: { refund: down() } });
 
       await expect(
         service.refund(await receiptFrom(service))
       ).resolves.toBeNull();
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'ai.quota.refund_failed' })
+      );
+    });
+
+    it('reports nothing, under its own event, when the refund lands but the quota after it cannot be read', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { service, counters } = setup({ counters: { usage: down() } });
+      const receipt = await receiptFrom(service);
+
+      await expect(service.refund(receipt)).resolves.toBeNull();
+      expect(counters.refund).toHaveBeenCalledWith(receipt.turn);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'ai.quota.refund_report_failed' })
+      );
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'ai.quota.refund_failed' })
+      );
     });
 
     it("refunds the day a midnight-crossing turn consumed and reports today's quota", async () => {
@@ -383,7 +490,23 @@ describe('MessageQuotaService', () => {
       ).resolves.toEqual({ tier, messages });
     });
 
+    it('reads an anonymous caller under its session and its IP together', async () => {
+      const { service, counters } = setup();
+
+      await service.snapshot(
+        createExecutionContext({ tier: 'anonymous', clientIp: '203.0.113.7' })
+      );
+
+      expect(counters.usage).toHaveBeenCalledWith(
+        ['user-1', IP_SUBJECT],
+        expect.objectContaining({ key: '2026-09-27' })
+      );
+    });
+
     it('reads a registered caller from Postgres when the counters are down', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
       const { service } = setup({
         counters: { usage: down() },
         persisted: { countUserMessages: vi.fn().mockResolvedValue(7) },
@@ -392,6 +515,26 @@ describe('MessageQuotaService', () => {
       await expect(
         service.snapshot(createExecutionContext({ tier: 'free' }))
       ).resolves.toMatchObject({ messages: { used: 7, limit: 30 } });
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'ai.quota.counters_unavailable',
+          tier: 'free',
+        })
+      );
+    });
+
+    it('refuses to guess a registered snapshot when both stores are down', async () => {
+      const { service } = setup({
+        counters: { usage: down() },
+        persisted: { countUserMessages: down() },
+      });
+
+      const snapshot = service.snapshot(
+        createExecutionContext({ tier: 'free' })
+      );
+
+      await expect(snapshot).rejects.toBeInstanceOf(AiUnavailableError);
+      await expect(snapshot).rejects.toMatchObject({ dependency: 'quota' });
     });
 
     it('refuses to guess an anonymous snapshot when the counters are down', async () => {
