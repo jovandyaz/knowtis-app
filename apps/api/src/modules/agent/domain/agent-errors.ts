@@ -27,6 +27,12 @@ const echo = (text: string): string =>
     ? text
     : `${text.slice(0, MAX_ECHOED_EDIT_CHARS)}…`;
 
+const cutOffMidText = (field: string, maxChars: number): string =>
+  `${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed.`;
+
+const sendShorter = (maxChars: number): string =>
+  `Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`;
+
 export const AgentErrors = {
   invalidProposal: (reason: string) =>
     make('AGENT_INVALID_PROPOSAL', `Invalid proposal: ${reason}`),
@@ -90,7 +96,7 @@ export const AgentErrors = {
   markdownAtLimit: (field: string, maxChars: number) =>
     make(
       'AGENT_MARKDOWN_AT_LIMIT',
-      `${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed. Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`
+      `${cutOffMidText(field, maxChars)} ${sendShorter(maxChars)}`
     ),
   editFieldAtLimit: (
     position: number,
@@ -99,10 +105,10 @@ export const AgentErrors = {
   ) =>
     make(
       'AGENT_MARKDOWN_AT_LIMIT',
-      `Edit ${position}: ${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed. ${
+      `Edit ${position}: ${cutOffMidText(field, maxChars)} ${
         field === 'oldText'
           ? 'oldText has to stay an exact copy of the note, so do not shorten it by rewording: split the change into several edits, each with a shorter oldText copied exactly from getNote that still appears only once.'
-          : `Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`
+          : sendShorter(maxChars)
       }`
     ),
   wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>

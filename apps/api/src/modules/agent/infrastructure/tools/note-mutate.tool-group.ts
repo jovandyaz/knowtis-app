@@ -25,14 +25,12 @@ const CONTENT_MARKDOWN_DESCRIPTION = `The note body in Markdown: headings (level
 // a provider that decodes against the schema stops a string at maxLength
 // instead of failing it, so text that fills the limit exactly was cut off
 function refuseMarkdownAtLimit(
-  fields: readonly (readonly [string, string | undefined])[]
+  field: string,
+  text: string | undefined
 ): { error: string } | undefined {
-  const cut = fields.find(([, text]) => text?.length === MAX_MARKDOWN_CHARS);
-  return (
-    cut && {
-      error: AgentErrors.markdownAtLimit(cut[0], MAX_MARKDOWN_CHARS).message,
-    }
-  );
+  return text?.length === MAX_MARKDOWN_CHARS
+    ? { error: AgentErrors.markdownAtLimit(field, MAX_MARKDOWN_CHARS).message }
+    : undefined;
 }
 
 function refuseEditAtLimit(
@@ -84,9 +82,10 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             .describe(CONTENT_MARKDOWN_DESCRIPTION),
         }),
         execute: async ({ title, contentMarkdown }) => {
-          const refused = refuseMarkdownAtLimit([
-            ['contentMarkdown', contentMarkdown],
-          ]);
+          const refused = refuseMarkdownAtLimit(
+            'contentMarkdown',
+            contentMarkdown
+          );
           if (refused) {
             return refused;
           }
@@ -136,7 +135,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
         execute: async ({ noteId, edits, appendMarkdown }) => {
           const refused =
             refuseEditAtLimit(edits) ??
-            refuseMarkdownAtLimit([['appendMarkdown', appendMarkdown]]);
+            refuseMarkdownAtLimit('appendMarkdown', appendMarkdown);
           if (refused) {
             return refused;
           }
@@ -173,9 +172,10 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             }
           ),
         execute: async ({ noteId, title, contentMarkdown }) => {
-          const refused = refuseMarkdownAtLimit([
-            ['contentMarkdown', contentMarkdown],
-          ]);
+          const refused = refuseMarkdownAtLimit(
+            'contentMarkdown',
+            contentMarkdown
+          );
           if (refused) {
             return refused;
           }
