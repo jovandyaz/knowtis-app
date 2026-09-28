@@ -1910,7 +1910,7 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });
 
-  it('persists the user message alone when the turn aborts before any text', async () => {
+  it('closes the turn with an empty assistant row when it aborts before any text', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
@@ -1953,7 +1953,10 @@ describe('RunAgentTurnHandler', () => {
 
     expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
     const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
-    expect(appended.messages).toEqual([{ role: 'user', content: 'hola' }]);
+    expect(appended.messages).toEqual([
+      { role: 'user', content: 'hola' },
+      { role: 'assistant', content: '', sources: [], stopReason: 'aborted' },
+    ]);
   });
 
   describe('execution context', () => {

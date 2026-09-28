@@ -171,22 +171,25 @@ describe('toChatMessages', () => {
     ).not.toHaveProperty('interrupted');
   });
 
-  it('drops an assistant bubble left with nothing to show', () => {
-    expect(
-      toChatMessages(
-        [
-          row({ turnId: 't1', role: 'user', content: 'Q' }),
-          row({
-            turnId: 't1',
-            role: 'assistant',
-            content: '',
-            stopReason: 'error',
-          }),
-        ],
-        nextId
-      )
-    ).toEqual([{ id: 'h1', turnId: 't1', role: 'user', content: 'Q' }]);
-  });
+  it.each(['aborted', 'error'] as const)(
+    'renders nothing for an empty interrupted assistant row stored as %s',
+    (stopReason) => {
+      expect(
+        toChatMessages(
+          [
+            row({ turnId: 't1', role: 'user', content: 'Q' }),
+            row({
+              turnId: 't1',
+              role: 'assistant',
+              content: '',
+              stopReason,
+            }),
+          ],
+          nextId
+        )
+      ).toEqual([{ id: 'h1', turnId: 't1', role: 'user', content: 'Q' }]);
+    }
+  );
 
   it('leaves history written before turns had ids without a turn id', () => {
     expect(

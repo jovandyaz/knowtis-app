@@ -145,6 +145,21 @@ describe('pruneTranscript', () => {
     }
   );
 
+  it.each(['aborted', 'error'] as const)(
+    'marks the %s partial-reply marker on a turn that ended before any step',
+    (stopReason) => {
+      const rows = [
+        row({ role: 'user', content: 'Summarize my notes', turnId: 't1' }),
+        row({ role: 'assistant', content: '', stopReason, turnId: 't1' }),
+      ];
+
+      expect(pruneTranscript(rows, { keepToolTurns: 2 })).toEqual([
+        { role: 'user', content: 'Summarize my notes' },
+        { role: 'assistant', content: `\n\n[reply cut off: ${stopReason}]` },
+      ]);
+    }
+  );
+
   it('passes legacy text rows through untouched', () => {
     const out = pruneTranscript(
       [
