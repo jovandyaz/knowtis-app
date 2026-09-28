@@ -14,8 +14,10 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import {
+  MESSAGE_KIND,
   MESSAGE_STOP_REASON,
   MODEL_ID_MAX_LENGTH,
+  type MessageKind,
   type MessageStopReason,
 } from '@knowtis/shared-types';
 
@@ -74,6 +76,7 @@ export const conversationMessages = pgTable(
     parts: jsonb('parts').$type<PersistedParts>(),
     stopReason: text('stop_reason').$type<MessageStopReason>(),
     turnId: uuid('turn_id'),
+    kind: text('kind').$type<MessageKind>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -90,6 +93,14 @@ export const conversationMessages = pgTable(
       'conversation_messages_stop_reason_check',
       sql`${table.stopReason} IS NULL OR ${table.stopReason} IN (${sql.raw(
         MESSAGE_STOP_REASON.map((reason) => `'${reason}'`).join(', ')
+      )})`
+    ),
+    check(
+      'conversation_messages_kind_check',
+      sql`${table.kind} IS NULL OR ${table.kind} IN (${sql.raw(
+        Object.values(MESSAGE_KIND)
+          .map((kind) => `'${kind}'`)
+          .join(', ')
       )})`
     ),
   ]

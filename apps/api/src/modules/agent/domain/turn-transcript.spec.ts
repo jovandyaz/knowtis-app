@@ -177,4 +177,17 @@ describe('buildTurnRows', () => {
       })
     ).toEqual([]);
   });
+
+  it('stores a continuation as an empty marker row', () => {
+    expect(
+      buildTurnRows({
+        userContent: '',
+        userKind: 'continue',
+        turnMessages: [],
+        assistantText: 'More findings.',
+        sources: [],
+        stopReason: 'completed',
+      })[0]
+    ).toEqual({ role: 'user', content: '', kind: 'continue' });
+  });
 });

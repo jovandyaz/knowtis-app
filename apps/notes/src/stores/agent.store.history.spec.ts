@@ -258,6 +258,7 @@ const TRANSCRIPT: ConversationTranscript = {
       stopReason: 'completed',
     },
   ],
+  continuableTurnId: null,
 };
 
 function deferred<T>() {

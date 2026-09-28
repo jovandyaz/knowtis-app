@@ -43,6 +43,7 @@ const TRANSCRIPT: ConversationTranscript = {
       stopReason: null,
     },
   ],
+  continuableTurnId: null,
 };
 
 describe('ConversationController over HTTP', () => {

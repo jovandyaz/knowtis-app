@@ -14,6 +14,11 @@ export const AGENT_TURN_ERROR_CODE = {
   TURN_CLAIM_UNAVAILABLE: 'TURN_CLAIM_UNAVAILABLE',
 } as const;
 
+/** A user row stored with no text of its own: `continue` resumes the turn before it. */
+export const MESSAGE_KIND = { CONTINUE: 'continue' } as const;
+
+export type MessageKind = (typeof MESSAGE_KIND)[keyof typeof MESSAGE_KIND];
+
 const WHITESPACE_RUN = /\s+/g;
 const WORD_SEPARATOR = ' ';
 
@@ -38,6 +43,7 @@ export interface ConversationTranscriptMessage {
   content: string;
   sources: { id: string; title: string }[];
   stopReason: MessageStopReason | null;
+  kind?: MessageKind;
 }
 
 export interface ConversationTranscript {
@@ -46,6 +52,8 @@ export interface ConversationTranscript {
   noteId: string | null;
   hasEarlier: boolean;
   messages: ConversationTranscriptMessage[];
+  /** The turn a continue request may resume now; null when none can. */
+  continuableTurnId: string | null;
 }
 
 export function normalizeConversationTitle(title: string): string {

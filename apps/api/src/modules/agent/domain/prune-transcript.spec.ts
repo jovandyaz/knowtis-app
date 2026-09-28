@@ -4,6 +4,7 @@ import type { AgentMessage } from './agent-message';
 import { estimateMessageTokens } from './message-tokens';
 import type { ConversationMessageRow } from './ports/conversation.repository';
 import {
+  CONTINUE_REQUEST,
   fitHistoryToBudget,
   partialReplySuffix,
   pruneTranscript,
@@ -17,6 +18,7 @@ const row = (
   parts: null,
   stopReason: null,
   turnId: null,
+  kind: null,
   ...r,
 });
 const call = (id: string) => ({
@@ -258,6 +260,36 @@ describe('pruneTranscript', () => {
       { keepToolTurns: 2 }
     );
     expect(out[0].content).toBe('a');
+  });
+
+  it('replays a continue marker as the continue instruction, never as an empty message', () => {
+    const rows = [
+      row({ role: 'user', content: 'Research X', turnId: 't1' }),
+      row({
+        role: 'assistant',
+        content: 'Found A. Pending: B.',
+        stopReason: 'max_steps',
+        turnId: 't1',
+      }),
+      row({ role: 'user', content: '', kind: 'continue', turnId: 't2' }),
+      row({
+        role: 'assistant',
+        content: 'Found B.',
+        stopReason: 'completed',
+        turnId: 't2',
+      }),
+    ];
+    expect(
+      pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => [
+        m.role,
+        m.content,
+      ])
+    ).toEqual([
+      ['user', 'Research X'],
+      ['assistant', 'Found A. Pending: B.'],
+      ['user', CONTINUE_REQUEST],
+      ['assistant', 'Found B.'],
+    ]);
   });
 
   it('marks a cut-off reply on the parts of a kept row as well as its content', () => {

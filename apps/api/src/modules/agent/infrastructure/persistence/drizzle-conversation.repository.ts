@@ -13,9 +13,10 @@ import {
 } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type {
-  ConversationSummary,
-  ConversationTranscript,
+import {
+  MESSAGE_KIND,
+  type ConversationSummary,
+  type ConversationTranscript,
 } from '@knowtis/shared-types';
 
 import {
@@ -39,6 +40,7 @@ import type {
   ConversationMessageRow,
   ConversationRepository,
   CreateConversationInput,
+  LastConversationMessage,
   LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
 import {
@@ -103,7 +105,8 @@ const DISPLAYED_ROW = and(
     and(
       eq(conversationMessages.role, 'assistant'),
       isNotNull(conversationMessages.stopReason)
-    )
+    ),
+    eq(conversationMessages.kind, MESSAGE_KIND.CONTINUE)
   )
 );
 
@@ -188,6 +191,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         parts: conversationMessages.parts,
         stopReason: conversationMessages.stopReason,
         turnId: conversationMessages.turnId,
+        kind: conversationMessages.kind,
       })
       .from(conversationMessages)
       .where(
@@ -208,6 +212,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
       parts: this.partsOf(r.parts, conversationId),
       stopReason: r.stopReason ?? null,
       turnId: r.turnId ?? null,
+      kind: r.kind ?? null,
     }));
     const readable = await this.readableNoteIds(
       noteIdsInToolParts(rows),
@@ -265,6 +270,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
           } satisfies PersistedParts)
         : null,
       stopReason: m.stopReason ?? null,
+      kind: m.kind ?? null,
     }));
     const [first, ...rest] = values;
     const claimsTurn = first.role === 'user';
@@ -367,6 +373,38 @@ export class DrizzleConversationRepository implements ConversationRepository {
     };
   }
 
+  async findLastMessage(
+    conversationId: string,
+    userId: string
+  ): Promise<LastConversationMessage | null> {
+    const [last] = await this.db
+      .select({
+        turnId: conversationMessages.turnId,
+        role: conversationMessages.role,
+        stopReason: conversationMessages.stopReason,
+      })
+      .from(conversationMessages)
+      .innerJoin(
+        conversations,
+        eq(conversations.id, conversationMessages.conversationId)
+      )
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .orderBy(desc(conversationMessages.seq))
+      .limit(1);
+    return last
+      ? {
+          turnId: last.turnId ?? null,
+          role: last.role,
+          stopReason: last.stopReason ?? null,
+        }
+      : null;
+  }
+
   async loadTranscriptForUser(
     conversationId: string,
     userId: string,
@@ -400,6 +438,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         sources: readableSources(userId),
         stopReason: conversationMessages.stopReason,
         turnId: conversationMessages.turnId,
+        kind: conversationMessages.kind,
       })
       .from(conversationMessages)
       .innerJoin(
@@ -428,6 +467,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
                 content: row.content,
                 sources: row.sources,
                 stopReason: row.stopReason ?? null,
+                ...(row.kind ? { kind: row.kind } : {}),
               },
             ]
       );
@@ -435,7 +475,12 @@ export class DrizzleConversationRepository implements ConversationRepository {
       displayRows,
       newestFirst.length > limit
     );
-    return { ...header, hasEarlier, messages: rows };
+    return {
+      ...header,
+      hasEarlier,
+      messages: rows,
+      continuableTurnId: null,
+    };
   }
 
   async rename(

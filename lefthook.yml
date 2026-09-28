@@ -44,6 +44,7 @@ pre-commit:
         - 'apps/api/src/database/schema/*.ts'
         - 'apps/api/src/database/schema/**/*.ts'
         - 'packages/shared/types/src/lib/ai.types.ts'
+        - 'packages/shared/types/src/lib/conversation.types.ts'
       run: |
         npx nx db:generate api --no-cloud 2>/dev/null
         if ! git diff --exit-code -- apps/api/drizzle/ > /dev/null 2>&1; then

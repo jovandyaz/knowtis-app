@@ -165,7 +165,14 @@ function historyRow(
   row: Partial<ConversationMessageRow> &
     Pick<ConversationMessageRow, 'role' | 'content'>
 ): ConversationMessageRow {
-  return { sources: [], parts: null, stopReason: null, turnId: null, ...row };
+  return {
+    sources: [],
+    parts: null,
+    stopReason: null,
+    turnId: null,
+    kind: null,
+    ...row,
+  };
 }
 
 function makeConversations(history: ConversationMessageRow[] = []) {

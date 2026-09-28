@@ -15,6 +15,8 @@ import {
   vi,
 } from 'vitest';
 
+import { MESSAGE_KIND } from '@knowtis/shared-types';
+
 import { validateEnv } from '../../../../config/env.config';
 import {
   conversationMessages,
@@ -680,6 +682,152 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     });
   });
 
+  describe('continue marker', () => {
+    const storeContinuedConversation = async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'Research X' },
+          {
+            role: 'assistant',
+            content: 'Found A. Pending: B.',
+            stopReason: 'max_steps',
+          },
+        ],
+      });
+      const continuation = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: continuation,
+        messages: buildTurnRows({
+          userContent: '',
+          userKind: MESSAGE_KIND.CONTINUE,
+          turnMessages: [],
+          assistantText: 'Found B.',
+          sources: [],
+          stopReason: 'completed',
+        }),
+      });
+      return { id, continuation };
+    };
+
+    it('stores the kind of a continuation and loads it back', async () => {
+      const { id, continuation } = await storeContinuedConversation();
+
+      const rows = await repo.loadMessages(id, USER, 40);
+
+      expect(rows.map((r) => [r.role, r.content, r.kind])).toEqual([
+        ['user', 'Research X', null],
+        ['assistant', 'Found A. Pending: B.', null],
+        ['user', '', MESSAGE_KIND.CONTINUE],
+        ['assistant', 'Found B.', null],
+      ]);
+      expect(rows[2].turnId).toBe(continuation);
+    });
+
+    it('keeps the marker out of text-only reads', async () => {
+      const { id } = await storeContinuedConversation();
+
+      const rows = await repo.loadMessages(id, USER, 40, { textOnly: true });
+
+      expect(rows.map((r) => [r.role, r.content])).toEqual([
+        ['user', 'Research X'],
+        ['assistant', 'Found A. Pending: B.'],
+        ['assistant', 'Found B.'],
+      ]);
+    });
+
+    it('rejects writing a kind outside the persisted set', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+
+      const driverError = await repo
+        .appendTurn({
+          conversationId: id,
+          turnId: randomUUID(),
+          messages: [{ role: 'user', content: '', kind: 'other' as never }],
+        })
+        .then(
+          () => undefined,
+          (error: unknown) => (error instanceof Error ? error.cause : error)
+        );
+
+      expect(driverError).toMatchObject({
+        message: expect.stringContaining('conversation_messages_kind_check'),
+      });
+    });
+  });
+
+  describe('findLastMessage', () => {
+    it('returns the newest row of the conversation', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'q1' },
+          { role: 'assistant', content: 'a1', stopReason: 'completed' },
+        ],
+      });
+      const capped = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: capped,
+        messages: [
+          { role: 'user', content: 'q2' },
+          { role: 'assistant', content: '', stopReason: 'max_steps' },
+        ],
+      });
+
+      expect(await repo.findLastMessage(id, USER)).toEqual({
+        turnId: capped,
+        role: 'assistant',
+        stopReason: 'max_steps',
+      });
+    });
+
+    it("refuses another user's conversation", async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: [
+          { role: 'user', content: 'q' },
+          { role: 'assistant', content: 'a', stopReason: 'completed' },
+        ],
+      });
+
+      expect(await repo.findLastMessage(id, OTHER)).toBeNull();
+    });
+
+    it('returns null for a conversation with no rows', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+
+      expect(await repo.findLastMessage(id, USER)).toBeNull();
+    });
+  });
+
   describe('conversation history', () => {
     const LISTER = '00000000-0000-4000-8000-0000000004b1';
     const STRANGER = '00000000-0000-4000-8000-0000000004b2';
@@ -962,6 +1110,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
             stopReason: null,
           },
         ],
+        continuableTurnId: null,
       });
     });
 
@@ -1041,6 +1190,70 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           content: '',
           sources: [{ id: noteId, title: 'N1' }],
           stopReason: 'max_steps',
+        },
+      ]);
+    });
+
+    it('serves a continue marker with its kind and no text', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        title: 't',
+      });
+      const capped = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: capped,
+        messages: [
+          { role: 'user', content: 'Research X' },
+          {
+            role: 'assistant',
+            content: 'Found A. Pending: B.',
+            stopReason: 'max_steps',
+          },
+        ],
+      });
+      const continuation = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: continuation,
+        messages: [
+          { role: 'user', content: '', kind: MESSAGE_KIND.CONTINUE },
+          { role: 'assistant', content: 'Found B.', stopReason: 'completed' },
+        ],
+      });
+
+      expect(
+        (await repo.loadTranscriptForUser(id, LISTER, 40))?.messages
+      ).toEqual([
+        {
+          turnId: capped,
+          role: 'user',
+          content: 'Research X',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId: capped,
+          role: 'assistant',
+          content: 'Found A. Pending: B.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+        {
+          turnId: continuation,
+          role: 'user',
+          content: '',
+          sources: [],
+          stopReason: null,
+          kind: MESSAGE_KIND.CONTINUE,
+        },
+        {
+          turnId: continuation,
+          role: 'assistant',
+          content: 'Found B.',
+          sources: [],
+          stopReason: 'completed',
         },
       ]);
     });

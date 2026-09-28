@@ -1,0 +1,2 @@
+ALTER TABLE "conversation_messages" ADD COLUMN "kind" text;--> statement-breakpoint
+ALTER TABLE "conversation_messages" ADD CONSTRAINT "conversation_messages_kind_check" CHECK ("conversation_messages"."kind" IS NULL OR "conversation_messages"."kind" IN ('continue')) NOT VALID;

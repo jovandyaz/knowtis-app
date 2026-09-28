@@ -228,9 +228,11 @@ export {
   CONVERSATION_TITLE_MAX,
   deriveConversationTitle,
   isValidConversationTitle,
+  MESSAGE_KIND,
   normalizeConversationTitle,
   type ConversationPage,
   type ConversationSummary,
   type ConversationTranscript,
   type ConversationTranscriptMessage,
+  type MessageKind,
 } from './lib/conversation.types';

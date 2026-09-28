@@ -5,6 +5,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { MESSAGE_KIND } from '@knowtis/shared-types';
+
 import { validateEnv } from '../../../../config/env.config';
 import {
   DATABASE_CONNECTION,
@@ -23,6 +25,8 @@ import { DrizzleUserMessageCountRepository } from './drizzle-user-message-count.
 const USER = '00000000-0000-4000-8000-0000000000c5';
 const OTHER = '00000000-0000-4000-8000-0000000000c6';
 const IDLE = '00000000-0000-4000-8000-0000000000c7';
+const CONTINUER = '00000000-0000-4000-8000-0000000000c8';
+const ACCOUNTS = [USER, OTHER, IDLE, CONTINUER];
 const DAY = utcDayOf(new Date('2026-09-27T12:00:00.000Z'));
 const MS = 1;
 
@@ -66,8 +70,8 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserMessageCountRepository', () => {
     }).compile();
     db = moduleRef.get<Database>(DATABASE_CONNECTION);
     repo = new DrizzleUserMessageCountRepository(db);
-    await db.delete(users).where(inArray(users.id, [USER, OTHER, IDLE]));
-    for (const id of [USER, OTHER, IDLE]) {
+    await db.delete(users).where(inArray(users.id, ACCOUNTS));
+    for (const id of ACCOUNTS) {
       await db.insert(users).values({
         id,
         email: `q-${id}@test.local`,
@@ -87,7 +91,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserMessageCountRepository', () => {
   });
 
   afterAll(async () => {
-    await db.delete(users).where(inArray(users.id, [USER, OTHER, IDLE]));
+    await db.delete(users).where(inArray(users.id, ACCOUNTS));
     await moduleRef.close();
   });
 
@@ -101,5 +105,20 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserMessageCountRepository', () => {
 
   it('counts zero for a caller with no conversations', async () => {
     await expect(repo.countUserMessages(IDLE, DAY)).resolves.toBe(0);
+  });
+
+  it('counts a continue marker as one message', async () => {
+    const continued = await conversationOf(CONTINUER);
+    await message(continued, 'user', new Date('2026-09-27T12:00:00.000Z'));
+    await db.insert(conversationMessages).values({
+      conversationId: continued,
+      role: 'user',
+      content: '',
+      kind: MESSAGE_KIND.CONTINUE,
+      turnId: randomUUID(),
+      createdAt: new Date('2026-09-27T12:00:02.000Z'),
+    });
+
+    await expect(repo.countUserMessages(CONTINUER, DAY)).resolves.toBe(2);
   });
 });

@@ -378,6 +378,7 @@ describe('AgentCopilotPanel', () => {
           stopReason: 'completed',
         },
       ],
+      continuableTurnId: null,
     };
 
     it('restores the conversation this browser remembered for this user', async () => {
