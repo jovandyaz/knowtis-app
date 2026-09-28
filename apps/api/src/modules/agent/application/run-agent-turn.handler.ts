@@ -13,6 +13,7 @@ import {
   AGENT_STOP_REASON,
   deriveConversationTitle,
   type AgentStopReason,
+  type AiQuota,
   type MessageStopReason,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
@@ -31,6 +32,7 @@ import {
   type Reservation,
 } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
+import { MessageQuotaService } from '../../ai/application/services/message-quota.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import {
@@ -42,7 +44,10 @@ import {
   billingFor,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
-import { segmentLimits } from '../../ai/domain/execution-context/segment-policy';
+import {
+  segmentLimits,
+  type SegmentLimits,
+} from '../../ai/domain/execution-context/segment-policy';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -136,6 +141,8 @@ export interface RunAgentTurnCallbacks {
   readonly onConversation?: (conversationId: string) => void;
   /** Fires once, just before the model runs; a turn that ends without it was refused before any model call. */
   readonly onModelStart?: () => void;
+  /** Fires after the turn draws or gives back one of today's messages. */
+  readonly onQuota?: (quota: AiQuota) => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -158,7 +165,28 @@ interface TurnLoopPolicy {
     event: { proposal: ProposedMutation; usage: AgentTurnUsage },
     ctx: TurnLoopContext
   ) => Promise<TurnEventOutcome>;
+  readonly consumesQuota: boolean;
 }
+
+interface QuotaHold {
+  /** Gives the turn's message back; only the first call acts. */
+  readonly refund: () => Promise<void>;
+}
+
+const NO_QUOTA_HOLD: QuotaHold = { refund: () => Promise.resolve() };
+
+type PreparedTurn =
+  | { readonly kind: 'refused' }
+  | { readonly kind: 'budget_denied'; readonly reason?: string }
+  | {
+      readonly kind: 'ready';
+      readonly messages: AgentMessage[];
+      readonly userMemories: string[];
+      readonly limits: SegmentLimits;
+      readonly openrouterProviderOrder: readonly string[];
+      readonly openrouterIgnoredProviders: readonly string[];
+      readonly reservation: Reservation;
+    };
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
@@ -206,7 +234,8 @@ export class RunAgentTurnHandler {
     private readonly injectionGuard: InjectionGuardService,
     private readonly aiConfig: AIConfigService,
     private readonly turnEffort: TurnEffortResolver,
-    private readonly tierResolver: TierResolver
+    private readonly tierResolver: TierResolver,
+    private readonly quota: MessageQuotaService
   ) {}
 
   async execute(
@@ -273,6 +302,7 @@ export class RunAgentTurnHandler {
         callbacks.onProposal(event.proposal);
         return 'stop';
       },
+      consumesQuota: true,
     };
   }
 
@@ -494,6 +524,7 @@ export class RunAgentTurnHandler {
         });
         return 'stop';
       },
+      consumesQuota: false,
     };
   }
 
@@ -554,7 +585,12 @@ export class RunAgentTurnHandler {
     resume: { outcome: string } | undefined,
     callbacks: Pick<
       RunAgentTurnCallbacks,
-      'onChunk' | 'onDone' | 'onError' | 'onThinking' | 'onModelStart'
+      | 'onChunk'
+      | 'onDone'
+      | 'onError'
+      | 'onThinking'
+      | 'onModelStart'
+      | 'onQuota'
     >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
@@ -613,90 +649,58 @@ export class RunAgentTurnHandler {
       }
     }
 
-    const inputMessages = input.messages ?? [];
     const freshUserMessage: AgentMessage | undefined =
       resume === undefined && input.message
         ? { role: 'user', content: input.message.content }
         : undefined;
-    if (freshUserMessage) {
-      if (freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
-        callbacks.onError(messageTooLongError());
-        return;
-      }
-      const verdict = await this.injectionGuard.guard(
-        freshUserMessage.content,
-        execution
-      );
-      if (!verdict.safe) {
-        callbacks.onError(AIErrors.promptInjectionDetected());
-        return;
-      }
+    if (
+      freshUserMessage &&
+      freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS
+    ) {
+      callbacks.onError(messageTooLongError());
+      return;
     }
-    const sanitized = sanitizeReplayHistory(inputMessages);
-    const fitted = await this.fitGuardedHistory(
-      sanitized.messages,
-      freshUserMessage,
-      execution
-    );
-    logInputDetections(
-      this.logger,
-      [
-        ...detectionRows(sanitized.detections, inputMessages),
-        ...detectionRows(fitted.detections, fitted.messages),
-      ],
-      {
-        surface: 'history',
-        userId,
-        ...(persistence ? { conversationId: persistence.conversationId } : {}),
-      },
-      fitted.dropped
-    );
-    const messages = fitted.messages;
-    const estimatedTokens = this.estimateTokens(messages);
-    const pricing = this.modelCatalog.getPricing(model);
-    const estimatedCostUsd = pricing
-      ? computeTokenCostUsd(
-          { inputTokens: estimatedTokens, outputTokens: 0 },
-          pricing
-        )
-      : 0;
-    const userMemories = input.memoryQuery
-      ? await this.loadUserMemories(execution, input.memoryQuery)
-      : [];
-
-    // Resolve turn settings BEFORE reserving quota: a settings-store failure
-    // must escape before any reservation exists, else the held reservation
-    // leaks with no client-facing error (the gateway turn slot has no catch).
-    const { maxSteps, maxTurnTokens } = segmentLimits(execution, {
-      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
-      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
-      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
-      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
-    });
-    const [openrouterProviderOrder, openrouterIgnoredProviders] =
-      await Promise.all([
-        this.aiConfig.getOpenRouterProviderOrder(),
-        this.aiConfig.getOpenRouterIgnoredProviders(),
-      ]);
-
-    const limit = await this.rateLimit.checkLimit(execution, {
-      tokens: estimatedTokens,
-      costUsd: estimatedCostUsd,
-    });
-    if (!limit.allowed) {
-      callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
+    // The injection classifier is itself a model call, so the message is
+    // drawn before it: an exhausted caller must not reach any model.
+    const hold = policy.consumesQuota
+      ? await this.holdQuota(execution, input.turnId, callbacks)
+      : NO_QUOTA_HOLD;
+    if (!hold) {
+      return;
+    }
+    let prepared: PreparedTurn;
+    try {
+      prepared = await this.prepareTurn(
+        input,
+        execution,
+        model,
+        freshUserMessage,
+        persistence,
+        callbacks
+      );
+    } catch (error) {
+      await hold.refund();
+      throw error;
+    }
+    if (prepared.kind === 'refused') {
+      return;
+    }
+    if (prepared.kind === 'budget_denied') {
+      await hold.refund();
+      callbacks.onError(AIErrors.rateLimitExceeded(prepared.reason));
       return;
     }
 
     const ctx: TurnLoopContext = {
       execution,
-      reservation: limit.reservation,
+      reservation: prepared.reservation,
       model,
       reconciled: false,
     };
 
     const turnMessages: AgentMessage[] = [];
     let assistantText = '';
+    let answered = false;
     let persisted = false;
     const persistTurnOnce = async (
       sources: readonly AgentSource[],
@@ -727,21 +731,23 @@ export class RunAgentTurnHandler {
       for await (const event of this.orchestrator.run({
         userId,
         execution,
-        messages,
+        messages: prepared.messages,
         model,
-        maxSteps,
-        maxTurnTokens,
+        maxSteps: prepared.limits.maxSteps,
+        maxTurnTokens: prepared.limits.maxTurnTokens,
         effortFor: (candidate: string) =>
           this.effortForModel({
             execution,
             model: candidate,
             requested: input.effort,
           }),
-        openrouterProviderOrder,
-        openrouterIgnoredProviders,
+        openrouterProviderOrder: prepared.openrouterProviderOrder,
+        openrouterIgnoredProviders: prepared.openrouterIgnoredProviders,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
-        ...(userMemories.length ? { userMemories } : {}),
+        ...(prepared.userMemories.length
+          ? { userMemories: prepared.userMemories }
+          : {}),
         ...(signal ? { signal } : {}),
         ...(resume ? { resume } : {}),
         ...(byokApiKey ? { byokApiKey } : {}),
@@ -752,9 +758,13 @@ export class RunAgentTurnHandler {
             break;
           case 'chunk':
             assistantText += event.text;
+            answered = true;
             callbacks.onChunk(event.text);
             break;
           case 'error':
+            if (!answered) {
+              await hold.refund();
+            }
             await this.recordUsageSafe(
               ctx,
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
@@ -838,6 +848,9 @@ export class RunAgentTurnHandler {
         });
       }
       await persistTurnOnce([], 'error');
+      if (!answered) {
+        await hold.refund();
+      }
       callbacks.onError(
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
@@ -865,8 +878,137 @@ export class RunAgentTurnHandler {
           model: ctx.model,
         });
       }
+      if (!answered) {
+        await hold.refund();
+      }
       callbacks.onError(AIErrors.providerError('Agent turn failed'));
     }
+  }
+
+  private async holdQuota(
+    execution: AiExecutionContext,
+    turnId: string,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onError' | 'onQuota'>
+  ): Promise<QuotaHold | null> {
+    const outcome = await this.quota.consume(execution, turnId);
+    switch (outcome.kind) {
+      case 'unmetered':
+        return NO_QUOTA_HOLD;
+      case 'consumed': {
+        callbacks.onQuota?.(outcome.quota);
+        let refunded = false;
+        return {
+          refund: async () => {
+            if (refunded) {
+              return;
+            }
+            refunded = true;
+            const quota = await this.quota.refund(outcome.receipt);
+            if (quota) {
+              callbacks.onQuota?.(quota);
+            }
+          },
+        };
+      }
+      case 'exhausted':
+        callbacks.onError(
+          AIErrors.quotaExhausted(outcome.resetsAt, outcome.upgrade)
+        );
+        return null;
+      case 'unavailable':
+        callbacks.onError(AgentErrors.turnClaimUnavailable());
+        return null;
+      default: {
+        const _exhaustive: never = outcome;
+        throw new Error(`Unhandled quota outcome: ${String(_exhaustive)}`);
+      }
+    }
+  }
+
+  private async prepareTurn(
+    input: TurnInput,
+    execution: AiExecutionContext,
+    model: string,
+    freshUserMessage: AgentMessage | undefined,
+    persistence: PersistenceContext | undefined,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
+  ): Promise<PreparedTurn> {
+    const { userId } = execution.subject;
+    if (freshUserMessage) {
+      const verdict = await this.injectionGuard.guard(
+        freshUserMessage.content,
+        execution
+      );
+      if (!verdict.safe) {
+        callbacks.onError(AIErrors.promptInjectionDetected());
+        return { kind: 'refused' };
+      }
+    }
+    const inputMessages = input.messages ?? [];
+    const sanitized = sanitizeReplayHistory(inputMessages);
+    const fitted = await this.fitGuardedHistory(
+      sanitized.messages,
+      freshUserMessage,
+      execution
+    );
+    logInputDetections(
+      this.logger,
+      [
+        ...detectionRows(sanitized.detections, inputMessages),
+        ...detectionRows(fitted.detections, fitted.messages),
+      ],
+      {
+        surface: 'history',
+        userId,
+        ...(persistence ? { conversationId: persistence.conversationId } : {}),
+      },
+      fitted.dropped
+    );
+    const messages = fitted.messages;
+    const estimatedTokens = this.estimateTokens(messages);
+    const pricing = this.modelCatalog.getPricing(model);
+    const estimatedCostUsd = pricing
+      ? computeTokenCostUsd(
+          { inputTokens: estimatedTokens, outputTokens: 0 },
+          pricing
+        )
+      : 0;
+    const userMemories = input.memoryQuery
+      ? await this.loadUserMemories(execution, input.memoryQuery)
+      : [];
+    // Resolve turn settings before the budget reservation: a settings-store
+    // failure must escape before any reservation exists, else the held
+    // reservation leaks with no client-facing error.
+    const limits = segmentLimits(execution, {
+      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
+      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
+      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
+      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
+    });
+    const [openrouterProviderOrder, openrouterIgnoredProviders] =
+      await Promise.all([
+        this.aiConfig.getOpenRouterProviderOrder(),
+        this.aiConfig.getOpenRouterIgnoredProviders(),
+      ]);
+    const limit = await this.rateLimit.checkLimit(execution, {
+      tokens: estimatedTokens,
+      costUsd: estimatedCostUsd,
+    });
+    if (!limit.allowed) {
+      return {
+        kind: 'budget_denied',
+        ...(limit.reason !== undefined ? { reason: limit.reason } : {}),
+      };
+    }
+    return {
+      kind: 'ready',
+      messages,
+      userMemories,
+      limits,
+      openrouterProviderOrder,
+      openrouterIgnoredProviders,
+      reservation: limit.reservation,
+    };
   }
 
   /**

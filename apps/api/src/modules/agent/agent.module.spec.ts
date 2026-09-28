@@ -7,9 +7,11 @@ import {
   bootConfigModule,
   infrastructureStub,
 } from '../../test-support/module-boot';
+import { MessageQuotaService } from '../ai/application/services/message-quota.service';
 import { AI_REDIS } from '../ai/infrastructure/redis/ai-redis.provider';
 import { AgentGateway } from './agent.gateway';
 import { AgentModule } from './agent.module';
+import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
 import { RETRIEVAL_PORT } from './domain/ports/retrieval.port';
 import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
 import { TurnClaimService } from './infrastructure/turn-claim/turn-claim.service';
@@ -58,6 +60,25 @@ describe('AgentModule wiring', () => {
 
         expect(retrieval).toBeInstanceOf(HybridRetrievalAdapter);
         expect(retrieval).toBe(moduleRef.get(HybridRetrievalAdapter));
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    "draws the turn handler's messages from the AI module's quota service",
+    async () => {
+      const moduleRef = await compileAgentModule(infrastructureStub());
+
+      try {
+        const quota = moduleRef.get(MessageQuotaService);
+
+        expect(quota).toBeInstanceOf(MessageQuotaService);
+        expect(Object.values(moduleRef.get(RunAgentTurnHandler))).toContain(
+          quota
+        );
       } finally {
         await moduleRef.close();
       }

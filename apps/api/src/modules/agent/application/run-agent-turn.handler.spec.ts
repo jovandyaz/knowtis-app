@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,6 +12,8 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_TURN_ERROR_CODE,
+  type AiQuota,
   type ByokProvider,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
@@ -22,6 +25,11 @@ import type {
   UsageEstimate,
 } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
+import {
+  MessageQuotaService,
+  QUOTA_STORES,
+  type QuotaReceipt,
+} from '../../ai/application/services/message-quota.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
@@ -32,7 +40,9 @@ import {
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
+import { utcDayOf } from '../../ai/domain/value-objects/utc-day';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
+import { createMessageQuotaStub } from '../../ai/testing/create-message-quota-stub';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
@@ -269,7 +279,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -326,7 +337,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onThinking = vi.fn();
     const onChunk = vi.fn();
@@ -372,7 +384,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -406,7 +419,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -454,7 +468,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -492,7 +507,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -550,7 +566,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -591,7 +608,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -627,7 +645,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const error = vi.fn();
 
@@ -661,7 +680,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const error = vi.fn();
 
@@ -705,7 +725,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const done = vi.fn();
 
@@ -751,7 +772,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const done = vi.fn();
 
@@ -801,7 +823,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const done = vi.fn();
 
@@ -848,7 +871,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -886,7 +910,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -924,7 +949,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -972,7 +998,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -1004,7 +1031,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1040,7 +1068,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1080,7 +1109,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onConversation = vi.fn();
 
@@ -1131,7 +1161,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onConversation = vi.fn();
     const onDone = vi.fn();
@@ -1171,7 +1202,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1220,7 +1252,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onProposal = vi.fn();
 
@@ -1267,7 +1300,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onDone = vi.fn();
 
@@ -1307,7 +1341,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.resumeTurn(
@@ -1352,7 +1387,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1392,7 +1428,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1442,7 +1479,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onDone = vi.fn();
 
@@ -1496,7 +1534,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1531,7 +1570,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1570,7 +1610,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1612,7 +1653,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -1658,7 +1700,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1701,7 +1744,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1753,7 +1797,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -1804,7 +1849,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onDone = vi.fn();
 
@@ -1847,7 +1893,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -1890,7 +1937,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -1933,7 +1981,8 @@ describe('RunAgentTurnHandler', () => {
         injectionGuard,
         makeAIConfig(),
         makeTurnEffort(),
-        tierResolver
+        tierResolver,
+        createMessageQuotaStub()
       );
       const callbacks = {
         onChunk: vi.fn(),
@@ -2178,7 +2227,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2218,7 +2268,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -2267,7 +2318,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -2307,7 +2359,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -2389,7 +2442,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2482,7 +2536,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2563,7 +2618,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2640,7 +2696,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2689,7 +2746,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       turnEffort,
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2737,7 +2795,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       turnEffort,
-      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider])
+      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider]),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2785,7 +2844,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       turnEffort,
-      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider])
+      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider]),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2832,7 +2892,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       turnEffort,
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2885,7 +2946,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       turnEffort,
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -2927,7 +2989,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -2965,7 +3028,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig('medium', ['fireworks', 'together'], ['parasail']),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3002,7 +3066,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig('medium', []),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3040,7 +3105,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       aiConfig,
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await expect(
@@ -3076,7 +3142,8 @@ describe('RunAgentTurnHandler', () => {
       guard,
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3120,7 +3187,8 @@ describe('RunAgentTurnHandler', () => {
       guard,
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3158,7 +3226,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3197,7 +3266,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
     const onConversation = vi.fn();
@@ -3245,7 +3315,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3285,7 +3356,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(false),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3333,7 +3405,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onDone = vi.fn();
 
@@ -3381,7 +3454,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3417,7 +3491,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3455,7 +3530,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3492,7 +3568,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const done = vi.fn();
     await handler.execute(
@@ -3533,7 +3610,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -3585,7 +3663,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     await handler.execute(
       {
@@ -3626,7 +3705,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const error = vi.fn();
     await handler.execute(
@@ -3675,7 +3755,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onProposal = vi.fn();
 
@@ -3719,7 +3800,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -3753,7 +3835,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3800,7 +3883,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3843,7 +3927,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3886,7 +3971,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -3926,7 +4012,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -3969,7 +4056,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.resumeTurn(
@@ -4009,7 +4097,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(false),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4051,7 +4140,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -4105,7 +4195,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.resumeTurn(
@@ -4146,7 +4237,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -4198,7 +4290,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4255,7 +4348,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver(['google'])
+      makeTierResolver(['google']),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -4307,7 +4401,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver(['google'])
+      makeTierResolver(['google']),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4353,7 +4448,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4397,7 +4493,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4434,7 +4531,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4474,7 +4572,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
 
     await handler.execute(
@@ -4526,7 +4625,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver(['google'])
+      makeTierResolver(['google']),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4569,7 +4669,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4610,7 +4711,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4656,7 +4758,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
     const onProposal = vi.fn();
@@ -4705,7 +4808,8 @@ describe('RunAgentTurnHandler', () => {
       makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const onError = vi.fn();
 
@@ -4775,7 +4879,8 @@ describe('RunAgentTurnHandler', () => {
         guard,
         makeAIConfig(),
         makeTurnEffort(),
-        makeTierResolver()
+        makeTierResolver(),
+        createMessageQuotaStub()
       );
       return { conversations, orchestrator, handler };
     }
@@ -5088,7 +5193,8 @@ describe('RunAgentTurnHandler', () => {
         makeGuard(),
         makeAIConfig(),
         makeTurnEffort(),
-        makeTierResolver()
+        makeTierResolver(),
+        createMessageQuotaStub()
       );
       return {
         conversations,
@@ -5292,7 +5398,8 @@ describe('RunAgentTurnHandler replay guard', () => {
       guard,
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -5858,7 +5965,8 @@ describe('RunAgentTurnHandler turn identity', () => {
       over.guard ?? makeGuard(),
       makeAIConfig(),
       makeTurnEffort(),
-      makeTierResolver()
+      makeTierResolver(),
+      createMessageQuotaStub()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -6034,5 +6142,477 @@ describe('RunAgentTurnHandler turn identity', () => {
     expect(callbacks.onError).toHaveBeenCalledOnce();
     expect(callbacks.onModelStart).not.toHaveBeenCalled();
     expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+});
+
+describe('RunAgentTurnHandler daily message quota', () => {
+  const DAY = utcDayOf(new Date('2026-09-27T12:00:00.000Z'));
+  const RESETS_AT = '2026-09-28T00:00:00.000Z';
+  const RECEIPT: QuotaReceipt = {
+    turn: { subjects: [USER], turnId: TURN_ID, day: DAY },
+    tier: 'free',
+    limit: 30,
+    store: QUOTA_STORES.REDIS,
+  };
+  const AFTER_CONSUME: AiQuota = {
+    tier: 'free',
+    messages: { used: 1, limit: 30, resetsAt: RESETS_AT },
+  };
+  const AFTER_REFUND: AiQuota = {
+    tier: 'free',
+    messages: { used: 0, limit: 30, resetsAt: RESETS_AT },
+  };
+
+  function consumedQuota() {
+    const quota = createMessageQuotaStub({
+      kind: 'consumed',
+      receipt: RECEIPT,
+      quota: AFTER_CONSUME,
+    });
+    vi.mocked(quota.refund).mockResolvedValue(AFTER_REFUND);
+    return quota;
+  }
+
+  function build(over: {
+    quota: MessageQuotaService;
+    events?: AgentEvent[];
+    orchestrator?: AgentOrchestrator;
+    allowed?: boolean;
+    guard?: InjectionGuardService;
+    tierResolver?: TierResolver;
+    byok?: ByokService;
+    aiConfig?: AIConfigService;
+    modelPreference?: ModelPreferenceService;
+    embed?: EmbeddingPort;
+  }) {
+    const deps = makeDeps({
+      ...(over.allowed === false ? { allowed: false } : {}),
+      ...(over.events ? { events: over.events } : {}),
+    });
+    const orchestrator = over.orchestrator ?? deps.orchestrator;
+    const guard = over.guard ?? makeGuard();
+    const embed = over.embed ?? makeEmbed();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      deps.rateLimit,
+      deps.config,
+      deps.pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      embed,
+      over.modelPreference ?? makeModelPreference(),
+      over.byok ?? makeByok(),
+      guard,
+      over.aiConfig ?? makeAIConfig(),
+      makeTurnEffort(),
+      over.tierResolver ?? makeTierResolver(),
+      over.quota
+    );
+    return { handler, rateLimit: deps.rateLimit, orchestrator, guard, embed };
+  }
+
+  function callbacks() {
+    return {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+      onQuota: vi.fn(),
+      onModelStart: vi.fn(),
+    };
+  }
+
+  const turn = { userId: USER, turnId: TURN_ID, message: { content: 'hola' } };
+  const aborted: AgentEvent = {
+    type: 'aborted',
+    usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
+  };
+
+  it('draws the message after the model and key resolve and before the injection guard', async () => {
+    const order: string[] = [];
+    const quota = consumedQuota();
+    vi.mocked(quota.consume).mockImplementation(async () => {
+      order.push('quota');
+      return { kind: 'consumed', receipt: RECEIPT, quota: AFTER_CONSUME };
+    });
+    const guard = {
+      guard: vi.fn(async () => {
+        order.push('guard');
+        return { safe: true, score: 0 };
+      }),
+    } as unknown as InjectionGuardService;
+    const { handler, rateLimit } = build({ quota, guard });
+    vi.mocked(rateLimit.checkLimit).mockImplementation(async (_e, estimate) => {
+      order.push('checkLimit');
+      return { allowed: true, reservation: { estimate } };
+    });
+    const cb = callbacks();
+    cb.onModelStart.mockImplementation(() => order.push('model'));
+
+    await handler.execute(turn, cb);
+
+    expect(order).toEqual(['quota', 'guard', 'checkLimit', 'model']);
+    expect(quota.consume).toHaveBeenCalledWith(executionFor(USER), TURN_ID);
+    expect(cb.onQuota).toHaveBeenCalledWith(AFTER_CONSUME);
+  });
+
+  it('refuses an exhausted turn before any model call', async () => {
+    const quota = createMessageQuotaStub({
+      kind: 'exhausted',
+      resetsAt: new Date(RESETS_AT),
+      upgrade: 'register',
+    });
+    const { handler, rateLimit, orchestrator, guard, embed } = build({ quota });
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(cb.onError).toHaveBeenCalledWith({
+      code: 'AI_QUOTA_EXHAUSTED',
+      message: expect.any(String),
+      resetsAt: RESETS_AT,
+      upgrade: 'register',
+    });
+    expect(guard.guard).not.toHaveBeenCalled();
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(cb.onModelStart).not.toHaveBeenCalled();
+  });
+
+  it('fails the turn closed with a resendable code when the quota store is unavailable', async () => {
+    const { handler, rateLimit } = build({
+      quota: createMessageQuotaStub({ kind: 'unavailable' }),
+    });
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      })
+    );
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+  });
+
+  it('refunds and reports the quota when the budget gate denies the turn', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({ quota, allowed: false });
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+    expect(quota.refund).toHaveBeenCalledWith(RECEIPT);
+    expect(cb.onQuota).toHaveBeenLastCalledWith(AFTER_REFUND);
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.RATE_LIMIT_EXCEEDED })
+    );
+  });
+
+  it.each([
+    ['a provider error', AIErrors.providerError('upstream 500')],
+    ['an overloaded provider', AIErrors.providerOverloaded()],
+    ['a timeout', AIErrors.timeout('Agent turn timed out')],
+    ['an empty completion', AIErrors.emptyCompletion()],
+  ])('refunds %s before the first text delta', async (_name, error) => {
+    const quota = consumedQuota();
+    const { handler } = build({ quota, events: [{ type: 'error', error }] });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+  });
+
+  it('refunds an internal error before the first text delta', async () => {
+    const quota = consumedQuota();
+    const orchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        throw new Error('orchestrator failed');
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const { handler } = build({ quota, orchestrator });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+  });
+
+  it('refunds a turn that ends without a terminal event', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({ quota, events: [] });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+  });
+
+  it('refunds when preparing the model call throws, and still surfaces the failure', async () => {
+    const quota = consumedQuota();
+    const aiConfig = makeAIConfig();
+    vi.mocked(aiConfig.getOpenRouterProviderOrder).mockRejectedValue(
+      new Error('settings store down')
+    );
+    const { handler } = build({ quota, aiConfig });
+
+    await expect(handler.execute(turn, callbacks())).rejects.toThrow(
+      'settings store down'
+    );
+    expect(quota.refund).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the message when the orchestrator throws after text has streamed', async () => {
+    const quota = consumedQuota();
+    const orchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        yield { type: 'chunk', text: 'Hola' } as AgentEvent;
+        throw new Error('orchestrator failed');
+      }),
+    };
+    const { handler } = build({ quota, orchestrator });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('keeps the message for a proposal with no text', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [
+        {
+          type: 'proposal',
+          proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+          usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+        },
+      ],
+    });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('keeps the message for a done turn with no text', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [
+        {
+          type: 'done',
+          usage: { inputTokens: 10, outputTokens: 0, model: SERVED_MODEL },
+          sources: [],
+          knownNotes: [],
+          webSources: [],
+          stopReason: 'token_budget',
+        },
+      ],
+    });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('keeps the message once text has streamed', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [
+        { type: 'chunk', text: 'Hola' },
+        { type: 'error', error: AIErrors.providerError('upstream 500') },
+      ],
+    });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('keeps the message when a turn that streamed text ends without a terminal event', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [{ type: 'chunk', text: 'Hola' }],
+    });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('gives the message back once when reporting the failure throws', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [
+        { type: 'error', error: AIErrors.providerError('upstream 500') },
+      ],
+    });
+    const cb = callbacks();
+    cb.onError.mockImplementationOnce(() => {
+      throw new Error('socket closed');
+    });
+
+    await handler.execute(turn, cb);
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+    expect(cb.onError).toHaveBeenLastCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.PROVIDER_ERROR })
+    );
+  });
+
+  it('does not refund a user abort that surfaces as a thrown error', async () => {
+    const quota = consumedQuota();
+    const controller = new AbortController();
+    const orchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        controller.abort();
+        throw new Error('aborted');
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const { handler } = build({ quota, orchestrator });
+
+    await handler.execute(turn, callbacks(), controller.signal);
+
+    expect(orchestrator.run).toHaveBeenCalledOnce();
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('does not refund a user abort mid-stream', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({ quota, events: [aborted] });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('does not refund a user abort before the model starts', async () => {
+    const quota = consumedQuota();
+    const controller = new AbortController();
+    const guard = {
+      guard: vi.fn(async () => {
+        controller.abort();
+        return { safe: true, score: 0 };
+      }),
+    } as unknown as InjectionGuardService;
+    const { handler, orchestrator } = build({ quota, guard });
+
+    await handler.execute(turn, callbacks(), controller.signal);
+
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('does not refund an injection-guard refusal of the user input', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({ quota, guard: makeGuard(false) });
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.PROMPT_INJECTION_DETECTED })
+    );
+    expect(quota.refund).not.toHaveBeenCalled();
+  });
+
+  it('never consumes on a resumed turn', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({ quota });
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        resume: { outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
+    );
+
+    expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  it('never consumes when the requested model is not selectable', async () => {
+    const quota = consumedQuota();
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
+    const { handler } = build({ quota, modelPreference });
+
+    await handler.execute({ ...turn, model: SERVED_MODEL }, callbacks());
+
+    expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  it('never consumes when the saved key for the model is unavailable', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      tierResolver: makeTierResolver(['google']),
+    });
+
+    await handler.execute({ ...turn, model: USER_KEYED_MODEL }, callbacks());
+
+    expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  describe('with the real quota service', () => {
+    function realQuota() {
+      const counters = {
+        consume: vi
+          .fn()
+          .mockResolvedValue({ allowed: true, used: 1, replayed: false }),
+        refund: vi.fn().mockResolvedValue(true),
+        usage: vi.fn().mockResolvedValue(0),
+      };
+      const service = new MessageQuotaService(
+        counters,
+        { countUserMessages: vi.fn() },
+        {
+          getDailyMessageLimits: vi
+            .fn()
+            .mockResolvedValue({ anonymous: 5, free: 30 }),
+        } as unknown as AIConfigService,
+        { emit: vi.fn() } as unknown as EventEmitter2
+      );
+      return { service, counters };
+    }
+
+    it("never touches the counters for a turn billed to the caller's key", async () => {
+      const { service, counters } = realQuota();
+      const byok = makeByok();
+      vi.mocked(byok.getApiKey).mockResolvedValue('sk-user-key');
+      const { handler } = build({
+        quota: service,
+        byok,
+        tierResolver: makeTierResolver(['google']),
+      });
+
+      await handler.execute({ ...turn, model: USER_KEYED_MODEL }, callbacks());
+
+      expect(counters.consume).not.toHaveBeenCalled();
+    });
+
+    it('meters a byok-tier caller on a platform model under the free limit', async () => {
+      const { service, counters } = realQuota();
+      const { handler } = build({
+        quota: service,
+        tierResolver: makeTierResolver(['google']),
+      });
+
+      await handler.execute({ ...turn, model: SERVED_MODEL }, callbacks());
+
+      expect(counters.consume).toHaveBeenCalledWith(
+        expect.objectContaining({ subjects: [USER], turnId: TURN_ID }),
+        30
+      );
+    });
   });
 });
