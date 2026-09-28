@@ -21,14 +21,14 @@ describe('COPILOT_EVAL_CASES', () => {
     expect(COPILOT_EVAL_CASES).toHaveLength(12);
   });
 
-  it('caps the checkpoint case at two steps and grades both the answer and its wording', () => {
+  it('caps the checkpoint case at three steps and grades both the answer and its wording', () => {
     const checkpoint = COPILOT_EVAL_CASES.find(
       (testCase) =>
         testCase.description ===
         'checkpoint: a capped turn answers and states what is pending'
     );
 
-    expect(checkpoint?.vars.maxSteps).toBe(2);
+    expect(checkpoint?.vars.maxSteps).toBe(3);
     expect(checkpoint?.assert.map((assertion) => assertion.type)).toEqual([
       'javascript',
       'llm-rubric',

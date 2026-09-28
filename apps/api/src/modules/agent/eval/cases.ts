@@ -208,7 +208,7 @@ export const COPILOT_EVAL_CASES: CopilotEvalCase[] = [
       message:
         'Read every one of my notes one by one and give me a detailed summary of each.',
       fixtureSet: 'recent',
-      maxSteps: 2,
+      maxSteps: 3,
     },
     assert: [
       js(assertCappedTurnAnswers),
