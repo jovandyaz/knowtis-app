@@ -1,14 +1,11 @@
-import type { ByokProvider } from '@knowtis/shared-types';
+import type { AccessTier, ByokProvider } from '@knowtis/shared-types';
 
 import {
   PLATFORM_BILLING,
   type AiExecutionContext,
   type Billing,
 } from '../domain/execution-context/ai-execution-context';
-import {
-  TIER_POLICIES,
-  type AccessTier,
-} from '../domain/execution-context/tier-policy';
+import { TIER_POLICIES } from '../domain/execution-context/tier-policy';
 
 export function createExecutionContext(
   overrides: {

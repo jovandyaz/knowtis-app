@@ -91,6 +91,10 @@ export const MODEL_ID_MAX_LENGTH = 120;
 export const MODEL_TIERS = ['fast', 'balanced', 'powerful', 'open'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
+/** The commercial layer of an AI caller, resolved on the server per request; the client never declares it. */
+export const AI_ACCESS_TIERS = ['anonymous', 'free', 'byok'] as const;
+export type AccessTier = (typeof AI_ACCESS_TIERS)[number];
+
 /** User-facing capability choice; the `open` tier is the free pool backing these, never a selectable intent. */
 export const MODEL_INTENTS = [
   'fast',

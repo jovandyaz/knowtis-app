@@ -1,6 +1,6 @@
-import type { RateLimits } from '../ports/rate-limit.port';
+import type { AccessTier } from '@knowtis/shared-types';
 
-export type AccessTier = 'anonymous' | 'free' | 'byok';
+import type { RateLimits } from '../ports/rate-limit.port';
 
 const FULL_ALLOWANCE = 'full';
 export const ANONYMOUS_SHARE_ALLOWANCE = 'anonymous-share';

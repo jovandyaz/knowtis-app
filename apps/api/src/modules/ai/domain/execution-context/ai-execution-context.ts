@@ -1,6 +1,6 @@
-import type { ByokProvider } from '@knowtis/shared-types';
+import type { AccessTier, ByokProvider } from '@knowtis/shared-types';
 
-import type { AccessTier, TierPolicy } from './tier-policy';
+import type { TierPolicy } from './tier-policy';
 
 /** Who pays for a model call. BYOK names the provider whose stored key serves it; the key itself never travels in a context. */
 export type Billing =
