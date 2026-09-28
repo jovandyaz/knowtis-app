@@ -292,6 +292,28 @@ describe('pruneTranscript', () => {
     ]);
   });
 
+  it('replays an assistant row that carries the continue kind as its own content', () => {
+    const rows = [
+      row({ role: 'user', content: 'q', turnId: 't1' }),
+      row({
+        role: 'assistant',
+        content: 'answer',
+        stopReason: 'completed',
+        kind: 'continue',
+        turnId: 't1',
+      }),
+    ];
+    expect(
+      pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => [
+        m.role,
+        m.content,
+      ])
+    ).toEqual([
+      ['user', 'q'],
+      ['assistant', 'answer'],
+    ]);
+  });
+
   it('marks a cut-off reply on the parts of a kept row as well as its content', () => {
     const rows = [
       row({ role: 'user', content: 'q', turnId: 't' }),

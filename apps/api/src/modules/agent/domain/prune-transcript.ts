@@ -178,7 +178,7 @@ export function pruneTranscript(
   const keep = recentToolTurns(ordered, options.keepToolTurns);
   const messages: AgentMessage[] = [];
   for (const row of ordered) {
-    if (row.kind === MESSAGE_KIND.CONTINUE) {
+    if (row.role === 'user' && row.kind === MESSAGE_KIND.CONTINUE) {
       messages.push({ role: 'user', content: CONTINUE_REQUEST });
       continue;
     }
