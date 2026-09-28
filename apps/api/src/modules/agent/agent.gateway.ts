@@ -21,6 +21,8 @@ import {
   FEATURE_FLAG_KEYS,
   MODEL_ID_MAX_LENGTH,
   REASONING_EFFORTS,
+  type AgentQuotaPayload,
+  type AiQuota,
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
@@ -288,6 +290,7 @@ export class AgentGateway
               ...this.baseCallbacks(client, controller, turnId),
               onProposal,
               onModelStart,
+              onQuota: (quota) => this.emitQuota(client, turnId, quota),
             },
             controller.signal
           )
@@ -495,6 +498,27 @@ export class AgentGateway
     } finally {
       this.turns.release(userId, client.id, slotId);
       this.tokenExpiry.afterSlotRelease(client);
+    }
+  }
+
+  // A quota emit failure must never lose the consume/refund it reports, so it
+  // logs and moves on instead of propagating into the turn.
+  private emitQuota(
+    client: AuthenticatedSocket,
+    turnId: string,
+    quota: AiQuota
+  ): void {
+    try {
+      client.emit('agent:quota', {
+        turnId,
+        ...quota,
+      } satisfies AgentQuotaPayload);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.quota.emit_failed',
+        turnId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

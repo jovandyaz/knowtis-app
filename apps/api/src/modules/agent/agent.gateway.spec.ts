@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
+import { AIErrors } from '../ai/domain/errors/ai.errors';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AgentGateway } from './agent.gateway';
@@ -1889,6 +1890,125 @@ describe('AgentGateway', () => {
         'agent:error:AUTH_REQUIRED',
       ]);
       expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('AgentGateway daily message quota', () => {
+    const TURN = '77777777-7777-4777-8777-777777777777';
+    const QUOTA = {
+      tier: 'free',
+      messages: { used: 3, limit: 30, resetsAt: '2026-09-28T00:00:00.000Z' },
+    } as const;
+
+    it('emits agent:quota with the turn id whenever the handler reports the quota', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, callbacks: RunAgentTurnCallbacks) => {
+          callbacks.onQuota?.(QUOTA);
+        }
+      );
+      const gateway = makeGateway({ handler: { execute } });
+      const client = makeClient('u1');
+
+      await gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'hi' },
+      });
+
+      expect(client.emit).toHaveBeenCalledWith('agent:quota', {
+        turnId: TURN,
+        ...QUOTA,
+      });
+    });
+
+    it('emits AI_QUOTA_EXHAUSTED with its reset instant and upgrade', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, callbacks: RunAgentTurnCallbacks) => {
+          callbacks.onError(
+            AIErrors.quotaExhausted(
+              new Date('2026-09-28T00:00:00.000Z'),
+              'register'
+            )
+          );
+        }
+      );
+      const gateway = makeGateway({ handler: { execute } });
+      const client = makeClient('u1');
+
+      await gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'hi' },
+      });
+
+      expect(client.emit).toHaveBeenCalledWith('agent:error', {
+        code: 'AI_QUOTA_EXHAUSTED',
+        message: expect.any(String),
+        resetsAt: '2026-09-28T00:00:00.000Z',
+        upgrade: 'register',
+        turnId: TURN,
+      });
+    });
+
+    it('releases the claim of an exhausted turn, so a resend of it runs again', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, callbacks: RunAgentTurnCallbacks) => {
+          callbacks.onError(
+            AIErrors.quotaExhausted(
+              new Date('2026-09-28T00:00:00.000Z'),
+              'byok'
+            )
+          );
+        }
+      );
+      const gateway = makeGateway({ handler: { execute } });
+      const client = makeClient('u1');
+      const payload = { turnId: TURN, message: { content: 'hi' } };
+
+      await gateway.handleMessage(client as never, payload);
+      await gateway.handleMessage(client as never, payload);
+
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the turn running when the agent:quota emit throws', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, callbacks: RunAgentTurnCallbacks) => {
+          callbacks.onQuota?.(QUOTA);
+          callbacks.onDone({
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'test-model',
+            costUsd: 0,
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: AGENT_STOP_REASON.COMPLETED,
+          });
+        }
+      );
+      const gateway = makeGateway({ handler: { execute } });
+      const client = makeClient('u1');
+      client.emit = vi.fn((event: string) => {
+        if (event === 'agent:quota') {
+          throw new Error('socket write failed');
+        }
+      });
+      const log = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+
+      await gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'hi' },
+      });
+
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'agent.quota.emit_failed' })
+      );
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:done',
+        expect.objectContaining({ turnId: TURN })
+      );
+      log.mockRestore();
     });
   });
 });
