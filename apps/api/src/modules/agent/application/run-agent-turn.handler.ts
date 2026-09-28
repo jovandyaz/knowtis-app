@@ -924,8 +924,6 @@ export class RunAgentTurnHandler {
     }
   }
 
-  // The counter a client shows is advisory, so a failed report must never
-  // fail the turn, skip its accounting or replace the error it ends with.
   private reportQuota(
     callbacks: Pick<RunAgentTurnCallbacks, 'onQuota'>,
     quota: AiQuota,
