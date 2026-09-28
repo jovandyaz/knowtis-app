@@ -10,20 +10,20 @@ Per-turn reasoning **effort** is plumbed here but resolved elsewhere: a turn car
 
 `@WebSocketGateway` on the **`/agent`** namespace ([agent.gateway.ts](agent.gateway.ts)).
 
-| Direction       | Event                            | Meaning                                                                                                        |
-| --------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| client → server | `agent:message`                  | New user turn (`{ turnId?, conversationId?, message, noteId?, model?, effort? }`)                              |
-| client → server | `agent:approve` / `agent:reject` | HITL decision on a pending proposal — `{ proposalId, noteId? }`, plus an optional `reason` on reject           |
-| client → server | `agent:cancel`                   | Abort every in-flight turn on this socket                                                                      |
-| server → client | `agent:conversation`             | `{ conversationId }` — emitted once when the turn creates the conversation                                     |
-| server → client | `agent:chunk`                    | Streamed assistant text                                                                                        |
-| server → client | `agent:thinking`                 | Streamed reasoning summary (`{ text }`), rendered apart from the answer                                        |
-| server → client | `agent:proposal`                 | A proposed mutation awaiting approval                                                                          |
-| server → client | `agent:committed`                | Approved mutation applied (`{ proposalId, result }`)                                                           |
-| server → client | `agent:done`                     | Turn finished: `{ usage, sources, knownNotes, webSources, stopReason, conversationId? }`                       |
-| server → client | `agent:quota`                    | `{ turnId, tier, messages: { used, limit, resetsAt } \| null }`, after each consume and each refund that lands |
-| server → client | `agent:turn_settled`             | The resent turn already reached the model: `{ turnId, conversationId }`, sent instead of running it again      |
-| server → client | `agent:error`                    | Refusal or failure: `{ code, message }`, plus `turnId` once the turn is known (codes below)                    |
+| Direction       | Event                            | Meaning                                                                                                                                                                                         |
+| --------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| client → server | `agent:message`                  | New user turn (`{ turnId?, conversationId?, message, noteId?, model?, effort? }`)                                                                                                               |
+| client → server | `agent:approve` / `agent:reject` | HITL decision on a pending proposal — `{ proposalId, noteId? }`, plus an optional `reason` on reject                                                                                            |
+| client → server | `agent:cancel`                   | Abort every in-flight turn on this socket                                                                                                                                                       |
+| server → client | `agent:conversation`             | `{ conversationId }` — emitted once when the turn creates the conversation                                                                                                                      |
+| server → client | `agent:chunk`                    | Streamed assistant text                                                                                                                                                                         |
+| server → client | `agent:thinking`                 | Streamed reasoning summary (`{ text }`), rendered apart from the answer                                                                                                                         |
+| server → client | `agent:proposal`                 | A proposed mutation awaiting approval                                                                                                                                                           |
+| server → client | `agent:committed`                | Approved mutation applied (`{ proposalId, result }`)                                                                                                                                            |
+| server → client | `agent:done`                     | Turn finished: `{ usage, sources, knownNotes, webSources, stopReason, conversationId? }`                                                                                                        |
+| server → client | `agent:quota`                    | `{ turnId, tier, messages: { used, limit, resetsAt } \| null }`, after each consume and each refund that lands; skipped when the post-refund quota read fails (`ai.quota.refund_report_failed`) |
+| server → client | `agent:turn_settled`             | The resent turn already reached the model: `{ turnId, conversationId }`, sent instead of running it again                                                                                       |
+| server → client | `agent:error`                    | Refusal or failure: `{ code, message }`, plus `turnId` once the turn is known (codes below)                                                                                                     |
 
 Every server → client event about a turn carries its `turnId`. The gateway claims a client-sent `turnId` in Redis before the turn runs (`TurnClaimService`), so a resend never runs twice: a resend of a turn that reached the model gets `agent:turn_settled` for a day afterwards, one still running gets `TURN_IN_PROGRESS`, and a `turnId` reused for another message, note or conversation gets `TURN_ID_REUSED`. A turn refused before the model ran releases its claim, so its resend runs. A turn sent without a `turnId` is given one and skips the claim.
 
