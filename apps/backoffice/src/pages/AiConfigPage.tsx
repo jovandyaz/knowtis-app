@@ -35,6 +35,11 @@ const TAB: Record<AiConfigTabValue, AiConfigTabValue> = {
   providers: 'providers',
 };
 
+const MESSAGE_LIMIT_KEYS: readonly string[] = [
+  AI_CONFIG_KEYS.ANON_DAILY_MESSAGES,
+  AI_CONFIG_KEYS.FREE_DAILY_MESSAGES,
+];
+
 export function AiConfigPage() {
   const config = useAiConfig();
   const flags = useFeatureFlags();
@@ -53,8 +58,8 @@ export function AiConfigPage() {
   const modelEntries = (config.data ?? []).filter(
     (entry) => entry.kind === 'model'
   );
-  const messageLimits = (config.data ?? []).filter(
-    (entry) => entry.kind === 'count'
+  const messageLimits = (config.data ?? []).filter((entry) =>
+    MESSAGE_LIMIT_KEYS.includes(entry.key)
   );
   const defaultModel =
     config.data?.find((entry) => entry.key === AI_CONFIG_KEYS.DEFAULT_MODEL)

@@ -112,6 +112,37 @@ describe('MessageLimitsSection', () => {
     ).toBeInTheDocument();
   });
 
+  it('accepts 0, saving it to its own key', async () => {
+    render(<MessageLimitsSection entries={ENTRIES} />);
+
+    const input = guestsField();
+    await userEvent.clear(input);
+    await userEvent.type(input, '0');
+
+    expect(
+      screen.queryByText('A whole number from 0 to 10000.')
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(setConfigMutate).toHaveBeenCalledWith(
+      { key: 'ai_anon_daily_messages', value: '0' },
+      expect.anything()
+    );
+  });
+
+  it('ties the guest hint to its input, not the signed-in field', () => {
+    render(<MessageLimitsSection entries={ENTRIES} />);
+
+    expect(guestsField()).toHaveAccessibleDescription(
+      expect.stringContaining('0 turns the guest copilot off.')
+    );
+    expect(signedInField()).not.toHaveAccessibleDescription(
+      expect.stringContaining('0 turns the guest copilot off.')
+    );
+  });
+
   it('resets a stored limit to its code default', async () => {
     render(<MessageLimitsSection entries={ENTRIES} />);
 

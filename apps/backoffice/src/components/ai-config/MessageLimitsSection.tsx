@@ -49,9 +49,11 @@ export function MessageLimitsSection({ entries }: MessageLimitsSectionProps) {
       title="Daily messages"
       description="Copilot messages each caller gets per UTC day on platform-paid models. Turns billed to a user's own key never count."
     >
-      {entries.map((entry) => (
-        <MessageLimitField key={entry.key} entry={entry} />
-      ))}
+      <div className="flex flex-col gap-6">
+        {entries.map((entry) => (
+          <MessageLimitField key={entry.key} entry={entry} />
+        ))}
+      </div>
     </ConfigSection>
   );
 }
@@ -67,6 +69,13 @@ function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
     label: entry.key,
     inputId: entry.key,
   };
+  const describedBy =
+    [
+      hint ? `${inputId}-hint` : null,
+      error !== null ? `${inputId}-error` : null,
+    ]
+      .filter((id): id is string => id !== null)
+      .join(' ') || undefined;
 
   return (
     <div className="flex flex-col gap-2">
@@ -90,12 +99,14 @@ function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
           spellCheck={false}
           autoComplete="off"
           aria-invalid={error !== null}
-          aria-describedby={error !== null ? `${inputId}-error` : undefined}
+          aria-describedby={describedBy}
           onChange={(event) => edit(event.target.value)}
         />
       </FormField>
       {hint ? (
-        <p className="text-xs text-(--muted-foreground)">{hint}</p>
+        <p id={`${inputId}-hint`} className="text-xs text-(--muted-foreground)">
+          {hint}
+        </p>
       ) : null}
       {isDirty ? (
         <div className="flex flex-wrap items-center gap-2">
