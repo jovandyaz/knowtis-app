@@ -37,6 +37,8 @@ const ANON_LIMIT = 5;
 const RACING_SESSIONS = 20;
 const TWO_DAYS_SECONDS = 48 * 60 * 60;
 const TTL_SLACK_SECONDS = 5;
+const QUOTA_KEY_PATTERN = 'ai:quota:*';
+const SCAN_BATCH = 1000;
 
 function counterKey(subject: string): string {
   return `ai:quota:msgs:${subject}:${DAY.key}`;
@@ -44,6 +46,23 @@ function counterKey(subject: string): string {
 
 function markerKey(subject: string, turnId: string): string {
   return `ai:quota:turn:${subject}:${DAY.key}:${turnId}`;
+}
+
+async function scanQuotaKeys(client: Redis): Promise<Set<string>> {
+  const keys = new Set<string>();
+  let cursor = '0';
+  do {
+    const [next, batch] = await client.scan(
+      cursor,
+      'MATCH',
+      QUOTA_KEY_PATTERN,
+      'COUNT',
+      SCAN_BATCH
+    );
+    batch.forEach((key) => keys.add(key));
+    cursor = next;
+  } while (cursor !== '0');
+  return keys;
 }
 
 describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
@@ -282,6 +301,18 @@ describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
     }
   });
 
+  it('gives a counter left without an expiry the two-day TTL on its next consume', async () => {
+    const user = subject('user');
+    await redis.set(counterKey(user), '3');
+
+    await adapter.consume(turn([user]), LIMIT);
+
+    const ttl = await redis.ttl(counterKey(user));
+    expect(ttl).toBeGreaterThan(TWO_DAYS_SECONDS - TTL_SLACK_SECONDS);
+    expect(ttl).toBeLessThanOrEqual(TWO_DAYS_SECONDS);
+    expect(await adapter.usage([user], DAY)).toBe(4);
+  });
+
   it('passes every key it touches to the script in KEYS', async () => {
     const session = subject('anon');
     const ip = subject('ip');
@@ -291,16 +322,24 @@ describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
       counterKey(session),
       counterKey(ip),
     ];
+    const ownIds = [session, ip, declared.turnId];
+    const before = await scanQuotaKeys(redis);
+    const createdSinceBefore = async () =>
+      [...(await scanQuotaKeys(redis))]
+        .filter(
+          (key) => !before.has(key) && ownIds.some((id) => key.includes(id))
+        )
+        .sort();
     const evalSpy = vi.spyOn(redis, 'eval');
 
     try {
       await adapter.consume(declared, LIMIT);
-      const written = (
-        await Promise.all([session, ip].map((s) => redis.keys(`*${s}*`)))
-      ).flat();
-      expect([...new Set(written)].sort()).toEqual([...turnKeys].sort());
+      expect(await createdSinceBefore()).toEqual([...turnKeys].sort());
 
       await adapter.refund(declared);
+      expect(turnKeys).toEqual(
+        expect.arrayContaining(await createdSinceBefore())
+      );
       expect(
         evalSpy.mock.calls.map(([, numKeys, ...keysThenArgs]) =>
           keysThenArgs.slice(0, Number(numKeys))
