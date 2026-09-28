@@ -238,6 +238,18 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
     });
   }
 
+  if (
+    data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS < data.AI_AGENT_MAX_OUTPUT_TOKENS
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_SYNTHESIS_RESERVE_TOKENS must be at least AI_AGENT_MAX_OUTPUT_TOKENS — a smaller reserve lets one tool step’s output pass the turn token budget',
+      path: ['AI_AGENT_SYNTHESIS_RESERVE_TOKENS'],
+      input: data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS,
+    });
+  }
+
   if (data.AI_AGENT_SYNTHESIS_RESERVE_MS >= data.AI_AGENT_MAX_MS) {
     ctx.addIssue({
       code: 'custom',
