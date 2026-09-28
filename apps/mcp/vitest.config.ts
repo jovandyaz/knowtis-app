@@ -1,4 +1,5 @@
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import { isAgent } from 'std-env';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -8,7 +9,7 @@ export default defineConfig({
     // not set them, and a failure then reaches CI as a bare exit code. Measured:
     // silent in every project whose config the executor loads (`root`, `config`
     // or `configFile`); adding one to a project would silence it too.
-    reporters: ['default'],
+    reporters: [isAgent ? 'agent' : 'default'],
     globals: true,
     environment: 'node',
     include: ['src/**/*.spec.ts'],

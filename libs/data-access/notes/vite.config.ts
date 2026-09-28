@@ -1,5 +1,6 @@
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import react from '@vitejs/plugin-react-swc';
+import { isAgent } from 'std-env';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -42,7 +43,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    reporters: ['default'],
+    reporters: [isAgent ? 'agent' : 'default'],
     coverage: {
       reportsDirectory: '../../../coverage/libs/data-access/notes',
       provider: 'v8',
