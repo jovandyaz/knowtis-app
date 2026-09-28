@@ -56,7 +56,7 @@ import {
   ApiForbidden,
   ApiNotFound,
   ApiUnauthorized,
-} from '../../core/swagger';
+} from '../../core/swagger/api-responses.decorator';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { MCP_SCOPES } from '../mcp/mcp-token';
 import {

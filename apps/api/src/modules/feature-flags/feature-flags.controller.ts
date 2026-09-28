@@ -26,7 +26,7 @@ import {
   ApiAuthErrors,
   ApiBadRequest,
   ApiUnauthorized,
-} from '../../core/swagger';
+} from '../../core/swagger/api-responses.decorator';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagKeyParam } from './dto/feature-flag-key.param';
 import { UpsertFeatureFlagDto } from './dto/feature-flags.dto';

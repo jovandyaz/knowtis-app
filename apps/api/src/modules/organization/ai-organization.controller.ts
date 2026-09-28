@@ -30,7 +30,7 @@ import {
   ApiAuthErrors,
   ApiBadRequest,
   ApiServiceUnavailable,
-} from '../../core/swagger';
+} from '../../core/swagger/api-responses.decorator';
 import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';

@@ -23,7 +23,7 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { ApiServiceUnavailable } from '../../core/swagger';
+import { ApiServiceUnavailable } from '../../core/swagger/api-responses.decorator';
 import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';

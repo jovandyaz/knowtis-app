@@ -25,7 +25,7 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { SUBJECTS } from '@knowtis/authorization';
 
 import { clientIpOf } from '../../core/http/client-ip';
-import { ApiServiceUnavailable } from '../../core/swagger';
+import { ApiServiceUnavailable } from '../../core/swagger/api-responses.decorator';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,

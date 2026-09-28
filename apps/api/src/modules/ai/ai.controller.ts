@@ -42,7 +42,7 @@ import {
   ApiAuthErrors,
   ApiBadRequest,
   ApiServiceUnavailable,
-} from '../../core/swagger';
+} from '../../core/swagger/api-responses.decorator';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
