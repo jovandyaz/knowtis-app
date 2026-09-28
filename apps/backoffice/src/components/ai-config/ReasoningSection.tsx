@@ -25,8 +25,8 @@ export function ReasoningSection({ entry }: ReasoningSectionProps) {
       description="How much hidden thinking reasoning models spend before answering. This is the global default and covers BYOK turns too. Lower answers faster and cheaper; higher digs deeper."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the reasoning effort."
       />
       <div className="flex flex-wrap items-center gap-2">

@@ -10,6 +10,7 @@ import { CeilingSection } from '../CeilingSection';
 const setConfigMutate = vi.fn();
 const setConfigState = { isPending: false };
 const resetConfigMutate = vi.fn();
+const resetConfigState = { isError: false, error: null as Error | null };
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -24,8 +25,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
       isPending: false,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -57,6 +58,8 @@ describe('CeilingSection', () => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
   });
 
   it('shows the effective ceiling and its source', () => {
@@ -181,6 +184,19 @@ describe('CeilingSection', () => {
     expect(resetConfigMutate).toHaveBeenCalledWith({
       key: 'ai_free_tier_ceiling',
     });
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not reset the free-tier ceiling.'
+    );
+
+    renderSection('2.50', 'custom');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not reset the free-tier ceiling.'
+    );
   });
 
   it('offers no reset while serving the code default', () => {

@@ -80,8 +80,8 @@ function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
   return (
     <div className="flex flex-col gap-2">
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the daily message limit."
       />
       <ConfigSourceCell

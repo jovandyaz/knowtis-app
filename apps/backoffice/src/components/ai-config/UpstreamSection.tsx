@@ -111,8 +111,8 @@ export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
   return (
     <ConfigSection title={copy.title} description={copy.description}>
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage={`Could not update ${copy.label.toLowerCase()}.`}
       />
       <ConfigSourceCell

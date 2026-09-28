@@ -55,8 +55,8 @@ export function ModelsSection({
       description="Which model each kind of turn runs on. The default model is what every free-tier client gets."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the model."
       />
       <Table>

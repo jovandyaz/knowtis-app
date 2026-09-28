@@ -74,8 +74,8 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
       description="Order the models a turn falls back through when a provider fails. The first one that can route wins."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the chain."
       />
       <ConfigSourceCell

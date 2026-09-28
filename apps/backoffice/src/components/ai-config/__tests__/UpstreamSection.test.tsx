@@ -10,7 +10,11 @@ import { UpstreamSection } from '../UpstreamSection';
 const setConfigMutate = vi.fn();
 const setConfigState = { isPending: false };
 const resetConfigMutate = vi.fn();
-const resetConfigState = { isPending: false };
+const resetConfigState = {
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+};
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -25,8 +29,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
       isPending: resetConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -63,6 +67,19 @@ describe('UpstreamSection', () => {
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update preferred providers.');
+
+    renderSection();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update preferred providers.'
+    );
   });
 
   it('edits independent preference and exclusion lists with distinct labels', async () => {

@@ -9,6 +9,7 @@ import { MessageLimitsSection } from '../MessageLimitsSection';
 
 const setConfigMutate = vi.fn();
 const resetConfigMutate = vi.fn();
+const resetConfigState = { isError: false, error: null as Error | null };
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -23,8 +24,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
       isPending: false,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -61,6 +62,8 @@ describe('MessageLimitsSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     resetConfigMutate.mockReset();
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
   });
 
   it('shows each limit with its source', () => {
@@ -153,5 +156,18 @@ describe('MessageLimitsSection', () => {
     expect(resetConfigMutate).toHaveBeenCalledWith({
       key: 'ai_free_daily_messages',
     });
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not reset the daily message limit.'
+    );
+
+    render(<MessageLimitsSection entries={[ENTRIES[1]]} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not reset the daily message limit.'
+    );
   });
 });

@@ -18,7 +18,11 @@ const {
   setConfigMutate: vi.fn(),
   setConfigState: { isPending: false },
   resetConfigMutate: vi.fn(),
-  resetConfigState: { isPending: false },
+  resetConfigState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
@@ -35,8 +39,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
       isPending: resetConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -120,6 +124,8 @@ describe('ModelsSection', () => {
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
     onConfigureProviders.mockReset();
     useAssignableModelsMock.mockReturnValue({
       data: MODELS,
@@ -184,6 +190,17 @@ describe('ModelsSection', () => {
       screen.getByRole('button', { name: /^reset to default: .+$/i })
     ).toBeDisabled();
   });
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update the model.');
+
+    renderSection('custom');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the model.'
+    );
+  });
+
   it('marks a stored value the runtime no longer serves as stale', () => {
     renderSection('stale');
 

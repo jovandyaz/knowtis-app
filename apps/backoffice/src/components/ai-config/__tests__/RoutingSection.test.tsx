@@ -18,7 +18,11 @@ const {
   setConfigMutate: vi.fn(),
   setConfigState: { isPending: false },
   resetConfigMutate: vi.fn(),
-  resetConfigState: { isPending: false },
+  resetConfigState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
@@ -35,8 +39,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
       isPending: resetConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -116,12 +120,25 @@ describe('RoutingSection', () => {
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
     useAssignableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
     });
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update the chain.');
+
+    renderChain();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the chain.'
+    );
   });
 
   it('lists the chain in fallback order', () => {

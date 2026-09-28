@@ -52,8 +52,8 @@ export function CeilingSection({ entry }: CeilingSectionProps) {
       description="The output price the platform absorbs, in dollars per million tokens. Models at or under it serve every signed-in user; anything above is BYOK only."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the free-tier ceiling."
       />
       <ConfigSourceCell
