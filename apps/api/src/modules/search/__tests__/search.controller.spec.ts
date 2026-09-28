@@ -171,11 +171,9 @@ describe('SearchController', () => {
 
     await controller.search(user, dto, req);
 
-    const [execution] = tierResolver.resolve.mock.results.map(
-      (r) => r.value
-    ) as [Promise<unknown>];
+    const execution = await tierResolver.resolve.mock.results[0]?.value;
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
-    expect(search).toHaveBeenCalledWith(await execution, 'x', {
+    expect(search).toHaveBeenCalledWith(execution, 'x', {
       semantic: false,
     });
   });

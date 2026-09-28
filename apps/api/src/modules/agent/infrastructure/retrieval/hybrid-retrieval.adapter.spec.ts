@@ -183,9 +183,14 @@ describe('HybridRetrievalAdapter.search', () => {
   });
 
   it('never embeds when semantic is off', async () => {
-    const { adapter, embed } = make({ lexical: ['a'], vector: ['b'] });
-    await adapter.search(EXECUTION, 'x', { semantic: false });
+    const { adapter, embed, rateLimit } = make({
+      lexical: ['a'],
+      vector: ['b'],
+    });
+    const hits = await adapter.search(EXECUTION, 'x', { semantic: false });
+    expect(hits.map((h) => h.id)).toEqual(['a']);
     expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
   });
 });
 

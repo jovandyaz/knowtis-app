@@ -34,10 +34,7 @@ import { SearchQueryDto } from './dto/search-query.dto';
 
 const DEFAULT_LIMIT = 20;
 
-const SEARCH_MODES = ['hybrid', 'lexical'] as const;
-type SearchMode = (typeof SEARCH_MODES)[number];
-const HYBRID_MODE: SearchMode = SEARCH_MODES[0];
-const LEXICAL_MODE: SearchMode = SEARCH_MODES[1];
+type SearchMode = 'hybrid' | 'lexical';
 
 @ApiTags('Search')
 @ApiBearerAuth()
@@ -76,7 +73,12 @@ export class SearchController {
             },
           },
         },
-        mode: { type: 'string', enum: [...SEARCH_MODES] },
+        mode: {
+          type: 'string',
+          enum: ['hybrid', 'lexical'],
+          description:
+            "Whether the semantic leg was attempted, not whether it succeeded. 'lexical' means it was skipped because the AI budget refused it; 'hybrid' means it was attempted (it may still fall back to lexical results internally on failure).",
+        },
       },
     },
   })
@@ -106,7 +108,7 @@ export class SearchController {
       });
       return {
         hits: hits.slice(0, query.limit ?? DEFAULT_LIMIT),
-        mode: semantic ? HYBRID_MODE : LEXICAL_MODE,
+        mode: semantic ? 'hybrid' : 'lexical',
       };
     } finally {
       if (check?.allowed) {
