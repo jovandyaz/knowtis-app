@@ -13,6 +13,7 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  type AgentStopReason,
   type AiQuota,
   type ByokProvider,
   type ReasoningEffort,
@@ -1507,6 +1508,7 @@ describe('RunAgentTurnHandler', () => {
         inputTokens: 7,
         outputTokens: 3,
         costUsd: expect.any(Number),
+        continuable: false,
       })
     );
     expect(onDone.mock.calls[0][0].costUsd).toBeGreaterThan(0);
@@ -6773,6 +6775,151 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
     expect(orchestrator.run).toHaveBeenCalledOnce();
     expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  describe('continuable on done', () => {
+    function doneWith(stopReason: AgentStopReason): AgentEvent[] {
+      return [
+        { type: 'chunk', text: 'Found A. Pending: B.' },
+        {
+          type: 'done',
+          usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
+          sources: [],
+          knownNotes: [],
+          webSources: [],
+          stopReason,
+        },
+      ];
+    }
+    const resumed = {
+      userId: USER,
+      turnId: TURN_ID,
+      conversationId: 'conv-1',
+      resume: { outcome: 'created' },
+    };
+
+    it('is continuable when a capped turn leaves the caller messages', async () => {
+      const { handler } = build({
+        quota: consumedQuota(),
+        events: doneWith('max_steps'),
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'max_steps', continuable: true })
+      );
+    });
+
+    it('is not continuable when the capped turn drew the last message', async () => {
+      const quota = createMessageQuotaStub({
+        kind: 'consumed',
+        receipt: RECEIPT,
+        quota: {
+          tier: 'free',
+          messages: { used: 30, limit: 30, resetsAt: RESETS_AT },
+        },
+      });
+      const { handler } = build({ quota, events: doneWith('max_steps') });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+    });
+
+    it('is continuable when an unmetered turn hits the time limit', async () => {
+      const { handler } = build({
+        quota: createMessageQuotaStub(),
+        events: doneWith('time_limit'),
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'time_limit', continuable: true })
+      );
+    });
+
+    it('is not continuable when the turn completed', async () => {
+      const { handler } = build({
+        quota: consumedQuota(),
+        events: doneWith('completed'),
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+    });
+
+    it('reads the quota for a capped resume leg, which draws no message', async () => {
+      const quota = consumedQuota();
+      vi.mocked(quota.snapshot).mockResolvedValue(AFTER_CONSUME);
+      const { handler } = build({ quota, events: doneWith('max_steps') });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'max_steps', continuable: true })
+      );
+      expect(quota.snapshot).toHaveBeenCalledWith(executionFor(USER));
+      expect(quota.consume).not.toHaveBeenCalled();
+    });
+
+    it('is not continuable when a capped resume leg cannot read the quota', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const quota = consumedQuota();
+      vi.mocked(quota.snapshot).mockRejectedValue(new Error('redis down'));
+      const { handler } = build({ quota, events: doneWith('max_steps') });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.continuable.snapshot_failed',
+          error: 'redis down',
+        })
+      );
+    });
+
+    it('never reads the quota for a resume leg that completed', async () => {
+      const quota = consumedQuota();
+      const { handler } = build({ quota, events: doneWith('completed') });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+      expect(quota.snapshot).not.toHaveBeenCalled();
+    });
   });
 
   it('never consumes when the requested model is not selectable', async () => {

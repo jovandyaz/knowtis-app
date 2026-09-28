@@ -54,6 +54,8 @@ export interface AgentDonePayload {
   knownNotes: AgentSource[];
   webSources: WebSource[];
   stopReason: AgentStopReason;
+  /** Absent from servers that predate turn continuation. */
+  continuable?: boolean;
   conversationId?: string;
 }
 

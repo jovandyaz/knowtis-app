@@ -350,6 +350,43 @@ describe('AgentGateway', () => {
     }
   );
 
+  it.each([true, false])(
+    'forwards continuable %s on agent:done',
+    async (continuable) => {
+      const execute = vi.fn(
+        async (
+          _input: unknown,
+          cb: { onDone: (usage: unknown) => void }
+        ): Promise<void> => {
+          cb.onDone({
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'm',
+            costUsd: 0,
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'max_steps',
+            continuable,
+          });
+        }
+      );
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+      });
+      const client = makeClient('u1');
+
+      await gateway.handleMessage(client as never, {
+        message: { content: 'hi' },
+      });
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:done',
+        expect.objectContaining({ stopReason: 'max_steps', continuable })
+      );
+    }
+  );
+
   it('emits agent:thinking when the handler streams reasoning', async () => {
     const execute = vi.fn(
       async (
@@ -1030,6 +1067,7 @@ describe('AgentGateway', () => {
       knownNotes: [],
       webSources: [],
       stopReason: 'completed' as const,
+      continuable: false,
     };
 
     type Execute = (
@@ -1665,6 +1703,7 @@ describe('AgentGateway', () => {
       knownNotes: [],
       webSources: [],
       stopReason: 'completed' as const,
+      continuable: false,
     };
 
     type Execute = (
@@ -2043,6 +2082,7 @@ describe('AgentGateway', () => {
             knownNotes: [],
             webSources: [],
             stopReason: AGENT_STOP_REASON.COMPLETED,
+            continuable: false,
           });
         }
       );

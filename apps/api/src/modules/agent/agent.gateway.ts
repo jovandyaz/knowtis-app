@@ -548,6 +548,7 @@ export class AgentGateway
           knownNotes: usage.knownNotes,
           webSources: usage.webSources,
           stopReason: usage.stopReason,
+          continuable: usage.continuable,
           ...(usage.conversationId
             ? { conversationId: usage.conversationId }
             : {}),

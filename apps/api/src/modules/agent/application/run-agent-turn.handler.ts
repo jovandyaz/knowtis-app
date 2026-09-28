@@ -66,6 +66,11 @@ import {
   seamHead,
   seamTail,
 } from '../domain/coalesce-messages';
+import {
+  hasMessagesLeft,
+  isContinuable,
+  isContinuableStop,
+} from '../domain/continuable';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -134,6 +139,8 @@ export interface RunAgentTurnCallbacks {
     knownNotes: readonly AgentSource[];
     webSources: readonly WebSource[];
     stopReason: AgentStopReason;
+    /** The turn stopped at a checkpoint and the caller has a message left to continue it. */
+    continuable: boolean;
     conversationId?: string;
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
@@ -171,9 +178,13 @@ interface TurnLoopPolicy {
 
 interface QuotaHold {
   readonly refund: () => Promise<void>;
+  readonly quota: () => AiQuota | null;
 }
 
-const NO_QUOTA_HOLD: QuotaHold = { refund: () => Promise.resolve() };
+const NO_QUOTA_HOLD: QuotaHold = {
+  refund: () => Promise.resolve(),
+  quota: () => null,
+};
 
 type PreparedTurn =
   | { readonly kind: 'refused' }
@@ -518,6 +529,7 @@ export class RunAgentTurnHandler {
           knownNotes: [],
           webSources: [],
           stopReason: AGENT_STOP_REASON.COMPLETED,
+          continuable: false,
         });
         return 'stop';
       },
@@ -806,6 +818,12 @@ export class RunAgentTurnHandler {
               void this.byok.markUsed(userId, execution.billing.provider);
             }
             await persistTurnOnce(event.sources, event.stopReason);
+            const continuable = policy.consumesQuota
+              ? isContinuable(event.stopReason, hold.quota())
+              : await this.continuableFromSnapshot(
+                  event.stopReason,
+                  input.execution
+                );
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -815,6 +833,7 @@ export class RunAgentTurnHandler {
               knownNotes: event.knownNotes,
               webSources: event.webSources,
               stopReason: event.stopReason,
+              continuable,
               ...(persistence
                 ? { conversationId: persistence.conversationId }
                 : {}),
@@ -902,6 +921,7 @@ export class RunAgentTurnHandler {
       case 'consumed': {
         this.reportQuota(callbacks, outcome.quota, turnId);
         let refunded = false;
+        let reported = outcome.quota;
         return {
           refund: async () => {
             if (refunded) {
@@ -910,9 +930,11 @@ export class RunAgentTurnHandler {
             refunded = true;
             const quota = await this.quota.refund(outcome.receipt);
             if (quota) {
+              reported = quota;
               this.reportQuota(callbacks, quota, turnId);
             }
           },
+          quota: () => reported,
         };
       }
       case 'exhausted':
@@ -927,6 +949,27 @@ export class RunAgentTurnHandler {
         const _exhaustive: never = outcome;
         throw new Error(`Unhandled quota outcome: ${String(_exhaustive)}`);
       }
+    }
+  }
+
+  // A leg that draws no message holds NO_QUOTA_HOLD, whose null reads as
+  // unmetered; a platform caller is metered, so the quota is read instead.
+  private async continuableFromSnapshot(
+    stopReason: AgentStopReason,
+    execution: AiExecutionContext
+  ): Promise<boolean> {
+    if (!isContinuableStop(stopReason)) {
+      return false;
+    }
+    try {
+      return hasMessagesLeft(await this.quota.snapshot(execution));
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.continuable.snapshot_failed',
+        userId: execution.subject.userId,
+        error: reasonOf(error),
+      });
+      return false;
     }
   }
 
