@@ -7,9 +7,9 @@ export interface DailyMessageLimits {
   readonly free: number;
 }
 
-const ANONYMOUS_TIER = 'anonymous';
-const BYOK = 'byok';
-const REGISTER_UPGRADE: QuotaUpgrade = 'register';
+const ANONYMOUS_TIER = 'anonymous' satisfies AccessTier;
+const BYOK = 'byok' satisfies AccessTier & QuotaUpgrade;
+const REGISTER_UPGRADE = 'register' satisfies QuotaUpgrade;
 
 /**
  * The daily messages a turn draws from, or null when it draws from none. The

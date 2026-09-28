@@ -109,7 +109,6 @@ export {
 
 export {
   AI_QUOTA_EXHAUSTED_CODE,
-  QUOTA_UPGRADES,
   type QuotaUpgrade,
   type AiMessageQuota,
   type AiQuota,
@@ -219,7 +218,6 @@ export {
   FLASHCARD_REVIEW_KINDS,
   type FlashcardReviewKind,
   FLASHCARD_REVIEW_KIND,
-  QUOTA_REMAINING_BUCKETS,
   type QuotaRemainingBucket,
   QUOTA_REMAINING_BUCKET,
 } from './lib/analytics.types';

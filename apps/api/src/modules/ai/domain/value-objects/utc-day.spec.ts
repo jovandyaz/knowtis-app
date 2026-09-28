@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { utcDayOf } from './utc-day';
 
 describe('utcDayOf', () => {
+  beforeAll(() => {
+    vi.stubEnv('TZ', 'Pacific/Kiritimati');
+  });
+
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
   it.each([
     {
       now: '2026-09-27T12:34:56.789Z',

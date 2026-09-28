@@ -3,8 +3,7 @@ import type { AccessTier } from './ai.types';
 export const AI_QUOTA_EXHAUSTED_CODE = 'AI_QUOTA_EXHAUSTED';
 
 /** The upgrade an exhausted caller is offered: register (anonymous) or bring a key. */
-export const QUOTA_UPGRADES = ['register', 'byok'] as const;
-export type QuotaUpgrade = (typeof QUOTA_UPGRADES)[number];
+export type QuotaUpgrade = 'register' | 'byok';
 
 export interface AiMessageQuota {
   used: number;

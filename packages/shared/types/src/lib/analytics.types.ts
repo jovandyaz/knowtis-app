@@ -54,8 +54,7 @@ export const FLASHCARD_REVIEW_KIND = {
   EARLY: 'early',
 } as const satisfies Record<string, FlashcardReviewKind>;
 
-export const QUOTA_REMAINING_BUCKETS = ['0', '1-20%', '>20%'] as const;
-export type QuotaRemainingBucket = (typeof QUOTA_REMAINING_BUCKETS)[number];
+export type QuotaRemainingBucket = '0' | '1-20%' | '>20%';
 
 export const QUOTA_REMAINING_BUCKET = {
   NONE: '0',
