@@ -43,21 +43,28 @@ GitHub-triggered deploys, and Vercel's system variables do not exist in a
 prebuilt deploy, so neither is used. A non-empty `REVISION` wins over a `RELEASE_SHA`
 environment variable. Local runs report `0.1.0`.
 
-| Event                   | Authority                                                                              | Allowed event properties                                                                   |
-| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `user signed up`        | API auth event                                                                         | `source=api`                                                                               |
-| `email verified`        | API auth event                                                                         | `source=api`, `verification_method` (`code`, `link`, or `password_reset`)                  |
-| `note created`          | API for registered users; browser after confirmed success for anonymous users          | `source` (`api` or `browser`), `actor_type`                                                |
-| `note activated`        | Browser, on the first meaningful edit of an initially empty note during that lifecycle | `source=editor`                                                                            |
-| `note shared`           | API after a successful link or collaborator share                                      | `source=api`, `share_type` (`link` or `collaborator`), `permission` (`viewer` or `editor`) |
-| `shared note viewed`    | Browser after the shared note resolves successfully                                    | `source=share_link`, `permission`, `actor_type`                                            |
-| `ai response completed` | Browser only after a live assistant or copilot stream completes                        | `source`, `assistant_type`, and `action` when applicable                                   |
-| `mcp key created`       | API after persistence succeeds                                                         | `source=api`, `scope_level` (`read`, `write`, or `share`)                                  |
+| Event                   | Authority                                                                              | Allowed event properties                                                                                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user signed up`        | API auth event                                                                         | `source=api`                                                                                                                                                  |
+| `email verified`        | API auth event                                                                         | `source=api`, `verification_method` (`code`, `link`, or `password_reset`)                                                                                     |
+| `note created`          | API for registered users; browser after confirmed success for anonymous users          | `source` (`api` or `browser`), `actor_type`                                                                                                                   |
+| `note activated`        | Browser, on the first meaningful edit of an initially empty note during that lifecycle | `source=editor`                                                                                                                                               |
+| `note shared`           | API after a successful link or collaborator share                                      | `source=api`, `share_type` (`link` or `collaborator`), `permission` (`viewer` or `editor`)                                                                    |
+| `shared note viewed`    | Browser after the shared note resolves successfully                                    | `source=share_link`, `permission`, `actor_type`                                                                                                               |
+| `ai response completed` | Browser only after a live assistant or copilot stream completes                        | `source`, `assistant_type`, and `action` when applicable                                                                                                      |
+| `mcp key created`       | API after persistence succeeds                                                         | `source=api`, `scope_level` (`read`, `write`, or `share`)                                                                                                     |
+| `ai quota consumed`     | API when a copilot turn draws a daily message (not on a replayed turn id)              | `source=api`, `tier` (`anonymous`, `free`, or `byok`), `remaining_bucket` (`0`, `1-20%`, or `>20%`, bucketed in the listener; raw counts never leave the API) |
+| `ai quota exhausted`    | API on a caller's first turn refused for a spent quota each UTC day                    | `source=api`, `tier`                                                                                                                                          |
 
 Browser anonymous creation is deliberately browser-authoritative so it retains
 the browser distinct ID and joins the pre-signup funnel. Registered API events
 use the stable database user ID. `shared note viewed` is not emitted when the
 viewer is the note's owner; owners opening their own link are not an audience.
+Server events carry `actor_type=anonymous` for anonymous sessions; their
+distinct ID is the anonymous user ID, not the browser's. `ai quota exhausted`
+counts callers, not attempts: retries on a spent quota are not captured again
+that day, except while the quota falls back to Postgres, which captures every
+refusal.
 
 Only identification may set these person properties: `email`, `name`, `role`,
 `locale`, and `is_internal`. Email and name are not event properties. Event
@@ -142,7 +149,8 @@ WHERE timestamp >= now() - INTERVAL 24 HOUR
   AND properties.environment = 'production'
   AND event IN ('user signed up', 'email verified', 'note created',
     'note activated', 'note shared', 'shared note viewed',
-    'ai response completed', 'mcp key created')
+    'ai response completed', 'mcp key created', 'ai quota consumed',
+    'ai quota exhausted')
 GROUP BY event
 ORDER BY event
 ```
@@ -196,6 +204,8 @@ the taxonomy. Until real production events introduce a custom property, an
 update returns `Property definition not found`. Do not send synthetic
 production events to work around this. After the first real ingestion,
 describe and verify the custom properties listed in the event contract above.
+The `ai quota consumed` and `ai quota exhausted` event definitions are created
+in project `344524` the same way, after their first real ingestion.
 
 When verifying these assets, confirm the dashboard contains the six saved
 insights listed above and that each remains attached to dashboard `2065684`.

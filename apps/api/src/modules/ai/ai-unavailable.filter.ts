@@ -8,10 +8,10 @@ import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
 const AI_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
 
 /**
- * Answers a failed tier lookup with a retryable 503 and `Retry-After`,
- * instead of an unmapped 500. Bound per controller, it runs before the
- * global filter and hands it the translated exception, so the body format,
- * the 5xx masking and the `Retry-After` header stay in one place.
+ * Answers a failed tier or quota lookup with a retryable 503 and
+ * `Retry-After`, instead of an unmapped 500. Bound per controller, it runs
+ * before the global filter and hands it the translated exception, so the
+ * body format, the 5xx masking and the `Retry-After` header stay in one place.
  */
 @Catch(AiUnavailableError)
 export class AiUnavailableExceptionFilter extends GlobalExceptionFilter {

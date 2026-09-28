@@ -26,6 +26,7 @@ import type { TierResolver } from '../../ai/application/services/tier-resolver.s
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
+import { createMessageQuotaStub } from '../../ai/testing/create-message-quota-stub';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
@@ -172,7 +173,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       guardStub,
       aiConfigStub,
       turnEffortStub,
-      tierResolverStub
+      tierResolverStub,
+      createMessageQuotaStub()
     );
 
     let conversationId: string | undefined;
@@ -252,7 +254,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       guardStub,
       aiConfigStub,
       turnEffortStub,
-      tierResolverStub
+      tierResolverStub,
+      createMessageQuotaStub()
     );
 
     const onError = vi.fn();
@@ -306,7 +309,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       guardStub,
       aiConfigStub,
       turnEffortStub,
-      tierResolverStub
+      tierResolverStub,
+      createMessageQuotaStub()
     );
     const opened = conversationIdForTurn(USER, REPLAYED_TURN);
     const deliver = (callbacks: {
