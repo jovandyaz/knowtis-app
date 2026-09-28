@@ -183,7 +183,7 @@ export class ProductAnalyticsListener {
         event: capture.event,
         properties: capture.properties,
         actor: {
-          actor_type: 'registered',
+          actor_type: user.isAnonymous ? 'anonymous' : 'registered',
           is_internal: traits.isInternal,
           locale: traits.locale,
         },

@@ -283,6 +283,21 @@ describe('ProductAnalyticsListener', () => {
     );
   });
 
+  it('tags a server event from an anonymous session as an anonymous actor', async () => {
+    findById.mockResolvedValue({ ...USER, isAnonymous: true });
+
+    await listener.handleNoteShared(
+      new NoteSharedEvent(USER.id, 'link', 'viewer')
+    );
+
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'note shared',
+        actor: expect.objectContaining({ actor_type: 'anonymous' }),
+      })
+    );
+  });
+
   it('maps every score bucket boundary', async () => {
     const cases: Array<[number, QuizScoreBucket]> = [
       [0.2, '<50'],

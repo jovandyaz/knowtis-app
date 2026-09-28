@@ -13,9 +13,7 @@ import type {
   QuizScoreBucket,
 } from '@knowtis/shared-types';
 
-export interface ServerActorContext extends ProductActorContext {
-  actor_type: 'registered';
-}
+export type ServerActorContext = ProductActorContext;
 
 export type ServerPersonProperties = ProductPersonProperties;
 
