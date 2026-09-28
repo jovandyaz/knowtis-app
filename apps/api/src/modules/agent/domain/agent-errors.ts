@@ -94,6 +94,19 @@ export const AgentErrors = {
       'AGENT_MARKDOWN_AT_LIMIT',
       `${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed. Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`
     ),
+  editFieldAtLimit: (
+    position: number,
+    field: 'oldText' | 'newText',
+    maxChars: number
+  ) =>
+    make(
+      'AGENT_MARKDOWN_AT_LIMIT',
+      `Edit ${position}: ${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed. ${
+        field === 'oldText'
+          ? 'oldText has to stay an exact copy of the note, so do not shorten it by rewording: split the change into several edits, each with a shorter oldText copied exactly from getNote that still appears only once.'
+          : `Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`
+      }`
+    ),
   wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>
     make(
       'AGENT_WHOLE_BODY_UPDATE_REFUSED',

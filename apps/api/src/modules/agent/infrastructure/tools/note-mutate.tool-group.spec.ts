@@ -406,6 +406,41 @@ describe('NoteMutateToolGroup markdown length', () => {
     }
   );
 
+  it('names the cut edit and tells the model to split an oldText rather than reword it', async () => {
+    const builder = {
+      buildEdit: vi.fn(),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+
+    const out = (await run(group(builder), c, 'proposeEditNote', {
+      noteId: NOTE_ID,
+      edits: [
+        { oldText: 'milk', newText: 'oat milk' },
+        { oldText: AT_LIMIT, newText: 'x' },
+      ],
+    })) as { error: string };
+
+    expect(out.error).toContain('Edit 2: oldText');
+    expect(out.error).toContain('copied exactly from getNote');
+    expect(out.error).not.toContain('condense');
+    expect(builder.buildEdit).not.toHaveBeenCalled();
+  });
+
+  it('names the cut edit when its newText fills the limit', async () => {
+    const builder = {
+      buildEdit: vi.fn(),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+
+    const out = (await run(group(builder), c, 'proposeEditNote', {
+      noteId: NOTE_ID,
+      edits: [{ oldText: 'milk', newText: AT_LIMIT }],
+    })) as { error: string };
+
+    expect(out.error).toContain('Edit 1: newText');
+    expect(out.error).toContain('condense it');
+  });
+
   it('proposes markdown one character under the limit', async () => {
     const builder = {
       buildEdit: vi.fn().mockResolvedValue(ok(editProposal)),

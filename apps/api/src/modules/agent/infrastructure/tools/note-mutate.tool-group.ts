@@ -35,6 +35,23 @@ function refuseMarkdownAtLimit(
   );
 }
 
+function refuseEditAtLimit(
+  edits: readonly { oldText: string; newText: string }[]
+): { error: string } | undefined {
+  for (const [i, edit] of edits.entries()) {
+    const cut = (['oldText', 'newText'] as const).find(
+      (field) => edit[field].length === MAX_MARKDOWN_CHARS
+    );
+    if (cut) {
+      return {
+        error: AgentErrors.editFieldAtLimit(i + 1, cut, MAX_MARKDOWN_CHARS)
+          .message,
+      };
+    }
+  }
+  return undefined;
+}
+
 function captureProposal(
   collector: ProposalCollector,
   proposal: ProposedMutation
@@ -117,13 +134,9 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             ),
         }),
         execute: async ({ noteId, edits, appendMarkdown }) => {
-          const refused = refuseMarkdownAtLimit([
-            ['appendMarkdown', appendMarkdown],
-            ...edits.flatMap(({ oldText, newText }) => [
-              ['oldText', oldText] as const,
-              ['newText', newText] as const,
-            ]),
-          ]);
+          const refused =
+            refuseEditAtLimit(edits) ??
+            refuseMarkdownAtLimit([['appendMarkdown', appendMarkdown]]);
           if (refused) {
             return refused;
           }
