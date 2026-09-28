@@ -16,9 +16,17 @@ const {
 } = vi.hoisted(() => ({
   useAssignableModelsMock: vi.fn(),
   setConfigMutate: vi.fn(),
-  setConfigState: { isPending: false },
+  setConfigState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
   resetConfigMutate: vi.fn(),
-  resetConfigState: { isPending: false },
+  resetConfigState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
@@ -28,15 +36,23 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useAssignableModels: () => useAssignableModelsMock(),
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
+      reset: () => {
+        setConfigState.isError = false;
+        setConfigState.error = null;
+      },
       isPending: setConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: setConfigState.isError,
+      error: setConfigState.error,
     }),
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
+      reset: () => {
+        resetConfigState.isError = false;
+        resetConfigState.error = null;
+      },
       isPending: resetConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -114,14 +130,47 @@ describe('RoutingSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
+    setConfigState.isError = false;
+    setConfigState.error = null;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
     useAssignableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
     });
+  });
+
+  it('clears a stale reset error once a save succeeds', async () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update the chain.');
+
+    const { rerender } = renderChain();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the chain.'
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /move haiku earlier/i })
+    );
+    await userEvent.click(screen.getByRole('button', { name: /save chain/i }));
+    rerender(<RoutingSection entry={entryWith(CHAIN)} />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update the chain.');
+
+    renderChain();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the chain.'
+    );
   });
 
   it('lists the chain in fallback order', () => {
