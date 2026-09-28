@@ -131,6 +131,7 @@ describe('buildTurnRows', () => {
   it.each([
     'max_steps',
     'token_budget',
+    'time_limit',
     'error',
     'aborted',
     'completed',

@@ -350,7 +350,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(rows[3].sources).toEqual([{ id: noteId, title: 'GTD' }]);
   });
 
-  it.each(['max_steps', 'token_budget'] as const)(
+  it.each(['max_steps', 'token_budget', 'time_limit'] as const)(
     'reloads a %s tool-ending turn with its terminal notice and intact replay pairs',
     async (stopReason) => {
       const noteId = await ownNote('N1');
