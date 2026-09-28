@@ -165,33 +165,84 @@ describe('ProductAnalytics', () => {
     await close();
   });
 
-  it('sends only the allowlisted quota properties', async () => {
-    const { analytics, close } = await createAnalytics({
-      NODE_ENV: 'production',
-      POSTHOG_PROJECT_TOKEN: 'project-token',
-      POSTHOG_HOST: 'https://us.i.posthog.com',
-    });
-
-    analytics.capture({
-      distinctId: 'user-1',
-      event: 'ai quota consumed',
-      properties: {
+  it.each([
+    {
+      label: 'ai quota consumed',
+      input: {
+        distinctId: 'user-1',
+        event: 'ai quota consumed' as const,
+        properties: {
+          source: 'api' as const,
+          tier: 'free' as const,
+          remaining_bucket: '>20%' as const,
+          used: 1,
+          limit: 30,
+        } as ServerProductEventMap['ai quota consumed'],
+        actor: {
+          actor_type: 'registered' as const,
+          is_internal: false,
+          locale: 'en',
+        },
+      },
+      expectedProperties: {
         source: 'api',
         tier: 'free',
         remaining_bucket: '>20%',
-        used: 1,
-      } as ServerProductEventMap['ai quota consumed'],
-      actor: { actor_type: 'registered', is_internal: false, locale: 'en' },
-    });
+        actor_type: 'registered',
+        is_internal: false,
+        locale: 'en',
+      },
+    },
+    {
+      label: 'ai quota exhausted',
+      input: {
+        distinctId: 'user-1',
+        event: 'ai quota exhausted' as const,
+        properties: {
+          source: 'api' as const,
+          tier: 'anonymous' as const,
+          used: 5,
+          limit: 5,
+        } as ServerProductEventMap['ai quota exhausted'],
+        actor: {
+          actor_type: 'anonymous' as const,
+          is_internal: false,
+          locale: 'en',
+        },
+      },
+      expectedProperties: {
+        source: 'api',
+        tier: 'anonymous',
+        actor_type: 'anonymous',
+        is_internal: false,
+        locale: 'en',
+      },
+    },
+  ])(
+    'sends only the allowlisted $label properties',
+    async ({ input, expectedProperties }) => {
+      const { analytics, close } = await createAnalytics({
+        NODE_ENV: 'production',
+        POSTHOG_PROJECT_TOKEN: 'project-token',
+        POSTHOG_HOST: 'https://us.i.posthog.com',
+        RELEASE_SHA: 'sha-quota',
+      });
 
-    expect(capture).toHaveBeenCalledWith(
-      expect.objectContaining({
-        properties: expect.not.objectContaining({ used: 1 }),
-      })
-    );
+      analytics.capture(input);
 
-    await close();
-  });
+      expect(capture).toHaveBeenCalledWith({
+        distinctId: input.distinctId,
+        event: input.event,
+        properties: {
+          environment: 'production',
+          app_version: 'sha-quota',
+          ...expectedProperties,
+        },
+      });
+
+      await close();
+    }
+  );
 
   it('does not throw when the PostHog client is unavailable', async () => {
     const { analytics, close } = await createAnalytics({ NODE_ENV: 'test' });
