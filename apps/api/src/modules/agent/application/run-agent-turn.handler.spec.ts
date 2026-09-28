@@ -6209,7 +6209,14 @@ describe('RunAgentTurnHandler daily message quota', () => {
       over.tierResolver ?? makeTierResolver(),
       over.quota
     );
-    return { handler, rateLimit: deps.rateLimit, orchestrator, guard, embed };
+    return {
+      handler,
+      rateLimit: deps.rateLimit,
+      pendingStore: deps.pendingStore,
+      orchestrator,
+      guard,
+      embed,
+    };
   }
 
   function callbacks() {
@@ -6222,6 +6229,10 @@ describe('RunAgentTurnHandler daily message quota', () => {
       onModelStart: vi.fn(),
     };
   }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   const turn = { userId: USER, turnId: TURN_ID, message: { content: 'hola' } };
   const aborted: AgentEvent = {
@@ -6282,7 +6293,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
   });
 
   it('fails the turn closed with a resendable code when the quota store is unavailable', async () => {
-    const { handler, rateLimit } = build({
+    const { handler, rateLimit, guard, orchestrator } = build({
       quota: createMessageQuotaStub({ kind: 'unavailable' }),
     });
     const cb = callbacks();
@@ -6294,7 +6305,34 @@ describe('RunAgentTurnHandler daily message quota', () => {
         code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
       })
     );
+    expect(guard.guard).not.toHaveBeenCalled();
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('still runs the turn when reporting the drawn message throws', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const quota = consumedQuota();
+    const { handler, orchestrator } = build({ quota });
+    const cb = callbacks();
+    cb.onQuota.mockImplementation(() => {
+      throw new Error('socket closed');
+    });
+
+    await handler.execute(turn, cb);
+
+    expect(orchestrator.run).toHaveBeenCalledOnce();
+    expect(cb.onDone).toHaveBeenCalledOnce();
+    expect(cb.onError).not.toHaveBeenCalled();
+    expect(quota.refund).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.quota.report_failed',
+        turnId: TURN_ID,
+      })
+    );
   });
 
   it('refunds and reports the quota when the budget gate denies the turn', async () => {
@@ -6466,6 +6504,97 @@ describe('RunAgentTurnHandler daily message quota', () => {
     );
   });
 
+  it('reports the provider error and records its usage when reporting the refund throws', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const quota = consumedQuota();
+    const error = AIErrors.providerError('upstream 500');
+    const { handler, rateLimit } = build({
+      quota,
+      events: [
+        {
+          type: 'error',
+          error,
+          usage: { inputTokens: 12, outputTokens: 0, model: SERVED_MODEL },
+        },
+      ],
+    });
+    const cb = callbacks();
+    cb.onQuota.mockImplementation((reported: AiQuota) => {
+      if (reported === AFTER_REFUND) {
+        throw new Error('socket closed');
+      }
+    });
+
+    await handler.execute(turn, cb);
+
+    expect(cb.onError).toHaveBeenCalledOnce();
+    expect(cb.onError).toHaveBeenCalledWith(error);
+    expect(quota.refund).toHaveBeenCalledOnce();
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      executionFor(USER),
+      ANY_RESERVATION,
+      expect.objectContaining({ inputTokens: 12, model: SERVED_MODEL })
+    );
+    expect(
+      vi.mocked(rateLimit.recordUsage).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(quota.refund).mock.invocationCallOrder[0]);
+  });
+
+  it('refunds a turn whose model only reasoned before it failed', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [
+        { type: 'thinking', text: 'let me see' },
+        { type: 'error', error: AIErrors.providerError('upstream 500') },
+      ],
+    });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+  });
+
+  it('refunds a turn whose only text delta was empty before it failed', async () => {
+    const quota = consumedQuota();
+    const { handler } = build({
+      quota,
+      events: [
+        { type: 'chunk', text: '' },
+        { type: 'error', error: AIErrors.providerError('upstream 500') },
+      ],
+    });
+
+    await handler.execute(turn, callbacks());
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+  });
+
+  it('refunds a proposal with no text when saving it fails', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const quota = consumedQuota();
+    const { handler, pendingStore } = build({
+      quota,
+      events: [
+        {
+          type: 'proposal',
+          proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+          usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+        },
+      ],
+    });
+    vi.mocked(pendingStore.save).mockRejectedValue(new Error('redis down'));
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(quota.refund).toHaveBeenCalledOnce();
+    expect(cb.onProposal).not.toHaveBeenCalled();
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.PROVIDER_ERROR })
+    );
+  });
+
   it('does not refund a user abort that surfaces as a thrown error', async () => {
     const quota = consumedQuota();
     const controller = new AbortController();
@@ -6525,7 +6654,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
   it('never consumes on a resumed turn', async () => {
     const quota = consumedQuota();
-    const { handler } = build({ quota });
+    const { handler, orchestrator } = build({ quota });
 
     await handler.resumeTurn(
       {
@@ -6537,6 +6666,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
     );
 
+    expect(orchestrator.run).toHaveBeenCalledOnce();
     expect(quota.consume).not.toHaveBeenCalled();
   });
 
@@ -6545,9 +6675,13 @@ describe('RunAgentTurnHandler daily message quota', () => {
     const modelPreference = makeModelPreference();
     vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
     const { handler } = build({ quota, modelPreference });
+    const cb = callbacks();
 
-    await handler.execute({ ...turn, model: SERVED_MODEL }, callbacks());
+    await handler.execute({ ...turn, model: SERVED_MODEL }, cb);
 
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.INVALID_MODEL })
+    );
     expect(quota.consume).not.toHaveBeenCalled();
   });
 
@@ -6557,9 +6691,16 @@ describe('RunAgentTurnHandler daily message quota', () => {
       quota,
       tierResolver: makeTierResolver(['google']),
     });
+    const cb = callbacks();
 
-    await handler.execute({ ...turn, model: USER_KEYED_MODEL }, callbacks());
+    await handler.execute({ ...turn, model: USER_KEYED_MODEL }, cb);
 
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: AIErrorCodes.PROVIDER_ERROR,
+        message: expect.stringContaining('saved key'),
+      })
+    );
     expect(quota.consume).not.toHaveBeenCalled();
   });
 
@@ -6589,7 +6730,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       const { service, counters } = realQuota();
       const byok = makeByok();
       vi.mocked(byok.getApiKey).mockResolvedValue('sk-user-key');
-      const { handler } = build({
+      const { handler, orchestrator } = build({
         quota: service,
         byok,
         tierResolver: makeTierResolver(['google']),
@@ -6597,6 +6738,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
       await handler.execute({ ...turn, model: USER_KEYED_MODEL }, callbacks());
 
+      expect(orchestrator.run).toHaveBeenCalledOnce();
       expect(counters.consume).not.toHaveBeenCalled();
     });
 

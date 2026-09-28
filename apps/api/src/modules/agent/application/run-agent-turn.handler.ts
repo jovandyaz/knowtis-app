@@ -169,7 +169,6 @@ interface TurnLoopPolicy {
 }
 
 interface QuotaHold {
-  /** Gives the turn's message back; only the first call acts. */
   readonly refund: () => Promise<void>;
 }
 
@@ -758,19 +757,19 @@ export class RunAgentTurnHandler {
             break;
           case 'chunk':
             assistantText += event.text;
-            answered = true;
+            answered ||= event.text.length > 0;
             callbacks.onChunk(event.text);
             break;
           case 'error':
-            if (!answered) {
-              await hold.refund();
-            }
             await this.recordUsageSafe(
               ctx,
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
             await persistTurnOnce([], 'error');
+            if (!answered) {
+              await hold.refund();
+            }
             callbacks.onError(event.error);
             return;
           case 'aborted':
@@ -895,7 +894,7 @@ export class RunAgentTurnHandler {
       case 'unmetered':
         return NO_QUOTA_HOLD;
       case 'consumed': {
-        callbacks.onQuota?.(outcome.quota);
+        this.reportQuota(callbacks, outcome.quota, turnId);
         let refunded = false;
         return {
           refund: async () => {
@@ -905,7 +904,7 @@ export class RunAgentTurnHandler {
             refunded = true;
             const quota = await this.quota.refund(outcome.receipt);
             if (quota) {
-              callbacks.onQuota?.(quota);
+              this.reportQuota(callbacks, quota, turnId);
             }
           },
         };
@@ -922,6 +921,25 @@ export class RunAgentTurnHandler {
         const _exhaustive: never = outcome;
         throw new Error(`Unhandled quota outcome: ${String(_exhaustive)}`);
       }
+    }
+  }
+
+  // The counter a client shows is advisory, so a failed report must never
+  // fail the turn, skip its accounting or replace the error it ends with.
+  private reportQuota(
+    callbacks: Pick<RunAgentTurnCallbacks, 'onQuota'>,
+    quota: AiQuota,
+    turnId: string
+  ): void {
+    try {
+      callbacks.onQuota?.(quota);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.quota.report_failed',
+        turnId,
+        tier: quota.tier,
+        error: reasonOf(error),
+      });
     }
   }
 
