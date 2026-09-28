@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeader';
 import { CatalogSection } from '@/components/ai-config/CatalogSection';
 import { CeilingSection } from '@/components/ai-config/CeilingSection';
+import { MessageLimitsSection } from '@/components/ai-config/MessageLimitsSection';
 import { ModelsSection } from '@/components/ai-config/ModelsSection';
 import { ProvidersSection } from '@/components/ai-config/ProvidersSection';
 import { ReasoningSection } from '@/components/ai-config/ReasoningSection';
@@ -51,6 +52,9 @@ export function AiConfigPage() {
   );
   const modelEntries = (config.data ?? []).filter(
     (entry) => entry.kind === 'model'
+  );
+  const messageLimits = (config.data ?? []).filter(
+    (entry) => entry.kind === 'count'
   );
   const defaultModel =
     config.data?.find((entry) => entry.key === AI_CONFIG_KEYS.DEFAULT_MODEL)
@@ -118,6 +122,9 @@ export function AiConfigPage() {
                 {chain ? <RoutingSection entry={chain} /> : null}
                 {effort ? <ReasoningSection entry={effort} /> : null}
                 {ceiling ? <CeilingSection entry={ceiling} /> : null}
+                {messageLimits.length > 0 ? (
+                  <MessageLimitsSection entries={messageLimits} />
+                ) : null}
               </div>
             </>
           )}
