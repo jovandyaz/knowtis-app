@@ -16,7 +16,11 @@ const {
 } = vi.hoisted(() => ({
   useAssignableModelsMock: vi.fn(),
   setConfigMutate: vi.fn(),
-  setConfigState: { isPending: false },
+  setConfigState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
   resetConfigMutate: vi.fn(),
   resetConfigState: {
     isPending: false,
@@ -32,12 +36,20 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useAssignableModels: () => useAssignableModelsMock(),
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
+      reset: () => {
+        setConfigState.isError = false;
+        setConfigState.error = null;
+      },
       isPending: setConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: setConfigState.isError,
+      error: setConfigState.error,
     }),
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
+      reset: () => {
+        resetConfigState.isError = false;
+        resetConfigState.error = null;
+      },
       isPending: resetConfigState.isPending,
       isError: resetConfigState.isError,
       error: resetConfigState.error,
@@ -122,6 +134,8 @@ describe('ModelsSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
+    setConfigState.isError = false;
+    setConfigState.error = null;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
     resetConfigState.isError = false;
@@ -190,6 +204,29 @@ describe('ModelsSection', () => {
       screen.getByRole('button', { name: /^reset to default: .+$/i })
     ).toBeDisabled();
   });
+  it('clears a stale reset error once a save succeeds', async () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update the model.');
+
+    const { rerender } = renderSection();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the model.'
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+    await userEvent.click(
+      await screen.findByRole('menuitemradio', { name: /haiku/i })
+    );
+    rerender(
+      <ModelsSection
+        entries={[entryWith('custom')]}
+        onConfigureProviders={onConfigureProviders}
+      />
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows a failed reset', () => {
     resetConfigState.isError = true;
     resetConfigState.error = new Error('Could not update the model.');

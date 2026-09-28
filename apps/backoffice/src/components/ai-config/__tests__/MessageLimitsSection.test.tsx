@@ -17,12 +17,17 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     ...actual,
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
+      reset: vi.fn(),
       isPending: false,
       isError: false,
       error: null,
     }),
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
+      reset: () => {
+        resetConfigState.isError = false;
+        resetConfigState.error = null;
+      },
       isPending: false,
       isError: resetConfigState.isError,
       error: resetConfigState.error,
@@ -156,6 +161,28 @@ describe('MessageLimitsSection', () => {
     expect(resetConfigMutate).toHaveBeenCalledWith({
       key: 'ai_free_daily_messages',
     });
+  });
+
+  it('clears a stale reset error once a save succeeds', async () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not reset the daily message limit.'
+    );
+
+    const { rerender } = render(
+      <MessageLimitsSection entries={[ENTRIES[1]]} />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not reset the daily message limit.'
+    );
+
+    const input = signedInField();
+    await userEvent.clear(input);
+    await userEvent.type(input, '12');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    rerender(<MessageLimitsSection entries={[ENTRIES[1]]} />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows a failed reset', () => {

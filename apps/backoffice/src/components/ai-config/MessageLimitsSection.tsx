@@ -1,8 +1,4 @@
-import {
-  useResetAiConfig,
-  useSetAiConfig,
-  type AiConfigEntry,
-} from '@knowtis/data-access-admin';
+import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import {
   Button,
   FormField,
@@ -18,6 +14,7 @@ import {
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 import { useForkedDraft } from './useForkedDraft';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 interface LimitField {
   label: string;
@@ -59,8 +56,7 @@ export function MessageLimitsSection({ entries }: MessageLimitsSectionProps) {
 }
 
 function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
   const { value, isDirty, edit, discard } = useForkedDraft(entry.value);

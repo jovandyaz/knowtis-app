@@ -1,21 +1,17 @@
-import {
-  useResetAiConfig,
-  useSetAiConfig,
-  type AiConfigEntry,
-} from '@knowtis/data-access-admin';
+import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import { Button, MutationErrorAlert } from '@knowtis/design-system';
 import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 interface ReasoningSectionProps {
   entry: AiConfigEntry;
 }
 
 export function ReasoningSection({ entry }: ReasoningSectionProps) {
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
 

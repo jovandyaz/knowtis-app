@@ -8,7 +8,11 @@ import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import { UpstreamSection } from '../UpstreamSection';
 
 const setConfigMutate = vi.fn();
-const setConfigState = { isPending: false };
+const setConfigState = {
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+};
 const resetConfigMutate = vi.fn();
 const resetConfigState = {
   isPending: false,
@@ -22,12 +26,20 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     ...actual,
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
+      reset: () => {
+        setConfigState.isError = false;
+        setConfigState.error = null;
+      },
       isPending: setConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: setConfigState.isError,
+      error: setConfigState.error,
     }),
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
+      reset: () => {
+        resetConfigState.isError = false;
+        resetConfigState.error = null;
+      },
       isPending: resetConfigState.isPending,
       isError: resetConfigState.isError,
       error: resetConfigState.error,
@@ -65,10 +77,35 @@ describe('UpstreamSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
+    setConfigState.isError = false;
+    setConfigState.error = null;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
     resetConfigState.isError = false;
     resetConfigState.error = null;
+  });
+
+  it('clears a stale reset error once a save succeeds', async () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error('Could not update preferred providers.');
+
+    const { rerender } = renderSection('fireworks');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update preferred providers.'
+    );
+
+    const input = screen.getByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'baseten');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    rerender(
+      <UpstreamSection
+        mode="preference"
+        entry={entryWith('fireworks', 'default')}
+      />
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows a failed reset', () => {

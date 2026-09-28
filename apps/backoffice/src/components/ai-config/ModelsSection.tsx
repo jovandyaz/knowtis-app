@@ -1,7 +1,5 @@
 import {
   useAssignableModels,
-  useResetAiConfig,
-  useSetAiConfig,
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
@@ -20,6 +18,7 @@ import { AI_CONFIG_KEYS, MODEL_TIERS } from '@knowtis/shared-types';
 import { toModelSelectOption } from './assignable-model-options';
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 const KEY_LABELS: Record<string, string> = {
   [AI_CONFIG_KEYS.DEFAULT_MODEL]: 'Default model',
@@ -37,8 +36,7 @@ export function ModelsSection({
   onConfigureProviders,
 }: ModelsSectionProps) {
   const models = useAssignableModels();
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
 

@@ -26,6 +26,7 @@ const {
 
 const idleMutation = {
   mutate: vi.fn(),
+  reset: vi.fn(),
   isPending: false,
   isError: false,
   error: null,
@@ -47,6 +48,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useSystemProviders: () => useSystemProvidersMock(),
     useSetAiConfig: vi.fn().mockReturnValue({
       mutate: setConfigMutate,
+      reset: vi.fn(),
       isPending: false,
       isError: false,
       error: null,
