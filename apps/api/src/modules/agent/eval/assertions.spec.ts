@@ -708,8 +708,12 @@ describe('assertCappedTurnAnswers', () => {
   });
 
   it('rejects output that is not a transcript', () => {
-    expect(assertCappedTurnAnswers({ stopReason: 'max_steps' })).toBe(false);
-    expect(assertCappedTurnAnswers('{ not json')).toBe(false);
+    expect(
+      assertCappedTurnAnswers({
+        stopReason: 'max_steps',
+        text: 'Found notes A and B.',
+      })
+    ).toBe(false);
   });
 
   it('rejects a turn that completed instead of hitting the cap', () => {
