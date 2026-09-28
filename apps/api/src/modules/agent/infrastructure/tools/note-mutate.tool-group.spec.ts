@@ -456,15 +456,21 @@ describe('NoteMutateToolGroup markdown length', () => {
     expect(c.proposals.captured).toBe(editProposal);
   });
 
-  it('tells the model to escape a semicolon inside a mermaid diagram', () => {
+  it('tells the model to escape a semicolon and a # inside a mermaid diagram', () => {
     const tools = group({} as MutationProposalBuilder).build(ctx());
     const edit = editSchema(group({} as MutationProposalBuilder));
 
     expect(JSON.stringify(z.toJSONSchema(edit))).toContain('#59;');
+    expect(JSON.stringify(z.toJSONSchema(edit))).toContain('#35;');
     expect(
       JSON.stringify(
         z.toJSONSchema(tools.proposeCreateNote.inputSchema as z.ZodType)
       )
     ).toContain('#59;');
+    expect(
+      JSON.stringify(
+        z.toJSONSchema(tools.proposeCreateNote.inputSchema as z.ZodType)
+      )
+    ).toContain('#35;');
   });
 });

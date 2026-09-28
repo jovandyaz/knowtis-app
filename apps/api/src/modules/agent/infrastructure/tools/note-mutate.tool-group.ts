@@ -18,9 +18,9 @@ import {
 
 const MAX_EDITS_PER_PROPOSAL = 20;
 const MAX_MARKDOWN_CHARS = 20_000;
-const MERMAID_SEMICOLON_GUIDANCE =
-  'Inside a ```mermaid diagram never write a semicolon in a label or message: mermaid reads it as the end of the statement and the diagram fails to render, so write #59; instead.';
-const CONTENT_MARKDOWN_DESCRIPTION = `The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, ++underline++, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, \`\`\`mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported. ${MERMAID_SEMICOLON_GUIDANCE}`;
+const MERMAID_ESCAPE_GUIDANCE =
+  'Inside a ```mermaid diagram never write a semicolon or a # in a label or message: mermaid reads them as the end of the statement or a comment and the diagram fails to render, so write #59; for a semicolon and #35; for a # instead.';
+const CONTENT_MARKDOWN_DESCRIPTION = `The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, ++underline++, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, \`\`\`mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported. ${MERMAID_ESCAPE_GUIDANCE}`;
 
 // a provider that decodes against the schema stops a string at maxLength
 // instead of failing it, so text that fills the limit exactly was cut off
@@ -119,7 +119,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
                   .string()
                   .max(MAX_MARKDOWN_CHARS)
                   .describe(
-                    `Replacement Markdown, same vocabulary as contentMarkdown (no raw HTML; an image only with a url getNote returned); empty to delete oldText. ${MERMAID_SEMICOLON_GUIDANCE}`
+                    `Replacement Markdown, same vocabulary as contentMarkdown (no raw HTML; an image only with a url getNote returned); empty to delete oldText. ${MERMAID_ESCAPE_GUIDANCE}`
                   ),
               })
             )
@@ -130,7 +130,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             .max(MAX_MARKDOWN_CHARS)
             .optional()
             .describe(
-              `Markdown to add after the end of the note, same vocabulary as contentMarkdown. ${MERMAID_SEMICOLON_GUIDANCE}`
+              `Markdown to add after the end of the note, same vocabulary as contentMarkdown. ${MERMAID_ESCAPE_GUIDANCE}`
             ),
         }),
         execute: async ({ noteId, edits, appendMarkdown }) => {
