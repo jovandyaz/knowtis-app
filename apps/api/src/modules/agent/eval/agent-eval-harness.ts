@@ -185,7 +185,8 @@ export class AgentEvalHarness {
   async runConversation(
     messages: readonly AgentMessage[],
     fixtureSet: NoteFixtureSetName,
-    model: string
+    model: string,
+    maxSteps: number = this.maxSteps
   ): Promise<EvalTranscript> {
     assertPinnedModelAvailable(this.fallbackChain.candidatesFor(model), model);
     this.retrieval.seed(resolveFixtureSet(fixtureSet));
@@ -198,7 +199,7 @@ export class AgentEvalHarness {
       execution: EVAL_EXECUTION,
       messages,
       model,
-      maxSteps: this.maxSteps,
+      maxSteps,
       maxTurnTokens: this.maxTurnTokens,
       effortFor: (candidate) => this.turnSettings.effortFor(candidate),
       openrouterProviderOrder,
@@ -243,15 +244,18 @@ export class AgentEvalHarness {
     };
   }
 
+  /** `maxSteps` overrides the configured step cap for this case only. */
   async runCase(
     message: string,
     fixtureSet: NoteFixtureSetName,
-    model: string
+    model: string,
+    maxSteps?: number
   ): Promise<EvalTranscript> {
     return this.runConversation(
       [{ role: 'user', content: message }],
       fixtureSet,
-      model
+      model,
+      maxSteps
     );
   }
 

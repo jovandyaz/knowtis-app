@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { assertCappedTurnAnswers } from './assertions';
 import { COPILOT_EVAL_CASES, selectCopilotCases } from './cases';
 import { caseKeyOf } from './runtime/eval-runtime';
 
@@ -16,8 +17,25 @@ const FIXTURE_NAMES = new Set([
 ]);
 
 describe('COPILOT_EVAL_CASES', () => {
-  it('defines the eleven cases', () => {
-    expect(COPILOT_EVAL_CASES).toHaveLength(11);
+  it('defines the twelve cases', () => {
+    expect(COPILOT_EVAL_CASES).toHaveLength(12);
+  });
+
+  it('caps the checkpoint case at two steps and grades both the answer and its wording', () => {
+    const checkpoint = COPILOT_EVAL_CASES.find(
+      (testCase) =>
+        testCase.description ===
+        'checkpoint: a capped turn answers and states what is pending'
+    );
+
+    expect(checkpoint?.vars.maxSteps).toBe(2);
+    expect(checkpoint?.assert.map((assertion) => assertion.type)).toEqual([
+      'javascript',
+      'llm-rubric',
+    ]);
+    expect(checkpoint?.assert[0]).toMatchObject({
+      value: assertCappedTurnAnswers,
+    });
   });
 
   it('every case has a message, a known fixtureSet, and at least one assertion', () => {
@@ -60,6 +78,7 @@ describe('COPILOT_EVAL_CASES', () => {
       'edit fidelity: an unrelated change preserves the rest',
       'edit: add a line to a complete note',
       'edit: append to a note read truncated',
+      'checkpoint: a capped turn answers and states what is pending',
     ]);
   });
 
@@ -85,7 +104,7 @@ describe('COPILOT_EVAL_CASES', () => {
       ]);
       expect(
         selectCopilotCases(' behavior ').map((testCase) => testCase.category)
-      ).toStrictEqual(Array.from({ length: 8 }, () => 'behavior'));
+      ).toStrictEqual(Array.from({ length: 9 }, () => 'behavior'));
     });
 
     it.each(['securty', 'Security'])(

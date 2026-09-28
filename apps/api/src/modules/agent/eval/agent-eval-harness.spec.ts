@@ -181,6 +181,47 @@ describe('production parity of an eval turn', () => {
   );
 });
 
+describe('per-case step cap', () => {
+  function recordingHarness(inputs: AgentRunInput[]) {
+    const { chain } = setup();
+    const orchestrator: AgentOrchestrator = {
+      run: (input) => {
+        inputs.push(input);
+        return (async function* (): AsyncGenerator<AgentEvent> {
+          yield {
+            type: 'done',
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'completed',
+            usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
+          };
+        })();
+      },
+    };
+    return AgentEvalHarness.withCollaborators({
+      moduleRef: { close: async () => undefined },
+      orchestrator,
+      fallbackChain: chain,
+      catalog: createTestCatalog(),
+      retrieval: new RecordingFixtureRetrieval(),
+      turnSettings: NO_TURN_SETTINGS,
+      maxSteps: 8,
+      maxTurnTokens: 10_000,
+    });
+  }
+
+  it('overrides the configured step cap for that case only', async () => {
+    const inputs: AgentRunInput[] = [];
+    const harness = recordingHarness(inputs);
+
+    await harness.runCase('hello', 'empty', MODEL, 2);
+    await harness.runCase('hello', 'empty', MODEL);
+
+    expect(inputs.map((input) => input.maxSteps)).toStrictEqual([2, 8]);
+  });
+});
+
 describe('history replay through harness, real orchestrator and AI SDK', () => {
   let configDir: string;
   const previousConfigDir = process.env['PROMPTFOO_CONFIG_DIR'];
