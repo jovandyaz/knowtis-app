@@ -2,8 +2,6 @@ import { useState } from 'react';
 
 import {
   useAssignableModels,
-  useResetAiConfig,
-  useSetAiConfig,
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
@@ -21,6 +19,7 @@ import {
 import { toModelSelectOption } from './assignable-model-options';
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 function move(chain: string[], from: number, to: number): string[] {
   const next = [...chain];
@@ -35,8 +34,7 @@ interface RoutingSectionProps {
 
 export function RoutingSection({ entry }: RoutingSectionProps) {
   const models = useAssignableModels();
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
   // A draft keeps a reorder to one write, and `base` drops it if another admin
@@ -74,8 +72,8 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
       description="Order the models a turn falls back through when a provider fails. The first one that can route wins."
     >
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage="Could not update the chain."
       />
       <ConfigSourceCell

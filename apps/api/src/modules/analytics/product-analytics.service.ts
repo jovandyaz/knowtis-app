@@ -21,6 +21,8 @@ const EVENT_PROPERTY_KEYS = {
   'study artifact generated': ['source', 'artifact_type'],
   'flashcard reviewed': ['source', 'quality', 'kind'],
   'quiz completed': ['source', 'scope', 'score_bucket'],
+  'ai quota consumed': ['source', 'tier', 'remaining_bucket'],
+  'ai quota exhausted': ['source', 'tier'],
 } as const satisfies {
   [E in ServerProductEventName]: readonly (keyof ServerProductEventMap[E])[];
 };

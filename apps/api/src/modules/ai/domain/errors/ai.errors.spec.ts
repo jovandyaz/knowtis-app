@@ -45,4 +45,15 @@ describe('AIErrors', () => {
       message: 'Token expired',
     });
   });
+
+  it('names the quota refusal with its reset instant and upgrade', () => {
+    expect(
+      AIErrors.quotaExhausted(new Date('2026-09-28T00:00:00.000Z'), 'byok')
+    ).toEqual({
+      code: 'AI_QUOTA_EXHAUSTED',
+      message: expect.any(String),
+      resetsAt: '2026-09-28T00:00:00.000Z',
+      upgrade: 'byok',
+    });
+  });
 });

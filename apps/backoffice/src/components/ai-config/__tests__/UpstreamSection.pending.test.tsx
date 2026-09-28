@@ -64,7 +64,9 @@ describe('UpstreamSection pending mutations', () => {
         screen.getByRole('textbox', { name: 'Ignored providers' }),
         ',fireworks'
       );
-      const save = screen.getByRole('button', { name: 'Save' });
+      const save = screen.getByRole('button', {
+        name: 'Save: ignored providers',
+      });
       const reset = screen.getByRole('button', { name: RESET_NAME });
       const buttons = { Save: save, Reset: reset };
 

@@ -1,10 +1,6 @@
 import { useRef } from 'react';
 
-import {
-  useResetAiConfig,
-  useSetAiConfig,
-  type AiConfigEntry,
-} from '@knowtis/data-access-admin';
+import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import {
   Button,
   FormField,
@@ -15,6 +11,7 @@ import {
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 import { useForkedDraft } from './useForkedDraft';
+import { useResettableConfigMutations } from './useResettableConfigMutations';
 
 const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
@@ -77,8 +74,7 @@ interface UpstreamSectionProps {
 
 export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
   const copy = UPSTREAM_COPY[mode];
-  const setConfig = useSetAiConfig();
-  const resetConfig = useResetAiConfig();
+  const { setConfig, resetConfig } = useResettableConfigMutations();
   const mutationInFlight = useRef(false);
   // Cross-guard: a PUT and a DELETE on the same key must not race.
   const mutating = setConfig.isPending || resetConfig.isPending;
@@ -111,8 +107,8 @@ export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
   return (
     <ConfigSection title={copy.title} description={copy.description}>
       <MutationErrorAlert
-        error={setConfig.error}
-        isError={setConfig.isError}
+        error={setConfig.error ?? resetConfig.error}
+        isError={setConfig.isError || resetConfig.isError}
         fallbackMessage={`Could not update ${copy.label.toLowerCase()}.`}
       />
       <ConfigSourceCell
@@ -140,10 +136,19 @@ export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
       </p>
       {isDirty ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={mutating || error !== null} onClick={save}>
+          <Button
+            disabled={mutating || error !== null}
+            aria-label={`Save: ${copy.label.toLowerCase()}`}
+            onClick={save}
+          >
             Save
           </Button>
-          <Button variant="ghost" disabled={mutating} onClick={discard}>
+          <Button
+            variant="ghost"
+            disabled={mutating}
+            aria-label={`Discard: ${copy.label.toLowerCase()}`}
+            onClick={discard}
+          >
             Discard
           </Button>
         </div>

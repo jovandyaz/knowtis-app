@@ -9,8 +9,10 @@ import {
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   GLOBAL_REASONING_EFFORTS,
   isGlobalReasoningEffort,
+  MAX_DAILY_MESSAGE_LIMIT,
   MODEL_INTENTS,
   parseChain,
+  parseDailyMessageLimit,
   TOKENS_PER_MILLION,
   USD_PER_MILLION_FORMAT,
   type AIConfigKey,
@@ -21,6 +23,7 @@ import {
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import type { DailyMessageLimits } from '../../domain/execution-context/quota-policy';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -37,11 +40,21 @@ const CACHE_TTL_MS = 30_000; // 30 seconds
 const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
 
-export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list' | 'money';
+export const AI_CONFIG_KINDS = [
+  'model',
+  'chain',
+  'choice',
+  'list',
+  'money',
+  'count',
+] as const;
+export type AIConfigKind = (typeof AI_CONFIG_KINDS)[number];
 
 type ConfigKeyDef =
-  | { default: string; kind: 'model' | 'chain' | 'list' | 'money' }
+  | { default: string; kind: Exclude<AIConfigKind, 'choice'> }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
+
+type DailyMessageLimitKey = 'ai_anon_daily_messages' | 'ai_free_daily_messages';
 
 /** Above the price that admits a model into the catalog at all, a higher ceiling can only be a typo: nothing that expensive is ever promotable. */
 const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
@@ -100,6 +113,14 @@ const CONFIG_KEYS = {
   ai_free_tier_ceiling: {
     default: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
     kind: 'money',
+  },
+  ai_anon_daily_messages: {
+    default: AI_SETTING_DEFAULTS.ai_anon_daily_messages,
+    kind: 'count',
+  },
+  ai_free_daily_messages: {
+    default: AI_SETTING_DEFAULTS.ai_free_daily_messages,
+    kind: 'count',
   },
 } as const satisfies Record<AIConfigKey, ConfigKeyDef>;
 
@@ -248,6 +269,29 @@ export class AIConfigService {
     return FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
   }
 
+  /** The daily copilot messages each tier gets on platform-billed turns. A bad row falls back to the code default, so a typo never opens a tier wider than shipped. */
+  async getDailyMessageLimits(): Promise<DailyMessageLimits> {
+    const [anonymous, free] = await Promise.all([
+      this.getDailyMessageLimit('ai_anon_daily_messages'),
+      this.getDailyMessageLimit('ai_free_daily_messages'),
+    ]);
+    return { anonymous, free };
+  }
+
+  private async getDailyMessageLimit(
+    key: DailyMessageLimitKey
+  ): Promise<number> {
+    const value = await this.getConfigValue(key);
+    const parsed = parseDailyMessageLimit(value);
+    if (parsed !== null) {
+      return parsed;
+    }
+    this.logger.warn(
+      `Ignoring invalid daily message limit '${key}', using the code default`
+    );
+    return Number(CONFIG_KEYS[key].default);
+  }
+
   /** Resolves preferred OpenRouter upstreams; other upstreams remain eligible. */
   async getOpenRouterProviderOrder(): Promise<readonly string[]> {
     return this.getOpenRouterProviderList('ai_openrouter_providers');
@@ -361,6 +405,13 @@ export class AIConfigService {
           );
         }
         return;
+      case 'count':
+        if (parseDailyMessageLimit(value) === null) {
+          throw new InvalidAIConfigError(
+            `'${value}' is not a valid daily message limit: a whole number from 0 to ${MAX_DAILY_MESSAGE_LIMIT}`
+          );
+        }
+        return;
       default: {
         const _exhaustive: never = def;
         throw new InvalidAIConfigError(
@@ -439,7 +490,7 @@ export class AIConfigService {
     if (kind === 'chain') {
       return parseChain(value).join(CHAIN_SEPARATOR);
     }
-    return kind === 'money' ? value.trim() : value;
+    return kind === 'money' || kind === 'count' ? value.trim() : value;
   }
 
   /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
@@ -472,6 +523,10 @@ export class AIConfigService {
         return parseProviderList(row.value) !== null ? row.value : def.default;
       case 'money':
         return parseUsdPerMillion(row.value) !== null
+          ? row.value.trim()
+          : def.default;
+      case 'count':
+        return parseDailyMessageLimit(row.value) !== null
           ? row.value.trim()
           : def.default;
       default: {

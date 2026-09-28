@@ -486,6 +486,24 @@ describe('AIConfigService', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_anon_daily_messages',
+        value: '5',
+        kind: 'count',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_free_daily_messages',
+        value: '30',
+        kind: 'count',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
     ]);
   });
 
@@ -560,6 +578,24 @@ describe('AIConfigService', () => {
         key: 'ai_free_tier_ceiling',
         value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
         kind: 'money',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_anon_daily_messages',
+        value: '5',
+        kind: 'count',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_free_daily_messages',
+        value: '30',
+        kind: 'count',
         source: 'default',
         storedValue: null,
         description: null,
@@ -1089,6 +1125,70 @@ describe('AIConfigService', () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
 
       expect(await promoted.getDefaultModel()).toBe(PROMOTED_ID);
+    });
+  });
+
+  describe('daily message limits', () => {
+    it('serves the code defaults', async () => {
+      await expect(service.getDailyMessageLimits()).resolves.toEqual({
+        anonymous: 5,
+        free: 30,
+      });
+    });
+
+    it('serves a stored limit per tier', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_free_daily_messages' ? '12' : null
+      );
+
+      await expect(service.getDailyMessageLimits()).resolves.toEqual({
+        anonymous: 5,
+        free: 12,
+      });
+    });
+
+    it('falls back to the code default rather than open a tier on a bad row', async () => {
+      mockRepo.get.mockResolvedValue('many');
+
+      await expect(service.getDailyMessageLimits()).resolves.toEqual({
+        anonymous: 5,
+        free: 30,
+      });
+    });
+
+    it('rejects a limit that is not a whole number within range', async () => {
+      for (const value of ['-1', '1.5', 'abc', '', '10001']) {
+        await expect(
+          service.setConfig('ai_free_daily_messages', value, ACTOR)
+        ).rejects.toThrow(InvalidAIConfigError);
+      }
+    });
+
+    it('persists a valid limit, zero included', async () => {
+      await service.setConfig('ai_anon_daily_messages', '0', ACTOR);
+
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_anon_daily_messages',
+        '0',
+        undefined
+      );
+    });
+
+    it('reads a padded limit as the operator set it, not as a stale row', async () => {
+      mockRepo.getAllRows.mockResolvedValue([
+        {
+          key: 'ai_free_daily_messages',
+          value: ' 40 ',
+          description: null,
+          updatedAt: null,
+        },
+      ]);
+
+      const entries = await service.getEffectiveConfig();
+
+      expect(
+        entries.find((e) => e.key === 'ai_free_daily_messages')
+      ).toMatchObject({ source: 'custom', value: '40', storedValue: null });
     });
   });
 });

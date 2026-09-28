@@ -1,4 +1,4 @@
-export const AI_DEPENDENCIES = ['tier'] as const;
+export const AI_DEPENDENCIES = ['tier', 'quota'] as const;
 export type AiDependency = (typeof AI_DEPENDENCIES)[number];
 
 /** A store the AI edge reads before any model call failed; the same request may succeed on retry. */

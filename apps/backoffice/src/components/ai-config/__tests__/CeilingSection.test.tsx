@@ -8,8 +8,13 @@ import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import { CeilingSection } from '../CeilingSection';
 
 const setConfigMutate = vi.fn();
-const setConfigState = { isPending: false };
+const setConfigState = {
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+};
 const resetConfigMutate = vi.fn();
+const resetConfigState = { isError: false, error: null as Error | null };
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -17,15 +22,23 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     ...actual,
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
+      reset: () => {
+        setConfigState.isError = false;
+        setConfigState.error = null;
+      },
       isPending: setConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: setConfigState.isError,
+      error: setConfigState.error,
     }),
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
+      reset: () => {
+        resetConfigState.isError = false;
+        resetConfigState.error = null;
+      },
       isPending: false,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -56,7 +69,11 @@ describe('CeilingSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
+    setConfigState.isError = false;
+    setConfigState.error = null;
     resetConfigMutate.mockReset();
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
   });
 
   it('shows the effective ceiling and its source', () => {
@@ -181,6 +198,56 @@ describe('CeilingSection', () => {
     expect(resetConfigMutate).toHaveBeenCalledWith({
       key: 'ai_free_tier_ceiling',
     });
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not reset the free-tier ceiling.'
+    );
+
+    renderSection('2.50', 'custom');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not reset the free-tier ceiling.'
+    );
+  });
+
+  it('clears a stale reset error once a save succeeds', async () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not reset the free-tier ceiling.'
+    );
+
+    const { rerender } = renderSection('4.00', 'default');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not reset the free-tier ceiling.'
+    );
+
+    const input = screen.getByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, '2.50');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    rerender(<CeilingSection entry={entryWith('4.00', 'default')} />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('clears a stale save error once a reset succeeds', async () => {
+    setConfigState.isError = true;
+    setConfigState.error = new Error('Could not update the free-tier ceiling.');
+
+    const { rerender } = renderSection('2.50', 'custom');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the free-tier ceiling.'
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /reset to default/i })
+    );
+    rerender(<CeilingSection entry={entryWith('2.50', 'custom')} />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('offers no reset while serving the code default', () => {

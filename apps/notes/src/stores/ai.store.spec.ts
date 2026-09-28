@@ -7,7 +7,10 @@ import type {
   AIStreamHandle,
 } from '@knowtis/api-client';
 import { aiClient } from '@knowtis/api-client';
-import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_TURN_ERROR_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
+} from '@knowtis/shared-types';
 
 import { STREAM_INACTIVITY_MS, useAIStore } from './ai.store';
 
@@ -228,6 +231,12 @@ describe('aiErrorMessageKey', () => {
     expect(aiErrorMessageKey('VALIDATION_ERROR')).toBe('ai.errors.validation');
     expect(aiErrorMessageKey('PROMPT_INJECTION_DETECTED')).toBe(
       'ai.errors.injection'
+    );
+  });
+
+  it('names an exhausted daily quota with the usage-limit message', () => {
+    expect(aiErrorMessageKey(AI_QUOTA_EXHAUSTED_CODE)).toBe(
+      'ai.errors.rateLimited'
     );
   });
 

@@ -26,6 +26,7 @@ const {
 
 const idleMutation = {
   mutate: vi.fn(),
+  reset: vi.fn(),
   isPending: false,
   isError: false,
   error: null,
@@ -47,6 +48,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useSystemProviders: () => useSystemProvidersMock(),
     useSetAiConfig: vi.fn().mockReturnValue({
       mutate: setConfigMutate,
+      reset: vi.fn(),
       isPending: false,
       isError: false,
       error: null,
@@ -303,6 +305,58 @@ describe('AiConfigPage', () => {
       screen.getByRole('heading', { name: 'Free tier' })
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/ceiling/i)).toHaveValue('4.00');
+  });
+
+  it('routes count entries to the daily message limits editor', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_anon_daily_messages',
+          value: '5',
+          kind: 'count',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
+        {
+          key: 'ai_free_daily_messages',
+          value: '30',
+          kind: 'count',
+          source: 'custom',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('Daily messages')).toBeInTheDocument();
+  });
+
+  it('renders no daily message limits section without count entries', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_default_model',
+          value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
+          source: 'custom',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.queryByText('Daily messages')).not.toBeInTheDocument();
   });
 
   it('renders the model editor when the api predates the chain key', () => {

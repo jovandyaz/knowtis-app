@@ -9,9 +9,17 @@ import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 import { ReasoningSection } from '../ReasoningSection';
 
 const setConfigMutate = vi.fn();
-const setConfigState = { isPending: false };
+const setConfigState = {
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+};
 const resetConfigMutate = vi.fn();
-const resetConfigState = { isPending: false };
+const resetConfigState = {
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+};
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -19,15 +27,23 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     ...actual,
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
+      reset: () => {
+        setConfigState.isError = false;
+        setConfigState.error = null;
+      },
       isPending: setConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: setConfigState.isError,
+      error: setConfigState.error,
     }),
     useResetAiConfig: () => ({
       mutate: resetConfigMutate,
+      reset: () => {
+        resetConfigState.isError = false;
+        resetConfigState.error = null;
+      },
       isPending: resetConfigState.isPending,
-      isError: false,
-      error: null,
+      isError: resetConfigState.isError,
+      error: resetConfigState.error,
     }),
   };
 });
@@ -60,8 +76,42 @@ describe('ReasoningSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
+    setConfigState.isError = false;
+    setConfigState.error = null;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
+    resetConfigState.isError = false;
+    resetConfigState.error = null;
+  });
+
+  it('clears a stale reset error once a save succeeds', async () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not update the reasoning effort.'
+    );
+
+    const { rerender } = renderSection();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the reasoning effort.'
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'high' }));
+    rerender(<ReasoningSection entry={entryWith('high', 'custom')} />);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a failed reset', () => {
+    resetConfigState.isError = true;
+    resetConfigState.error = new Error(
+      'Could not update the reasoning effort.'
+    );
+
+    renderSection();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not update the reasoning effort.'
+    );
   });
 
   it('offers every curated effort as a choice', () => {

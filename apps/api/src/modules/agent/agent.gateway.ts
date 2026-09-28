@@ -21,9 +21,12 @@ import {
   FEATURE_FLAG_KEYS,
   MODEL_ID_MAX_LENGTH,
   REASONING_EFFORTS,
+  type AgentQuotaPayload,
+  type AiQuota,
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
+import { reasonOf } from '../../core/errors/reason-of';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
@@ -288,6 +291,7 @@ export class AgentGateway
               ...this.baseCallbacks(client, controller, turnId),
               onProposal,
               onModelStart,
+              onQuota: (quota) => this.emitQuota(client, turnId, quota),
             },
             controller.signal
           )
@@ -495,6 +499,25 @@ export class AgentGateway
     } finally {
       this.turns.release(userId, client.id, slotId);
       this.tokenExpiry.afterSlotRelease(client);
+    }
+  }
+
+  private emitQuota(
+    client: AuthenticatedSocket,
+    turnId: string,
+    quota: AiQuota
+  ): void {
+    try {
+      client.emit('agent:quota', {
+        turnId,
+        ...quota,
+      } satisfies AgentQuotaPayload);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.quota.emit_failed',
+        turnId,
+        error: reasonOf(error),
+      });
     }
   }
 

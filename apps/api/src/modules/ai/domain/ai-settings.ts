@@ -11,4 +11,6 @@ export const AI_SETTING_DEFAULTS = {
   ai_reasoning_effort: 'medium',
   ai_openrouter_providers: 'fireworks,baseten',
   ai_openrouter_ignored_providers: '',
+  ai_anon_daily_messages: '5',
+  ai_free_daily_messages: '30',
 } as const satisfies Record<AIConfigKey, string>;

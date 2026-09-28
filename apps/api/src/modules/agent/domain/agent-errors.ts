@@ -67,8 +67,6 @@ export const AgentErrors = {
       AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
       'The turn could not be started right now; send it again'
     ),
-  targetUserNotFound: (email: string) =>
-    make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
   editTextNotFound: (position: number, oldText: string) =>
     make(
       'AGENT_EDIT_TEXT_NOT_FOUND',

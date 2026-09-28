@@ -58,6 +58,8 @@ export {
   AI_TONES,
   MODEL_ID_MAX_LENGTH,
   MODEL_TIERS,
+  AI_ACCESS_TIERS,
+  type AccessTier,
   MODEL_ACCESS,
   MODEL_INTENTS,
   DEFAULT_MODEL_INTENT,
@@ -104,6 +106,18 @@ export {
   type SystemProviderInfo,
   type EncryptedSecret,
 } from './lib/ai.types';
+
+export {
+  AI_QUOTA_EXHAUSTED_CODE,
+  type QuotaUpgrade,
+  type AiMessageQuota,
+  type AiQuota,
+  type AgentQuotaPayload,
+  type AgentQuotaExhaustedError,
+  MAX_DAILY_MESSAGE_LIMIT,
+  parseDailyMessageLimit,
+  QUOTA_LOW_REMAINING_FRACTION,
+} from './lib/ai-quota.types';
 
 export {
   ARTIFACT_TYPE,
@@ -204,6 +218,8 @@ export {
   FLASHCARD_REVIEW_KINDS,
   type FlashcardReviewKind,
   FLASHCARD_REVIEW_KIND,
+  type QuotaRemainingBucket,
+  QUOTA_REMAINING_BUCKET,
 } from './lib/analytics.types';
 
 export {

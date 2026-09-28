@@ -20,6 +20,7 @@ const TIER_RESOLVING_CONTROLLERS = [
   'SearchController',
   'ArtifactsController',
   'AiOrganizationController',
+  'AiQuotaController',
 ];
 
 type Constructor = abstract new (...args: never[]) => unknown;
