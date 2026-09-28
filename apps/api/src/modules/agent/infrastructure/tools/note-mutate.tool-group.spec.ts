@@ -341,3 +341,89 @@ describe('NoteMutateToolGroup.proposeEditNote', () => {
     );
   });
 });
+
+describe('NoteMutateToolGroup markdown length', () => {
+  const MAX_MARKDOWN_CHARS = 20_000;
+  const AT_LIMIT = 'x'.repeat(MAX_MARKDOWN_CHARS);
+
+  it('accepts an append longer than 10k characters', () => {
+    const schema = editSchema(group({} as MutationProposalBuilder));
+
+    expect(
+      schema.safeParse({ noteId: NOTE_ID, appendMarkdown: 'x'.repeat(15_000) })
+        .success
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      'proposeEditNote',
+      'appendMarkdown',
+      'buildEdit',
+      { noteId: NOTE_ID, edits: [], appendMarkdown: AT_LIMIT },
+    ],
+    [
+      'proposeEditNote',
+      'newText',
+      'buildEdit',
+      { noteId: NOTE_ID, edits: [{ oldText: 'milk', newText: AT_LIMIT }] },
+    ],
+    [
+      'proposeCreateNote',
+      'contentMarkdown',
+      'buildCreate',
+      { title: 'Plan', contentMarkdown: AT_LIMIT },
+    ],
+    [
+      'proposeUpdateNote',
+      'contentMarkdown',
+      'buildUpdate',
+      { noteId: NOTE_ID, contentMarkdown: AT_LIMIT },
+    ],
+  ])(
+    '%s refuses a %s that fills the whole limit, since it was most likely cut off',
+    async (tool, field, method, input) => {
+      const builder = {
+        [method]: vi.fn(),
+      } as unknown as MutationProposalBuilder;
+      const c = ctx();
+
+      const out = (await run(group(builder), c, tool, input)) as {
+        error: string;
+      };
+
+      expect(out.error).toContain(field);
+      expect(
+        builder[method as keyof MutationProposalBuilder]
+      ).not.toHaveBeenCalled();
+      expect(c.proposals.captured).toBeNull();
+    }
+  );
+
+  it('proposes markdown one character under the limit', async () => {
+    const builder = {
+      buildEdit: vi.fn().mockResolvedValue(ok(editProposal)),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+
+    await run(group(builder), c, 'proposeEditNote', {
+      noteId: NOTE_ID,
+      edits: [],
+      appendMarkdown: AT_LIMIT.slice(1),
+    });
+
+    expect(c.proposals.captured).toBe(editProposal);
+  });
+
+  it('tells the model to escape a semicolon inside a mermaid diagram', () => {
+    const tools = group({} as MutationProposalBuilder).build(ctx());
+    const edit = editSchema(group({} as MutationProposalBuilder));
+
+    expect(JSON.stringify(z.toJSONSchema(edit))).toContain('#59;');
+    expect(
+      JSON.stringify(
+        z.toJSONSchema(tools.proposeCreateNote.inputSchema as z.ZodType)
+      )
+    ).toContain('#59;');
+  });
+});

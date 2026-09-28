@@ -89,6 +89,11 @@ export const AgentErrors = {
       EDIT_WOULD_LOSE_CONTENT,
       `This note holds an AI block the user has not inserted or discarded yet (${nodes.join(', ')}). The Markdown you read has no form for it, so you never saw it, and this change would delete it; it was refused rather than proposed. Ask the user to insert or discard the AI block in the note, then try again.`
     ),
+  markdownAtLimit: (field: string, maxChars: number) =>
+    make(
+      'AGENT_MARKDOWN_AT_LIMIT',
+      `${field} is exactly ${maxChars} characters, the most one call accepts, so it was almost certainly cut off mid-text; nothing was proposed. Send it again shorter than ${maxChars} characters: condense it, or propose part of it now and tell the user the rest can follow once they confirm.`
+    ),
   wholeBodyUpdateRefused: (status: Exclude<NoteContentStatus, 'complete'>) =>
     make(
       'AGENT_WHOLE_BODY_UPDATE_REFUSED',

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
+import { AgentErrors } from '../../domain/agent-errors';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import type { ProposalCollector } from '../orchestrator/proposal-collector';
@@ -16,9 +17,23 @@ import {
 } from './tool-execution.error';
 
 const MAX_EDITS_PER_PROPOSAL = 20;
-const MAX_EDIT_TEXT_CHARS = 10_000;
-const CONTENT_MARKDOWN_DESCRIPTION =
-  'The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, ++underline++, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, ```mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported.';
+const MAX_MARKDOWN_CHARS = 20_000;
+const MERMAID_SEMICOLON_GUIDANCE =
+  'Inside a ```mermaid diagram never write a semicolon in a label or message: mermaid reads it as the end of the statement and the diagram fails to render, so write #59; instead.';
+const CONTENT_MARKDOWN_DESCRIPTION = `The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, ++underline++, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, \`\`\`mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported. ${MERMAID_SEMICOLON_GUIDANCE}`;
+
+// a provider that decodes against the schema stops a string at maxLength
+// instead of failing it, so text that fills the limit exactly was cut off
+function refuseMarkdownAtLimit(
+  fields: readonly (readonly [string, string | undefined])[]
+): { error: string } | undefined {
+  const cut = fields.find(([, text]) => text?.length === MAX_MARKDOWN_CHARS);
+  return (
+    cut && {
+      error: AgentErrors.markdownAtLimit(cut[0], MAX_MARKDOWN_CHARS).message,
+    }
+  );
+}
 
 function captureProposal(
   collector: ProposalCollector,
@@ -48,10 +63,16 @@ export class NoteMutateToolGroup implements AgentToolGroup {
           title: z.string().min(1).max(200).describe('The note title'),
           contentMarkdown: z
             .string()
-            .max(20000)
+            .max(MAX_MARKDOWN_CHARS)
             .describe(CONTENT_MARKDOWN_DESCRIPTION),
         }),
         execute: async ({ title, contentMarkdown }) => {
+          const refused = refuseMarkdownAtLimit([
+            ['contentMarkdown', contentMarkdown],
+          ]);
+          if (refused) {
+            return refused;
+          }
           const r = await this.proposalBuilder.buildCreate(
             userId,
             title,
@@ -73,15 +94,15 @@ export class NoteMutateToolGroup implements AgentToolGroup {
                 oldText: z
                   .string()
                   .min(1)
-                  .max(MAX_EDIT_TEXT_CHARS)
+                  .max(MAX_MARKDOWN_CHARS)
                   .describe(
                     'Exact text currently in the note, as getNote returned it'
                   ),
                 newText: z
                   .string()
-                  .max(MAX_EDIT_TEXT_CHARS)
+                  .max(MAX_MARKDOWN_CHARS)
                   .describe(
-                    'Replacement Markdown, same vocabulary as contentMarkdown (no raw HTML; an image only with a url getNote returned); empty to delete oldText'
+                    `Replacement Markdown, same vocabulary as contentMarkdown (no raw HTML; an image only with a url getNote returned); empty to delete oldText. ${MERMAID_SEMICOLON_GUIDANCE}`
                   ),
               })
             )
@@ -89,11 +110,20 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             .default([]),
           appendMarkdown: z
             .string()
-            .max(MAX_EDIT_TEXT_CHARS)
+            .max(MAX_MARKDOWN_CHARS)
             .optional()
-            .describe('Markdown to add after the end of the note'),
+            .describe(
+              `Markdown to add after the end of the note, same vocabulary as contentMarkdown. ${MERMAID_SEMICOLON_GUIDANCE}`
+            ),
         }),
         execute: async ({ noteId, edits, appendMarkdown }) => {
+          const refused = refuseMarkdownAtLimit([
+            ['appendMarkdown', appendMarkdown],
+            ...edits.map(({ newText }) => ['newText', newText] as const),
+          ]);
+          if (refused) {
+            return refused;
+          }
           const r = await wrapUpstreamFailure(
             () =>
               this.proposalBuilder.buildEdit(userId, noteId, {
@@ -116,7 +146,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             title: z.string().min(1).max(200).optional(),
             contentMarkdown: z
               .string()
-              .max(20000)
+              .max(MAX_MARKDOWN_CHARS)
               .describe(CONTENT_MARKDOWN_DESCRIPTION)
               .optional(),
           })
@@ -127,6 +157,12 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             }
           ),
         execute: async ({ noteId, title, contentMarkdown }) => {
+          const refused = refuseMarkdownAtLimit([
+            ['contentMarkdown', contentMarkdown],
+          ]);
+          if (refused) {
+            return refused;
+          }
           const r = await wrapUpstreamFailure(
             () =>
               this.proposalBuilder.buildUpdate(execution, noteId, {
