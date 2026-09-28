@@ -306,16 +306,15 @@ Two `ai_config` knobs set the daily limits: `ai_anon_daily_messages` (default `5
 - a provider, overloaded, timeout or empty-completion error before the first `chunk`;
 - a turn with no terminal event;
 - an internal throw before the first `chunk`;
-- a throw while preparing the model call.
+- a throw while preparing the model call;
+- a disconnect, an expired token or a deploy before the first `chunk`.
 
 It never happens for:
 
-- a user abort;
+- a user cancel;
 - an injection-guard refusal;
 - a failure or throw after text has streamed;
 - a `done` or a `proposal` with no text.
-
-A turn cut before its first text by a disconnect, an expired token or a deploy is refunded; a user cancel keeps the message.
 
 A refund of a turn that crossed midnight gives the message back on the day it was consumed, then reports the caller's quota for the current UTC day. A resume (`resumeTurn`, after an `agent:approve`/`agent:reject`) never calls `consume` — only a fresh `agent:message` draws from the quota. A turn consumed through the Postgres fallback is never refunded: its own persisted row is what the fallback counts, so there is no counter to give a message back to.
 
