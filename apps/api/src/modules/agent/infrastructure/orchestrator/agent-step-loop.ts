@@ -24,6 +24,13 @@ import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { fromResponseMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
 import {
+  nextInputTokens,
+  segmentEndAfterToolStep,
+  synthesisOutputCap,
+  type SegmentEnd,
+  type SegmentState,
+} from './segment-close';
+import {
   errorEvent,
   errorMessage,
   runStepCall,
@@ -51,6 +58,11 @@ const MAX_STEP_ATTEMPTS = 2;
 const FINISH_REASON_LENGTH = 'length';
 const FINISH_REASON_TOOL_CALLS = 'tool-calls';
 const FINISH_REASON_CONTENT_FILTER = 'content-filter';
+
+// Appended to the synthesis call's prompt only; never threaded into history,
+// so it is not persisted and a continuation does not replay it.
+export const SYNTHESIS_REQUEST =
+  '(Stop using tools now: this part of the task has reached its limit. Answer me in my language with what you found so far, then, under a short heading, list what is still pending so it can be continued.)';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -164,6 +176,9 @@ export interface AgentStepLoopParams {
     readonly maxRetries: number;
     readonly maxMs: number;
     readonly maxTurnTokens: number;
+    readonly synthesisReserveTokens: number;
+    readonly synthesisReserveMs: number;
+    readonly deadlineAt: number;
   };
   readonly sources: Map<string, AgentSource>;
   readonly knownNotes: Map<string, AgentSource>;
@@ -211,6 +226,8 @@ export async function* runAgentStepLoop(
     cacheWriteTokens: 0,
   };
   let completedSteps = 0;
+  let segmentEnd: SegmentEnd | null = null;
+  let synthesisMaxOutputTokens = params.budgets.maxOutputTokens;
 
   while (completedSteps < input.maxSteps) {
     let advanceToNextStep = false;
@@ -221,6 +238,7 @@ export async function* runAgentStepLoop(
       attempt < MAX_STEP_ATTEMPTS;
       attempt++
     ) {
+      const synthesizing = segmentEnd !== null;
       const result = yield* runStepCall({
         logger,
         input,
@@ -231,14 +249,18 @@ export async function* runAgentStepLoop(
         instructions: params.instructions,
         cache: params.cache,
         tools: params.tools,
-        ...(completedSteps + 1 === input.maxSteps
+        ...(synthesizing || completedSteps + 1 === input.maxSteps
           ? { toolChoice: 'none' as const }
           : {}),
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
         providerOptions,
-        history,
-        budgets: params.budgets,
+        history: synthesizing
+          ? [...history, { role: 'user', content: SYNTHESIS_REQUEST }]
+          : history,
+        budgets: synthesizing
+          ? { ...params.budgets, maxOutputTokens: synthesisMaxOutputTokens }
+          : params.budgets,
         turn,
       });
 
@@ -377,7 +399,8 @@ export async function* runAgentStepLoop(
             });
           }
           const { messages: stepMessages } = await result.response;
-          yield { type: 'step', messages: fromResponseMessages(stepMessages) };
+          const stepRows = fromResponseMessages(stepMessages);
+          yield { type: 'step', messages: stepRows };
           const captured = params.proposals.captured;
           if (captured) {
             emitTurnHealth(
@@ -398,27 +421,71 @@ export async function* runAgentStepLoop(
           }
           const spentTurnTokens =
             turnUsage.inputTokens + turnUsage.outputTokens;
-          const withinTokenBudget =
-            spentTurnTokens < params.budgets.maxTurnTokens;
           const wantsMoreTools =
             result.finishReason === FINISH_REASON_TOOL_CALLS;
-          const willContinue =
+          const stepNumber = completedSteps + 1;
+          if (
             wantsMoreTools &&
-            completedSteps + 1 < input.maxSteps &&
-            withinTokenBudget;
-          if (willContinue) {
-            emitTurnHealth(
-              logger,
+            segmentEnd === null &&
+            stepNumber < input.maxSteps
+          ) {
+            const state: SegmentState = {
+              completedSteps: stepNumber,
+              maxSteps: input.maxSteps,
+              spentTurnTokens,
+              nextInputTokens: nextInputTokens(
+                result.usage.inputTokens,
+                result.usage.outputTokens,
+                stepRows
+              ),
+              maxTurnTokens: params.budgets.maxTurnTokens,
+              reserveTokens: params.budgets.synthesisReserveTokens,
+              now: Date.now(),
+              deadlineAt: params.budgets.deadlineAt,
+              reserveMs: params.budgets.synthesisReserveMs,
+            };
+            const end = segmentEndAfterToolStep(state);
+            const cap =
+              end === null
+                ? 0
+                : synthesisOutputCap(state, params.budgets.maxOutputTokens);
+            if (end === null || cap > 0) {
+              emitTurnHealth(
+                logger,
+                userId,
+                currentModel,
+                result.health,
+                AGENT_TURN_OUTCOME.CONTINUED,
+                result.callStartedAt,
+                modelsUsed
+              );
+              history.push(...stepMessages);
+              if (end !== null) {
+                segmentEnd = end;
+                synthesisMaxOutputTokens = cap;
+                logger.warn({
+                  event: 'agent.turn.segment_closed',
+                  userId,
+                  model: currentModel,
+                  reason: end,
+                  completedSteps: stepNumber,
+                  spentTurnTokens,
+                  maxOutputTokens: cap,
+                });
+              }
+              advanceToNextStep = true;
+              break stepAttempts;
+            }
+            logger.warn({
+              event: 'agent.turn.synthesis_unaffordable',
               userId,
-              currentModel,
-              result.health,
-              AGENT_TURN_OUTCOME.CONTINUED,
-              result.callStartedAt,
-              modelsUsed
-            );
-            history.push(...stepMessages);
-            advanceToNextStep = true;
-            break stepAttempts;
+              model: currentModel,
+              reason: end,
+              spentTurnTokens,
+              nextInputTokens: state.nextInputTokens,
+              maxTurnTokens: params.budgets.maxTurnTokens,
+            });
+            segmentEnd = end;
           }
           if (
             turn.textDeltas === 0 &&
@@ -440,23 +507,17 @@ export async function* runAgentStepLoop(
             return;
           }
           let stopReason: AgentStopReason = AGENT_STOP_REASON.COMPLETED;
-          if (wantsMoreTools && !withinTokenBudget) {
-            stopReason = AGENT_STOP_REASON.TOKEN_BUDGET;
+          if (result.finishReason === FINISH_REASON_CONTENT_FILTER) {
+            stopReason = AGENT_STOP_REASON.CONTENT_FILTER;
             logger.warn({
-              event: 'agent.turn.token_budget_reached',
+              event: 'agent.turn.content_filtered',
               userId,
               model: currentModel,
-              spentTurnTokens,
-              maxTurnTokens: params.budgets.maxTurnTokens,
             });
+          } else if (segmentEnd !== null) {
+            stopReason = segmentEnd;
           } else if (wantsMoreTools) {
             stopReason = AGENT_STOP_REASON.MAX_STEPS;
-            logger.warn({
-              event: 'agent.turn.max_steps_reached',
-              userId,
-              model: currentModel,
-              maxSteps: input.maxSteps,
-            });
           } else if (result.finishReason === FINISH_REASON_LENGTH) {
             stopReason = AGENT_STOP_REASON.LENGTH;
             logger.warn({
@@ -464,13 +525,6 @@ export async function* runAgentStepLoop(
               userId,
               model: currentModel,
               maxOutputTokens: params.budgets.maxOutputTokens,
-            });
-          } else if (result.finishReason === FINISH_REASON_CONTENT_FILTER) {
-            stopReason = AGENT_STOP_REASON.CONTENT_FILTER;
-            logger.warn({
-              event: 'agent.turn.content_filtered',
-              userId,
-              model: currentModel,
             });
           }
           emitTurnHealth(

@@ -46,9 +46,9 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
   ) {}
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
-    const timeoutSignal = AbortSignal.timeout(
-      this.configService.get('AI_AGENT_MAX_MS')
-    );
+    const maxMs = this.configService.get('AI_AGENT_MAX_MS');
+    const deadlineAt = Date.now() + maxMs;
+    const timeoutSignal = AbortSignal.timeout(maxMs);
     const abortSignal = input.signal
       ? AbortSignal.any([input.signal, timeoutSignal])
       : timeoutSignal;
@@ -57,6 +57,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       yield* this.runTurn(input, input.model, abortSignal, timeoutSignal, {
         throwOnFreshFailure: false,
         stepFailoverCandidates: [],
+        deadlineAt,
       });
       return;
     }
@@ -78,6 +79,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
           onModelSettled: (settled) => {
             served.model = settled;
           },
+          deadlineAt,
         });
       },
       chunks: (turn) => turn,
@@ -96,6 +98,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       throwOnFreshFailure: boolean;
       stepFailoverCandidates: readonly string[];
       onModelSettled?: (model: string) => void;
+      deadlineAt: number;
     }
   ): AsyncGenerator<AgentEvent> {
     const { userId } = input.execution.subject;
@@ -185,6 +188,13 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         maxRetries: this.configService.get('AI_MAX_RETRIES'),
         maxMs: this.configService.get('AI_AGENT_MAX_MS'),
         maxTurnTokens: input.maxTurnTokens,
+        synthesisReserveTokens: this.configService.get(
+          'AI_AGENT_SYNTHESIS_RESERVE_TOKENS'
+        ),
+        synthesisReserveMs: this.configService.get(
+          'AI_AGENT_SYNTHESIS_RESERVE_MS'
+        ),
+        deadlineAt: options.deadlineAt,
       },
       sources,
       knownNotes,
