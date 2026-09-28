@@ -2972,6 +2972,42 @@ describe('RunAgentTurnHandler', () => {
     warnSpy.mockRestore();
   });
 
+  it('rejects a turn with no message', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'VALIDATION_ERROR',
+      message: 'message is required',
+    });
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(conversations.create).not.toHaveBeenCalled();
+  });
+
   it('rejects an effort request from an anonymous turn', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();

@@ -243,10 +243,7 @@ export class RunAgentTurnHandler {
     signal?: AbortSignal
   ): Promise<void> {
     if (!input.message) {
-      callbacks.onError({
-        code: 'validation_error',
-        message: 'message is required',
-      });
+      callbacks.onError(AIErrors.validationError('message is required'));
       return;
     }
     // Resolve and reject before resolveConversation so a refused turn leaves no row behind.

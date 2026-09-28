@@ -25,8 +25,6 @@ type AIErrorMessageKey =
   | 'ai.errors.answerUnavailable'
   | 'ai.errors.turnInterrupted'
   | 'ai.errors.permissionDenied'
-  | 'ai.errors.sanitizeRejected'
-  | 'ai.errors.targetUserNotFound'
   | 'ai.errors.noteNotFound'
   | 'ai.errors.invalidProposal'
   | 'ai.errors.emailNotVerified';
@@ -56,8 +54,6 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AGENT_ANSWER_UNAVAILABLE: 'ai.errors.answerUnavailable',
   AGENT_TURN_INTERRUPTED: 'ai.errors.turnInterrupted',
   AGENT_PERMISSION_DENIED: 'ai.errors.permissionDenied',
-  AGENT_SANITIZE_REJECTED: 'ai.errors.sanitizeRejected',
-  AGENT_TARGET_USER_NOT_FOUND: 'ai.errors.targetUserNotFound',
   AGENT_NOTE_NOT_FOUND: 'ai.errors.noteNotFound',
   AGENT_INVALID_PROPOSAL: 'ai.errors.invalidProposal',
   [AGENT_EMAIL_NOT_VERIFIED_CODE]: 'ai.errors.emailNotVerified',
