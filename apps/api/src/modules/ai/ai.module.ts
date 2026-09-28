@@ -13,6 +13,7 @@ import { AiCatalogController } from './ai-catalog.controller';
 import { AiKeysController } from './ai-keys.controller';
 import { AiModelsController } from './ai-models.controller';
 import { AiProvidersController } from './ai-providers.controller';
+import { AiQuotaController } from './ai-quota.controller';
 import { AIController } from './ai.controller';
 import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
@@ -109,6 +110,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AiKeysController,
     AiProvidersController,
     AiCatalogController,
+    AiQuotaController,
   ],
   providers: [
     SelectableModelsService,
