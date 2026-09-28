@@ -97,7 +97,9 @@ describe('UpstreamSection', () => {
     const input = screen.getByRole('textbox');
     await userEvent.clear(input);
     await userEvent.type(input, 'baseten');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    );
     rerender(
       <UpstreamSection
         mode="preference"
@@ -144,7 +146,9 @@ describe('UpstreamSection', () => {
       screen.getByText(/Leave it empty to exclude no providers/)
     ).toBeInTheDocument();
     await userEvent.type(ignored, ' parasail ');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: ignored providers' })
+    );
     expect(setConfigMutate).toHaveBeenCalledWith(
       { key: 'ai_openrouter_ignored_providers', value: 'parasail' },
       expect.anything()
@@ -169,7 +173,9 @@ describe('UpstreamSection', () => {
         resetConfigState.isPending = true;
       }
       rerender(<UpstreamSection mode="ignore" entry={entry} />);
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Save: ignored providers' })
+      ).toBeDisabled();
       expect(
         screen.getByRole('button', {
           name: /reset to default: ignored providers/i,
@@ -193,7 +199,7 @@ describe('UpstreamSection', () => {
     );
     expect(screen.getByRole('textbox')).toHaveValue('novita');
     expect(
-      screen.queryByRole('button', { name: 'Save' })
+      screen.queryByRole('button', { name: 'Save: ignored providers' })
     ).not.toBeInTheDocument();
     await userEvent.click(
       screen.getByRole('button', {
@@ -204,6 +210,44 @@ describe('UpstreamSection', () => {
       { key: 'ai_openrouter_ignored_providers' },
       expect.anything()
     );
+  });
+
+  it('gives each dirty field its own save and discard name', async () => {
+    render(
+      <>
+        <UpstreamSection
+          mode="preference"
+          entry={entryWith('fireworks', 'custom')}
+        />
+        <UpstreamSection
+          mode="ignore"
+          entry={{
+            ...entryWith('', 'default'),
+            key: 'ai_openrouter_ignored_providers',
+          }}
+        />
+      </>
+    );
+    const preference = screen.getByRole('textbox', {
+      name: 'Preferred providers',
+    });
+    const ignored = screen.getByRole('textbox', { name: 'Ignored providers' });
+
+    await userEvent.type(preference, ',baseten');
+    await userEvent.type(ignored, 'parasail');
+
+    expect(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Save: ignored providers' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Discard: preferred providers' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Discard: ignored providers' })
+    ).toBeInTheDocument();
   });
 
   it('names the measured-good defaults in its helper text', () => {
@@ -223,7 +267,9 @@ describe('UpstreamSection', () => {
     const input = screen.getByRole('textbox');
     await userEvent.clear(input);
     await userEvent.type(input, 'baseten');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    );
 
     rerender(
       <UpstreamSection
@@ -247,7 +293,9 @@ describe('UpstreamSection', () => {
     const input = screen.getByRole('textbox');
     await userEvent.clear(input);
     await userEvent.type(input, '  fireworks,baseten  ');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    );
 
     expect(setConfigMutate).toHaveBeenCalledWith(
       {
@@ -266,7 +314,9 @@ describe('UpstreamSection', () => {
     await userEvent.type(input, 'Fireworks');
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    ).toBeDisabled();
     expect(setConfigMutate).not.toHaveBeenCalled();
   });
 
@@ -275,7 +325,9 @@ describe('UpstreamSection', () => {
 
     const input = screen.getByRole('textbox');
     await userEvent.clear(input);
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    );
 
     expect(setConfigMutate).toHaveBeenCalledWith(
       {
@@ -342,8 +394,12 @@ describe('UpstreamSection', () => {
     await userEvent.clear(input);
     await userEvent.type(input, 'baseten');
 
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Save: preferred providers' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Discard: preferred providers' })
+    ).toBeInTheDocument();
 
     rerender(
       <UpstreamSection
@@ -354,10 +410,10 @@ describe('UpstreamSection', () => {
 
     expect(screen.getByRole('textbox')).toHaveValue('together');
     expect(
-      screen.queryByRole('button', { name: 'Save' })
+      screen.queryByRole('button', { name: 'Save: preferred providers' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Discard' })
+      screen.queryByRole('button', { name: 'Discard: preferred providers' })
     ).not.toBeInTheDocument();
   });
 });

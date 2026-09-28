@@ -86,7 +86,9 @@ describe('MessageLimitsSection', () => {
     const input = signedInField();
     await userEvent.clear(input);
     await userEvent.type(input, ' 12 ');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: Signed-in users' })
+    );
 
     expect(setConfigMutate).toHaveBeenCalledWith(
       { key: 'ai_free_daily_messages', value: '12' },
@@ -108,7 +110,11 @@ describe('MessageLimitsSection', () => {
       expect(
         screen.getByText('A whole number from 0 to 10000.')
       ).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', {
+          name: 'Save: Guests (per session and per IP)',
+        })
+      ).toBeDisabled();
     }
   );
 
@@ -130,9 +136,12 @@ describe('MessageLimitsSection', () => {
     expect(
       screen.queryByText('A whole number from 0 to 10000.')
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    const saveGuests = screen.getByRole('button', {
+      name: 'Save: Guests (per session and per IP)',
+    });
+    expect(saveGuests).toBeEnabled();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(saveGuests);
 
     expect(setConfigMutate).toHaveBeenCalledWith(
       { key: 'ai_anon_daily_messages', value: '0' },
@@ -149,6 +158,32 @@ describe('MessageLimitsSection', () => {
     expect(signedInField()).not.toHaveAccessibleDescription(
       expect.stringContaining('0 turns the guest copilot off.')
     );
+  });
+
+  it('gives each dirty field its own save and discard name', async () => {
+    render(<MessageLimitsSection entries={ENTRIES} />);
+
+    await userEvent.clear(guestsField());
+    await userEvent.type(guestsField(), '7');
+    await userEvent.clear(signedInField());
+    await userEvent.type(signedInField(), '12');
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Save: Guests (per session and per IP)',
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Save: Signed-in users' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'Discard: Guests (per session and per IP)',
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Discard: Signed-in users' })
+    ).toBeInTheDocument();
   });
 
   it('resets a stored limit to its code default', async () => {
@@ -179,7 +214,9 @@ describe('MessageLimitsSection', () => {
     const input = signedInField();
     await userEvent.clear(input);
     await userEvent.type(input, '12');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save: Signed-in users' })
+    );
     rerender(<MessageLimitsSection entries={[ENTRIES[1]]} />);
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

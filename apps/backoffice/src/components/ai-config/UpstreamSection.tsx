@@ -136,10 +136,19 @@ export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
       </p>
       {isDirty ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={mutating || error !== null} onClick={save}>
+          <Button
+            disabled={mutating || error !== null}
+            aria-label={`Save: ${copy.label.toLowerCase()}`}
+            onClick={save}
+          >
             Save
           </Button>
-          <Button variant="ghost" disabled={mutating} onClick={discard}>
+          <Button
+            variant="ghost"
+            disabled={mutating}
+            aria-label={`Discard: ${copy.label.toLowerCase()}`}
+            onClick={discard}
+          >
             Discard
           </Button>
         </div>

@@ -108,6 +108,7 @@ function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             disabled={mutating || error !== null}
+            aria-label={`Save: ${label}`}
             onClick={() =>
               setConfig.mutate(
                 { key: entry.key, value: value.trim() },
@@ -117,7 +118,12 @@ function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
           >
             Save
           </Button>
-          <Button variant="ghost" disabled={mutating} onClick={discard}>
+          <Button
+            variant="ghost"
+            disabled={mutating}
+            aria-label={`Discard: ${label}`}
+            onClick={discard}
+          >
             Discard
           </Button>
         </div>
