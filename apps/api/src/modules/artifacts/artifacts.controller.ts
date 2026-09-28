@@ -13,6 +13,7 @@ import {
   Post,
   Query,
   Req,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -22,6 +23,7 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
+import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { GetNoteHandler } from '../notes/application';
@@ -37,6 +39,7 @@ import { ArtifactsQueryDto, GenerateArtifactDto } from './dto/artifacts.dto';
 @ApiBearerAuth()
 @Controller('artifacts')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 export class ArtifactsController {
   constructor(

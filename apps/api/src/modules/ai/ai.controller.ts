@@ -16,6 +16,7 @@ import {
   Query,
   Req,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -40,6 +41,7 @@ import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import {
@@ -186,6 +188,7 @@ const metricsSummarySchema = {
 @ApiBearerAuth()
 @Controller('ai')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 export class AIController {
   constructor(

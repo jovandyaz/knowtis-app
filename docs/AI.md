@@ -235,7 +235,9 @@ aiClient handle.cancel() OR emit 'ai:cancel'
 
 ### Error Codes
 
-`AIErrorCodes` (`domain/errors/ai.errors.ts`) has 14 codes. The same codes are emitted over `ai:error`, `agent:error`, and mapped to HTTP statuses by `AI_ERROR_STATUS_MAP` in `ai.controller.ts` (`unwrapOrThrow` in `core/http/unwrap-or-throw.ts` defaults codes absent from the map to 400).
+`AIErrorCodes` (`domain/errors/ai.errors.ts`) has 14 codes. The same codes are emitted over `ai:error`, `agent:error`, and mapped to HTTP statuses by `AI_ERROR_STATUS_MAP` in `ai.controller.ts` (`unwrapOrThrow` in `core/http/unwrap-or-throw.ts` defaults codes absent from the map to 500).
+
+A tier-resolution failure (the BYOK key store is unreachable) answers **503** with `Retry-After: 5` on `POST /ai/complete`, `POST /ai/voice-note`, `GET /search` (and so the MCP `search-notes` tool), `POST /artifacts/generate` and `POST /ai/organization/suggest`, through `AiUnavailableExceptionFilter`. The body is masked like every 5xx. PR 2b adds `GET /ai/quota` to this list (Task 12).
 
 | Code                        | Cause                                                           | HTTP (`ai.controller.ts`) |
 | --------------------------- | --------------------------------------------------------------- | ------------------------- |

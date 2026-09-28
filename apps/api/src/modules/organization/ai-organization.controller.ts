@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Post,
   Req,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -26,6 +27,7 @@ import {
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
@@ -50,6 +52,7 @@ const SUGGEST_THROTTLE = { default: { limit: 10, ttl: 60000 } };
 @ApiTags('AI')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Controller('ai/organization')
 export class AiOrganizationController {

@@ -3,6 +3,7 @@ import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   BadRequestException,
   ForbiddenException,
+  Logger,
   type ExecutionContext,
   type INestApplication,
 } from '@nestjs/common';
@@ -29,6 +30,7 @@ import {
   InvalidAIConfigError,
 } from './application/services/ai-config.service';
 import { TierResolver } from './application/services/tier-resolver.service';
+import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { FallbackChainService } from './infrastructure/providers/fallback-chain.service';
 import { createExecutionContext } from './testing/create-execution-context';
@@ -269,6 +271,17 @@ describe('POST /ai/voice-note', () => {
     const response = await postRecording(MAX_VOICE_NOTE_BYTES + 1);
 
     expect(response.status).toBe(413);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 when the tier cannot be resolved', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    resolve.mockRejectedValue(new AiUnavailableError('tier', 'db down'));
+
+    const response = await postRecording(1024);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('5');
     expect(execute).not.toHaveBeenCalled();
   });
 });
