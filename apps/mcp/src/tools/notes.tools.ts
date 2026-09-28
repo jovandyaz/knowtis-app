@@ -22,6 +22,9 @@ import { wrapToolHandler } from './wrap-tool-handler.js';
 
 const DEFAULT_LIST_NOTES_LIMIT = 20;
 
+const MERMAID_ESCAPE_GUIDANCE =
+  'Inside a ```mermaid diagram never write a semicolon or a # in a label or message: mermaid reads them as the end of the statement or a comment and the diagram fails to render, so write #59; for a semicolon and #35; for a # instead.';
+
 const aiBlockWouldBeLost = (nodes: readonly string[]): string =>
   `This note holds an AI block that has not been inserted or discarded yet (${nodes.join(', ')}). ` +
   'Markdown has no form for it, so get-note does not show it, and this update would delete it; nothing was changed. ' +
@@ -173,8 +176,7 @@ export function registerNotesTools(
     'create-note',
     {
       title: 'Create Note',
-      description:
-        'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), underline (++text++), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (```mermaid ... ```).',
+      description: `Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, \`inline code\`, fenced code blocks (\`\`\`lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), underline (++text++), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (\`\`\`mermaid ... \`\`\`). ${MERMAID_ESCAPE_GUIDANCE}`,
       inputSchema: {
         title: z.string().min(1).describe('Title of the new note'),
         content: z
@@ -206,8 +208,7 @@ export function registerNotesTools(
     'update-note',
     {
       title: 'Update Note',
-      description:
-        'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, underline, highlight, super/subscript, Mermaid diagrams). Image sizes, highlight colours and diagram view modes the note already had are kept. A content update is refused while the note holds an AI block the user has not inserted or discarded, since Markdown cannot carry it.',
+      description: `Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, underline, highlight, super/subscript, Mermaid diagrams). Image sizes, highlight colours and diagram view modes the note already had are kept. A content update is refused while the note holds an AI block the user has not inserted or discarded, since Markdown cannot carry it. ${MERMAID_ESCAPE_GUIDANCE}`,
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to update'),
         title: z.string().optional().describe('New title'),
