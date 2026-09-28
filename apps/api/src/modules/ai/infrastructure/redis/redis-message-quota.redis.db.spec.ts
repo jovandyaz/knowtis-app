@@ -48,6 +48,10 @@ function markerKey(subject: string, turnId: string): string {
   return `ai:quota:turn:${subject}:${DAY.key}:${turnId}`;
 }
 
+function exhaustedKey(subject: string): string {
+  return `ai:quota:exhausted:${subject}:${DAY.key}`;
+}
+
 async function scanQuotaKeys(client: Redis): Promise<Set<string>> {
   const keys = new Set<string>();
   let cursor = '0';
@@ -171,7 +175,59 @@ describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
     await expect(adapter.consume(turn([user]), 1)).resolves.toEqual({
       allowed: false,
       used: 1,
+      firstDenial: true,
     });
+  });
+
+  it("flags only the caller's first denial of the day, and a denial writes no counter or marker", async () => {
+    const user = subject('user');
+    await adapter.consume(turn([user]), 1);
+    const first = turn([user]);
+    const second = turn([user]);
+
+    await expect(adapter.consume(first, 1)).resolves.toEqual({
+      allowed: false,
+      used: 1,
+      firstDenial: true,
+    });
+    const ttl = await redis.ttl(exhaustedKey(user));
+    expect(ttl).toBeGreaterThan(TWO_DAYS_SECONDS - TTL_SLACK_SECONDS);
+    expect(ttl).toBeLessThanOrEqual(TWO_DAYS_SECONDS);
+    await expect(adapter.consume(second, 1)).resolves.toEqual({
+      allowed: false,
+      used: 1,
+      firstDenial: false,
+    });
+    expect(await redis.get(counterKey(user))).toBe('1');
+    expect(
+      await redis.exists(
+        markerKey(user, first.turnId),
+        markerKey(user, second.turnId)
+      )
+    ).toBe(0);
+  });
+
+  it('flags a first denial again on a new day', async () => {
+    const user = subject('user');
+    await adapter.consume(turn([user], randomUUID(), DAY), 0);
+
+    await expect(
+      adapter.consume(turn([user], randomUUID(), DAY), 0)
+    ).resolves.toMatchObject({ allowed: false, firstDenial: false });
+    await expect(
+      adapter.consume(turn([user], randomUUID(), NEXT_DAY), 0)
+    ).resolves.toEqual({ allowed: false, used: 0, firstDenial: true });
+  });
+
+  it('flags the first denial per caller, so each session behind a spent IP gets its own', async () => {
+    const ip = subject('ip');
+    await adapter.consume(turn([subject('anon'), ip]), 1);
+
+    for (const session of [subject('anon'), subject('anon')]) {
+      await expect(
+        adapter.consume(turn([session, ip]), 1)
+      ).resolves.toMatchObject({ allowed: false, firstDenial: true });
+    }
   });
 
   it('treats a refund without a marker as a no-op', async () => {
@@ -220,6 +276,7 @@ describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
     await expect(adapter.consume(denied, 2)).resolves.toEqual({
       allowed: false,
       used: 2,
+      firstDenial: true,
     });
     expect(await adapter.usage([session], DAY)).toBe(0);
     expect(await adapter.usage([ip], DAY)).toBe(2);
@@ -236,6 +293,7 @@ describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
     await expect(adapter.consume(denied, 1)).resolves.toEqual({
       allowed: false,
       used: 1,
+      firstDenial: true,
     });
     expect(await adapter.usage([ip], DAY)).toBe(0);
     expect(await redis.exists(markerKey(session, denied.turnId))).toBe(0);
@@ -316,35 +374,44 @@ describe.runIf(!!REDIS_URL)('RedisMessageQuotaAdapter against Redis', () => {
   it('passes every key it touches to the script in KEYS', async () => {
     const session = subject('anon');
     const ip = subject('ip');
-    const declared = turn([session, ip]);
-    const turnKeys = [
-      markerKey(session, declared.turnId),
-      counterKey(session),
-      counterKey(ip),
+    const admitted = turn([session, ip]);
+    const denied = turn([session, ip]);
+    const counters = [counterKey(session), counterKey(ip)];
+    const consumeKeys = ({ turnId }: QuotaTurn) => [
+      markerKey(session, turnId),
+      exhaustedKey(session),
+      ...counters,
     ];
-    const ownIds = [session, ip, declared.turnId];
-    const before = await scanQuotaKeys(redis);
-    const createdSinceBefore = async () =>
-      [...(await scanQuotaKeys(redis))]
-        .filter(
-          (key) => !before.has(key) && ownIds.some((id) => key.includes(id))
+    const ownKeys = async () =>
+      new Set(
+        [...(await scanQuotaKeys(redis))].filter((key) =>
+          [session, ip].some((id) => key.includes(id))
         )
-        .sort();
+      );
+    const createdBy = async (call: () => Promise<unknown>) => {
+      const before = await ownKeys();
+      await call();
+      return [...(await ownKeys())].filter((key) => !before.has(key)).sort();
+    };
     const evalSpy = vi.spyOn(redis, 'eval');
 
     try {
-      await adapter.consume(declared, LIMIT);
-      expect(await createdSinceBefore()).toEqual([...turnKeys].sort());
-
-      await adapter.refund(declared);
-      expect(turnKeys).toEqual(
-        expect.arrayContaining(await createdSinceBefore())
+      expect(await createdBy(() => adapter.consume(admitted, 1))).toEqual(
+        [markerKey(session, admitted.turnId), ...counters].sort()
       );
+      expect(await createdBy(() => adapter.consume(denied, 1))).toEqual([
+        exhaustedKey(session),
+      ]);
+      expect(await createdBy(() => adapter.refund(admitted))).toEqual([]);
       expect(
         evalSpy.mock.calls.map(([, numKeys, ...keysThenArgs]) =>
           keysThenArgs.slice(0, Number(numKeys))
         )
-      ).toEqual([turnKeys, turnKeys]);
+      ).toEqual([
+        consumeKeys(admitted),
+        consumeKeys(denied),
+        [markerKey(session, admitted.turnId), ...counters],
+      ]);
     } finally {
       evalSpy.mockRestore();
     }

@@ -102,6 +102,9 @@ export class MessageQuotaService {
       return this.consumeFromPersisted(execution, turn, limit);
     }
     if (!result.allowed) {
+      if (result.firstDenial) {
+        this.announceExhausted(execution);
+      }
       return this.exhausted(execution, turn.day);
     }
     if (!result.replayed) {
@@ -183,6 +186,8 @@ export class MessageQuotaService {
         turn.day
       );
       if (used >= limit) {
+        // Postgres has no record of earlier denials, so every one is announced.
+        this.announceExhausted(execution);
         return this.exhausted(execution, turn.day);
       }
       this.announceConsumed(execution, used + 1, limit);
@@ -247,14 +252,17 @@ export class MessageQuotaService {
     execution: AiExecutionContext,
     day: UtcDay
   ): QuotaConsumeOutcome {
-    this.announce(
-      new MessageQuotaExhaustedEvent(execution.subject.userId, execution.tier)
-    );
     return {
       kind: 'exhausted',
       resetsAt: day.resetsAt,
       upgrade: quotaUpgradeFor(execution.tier),
     };
+  }
+
+  private announceExhausted(execution: AiExecutionContext): void {
+    this.announce(
+      new MessageQuotaExhaustedEvent(execution.subject.userId, execution.tier)
+    );
   }
 
   private announceConsumed(

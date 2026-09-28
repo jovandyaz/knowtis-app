@@ -15,12 +15,17 @@ export type QuotaConsumeResult =
       readonly used: number;
       readonly replayed: boolean;
     }
-  | { readonly allowed: false; readonly used: number };
+  | {
+      readonly allowed: false;
+      readonly used: number;
+      readonly firstDenial: boolean;
+    };
 
 /**
  * Daily message counters. A turn consumes only when every subject is under the
  * limit, and one turn id consumes at most once per caller and day. `used` is
- * the highest count among the subjects.
+ * the highest count among the subjects. `firstDenial` is true only for the
+ * caller's first refused turn of the day.
  */
 export interface MessageQuotaPort {
   consume(turn: QuotaTurn, limit: number): Promise<QuotaConsumeResult>;

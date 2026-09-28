@@ -168,7 +168,11 @@ describe('MessageQuotaService', () => {
       async ({ tier, upgrade }) => {
         const { service, events } = setup({
           counters: {
-            consume: vi.fn().mockResolvedValue({ allowed: false, used: 5 }),
+            consume: vi.fn().mockResolvedValue({
+              allowed: false,
+              used: 5,
+              firstDenial: true,
+            }),
           },
         });
 
@@ -188,6 +192,41 @@ describe('MessageQuotaService', () => {
         );
       }
     );
+
+    it('announces an exhausted caller once across two denials, refusing both', async () => {
+      const { service, events } = setup({
+        counters: {
+          consume: vi
+            .fn()
+            .mockResolvedValueOnce({
+              allowed: false,
+              used: 30,
+              firstDenial: true,
+            })
+            .mockResolvedValueOnce({
+              allowed: false,
+              used: 30,
+              firstDenial: false,
+            }),
+        },
+      });
+      const exhausted = {
+        kind: 'exhausted',
+        resetsAt: new Date(RESETS_AT),
+        upgrade: 'byok',
+      };
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await expect(
+          service.consume(createExecutionContext({ tier: 'free' }), TURN)
+        ).resolves.toEqual(exhausted);
+      }
+      expect(events.emit).toHaveBeenCalledTimes(1);
+      expect(events.emit).toHaveBeenCalledWith(
+        MessageQuotaExhaustedEvent.EVENT_NAME,
+        expect.objectContaining({ userId: 'user-1', tier: 'free' })
+      );
+    });
 
     it('announces a fresh consumption with its raw counts', async () => {
       const { service, events } = setup({
@@ -230,7 +269,7 @@ describe('MessageQuotaService', () => {
 
     it.each([
       {
-        counted: { allowed: false, used: 30 },
+        counted: { allowed: false, used: 30, firstDenial: true },
         expected: { kind: 'exhausted' },
       },
       {
@@ -311,6 +350,25 @@ describe('MessageQuotaService', () => {
       );
     });
 
+    it('announces every denial the Postgres fallback refuses, since it keeps no record of an earlier one', async () => {
+      const { service, events } = setup({
+        counters: { consume: down() },
+        persisted: { countUserMessages: vi.fn().mockResolvedValue(30) },
+      });
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await expect(
+          service.consume(createExecutionContext({ tier: 'free' }), TURN)
+        ).resolves.toMatchObject({ kind: 'exhausted' });
+      }
+      expect(events.emit).toHaveBeenCalledTimes(2);
+      expect(events.emit).toHaveBeenNthCalledWith(
+        2,
+        MessageQuotaExhaustedEvent.EVENT_NAME,
+        expect.objectContaining({ userId: 'user-1', tier: 'free' })
+      );
+    });
+
     it('fails an anonymous caller closed when the counters are down', async () => {
       const { service, persisted } = setup({ counters: { consume: down() } });
 
@@ -355,7 +413,9 @@ describe('MessageQuotaService', () => {
       const { service, counters } = setup({
         limits: { anonymous: 0, free: 30 },
         counters: {
-          consume: vi.fn().mockResolvedValue({ allowed: false, used: 0 }),
+          consume: vi
+            .fn()
+            .mockResolvedValue({ allowed: false, used: 0, firstDenial: true }),
         },
       });
 

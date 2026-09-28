@@ -54,14 +54,17 @@ environment variable. Local runs report `0.1.0`.
 | `ai response completed` | Browser only after a live assistant or copilot stream completes                        | `source`, `assistant_type`, and `action` when applicable                                                                                                      |
 | `mcp key created`       | API after persistence succeeds                                                         | `source=api`, `scope_level` (`read`, `write`, or `share`)                                                                                                     |
 | `ai quota consumed`     | API when a copilot turn draws a daily message (not on a replayed turn id)              | `source=api`, `tier` (`anonymous`, `free`, or `byok`), `remaining_bucket` (`0`, `1-20%`, or `>20%`, bucketed in the listener; raw counts never leave the API) |
-| `ai quota exhausted`    | API when a turn is refused for a spent quota                                           | `source=api`, `tier`                                                                                                                                          |
+| `ai quota exhausted`    | API on a caller's first turn refused for a spent quota each UTC day                    | `source=api`, `tier`                                                                                                                                          |
 
 Browser anonymous creation is deliberately browser-authoritative so it retains
 the browser distinct ID and joins the pre-signup funnel. Registered API events
 use the stable database user ID. `shared note viewed` is not emitted when the
 viewer is the note's owner; owners opening their own link are not an audience.
 Server events carry `actor_type=anonymous` for anonymous sessions; their
-distinct ID is the anonymous user ID, not the browser's.
+distinct ID is the anonymous user ID, not the browser's. `ai quota exhausted`
+counts callers, not attempts: retries on a spent quota are not captured again
+that day, except while the quota falls back to Postgres, which captures every
+refusal.
 
 Only identification may set these person properties: `email`, `name`, `role`,
 `locale`, and `is_internal`. Email and name are not event properties. Event
