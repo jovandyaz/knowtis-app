@@ -364,6 +364,12 @@ describe('NoteMutateToolGroup markdown length', () => {
     ],
     [
       'proposeEditNote',
+      'oldText',
+      'buildEdit',
+      { noteId: NOTE_ID, edits: [{ oldText: AT_LIMIT, newText: 'milk' }] },
+    ],
+    [
+      'proposeEditNote',
       'newText',
       'buildEdit',
       { noteId: NOTE_ID, edits: [{ oldText: 'milk', newText: AT_LIMIT }] },

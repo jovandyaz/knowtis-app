@@ -119,7 +119,10 @@ export class NoteMutateToolGroup implements AgentToolGroup {
         execute: async ({ noteId, edits, appendMarkdown }) => {
           const refused = refuseMarkdownAtLimit([
             ['appendMarkdown', appendMarkdown],
-            ...edits.map(({ newText }) => ['newText', newText] as const),
+            ...edits.flatMap(({ oldText, newText }) => [
+              ['oldText', oldText] as const,
+              ['newText', newText] as const,
+            ]),
           ]);
           if (refused) {
             return refused;
