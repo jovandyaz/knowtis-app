@@ -77,7 +77,7 @@ export class SearchController {
           type: 'string',
           enum: ['hybrid', 'lexical'],
           description:
-            "Whether the semantic leg was attempted, not whether it succeeded. 'lexical' means it was skipped because the AI budget refused it; 'hybrid' means it was attempted (it may still fall back to lexical results internally on failure).",
+            "Whether the semantic leg was attempted, not whether it succeeded. 'lexical' means it was skipped because no embedding provider is configured or the AI budget refused it; 'hybrid' means it was attempted (it may still fall back to lexical results internally on failure).",
         },
       },
     },
