@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QuizScoreBucket } from '@knowtis/shared-types';
 
+import { MessageQuotaConsumedEvent } from '../ai/domain/events/message-quota-consumed.event';
+import { MessageQuotaExhaustedEvent } from '../ai/domain/events/message-quota-exhausted.event';
 import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
 import { FlashcardReviewedEvent } from '../artifacts/domain/events/flashcard-reviewed.event';
 import { QuizCompletedEvent } from '../artifacts/domain/events/quiz-completed.event';
@@ -293,6 +295,47 @@ describe('ProductAnalyticsListener', () => {
     expect(capture).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'note shared',
+        actor: expect.objectContaining({ actor_type: 'anonymous' }),
+      })
+    );
+  });
+
+  it.each([
+    { used: 1, limit: 30, bucket: '>20%' },
+    { used: 23, limit: 30, bucket: '>20%' },
+    { used: 24, limit: 30, bucket: '1-20%' },
+    { used: 4, limit: 5, bucket: '1-20%' },
+    { used: 30, limit: 30, bucket: '0' },
+    { used: 31, limit: 30, bucket: '0' },
+    { used: 0, limit: 0, bucket: '0' },
+  ])(
+    'captures a consumed quota of $used/$limit as bucket $bucket, never the raw counts',
+    async ({ used, limit, bucket }) => {
+      await listener.handleQuotaConsumed(
+        new MessageQuotaConsumedEvent(USER.id, 'free', used, limit)
+      );
+
+      expect(capture).toHaveBeenCalledWith(
+        expect.objectContaining({
+          distinctId: USER.id,
+          event: 'ai quota consumed',
+          properties: { source: 'api', tier: 'free', remaining_bucket: bucket },
+        })
+      );
+    }
+  );
+
+  it('captures an exhausted anonymous quota as an anonymous actor', async () => {
+    findById.mockResolvedValue({ ...USER, isAnonymous: true });
+
+    await listener.handleQuotaExhausted(
+      new MessageQuotaExhaustedEvent(USER.id, 'anonymous')
+    );
+
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai quota exhausted',
+        properties: { source: 'api', tier: 'anonymous' },
         actor: expect.objectContaining({ actor_type: 'anonymous' }),
       })
     );

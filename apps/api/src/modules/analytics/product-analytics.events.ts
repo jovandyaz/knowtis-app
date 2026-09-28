@@ -1,6 +1,7 @@
 import type { EmailVerificationSource } from '@jovandyaz/auth/server';
 
 import type {
+  AccessTier,
   ArtifactType,
   FlashcardReviewKind,
   McpScopeLevel,
@@ -11,6 +12,7 @@ import type {
   ProductPersonProperties,
   QuizAttemptScope,
   QuizScoreBucket,
+  QuotaRemainingBucket,
 } from '@knowtis/shared-types';
 
 export type ServerActorContext = ProductActorContext;
@@ -41,6 +43,12 @@ export interface ServerProductEventMap {
     scope: QuizAttemptScope;
     score_bucket: QuizScoreBucket;
   };
+  'ai quota consumed': {
+    source: 'api';
+    tier: AccessTier;
+    remaining_bucket: QuotaRemainingBucket;
+  };
+  'ai quota exhausted': { source: 'api'; tier: AccessTier };
 }
 
 export type ServerProductEventName = keyof ServerProductEventMap &

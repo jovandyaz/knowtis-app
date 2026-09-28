@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DATABASE_CONNECTION } from '../../database';
 import { AnalyticsModule } from './analytics.module';
+import type { ServerProductEventMap } from './product-analytics.events';
 import { ProductAnalytics } from './product-analytics.service';
 
 const { capture, shutdown, PostHog } = vi.hoisted(() => {
@@ -160,6 +161,34 @@ describe('ProductAnalytics', () => {
         },
       },
     });
+
+    await close();
+  });
+
+  it('sends only the allowlisted quota properties', async () => {
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+    });
+
+    analytics.capture({
+      distinctId: 'user-1',
+      event: 'ai quota consumed',
+      properties: {
+        source: 'api',
+        tier: 'free',
+        remaining_bucket: '>20%',
+        used: 1,
+      } as ServerProductEventMap['ai quota consumed'],
+      actor: { actor_type: 'registered', is_internal: false, locale: 'en' },
+    });
+
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        properties: expect.not.objectContaining({ used: 1 }),
+      })
+    );
 
     await close();
   });
