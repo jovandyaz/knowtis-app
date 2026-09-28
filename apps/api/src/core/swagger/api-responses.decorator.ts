@@ -48,12 +48,19 @@ export const ApiConflict = (reason: string) =>
   });
 
 /**
- * Common 503 Service Unavailable response decorator with a customizable reason.
+ * Common 503 Service Unavailable response decorator with a customizable reason
+ * and the `Retry-After` header the response carries.
  */
 export const ApiServiceUnavailable = (reason: string) =>
   ApiResponse({
     status: 503,
     description: `Service unavailable — ${reason}`,
+    headers: {
+      'Retry-After': {
+        description: 'Seconds to wait before retrying',
+        schema: { type: 'integer' },
+      },
+    },
   });
 
 /**
