@@ -19,6 +19,8 @@ import {
 import { SYNTHESIS_REQUEST } from './agent-step-loop';
 import type { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
+import { fromResponseMessages, type ResponseMessage } from './message-mapper';
+import { nextInputTokens } from './segment-close';
 
 const propagateSpy = vi.hoisted(() =>
   vi.fn((_attrs: Record<string, unknown>, fn: () => unknown): unknown => fn())
@@ -2360,7 +2362,7 @@ describe('AiSdkAgentOrchestrator', () => {
     logSpy.mockRestore();
   });
 
-  const TOOL_CALL_MESSAGES = [
+  const TOOL_CALL_MESSAGES: ResponseMessage[] = [
     {
       role: 'assistant',
       content: [
@@ -2388,10 +2390,9 @@ describe('AiSdkAgentOrchestrator', () => {
     TOOL_CALL_MESSAGES[0],
     { ...TOOL_CALL_MESSAGES[1], providerOptions: ANTHROPIC_CACHE_BREAKPOINT },
   ];
-  const CACHED_SYNTHESIS_REQUEST = {
+  const SYNTHESIS_REQUEST_MESSAGE = {
     role: 'user',
     content: SYNTHESIS_REQUEST,
-    providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
   };
 
   function toolCallStep(usage: { inputTokens: number; outputTokens: number }) {
@@ -2560,7 +2561,10 @@ describe('AiSdkAgentOrchestrator', () => {
       FALLBACK
     );
 
-    const consumed = collect(orchestrator.run({ ...baseInput, maxSteps: 2 }));
+    const maxTurnTokens = 3_000;
+    const consumed = collect(
+      orchestrator.run({ ...baseInput, maxSteps: 2, maxTurnTokens })
+    );
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
@@ -2569,6 +2573,14 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(
       streamTextMock.mock.calls.map(([options]) => options.toolChoice)
     ).toEqual([undefined, 'none', 'none', 'none']);
+    const spent = 10 + 5;
+    const synthesisCap =
+      maxTurnTokens -
+      spent -
+      nextInputTokens(10, 5, fromResponseMessages(TOOL_CALL_MESSAGES));
+    expect(
+      streamTextMock.mock.calls.map(([options]) => options.maxOutputTokens)
+    ).toEqual([4096, synthesisCap, synthesisCap, synthesisCap]);
     const models = streamTextMock.mock.calls.map(
       (call) => (call[0].model as { modelId: string }).modelId
     );
@@ -2584,9 +2596,9 @@ describe('AiSdkAgentOrchestrator', () => {
       .messages as unknown[];
     expect(failoverMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 2);
     expect(failoverMessages).toEqual(
-      expect.arrayContaining(TOOL_CALL_MESSAGES)
+      expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
-    expect(failoverMessages.at(-1)).toEqual(CACHED_SYNTHESIS_REQUEST);
+    expect(failoverMessages.at(-1)).toEqual(SYNTHESIS_REQUEST_MESSAGE);
     expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
     expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
       false
@@ -3126,10 +3138,10 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(streamTextMock.mock.calls[0][0].toolChoice).toBeUndefined();
     expect(streamTextMock.mock.calls[1][0].toolChoice).toBe('none');
     expect(streamTextMock.mock.calls[1][0].messages).toEqual(
-      expect.arrayContaining(TOOL_CALL_MESSAGES)
+      expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
     expect(streamTextMock.mock.calls[1][0].messages.at(-1)).toEqual(
-      CACHED_SYNTHESIS_REQUEST
+      SYNTHESIS_REQUEST_MESSAGE
     );
     expect(events.at(-1)).toMatchObject({
       type: 'done',

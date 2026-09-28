@@ -255,9 +255,10 @@ export async function* runAgentStepLoop(
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
         providerOptions,
-        history: synthesizing
-          ? [...history, { role: 'user', content: SYNTHESIS_REQUEST }]
-          : history,
+        history,
+        ...(synthesizing
+          ? { trailingMessage: { role: 'user', content: SYNTHESIS_REQUEST } }
+          : {}),
         budgets: synthesizing
           ? { ...params.budgets, maxOutputTokens: synthesisMaxOutputTokens }
           : params.budgets,

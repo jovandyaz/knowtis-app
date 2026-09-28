@@ -150,6 +150,8 @@ export interface StepCallParams {
   readonly traceIdentity: TraceIdentityAttrs;
   readonly providerOptions: TurnProviderOptions;
   readonly history: ModelMessage[];
+  /** Sent after the cache breakpoint, so a one-off message never moves it off the replayable history. */
+  readonly trailingMessage?: ModelMessage;
   readonly budgets: {
     readonly stallMs: number;
     readonly ttftMs: number;
@@ -225,15 +227,18 @@ export async function* runStepCall(
   };
 
   try {
+    const history = params.cache
+      ? withLastMessageCache(model, params.history)
+      : params.history;
     result = withTraceIdentity(params.traceIdentity, () =>
       streamText({
         model: params.providerRegistry.languageModel(model, input.byokApiKey),
         ...(params.cache
           ? cacheableInstructions(model, params.instructions)
           : { instructions: params.instructions }),
-        messages: params.cache
-          ? withLastMessageCache(model, params.history)
-          : params.history,
+        messages: params.trailingMessage
+          ? [...history, params.trailingMessage]
+          : history,
         tools: params.tools,
         ...(params.toolChoice ? { toolChoice: params.toolChoice } : {}),
         stopWhen: isStepCount(1),
