@@ -1996,19 +1996,24 @@ describe('AgentGateway', () => {
         .spyOn(Logger.prototype, 'warn')
         .mockImplementation(() => undefined);
 
-      await gateway.handleMessage(client as never, {
-        turnId: TURN,
-        message: { content: 'hi' },
-      });
+      try {
+        await gateway.handleMessage(client as never, {
+          turnId: TURN,
+          message: { content: 'hi' },
+        });
 
-      expect(log).toHaveBeenCalledWith(
-        expect.objectContaining({ event: 'agent.quota.emit_failed' })
-      );
-      expect(client.emit).toHaveBeenCalledWith(
-        'agent:done',
-        expect.objectContaining({ turnId: TURN })
-      );
-      log.mockRestore();
+        expect(log).toHaveBeenCalledWith({
+          event: 'agent.quota.emit_failed',
+          turnId: TURN,
+          error: 'socket write failed',
+        });
+        expect(client.emit).toHaveBeenCalledWith(
+          'agent:done',
+          expect.objectContaining({ turnId: TURN })
+        );
+      } finally {
+        log.mockRestore();
+      }
     });
   });
 });

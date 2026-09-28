@@ -26,6 +26,7 @@ import {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
+import { reasonOf } from '../../core/errors/reason-of';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
@@ -501,8 +502,6 @@ export class AgentGateway
     }
   }
 
-  // A quota emit failure must never lose the consume/refund it reports, so it
-  // logs and moves on instead of propagating into the turn.
   private emitQuota(
     client: AuthenticatedSocket,
     turnId: string,
@@ -517,7 +516,7 @@ export class AgentGateway
       this.logger.warn({
         event: 'agent.quota.emit_failed',
         turnId,
-        error: error instanceof Error ? error.message : String(error),
+        error: reasonOf(error),
       });
     }
   }
