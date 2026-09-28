@@ -10,18 +10,19 @@ Per-turn reasoning **effort** is plumbed here but resolved elsewhere: a turn car
 
 `@WebSocketGateway` on the **`/agent`** namespace ([agent.gateway.ts](agent.gateway.ts)).
 
-| Direction       | Event                            | Meaning                                                                                              |
-| --------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| client → server | `agent:message`                  | New user turn (`{ conversationId?, message, noteId?, model?, effort? }`)                             |
-| client → server | `agent:approve` / `agent:reject` | HITL decision on a pending proposal — `{ proposalId, noteId? }`, plus an optional `reason` on reject |
-| client → server | `agent:cancel`                   | Abort the in-flight turn                                                                             |
-| server → client | `agent:conversation`             | `{ conversationId }` — emitted once when the turn creates the conversation                           |
-| server → client | `agent:chunk`                    | Streamed assistant text                                                                              |
-| server → client | `agent:thinking`                 | Streamed reasoning summary (`{ text }`), rendered apart from the answer                              |
-| server → client | `agent:proposal`                 | A proposed mutation awaiting approval                                                                |
-| server → client | `agent:committed`                | Approved mutation applied (`{ proposalId, result }`)                                                 |
-| server → client | `agent:done`                     | Turn finished: `{ usage, sources, knownNotes, webSources, stopReason, conversationId? }`             |
-| server → client | `agent:error`                    | Auth / feature-flag / runtime error (`{ code, message }`; AI or `AGENT_*` codes, see below)          |
+| Direction       | Event                            | Meaning                                                                                                           |
+| --------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| client → server | `agent:message`                  | New user turn (`{ conversationId?, message, noteId?, model?, effort? }`)                                          |
+| client → server | `agent:approve` / `agent:reject` | HITL decision on a pending proposal — `{ proposalId, noteId? }`, plus an optional `reason` on reject              |
+| client → server | `agent:cancel`                   | Abort the in-flight turn                                                                                          |
+| server → client | `agent:conversation`             | `{ conversationId }` — emitted once when the turn creates the conversation                                        |
+| server → client | `agent:chunk`                    | Streamed assistant text                                                                                           |
+| server → client | `agent:thinking`                 | Streamed reasoning summary (`{ text }`), rendered apart from the answer                                           |
+| server → client | `agent:proposal`                 | A proposed mutation awaiting approval                                                                             |
+| server → client | `agent:committed`                | Approved mutation applied (`{ proposalId, result }`)                                                              |
+| server → client | `agent:done`                     | Turn finished: `{ usage, sources, knownNotes, webSources, stopReason, conversationId? }`                          |
+| server → client | `agent:quota`                    | `{ turnId, tier, messages: { used, limit, resetsAt } \| null }`, sent after each consume and refund               |
+| server → client | `agent:error`                    | Auth / feature-flag / runtime error (`{ code, message }`; AI, `AGENT_*` or `AI_QUOTA_EXHAUSTED` codes, see below) |
 
 Every client → server event is acknowledged on receipt, before validation (`@Ack()`): socket.io delivers at most once, so the client (`libs/api-client/src/lib/agent.client.ts`) waits for that receipt (`ackTimeout: 10000`) and, when it never arrives, drops the socket and fails the request with `CONNECTION_FAILED` instead of waiting on a turn the server never saw. Nothing is resent automatically, because starting a turn is not idempotent and a copy replayed after a reconnect would run twice; the retry banner is the user's resend. A request without a receipt yet is never cancelled either: its socket is dropped and the next send opens a fresh one. Outcomes still travel as `agent:error`; the receipt only says the event was delivered.
 
@@ -85,7 +86,9 @@ Proposals live in Redis keyed by `proposalId`; approve and reject both resume th
 
 ## Error codes
 
-`AgentErrors` ([`domain/agent-errors.ts`](domain/agent-errors.ts)): `AGENT_INVALID_PROPOSAL`, `AGENT_STALE_NOTE`, `AGENT_PROPOSAL_EXPIRED`, `AGENT_PERMISSION_DENIED`, `AGENT_EMAIL_NOT_VERIFIED` (`AGENT_EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`), `AGENT_COMMIT_FAILED`, `AGENT_SANITIZE_REJECTED`, `AGENT_NOTE_NOT_FOUND`, `AGENT_CONVERSATION_NOT_FOUND` (`AGENT_CONVERSATION_NOT_FOUND_CODE` from `@knowtis/shared-types`), `AGENT_TARGET_USER_NOT_FOUND`, `AGENT_EDIT_TEXT_NOT_FOUND`, `AGENT_EDIT_TEXT_AMBIGUOUS`, `AGENT_WHOLE_BODY_UPDATE_REFUSED`, `AGENT_EDIT_WOULD_LOSE_CONTENT`. Causes: [Agent error codes](../../../../../docs/AI.md#agent-error-codes). Everything else on `agent:error` is an `AIErrorCodes` member.
+`AgentErrors` ([`domain/agent-errors.ts`](domain/agent-errors.ts)): `AGENT_INVALID_PROPOSAL`, `AGENT_STALE_NOTE`, `AGENT_PROPOSAL_EXPIRED`, `AGENT_PERMISSION_DENIED`, `AGENT_EMAIL_NOT_VERIFIED` (`AGENT_EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`), `AGENT_COMMIT_FAILED`, `AGENT_SANITIZE_REJECTED`, `AGENT_NOTE_NOT_FOUND`, `AGENT_CONVERSATION_NOT_FOUND` (`AGENT_CONVERSATION_NOT_FOUND_CODE` from `@knowtis/shared-types`), `AGENT_TARGET_USER_NOT_FOUND`, `AGENT_EDIT_TEXT_NOT_FOUND`, `AGENT_EDIT_TEXT_AMBIGUOUS`, `AGENT_WHOLE_BODY_UPDATE_REFUSED`, `AGENT_EDIT_WOULD_LOSE_CONTENT`. Causes: [Agent error codes](../../../../../docs/AI.md#agent-error-codes). Everything else on `agent:error` is an `AIErrorCodes` member, including `AI_QUOTA_EXHAUSTED` (`AI_QUOTA_EXHAUSTED_CODE` from `@knowtis/shared-types`, `{ resetsAt, upgrade }`) — see [Daily Message Quota](../../../../../docs/AI.md#daily-message-quota).
+
+A quota store outage answers `TURN_CLAIM_UNAVAILABLE` (resendable) instead, because the turn claim needs Redis before the quota is ever drawn.
 
 ## Eval harness
 
