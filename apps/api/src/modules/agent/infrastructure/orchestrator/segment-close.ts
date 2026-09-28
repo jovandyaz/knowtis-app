@@ -25,8 +25,9 @@ export interface SegmentState {
 
 // Every call re-sends the whole history, so one more tool step costs about
 // nextInput and the synthesis after it about nextInput plus its request; the
-// reserve covers that step's typical output plus the synthesis, so a step that
-// fills its output cap can leave the synthesis unaffordable. Negated so a NaN
+// reserve covers that step's typical output and tool results plus the synthesis,
+// so a step with a full output or large tool results can leave the synthesis
+// unaffordable. Negated so a NaN
 // anywhere closes the segment instead of running unbudgeted.
 function tokensRunOut(state: SegmentState): boolean {
   return !(
