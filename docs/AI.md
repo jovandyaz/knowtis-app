@@ -307,7 +307,7 @@ Two `ai_config` knobs set the daily limits: `ai_anon_daily_messages` (default `5
 - a turn with no terminal event;
 - an internal throw before the first `chunk`;
 - a throw while preparing the model call;
-- a disconnect, an expired token or a deploy before the first `chunk`.
+- a disconnect or an expired token before the first `chunk`.
 
 It never happens for:
 
@@ -315,6 +315,8 @@ It never happens for:
 - an injection-guard refusal;
 - a failure or throw after text has streamed;
 - a `done` or a `proposal` with no text.
+
+A turn cut by a deploy keeps its message: the API's shutdown closes Redis before its sockets, so the refund fails with `ai.quota.refund_failed`.
 
 A refund of a turn that crossed midnight gives the message back on the day it was consumed, then reports the caller's quota for the current UTC day. A resume (`resumeTurn`, after an `agent:approve`/`agent:reject`) never calls `consume` — only a fresh `agent:message` draws from the quota. A turn consumed through the Postgres fallback is never refunded: its own persisted row is what the fallback counts, so there is no counter to give a message back to.
 
@@ -1510,7 +1512,7 @@ Because the stall aborts only the per-call signal, the turn-level signal survive
 
 **A shorter budget for the first part.** The first silence window of a call — before any part has arrived — is bounded by `AI_AGENT_TTFT_MS` (default 30 s), not the full `AI_AGENT_STALL_MS`: a call that hasn't said anything yet is far more likely to be dead than one already generating. Every step call opens with its own TTFT window, continuation calls included. The first non-marker part received flips the watchdog over to the `AI_AGENT_STALL_MS` budget for the rest of that call; a stall after that point follows the pre-existing semantics above, unchanged.
 
-**Zero-output retry.** The retry is scoped **per call**: a call that hits the TTFT deadline without streaming a single part is retried against the **same model** exactly once — a fresh `streamText` call with identical inputs — because a call that streamed zero parts also ran zero tools and rendered zero text: rerunning it is idempotent, unlike retrying after any output has already streamed. The retry is logged as `agent.turn.retry` (`model`, `attempt`, `reason: 'ttft'`). If the retry is also silent, the outcome follows the call's position: the first call of the turn throws `AgentStallError` (the outer chain advances) when non-last and non-BYOK; a continuation step fails over at the step boundary to the next candidate on the same history; the last candidate or a BYOK turn ends with `AI_TIMEOUT`. A user abort or the `AI_AGENT_MAX_MS` ceiling firing during either attempt always wins over the retry, ending the turn immediately regardless of how many parts have streamed.
+**Zero-output retry.** The retry is scoped **per call**: a call that hits the TTFT deadline without streaming a single part is retried against the **same model** exactly once — a fresh `streamText` call with identical inputs — because a call that streamed zero parts also ran zero tools and rendered zero text: rerunning it is idempotent, unlike retrying after any output has already streamed. The retry is logged as `agent.turn.retry` (`model`, `attempt`, `reason: 'ttft'`). If the retry is also silent, the outcome follows the call's position: the first call of the turn throws `AgentStallError` (the outer chain advances) when non-last and non-BYOK; a continuation step fails over at the step boundary to the next candidate on the same history; the last candidate or a BYOK turn ends with `AI_TIMEOUT`. An abort (a user cancel or a socket disconnect) or the `AI_AGENT_MAX_MS` ceiling firing during either attempt always wins over the retry, ending the turn immediately regardless of how many parts have streamed.
 
 **Timeout hierarchy.** The budgets nest strictly: `AI_AGENT_TTFT_MS` (30 s) < `AI_AGENT_STALL_MS` (60 s) < `AI_AGENT_MAX_MS` (300 s) < the client's stream-inactivity watchdog (`AGENT_STREAM_INACTIVITY_MS`, 310 s) — each guard needs room to fire before the next, outer one does, or it never fires at all. Boot-time env validation enforces the two server-side links with a `superRefine` (`AI_AGENT_STALL_MS < AI_AGENT_MAX_MS`, then `AI_AGENT_TTFT_MS < AI_AGENT_STALL_MS`): the process refuses to start if either is violated.
 
