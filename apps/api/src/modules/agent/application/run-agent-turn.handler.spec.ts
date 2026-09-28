@@ -58,6 +58,7 @@ import {
   projectReplayText,
   REPLAY_REDACTION_MARKER,
 } from '../domain/replay-input-sanitizer';
+import { TURN_ABORT_REASON } from '../domain/turn-abort';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import type { InjectionGuardService } from './injection-guard.service';
 import {
@@ -1910,7 +1911,7 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });
 
-  it('persists the user message alone when the turn aborts before any text', async () => {
+  it('closes the turn with an empty assistant row when it aborts before any text', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
@@ -1953,7 +1954,10 @@ describe('RunAgentTurnHandler', () => {
 
     expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
     const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
-    expect(appended.messages).toEqual([{ role: 'user', content: 'hola' }]);
+    expect(appended.messages).toEqual([
+      { role: 'user', content: 'hola' },
+      { role: 'assistant', content: '', sources: [], stopReason: 'aborted' },
+    ]);
   });
 
   describe('execution context', () => {
@@ -6631,49 +6635,107 @@ describe('RunAgentTurnHandler daily message quota', () => {
     );
   });
 
-  it('does not refund a user abort that surfaces as a thrown error', async () => {
+  it.each([
+    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+  ] as const)(
+    'a %s abort before any text %s the message',
+    async (reason, _verb, refunds) => {
+      const quota = consumedQuota();
+      const controller = new AbortController();
+      const orchestrator: AgentOrchestrator = {
+        run: vi.fn(async function* () {
+          controller.abort(reason);
+          yield aborted;
+        }),
+      };
+      const { handler } = build({ quota, orchestrator });
+
+      await handler.execute(turn, callbacks(), controller.signal);
+
+      expect(quota.refund).toHaveBeenCalledTimes(refunds);
+    }
+  );
+
+  it('keeps the message when the server aborts after text streamed', async () => {
     const quota = consumedQuota();
     const controller = new AbortController();
     const orchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
-        controller.abort();
-        throw new Error('aborted');
-        yield { type: 'chunk', text: '' } as AgentEvent;
+        yield { type: 'chunk', text: 'Hola' } as AgentEvent;
+        controller.abort(TURN_ABORT_REASON.DISCONNECTED);
+        yield aborted;
       }),
     };
     const { handler } = build({ quota, orchestrator });
 
     await handler.execute(turn, callbacks(), controller.signal);
 
-    expect(orchestrator.run).toHaveBeenCalledOnce();
     expect(quota.refund).not.toHaveBeenCalled();
   });
 
-  it('does not refund a user abort mid-stream', async () => {
-    const quota = consumedQuota();
-    const { handler } = build({ quota, events: [aborted] });
+  it.each([
+    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+  ] as const)(
+    'a %s abort thrown before any text %s the message',
+    async (reason, _verb, refunds) => {
+      const quota = consumedQuota();
+      const controller = new AbortController();
+      const orchestrator: AgentOrchestrator = {
+        run: vi.fn(async function* () {
+          controller.abort(reason);
+          throw new Error('aborted');
+          yield { type: 'chunk', text: '' } as AgentEvent;
+        }),
+      };
+      const { handler } = build({ quota, orchestrator });
 
-    await handler.execute(turn, callbacks());
+      await handler.execute(turn, callbacks(), controller.signal);
 
-    expect(quota.refund).not.toHaveBeenCalled();
-  });
+      expect(quota.refund).toHaveBeenCalledTimes(refunds);
+    }
+  );
 
-  it('does not refund a user abort before the model starts', async () => {
+  it('keeps the message when the server abort throws after text streamed', async () => {
     const quota = consumedQuota();
     const controller = new AbortController();
-    const guard = {
-      guard: vi.fn(async () => {
-        controller.abort();
-        return { safe: true, score: 0 };
+    const orchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        yield { type: 'chunk', text: 'Hola' } as AgentEvent;
+        controller.abort(TURN_ABORT_REASON.DISCONNECTED);
+        throw new Error('aborted');
       }),
-    } as unknown as InjectionGuardService;
-    const { handler, orchestrator } = build({ quota, guard });
+    };
+    const { handler } = build({ quota, orchestrator });
 
     await handler.execute(turn, callbacks(), controller.signal);
 
-    expect(orchestrator.run).not.toHaveBeenCalled();
     expect(quota.refund).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+  ] as const)(
+    'a %s abort before the model starts %s the message',
+    async (reason, _verb, refunds) => {
+      const quota = consumedQuota();
+      const controller = new AbortController();
+      const guard = {
+        guard: vi.fn(async () => {
+          controller.abort(reason);
+          return { safe: true, score: 0 };
+        }),
+      } as unknown as InjectionGuardService;
+      const { handler, orchestrator } = build({ quota, guard });
+
+      await handler.execute(turn, callbacks(), controller.signal);
+
+      expect(orchestrator.run).not.toHaveBeenCalled();
+      expect(quota.refund).toHaveBeenCalledTimes(refunds);
+    }
+  );
 
   it('does not refund an injection-guard refusal of the user input', async () => {
     const quota = consumedQuota();

@@ -49,10 +49,18 @@ describe('buildTurnRows', () => {
     ]);
   });
 
-  it('persists only the user row when the turn produced no text', () => {
+  it('closes the turn with an empty assistant row when it produced no text', () => {
     const rows = buildTurnRows(input({}));
 
-    expect(rows).toEqual([{ role: 'user', content: USER_CONTENT }]);
+    expect(rows).toEqual([
+      { role: 'user', content: USER_CONTENT },
+      {
+        role: 'assistant',
+        content: '',
+        sources: SOURCES,
+        stopReason: 'completed',
+      },
+    ]);
   });
 
   it('stamps the stop reason on the last step row when the step carried all the text', () => {
@@ -139,4 +147,33 @@ describe('buildTurnRows', () => {
       ]);
     }
   );
+
+  it.each(['error', 'aborted'] as const)(
+    'closes a turn that ended with %s before any step with an empty assistant row',
+    (stopReason) => {
+      expect(
+        buildTurnRows({
+          userContent: 'Summarize my notes',
+          turnMessages: [],
+          assistantText: '',
+          sources: [],
+          stopReason,
+        })
+      ).toEqual([
+        { role: 'user', content: 'Summarize my notes' },
+        { role: 'assistant', content: '', sources: [], stopReason },
+      ]);
+    }
+  );
+
+  it('adds no row to a resume leg that stored nothing', () => {
+    expect(
+      buildTurnRows({
+        turnMessages: [],
+        assistantText: '',
+        sources: [],
+        stopReason: 'aborted',
+      })
+    ).toEqual([]);
+  });
 });

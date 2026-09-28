@@ -21,6 +21,7 @@ import type {
   RunAgentTurnHandler,
 } from './application/run-agent-turn.handler';
 import { ProposedMutation } from './domain/proposed-mutation';
+import { TURN_ABORT_REASON } from './domain/turn-abort';
 import { KNOWTIS_CONVERSATION_NAMESPACE } from './domain/turn-identity';
 import { TurnClaimService } from './infrastructure/turn-claim/turn-claim.service';
 import {
@@ -405,6 +406,36 @@ describe('AgentGateway', () => {
     await Promise.all([turnA, turnB]);
   });
 
+  it('cancel aborts the slot with the cancelled reason', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let signal: AbortSignal | undefined;
+    const execute = vi.fn(
+      async (_input: unknown, _cb: unknown, sig: AbortSignal) => {
+        signal = sig;
+        await gate;
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    const turn = gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+    await flushAsync();
+
+    gateway.handleCancel(client as never);
+
+    expect(signal?.reason).toBe(TURN_ABORT_REASON.CANCELLED);
+
+    release();
+    await turn;
+  });
+
   it('rejects a 3rd concurrent turn for the same user with AI_RATE_LIMIT_EXCEEDED', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -552,6 +583,36 @@ describe('AgentGateway', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('disconnect aborts the slot with the disconnected reason', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let signal: AbortSignal | undefined;
+    const execute = vi.fn(
+      async (_input: unknown, _cb: unknown, sig: AbortSignal) => {
+        signal = sig;
+        await gate;
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    const turn = gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+    await flushAsync();
+
+    gateway.handleDisconnect(client as never);
+
+    expect(signal?.reason).toBe(TURN_ABORT_REASON.DISCONNECTED);
+
+    release();
+    await turn;
   });
 
   it('disconnects and emits AUTH_REQUIRED for MCP-source tokens', async () => {

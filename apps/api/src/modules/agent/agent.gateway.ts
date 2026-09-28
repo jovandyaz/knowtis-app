@@ -43,6 +43,7 @@ import {
   type RunAgentTurnCallbacks,
 } from './application/run-agent-turn.handler';
 import { AgentErrors } from './domain/agent-errors';
+import { TURN_ABORT_REASON } from './domain/turn-abort';
 import { conversationIdForTurn } from './domain/turn-identity';
 import {
   TURN_CLAIM_OUTCOME,
@@ -150,7 +151,7 @@ export class AgentGateway
   handleDisconnect(client: AuthenticatedSocket): void {
     this.tokenExpiry.clear(client);
     const hadActiveTurns = this.turns.hasActiveSlots(client.id);
-    this.turns.abortAllForClient(client.id);
+    this.turns.abortAllForClient(client.id, TURN_ABORT_REASON.DISCONNECTED);
     this.logger.log({
       event: 'agent.client.disconnected',
       clientId: client.id,
@@ -177,7 +178,7 @@ export class AgentGateway
     @Ack() ack?: DeliveryAck
   ): void {
     ack?.();
-    this.turns.abortAllForClient(client.id);
+    this.turns.abortAllForClient(client.id, TURN_ABORT_REASON.CANCELLED);
     this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
   }
 

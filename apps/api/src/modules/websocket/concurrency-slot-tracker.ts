@@ -51,13 +51,13 @@ export class ConcurrencySlotTracker {
     }
   }
 
-  abortAllForClient(clientId: string): void {
+  abortAllForClient(clientId: string, reason?: unknown): void {
     const slotIds = this.clientSlots.get(clientId);
     if (!slotIds) {
       return;
     }
     for (const slotId of slotIds) {
-      this.controllers.get(slotId)?.abort();
+      this.controllers.get(slotId)?.abort(reason);
     }
   }
 

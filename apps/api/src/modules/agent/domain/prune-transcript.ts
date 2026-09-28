@@ -106,7 +106,15 @@ function withParts(row: ConversationMessageRow): AgentMessage {
 }
 
 function textOnly(row: ConversationMessageRow): AgentMessage | null {
-  return textOnlyMessage(withParts(row));
+  const message = textOnlyMessage(withParts(row));
+  if (message) {
+    return message;
+  }
+  // An empty terminal row still needs to reach markPartial, or the turn it
+  // closes goes missing and the next turn's user row lands next to this one's.
+  return row.role === 'assistant' && isPartial(row.stopReason)
+    ? { role: 'assistant', content: '' }
+    : null;
 }
 
 /** Removes both sides of orphaned tool pairs without reviving hidden content. */

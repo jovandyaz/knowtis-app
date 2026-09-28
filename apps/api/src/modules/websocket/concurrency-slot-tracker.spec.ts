@@ -49,6 +49,16 @@ describe('ConcurrencySlotTracker', () => {
     expect(b.signal.aborted).toBe(false);
   });
 
+  it('aborts with the given reason', () => {
+    const tracker = new ConcurrencySlotTracker(1);
+    const controller = new AbortController();
+    tracker.acquire('u1', 'c1', 's1', controller);
+
+    tracker.abortAllForClient('c1', 'cancelled');
+
+    expect(controller.signal.reason).toBe('cancelled');
+  });
+
   it('keeps the aborted slot counted until released, then frees it', () => {
     const tracker = new ConcurrencySlotTracker(1);
     const a = new AbortController();

@@ -14,7 +14,7 @@ export interface TurnRowsInput {
   readonly stopReason: MessageStopReason;
 }
 
-/** Rows to persist for one turn: the user row, the rows of every completed step, and the terminal assistant row carrying the stop reason. */
+/** Rows to persist for one turn: the user row, the rows of every completed step, and a terminal assistant row carrying the stop reason, added empty when the turn produced none. */
 export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
   const { userContent, turnMessages, assistantText, sources, stopReason } =
     input;
@@ -45,7 +45,7 @@ export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
   const last = rows.at(-1);
   if (last && last.role === ASSISTANT_ROLE) {
     rows[rows.length - 1] = { ...last, sources, stopReason };
-  } else if (last?.role === 'tool') {
+  } else if (last) {
     rows.push({ role: ASSISTANT_ROLE, content: '', sources, stopReason });
   }
   return rows;

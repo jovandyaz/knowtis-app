@@ -145,6 +145,38 @@ describe('pruneTranscript', () => {
     }
   );
 
+  it.each(['aborted', 'error'] as const)(
+    'marks the %s partial-reply marker on a turn that ended before any step',
+    (stopReason) => {
+      const rows = [
+        row({ role: 'user', content: 'Summarize my notes', turnId: 't1' }),
+        row({ role: 'assistant', content: '', stopReason, turnId: 't1' }),
+      ];
+
+      expect(pruneTranscript(rows, { keepToolTurns: 2 })).toEqual([
+        { role: 'user', content: 'Summarize my notes' },
+        { role: 'assistant', content: `\n\n[reply cut off: ${stopReason}]` },
+      ]);
+    }
+  );
+
+  it('marks an out-of-window turn whose only reply is an empty aborted row', () => {
+    const rows = [
+      row({ role: 'user', content: 'Summarize my notes', turnId: 't1' }),
+      row({
+        role: 'assistant',
+        content: '',
+        stopReason: 'aborted',
+        turnId: 't1',
+      }),
+    ];
+
+    expect(pruneTranscript(rows, { keepToolTurns: 0 })).toEqual([
+      { role: 'user', content: 'Summarize my notes' },
+      { role: 'assistant', content: partialReplySuffix('aborted') },
+    ]);
+  });
+
   it('passes legacy text rows through untouched', () => {
     const out = pruneTranscript(
       [

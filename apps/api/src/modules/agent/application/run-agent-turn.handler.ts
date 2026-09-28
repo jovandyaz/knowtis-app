@@ -93,6 +93,7 @@ import {
   sanitizeReplayHistory,
   type ReplayDetection,
 } from '../domain/replay-input-sanitizer';
+import { isUserCancel } from '../domain/turn-abort';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
@@ -720,6 +721,9 @@ export class RunAgentTurnHandler {
         outputTokens: 0,
         model,
       });
+      if (!isUserCancel(signal)) {
+        await hold.refund();
+      }
       return;
     }
     callbacks.onModelStart?.();
@@ -772,6 +776,9 @@ export class RunAgentTurnHandler {
             await this.recordUsageSafe(ctx, event.usage);
             ctx.reconciled = true;
             await persistTurnOnce([], 'aborted');
+            if (!answered && !isUserCancel(signal)) {
+              await hold.refund();
+            }
             return;
           case 'done': {
             let costUsd: number;
@@ -858,6 +865,9 @@ export class RunAgentTurnHandler {
             outputTokens: 0,
             model: ctx.model,
           });
+        }
+        if (!answered && !isUserCancel(signal)) {
+          await hold.refund();
         }
         return;
       }
