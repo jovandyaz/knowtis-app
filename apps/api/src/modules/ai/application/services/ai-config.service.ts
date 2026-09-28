@@ -23,6 +23,7 @@ import {
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import type { DailyMessageLimits } from '../../domain/execution-context/quota-policy';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -52,11 +53,6 @@ export type AIConfigKind = (typeof AI_CONFIG_KINDS)[number];
 type ConfigKeyDef =
   | { default: string; kind: Exclude<AIConfigKind, 'choice'> }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
-
-export interface DailyMessageLimits {
-  readonly anonymous: number;
-  readonly free: number;
-}
 
 type DailyMessageLimitKey = 'ai_anon_daily_messages' | 'ai_free_daily_messages';
 

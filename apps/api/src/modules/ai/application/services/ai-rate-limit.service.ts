@@ -1,10 +1,9 @@
-import { createHash } from 'node:crypto';
-
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import { anonIpSubject } from '../../domain/execution-context/anonymous-ip-subject';
 import { dailyAllowance } from '../../domain/execution-context/tier-policy';
 import {
   AI_USAGE_REPOSITORY,
@@ -102,10 +101,9 @@ export class AIRateLimitService {
       execution.subject.userId,
       estimate.tokens,
       this.dailyAllowance(execution),
-      execution.tier === 'anonymous',
       execution.billing.kind === 'byok',
       costUsd,
-      execution.subject.clientIp
+      anonIpSubject(execution)
     );
     if (!gate.allowed) {
       return {
@@ -128,10 +126,9 @@ export class AIRateLimitService {
     userId: string,
     estimatedTokens: number,
     limits: RateLimits,
-    isAnonymous: boolean,
     byok: boolean,
     estimatedCostUsd: number,
-    clientIp: string | undefined
+    ipSubject: string | undefined
   ): Promise<Gate> {
     if (this.rateLimitProvider) {
       // The global breaker bounds ALL server-billed spend, so it runs before any
@@ -185,8 +182,7 @@ export class AIRateLimitService {
           estimatedTokens,
           estimatedCostUsd,
           limits,
-          isAnonymous,
-          clientIp
+          ipSubject
         );
       } catch (error) {
         this.logger.warn(
@@ -210,10 +206,8 @@ export class AIRateLimitService {
     estimatedTokens: number,
     effectiveCostUsd: number,
     limits: RateLimits,
-    isAnonymous: boolean,
-    clientIp: string | undefined
+    ipSubject: string | undefined
   ): Promise<Gate> {
-    const ipSubject = this.anonymousIpSubject(isAnonymous, clientIp);
     if (!ipSubject || !this.rateLimitProvider) {
       return { allowed: true };
     }
@@ -250,16 +244,6 @@ export class AIRateLimitService {
       );
       return { allowed: true };
     }
-  }
-
-  private anonymousIpSubject(
-    isAnonymous: boolean,
-    clientIp: string | undefined
-  ): string | undefined {
-    if (!isAnonymous || !clientIp) {
-      return undefined;
-    }
-    return `ip:${createHash('sha256').update(clientIp).digest('hex').slice(0, 16)}`;
   }
 
   private async checkByokCostCeiling(userId: string): Promise<Gate> {
@@ -393,7 +377,7 @@ export class AIRateLimitService {
     }
     await this.correctSubjects(
       userId,
-      this.unreservedIpSubject(execution),
+      anonIpSubject(execution),
       {
         estimatedTokens: 0,
         actualTokens: 0,
@@ -462,9 +446,7 @@ export class AIRateLimitService {
       // reserved and the actual spend never reaches the global breaker.
       await this.correctSubjects(
         row.userId,
-        reservation
-          ? reservation.reservedIpSubject
-          : this.unreservedIpSubject(execution),
+        reservation ? reservation.reservedIpSubject : anonIpSubject(execution),
         {
           estimatedTokens: estimate.tokens,
           actualTokens: usage.inputTokens + usage.outputTokens,
@@ -502,15 +484,6 @@ export class AIRateLimitService {
         this.logger.warn(failureMessage, error);
       }
     }
-  }
-
-  private unreservedIpSubject(
-    execution: AiExecutionContext
-  ): string | undefined {
-    return this.anonymousIpSubject(
-      execution.tier === 'anonymous',
-      execution.subject.clientIp
-    );
   }
 
   private async maybeWarnBudget(userId: string): Promise<void> {
