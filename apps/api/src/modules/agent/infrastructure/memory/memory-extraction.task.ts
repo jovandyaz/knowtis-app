@@ -122,7 +122,6 @@ export class MemoryExtractionTask {
     }
   }
 
-  /** Unmarked conversations stay eligible, so a later tick retries them. */
   private async globalSpendExhausted(): Promise<boolean> {
     if (!(await this.rateLimit.isGlobalSpendExhausted())) {
       return false;
