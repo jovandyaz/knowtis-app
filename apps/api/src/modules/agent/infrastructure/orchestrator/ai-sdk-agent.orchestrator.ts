@@ -98,6 +98,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       onModelSettled?: (model: string) => void;
     }
   ): AsyncGenerator<AgentEvent> {
+    const { userId } = input.execution.subject;
     const turnStartedAt = Date.now();
     const sources = new Map<string, AgentSource>();
     const knownNotes = new Map<string, AgentSource>();
@@ -109,7 +110,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     const webFetchAllowlist = new WebFetchAllowlist();
     webFetchAllowlist.seedFromMessages(input.messages);
     const toolContext: AgentToolContext = {
-      userId: input.userId,
       phase: input.resume ? 'readonly' : 'full',
       execution: input.execution,
       proposals,
@@ -145,7 +145,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     } catch (error) {
       emitTurnHealth(
         this.logger,
-        input.userId,
+        userId,
         model,
         createHealth(),
         AGENT_TURN_OUTCOME.ERROR,
@@ -174,7 +174,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         this.configService.get('NODE_ENV') !== 'production' && !input.byokApiKey
       ),
       traceIdentity: {
-        userId: input.userId,
+        userId,
         ...(input.resume ? { tags: ['resume'] as const } : {}),
       },
       initialMessages,

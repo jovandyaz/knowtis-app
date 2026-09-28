@@ -81,7 +81,6 @@ describe.runIf(GATE)('web search tool quality', () => {
   it('cites web sources for a current public-web question', async () => {
     const model = process.env['AI_EVAL_MODEL']?.trim() || DEFAULT_AGENT_MODEL;
     const events = orchestrator.run({
-      userId: USER,
       execution: EXECUTION,
       messages: [
         {

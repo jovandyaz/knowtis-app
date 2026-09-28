@@ -9,7 +9,6 @@ export interface AgentResumeContext {
 }
 
 export interface AgentRunInput {
-  readonly userId: string;
   /** The turn's billed context; the tools' side costs are charged to it. */
   readonly execution: AiExecutionContext;
   readonly messages: readonly AgentMessage[];

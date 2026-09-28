@@ -27,7 +27,6 @@ const NOTE = {
 };
 const ANSWER = 'Take one step at a time.';
 const INPUT: AgentRunInput = {
-  userId: 'fixture-user',
   execution: createExecutionContext({ userId: 'fixture-user' }),
   model: MODEL,
   messages: [{ role: 'user', content: 'Read note n1 and summarize it.' }],

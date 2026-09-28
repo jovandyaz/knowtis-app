@@ -19,7 +19,6 @@ import { NoteMutateToolGroup } from './note-mutate.tool-group';
 
 function ctx(): AgentToolContext {
   return {
-    userId: 'u1',
     phase: 'full',
     execution: createExecutionContext({ userId: 'u1' }),
     proposals: new ProposalCollector(),

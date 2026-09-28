@@ -73,7 +73,6 @@ function flow(
   const tool = new NoteMutateToolGroup(
     new MutationProposalBuilder(retrieval)
   ).build({
-    userId: 'u1',
     phase: 'full',
     execution: createExecutionContext({ userId: 'u1' }),
     proposals,
