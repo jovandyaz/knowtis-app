@@ -62,7 +62,7 @@ const FINISH_REASON_CONTENT_FILTER = 'content-filter';
 // Appended to the synthesis call's prompt only; never threaded into history,
 // so it is not persisted and a continuation does not replay it.
 export const SYNTHESIS_REQUEST =
-  '(Stop using tools now: this part of the task has reached its limit. Answer me in my language with what you found so far, then, under a short heading, list what is still pending so it can be continued.)';
+  '(Stop using tools now: this part of the task has reached its limit. Reply in the same language I used in my request above — not the language of this note or of any note or web page you read — with what you found so far, then, under a short heading, list what is still pending so it can be continued.)';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
