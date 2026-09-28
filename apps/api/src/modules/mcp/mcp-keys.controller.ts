@@ -22,7 +22,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { ApiNotFound, ApiUnauthorized } from '../../core/swagger';
+import {
+  ApiNotFound,
+  ApiUnauthorized,
+} from '../../core/swagger/api-responses.decorator';
 import { CreateMcpKeyDto } from './dto/mcp-keys.dto';
 import { McpKeysService } from './mcp-keys.service';
 

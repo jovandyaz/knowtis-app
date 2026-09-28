@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { ByokService } from './byok.service';
 import { TierResolver } from './tier-resolver.service';
 
@@ -53,12 +54,19 @@ describe('TierResolver', () => {
     expect([...context.byokProviders]).toEqual(['anthropic']);
   });
 
-  it('propagates a key-store failure instead of guessing a tier', async () => {
+  it('reports a key-store failure as an unavailable tier instead of guessing one', async () => {
+    const cause = new Error('db down');
     const resolver = new TierResolver({
-      enabledProviders: vi.fn().mockRejectedValue(new Error('db down')),
+      enabledProviders: vi.fn().mockRejectedValue(cause),
     } as unknown as ByokService);
-    await expect(
-      resolver.resolve({ userId: 'u-1', isAnonymous: false })
-    ).rejects.toThrow('db down');
+
+    const failure = resolver.resolve({ userId: 'u-1', isAnonymous: false });
+
+    await expect(failure).rejects.toBeInstanceOf(AiUnavailableError);
+    await expect(failure).rejects.toMatchObject({
+      dependency: 'tier',
+      message: 'tier unavailable: db down',
+      cause,
+    });
   });
 });

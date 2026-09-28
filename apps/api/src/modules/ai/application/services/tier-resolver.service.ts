@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 
 import type { ByokProvider } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
+import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import {
   PLATFORM_BILLING,
   type AiCaller,
@@ -13,7 +15,11 @@ import {
 } from '../../domain/execution-context/tier-policy';
 import { ByokService } from './byok.service';
 
-/** Builds the caller's execution context once per request or turn; the client never declares its own tier. */
+/**
+ * Builds the caller's execution context once per request or turn; the
+ * client never declares its own tier. Rejects with `AiUnavailableError`
+ * when the key store fails.
+ */
 @Injectable()
 export class TierResolver {
   constructor(private readonly byok: ByokService) {}
@@ -21,7 +27,7 @@ export class TierResolver {
   async resolve(caller: AiCaller): Promise<AiExecutionContext> {
     const byokProviders = caller.isAnonymous
       ? new Set<ByokProvider>()
-      : await this.byok.enabledProviders(caller.userId);
+      : await this.storedKeyProviders(caller.userId);
     const tier: AccessTier = caller.isAnonymous
       ? 'anonymous'
       : byokProviders.size > 0
@@ -37,5 +43,15 @@ export class TierResolver {
       policy: TIER_POLICIES[tier],
       byokProviders,
     };
+  }
+
+  private async storedKeyProviders(
+    userId: string
+  ): Promise<ReadonlySet<ByokProvider>> {
+    try {
+      return await this.byok.enabledProviders(userId);
+    } catch (error) {
+      throw new AiUnavailableError('tier', reasonOf(error), { cause: error });
+    }
   }
 }

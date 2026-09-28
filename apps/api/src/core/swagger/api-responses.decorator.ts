@@ -48,6 +48,15 @@ export const ApiConflict = (reason: string) =>
   });
 
 /**
+ * Common 503 Service Unavailable response decorator with a customizable reason.
+ */
+export const ApiServiceUnavailable = (reason: string) =>
+  ApiResponse({
+    status: 503,
+    description: `Service unavailable — ${reason}`,
+  });
+
+/**
  * Combines 401 + 403 responses for protected endpoints.
  */
 export const ApiAuthErrors = (forbiddenReason: string) =>

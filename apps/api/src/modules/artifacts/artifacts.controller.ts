@@ -13,6 +13,7 @@ import {
   Post,
   Query,
   Req,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -22,6 +23,8 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
+import { ApiServiceUnavailable } from '../../core/swagger/api-responses.decorator';
+import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { GetNoteHandler } from '../notes/application';
@@ -37,6 +40,7 @@ import { ArtifactsQueryDto, GenerateArtifactDto } from './dto/artifacts.dto';
 @ApiBearerAuth()
 @Controller('artifacts')
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 export class ArtifactsController {
   constructor(
@@ -49,6 +53,9 @@ export class ArtifactsController {
   ) {}
 
   @ApiOperation({ summary: 'Generate an artifact from a note' })
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Post('generate')
   async generate(
     @CurrentUser() user: RequestUser,

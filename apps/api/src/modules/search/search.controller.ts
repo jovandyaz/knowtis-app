@@ -4,7 +4,15 @@ import {
   PoliciesGuard,
   RequirePermission,
 } from '@jovandyaz/permissions-nestjs';
-import { Controller, Get, Inject, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  Query,
+  Req,
+  UseFilters,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -17,11 +25,13 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { SUBJECTS } from '@knowtis/authorization';
 
 import { clientIpOf } from '../../core/http/client-ip';
+import { ApiServiceUnavailable } from '../../core/swagger/api-responses.decorator';
 import {
   RETRIEVAL_PORT,
   type RetrievalPort,
 } from '../agent/domain/ports/retrieval.port';
 import type { NoteHit } from '../agent/domain/retrieval';
+import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { AIRateLimitService } from '../ai/application/services/ai-rate-limit.service';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import {
@@ -40,6 +50,7 @@ type SearchMode = 'hybrid' | 'lexical';
 @ApiBearerAuth()
 @Controller('search')
 @UseGuards(JwtAuthGuard, PoliciesGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 export class SearchController {
   constructor(
     @Inject(RETRIEVAL_PORT) private readonly retrieval: RetrievalPort,
@@ -82,6 +93,9 @@ export class SearchController {
       },
     },
   })
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.READ)

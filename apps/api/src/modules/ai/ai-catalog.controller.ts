@@ -36,7 +36,10 @@ import {
   DEFAULT_LIMIT,
   DEFAULT_PAGE,
 } from '../../core/pagination/pagination.constants';
-import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import {
+  ApiAuthErrors,
+  ApiBadRequest,
+} from '../../core/swagger/api-responses.decorator';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
