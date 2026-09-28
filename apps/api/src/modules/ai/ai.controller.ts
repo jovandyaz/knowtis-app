@@ -49,6 +49,7 @@ import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import {
+  AI_CONFIG_KINDS,
   AIConfigService,
   InvalidAIConfigError,
   type AIConfigEntry,
@@ -117,7 +118,7 @@ const effectiveConfigSchema = {
       },
       kind: {
         type: 'string',
-        enum: ['model', 'chain', 'choice', 'list'],
+        enum: [...AI_CONFIG_KINDS],
         example: 'model',
       },
       source: {

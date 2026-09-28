@@ -16,6 +16,8 @@ export const PRODUCT_EVENT_NAMES = [
   'study session completed',
   'flashcard reviewed',
   'quiz completed',
+  'ai quota consumed',
+  'ai quota exhausted',
 ] as const;
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];
 
@@ -51,6 +53,15 @@ export const FLASHCARD_REVIEW_KIND = {
   NEW: 'new',
   EARLY: 'early',
 } as const satisfies Record<string, FlashcardReviewKind>;
+
+export const QUOTA_REMAINING_BUCKETS = ['0', '1-20%', '>20%'] as const;
+export type QuotaRemainingBucket = (typeof QUOTA_REMAINING_BUCKETS)[number];
+
+export const QUOTA_REMAINING_BUCKET = {
+  NONE: '0',
+  LOW: '1-20%',
+  PLENTY: '>20%',
+} as const satisfies Record<string, QuotaRemainingBucket>;
 
 /** Common properties every product event carries about the acting user. */
 export interface ProductActorContext {

@@ -108,6 +108,19 @@ export {
 } from './lib/ai.types';
 
 export {
+  AI_QUOTA_EXHAUSTED_CODE,
+  QUOTA_UPGRADES,
+  type QuotaUpgrade,
+  type AiMessageQuota,
+  type AiQuota,
+  type AgentQuotaPayload,
+  type AgentQuotaExhaustedError,
+  MAX_DAILY_MESSAGE_LIMIT,
+  parseDailyMessageLimit,
+  QUOTA_LOW_REMAINING_FRACTION,
+} from './lib/ai-quota.types';
+
+export {
   ARTIFACT_TYPE,
   ARTIFACT_TYPES,
   type ArtifactType,
@@ -206,6 +219,9 @@ export {
   FLASHCARD_REVIEW_KINDS,
   type FlashcardReviewKind,
   FLASHCARD_REVIEW_KIND,
+  QUOTA_REMAINING_BUCKETS,
+  type QuotaRemainingBucket,
+  QUOTA_REMAINING_BUCKET,
 } from './lib/analytics.types';
 
 export {
