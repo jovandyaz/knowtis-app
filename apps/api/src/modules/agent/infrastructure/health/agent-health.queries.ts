@@ -67,6 +67,7 @@ export class AgentHealthQueries {
                 WHERE prev.role = 'tool'
                   AND part->>'type' = 'tool-result'
                   AND part->>'toolName' = ANY(${PROPOSAL_TOOL_NAMES})
+                  AND part->'output'->>'ok' = 'true'
               )
             )
         ) AS no_answer_turns

@@ -1573,9 +1573,10 @@ rows carrying a stop reason, aborted turns excluded) that ended without an answe
 reason — an empty completion, or a capped segment whose synthesis could not be afforded. A proposal
 turn is answered even though its terminal row is blank, because the proposal card is the answer: a
 blank row is answered when the row just before it in its turn (the highest `seq` below it with the
-same `conversation_id` and `turn_id`) is a tool row carrying a result from a proposal tool
-(`PROPOSAL_TOOL_NAMES` in `note-mutate.tool-group.ts`). A blank reply after an approval, or after a
-proposal the model moved past, still counts as no answer. A tool-free reply that leaks
+same `conversation_id` and `turn_id`) is a tool row carrying a created proposal: a result from a
+proposal tool (`PROPOSAL_TOOL_NAMES` in `note-mutate.tool-group.ts`) whose output has `ok: true`. A
+blank reply after an approval, after a proposal the model moved past, or after a refused proposal
+(an `{ error }` output) still counts as no answer. A tool-free reply that leaks
 tool-call markup is never stored: without a rescue it ends as `AI_PROVIDER_ERROR` and counts as
 `error`. A tool call the model writes as plain text on a normal tool step is stored as text, so the
 alert does not see it. The rate alerts on the user-visible symptom rather than on its causes:

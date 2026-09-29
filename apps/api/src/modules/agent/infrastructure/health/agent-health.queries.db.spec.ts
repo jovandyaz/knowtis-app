@@ -44,7 +44,11 @@ function toolResultParts(outputType: ToolOutputType): PersistedParts {
   };
 }
 
-function toolStep(turnId: string, toolName: string): NewConversationMessage[] {
+function toolStep(
+  turnId: string,
+  toolName: string,
+  output: unknown = { ok: true, proposalId: randomUUID(), summary: 'Draft' }
+): NewConversationMessage[] {
   return [
     {
       conversationId: CONVERSATION,
@@ -68,7 +72,7 @@ function toolStep(turnId: string, toolName: string): NewConversationMessage[] {
             type: 'tool-result',
             toolCallId: 't1',
             toolName,
-            output: { ok: true },
+            output,
             outputType: 'json',
           },
         ],
@@ -311,6 +315,15 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
     const delta = await deltaAfter([
       ...toolStep(turnId, 'proposeCreateNote'),
       ...toolStep(turnId, 'getNote'),
+      blankReply(turnId, 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
+  });
+
+  it('does not let a refused proposal answer the blank reply after it', async () => {
+    const turnId = randomUUID();
+    const delta = await deltaAfter([
+      ...toolStep(turnId, 'proposeCreateNote', { error: 'Note not found' }),
       blankReply(turnId, 'completed'),
     ]);
     expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
