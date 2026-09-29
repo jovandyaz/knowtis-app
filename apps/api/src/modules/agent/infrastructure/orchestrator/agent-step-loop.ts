@@ -588,7 +588,7 @@ export async function* runAgentStepLoop(
                 segmentEnd = end;
                 synthesisInputTokens = state.nextInputTokens;
                 synthesisMaxOutputTokens = cap;
-                logger.warn({
+                logger.log({
                   event: 'agent.turn.segment_closed',
                   userId,
                   model: currentModel,

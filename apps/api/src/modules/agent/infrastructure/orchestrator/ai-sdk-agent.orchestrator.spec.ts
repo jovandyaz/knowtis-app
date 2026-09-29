@@ -3157,7 +3157,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('logs the closed segment with its reason and the synthesis output cap', async () => {
-    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
     streamTextMock.mockClear();
     streamTextMock
       .mockImplementationOnce(toolCallStep({ inputTokens: 5, outputTokens: 1 }))
@@ -3165,7 +3165,7 @@ describe('AiSdkAgentOrchestrator', () => {
 
     await collect(makeOrchestrator().run({ ...baseInput, maxSteps: 2 }));
 
-    expect(warnSpy).toHaveBeenCalledWith({
+    expect(logSpy).toHaveBeenCalledWith({
       event: 'agent.turn.segment_closed',
       userId: 'u1',
       model: MODEL,
@@ -3175,7 +3175,7 @@ describe('AiSdkAgentOrchestrator', () => {
       maxOutputTokens: 4096,
     });
     expect(streamTextMock.mock.calls[1][0].maxOutputTokens).toBe(4096);
-    warnSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it('keeps the segment reason when the synthesis spends its whole output cap', async () => {
