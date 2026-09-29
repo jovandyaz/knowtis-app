@@ -68,7 +68,8 @@ counts callers, not attempts: retries on a spent quota are not captured again
 that day, except while the quota falls back to Postgres, which captures every
 refusal.
 
-The insight `AI turn checkpoint rate` plots `ai turn checkpoint reached` ÷
+The insight `AI turn checkpoint rate` (short id `3Txw9e6s`,
+<https://us.posthog.com/project/344524/insights/3Txw9e6s>) plots `ai turn checkpoint reached` ÷
 `ai quota consumed` per day: how often copilot turns stop at a checkpoint the
 user can continue. That is product usage, not a failure; turns that end without
 an answer alert through the API's daily agent health report instead.
@@ -204,6 +205,7 @@ rename or delete historical assets.
 | `Knowtis note activation retention`           | Retention insight         | `11618352`                             |
 | `Knowtis AI adoption`                         | Trends insight            | `11618353`                             |
 | `Knowtis MCP adoption`                        | Trends insight            | `11618354`                             |
+| `AI turn checkpoint rate`                     | Trends insight            | `12353729`                             |
 
 PostHog can create custom event definitions before first ingestion, but its
 property-definition endpoint can only update properties that already exist in

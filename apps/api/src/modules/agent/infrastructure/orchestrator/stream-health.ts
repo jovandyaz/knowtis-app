@@ -36,6 +36,7 @@ export const AGENT_TURN_OUTCOME = {
   TIMEOUT: 'timeout',
   ABORTED: 'aborted',
   EMPTY: 'empty',
+  LEAKED: 'leaked',
   CONTINUED: 'continued',
 } as const;
 export type AgentTurnOutcome =

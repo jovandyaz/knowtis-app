@@ -434,7 +434,8 @@ export async function* runAgentStepLoop(
             accumulateTurnUsage(turnUsage, result.usage);
           }
           logger.warn({
-            event: 'agent.synthesis.markup_leak',
+            event: 'agent.turn.markup_leak',
+            call: synthesizing ? 'synthesis' : 'final_step',
             userId,
             model: currentModel,
             upstream: result.health.upstream,
@@ -444,7 +445,7 @@ export async function* runAgentStepLoop(
             userId,
             currentModel,
             result.health,
-            AGENT_TURN_OUTCOME.EMPTY,
+            AGENT_TURN_OUTCOME.LEAKED,
             result.callStartedAt,
             modelsUsed
           );
