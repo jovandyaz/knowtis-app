@@ -79,6 +79,13 @@ class AgentStallError extends Error {
   }
 }
 
+class ToolMarkupLeakError extends Error {
+  constructor() {
+    super('Reply leaked raw tool-call markup');
+    this.name = 'ToolMarkupLeakError';
+  }
+}
+
 type StepRetryReason = 'ttft' | 'transient';
 
 function logRetry(
@@ -122,14 +129,14 @@ function canRetryTransientStep(
 }
 
 function eligibleForStepFailover(
-  health: StreamHealth,
+  nothingStreamed: boolean,
   completedSteps: number,
   byok: boolean,
   failoverCandidates: readonly string[]
 ): boolean {
   return (
     completedSteps > 0 &&
-    health.parts === 0 &&
+    nothingStreamed &&
     !byok &&
     failoverCandidates.length > 0
   );
@@ -237,6 +244,23 @@ export async function* runAgentStepLoop(
   let segmentEnd: SegmentEnd | null = null;
   let synthesisMaxOutputTokens = params.budgets.maxOutputTokens;
 
+  const failOverTo = async (nextModel: string, reason: string) => {
+    params.cooldown.recordFailure(cooldownKeyOf(currentModel));
+    logger.warn({
+      event: 'ai.chain.step_failed',
+      model: currentModel,
+      provider: providerOf(currentModel),
+      nextModel,
+      atStep: completedSteps,
+      reason,
+    });
+    currentModel = nextModel;
+    params.onModelSettled?.(currentModel);
+    providerOptions = await optionsFor(currentModel);
+    modelsUsed.push(currentModel);
+    history = pruneMessages({ messages: history, reasoning: 'all' });
+  };
+
   while (completedSteps < input.maxSteps) {
     let advanceToNextStep = false;
     let failedOver = false;
@@ -260,6 +284,7 @@ export async function* runAgentStepLoop(
         cache: params.cache && !withoutTools,
         tools: withoutTools ? {} : params.tools,
         ...(toolFree ? { toolChoice: 'none' as const } : {}),
+        failOnToolMarkup: toolFree,
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
         providerOptions,
@@ -304,7 +329,7 @@ export async function* runAgentStepLoop(
             continue;
           }
           const nextModel = eligibleForStepFailover(
-            result.health,
+            result.health.parts === 0,
             completedSteps,
             byok,
             failoverCandidates
@@ -312,20 +337,7 @@ export async function* runAgentStepLoop(
             ? failoverCandidates.shift()
             : undefined;
           if (nextModel !== undefined) {
-            params.cooldown.recordFailure(cooldownKeyOf(currentModel));
-            logger.warn({
-              event: 'ai.chain.step_failed',
-              model: currentModel,
-              provider: providerOf(currentModel),
-              nextModel,
-              atStep: completedSteps,
-              reason: 'continuation stall',
-            });
-            currentModel = nextModel;
-            params.onModelSettled?.(currentModel);
-            providerOptions = await optionsFor(currentModel);
-            modelsUsed.push(currentModel);
-            history = pruneMessages({ messages: history, reasoning: 'all' });
+            await failOverTo(nextModel, 'continuation stall');
             failedOver = true;
             break stepAttempts;
           }
@@ -393,6 +405,56 @@ export async function* runAgentStepLoop(
             fromStream
               ? bestEffortUsage(currentModel, turn.stepUsage)
               : undefined
+          );
+          return;
+        }
+        case STEP_CALL_KIND.LEAKED: {
+          if (result.usage) {
+            accumulateTurnUsage(turnUsage, result.usage);
+          }
+          logger.warn({
+            event: 'agent.synthesis.markup_leak',
+            userId,
+            model: currentModel,
+            upstream: result.health.upstream,
+          });
+          emitTurnHealth(
+            logger,
+            userId,
+            currentModel,
+            result.health,
+            AGENT_TURN_OUTCOME.EMPTY,
+            result.callStartedAt,
+            modelsUsed
+          );
+          // Thinking already shown does not block a switch, as when the chain
+          // falls through at the turn level: the client treats it as ephemeral.
+          const nothingStreamed = result.health.textDeltas === 0;
+          const nextModel = eligibleForStepFailover(
+            nothingStreamed,
+            completedSteps,
+            byok,
+            failoverCandidates
+          )
+            ? failoverCandidates.shift()
+            : undefined;
+          if (nextModel !== undefined) {
+            await failOverTo(nextModel, 'tool markup leak');
+            failedOver = true;
+            break stepAttempts;
+          }
+          // The drained call already counts as progress, so a fresh turn is
+          // judged by the steps before it.
+          if (
+            params.throwOnFreshFailure &&
+            completedSteps === 0 &&
+            nothingStreamed
+          ) {
+            throw new ToolMarkupLeakError();
+          }
+          yield errorEvent(
+            AIErrors.emptyCompletion(),
+            turnUsageEvent(turnUsage, currentModel)
           );
           return;
         }
