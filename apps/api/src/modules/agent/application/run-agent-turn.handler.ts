@@ -1067,7 +1067,6 @@ export class RunAgentTurnHandler {
       case 'consumed': {
         this.reportQuota(callbacks, outcome.quota, turnId);
         let refunded = false;
-        let reported = outcome.quota;
         return {
           refund: async () => {
             if (refunded) {
@@ -1076,11 +1075,10 @@ export class RunAgentTurnHandler {
             refunded = true;
             const quota = await this.quota.refund(outcome.receipt);
             if (quota) {
-              reported = quota;
               this.reportQuota(callbacks, quota, turnId);
             }
           },
-          quota: () => reported,
+          quota: () => outcome.quota,
         };
       }
       case 'exhausted':
