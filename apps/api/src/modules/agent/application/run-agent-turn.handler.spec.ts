@@ -7190,6 +7190,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       code: AGENT_CONVERSATION_NOT_FOUND_CODE,
       message: 'Conversation not found',
     });
+    expect(ctx.conversations.findLastMessage).not.toHaveBeenCalled();
   });
 
   it('refuses effort on an anonymous continuation before any work', async () => {
@@ -7366,7 +7367,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
     [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
   ] as const)(
-    'a %s abort before any text %s the message, as for any turn',
+    'a %s abort before any text %s the message and stores the marker with an aborted reply',
     async (reason, _verb, refunds) => {
       const controller = new AbortController();
       const ctx = setup();
@@ -7381,6 +7382,19 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       await ctx.handler.continueTurn(request, ctx.callbacks, controller.signal);
 
       expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
+        conversationId: 'conv-1',
+        turnId: CONTINUATION,
+        messages: [
+          { role: 'user', content: '', kind: 'continue' },
+          {
+            role: 'assistant',
+            content: '',
+            sources: [],
+            stopReason: 'aborted',
+          },
+        ],
+      });
     }
   );
 });

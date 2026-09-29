@@ -121,18 +121,20 @@ interface RunAgentTurnInput {
   readonly effort?: ReasoningEffort;
 }
 
-interface ContinueTurnInput {
-  readonly userId: string;
-  readonly turnId: string;
+type ContinueTurnInput = Pick<
+  RunAgentTurnInput,
+  | 'userId'
+  | 'turnId'
+  | 'isAnonymous'
+  | 'clientIp'
+  | 'noteId'
+  | 'model'
+  | 'effort'
+> & {
   readonly conversationId: string;
   /** The capped turn this one continues; it must be the conversation's newest. */
   readonly continuesTurnId: string;
-  readonly isAnonymous?: boolean;
-  readonly clientIp?: string;
-  readonly noteId?: string;
-  readonly model?: string;
-  readonly effort?: ReasoningEffort;
-}
+};
 
 type TurnInput = Omit<
   RunAgentTurnInput,

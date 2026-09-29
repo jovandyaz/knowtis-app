@@ -140,8 +140,7 @@ function keyOf(request: TurnClaimRequest): string {
   return `${KEY_PREFIX}${request.userId}:${request.turnId}`;
 }
 
-// A message keeps the fingerprint it had before continue requests existed, so
-// a claim stored by the previous deploy still recognizes its resend.
+// Changing a message request's fingerprint would turn its in-flight resend into REUSED, so continuesTurnId is hashed only when set.
 function fingerprintOf(request: TurnClaimRequest): string {
   return createHash('sha256')
     .update(
