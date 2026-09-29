@@ -68,6 +68,11 @@ counts callers, not attempts: retries on a spent quota are not captured again
 that day, except while the quota falls back to Postgres, which captures every
 refusal.
 
+The insight `AI turn checkpoint rate` plots `ai turn checkpoint reached` ÷
+`ai quota consumed` per day: how often copilot turns stop at a checkpoint the
+user can continue. That is product usage, not a failure; turns that end without
+an answer alert through the API's daily agent health report instead.
+
 Only identification may set these person properties: `email`, `name`, `role`,
 `locale`, and `is_internal`. Email and name are not event properties. Event
 names and categorical values are declared once in `@knowtis/shared-types`

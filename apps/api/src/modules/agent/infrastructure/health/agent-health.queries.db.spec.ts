@@ -5,6 +5,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { MessageStopReason } from '@knowtis/shared-types';
+
 import { validateEnv } from '../../../../config/env.config';
 import {
   conversationMessages,
@@ -145,7 +147,7 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
         conversationId: CONVERSATION,
         turnId: randomUUID(),
         role: 'assistant',
-        content: 'a',
+        content: '',
         stopReason: 'error',
         createdAt: outOfWindow,
       },
@@ -157,18 +159,53 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
     await moduleRef.close();
   });
 
-  it('counts tool results, tool errors, stop turns, and anomalous stops inside the window', async () => {
+  it('counts tool results, tool errors, and terminal turns inside the window', async () => {
     const stats = await queries.collectWindowStats(since);
     expect({
       toolCalls: stats.toolCalls - baseline.toolCalls,
       toolErrors: stats.toolErrors - baseline.toolErrors,
-      stopTurns: stats.stopTurns - baseline.stopTurns,
-      anomalousStops: stats.anomalousStops - baseline.anomalousStops,
+      terminalTurns: stats.terminalTurns - baseline.terminalTurns,
+      noAnswerTurns: stats.noAnswerTurns - baseline.noAnswerTurns,
     }).toEqual({
       toolCalls: 3,
       toolErrors: 1,
-      stopTurns: 3,
-      anomalousStops: 1,
+      terminalTurns: 3,
+      noAnswerTurns: 0,
     });
   });
+
+  it.each<[MessageStopReason | null, string, number, number]>([
+    ['completed', 'answer', 1, 0],
+    ['max_steps', 'answer', 1, 0],
+    ['token_budget', 'answer', 1, 0],
+    ['time_limit', 'answer', 1, 0],
+    ['error', 'partial', 1, 1],
+    ['length', 'answer', 1, 1],
+    ['content_filter', 'answer', 1, 1],
+    ['content_filter', '', 1, 1],
+    ['completed', '', 1, 1],
+    ['completed', ' \n\t ', 1, 1],
+    ['max_steps', '', 1, 1],
+    ['max_steps', '\n\n', 1, 1],
+    ['aborted', 'answer', 0, 0],
+    ['aborted', '', 0, 0],
+    [null, '', 0, 0],
+  ])(
+    'counts a %s row with content %j as %i terminal and %i no-answer',
+    async (stopReason, content, terminalTurns, noAnswerTurns) => {
+      const before = await queries.collectWindowStats(since);
+      await db.insert(conversationMessages).values({
+        conversationId: CONVERSATION,
+        turnId: randomUUID(),
+        role: 'assistant',
+        content,
+        stopReason,
+      });
+      const after = await queries.collectWindowStats(since);
+      expect({
+        terminalTurns: after.terminalTurns - before.terminalTurns,
+        noAnswerTurns: after.noAnswerTurns - before.noAnswerTurns,
+      }).toEqual({ terminalTurns, noAnswerTurns });
+    }
+  );
 });

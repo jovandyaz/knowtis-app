@@ -12,14 +12,14 @@ const TOOL_ERROR_OUTPUT_TYPES: readonly ToolOutputType[] = [
   'error-json',
   'execution-denied',
 ];
-const ANOMALOUS_STOP_REASONS: readonly MessageStopReason[] = [
-  'max_steps',
-  'token_budget',
-  'time_limit',
+const NO_ANSWER_STOP_REASONS: readonly MessageStopReason[] = [
   'length',
   'content_filter',
   'error',
 ];
+// Not btrim(): it strips only spaces, so a newline-only completion would
+// count as an answer.
+const BLANK_CONTENT_PATTERN = '^[[:space:]]*$';
 
 @Injectable()
 export class AgentHealthQueries {
@@ -42,22 +42,26 @@ export class AgentHealthQueries {
       CROSS JOIN LATERAL jsonb_array_elements(m.parts->'parts') AS part
       WHERE m.role = 'tool' AND m.parts IS NOT NULL AND m.created_at >= ${sinceIso}
     `;
-    const [stopRow] = await this.client<
-      { stop_turns: string; anomalous_stops: string }[]
+    const [turnRow] = await this.client<
+      { terminal_turns: string; no_answer_turns: string }[]
     >`
       SELECT
-        COUNT(*) FILTER (WHERE stop_reason <> 'aborted') AS stop_turns,
+        COUNT(*) AS terminal_turns,
         COUNT(*) FILTER (
-          WHERE stop_reason = ANY(${ANOMALOUS_STOP_REASONS})
-        ) AS anomalous_stops
+          WHERE stop_reason = ANY(${NO_ANSWER_STOP_REASONS})
+            OR content ~ ${BLANK_CONTENT_PATTERN}
+        ) AS no_answer_turns
       FROM conversation_messages
-      WHERE role = 'assistant' AND stop_reason IS NOT NULL AND created_at >= ${sinceIso}
+      WHERE role = 'assistant'
+        AND stop_reason IS NOT NULL
+        AND stop_reason <> 'aborted'
+        AND created_at >= ${sinceIso}
     `;
     return {
       toolCalls: Number(toolRow?.tool_calls ?? 0),
       toolErrors: Number(toolRow?.tool_errors ?? 0),
-      stopTurns: Number(stopRow?.stop_turns ?? 0),
-      anomalousStops: Number(stopRow?.anomalous_stops ?? 0),
+      terminalTurns: Number(turnRow?.terminal_turns ?? 0),
+      noAnswerTurns: Number(turnRow?.no_answer_turns ?? 0),
     };
   }
 }

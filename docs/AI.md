@@ -773,7 +773,7 @@ Names and defaults from `apps/api/src/config/env.config.ts` (Zod schema, validat
 | `AI_AGENT_HISTORY_LIMIT`            | `120`    | Max prior conversation rows loaded per turn (tool rows count).                                                                                                                                                                                                                                                                                                                                                |
 | `AI_AGENT_PROPOSAL_TTL_SECONDS`     | `600`    | TTL of a pending HITL proposal in Redis (the approval window).                                                                                                                                                                                                                                                                                                                                                |
 | `AGENT_TOOL_ERROR_ALERT_RATE`       | `0.1`    | Tool-error rate that trips the daily agent health alert (0–1)                                                                                                                                                                                                                                                                                                                                                 |
-| `AGENT_STOP_ANOMALY_ALERT_RATE`     | `0.2`    | Anomalous stop-reason rate that trips the same alert (0–1)                                                                                                                                                                                                                                                                                                                                                    |
+| `AGENT_NO_ANSWER_ALERT_RATE`        | `0.1`    | No-answer rate (terminal turns that ended without an answer) that trips the same alert (0–1); checkpoints the user can continue count only when they carry no answer (see [Agent health alerts](#agent-health-alerts))                                                                                                                                                                                        |
 
 **Embeddings, memory, web search**
 
@@ -1567,11 +1567,19 @@ A structured `agent.turn.health` event is logged **per LLM call**, once when the
 
 A daily cron (06:00 UTC, always on) computes two rates over the
 last 24h of `conversation_messages`: the tool error rate (tool-result parts with an error
-`outputType`) and the anomalous stop-reason rate (`max_steps`, `token_budget`, `time_limit`,
-`length`, `content_filter`, `error`; aborted turns excluded). It always logs `agent.health.report`; when a
-rate crosses `AGENT_TOOL_ERROR_ALERT_RATE` (default 0.10) or `AGENT_STOP_ANOMALY_ALERT_RATE`
-(default 0.20) with at least 20 samples, it POSTs an `agent.health.alert` event to
-`AI_ALERT_WEBHOOK_URL` — a no-op (with the one-time boot warning already logged) when that env var is unset. Thresholds are fixed fractions by design — a moving baseline is a
+`outputType`) and the no-answer rate. The no-answer rate is the share of terminal turns (assistant
+rows carrying a stop reason, aborted turns excluded) that ended without an answer: a stop reason of
+`error`, `length`, or `content_filter`, or an empty or whitespace-only `content` under any stop
+reason — an empty completion, a capped segment whose synthesis could not be afforded, a reply that
+was nothing but leaked tool-call markup. It alerts on that user-visible symptom rather than on its
+causes: `max_steps`, `token_budget`, and `time_limit` are checkpoints the user can continue, so a
+segment that ends on one with an answer is healthy, and checkpoint volume is product usage, tracked
+by the PostHog insight "AI turn checkpoint rate" (see
+[POSTHOG_ANALYTICS.md](POSTHOG_ANALYTICS.md#event-contract)). It always logs `agent.health.report`
+(`toolCalls`, `toolErrors`, `terminalTurns`, `noAnswerTurns`, `signals`); when a rate crosses
+`AGENT_TOOL_ERROR_ALERT_RATE` (default 0.10) or `AGENT_NO_ANSWER_ALERT_RATE` (default 0.10) with at
+least 20 samples, it POSTs an `agent.health.alert` event (`signal`: `tool_error_rate` or
+`no_answer_rate`) to `AI_ALERT_WEBHOOK_URL` — a no-op (with the one-time boot warning already logged) when that env var is unset. Thresholds are fixed fractions by design — a moving baseline is a
 follow-up if they prove noisy. `AgentHealthReportTask.run()` resolves `'reported'` or `'locked'` (another instance already holds the run's advisory lock this cycle).
 
 ## Long-term user memory (A6b)
