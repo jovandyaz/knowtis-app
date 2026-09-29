@@ -7669,5 +7669,33 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
         checkpoint('token_budget', 1),
       ]);
     });
+
+    it('finishes the turn when announcing its segments throws', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const ctx = setup({ events: doneWith('max_steps') });
+      vi.mocked(ctx.emitter.emit).mockImplementation(() => {
+        throw new Error('listener failed');
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.orchestrator.run).toHaveBeenCalledOnce();
+      expect(ctx.callbacks.onDone).toHaveBeenCalledOnce();
+      expect(ctx.callbacks.onError).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.announce_failed',
+          domainEvent: TurnContinuedEvent.EVENT_NAME,
+        })
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.announce_failed',
+          domainEvent: TurnCheckpointReachedEvent.EVENT_NAME,
+        })
+      );
+    });
   });
 });
