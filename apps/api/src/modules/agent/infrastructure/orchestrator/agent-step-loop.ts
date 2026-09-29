@@ -268,6 +268,7 @@ export async function* runAgentStepLoop(
   let segmentEnd: SegmentEnd | null = null;
   let synthesisInputTokens = 0;
   let synthesisMaxOutputTokens = params.budgets.maxOutputTokens;
+  let unreportedLeakTokens = 0;
 
   const failOverTo = async (nextModel: string, reason: string) => {
     params.cooldown.recordFailure(cooldownKeyOf(currentModel));
@@ -458,12 +459,14 @@ export async function* runAgentStepLoop(
           // falls through at the turn level: the client treats it as ephemeral.
           const nothingStreamed = result.health.textDeltas === 0;
           // A drain cut short by a stall or a stream error reports no usage,
-          // so the leaked call counts as the most it could have spent.
-          const unreportedLeakTokens = result.usage
-            ? 0
-            : synthesisInputTokens +
+          // and a provider may report partial counts, so such a leaked call
+          // counts as the most it could have spent, on top of what it reported.
+          if (!result.usage || !hasCompleteUsage(result.usage)) {
+            unreportedLeakTokens +=
+              synthesisInputTokens +
               SYNTHESIS_REQUEST_TOKENS +
               synthesisMaxOutputTokens;
+          }
           const rescueCap = synthesisOutputCap(
             {
               spentTurnTokens:

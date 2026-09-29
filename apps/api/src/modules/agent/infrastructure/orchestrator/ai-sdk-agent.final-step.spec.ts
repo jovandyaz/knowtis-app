@@ -329,18 +329,22 @@ async function runBudgetedTurn(
   return { model, events, spent };
 }
 
-// Same accounting as runBudgetedTurn, except that the first synthesis leaks and
-// the one after it answers on the fallback, both re-sending the history the
-// last tool step left. A leak that stalls is billed its whole cap too.
+type LeakDrain = 'reported' | 'uncounted' | 'stalled';
+
+// Same accounting as runBudgetedTurn, except that the syntheses leak in the
+// order `leaks` lists and the one after them answers on a fallback, all
+// re-sending the history the last tool step left. A leak whose drain reports
+// no counts is billed its whole cap too.
 async function runLeakingBudgetedTurn(
   maxTurnTokens: number,
   reserveTokens: number,
-  stallsAfterLeak: boolean
+  leaks: readonly LeakDrain[],
+  fallbackChain = NATIVE_NONE_MODEL
 ) {
   const reported: { input: number; output: number }[] = [];
   let lastStepRows: readonly AgentMessage[] = [];
   let lastToolStep: { input: number; output: number } | undefined;
-  let leaked = false;
+  let syntheses = 0;
   const model = new MockLanguageModelV4({
     doStream: async ({ toolChoice, maxOutputTokens, abortSignal }) => {
       const history = lastToolStep
@@ -354,13 +358,16 @@ async function runLeakingBudgetedTurn(
         lastToolStep = { input, output };
         return toolResponse(usage(input, output));
       }
-      if (leaked) {
-        return textResponse(usage(input, output));
+      switch (leaks[syntheses++]) {
+        case 'reported':
+          return leakResponse('', usage(input, output));
+        case 'uncounted':
+          return leakResponse('', usage(undefined, undefined));
+        case 'stalled':
+          return leakUntilAborted(abortSignal);
+        default:
+          return textResponse(usage(input, output));
       }
-      leaked = true;
-      return stallsAfterLeak
-        ? leakUntilAborted(abortSignal)
-        : leakResponse('', usage(input, output));
     },
   });
   const { orchestrator } = fixture(
@@ -368,10 +375,10 @@ async function runLeakingBudgetedTurn(
     {
       AI_AGENT_MAX_OUTPUT_TOKENS: 2048,
       AI_AGENT_SYNTHESIS_RESERVE_TOKENS: reserveTokens,
-      ...(stallsAfterLeak ? { AI_AGENT_STALL_MS: 50 } : {}),
+      ...(leaks.includes('stalled') ? { AI_AGENT_STALL_MS: 50 } : {}),
       ...ROUTABLE_RESCUE,
     },
-    NATIVE_NONE_MODEL
+    fallbackChain
   );
   const warnSpy = vi.spyOn(Logger.prototype, 'warn');
   const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -1040,19 +1047,21 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
   });
 
   it.each([
-    { budget: 6_000, reserve: 3_000, stalls: false, rescued: false },
-    { budget: 15_000, reserve: 3_000, stalls: false, rescued: false },
-    { budget: 60_000, reserve: 3_000, stalls: false, rescued: false },
-    { budget: 20_000, reserve: 12_000, stalls: false, rescued: true },
-    { budget: 15_000, reserve: 3_000, stalls: true, rescued: false },
-    { budget: 20_000, reserve: 12_000, stalls: true, rescued: true },
-  ])(
-    'stays within a $budget-token budget when the synthesis after a token_budget close leaks (reserve $reserve, stalls after the leak: $stalls, rescued: $rescued)',
-    async ({ budget, reserve, stalls, rescued }) => {
+    { budget: 6_000, reserve: 3_000, drain: 'reported', rescued: false },
+    { budget: 15_000, reserve: 3_000, drain: 'reported', rescued: false },
+    { budget: 60_000, reserve: 3_000, drain: 'reported', rescued: false },
+    { budget: 20_000, reserve: 12_000, drain: 'reported', rescued: true },
+    { budget: 15_000, reserve: 3_000, drain: 'stalled', rescued: false },
+    { budget: 20_000, reserve: 12_000, drain: 'stalled', rescued: true },
+    { budget: 15_000, reserve: 3_000, drain: 'uncounted', rescued: false },
+    { budget: 20_000, reserve: 12_000, drain: 'uncounted', rescued: true },
+  ] satisfies { drain: LeakDrain; [key: string]: unknown }[])(
+    'stays within a $budget-token budget when the synthesis after a token_budget close leaks (reserve $reserve, drain $drain, rescued: $rescued)',
+    async ({ budget, reserve, drain, rescued }) => {
       const { model, events, spent, closedOn } = await runLeakingBudgetedTurn(
         budget,
         reserve,
-        stalls
+        [drain]
       );
 
       expect(spent).toBeLessThanOrEqual(budget);
@@ -1071,6 +1080,26 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
       );
     }
   );
+
+  it('counts a stalled leak against the budget when the model it fails over to leaks too', async () => {
+    const budget = 20_000;
+    const { model, events, spent } = await runLeakingBudgetedTurn(
+      budget,
+      12_000,
+      ['stalled', 'reported'],
+      `${NATIVE_NONE_MODEL},openai:gpt-4o`
+    );
+
+    expect(spent).toBeLessThanOrEqual(budget);
+    expect(
+      model.doStreamCalls.filter((call) => call.toolChoice?.type === 'none')
+    ).toHaveLength(2);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: LEAK_ERROR,
+      usage: { model: NATIVE_NONE_MODEL },
+    });
+  });
 
   it('streams a tool-free answer whose blank lines and tail only look like the start of markup in full, matching its stored text', async () => {
     const answer = 'Quedan 2 < 3.\n\nPendientes: <\n';
