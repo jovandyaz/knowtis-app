@@ -1018,7 +1018,7 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
     });
   });
 
-  it('moves a forced final step that leaks on the first call to the next candidate', async () => {
+  it('ends a forced final step that leaks on the first call with a provider error billing it, never restarting the turn on the next candidate', async () => {
     const model = inOrder(
       () => leakResponse(),
       () => textResponse()
@@ -1027,13 +1027,19 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
 
     const events = await collect(orchestrator.run({ ...INPUT, maxSteps: 1 }));
 
-    expect(model.doStreamCalls).toHaveLength(2);
-    expect(chunksOf(events)).toEqual([ANSWER]);
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(events.map((event) => event.type)).toEqual(['thinking', 'error']);
     expect(JSON.stringify(events)).not.toContain(DSML_MARKER);
-    expect(events.at(-1)).toMatchObject({
-      type: 'done',
-      stopReason: 'completed',
-      usage: { model: NATIVE_NONE_MODEL },
+    expect(events.at(-1)).toEqual({
+      type: 'error',
+      error: LEAK_ERROR,
+      usage: {
+        inputTokens: 11,
+        outputTokens: 7,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        model: MODEL,
+      },
     });
   });
 

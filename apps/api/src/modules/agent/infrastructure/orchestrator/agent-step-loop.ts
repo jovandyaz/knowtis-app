@@ -92,13 +92,6 @@ class AgentStallError extends Error {
 
 const TOOL_MARKUP_LEAK_REASON = 'reply leaked raw tool-call markup';
 
-class ToolMarkupLeakError extends Error {
-  constructor() {
-    super(TOOL_MARKUP_LEAK_REASON);
-    this.name = 'ToolMarkupLeakError';
-  }
-}
-
 type StepRetryReason = 'ttft' | 'transient';
 
 function logRetry(
@@ -494,15 +487,6 @@ export async function* runAgentStepLoop(
             await failOverTo(nextModel, 'tool markup leak');
             failedOver = true;
             break stepAttempts;
-          }
-          // The drained call already counts as progress, so a fresh turn is
-          // judged by the steps before it.
-          if (
-            params.throwOnFreshFailure &&
-            completedSteps === 0 &&
-            nothingStreamed
-          ) {
-            throw new ToolMarkupLeakError();
           }
           yield errorEvent(
             AIErrors.providerError(TOOL_MARKUP_LEAK_REASON),
