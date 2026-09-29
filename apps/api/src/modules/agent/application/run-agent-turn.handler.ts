@@ -648,7 +648,7 @@ export class RunAgentTurnHandler {
     );
   }
 
-  /** Runs a new turn that picks up where a capped one stopped; it draws a message, streams and persists like any turn. */
+  /** Runs a new turn that picks up where a capped one stopped; it is metered, streams and persists like any turn. */
   async continueTurn(
     input: ContinueTurnInput,
     callbacks: RunAgentTurnCallbacks,

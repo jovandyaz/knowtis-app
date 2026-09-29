@@ -169,11 +169,11 @@ AI variables are documented in [docs/AI.md → Environment Variables](../../docs
 
 ## WebSocket Transports
 
-| Transport  | Path / namespace | Auth                                                   | Events                                                                                                                                                                        |
-| ---------- | ---------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hocuspocus | `/collaboration` | JWT via `HocuspocusProvider`'s `token` callback        | Binary y-protocols sync + awareness; no named events                                                                                                                          |
-| Socket.io  | `/ai`            | JWT in `socket.auth.token` (or `Authorization` header) | in: `ai:complete`, `ai:cancel` — out: `ai:chunk`, `ai:done`, `ai:error`                                                                                                       |
-| Socket.io  | `/agent`         | same                                                   | in: `agent:message`, `agent:cancel`, `agent:approve`, `agent:reject` — out: `agent:thinking`, `agent:chunk`, `agent:proposal`, `agent:committed`, `agent:done`, `agent:error` |
+| Transport  | Path / namespace | Auth                                                   | Events                                                                                                                                                                                                                                   |
+| ---------- | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hocuspocus | `/collaboration` | JWT via `HocuspocusProvider`'s `token` callback        | Binary y-protocols sync + awareness; no named events                                                                                                                                                                                     |
+| Socket.io  | `/ai`            | JWT in `socket.auth.token` (or `Authorization` header) | in: `ai:complete`, `ai:cancel` — out: `ai:chunk`, `ai:done`, `ai:error`                                                                                                                                                                  |
+| Socket.io  | `/agent`         | same                                                   | in: `agent:message`, `agent:cancel`, `agent:approve`, `agent:reject` — out: `agent:thinking`, `agent:chunk`, `agent:conversation`, `agent:proposal`, `agent:committed`, `agent:quota`, `agent:done`, `agent:turn_settled`, `agent:error` |
 
 Payloads and error codes: [docs/AI.md → WebSocket Protocol](../../docs/AI.md#websocket-protocol) and `modules/agent/README.md`.
 
