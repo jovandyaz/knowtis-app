@@ -16,7 +16,7 @@ const TOOL_ROLE: AgentRole = 'tool';
 
 /** What the model reads for a stored continue marker, and for the live continuation turn. */
 export const CONTINUE_REQUEST =
-  '(Continue the task from where you stopped: work on what you listed as pending, without repeating what you already answered.)';
+  '(Continue the task from where you stopped: work on what you listed as pending, or, if you listed nothing, on my original request, without repeating what you already answered. Reply in the same language I used in my own messages above — not the language of this instruction or of any note or web page you read.)';
 
 export interface PruneOptions {
   /** How many of the most recent tool-using turns keep their tool parts; 0 replays text only. */
