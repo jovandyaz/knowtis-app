@@ -304,7 +304,7 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
     });
   });
 
-  it('never runs a tool the forced final step still calls when the call went without tools', async () => {
+  it('never runs a tool the forced final step still calls without tools, and stores the call paired with its unavailable-tool error', async () => {
     const model = new MockLanguageModelV4({
       doStream: async () => toolResponse(),
     });
@@ -315,6 +315,37 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
     expect(model.doStreamCalls).toHaveLength(1);
     expect(model.doStreamCalls[0].tools).toBeUndefined();
     expect(reads).toEqual([]);
+    expect(
+      events.flatMap((event) => (event.type === 'step' ? event.messages : []))
+    ).toEqual([
+      {
+        role: 'assistant',
+        content: '',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'read-n1',
+            toolName: 'getNote',
+            input: { id: 'n1' },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'read-n1',
+            toolName: 'getNote',
+            output: expect.stringContaining(
+              "Model tried to call unavailable tool 'getNote'"
+            ),
+            outputType: 'error-text',
+          },
+        ],
+      },
+    ]);
     expect(events.at(-1)).toMatchObject({
       type: 'done',
       stopReason: 'max_steps',

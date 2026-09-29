@@ -28,6 +28,7 @@ interface WireMessage {
 
 interface WireBody {
   readonly messages: readonly WireMessage[];
+  readonly input?: readonly unknown[];
   readonly [key: string]: unknown;
 }
 
@@ -251,7 +252,16 @@ const openaiText = () =>
     { data: OPENAI_COMPLETED },
   ]);
 
-function capturingFetch(responses: readonly (() => Response)[]) {
+const silentUntilAborted = (init?: RequestInit) =>
+  new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+      once: true,
+    });
+  });
+
+function capturingFetch(
+  responses: readonly ((init?: RequestInit) => Response | Promise<Response>)[]
+) {
   const bodies: WireBody[] = [];
   const fetchFn = async (_url: RequestInfo | URL, init?: RequestInit) => {
     bodies.push(JSON.parse(String(init?.body)) as WireBody);
@@ -259,12 +269,20 @@ function capturingFetch(responses: readonly (() => Response)[]) {
     if (!next) {
       throw new Error(`Unexpected provider call #${bodies.length}`);
     }
-    return next();
+    return next(init);
   };
   return { bodies, fetch: fetchFn as typeof fetch };
 }
 
-function orchestratorServing(model: LanguageModel) {
+interface Rescue {
+  readonly id: string;
+  readonly model: LanguageModel;
+}
+
+function orchestratorServing(
+  model: LanguageModel,
+  { rescue, config: overrides }: { rescue?: Rescue; config?: object } = {}
+) {
   const config = createMockConfig({
     AI_AGENT_MAX_MS: 10000,
     AI_AGENT_STALL_MS: 5000,
@@ -273,6 +291,7 @@ function orchestratorServing(model: LanguageModel) {
     AI_MAX_RETRIES: 0,
     AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 12000,
     AI_AGENT_SYNTHESIS_RESERVE_MS: 1000,
+    ...overrides,
   });
   const toolRegistry = new AgentToolRegistry([
     {
@@ -287,8 +306,10 @@ function orchestratorServing(model: LanguageModel) {
       }),
     },
   ]);
-  const { registry, chain } = createTestChain(config, '');
-  vi.spyOn(registry, 'languageModel').mockReturnValue(model);
+  const { registry, chain } = createTestChain(config, rescue?.id ?? '');
+  vi.spyOn(registry, 'languageModel').mockImplementation((id) =>
+    id === rescue?.id ? rescue.model : model
+  );
   return new AiSdkAgentOrchestrator(config, toolRegistry, registry, chain);
 }
 
@@ -493,5 +514,68 @@ describe('tool-free calls on the provider wire', () => {
       expect.objectContaining({ type: 'function', name: 'getNote' }),
     ]);
     expect(bodies[1].tool_choice).toBe('none');
+  });
+
+  it('flattens the synthesis for an OpenRouter candidate and sends it natively to the OpenAI model it fails over to', async () => {
+    const { bodies, fetch } = capturingFetch([
+      openrouterReasoningToolCall,
+      silentUntilAborted,
+      silentUntilAborted,
+      openaiText,
+    ]);
+    const orchestrator = orchestratorServing(
+      createOpenRouter({ apiKey: 'test-key', fetch })('deepseek/deepseek-v3.2'),
+      {
+        rescue: {
+          id: 'openai:gpt-5.5',
+          model: createOpenAI({ apiKey: 'test-key', fetch })('gpt-5.5'),
+        },
+        config: {
+          AI_AGENT_TTFT_MS: 50,
+          OPENROUTER_API_KEY: 'test-openrouter-key',
+          OPENAI_API_KEY: 'test-openai-key',
+        },
+      }
+    );
+
+    const events = await collect(
+      orchestrator.run(cappedTurn('openrouter:deepseek/deepseek-v3.2'))
+    );
+
+    expect(bodies).toHaveLength(4);
+    const [, silent, silentRetry, rescued] = bodies;
+    for (const attempt of [silent, silentRetry]) {
+      expect(attempt).not.toHaveProperty('tools');
+      expect(attempt).not.toHaveProperty('tool_choice');
+      expect(attempt.messages.at(-2)?.content).toBe(FLATTENED_RESULT);
+      expect(attempt.messages.at(-1)?.content).toBe(SYNTHESIS_REQUEST);
+    }
+    expect(rescued.tools).toEqual([
+      expect.objectContaining({ type: 'function', name: 'getNote' }),
+    ]);
+    expect(rescued.tool_choice).toBe('none');
+    expect(rescued.input?.[0]).toMatchObject({ role: 'developer' });
+    expect(rescued.input?.slice(1)).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: 'Lee la nota n1 y resúmela.' }],
+      },
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'getNote',
+        arguments: '{"id":"n1"}',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: JSON.stringify(NOTE),
+      },
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: SYNTHESIS_REQUEST }],
+      },
+    ]);
+    expect(events).toContainEqual({ type: 'chunk', text: ANSWER });
   });
 });
