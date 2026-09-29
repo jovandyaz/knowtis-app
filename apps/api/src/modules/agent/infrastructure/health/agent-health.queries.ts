@@ -5,6 +5,7 @@ import type { MessageStopReason } from '@knowtis/shared-types';
 
 import { DATABASE_CLIENT } from '../../../../database';
 import type { ToolOutputType } from '../../domain/agent-message';
+import { PROPOSAL_TOOL_NAMES } from '../tools/note-mutate.tool-group';
 import type { AgentHealthWindowStats } from './agent-health.evaluator';
 
 const TOOL_ERROR_OUTPUT_TYPES: readonly ToolOutputType[] = [
@@ -48,14 +49,26 @@ export class AgentHealthQueries {
       SELECT
         COUNT(*) AS terminal_turns,
         COUNT(*) FILTER (
-          WHERE stop_reason = ANY(${NO_ANSWER_STOP_REASONS})
-            OR content ~ ${BLANK_CONTENT_PATTERN}
+          WHERE m.stop_reason = ANY(${NO_ANSWER_STOP_REASONS})
+            OR (
+              m.content ~ ${BLANK_CONTENT_PATTERN}
+              AND NOT EXISTS (
+                SELECT 1
+                FROM conversation_messages t
+                CROSS JOIN LATERAL jsonb_array_elements(t.parts->'parts') AS part
+                WHERE t.conversation_id = m.conversation_id
+                  AND t.turn_id = m.turn_id
+                  AND t.role = 'tool'
+                  AND part->>'type' = 'tool-result'
+                  AND part->>'toolName' = ANY(${PROPOSAL_TOOL_NAMES})
+              )
+            )
         ) AS no_answer_turns
-      FROM conversation_messages
-      WHERE role = 'assistant'
-        AND stop_reason IS NOT NULL
-        AND stop_reason <> 'aborted'
-        AND created_at >= ${sinceIso}
+      FROM conversation_messages m
+      WHERE m.role = 'assistant'
+        AND m.stop_reason IS NOT NULL
+        AND m.stop_reason <> 'aborted'
+        AND m.created_at >= ${sinceIso}
     `;
     return {
       toolCalls: Number(toolRow?.tool_calls ?? 0),

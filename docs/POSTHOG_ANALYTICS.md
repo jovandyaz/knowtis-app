@@ -69,10 +69,13 @@ that day, except while the quota falls back to Postgres, which captures every
 refusal.
 
 The insight `AI turn checkpoint rate` (short id `3Txw9e6s`,
-<https://us.posthog.com/project/344524/insights/3Txw9e6s>) plots `ai turn checkpoint reached` ÷
-`ai quota consumed` per day: how often copilot turns stop at a checkpoint the
-user can continue. That is product usage, not a failure; turns that end without
-an answer alert through the API's daily agent health report instead.
+<https://us.posthog.com/project/344524/insights/3Txw9e6s>) plots checkpoints per
+metered message on the platform tiers, per day: `ai turn checkpoint reached`
+without the `byok` tier ÷ `ai quota consumed`. It shows how often copilot turns
+stop at a checkpoint the user can continue. Resume segments and refunded turns
+still skew the ratio slightly, since neither pairs one checkpoint with one
+metered message. Checkpoints are product usage, not failures; turns that end
+without an answer alert through the API's daily agent health report instead.
 
 Only identification may set these person properties: `email`, `name`, `role`,
 `locale`, and `is_internal`. Email and name are not event properties. Event

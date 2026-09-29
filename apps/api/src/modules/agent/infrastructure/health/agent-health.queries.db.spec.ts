@@ -15,6 +15,7 @@ import {
   DatabaseModule,
   users,
   type Database,
+  type NewConversationMessage,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import {
@@ -41,6 +42,50 @@ function toolResultParts(outputType: ToolOutputType): PersistedParts {
       },
     ],
   };
+}
+
+function toolTurn(
+  toolName: string,
+  stopReason: MessageStopReason
+): NewConversationMessage[] {
+  const turnId = randomUUID();
+  return [
+    {
+      conversationId: CONVERSATION,
+      turnId,
+      role: 'assistant',
+      content: '',
+      parts: {
+        v: AGENT_MESSAGE_PARTS_VERSION,
+        parts: [{ type: 'tool-call', toolCallId: 't1', toolName, input: {} }],
+      },
+    },
+    {
+      conversationId: CONVERSATION,
+      turnId,
+      role: 'tool',
+      content: '',
+      parts: {
+        v: AGENT_MESSAGE_PARTS_VERSION,
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 't1',
+            toolName,
+            output: { ok: true },
+            outputType: 'json',
+          },
+        ],
+      },
+    },
+    {
+      conversationId: CONVERSATION,
+      turnId,
+      role: 'assistant',
+      content: '',
+      stopReason,
+    },
+  ];
 }
 
 describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
@@ -159,6 +204,18 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
     await moduleRef.close();
   });
 
+  async function deltaAfter(
+    rows: NewConversationMessage[]
+  ): Promise<Pick<AgentHealthWindowStats, 'terminalTurns' | 'noAnswerTurns'>> {
+    const before = await queries.collectWindowStats(since);
+    await db.insert(conversationMessages).values(rows);
+    const after = await queries.collectWindowStats(since);
+    return {
+      terminalTurns: after.terminalTurns - before.terminalTurns,
+      noAnswerTurns: after.noAnswerTurns - before.noAnswerTurns,
+    };
+  }
+
   it('counts tool results, tool errors, and terminal turns inside the window', async () => {
     const stats = await queries.collectWindowStats(since);
     expect({
@@ -193,19 +250,39 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
   ])(
     'counts a %s row with content %j as %i terminal and %i no-answer',
     async (stopReason, content, terminalTurns, noAnswerTurns) => {
-      const before = await queries.collectWindowStats(since);
-      await db.insert(conversationMessages).values({
-        conversationId: CONVERSATION,
-        turnId: randomUUID(),
-        role: 'assistant',
-        content,
-        stopReason,
-      });
-      const after = await queries.collectWindowStats(since);
-      expect({
-        terminalTurns: after.terminalTurns - before.terminalTurns,
-        noAnswerTurns: after.noAnswerTurns - before.noAnswerTurns,
-      }).toEqual({ terminalTurns, noAnswerTurns });
+      const delta = await deltaAfter([
+        {
+          conversationId: CONVERSATION,
+          turnId: randomUUID(),
+          role: 'assistant',
+          content,
+          stopReason,
+        },
+      ]);
+      expect(delta).toEqual({ terminalTurns, noAnswerTurns });
     }
   );
+
+  it('counts a blank proposal turn as answered, since the proposal card is the answer', async () => {
+    const delta = await deltaAfter(toolTurn('proposeCreateNote', 'completed'));
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 0 });
+  });
+
+  it('counts a blank turn after a read tool as no-answer', async () => {
+    const delta = await deltaAfter(toolTurn('getNote', 'token_budget'));
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
+  });
+
+  it('counts a proposal turn that ended on error as no-answer', async () => {
+    const delta = await deltaAfter(toolTurn('proposeCreateNote', 'error'));
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
+  });
+
+  it('does not let a proposal in one turn mask a blank row in another turn of the conversation', async () => {
+    const delta = await deltaAfter([
+      ...toolTurn('proposeCreateNote', 'completed'),
+      ...toolTurn('getNote', 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 2, noAnswerTurns: 1 });
+  });
 });

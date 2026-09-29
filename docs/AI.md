@@ -1570,9 +1570,14 @@ last 24h of `conversation_messages`: the tool error rate (tool-result parts with
 `outputType`) and the no-answer rate. The no-answer rate is the share of terminal turns (assistant
 rows carrying a stop reason, aborted turns excluded) that ended without an answer: a stop reason of
 `error`, `length`, or `content_filter`, or an empty or whitespace-only `content` under any stop
-reason — an empty completion, a capped segment whose synthesis could not be afforded, a reply that
-was nothing but leaked tool-call markup. It alerts on that user-visible symptom rather than on its
-causes: `max_steps`, `token_budget`, and `time_limit` are checkpoints the user can continue, so a
+reason — an empty completion, or a capped segment whose synthesis could not be afforded. A proposal
+turn is answered even though its terminal row is blank, because the proposal card is the answer: a
+blank row counts only when its turn (same `conversation_id` and `turn_id`) holds no tool result from
+a proposal tool (`PROPOSAL_TOOL_NAMES` in `note-mutate.tool-group.ts`). A tool-free reply that leaks
+tool-call markup is never stored: without a rescue it ends as `AI_PROVIDER_ERROR` and counts as
+`error`. A tool call the model writes as plain text on a normal tool step is stored as text, so the
+alert does not see it. The rate alerts on the user-visible symptom rather than on its causes:
+`max_steps`, `token_budget`, and `time_limit` are checkpoints the user can continue, so a
 segment that ends on one with an answer is healthy, and checkpoint volume is product usage, tracked
 by the PostHog insight "AI turn checkpoint rate" (see
 [POSTHOG_ANALYTICS.md](POSTHOG_ANALYTICS.md#event-contract)). It always logs `agent.health.report`
