@@ -7392,6 +7392,24 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     }
   );
 
+  it('draws nothing for a key-billed continuation and still reports it continuable', async () => {
+    const ctx = setup({
+      quota: createMessageQuotaStub({ kind: 'unmetered' }),
+      events: doneWith('max_steps'),
+    });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.quota.consume).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      CONTINUATION
+    );
+    expect(ctx.callbacks.onQuota).not.toHaveBeenCalled();
+    expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ stopReason: 'max_steps', continuable: true })
+    );
+  });
+
   it('retrieves memories for the last message the user wrote, not for a continue request', async () => {
     const ctx = setup({
       history: [
