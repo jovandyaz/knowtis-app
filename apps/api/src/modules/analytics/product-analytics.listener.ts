@@ -14,6 +14,8 @@ import {
 } from '@knowtis/shared-types';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
+import { TurnCheckpointReachedEvent } from '../agent/domain/events/turn-checkpoint-reached.event';
+import { TurnContinuedEvent } from '../agent/domain/events/turn-continued.event';
 import { MessageQuotaConsumedEvent } from '../ai/domain/events/message-quota-consumed.event';
 import { MessageQuotaExhaustedEvent } from '../ai/domain/events/message-quota-exhausted.event';
 import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
@@ -203,6 +205,41 @@ export class ProductAnalyticsListener {
       () => ({
         event: 'ai quota exhausted',
         properties: { source: 'api', tier: event.tier },
+      })
+    );
+  }
+
+  @OnEvent(TurnCheckpointReachedEvent.EVENT_NAME, { async: true })
+  async handleTurnCheckpointReached(
+    event: TurnCheckpointReachedEvent
+  ): Promise<void> {
+    await this.captureForUser(
+      TurnCheckpointReachedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'ai turn checkpoint reached',
+        properties: {
+          source: 'api',
+          tier: event.tier,
+          stop_reason: event.stopReason,
+          segment_index: event.segmentIndex,
+        },
+      })
+    );
+  }
+
+  @OnEvent(TurnContinuedEvent.EVENT_NAME, { async: true })
+  async handleTurnContinued(event: TurnContinuedEvent): Promise<void> {
+    await this.captureForUser(
+      TurnContinuedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'ai turn continued',
+        properties: {
+          source: 'api',
+          tier: event.tier,
+          segment_index: event.segmentIndex,
+        },
       })
     );
   }

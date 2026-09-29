@@ -225,12 +225,15 @@ export {
 export {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
   CONVERSATION_TITLE_MAX,
   deriveConversationTitle,
   isValidConversationTitle,
+  MESSAGE_KIND,
   normalizeConversationTitle,
   type ConversationPage,
   type ConversationSummary,
   type ConversationTranscript,
   type ConversationTranscriptMessage,
+  type MessageKind,
 } from './lib/conversation.types';

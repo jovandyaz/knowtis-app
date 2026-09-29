@@ -23,6 +23,7 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
     parts: null,
     stopReason: null,
     turnId: 't1',
+    kind: null,
   },
   {
     role: 'assistant',
@@ -39,6 +40,7 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
     ],
     stopReason: null,
     turnId: 't1',
+    kind: null,
   },
   {
     role: 'assistant',
@@ -47,6 +49,7 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
     parts: null,
     stopReason: 'completed',
     turnId: 't1',
+    kind: null,
   },
 ];
 

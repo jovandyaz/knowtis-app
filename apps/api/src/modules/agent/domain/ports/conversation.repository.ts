@@ -1,6 +1,7 @@
 import type {
   ConversationSummary,
   ConversationTranscript,
+  MessageKind,
   MessageStopReason,
 } from '@knowtis/shared-types';
 
@@ -14,6 +15,7 @@ export interface ConversationMessageRow {
   readonly parts: readonly AgentMessagePart[] | null;
   readonly stopReason: MessageStopReason | null;
   readonly turnId: string | null;
+  readonly kind: MessageKind | null;
 }
 
 export interface CreateConversationInput {
@@ -29,6 +31,13 @@ export interface PersistedTurnMessage {
   readonly parts?: readonly AgentMessagePart[];
   readonly sources?: readonly AgentSource[];
   readonly stopReason?: MessageStopReason;
+  readonly kind?: MessageKind;
+}
+
+export interface LastConversationMessage {
+  readonly turnId: string | null;
+  readonly role: AgentRole;
+  readonly stopReason: MessageStopReason | null;
 }
 
 export interface AppendTurnInput {
@@ -80,6 +89,11 @@ export interface ConversationRepository {
     userId: string,
     page: { offset: number; limit: number }
   ): Promise<{ items: ConversationSummary[]; total: number }>;
+  /** The newest stored row of a conversation `userId` owns; null when it has none or is not theirs. */
+  findLastMessage(
+    conversationId: string,
+    userId: string
+  ): Promise<LastConversationMessage | null>;
   /** Sources keep only the notes `userId` can still open, under each note's current title. */
   loadTranscriptForUser(
     conversationId: string,

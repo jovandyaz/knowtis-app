@@ -1,4 +1,4 @@
-import type { MessageStopReason } from '@knowtis/shared-types';
+import { MESSAGE_KIND, type MessageStopReason } from '@knowtis/shared-types';
 
 import {
   textOfParts,
@@ -13,6 +13,10 @@ export const PARTIAL_STOP_REASONS = ['aborted', 'error', 'length'] as const;
 type PartialStopReason = (typeof PARTIAL_STOP_REASONS)[number];
 
 const TOOL_ROLE: AgentRole = 'tool';
+
+/** What the model reads for a stored continue marker, and for the live continuation turn. */
+export const CONTINUE_REQUEST =
+  '(Continue the task from where you stopped: work on what you listed as pending, without repeating what you already answered.)';
 
 export interface PruneOptions {
   /** How many of the most recent tool-using turns keep their tool parts; 0 replays text only. */
@@ -174,6 +178,10 @@ export function pruneTranscript(
   const keep = recentToolTurns(ordered, options.keepToolTurns);
   const messages: AgentMessage[] = [];
   for (const row of ordered) {
+    if (row.role === 'user' && row.kind === MESSAGE_KIND.CONTINUE) {
+      messages.push({ role: 'user', content: CONTINUE_REQUEST });
+      continue;
+    }
     const kept =
       row.turnId && keep.has(row.turnId) ? withParts(row) : textOnly(row);
     if (!kept) {

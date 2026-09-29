@@ -49,6 +49,7 @@ const row = (
   parts,
   stopReason: null,
   turnId,
+  kind: null,
 });
 
 const legEnd = (turnId: string): ConversationMessageRow => ({

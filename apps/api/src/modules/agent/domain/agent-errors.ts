@@ -2,6 +2,7 @@ import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
 } from '@knowtis/shared-types';
 
 import type { NoteContentStatus } from './retrieval';
@@ -68,6 +69,8 @@ export const AgentErrors = {
     ),
   turnInProgress: () =>
     make(AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS, 'This turn is still running'),
+  turnNotContinuable: () =>
+    make(AGENT_TURN_NOT_CONTINUABLE_CODE, 'This turn cannot be continued'),
   turnClaimUnavailable: () =>
     make(
       AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,

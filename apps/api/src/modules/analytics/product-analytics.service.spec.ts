@@ -218,6 +218,62 @@ describe('ProductAnalytics', () => {
         locale: 'en',
       },
     },
+    {
+      label: 'ai turn checkpoint reached',
+      input: {
+        distinctId: 'user-1',
+        event: 'ai turn checkpoint reached' as const,
+        properties: {
+          source: 'api' as const,
+          tier: 'free' as const,
+          stop_reason: 'max_steps' as const,
+          segment_index: 1,
+          conversation_id: 'conv-1',
+          content: 'research X',
+        } as ServerProductEventMap['ai turn checkpoint reached'],
+        actor: {
+          actor_type: 'registered' as const,
+          is_internal: false,
+          locale: 'en',
+        },
+      },
+      expectedProperties: {
+        source: 'api',
+        tier: 'free',
+        stop_reason: 'max_steps',
+        segment_index: 1,
+        actor_type: 'registered',
+        is_internal: false,
+        locale: 'en',
+      },
+    },
+    {
+      label: 'ai turn continued',
+      input: {
+        distinctId: 'user-1',
+        event: 'ai turn continued' as const,
+        properties: {
+          source: 'api' as const,
+          tier: 'byok' as const,
+          segment_index: 2,
+          conversation_id: 'conv-1',
+          turn_id: 'turn-2',
+        } as ServerProductEventMap['ai turn continued'],
+        actor: {
+          actor_type: 'registered' as const,
+          is_internal: false,
+          locale: 'en',
+        },
+      },
+      expectedProperties: {
+        source: 'api',
+        tier: 'byok',
+        segment_index: 2,
+        actor_type: 'registered',
+        is_internal: false,
+        locale: 'en',
+      },
+    },
   ])(
     'sends only the allowlisted $label properties',
     async ({ input, expectedProperties }) => {

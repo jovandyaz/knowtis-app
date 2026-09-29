@@ -13,6 +13,8 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+  type AgentStopReason,
   type AiQuota,
   type ByokProvider,
   type ReasoningEffort,
@@ -46,14 +48,19 @@ import { createMessageQuotaStub } from '../../ai/testing/create-message-quota-st
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
+import { CONTINUABLE_STOP_REASONS } from '../domain/continuable';
+import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
+import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type {
   ConversationMessageRow,
   ConversationRepository,
+  LastConversationMessage,
 } from '../domain/ports/conversation.repository';
 import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { ProposedMutation } from '../domain/proposed-mutation';
+import { CONTINUE_REQUEST } from '../domain/prune-transcript';
 import {
   projectReplayText,
   REPLAY_REDACTION_MARKER,
@@ -165,7 +172,14 @@ function historyRow(
   row: Partial<ConversationMessageRow> &
     Pick<ConversationMessageRow, 'role' | 'content'>
 ): ConversationMessageRow {
-  return { sources: [], parts: null, stopReason: null, turnId: null, ...row };
+  return {
+    sources: [],
+    parts: null,
+    stopReason: null,
+    turnId: null,
+    kind: null,
+    ...row,
+  };
 }
 
 function makeConversations(history: ConversationMessageRow[] = []) {
@@ -259,6 +273,10 @@ function makeAIConfig(
   } as unknown as AIConfigService;
 }
 
+function makeEvents() {
+  return { emit: vi.fn() } as unknown as EventEmitter2;
+}
+
 describe('RunAgentTurnHandler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -281,7 +299,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -339,7 +358,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onThinking = vi.fn();
     const onChunk = vi.fn();
@@ -386,7 +406,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -421,7 +442,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -470,7 +492,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -509,7 +532,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -568,7 +592,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -610,7 +635,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -647,7 +673,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const error = vi.fn();
 
@@ -682,7 +709,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const error = vi.fn();
 
@@ -727,7 +755,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const done = vi.fn();
 
@@ -774,7 +803,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const done = vi.fn();
 
@@ -825,7 +855,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const done = vi.fn();
 
@@ -873,7 +904,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -912,7 +944,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -951,7 +984,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1000,7 +1034,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -1033,7 +1068,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1070,7 +1106,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1111,7 +1148,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onConversation = vi.fn();
 
@@ -1163,7 +1201,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onConversation = vi.fn();
     const onDone = vi.fn();
@@ -1204,7 +1243,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1254,7 +1294,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onProposal = vi.fn();
 
@@ -1302,7 +1343,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onDone = vi.fn();
 
@@ -1343,7 +1385,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.resumeTurn(
@@ -1389,7 +1432,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1430,7 +1474,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1481,7 +1526,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onDone = vi.fn();
 
@@ -1500,6 +1546,7 @@ describe('RunAgentTurnHandler', () => {
         inputTokens: 7,
         outputTokens: 3,
         costUsd: expect.any(Number),
+        continuable: false,
       })
     );
     expect(onDone.mock.calls[0][0].costUsd).toBeGreaterThan(0);
@@ -1536,7 +1583,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1572,7 +1620,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1612,7 +1661,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1655,7 +1705,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -1702,7 +1753,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1746,7 +1798,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1799,7 +1852,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -1851,7 +1905,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onDone = vi.fn();
 
@@ -1895,7 +1950,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -1939,7 +1995,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -1986,7 +2043,8 @@ describe('RunAgentTurnHandler', () => {
         makeAIConfig(),
         makeTurnEffort(),
         tierResolver,
-        createMessageQuotaStub()
+        createMessageQuotaStub(),
+        makeEvents()
       );
       const callbacks = {
         onChunk: vi.fn(),
@@ -2232,7 +2290,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2273,7 +2332,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -2323,7 +2383,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -2364,7 +2425,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -2447,7 +2509,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2541,7 +2604,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2623,7 +2687,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2701,7 +2766,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2751,7 +2817,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       turnEffort,
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2800,7 +2867,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       turnEffort,
       makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider]),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2849,7 +2917,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       turnEffort,
       makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider]),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2897,7 +2966,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       turnEffort,
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2951,7 +3021,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       turnEffort,
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -2994,7 +3065,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3030,7 +3102,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3069,7 +3142,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig('medium', ['fireworks', 'together'], ['parasail']),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -3107,7 +3181,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig('medium', []),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -3146,7 +3221,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await expect(
@@ -3183,7 +3259,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3228,7 +3305,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3267,7 +3345,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3307,7 +3386,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
     const onConversation = vi.fn();
@@ -3356,7 +3436,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3397,7 +3478,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3446,7 +3528,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onDone = vi.fn();
 
@@ -3495,7 +3578,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -3532,7 +3616,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -3571,7 +3656,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -3609,7 +3695,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const done = vi.fn();
     await handler.execute(
@@ -3651,7 +3738,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -3704,7 +3792,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     await handler.execute(
       {
@@ -3746,7 +3835,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const error = vi.fn();
     await handler.execute(
@@ -3796,7 +3886,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onProposal = vi.fn();
 
@@ -3841,7 +3932,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -3876,7 +3968,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -3924,7 +4017,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -3968,7 +4062,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -4012,7 +4107,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4053,7 +4149,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -4097,7 +4194,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.resumeTurn(
@@ -4138,7 +4236,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4181,7 +4280,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -4236,7 +4336,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.resumeTurn(
@@ -4278,7 +4379,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -4331,7 +4433,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4389,7 +4492,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(['google']),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -4442,7 +4546,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(['google']),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4489,7 +4594,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4534,7 +4640,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4572,7 +4679,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4613,7 +4721,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
 
     await handler.execute(
@@ -4666,7 +4775,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(['google']),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4710,7 +4820,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4752,7 +4863,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4799,7 +4911,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
     const onProposal = vi.fn();
@@ -4849,7 +4962,8 @@ describe('RunAgentTurnHandler', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const onError = vi.fn();
 
@@ -4920,7 +5034,8 @@ describe('RunAgentTurnHandler', () => {
         makeAIConfig(),
         makeTurnEffort(),
         makeTierResolver(),
-        createMessageQuotaStub()
+        createMessageQuotaStub(),
+        makeEvents()
       );
       return { conversations, orchestrator, handler };
     }
@@ -5234,7 +5349,8 @@ describe('RunAgentTurnHandler', () => {
         makeAIConfig(),
         makeTurnEffort(),
         makeTierResolver(),
-        createMessageQuotaStub()
+        createMessageQuotaStub(),
+        makeEvents()
       );
       return {
         conversations,
@@ -5439,7 +5555,8 @@ describe('RunAgentTurnHandler replay guard', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -6006,7 +6123,8 @@ describe('RunAgentTurnHandler turn identity', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      makeEvents()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -6247,7 +6365,8 @@ describe('RunAgentTurnHandler daily message quota', () => {
       over.aiConfig ?? makeAIConfig(),
       makeTurnEffort(),
       over.tierResolver ?? makeTierResolver(),
-      over.quota
+      over.quota,
+      makeEvents()
     );
     return {
       handler,
@@ -6768,6 +6887,151 @@ describe('RunAgentTurnHandler daily message quota', () => {
     expect(quota.consume).not.toHaveBeenCalled();
   });
 
+  describe('continuable on done', () => {
+    function doneWith(stopReason: AgentStopReason): AgentEvent[] {
+      return [
+        { type: 'chunk', text: 'Found A. Pending: B.' },
+        {
+          type: 'done',
+          usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
+          sources: [],
+          knownNotes: [],
+          webSources: [],
+          stopReason,
+        },
+      ];
+    }
+    const resumed = {
+      userId: USER,
+      turnId: TURN_ID,
+      conversationId: 'conv-1',
+      resume: { outcome: 'created' },
+    };
+
+    it('is continuable when a capped turn leaves the caller messages', async () => {
+      const { handler } = build({
+        quota: consumedQuota(),
+        events: doneWith('max_steps'),
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'max_steps', continuable: true })
+      );
+    });
+
+    it('is not continuable when the capped turn drew the last message', async () => {
+      const quota = createMessageQuotaStub({
+        kind: 'consumed',
+        receipt: RECEIPT,
+        quota: {
+          tier: 'free',
+          messages: { used: 30, limit: 30, resetsAt: RESETS_AT },
+        },
+      });
+      const { handler } = build({ quota, events: doneWith('max_steps') });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+    });
+
+    it('is continuable when an unmetered turn hits the time limit', async () => {
+      const { handler } = build({
+        quota: createMessageQuotaStub(),
+        events: doneWith('time_limit'),
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'time_limit', continuable: true })
+      );
+    });
+
+    it('is not continuable when the turn completed', async () => {
+      const { handler } = build({
+        quota: consumedQuota(),
+        events: doneWith('completed'),
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+    });
+
+    it('reads the quota for a capped resume leg, which draws no message', async () => {
+      const quota = consumedQuota();
+      vi.mocked(quota.snapshot).mockResolvedValue(AFTER_CONSUME);
+      const { handler } = build({ quota, events: doneWith('max_steps') });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'max_steps', continuable: true })
+      );
+      expect(quota.snapshot).toHaveBeenCalledWith(executionFor(USER));
+      expect(quota.consume).not.toHaveBeenCalled();
+    });
+
+    it('is not continuable when a capped resume leg cannot read the quota', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const quota = consumedQuota();
+      vi.mocked(quota.snapshot).mockRejectedValue(new Error('redis down'));
+      const { handler } = build({ quota, events: doneWith('max_steps') });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.continuable.snapshot_failed',
+          error: 'redis down',
+        })
+      );
+    });
+
+    it('never reads the quota for a resume leg that completed', async () => {
+      const quota = consumedQuota();
+      const { handler } = build({ quota, events: doneWith('completed') });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ continuable: false })
+      );
+      expect(quota.snapshot).not.toHaveBeenCalled();
+    });
+  });
+
   it('never consumes when the requested model is not selectable', async () => {
     const quota = consumedQuota();
     const modelPreference = makeModelPreference();
@@ -6852,6 +7116,603 @@ describe('RunAgentTurnHandler daily message quota', () => {
       expect(counters.consume).toHaveBeenCalledWith(
         expect.objectContaining({ subjects: [USER], turnId: TURN_ID }),
         30
+      );
+    });
+  });
+});
+
+describe('RunAgentTurnHandler continuing a capped turn', () => {
+  const CONTINUED = TURN_ID;
+  const CONTINUATION = SECOND_TURN_ID;
+  const RESETS_AT = '2026-09-29T00:00:00.000Z';
+  const RECEIPT: QuotaReceipt = {
+    turn: {
+      subjects: [USER],
+      turnId: CONTINUATION,
+      day: utcDayOf(new Date('2026-09-28T12:00:00.000Z')),
+    },
+    tier: 'free',
+    limit: 30,
+    store: QUOTA_STORES.REDIS,
+  };
+  const NOT_CONTINUABLE = {
+    code: AGENT_TURN_NOT_CONTINUABLE_CODE,
+    message: 'This turn cannot be continued',
+  };
+  const CAPPED_HISTORY = [
+    historyRow({ role: 'user', content: 'research X', turnId: CONTINUED }),
+    historyRow({
+      role: 'assistant',
+      content: 'Found A. Pending: B.',
+      turnId: CONTINUED,
+      stopReason: 'max_steps',
+    }),
+  ];
+  const CAPPED_LAST: LastConversationMessage = {
+    turnId: CONTINUED,
+    role: 'assistant',
+    stopReason: 'max_steps',
+  };
+  const request = {
+    userId: USER,
+    turnId: CONTINUATION,
+    conversationId: 'conv-1',
+    continuesTurnId: CONTINUED,
+  };
+
+  function doneWith(stopReason: AgentStopReason): AgentEvent[] {
+    return [
+      { type: 'chunk', text: 'Found B.' },
+      {
+        type: 'done',
+        usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+        stopReason,
+      },
+    ];
+  }
+
+  function consumedQuota(used = 2): MessageQuotaService {
+    return createMessageQuotaStub({
+      kind: 'consumed',
+      receipt: RECEIPT,
+      quota: {
+        tier: 'free',
+        messages: { used, limit: 30, resetsAt: RESETS_AT },
+      },
+    });
+  }
+
+  function setup(
+    over: {
+      last?: LastConversationMessage | null;
+      history?: ConversationMessageRow[];
+      quota?: MessageQuotaService;
+      events?: AgentEvent[];
+      allowed?: boolean;
+    } = {}
+  ) {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
+      events: over.events ?? doneWith('completed'),
+      ...(over.allowed === undefined ? {} : { allowed: over.allowed }),
+    });
+    const conversations = makeConversations(over.history ?? CAPPED_HISTORY);
+    Object.assign(conversations, {
+      findLastMessage: vi
+        .fn()
+        .mockResolvedValue(over.last === undefined ? CAPPED_LAST : over.last),
+    });
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const embed = makeEmbed();
+    const guard = makeGuard();
+    const quota = over.quota ?? consumedQuota();
+    const emitter = makeEvents();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      memory,
+      embed,
+      makeModelPreference(),
+      makeByok(),
+      guard,
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      quota,
+      emitter
+    );
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+      onModelStart: vi.fn(),
+      onQuota: vi.fn(),
+    };
+    return {
+      handler,
+      callbacks,
+      conversations,
+      orchestrator,
+      quota,
+      guard,
+      embed,
+      emitter,
+    };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function expectRefusedBeforeAnyWork(
+    ctx: ReturnType<typeof setup>,
+    error: { code: string; message: string }
+  ) {
+    expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(ctx.quota.consume).not.toHaveBeenCalled();
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+    expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+    expect(ctx.callbacks.onModelStart).not.toHaveBeenCalled();
+    expect(ctx.emitter.emit).not.toHaveBeenCalled();
+  }
+
+  it('refuses a turn that is no longer the newest one of the conversation', async () => {
+    const ctx = setup({ last: { ...CAPPED_LAST, turnId: 'other' } });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expectRefusedBeforeAnyWork(ctx, NOT_CONTINUABLE);
+  });
+
+  it.each([
+    ['completed', { ...CAPPED_LAST, stopReason: 'completed' }],
+    ['failed', { ...CAPPED_LAST, stopReason: 'error' }],
+    ['with no stop reason', { ...CAPPED_LAST, stopReason: null }],
+    [
+      'that ends on its user message',
+      { turnId: CONTINUED, role: 'user', stopReason: null },
+    ],
+    ['in an empty conversation', null],
+  ] as const)(
+    'refuses a turn %s, which stopped at no checkpoint',
+    async (_label, last) => {
+      const ctx = setup({ last });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expectRefusedBeforeAnyWork(ctx, NOT_CONTINUABLE);
+    }
+  );
+
+  it('refuses a conversation the caller does not own', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(
+      { ...request, conversationId: 'conv-unknown' },
+      ctx.callbacks
+    );
+
+    expectRefusedBeforeAnyWork(ctx, {
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'Conversation not found',
+    });
+    expect(ctx.conversations.findLastMessage).not.toHaveBeenCalled();
+  });
+
+  it('refuses effort on an anonymous continuation before any work', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(
+      { ...request, isAnonymous: true, effort: 'high' },
+      ctx.callbacks
+    );
+
+    expect(ctx.callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.VALIDATION_ERROR })
+    );
+    expect(ctx.quota.consume).not.toHaveBeenCalled();
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('draws a message for the continuation under its own turn id', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.quota.consume).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      CONTINUATION
+    );
+    expect(ctx.callbacks.onQuota).toHaveBeenCalledOnce();
+    expect(ctx.callbacks.onModelStart).toHaveBeenCalledOnce();
+  });
+
+  it('asks the model to continue after the capped synthesis, without guarding its own request', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    const [{ messages }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
+    expect(messages).toEqual([
+      { role: 'user', content: 'research X' },
+      { role: 'assistant', content: 'Found A. Pending: B.' },
+      { role: 'user', content: CONTINUE_REQUEST },
+    ]);
+    expect(ctx.guard.guard).not.toHaveBeenCalled();
+  });
+
+  it('stores the continuation as an empty continue marker under its own turn', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
+      conversationId: 'conv-1',
+      turnId: CONTINUATION,
+      messages: [
+        { role: 'user', content: '', kind: 'continue' },
+        {
+          role: 'assistant',
+          content: 'Found B.',
+          sources: [],
+          stopReason: 'completed',
+        },
+      ],
+    });
+  });
+
+  it.each([
+    ['capped again with messages left', 'token_budget', 2, true],
+    ['capped again on the last message', 'token_budget', 30, false],
+    ['completed', 'completed', 2, false],
+  ] as const)(
+    'reports a continuation %s as continuable: %s',
+    async (_label, stopReason, used, continuable) => {
+      const ctx = setup({
+        quota: consumedQuota(used),
+        events: doneWith(stopReason),
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stopReason,
+          continuable,
+          conversationId: 'conv-1',
+        })
+      );
+    }
+  );
+
+  it('draws nothing for a key-billed continuation and still reports it continuable', async () => {
+    const ctx = setup({
+      quota: createMessageQuotaStub({ kind: 'unmetered' }),
+      events: doneWith('max_steps'),
+    });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.quota.consume).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      CONTINUATION
+    );
+    expect(ctx.callbacks.onQuota).not.toHaveBeenCalled();
+    expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ stopReason: 'max_steps', continuable: true })
+    );
+  });
+
+  it('retrieves memories for the last message the user wrote, not for a continue request', async () => {
+    const ctx = setup({
+      history: [
+        ...CAPPED_HISTORY,
+        historyRow({
+          role: 'user',
+          content: '',
+          turnId: 'earlier-continuation',
+          kind: 'continue',
+        }),
+        historyRow({
+          role: 'assistant',
+          content: 'Found B. Pending: C.',
+          turnId: 'earlier-continuation',
+          stopReason: 'max_steps',
+        }),
+      ],
+      last: { ...CAPPED_LAST, turnId: 'earlier-continuation' },
+    });
+
+    await ctx.handler.continueTurn(
+      { ...request, continuesTurnId: 'earlier-continuation' },
+      ctx.callbacks
+    );
+
+    expect(ctx.embed.embedQuery).toHaveBeenCalledExactlyOnceWith('research X');
+    expect(ctx.orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ userMemories: ['Is vegan'] })
+    );
+  });
+
+  it('retrieves memories for the last message the user wrote when a continuation resumes after a proposal', async () => {
+    const ctx = setup({
+      history: [
+        ...CAPPED_HISTORY,
+        historyRow({
+          role: 'user',
+          content: '',
+          turnId: CONTINUATION,
+          kind: 'continue',
+        }),
+        historyRow({
+          role: 'assistant',
+          content: 'Shall I save B?',
+          turnId: CONTINUATION,
+          stopReason: 'completed',
+        }),
+      ],
+    });
+
+    await ctx.handler.resumeTurn(
+      {
+        userId: USER,
+        turnId: CONTINUATION,
+        conversationId: 'conv-1',
+        resume: { outcome: 'created' },
+      },
+      ctx.callbacks
+    );
+
+    expect(ctx.embed.embedQuery).toHaveBeenCalledExactlyOnceWith('research X');
+  });
+
+  it('answers an exhausted caller with the quota error, not a refusal to continue', async () => {
+    const ctx = setup({
+      quota: createMessageQuotaStub({
+        kind: 'exhausted',
+        resetsAt: new Date(RESETS_AT),
+        upgrade: 'register',
+      }),
+    });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith({
+      code: 'AI_QUOTA_EXHAUSTED',
+      message: expect.any(String),
+      resetsAt: RESETS_AT,
+      upgrade: 'register',
+    });
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+    expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+    expect(ctx.emitter.emit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+  ] as const)(
+    'a %s abort before any text %s the message and stores the marker with an aborted reply',
+    async (reason, _verb, refunds) => {
+      const controller = new AbortController();
+      const ctx = setup();
+      vi.mocked(ctx.orchestrator.run).mockImplementation(async function* () {
+        controller.abort(reason);
+        yield {
+          type: 'aborted',
+          usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
+        };
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks, controller.signal);
+
+      expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
+        conversationId: 'conv-1',
+        turnId: CONTINUATION,
+        messages: [
+          { role: 'user', content: '', kind: 'continue' },
+          {
+            role: 'assistant',
+            content: '',
+            sources: [],
+            stopReason: 'aborted',
+          },
+        ],
+      });
+    }
+  );
+
+  describe('announcing segments', () => {
+    const EARLIER_CONTINUATION = 'earlier-continuation';
+    const CONTINUED_HISTORY = [
+      ...CAPPED_HISTORY,
+      historyRow({
+        role: 'user',
+        content: '',
+        turnId: EARLIER_CONTINUATION,
+        kind: 'continue',
+      }),
+      historyRow({
+        role: 'assistant',
+        content: 'Found B. Pending: C.',
+        turnId: EARLIER_CONTINUATION,
+        stopReason: 'max_steps',
+      }),
+    ];
+    const CONTINUED_LAST: LastConversationMessage = {
+      ...CAPPED_LAST,
+      turnId: EARLIER_CONTINUATION,
+    };
+
+    function continued(segmentIndex: number) {
+      return [
+        TurnContinuedEvent.EVENT_NAME,
+        expect.objectContaining({ userId: USER, tier: 'free', segmentIndex }),
+      ];
+    }
+
+    function checkpoint(stopReason: AgentStopReason, segmentIndex: number) {
+      return [
+        TurnCheckpointReachedEvent.EVENT_NAME,
+        expect.objectContaining({
+          userId: USER,
+          tier: 'free',
+          stopReason,
+          segmentIndex,
+        }),
+      ];
+    }
+
+    it("announces a continuation once, as its model starts, numbered after the capped turn's segments", async () => {
+      const ctx = setup({ history: CONTINUED_HISTORY, last: CONTINUED_LAST });
+
+      await ctx.handler.continueTurn(
+        { ...request, continuesTurnId: EARLIER_CONTINUATION },
+        ctx.callbacks
+      );
+
+      const emit = vi.mocked(ctx.emitter.emit);
+      expect(emit.mock.calls).toEqual([continued(2)]);
+      expect(emit.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(ctx.orchestrator.run).mock.invocationCallOrder[0]
+      );
+    });
+
+    it.each(CONTINUABLE_STOP_REASONS)(
+      'announces a continuation capped again on %s as a checkpoint of its own segment',
+      async (stopReason) => {
+        const ctx = setup({ events: doneWith(stopReason) });
+
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(vi.mocked(ctx.emitter.emit).mock.calls).toEqual([
+          continued(1),
+          checkpoint(stopReason, 1),
+        ]);
+      }
+    );
+
+    it('announces no continuation refused after it drew its message', async () => {
+      const ctx = setup({ allowed: false });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code: AIErrorCodes.RATE_LIMIT_EXCEEDED })
+      );
+      expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+      expect(ctx.emitter.emit).not.toHaveBeenCalled();
+    });
+
+    it("numbers a fresh message's checkpoint 0, even after continuations", async () => {
+      const ctx = setup({
+        history: CONTINUED_HISTORY,
+        events: doneWith('max_steps'),
+      });
+
+      await ctx.handler.execute(
+        {
+          userId: USER,
+          turnId: CONTINUATION,
+          conversationId: 'conv-1',
+          message: { content: 'now research Y' },
+        },
+        ctx.callbacks
+      );
+
+      expect(vi.mocked(ctx.emitter.emit).mock.calls).toEqual([
+        checkpoint('max_steps', 0),
+      ]);
+    });
+
+    it.each(['completed', 'length', 'content_filter'] as const)(
+      'announces nothing for a turn that ended %s',
+      async (stopReason) => {
+        const ctx = setup({ events: doneWith(stopReason) });
+
+        await ctx.handler.execute(
+          {
+            userId: USER,
+            turnId: CONTINUATION,
+            conversationId: 'conv-1',
+            message: { content: 'now research Y' },
+          },
+          ctx.callbacks
+        );
+
+        expect(ctx.callbacks.onDone).toHaveBeenCalledOnce();
+        expect(ctx.emitter.emit).not.toHaveBeenCalled();
+      }
+    );
+
+    it("numbers a resumed continuation's checkpoint as the continuation's segment", async () => {
+      const ctx = setup({
+        history: [
+          ...CAPPED_HISTORY,
+          historyRow({
+            role: 'user',
+            content: '',
+            turnId: CONTINUATION,
+            kind: 'continue',
+          }),
+          historyRow({
+            role: 'assistant',
+            content: 'Shall I save B?',
+            turnId: CONTINUATION,
+            stopReason: 'completed',
+          }),
+        ],
+        events: doneWith('token_budget'),
+      });
+
+      await ctx.handler.resumeTurn(
+        {
+          userId: USER,
+          turnId: CONTINUATION,
+          conversationId: 'conv-1',
+          resume: { outcome: 'created' },
+        },
+        ctx.callbacks
+      );
+
+      expect(vi.mocked(ctx.emitter.emit).mock.calls).toEqual([
+        checkpoint('token_budget', 1),
+      ]);
+    });
+
+    it('finishes the turn when announcing its segments throws', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const ctx = setup({ events: doneWith('max_steps') });
+      vi.mocked(ctx.emitter.emit).mockImplementation(() => {
+        throw new Error('listener failed');
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.orchestrator.run).toHaveBeenCalledOnce();
+      expect(ctx.callbacks.onDone).toHaveBeenCalledOnce();
+      expect(ctx.callbacks.onError).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.announce_failed',
+          domainEvent: TurnContinuedEvent.EVENT_NAME,
+        })
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.announce_failed',
+          domainEvent: TurnCheckpointReachedEvent.EVENT_NAME,
+        })
       );
     });
   });

@@ -4,6 +4,9 @@ export const CONVERSATION_TITLE_MAX = 120;
 
 export const AGENT_CONVERSATION_NOT_FOUND_CODE = 'AGENT_CONVERSATION_NOT_FOUND';
 
+/** `agent:error` code for a continue request whose turn is not the conversation's newest, or stopped at no checkpoint. */
+export const AGENT_TURN_NOT_CONTINUABLE_CODE = 'AGENT_TURN_NOT_CONTINUABLE';
+
 /**
  * `agent:error` codes for a turn id that cannot run now. A resend of the same turn
  * clears `TURN_IN_PROGRESS` and `TURN_CLAIM_UNAVAILABLE`; `TURN_ID_REUSED` never clears.
@@ -13,6 +16,11 @@ export const AGENT_TURN_ERROR_CODE = {
   TURN_IN_PROGRESS: 'TURN_IN_PROGRESS',
   TURN_CLAIM_UNAVAILABLE: 'TURN_CLAIM_UNAVAILABLE',
 } as const;
+
+/** A user row stored with no text of its own: `continue` resumes the turn before it. */
+export const MESSAGE_KIND = { CONTINUE: 'continue' } as const;
+
+export type MessageKind = (typeof MESSAGE_KIND)[keyof typeof MESSAGE_KIND];
 
 const WHITESPACE_RUN = /\s+/g;
 const WORD_SEPARATOR = ' ';
@@ -38,6 +46,7 @@ export interface ConversationTranscriptMessage {
   content: string;
   sources: { id: string; title: string }[];
   stopReason: MessageStopReason | null;
+  kind?: MessageKind;
 }
 
 export interface ConversationTranscript {
@@ -46,6 +55,8 @@ export interface ConversationTranscript {
   noteId: string | null;
   hasEarlier: boolean;
   messages: ConversationTranscriptMessage[];
+  /** The turn a continue request may resume now; null when none can. */
+  continuableTurnId: string | null;
 }
 
 export function normalizeConversationTitle(title: string): string {

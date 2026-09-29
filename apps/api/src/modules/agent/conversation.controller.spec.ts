@@ -1,18 +1,23 @@
 import 'reflect-metadata';
 
 import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
-import type { ExecutionContext } from '@nestjs/common';
+import { Logger, type ExecutionContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
+  AiQuota,
   ConversationSummary,
   ConversationTranscript,
+  ConversationTranscriptMessage,
 } from '@knowtis/shared-types';
 
 import { createValidationPipe } from '../../config/validation-pipe';
+import { MessageQuotaService } from '../ai/application/services/message-quota.service';
+import { TierResolver } from '../ai/application/services/tier-resolver.service';
+import { createExecutionContext } from '../ai/testing/create-execution-context';
 import { ConversationController } from './conversation.controller';
 import { CONVERSATION_REPOSITORY } from './domain/ports/conversation.repository';
 
@@ -20,6 +25,9 @@ const USER_ID = '00000000-0000-4000-8000-0000000004c1';
 const CONVERSATION_ID = '00000000-0000-4000-8000-0000000004c2';
 const HISTORY_LIMIT = 120;
 const NOT_A_UUID = 'not-a-uuid';
+const TURN_ID = '00000000-0000-4000-8000-0000000004c3';
+const CLIENT_IP = '203.0.113.7';
+const RESETS_AT = '2026-09-29T00:00:00.000Z';
 
 const SUMMARY: ConversationSummary = {
   id: CONVERSATION_ID,
@@ -43,7 +51,39 @@ const TRANSCRIPT: ConversationTranscript = {
       stopReason: null,
     },
   ],
+  continuableTurnId: null,
 };
+
+const ASK: ConversationTranscriptMessage = {
+  turnId: TURN_ID,
+  role: 'user',
+  content: 'Research X',
+  sources: [],
+  stopReason: null,
+};
+
+function reply(
+  over: Partial<ConversationTranscriptMessage>
+): ConversationTranscriptMessage {
+  return {
+    turnId: TURN_ID,
+    role: 'assistant',
+    content: 'Found A. Pending: B.',
+    sources: [],
+    stopReason: 'max_steps',
+    ...over,
+  };
+}
+
+function transcriptOf(
+  messages: ConversationTranscriptMessage[]
+): ConversationTranscript {
+  return { ...TRANSCRIPT, messages };
+}
+
+function freeQuota(used: number): AiQuota {
+  return { tier: 'free', messages: { used, limit: 30, resetsAt: RESETS_AT } };
+}
 
 describe('ConversationController over HTTP', () => {
   let app: NestExpressApplication;
@@ -54,11 +94,19 @@ describe('ConversationController over HTTP', () => {
     rename: vi.fn(),
     deleteForUser: vi.fn(),
   };
+  const tierResolver = { resolve: vi.fn() };
+  const quota = { snapshot: vi.fn() };
+  let caller: { id: string; isAnonymous?: boolean };
 
-  async function call(method: string, path: string, body?: unknown) {
+  async function call(
+    method: string,
+    path: string,
+    body?: unknown,
+    headers: Record<string, string> = {}
+  ) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...headers },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const text = await response.text();
@@ -70,18 +118,21 @@ describe('ConversationController over HTTP', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    caller = { id: USER_ID };
     const moduleRef = await Test.createTestingModule({
       controllers: [ConversationController],
       providers: [
         { provide: CONVERSATION_REPOSITORY, useValue: repo },
         { provide: ConfigService, useValue: { get: () => HISTORY_LIMIT } },
+        { provide: TierResolver, useValue: tierResolver },
+        { provide: MessageQuotaService, useValue: quota },
       ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          context.switchToHttp().getRequest<{ user?: { id: string } }>().user =
-            { id: USER_ID };
+          context.switchToHttp().getRequest<{ user?: typeof caller }>().user =
+            caller;
           return true;
         },
       })
@@ -93,6 +144,7 @@ describe('ConversationController over HTTP', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await app.close();
   });
 
@@ -144,6 +196,117 @@ describe('ConversationController over HTTP', () => {
       USER_ID,
       HISTORY_LIMIT
     );
+  });
+
+  describe('continuableTurnId', () => {
+    const transcriptPath = `/agent/conversations/${CONVERSATION_ID}/messages`;
+
+    it.each([
+      ['ends on a user message', [ASK]],
+      ['ends on a completed reply', [ASK, reply({ stopReason: 'completed' })]],
+      ['ends on a cut-off reply', [ASK, reply({ stopReason: 'aborted' })]],
+      ['ends on a capped reply with no turn', [ASK, reply({ turnId: null })]],
+    ])(
+      'is null without reading the quota when the transcript %s',
+      async (_label, messages) => {
+        repo.loadTranscriptForUser.mockResolvedValue(transcriptOf(messages));
+
+        const response = await call('GET', transcriptPath);
+
+        expect(response).toEqual({
+          status: 200,
+          body: { ...transcriptOf(messages), continuableTurnId: null },
+        });
+        expect(tierResolver.resolve).not.toHaveBeenCalled();
+        expect(quota.snapshot).not.toHaveBeenCalled();
+      }
+    );
+
+    it('names the capped turn when the caller has messages left', async () => {
+      const messages = [ASK, reply({ stopReason: 'time_limit' })];
+      const execution = createExecutionContext({
+        userId: USER_ID,
+        clientIp: CLIENT_IP,
+      });
+      repo.loadTranscriptForUser.mockResolvedValue(transcriptOf(messages));
+      tierResolver.resolve.mockResolvedValue(execution);
+      quota.snapshot.mockResolvedValue(freeQuota(29));
+
+      const response = await call('GET', transcriptPath, undefined, {
+        'x-real-ip': CLIENT_IP,
+      });
+
+      expect(response).toEqual({
+        status: 200,
+        body: { ...transcriptOf(messages), continuableTurnId: TURN_ID },
+      });
+      expect(tierResolver.resolve).toHaveBeenCalledWith({
+        userId: USER_ID,
+        isAnonymous: false,
+        clientIp: CLIENT_IP,
+      });
+      expect(quota.snapshot).toHaveBeenCalledWith(execution);
+    });
+
+    it('resolves the tier of an anonymous caller as anonymous', async () => {
+      caller = { id: USER_ID, isAnonymous: true };
+      repo.loadTranscriptForUser.mockResolvedValue(
+        transcriptOf([ASK, reply({})])
+      );
+      tierResolver.resolve.mockResolvedValue(
+        createExecutionContext({ userId: USER_ID, tier: 'anonymous' })
+      );
+      quota.snapshot.mockResolvedValue(freeQuota(1));
+
+      await call('GET', transcriptPath, undefined, { 'x-real-ip': CLIENT_IP });
+
+      expect(tierResolver.resolve).toHaveBeenCalledWith({
+        userId: USER_ID,
+        isAnonymous: true,
+        clientIp: CLIENT_IP,
+      });
+    });
+
+    it('is null when the caller has no messages left today', async () => {
+      repo.loadTranscriptForUser.mockResolvedValue(
+        transcriptOf([ASK, reply({})])
+      );
+      tierResolver.resolve.mockResolvedValue(
+        createExecutionContext({ userId: USER_ID })
+      );
+      quota.snapshot.mockResolvedValue(freeQuota(30));
+
+      const response = await call('GET', transcriptPath);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({ continuableTurnId: null })
+      );
+      expect(quota.snapshot).toHaveBeenCalledOnce();
+    });
+
+    it('still serves the transcript, with no continuable turn, when the tier cannot be resolved', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const messages = [ASK, reply({})];
+      repo.loadTranscriptForUser.mockResolvedValue(transcriptOf(messages));
+      tierResolver.resolve.mockRejectedValue(new Error('tier store down'));
+
+      const response = await call('GET', transcriptPath);
+
+      expect(response).toEqual({
+        status: 200,
+        body: { ...transcriptOf(messages), continuableTurnId: null },
+      });
+      expect(quota.snapshot).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.continuable.snapshot_failed',
+          conversationId: CONVERSATION_ID,
+          error: 'tier store down',
+        })
+      );
+    });
   });
 
   it('answers 404 for a conversation that is missing or not the caller', async () => {

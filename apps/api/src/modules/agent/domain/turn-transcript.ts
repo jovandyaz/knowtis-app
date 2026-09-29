@@ -1,4 +1,4 @@
-import type { MessageStopReason } from '@knowtis/shared-types';
+import type { MessageKind, MessageStopReason } from '@knowtis/shared-types';
 
 import type { AgentSource } from './agent-event';
 import type { AgentMessage, AgentRole } from './agent-message';
@@ -8,6 +8,7 @@ const ASSISTANT_ROLE: AgentRole = 'assistant';
 
 export interface TurnRowsInput {
   readonly userContent?: string | undefined;
+  readonly userKind?: MessageKind;
   readonly turnMessages: readonly AgentMessage[];
   readonly assistantText: string;
   readonly sources: readonly AgentSource[];
@@ -16,11 +17,21 @@ export interface TurnRowsInput {
 
 /** Rows to persist for one turn: the user row, the rows of every completed step, and a terminal assistant row carrying the stop reason, added empty when the turn produced none. */
 export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
-  const { userContent, turnMessages, assistantText, sources, stopReason } =
-    input;
+  const {
+    userContent,
+    userKind,
+    turnMessages,
+    assistantText,
+    sources,
+    stopReason,
+  } = input;
   const rows: PersistedTurnMessage[] = [];
   if (userContent !== undefined) {
-    rows.push({ role: 'user', content: userContent });
+    rows.push({
+      role: 'user',
+      content: userContent,
+      ...(userKind ? { kind: userKind } : {}),
+    });
   }
   // Step rows already carry the text of every completed call, so only the text
   // streamed after the last one is still missing. Step-level failover re-streams

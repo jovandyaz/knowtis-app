@@ -372,6 +372,13 @@
       "when": 1790625807011,
       "tag": "0052_mysterious_james_howlett",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790634914051,
+      "tag": "0053_loud_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

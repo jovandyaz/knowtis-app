@@ -8,14 +8,18 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Query,
+  Req,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
 
 import type {
   ConversationPage,
@@ -23,11 +27,17 @@ import type {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
+import { reasonOf } from '../../core/errors/reason-of';
+import { clientIpOf } from '../../core/http/client-ip';
 import {
   DEFAULT_LIMIT,
   DEFAULT_PAGE,
 } from '../../core/pagination/pagination.constants';
+import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
+import { MessageQuotaService } from '../ai/application/services/message-quota.service';
+import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { CONVERSATION_NOT_FOUND_MESSAGE } from './domain/agent-errors';
+import { hasMessagesLeft, isContinuableStop } from './domain/continuable';
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
@@ -36,12 +46,17 @@ import { ListConversationsQueryDto } from './dto/list-conversations-query.dto';
 import { RenameConversationDto } from './dto/rename-conversation.dto';
 
 @UseGuards(JwtAuthGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 @Controller('agent/conversations')
 export class ConversationController {
+  private readonly logger = new Logger(ConversationController.name);
+
   constructor(
     @Inject(CONVERSATION_REPOSITORY)
     private readonly conversations: ConversationRepository,
-    private readonly config: ConfigService<EnvConfig, true>
+    private readonly config: ConfigService<EnvConfig, true>,
+    private readonly tierResolver: TierResolver,
+    private readonly quota: MessageQuotaService
   ) {}
 
   @Get()
@@ -61,7 +76,8 @@ export class ConversationController {
   @Get(':id/messages')
   async transcript(
     @CurrentUser() user: RequestUser,
-    @Param('id', ParseUUIDPipe) id: string
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request
   ): Promise<ConversationTranscript> {
     const transcript = await this.conversations.loadTranscriptForUser(
       id,
@@ -71,7 +87,33 @@ export class ConversationController {
     if (!transcript) {
       throw new NotFoundException(CONVERSATION_NOT_FOUND_MESSAGE);
     }
-    return transcript;
+    const last = transcript.messages.at(-1);
+    if (
+      last?.role !== 'assistant' ||
+      last.turnId === null ||
+      !isContinuableStop(last.stopReason)
+    ) {
+      return { ...transcript, continuableTurnId: null };
+    }
+    try {
+      const execution = await this.tierResolver.resolve({
+        userId: user.id,
+        isAnonymous: user.isAnonymous === true,
+        clientIp: clientIpOf(req),
+      });
+      const quota = await this.quota.snapshot(execution);
+      return {
+        ...transcript,
+        continuableTurnId: hasMessagesLeft(quota) ? last.turnId : null,
+      };
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.continuable.snapshot_failed',
+        conversationId: id,
+        error: reasonOf(error),
+      });
+      return { ...transcript, continuableTurnId: null };
+    }
   }
 
   @Patch(':id')

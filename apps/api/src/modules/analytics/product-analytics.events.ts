@@ -15,6 +15,8 @@ import type {
   QuotaRemainingBucket,
 } from '@knowtis/shared-types';
 
+import type { ContinuableStopReason } from '../agent/domain/continuable';
+
 export type ServerActorContext = ProductActorContext;
 
 export type ServerPersonProperties = ProductPersonProperties;
@@ -49,6 +51,17 @@ export interface ServerProductEventMap {
     remaining_bucket: QuotaRemainingBucket;
   };
   'ai quota exhausted': { source: 'api'; tier: AccessTier };
+  'ai turn checkpoint reached': {
+    source: 'api';
+    tier: AccessTier;
+    stop_reason: ContinuableStopReason;
+    segment_index: number;
+  };
+  'ai turn continued': {
+    source: 'api';
+    tier: AccessTier;
+    segment_index: number;
+  };
 }
 
 export type ServerProductEventName = keyof ServerProductEventMap &

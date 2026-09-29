@@ -23,6 +23,13 @@ const EVENT_PROPERTY_KEYS = {
   'quiz completed': ['source', 'scope', 'score_bucket'],
   'ai quota consumed': ['source', 'tier', 'remaining_bucket'],
   'ai quota exhausted': ['source', 'tier'],
+  'ai turn checkpoint reached': [
+    'source',
+    'tier',
+    'stop_reason',
+    'segment_index',
+  ],
+  'ai turn continued': ['source', 'tier', 'segment_index'],
 } as const satisfies {
   [E in ServerProductEventName]: readonly (keyof ServerProductEventMap[E])[];
 };

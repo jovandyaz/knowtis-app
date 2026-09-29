@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import {
   computeTokenCostUsd,
@@ -12,8 +13,10 @@ import {
 import {
   AGENT_STOP_REASON,
   deriveConversationTitle,
+  MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
+  type MessageKind,
   type MessageStopReason,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
@@ -66,6 +69,13 @@ import {
   seamHead,
   seamTail,
 } from '../domain/coalesce-messages';
+import {
+  hasMessagesLeft,
+  isContinuable,
+  isContinuableStop,
+} from '../domain/continuable';
+import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
+import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -85,6 +95,7 @@ import {
 } from '../domain/ports/pending-mutation.store';
 import type { ProposedMutation } from '../domain/proposed-mutation';
 import {
+  CONTINUE_REQUEST,
   fitHistoryToBudget,
   pruneTranscript,
 } from '../domain/prune-transcript';
@@ -93,6 +104,7 @@ import {
   sanitizeReplayHistory,
   type ReplayDetection,
 } from '../domain/replay-input-sanitizer';
+import { segmentIndexOf } from '../domain/segment-index';
 import { isUserCancel } from '../domain/turn-abort';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import { buildTurnRows } from '../domain/turn-transcript';
@@ -113,6 +125,21 @@ interface RunAgentTurnInput {
   readonly effort?: ReasoningEffort;
 }
 
+type ContinueTurnInput = Pick<
+  RunAgentTurnInput,
+  | 'userId'
+  | 'turnId'
+  | 'isAnonymous'
+  | 'clientIp'
+  | 'noteId'
+  | 'model'
+  | 'effort'
+> & {
+  readonly conversationId: string;
+  /** The capped turn this one continues; it must be the conversation's newest. */
+  readonly continuesTurnId: string;
+};
+
 type TurnInput = Omit<
   RunAgentTurnInput,
   'userId' | 'isAnonymous' | 'clientIp'
@@ -120,6 +147,10 @@ type TurnInput = Omit<
   readonly execution: AiExecutionContext;
   /** The text long-term memory is retrieved for; absent when there is none. */
   readonly memoryQuery?: string;
+  /** The turn's user message is the server's own CONTINUE_REQUEST, which the injection guard skips. */
+  readonly continuation?: boolean;
+  /** Which part of the answer to a user message this turn is: 0 for the message's own turn, n for its nth continuation. */
+  readonly segmentIndex: number;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -134,6 +165,8 @@ export interface RunAgentTurnCallbacks {
     knownNotes: readonly AgentSource[];
     webSources: readonly WebSource[];
     stopReason: AgentStopReason;
+    /** The turn stopped at a checkpoint and the caller has a message left to continue it. */
+    continuable: boolean;
     conversationId?: string;
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
@@ -159,6 +192,7 @@ interface PersistenceContext {
   readonly conversationId: string;
   readonly turnId: string;
   readonly userContent?: string;
+  readonly userKind?: MessageKind;
 }
 
 interface TurnLoopPolicy {
@@ -171,9 +205,13 @@ interface TurnLoopPolicy {
 
 interface QuotaHold {
   readonly refund: () => Promise<void>;
+  readonly quota: () => AiQuota | null;
 }
 
-const NO_QUOTA_HOLD: QuotaHold = { refund: () => Promise.resolve() };
+const NO_QUOTA_HOLD: QuotaHold = {
+  refund: () => Promise.resolve(),
+  quota: () => null,
+};
 
 type PreparedTurn =
   | { readonly kind: 'refused' }
@@ -202,6 +240,28 @@ function detectionRows(
     redactedSpans,
     role: messages[index].role,
   }));
+}
+
+// A continuation's user message is our own CONTINUE_REQUEST, so memory
+// retrieval embeds the last message the user actually wrote.
+function lastWrittenUserMessage(
+  history: readonly AgentMessage[]
+): string | undefined {
+  return history.findLast(
+    (m) => m.role === 'user' && m.content !== CONTINUE_REQUEST
+  )?.content;
+}
+
+function freshUserMessageOf(
+  input: TurnInput,
+  resume: { outcome: string } | undefined
+): AgentMessage | undefined {
+  if (input.continuation) {
+    return { role: 'user', content: CONTINUE_REQUEST };
+  }
+  return resume === undefined && input.message
+    ? { role: 'user', content: input.message.content }
+    : undefined;
 }
 
 function messageTooLongError() {
@@ -235,7 +295,8 @@ export class RunAgentTurnHandler {
     private readonly aiConfig: AIConfigService,
     private readonly turnEffort: TurnEffortResolver,
     private readonly tierResolver: TierResolver,
-    private readonly quota: MessageQuotaService
+    private readonly quota: MessageQuotaService,
+    private readonly events: EventEmitter2
   ) {}
 
   async execute(
@@ -340,6 +401,7 @@ export class RunAgentTurnHandler {
       memoryQuery: message.content,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       knownNotes,
+      segmentIndex: 0,
       ...(input.model ? { model: input.model } : {}),
       ...(input.effort ? { effort: input.effort } : {}),
       conversationModel: conversation.model,
@@ -426,7 +488,11 @@ export class RunAgentTurnHandler {
   private async loadConversationContext(
     conversationId: string,
     userId: string
-  ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
+  ): Promise<{
+    history: AgentMessage[];
+    knownNotes: AgentSource[];
+    segmentIndex: number;
+  }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
     const rows = await this.conversations.loadMessages(
       conversationId,
@@ -447,7 +513,11 @@ export class RunAgentTurnHandler {
         }
       }
     }
-    return { history, knownNotes: [...seen.values()] };
+    return {
+      history,
+      knownNotes: [...seen.values()],
+      segmentIndex: segmentIndexOf(rows),
+    };
   }
 
   private async persistTurn(
@@ -459,6 +529,7 @@ export class RunAgentTurnHandler {
   ): Promise<void> {
     const messages = buildTurnRows({
       userContent: persistence.userContent,
+      ...(persistence.userKind ? { userKind: persistence.userKind } : {}),
       turnMessages,
       assistantText,
       sources,
@@ -518,6 +589,7 @@ export class RunAgentTurnHandler {
           knownNotes: [],
           webSources: [],
           stopReason: AGENT_STOP_REASON.COMPLETED,
+          continuable: false,
         });
         return 'stop';
       },
@@ -548,19 +620,18 @@ export class RunAgentTurnHandler {
       callbacks.onError(AgentErrors.conversationNotFound());
       return;
     }
-    const { history, knownNotes } = await this.loadConversationContext(
-      input.conversationId,
-      input.userId
-    );
+    const { history, knownNotes, segmentIndex } =
+      await this.loadConversationContext(input.conversationId, input.userId);
     // A resume carries a tool-confirmation outcome, not the user's words, so
     // memory retrieval embeds the last real user message instead.
-    const memoryQuery = history.findLast((m) => m.role === 'user')?.content;
+    const memoryQuery = lastWrittenUserMessage(history);
     const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
       turnId: input.turnId,
       messages: history,
       knownNotes,
+      segmentIndex,
       execution,
       ...(memoryQuery ? { memoryQuery } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
@@ -574,6 +645,86 @@ export class RunAgentTurnHandler {
       signal,
       this.resumePolicy(callbacks),
       { conversationId: input.conversationId, turnId: input.turnId }
+    );
+  }
+
+  /** Runs a new turn that picks up where a capped one stopped; it is metered, streams and persists like any turn. */
+  async continueTurn(
+    input: ContinueTurnInput,
+    callbacks: RunAgentTurnCallbacks,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const execution = await this.resolveExecution(input, callbacks);
+    if (!execution) {
+      return;
+    }
+    if (input.effort && !execution.policy.effortSelectable) {
+      callbacks.onError(
+        AIErrors.validationError('effort is not available on anonymous turns')
+      );
+      return;
+    }
+    const found = await this.conversations.findByIdForUser(
+      input.conversationId,
+      input.userId
+    );
+    if (!found) {
+      callbacks.onError(AgentErrors.conversationNotFound());
+      return;
+    }
+    const last = await this.conversations.findLastMessage(
+      input.conversationId,
+      input.userId
+    );
+    if (
+      last?.role !== 'assistant' ||
+      last.turnId !== input.continuesTurnId ||
+      !isContinuableStop(last.stopReason)
+    ) {
+      callbacks.onError(AgentErrors.turnNotContinuable());
+      return;
+    }
+    const context = await this.loadConversationContext(
+      input.conversationId,
+      input.userId
+    );
+    const segmentIndex = context.segmentIndex + 1;
+    const memoryQuery = lastWrittenUserMessage(context.history);
+    const persistence: PersistenceContext = {
+      conversationId: input.conversationId,
+      turnId: input.turnId,
+      userContent: '',
+      userKind: MESSAGE_KIND.CONTINUE,
+    };
+    const onModelStart = () => {
+      callbacks.onModelStart?.();
+      this.announce(
+        new TurnContinuedEvent(
+          execution.subject.userId,
+          execution.tier,
+          segmentIndex
+        )
+      );
+    };
+    return this.runLoop(
+      {
+        turnId: input.turnId,
+        messages: context.history,
+        execution,
+        continuation: true,
+        knownNotes: context.knownNotes,
+        segmentIndex,
+        conversationModel: found.model,
+        ...(memoryQuery ? { memoryQuery } : {}),
+        ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+      },
+      undefined,
+      { ...callbacks, onModelStart },
+      signal,
+      this.executePolicy(callbacks, persistence),
+      persistence
     );
   }
 
@@ -646,10 +797,7 @@ export class RunAgentTurnHandler {
       }
     }
 
-    const freshUserMessage: AgentMessage | undefined =
-      resume === undefined && input.message
-        ? { role: 'user', content: input.message.content }
-        : undefined;
+    const freshUserMessage = freshUserMessageOf(input, resume);
     if (
       freshUserMessage &&
       freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS
@@ -806,6 +954,22 @@ export class RunAgentTurnHandler {
               void this.byok.markUsed(userId, execution.billing.provider);
             }
             await persistTurnOnce(event.sources, event.stopReason);
+            if (isContinuableStop(event.stopReason)) {
+              this.announce(
+                new TurnCheckpointReachedEvent(
+                  userId,
+                  execution.tier,
+                  event.stopReason,
+                  input.segmentIndex
+                )
+              );
+            }
+            const continuable = policy.consumesQuota
+              ? isContinuable(event.stopReason, hold.quota())
+              : await this.continuableFromSnapshot(
+                  event.stopReason,
+                  input.execution
+                );
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -815,6 +979,7 @@ export class RunAgentTurnHandler {
               knownNotes: event.knownNotes,
               webSources: event.webSources,
               stopReason: event.stopReason,
+              continuable,
               ...(persistence
                 ? { conversationId: persistence.conversationId }
                 : {}),
@@ -913,6 +1078,7 @@ export class RunAgentTurnHandler {
               this.reportQuota(callbacks, quota, turnId);
             }
           },
+          quota: () => outcome.quota,
         };
       }
       case 'exhausted':
@@ -927,6 +1093,27 @@ export class RunAgentTurnHandler {
         const _exhaustive: never = outcome;
         throw new Error(`Unhandled quota outcome: ${String(_exhaustive)}`);
       }
+    }
+  }
+
+  // A leg that draws no message holds NO_QUOTA_HOLD, whose null reads as
+  // unmetered; a platform caller is metered, so the quota is read instead.
+  private async continuableFromSnapshot(
+    stopReason: AgentStopReason,
+    execution: AiExecutionContext
+  ): Promise<boolean> {
+    if (!isContinuableStop(stopReason)) {
+      return false;
+    }
+    try {
+      return hasMessagesLeft(await this.quota.snapshot(execution));
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.continuable.snapshot_failed',
+        userId: execution.subject.userId,
+        error: reasonOf(error),
+      });
+      return false;
     }
   }
 
@@ -947,6 +1134,20 @@ export class RunAgentTurnHandler {
     }
   }
 
+  private announce(
+    event: TurnCheckpointReachedEvent | TurnContinuedEvent
+  ): void {
+    try {
+      this.events.emit(event.name, event);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.turn.announce_failed',
+        domainEvent: event.name,
+        error: reasonOf(error),
+      });
+    }
+  }
+
   private async prepareTurn(
     input: TurnInput,
     execution: AiExecutionContext,
@@ -956,7 +1157,7 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
   ): Promise<PreparedTurn> {
     const { userId } = execution.subject;
-    if (freshUserMessage) {
+    if (freshUserMessage && !input.continuation) {
       const verdict = await this.injectionGuard.guard(
         freshUserMessage.content,
         execution
