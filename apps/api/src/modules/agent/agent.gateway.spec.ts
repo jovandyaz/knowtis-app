@@ -1825,6 +1825,7 @@ describe('AgentGateway', () => {
           'with a continued turn id that is not a uuid',
           { continuesTurnId: 'x' },
         ],
+        ['that names its own turn', { continuesTurnId: TURN }],
       ])('is refused as invalid %s', async (_label, over) => {
         const execute = vi.fn();
         const continueTurn = vi.fn();

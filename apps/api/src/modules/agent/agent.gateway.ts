@@ -73,12 +73,17 @@ const agentMessageSchema = z.strictObject({
   ...turnFields,
 });
 
-const agentContinueSchema = z.strictObject({
-  turnId: z.uuid(),
-  conversationId: z.string().uuid(),
-  continuesTurnId: z.uuid(),
-  ...turnFields,
-});
+const agentContinueSchema = z
+  .strictObject({
+    turnId: z.uuid(),
+    conversationId: z.string().uuid(),
+    continuesTurnId: z.uuid(),
+    ...turnFields,
+  })
+  .refine((data) => data.continuesTurnId !== data.turnId, {
+    error: 'must name an earlier turn',
+    path: ['continuesTurnId'],
+  });
 
 const agentTurnSchema = z.union([agentMessageSchema, agentContinueSchema]);
 
