@@ -207,8 +207,9 @@ update returns `Property definition not found`. Do not send synthetic
 production events to work around this. After the first real ingestion,
 describe and verify the custom properties listed in the event contract above.
 The `ai quota consumed`, `ai quota exhausted`, `ai turn checkpoint reached`, and
-`ai turn continued` event definitions are created in project `344524` the same
-way, after their first real ingestion.
+`ai turn continued` event definitions already exist in project `344524` with
+descriptions. After their first real ingestion, describe their custom properties
+and mark the events verified.
 
 When verifying these assets, confirm the dashboard contains the six saved
 insights listed above and that each remains attached to dashboard `2065684`.

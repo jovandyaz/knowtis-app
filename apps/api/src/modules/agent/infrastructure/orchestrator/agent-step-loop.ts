@@ -13,10 +13,15 @@ import {
   providerOf,
   type ProviderCooldown,
 } from '@knowtis/ai-gateway';
-import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
+import {
+  AGENT_STOP_REASON,
+  type AgentStopReason,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import { honoursToolChoiceNone } from '../../../ai/infrastructure/providers/tool-choice-none';
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
 import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
@@ -44,6 +49,7 @@ import {
   emitTurnHealth,
   type StreamHealth,
 } from './stream-health';
+import { toToolFreeTranscript } from './tool-free-transcript';
 import {
   accumulateTurnUsage,
   bestEffortUsage,
@@ -70,12 +76,21 @@ const SYNTHESIS_REQUEST_TOKENS = estimateMessageTokens({
   content: SYNTHESIS_REQUEST,
 });
 
+// Reasoning shares the output cap with the answer, which a synthesis may get
+// little of. Lowered, never turned off: Opus and Sonnet 5.5 reject disabled
+// thinking, and mandatory-reasoning OpenRouter models reject effort none. Only
+// on a call sent without its tools, which already misses the prompt cache; on
+// a native call a changed effort would cost the cached prefix too.
+export const TOOL_FREE_REASONING_EFFORT: ReasoningEffort = 'low';
+
 class AgentStallError extends Error {
   constructor(stallMs: number) {
     super(`No stream activity for ${stallMs}ms`);
     this.name = 'AgentStallError';
   }
 }
+
+const TOOL_MARKUP_LEAK_REASON = 'reply leaked raw tool-call markup';
 
 type StepRetryReason = 'ttft' | 'transient';
 
@@ -120,14 +135,14 @@ function canRetryTransientStep(
 }
 
 function eligibleForStepFailover(
-  health: StreamHealth,
+  nothingStreamed: boolean,
   completedSteps: number,
   byok: boolean,
   failoverCandidates: readonly string[]
 ): boolean {
   return (
     completedSteps > 0 &&
-    health.parts === 0 &&
+    nothingStreamed &&
     !byok &&
     failoverCandidates.length > 0
   );
@@ -204,13 +219,24 @@ export async function* runAgentStepLoop(
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
 
-  const optionsFor = async (model: string) =>
-    turnProviderOptions({
+  const optionsFor = async (model: string) => {
+    const reasoningEffort = await input.effortFor?.(model);
+    const routing = {
       model,
-      reasoningEffort: await input.effortFor?.(model),
       providerOrder: input.openrouterProviderOrder,
       ignoredProviders: input.openrouterIgnoredProviders,
-    });
+    };
+    return {
+      step: turnProviderOptions({ ...routing, reasoningEffort }),
+      withoutTools: turnProviderOptions({
+        ...routing,
+        reasoningEffort:
+          reasoningEffort === undefined
+            ? undefined
+            : TOOL_FREE_REASONING_EFFORT,
+      }),
+    };
+  };
 
   let currentModel = params.model;
   let providerOptions = await optionsFor(currentModel);
@@ -233,7 +259,26 @@ export async function* runAgentStepLoop(
   };
   let completedSteps = 0;
   let segmentEnd: SegmentEnd | null = null;
+  let synthesisInputTokens = 0;
   let synthesisMaxOutputTokens = params.budgets.maxOutputTokens;
+  let unreportedLeakTokens = 0;
+
+  const failOverTo = async (nextModel: string, reason: string) => {
+    params.cooldown.recordFailure(cooldownKeyOf(currentModel));
+    logger.warn({
+      event: 'ai.chain.step_failed',
+      model: currentModel,
+      provider: providerOf(currentModel),
+      nextModel,
+      atStep: completedSteps,
+      reason,
+    });
+    currentModel = nextModel;
+    params.onModelSettled?.(currentModel);
+    providerOptions = await optionsFor(currentModel);
+    modelsUsed.push(currentModel);
+    history = pruneMessages({ messages: history, reasoning: 'all' });
+  };
 
   while (completedSteps < input.maxSteps) {
     let advanceToNextStep = false;
@@ -245,6 +290,8 @@ export async function* runAgentStepLoop(
       attempt++
     ) {
       const synthesizing = segmentEnd !== null;
+      const toolFree = synthesizing || completedSteps + 1 === input.maxSteps;
+      const withoutTools = toolFree && !honoursToolChoiceNone(currentModel);
       const result = yield* runStepCall({
         logger,
         input,
@@ -253,15 +300,16 @@ export async function* runAgentStepLoop(
         abortSignal: params.abortSignal,
         timeoutSignal: params.timeoutSignal,
         instructions: params.instructions,
-        cache: params.cache,
-        tools: params.tools,
-        ...(synthesizing || completedSteps + 1 === input.maxSteps
-          ? { toolChoice: 'none' as const }
-          : {}),
+        cache: params.cache && !withoutTools,
+        tools: withoutTools ? {} : params.tools,
+        ...(toolFree ? { toolChoice: 'none' as const } : {}),
+        failOnToolMarkup: toolFree,
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
-        providerOptions,
-        history,
+        providerOptions: withoutTools
+          ? providerOptions.withoutTools
+          : providerOptions.step,
+        history: withoutTools ? toToolFreeTranscript(history) : history,
         ...(synthesizing
           ? { trailingMessage: { role: 'user', content: SYNTHESIS_REQUEST } }
           : {}),
@@ -302,7 +350,7 @@ export async function* runAgentStepLoop(
             continue;
           }
           const nextModel = eligibleForStepFailover(
-            result.health,
+            result.health.parts === 0,
             completedSteps,
             byok,
             failoverCandidates
@@ -310,20 +358,7 @@ export async function* runAgentStepLoop(
             ? failoverCandidates.shift()
             : undefined;
           if (nextModel !== undefined) {
-            params.cooldown.recordFailure(cooldownKeyOf(currentModel));
-            logger.warn({
-              event: 'ai.chain.step_failed',
-              model: currentModel,
-              provider: providerOf(currentModel),
-              nextModel,
-              atStep: completedSteps,
-              reason: 'continuation stall',
-            });
-            currentModel = nextModel;
-            params.onModelSettled?.(currentModel);
-            providerOptions = await optionsFor(currentModel);
-            modelsUsed.push(currentModel);
-            history = pruneMessages({ messages: history, reasoning: 'all' });
+            await failOverTo(nextModel, 'continuation stall');
             failedOver = true;
             break stepAttempts;
           }
@@ -391,6 +426,71 @@ export async function* runAgentStepLoop(
             fromStream
               ? bestEffortUsage(currentModel, turn.stepUsage)
               : undefined
+          );
+          return;
+        }
+        case STEP_CALL_KIND.LEAKED: {
+          if (result.usage) {
+            accumulateTurnUsage(turnUsage, result.usage);
+          }
+          logger.warn({
+            event: 'agent.synthesis.markup_leak',
+            userId,
+            model: currentModel,
+            upstream: result.health.upstream,
+          });
+          emitTurnHealth(
+            logger,
+            userId,
+            currentModel,
+            result.health,
+            AGENT_TURN_OUTCOME.EMPTY,
+            result.callStartedAt,
+            modelsUsed
+          );
+          // Thinking already shown does not block a switch, as when the chain
+          // falls through at the turn level: the client treats it as ephemeral.
+          const nothingStreamed = result.health.textDeltas === 0;
+          // A drain cut short by a stall or a stream error reports no usage,
+          // and a provider may report partial counts, so such a leaked call
+          // counts as the most it could have spent, on top of what it reported.
+          if (!result.usage || !hasCompleteUsage(result.usage)) {
+            unreportedLeakTokens +=
+              synthesisInputTokens +
+              SYNTHESIS_REQUEST_TOKENS +
+              synthesisMaxOutputTokens;
+          }
+          const rescueCap = synthesisOutputCap(
+            {
+              spentTurnTokens:
+                turnUsage.inputTokens +
+                turnUsage.outputTokens +
+                unreportedLeakTokens,
+              nextInputTokens: synthesisInputTokens,
+              synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
+              maxTurnTokens: params.budgets.maxTurnTokens,
+            },
+            params.budgets.maxOutputTokens
+          );
+          const nextModel =
+            rescueCap > 0 &&
+            eligibleForStepFailover(
+              nothingStreamed,
+              completedSteps,
+              byok,
+              failoverCandidates
+            )
+              ? failoverCandidates.shift()
+              : undefined;
+          if (nextModel !== undefined) {
+            synthesisMaxOutputTokens = rescueCap;
+            await failOverTo(nextModel, 'tool markup leak');
+            failedOver = true;
+            break stepAttempts;
+          }
+          yield errorEvent(
+            AIErrors.providerError(TOOL_MARKUP_LEAK_REASON),
+            turnUsageEvent(turnUsage, currentModel)
           );
           return;
         }
@@ -470,8 +570,9 @@ export async function* runAgentStepLoop(
               history.push(...stepMessages);
               if (end !== null) {
                 segmentEnd = end;
+                synthesisInputTokens = state.nextInputTokens;
                 synthesisMaxOutputTokens = cap;
-                logger.warn({
+                logger.log({
                   event: 'agent.turn.segment_closed',
                   userId,
                   model: currentModel,

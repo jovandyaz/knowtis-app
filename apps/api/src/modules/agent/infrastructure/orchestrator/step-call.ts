@@ -44,6 +44,7 @@ import {
   STREAM_MARKER_PART_TYPES,
   type StreamHealth,
 } from './stream-health';
+import { scanForToolMarkup } from './tool-markup-guard';
 import { collectKnownNotes, collectSources } from './turn-collectors';
 import { bestEffortUsage, type StepUsageAccumulator } from './turn-usage';
 
@@ -146,6 +147,8 @@ export interface StepCallParams {
   readonly cache: boolean;
   readonly tools: ToolSet;
   readonly toolChoice?: 'none';
+  /** Ends the call as `leaked` once its text turns into raw tool-call markup, streaming only the text and thinking before it. */
+  readonly failOnToolMarkup: boolean;
   readonly telemetry: TelemetryOptions;
   readonly traceIdentity: TraceIdentityAttrs;
   readonly providerOptions: TurnProviderOptions;
@@ -172,6 +175,7 @@ export const STEP_CALL_KIND = {
   STALLED: 'stalled',
   INTERRUPTED: 'interrupted',
   ERRORED: 'errored',
+  LEAKED: 'leaked',
 } as const;
 
 /** Outcome of one streamText attempt; `completed` carries `response` for the loop to await once per completed call. */
@@ -191,11 +195,17 @@ export type StepCallResult =
       kind: typeof STEP_CALL_KIND.ERRORED;
       cause: unknown;
       fromStream: boolean;
+    })
+  | (StepCallHealth & {
+      kind: typeof STEP_CALL_KIND.LEAKED;
+      usage: LanguageModelUsage | undefined;
     });
 
 /**
  * Runs one streamText attempt: yields `thinking`/`chunk` and returns a
- * `StepCallResult` via `yield*`. Never logs health.
+ * `StepCallResult` via `yield*`. Never logs health. A `leaked` call is read to
+ * its end, so its usage and upstream are known, but nothing after the markup
+ * is streamed.
  */
 export async function* runStepCall(
   params: StepCallParams
@@ -214,6 +224,8 @@ export async function* runStepCall(
   const candidate = new AbortController();
   const runSignal = AbortSignal.any([params.abortSignal, candidate.signal]);
   let stalled = false;
+  let leaked = false;
+  let heldText = '';
   let stallTimer: NodeJS.Timeout | undefined;
   const armStallTimer = () => {
     clearTimeout(stallTimer);
@@ -267,6 +279,13 @@ export async function* runStepCall(
     };
   }
 
+  const chunkOf = (text: string): AgentEvent => {
+    turn.progressed = true;
+    health.textDeltas += 1;
+    turn.textDeltas += 1;
+    return { type: 'chunk', text };
+  };
+
   try {
     armStallTimer();
     for await (const part of result.stream) {
@@ -297,18 +316,26 @@ export async function* runStepCall(
       }
       switch (part.type) {
         case 'reasoning-delta':
-          if (part.text) {
+          if (part.text && !leaked) {
             yield { type: 'thinking', text: part.text };
           }
           break;
-        case 'text-delta':
-          if (part.text) {
-            turn.progressed = true;
-            health.textDeltas += 1;
-            turn.textDeltas += 1;
-            yield { type: 'chunk', text: part.text };
+        case 'text-delta': {
+          if (!part.text || leaked) {
+            break;
+          }
+          if (!params.failOnToolMarkup) {
+            yield chunkOf(part.text);
+            break;
+          }
+          const scan = scanForToolMarkup(heldText, part.text);
+          heldText = scan.held;
+          leaked = scan.leaked;
+          if (scan.emit) {
+            yield chunkOf(scan.emit);
           }
           break;
+        }
         case 'tool-call':
           health.toolCalls += 1;
           break;
@@ -346,8 +373,19 @@ export async function* runStepCall(
         callStartedAt,
       };
     }
+    if (leaked) {
+      return {
+        kind: STEP_CALL_KIND.LEAKED,
+        usage: stalled ? undefined : await result.usage,
+        health,
+        callStartedAt,
+      };
+    }
     if (stalled) {
       return { kind: STEP_CALL_KIND.STALLED, health, callStartedAt };
+    }
+    if (heldText) {
+      yield chunkOf(heldText);
     }
     const usage = await result.usage;
     return {
@@ -371,6 +409,14 @@ export async function* runStepCall(
       return {
         kind: STEP_CALL_KIND.INTERRUPTED,
         event: interrupted,
+        health,
+        callStartedAt,
+      };
+    }
+    if (leaked) {
+      return {
+        kind: STEP_CALL_KIND.LEAKED,
+        usage: undefined,
         health,
         callStartedAt,
       };
