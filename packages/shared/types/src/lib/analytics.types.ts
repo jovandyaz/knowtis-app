@@ -18,6 +18,8 @@ export const PRODUCT_EVENT_NAMES = [
   'quiz completed',
   'ai quota consumed',
   'ai quota exhausted',
+  'ai turn checkpoint reached',
+  'ai turn continued',
 ] as const;
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];
 

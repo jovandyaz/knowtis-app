@@ -8,6 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QuizScoreBucket } from '@knowtis/shared-types';
 
+import { CONTINUABLE_STOP_REASONS } from '../agent/domain/continuable';
+import { TurnCheckpointReachedEvent } from '../agent/domain/events/turn-checkpoint-reached.event';
+import { TurnContinuedEvent } from '../agent/domain/events/turn-continued.event';
 import { MessageQuotaConsumedEvent } from '../ai/domain/events/message-quota-consumed.event';
 import { MessageQuotaExhaustedEvent } from '../ai/domain/events/message-quota-exhausted.event';
 import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
@@ -339,6 +342,42 @@ describe('ProductAnalyticsListener', () => {
         actor: expect.objectContaining({ actor_type: 'anonymous' }),
       })
     );
+  });
+
+  it.each(CONTINUABLE_STOP_REASONS)(
+    'captures a %s checkpoint with only its tier, stop reason and segment index',
+    async (stopReason) => {
+      await listener.handleTurnCheckpointReached(
+        new TurnCheckpointReachedEvent(USER.id, 'free', stopReason, 1)
+      );
+
+      expect(capture).toHaveBeenCalledExactlyOnceWith({
+        distinctId: USER.id,
+        event: 'ai turn checkpoint reached',
+        properties: {
+          source: 'api',
+          tier: 'free',
+          stop_reason: stopReason,
+          segment_index: 1,
+        },
+        actor: { actor_type: 'registered', is_internal: false, locale: 'en' },
+      });
+    }
+  );
+
+  it('captures a continuation with only its tier and segment index', async () => {
+    findById.mockResolvedValue({ ...USER, isAnonymous: true });
+
+    await listener.handleTurnContinued(
+      new TurnContinuedEvent(USER.id, 'anonymous', 2)
+    );
+
+    expect(capture).toHaveBeenCalledExactlyOnceWith({
+      distinctId: USER.id,
+      event: 'ai turn continued',
+      properties: { source: 'api', tier: 'anonymous', segment_index: 2 },
+      actor: { actor_type: 'anonymous', is_internal: false, locale: 'en' },
+    });
   });
 
   it('maps every score bucket boundary', async () => {

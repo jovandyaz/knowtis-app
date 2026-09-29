@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -85,6 +86,8 @@ const turnEffortStub = {
 const tierResolverStub = {
   resolve: vi.fn().mockResolvedValue(createExecutionContext({ userId: USER })),
 } as unknown as TierResolver;
+
+const eventsStub = { emit: vi.fn() } as unknown as EventEmitter2;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let moduleRef: TestingModule;
@@ -174,7 +177,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       aiConfigStub,
       turnEffortStub,
       tierResolverStub,
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      eventsStub
     );
 
     let conversationId: string | undefined;
@@ -255,7 +259,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       aiConfigStub,
       turnEffortStub,
       tierResolverStub,
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      eventsStub
     );
 
     const onError = vi.fn();
@@ -310,7 +315,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       aiConfigStub,
       turnEffortStub,
       tierResolverStub,
-      createMessageQuotaStub()
+      createMessageQuotaStub(),
+      eventsStub
     );
     const opened = conversationIdForTurn(USER, REPLAYED_TURN);
     const deliver = (callbacks: {

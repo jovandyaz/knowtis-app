@@ -10,8 +10,11 @@ export const CONTINUABLE_STOP_REASONS = [
   'token_budget',
   'time_limit',
 ] as const satisfies readonly AgentStopReason[];
+export type ContinuableStopReason = (typeof CONTINUABLE_STOP_REASONS)[number];
 
-export function isContinuableStop(reason: MessageStopReason | null): boolean {
+export function isContinuableStop(
+  reason: MessageStopReason | null
+): reason is ContinuableStopReason {
   return (
     reason !== null &&
     (CONTINUABLE_STOP_REASONS as readonly string[]).includes(reason)
