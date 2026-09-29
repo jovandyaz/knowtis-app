@@ -17,6 +17,7 @@ import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import { honoursToolChoiceNone } from '../../../ai/infrastructure/providers/tool-choice-none';
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
 import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
@@ -44,6 +45,7 @@ import {
   emitTurnHealth,
   type StreamHealth,
 } from './stream-health';
+import { toToolFreeTranscript } from './tool-free-transcript';
 import {
   accumulateTurnUsage,
   bestEffortUsage,
@@ -245,6 +247,8 @@ export async function* runAgentStepLoop(
       attempt++
     ) {
       const synthesizing = segmentEnd !== null;
+      const toolFree = synthesizing || completedSteps + 1 === input.maxSteps;
+      const withoutTools = toolFree && !honoursToolChoiceNone(currentModel);
       const result = yield* runStepCall({
         logger,
         input,
@@ -253,15 +257,13 @@ export async function* runAgentStepLoop(
         abortSignal: params.abortSignal,
         timeoutSignal: params.timeoutSignal,
         instructions: params.instructions,
-        cache: params.cache,
-        tools: params.tools,
-        ...(synthesizing || completedSteps + 1 === input.maxSteps
-          ? { toolChoice: 'none' as const }
-          : {}),
+        cache: params.cache && !withoutTools,
+        tools: withoutTools ? {} : params.tools,
+        ...(toolFree ? { toolChoice: 'none' as const } : {}),
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
         providerOptions,
-        history,
+        history: withoutTools ? toToolFreeTranscript(history) : history,
         ...(synthesizing
           ? { trailingMessage: { role: 'user', content: SYNTHESIS_REQUEST } }
           : {}),
