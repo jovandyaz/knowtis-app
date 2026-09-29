@@ -44,11 +44,7 @@ function toolResultParts(outputType: ToolOutputType): PersistedParts {
   };
 }
 
-function toolTurn(
-  toolName: string,
-  stopReason: MessageStopReason
-): NewConversationMessage[] {
-  const turnId = randomUUID();
+function toolStep(turnId: string, toolName: string): NewConversationMessage[] {
   return [
     {
       conversationId: CONVERSATION,
@@ -78,14 +74,28 @@ function toolTurn(
         ],
       },
     },
-    {
-      conversationId: CONVERSATION,
-      turnId,
-      role: 'assistant',
-      content: '',
-      stopReason,
-    },
   ];
+}
+
+function blankReply(
+  turnId: string,
+  stopReason: MessageStopReason
+): NewConversationMessage {
+  return {
+    conversationId: CONVERSATION,
+    turnId,
+    role: 'assistant',
+    content: '',
+    stopReason,
+  };
+}
+
+function toolTurn(
+  toolName: string,
+  stopReason: MessageStopReason
+): NewConversationMessage[] {
+  const turnId = randomUUID();
+  return [...toolStep(turnId, toolName), blankReply(turnId, stopReason)];
 }
 
 describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
@@ -284,5 +294,25 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
       ...toolTurn('getNote', 'completed'),
     ]);
     expect(delta).toEqual({ terminalTurns: 2, noAnswerTurns: 1 });
+  });
+
+  it('counts a blank approval follow-up under the proposal turn id as no-answer', async () => {
+    const turnId = randomUUID();
+    const delta = await deltaAfter([
+      ...toolStep(turnId, 'proposeCreateNote'),
+      blankReply(turnId, 'completed'),
+      blankReply(turnId, 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 2, noAnswerTurns: 1 });
+  });
+
+  it('does not let a proposal the model moved past answer a later blank reply', async () => {
+    const turnId = randomUUID();
+    const delta = await deltaAfter([
+      ...toolStep(turnId, 'proposeCreateNote'),
+      ...toolStep(turnId, 'getNote'),
+      blankReply(turnId, 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
   });
 });

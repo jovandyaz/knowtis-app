@@ -54,11 +54,17 @@ export class AgentHealthQueries {
               m.content ~ ${BLANK_CONTENT_PATTERN}
               AND NOT EXISTS (
                 SELECT 1
-                FROM conversation_messages t
-                CROSS JOIN LATERAL jsonb_array_elements(t.parts->'parts') AS part
-                WHERE t.conversation_id = m.conversation_id
-                  AND t.turn_id = m.turn_id
-                  AND t.role = 'tool'
+                FROM (
+                  SELECT p.role, p.parts
+                  FROM conversation_messages p
+                  WHERE p.conversation_id = m.conversation_id
+                    AND p.turn_id = m.turn_id
+                    AND p.seq < m.seq
+                  ORDER BY p.seq DESC
+                  LIMIT 1
+                ) prev
+                CROSS JOIN LATERAL jsonb_array_elements(prev.parts->'parts') AS part
+                WHERE prev.role = 'tool'
                   AND part->>'type' = 'tool-result'
                   AND part->>'toolName' = ANY(${PROPOSAL_TOOL_NAMES})
               )
