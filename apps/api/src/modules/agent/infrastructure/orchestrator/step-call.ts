@@ -147,7 +147,7 @@ export interface StepCallParams {
   readonly cache: boolean;
   readonly tools: ToolSet;
   readonly toolChoice?: 'none';
-  /** Ends the call as `leaked` once its text turns into raw tool-call markup, streaming only the text before it. */
+  /** Ends the call as `leaked` once its text turns into raw tool-call markup, streaming only the text and thinking before it. */
   readonly failOnToolMarkup: boolean;
   readonly telemetry: TelemetryOptions;
   readonly traceIdentity: TraceIdentityAttrs;
@@ -316,7 +316,7 @@ export async function* runStepCall(
       }
       switch (part.type) {
         case 'reasoning-delta':
-          if (part.text) {
+          if (part.text && !leaked) {
             yield { type: 'thinking', text: part.text };
           }
           break;

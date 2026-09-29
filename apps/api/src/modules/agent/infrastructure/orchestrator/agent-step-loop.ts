@@ -78,8 +78,10 @@ const SYNTHESIS_REQUEST_TOKENS = estimateMessageTokens({
 
 // Reasoning shares the output cap with the answer, which a synthesis may get
 // little of. Lowered, never turned off: Opus and Sonnet 5.5 reject disabled
-// thinking, and mandatory-reasoning OpenRouter models reject effort none.
-const TOOL_FREE_REASONING_EFFORT: ReasoningEffort = 'low';
+// thinking, and mandatory-reasoning OpenRouter models reject effort none. Only
+// on a call sent without its tools, which already misses the prompt cache; on
+// a native call a changed effort would cost the cached prefix too.
+export const TOOL_FREE_REASONING_EFFORT: ReasoningEffort = 'low';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -88,9 +90,11 @@ class AgentStallError extends Error {
   }
 }
 
+const TOOL_MARKUP_LEAK_REASON = 'reply leaked raw tool-call markup';
+
 class ToolMarkupLeakError extends Error {
   constructor() {
-    super('Reply leaked raw tool-call markup');
+    super(TOOL_MARKUP_LEAK_REASON);
     this.name = 'ToolMarkupLeakError';
   }
 }
@@ -231,7 +235,7 @@ export async function* runAgentStepLoop(
     };
     return {
       step: turnProviderOptions({ ...routing, reasoningEffort }),
-      toolFree: turnProviderOptions({
+      withoutTools: turnProviderOptions({
         ...routing,
         reasoningEffort:
           reasoningEffort === undefined
@@ -262,6 +266,7 @@ export async function* runAgentStepLoop(
   };
   let completedSteps = 0;
   let segmentEnd: SegmentEnd | null = null;
+  let synthesisInputTokens = 0;
   let synthesisMaxOutputTokens = params.budgets.maxOutputTokens;
 
   const failOverTo = async (nextModel: string, reason: string) => {
@@ -307,8 +312,8 @@ export async function* runAgentStepLoop(
         failOnToolMarkup: toolFree,
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
-        providerOptions: toolFree
-          ? providerOptions.toolFree
+        providerOptions: withoutTools
+          ? providerOptions.withoutTools
           : providerOptions.step,
         history: withoutTools ? toToolFreeTranscript(history) : history,
         ...(synthesizing
@@ -452,15 +457,37 @@ export async function* runAgentStepLoop(
           // Thinking already shown does not block a switch, as when the chain
           // falls through at the turn level: the client treats it as ephemeral.
           const nothingStreamed = result.health.textDeltas === 0;
-          const nextModel = eligibleForStepFailover(
-            nothingStreamed,
-            completedSteps,
-            byok,
-            failoverCandidates
-          )
-            ? failoverCandidates.shift()
-            : undefined;
+          // A drain cut short by a stall or a stream error reports no usage,
+          // so the leaked call counts as the most it could have spent.
+          const unreportedLeakTokens = result.usage
+            ? 0
+            : synthesisInputTokens +
+              SYNTHESIS_REQUEST_TOKENS +
+              synthesisMaxOutputTokens;
+          const rescueCap = synthesisOutputCap(
+            {
+              spentTurnTokens:
+                turnUsage.inputTokens +
+                turnUsage.outputTokens +
+                unreportedLeakTokens,
+              nextInputTokens: synthesisInputTokens,
+              synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
+              maxTurnTokens: params.budgets.maxTurnTokens,
+            },
+            params.budgets.maxOutputTokens
+          );
+          const nextModel =
+            rescueCap > 0 &&
+            eligibleForStepFailover(
+              nothingStreamed,
+              completedSteps,
+              byok,
+              failoverCandidates
+            )
+              ? failoverCandidates.shift()
+              : undefined;
           if (nextModel !== undefined) {
+            synthesisMaxOutputTokens = rescueCap;
             await failOverTo(nextModel, 'tool markup leak');
             failedOver = true;
             break stepAttempts;
@@ -475,7 +502,7 @@ export async function* runAgentStepLoop(
             throw new ToolMarkupLeakError();
           }
           yield errorEvent(
-            AIErrors.emptyCompletion(),
+            AIErrors.providerError(TOOL_MARKUP_LEAK_REASON),
             turnUsageEvent(turnUsage, currentModel)
           );
           return;
@@ -556,6 +583,7 @@ export async function* runAgentStepLoop(
               history.push(...stepMessages);
               if (end !== null) {
                 segmentEnd = end;
+                synthesisInputTokens = state.nextInputTokens;
                 synthesisMaxOutputTokens = cap;
                 logger.warn({
                   event: 'agent.turn.segment_closed',
