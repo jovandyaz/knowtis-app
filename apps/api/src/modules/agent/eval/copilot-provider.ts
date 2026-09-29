@@ -9,6 +9,7 @@ interface CopilotVars {
   readonly message: string;
   readonly fixtureSet: NoteFixtureSetName;
   readonly model?: string;
+  readonly maxSteps?: number;
 }
 
 export function createCopilotProvider(
@@ -18,6 +19,11 @@ export function createCopilotProvider(
   return createStructuredProvider<CopilotVars, EvalTranscript>(
     'knowtis-copilot',
     (vars) =>
-      harness.runCase(vars.message, vars.fixtureSet, vars.model ?? defaultModel)
+      harness.runCase(
+        vars.message,
+        vars.fixtureSet,
+        vars.model ?? defaultModel,
+        vars.maxSteps
+      )
   );
 }

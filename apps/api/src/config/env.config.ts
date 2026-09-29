@@ -88,6 +88,16 @@ const envSchemaBase = z.object({
   AI_AGENT_TTFT_MS: z.coerce.number().int().min(1000).default(30000),
   AI_AGENT_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).default(8192),
   AI_AGENT_TURN_TOKEN_BUDGET: z.coerce.number().int().min(1000).default(150000),
+  AI_AGENT_SYNTHESIS_RESERVE_TOKENS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .default(12000),
+  AI_AGENT_SYNTHESIS_RESERVE_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .default(30000),
   AI_AGENT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(400).default(120),
   AI_MEMORY_QUIET_SECONDS: z.coerce.number().int().min(10).default(180),
   AI_MEMORY_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
@@ -213,6 +223,40 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
         'AI_AGENT_TTFT_MS must be less than AI_AGENT_STALL_MS — a first-part budget at or above the stall budget never fires, disabling zero-output retry',
       path: ['AI_AGENT_TTFT_MS'],
       input: data.AI_AGENT_TTFT_MS,
+    });
+  }
+
+  if (
+    data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS >= data.AI_AGENT_TURN_TOKEN_BUDGET
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_SYNTHESIS_RESERVE_TOKENS must be less than AI_AGENT_TURN_TOKEN_BUDGET — a reserve at or above the budget leaves no tool step before the synthesis',
+      path: ['AI_AGENT_SYNTHESIS_RESERVE_TOKENS'],
+      input: data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS,
+    });
+  }
+
+  if (
+    data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS < data.AI_AGENT_MAX_OUTPUT_TOKENS
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_SYNTHESIS_RESERVE_TOKENS must be at least AI_AGENT_MAX_OUTPUT_TOKENS — a smaller reserve lets one tool step’s output pass the turn token budget',
+      path: ['AI_AGENT_SYNTHESIS_RESERVE_TOKENS'],
+      input: data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS,
+    });
+  }
+
+  if (data.AI_AGENT_SYNTHESIS_RESERVE_MS >= data.AI_AGENT_MAX_MS) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_SYNTHESIS_RESERVE_MS must be less than AI_AGENT_MAX_MS — a reserve at or above the segment clock starts the synthesis before any tool step',
+      path: ['AI_AGENT_SYNTHESIS_RESERVE_MS'],
+      input: data.AI_AGENT_SYNTHESIS_RESERVE_MS,
     });
   }
 

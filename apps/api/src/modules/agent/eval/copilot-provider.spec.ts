@@ -30,7 +30,8 @@ describe('createCopilotProvider', () => {
     expect(runCase).toHaveBeenCalledWith(
       'recent?',
       'recent',
-      'anthropic:default-model'
+      'anthropic:default-model',
+      undefined
     );
     expect(res).toEqual({ output: TRANSCRIPT });
   });
@@ -51,7 +52,25 @@ describe('createCopilotProvider', () => {
     expect(runCase).toHaveBeenCalledWith(
       'recent?',
       'recent',
-      'anthropic:override'
+      'anthropic:override',
+      undefined
+    );
+  });
+
+  it('passes a per-case step cap from vars to the harness', async () => {
+    const runCase = vi.fn(async () => TRANSCRIPT);
+    const harness = { runCase } as unknown as AgentEvalHarness;
+
+    const provider = createCopilotProvider(harness, 'anthropic:default-model');
+    await provider.callApi('ignored', {
+      vars: { message: 'recent?', fixtureSet: 'recent', maxSteps: 2 },
+    } as never);
+
+    expect(runCase).toHaveBeenCalledWith(
+      'recent?',
+      'recent',
+      'anthropic:default-model',
+      2
     );
   });
 

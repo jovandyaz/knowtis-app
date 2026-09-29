@@ -10,14 +10,18 @@ import {
 } from '../../../../test-support/database-errors';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
+import { estimateMessageTokens } from '../../domain/message-tokens';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
 import {
   TOOL_ERROR_CODES,
   ToolExecutionError,
 } from '../tools/tool-execution.error';
+import { SYNTHESIS_REQUEST } from './agent-step-loop';
 import type { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
+import { fromResponseMessages, type ResponseMessage } from './message-mapper';
+import { nextInputTokens } from './segment-close';
 
 const propagateSpy = vi.hoisted(() =>
   vi.fn((_attrs: Record<string, unknown>, fn: () => unknown): unknown => fn())
@@ -104,6 +108,8 @@ function makeConfig(
     AI_AGENT_MAX_MS: 120000,
     AI_AGENT_STALL_MS: STALL_MS,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 12000,
+    AI_AGENT_SYNTHESIS_RESERVE_MS: 30000,
     AI_MAX_RETRIES: 3,
     AI_COOLDOWN_ALLOWED_FAILS: 3,
     AI_COOLDOWN_SECONDS: 120,
@@ -2357,7 +2363,7 @@ describe('AiSdkAgentOrchestrator', () => {
     logSpy.mockRestore();
   });
 
-  const TOOL_CALL_MESSAGES = [
+  const TOOL_CALL_MESSAGES: ResponseMessage[] = [
     {
       role: 'assistant',
       content: [
@@ -2385,6 +2391,10 @@ describe('AiSdkAgentOrchestrator', () => {
     TOOL_CALL_MESSAGES[0],
     { ...TOOL_CALL_MESSAGES[1], providerOptions: ANTHROPIC_CACHE_BREAKPOINT },
   ];
+  const SYNTHESIS_REQUEST_MESSAGE = {
+    role: 'user',
+    content: SYNTHESIS_REQUEST,
+  };
 
   function toolCallStep(usage: { inputTokens: number; outputTokens: number }) {
     return (opts: {
@@ -2552,7 +2562,10 @@ describe('AiSdkAgentOrchestrator', () => {
       FALLBACK
     );
 
-    const consumed = collect(orchestrator.run({ ...baseInput, maxSteps: 2 }));
+    const maxTurnTokens = 3_000;
+    const consumed = collect(
+      orchestrator.run({ ...baseInput, maxSteps: 2, maxTurnTokens })
+    );
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
@@ -2561,6 +2574,15 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(
       streamTextMock.mock.calls.map(([options]) => options.toolChoice)
     ).toEqual([undefined, 'none', 'none', 'none']);
+    const spent = 10 + 5;
+    const synthesisCap =
+      maxTurnTokens -
+      spent -
+      nextInputTokens(10, 5, fromResponseMessages(TOOL_CALL_MESSAGES)) -
+      estimateMessageTokens({ role: 'user', content: SYNTHESIS_REQUEST });
+    expect(
+      streamTextMock.mock.calls.map(([options]) => options.maxOutputTokens)
+    ).toEqual([4096, synthesisCap, synthesisCap, synthesisCap]);
     const models = streamTextMock.mock.calls.map(
       (call) => (call[0].model as { modelId: string }).modelId
     );
@@ -2574,10 +2596,11 @@ describe('AiSdkAgentOrchestrator', () => {
     // result — never a partial and never a re-executed tool step.
     const failoverMessages = streamTextMock.mock.calls[3][0]
       .messages as unknown[];
-    expect(failoverMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 1);
+    expect(failoverMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 2);
     expect(failoverMessages).toEqual(
       expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
+    expect(failoverMessages.at(-1)).toEqual(SYNTHESIS_REQUEST_MESSAGE);
     expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
     expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
       false
@@ -3119,9 +3142,86 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(streamTextMock.mock.calls[1][0].messages).toEqual(
       expect.arrayContaining(CACHED_TOOL_CALL_MESSAGES)
     );
+    expect(streamTextMock.mock.calls[1][0].messages.at(-1)).toEqual(
+      SYNTHESIS_REQUEST_MESSAGE
+    );
     expect(events.at(-1)).toMatchObject({
       type: 'done',
-      stopReason: 'completed',
+      stopReason: 'max_steps',
+    });
+  });
+
+  it('logs the closed segment with its reason and the synthesis output cap', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(toolCallStep({ inputTokens: 5, outputTokens: 1 }))
+      .mockImplementationOnce(failoverAnswer());
+
+    await collect(makeOrchestrator().run({ ...baseInput, maxSteps: 2 }));
+
+    expect(warnSpy).toHaveBeenCalledWith({
+      event: 'agent.turn.segment_closed',
+      userId: 'u1',
+      model: MODEL,
+      reason: 'max_steps',
+      completedSteps: 1,
+      spentTurnTokens: 6,
+      maxOutputTokens: 4096,
+    });
+    expect(streamTextMock.mock.calls[1][0].maxOutputTokens).toBe(4096);
+    warnSpy.mockRestore();
+  });
+
+  it('keeps the segment reason when the synthesis spends its whole output cap', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(toolCallStep({ inputTokens: 5, outputTokens: 1 }))
+      .mockImplementationOnce(() => ({
+        stream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'lo que encontré…' };
+          yield { type: 'finish', finishReason: 'length' };
+        })(),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 4096 }),
+        response: Promise.resolve({ messages: [] }),
+      }));
+
+    const events = await collect(
+      makeOrchestrator().run({ ...baseInput, maxSteps: 2 })
+    );
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      stopReason: 'max_steps',
+    });
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'agent.turn.output_truncated' })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('fails with AI_EMPTY_COMPLETION when the synthesis truncates before any text', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(toolCallStep({ inputTokens: 5, outputTokens: 1 }))
+      .mockImplementationOnce(() => ({
+        stream: (async function* () {
+          yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
+          yield { type: 'finish', finishReason: 'length' };
+        })(),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 4096 }),
+        response: Promise.resolve({ messages: [] }),
+      }));
+
+    const events = await collect(
+      makeOrchestrator().run({ ...baseInput, maxSteps: 2 })
+    );
+
+    expect(streamTextMock.mock.calls[1][0].toolChoice).toBe('none');
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_EMPTY_COMPLETION' },
     });
   });
 
@@ -3248,8 +3348,10 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(streamTextMock).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: 'agent.turn.token_budget_reached',
+        event: 'agent.turn.synthesis_unaffordable',
+        reason: 'token_budget',
         spentTurnTokens: 5000,
+        nextInputTokens: 5000,
         maxTurnTokens: 5000,
       })
     );

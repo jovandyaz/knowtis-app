@@ -152,6 +152,7 @@ export const AGENT_STOP_REASON = {
   MAX_STEPS: 'max_steps',
   LENGTH: 'length',
   TOKEN_BUDGET: 'token_budget',
+  TIME_LIMIT: 'time_limit',
   CONTENT_FILTER: 'content_filter',
 } as const;
 export type AgentStopReason =

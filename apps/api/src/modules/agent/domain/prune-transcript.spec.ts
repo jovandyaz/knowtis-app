@@ -110,6 +110,7 @@ describe('pruneTranscript', () => {
   it.each([
     'max_steps',
     'token_budget',
+    'time_limit',
     'completed',
     'content_filter',
   ] as const)(

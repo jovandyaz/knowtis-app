@@ -124,6 +124,8 @@ function harness(failPrimary = false, toolStep = false) {
     AI_AGENT_MAX_MS: 10_000,
     AI_AGENT_MAX_OUTPUT_TOKENS: 256,
     AI_AGENT_STALL_MS: 5_000,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 1_000,
+    AI_AGENT_SYNTHESIS_RESERVE_MS: 1_000,
     AI_MAX_RETRIES: 0,
   });
   const { registry, chain } = createTestChain(config, FALLBACK);
@@ -169,7 +171,7 @@ describe('OpenRouter routing on the real AI SDK wire', () => {
       messages: [{ role: 'user', content: 'test' }],
       model: PRIMARY,
       maxSteps: 3,
-      maxTurnTokens: 1_000,
+      maxTurnTokens: 10_000,
       openrouterProviderOrder: await routing.getOpenRouterProviderOrder(),
       openrouterIgnoredProviders: await routing.getOpenRouterIgnoredProviders(),
     })) {

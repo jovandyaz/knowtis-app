@@ -469,6 +469,7 @@
       "stopReason": {
         "max_steps": "Se alcanzó el límite de pasos.",
         "token_budget": "Se alcanzó el presupuesto del turno.",
+        "time_limit": "Se acabó el tiempo de este turno.",
         "length": "La respuesta quedó incompleta.",
         "content_filter": "El proveedor limitó esta respuesta."
       },

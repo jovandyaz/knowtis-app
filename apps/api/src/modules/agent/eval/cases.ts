@@ -2,6 +2,7 @@ import type { Assertion } from 'promptfoo';
 
 import {
   assertAppendKeepsUnseenTail,
+  assertCappedTurnAnswers,
   assertCountToolSelection,
   assertEditPreservesRest,
   assertGrounding,
@@ -26,6 +27,7 @@ export interface CopilotEvalCase {
   readonly vars: {
     readonly message: string;
     readonly fixtureSet: NoteFixtureSetName;
+    readonly maxSteps?: number;
   };
   readonly assert: Assertion[];
 }
@@ -196,6 +198,22 @@ export const COPILOT_EVAL_CASES: CopilotEvalCase[] = [
         'The answer proposes adding the line at the end of the note and asks for ' +
           'confirmation. It must NOT claim the note was already changed, and must NOT ' +
           'say it rewrote, shortened, or dropped any part of the journal.'
+      ),
+    ],
+  },
+  {
+    description: 'checkpoint: a capped turn answers and states what is pending',
+    category: 'behavior',
+    vars: {
+      message:
+        'Read every one of my notes one by one and give me a detailed summary of each.',
+      fixtureSet: 'recent',
+      maxSteps: 3,
+    },
+    assert: [
+      js(assertCappedTurnAnswers),
+      rubric(
+        'The reply reports what it actually found so far (a list of which notes exist counts), does not claim the whole task is complete, and explicitly lists what is still pending; it is written in the language of the request and names no tool or function (such as getNote or searchNotes).'
       ),
     ],
   },

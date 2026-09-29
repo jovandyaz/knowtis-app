@@ -194,6 +194,63 @@ describe('env.config agent vars', () => {
     );
   });
 
+  it('rejects a synthesis token reserve at or above the turn token budget', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        AI_AGENT_TURN_TOKEN_BUDGET: '20000',
+        AI_AGENT_SYNTHESIS_RESERVE_TOKENS: '20000',
+      })
+    ).toThrow(
+      /AI_AGENT_SYNTHESIS_RESERVE_TOKENS must be less than AI_AGENT_TURN_TOKEN_BUDGET/
+    );
+  });
+
+  it('rejects a synthesis token reserve below the per-call output cap', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        AI_AGENT_MAX_OUTPUT_TOKENS: '16000',
+        AI_AGENT_SYNTHESIS_RESERVE_TOKENS: '12000',
+      })
+    ).toThrow(
+      /AI_AGENT_SYNTHESIS_RESERVE_TOKENS must be at least AI_AGENT_MAX_OUTPUT_TOKENS/
+    );
+  });
+
+  it('accepts a synthesis token reserve equal to the per-call output cap', () => {
+    const env = validateEnv({
+      ...baseEnv,
+      AI_AGENT_MAX_OUTPUT_TOKENS: '12000',
+      AI_AGENT_SYNTHESIS_RESERVE_TOKENS: '12000',
+    });
+    expect(env.AI_AGENT_SYNTHESIS_RESERVE_TOKENS).toBe(12000);
+  });
+
+  it('rejects a synthesis time reserve at or above the segment clock', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        AI_AGENT_MAX_MS: '60000',
+        AI_AGENT_SYNTHESIS_RESERVE_MS: '60000',
+      })
+    ).toThrow(
+      /AI_AGENT_SYNTHESIS_RESERVE_MS must be less than AI_AGENT_MAX_MS/
+    );
+  });
+
+  it('defaults the synthesis reserves', () => {
+    const env = validateEnv(baseEnv);
+    expect(env.AI_AGENT_SYNTHESIS_RESERVE_TOKENS).toBe(12000);
+    expect(env.AI_AGENT_SYNTHESIS_RESERVE_MS).toBe(30000);
+    expect(env.AI_AGENT_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(
+      env.AI_AGENT_SYNTHESIS_RESERVE_TOKENS
+    );
+    expect(env.AI_AGENT_SYNTHESIS_RESERVE_TOKENS).toBeLessThan(
+      env.AI_AGENT_TURN_TOKEN_BUDGET
+    );
+  });
+
   it('accepts a stall budget strictly below the ceiling', () => {
     const env = validateEnv({
       ...baseEnv,

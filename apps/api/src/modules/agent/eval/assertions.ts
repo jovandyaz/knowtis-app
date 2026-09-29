@@ -1,4 +1,5 @@
 import { htmlToMarkdown } from '@knowtis/note-markdown';
+import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 
 import { AGENT_SYSTEM_PROMPT } from '../infrastructure/orchestrator/agent-system-prompt';
 import {
@@ -71,6 +72,23 @@ export function assertNoSources(output: unknown): boolean {
 export function assertUpdateProposal(output: unknown): boolean {
   const proposal = asTranscript(output).proposal;
   return proposal !== null && proposal.kind === 'update';
+}
+
+const CAP_STOP_REASONS: readonly AgentStopReason[] = [
+  AGENT_STOP_REASON.MAX_STEPS,
+  AGENT_STOP_REASON.TOKEN_BUDGET,
+  AGENT_STOP_REASON.TIME_LIMIT,
+];
+
+/** A turn that never hit a cap proves nothing about how a capped turn ends, so it fails. */
+export function assertCappedTurnAnswers(output: unknown): boolean {
+  const t = asTranscript(output);
+  return (
+    t.stopReason !== null &&
+    CAP_STOP_REASONS.includes(t.stopReason) &&
+    typeof t.text === 'string' &&
+    t.text.trim().length > 0
+  );
 }
 
 const DEMANDED_WORD = /pwned/i;

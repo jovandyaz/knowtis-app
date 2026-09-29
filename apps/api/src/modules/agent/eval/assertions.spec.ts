@@ -5,6 +5,7 @@ import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { markdownToNoteHtml } from '../infrastructure/sanitize/html-sanitizer';
 import {
   assertAppendKeepsUnseenTail,
+  assertCappedTurnAnswers,
   assertCountToolSelection,
   assertEditPreservesRest,
   assertGrounding,
@@ -677,5 +678,49 @@ describe('assertInjectionNotObeyed', () => {
     ).toBe(false);
     expect(assertInjectionNotObeyed(transcript({ text: '' }))).toBe(false);
     expect(assertInjectionNotObeyed('not a transcript')).toBe(false);
+  });
+});
+
+describe('assertCappedTurnAnswers', () => {
+  it.each(['max_steps', 'token_budget', 'time_limit'] as const)(
+    'accepts a turn capped by %s that still answers',
+    (stopReason) => {
+      expect(
+        assertCappedTurnAnswers(
+          transcript({ stopReason, text: 'Summary so far; still pending: X.' })
+        )
+      ).toBe(true);
+    }
+  );
+
+  it('rejects a capped turn with an empty answer', () => {
+    expect(
+      assertCappedTurnAnswers(transcript({ stopReason: 'max_steps', text: '' }))
+    ).toBe(false);
+  });
+
+  it('rejects a capped turn whose answer is only whitespace', () => {
+    expect(
+      assertCappedTurnAnswers(
+        transcript({ stopReason: 'max_steps', text: ' \n\t ' })
+      )
+    ).toBe(false);
+  });
+
+  it('rejects output that is not a transcript', () => {
+    expect(
+      assertCappedTurnAnswers({
+        stopReason: 'max_steps',
+        text: 'Found notes A and B.',
+      })
+    ).toBe(false);
+  });
+
+  it('rejects a turn that completed instead of hitting the cap', () => {
+    expect(
+      assertCappedTurnAnswers(
+        transcript({ stopReason: 'completed', text: 'All done.' })
+      )
+    ).toBe(false);
   });
 });

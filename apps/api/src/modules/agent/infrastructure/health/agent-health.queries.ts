@@ -15,6 +15,7 @@ const TOOL_ERROR_OUTPUT_TYPES: readonly ToolOutputType[] = [
 const ANOMALOUS_STOP_REASONS: readonly MessageStopReason[] = [
   'max_steps',
   'token_budget',
+  'time_limit',
   'length',
   'content_filter',
   'error',

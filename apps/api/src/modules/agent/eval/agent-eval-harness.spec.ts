@@ -89,6 +89,8 @@ function setup() {
     AI_AGENT_STALL_MS: 5000,
     AI_AGENT_TTFT_MS: 1000,
     AI_AGENT_MAX_OUTPUT_TOKENS: 1024,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 1024,
+    AI_AGENT_SYNTHESIS_RESERVE_MS: 1000,
     AI_MAX_RETRIES: 0,
   });
   const { registry, chain } = createTestChain(config, '');
@@ -179,6 +181,47 @@ describe('production parity of an eval turn', () => {
       expect(effortFor).toHaveBeenCalledWith(MODEL);
     }
   );
+});
+
+describe('per-case step cap', () => {
+  function recordingHarness(inputs: AgentRunInput[]) {
+    const { chain } = setup();
+    const orchestrator: AgentOrchestrator = {
+      run: (input) => {
+        inputs.push(input);
+        return (async function* (): AsyncGenerator<AgentEvent> {
+          yield {
+            type: 'done',
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'completed',
+            usage: { model: MODEL, inputTokens: 1, outputTokens: 1 },
+          };
+        })();
+      },
+    };
+    return AgentEvalHarness.withCollaborators({
+      moduleRef: { close: async () => undefined },
+      orchestrator,
+      fallbackChain: chain,
+      catalog: createTestCatalog(),
+      retrieval: new RecordingFixtureRetrieval(),
+      turnSettings: NO_TURN_SETTINGS,
+      maxSteps: 8,
+      maxTurnTokens: 10_000,
+    });
+  }
+
+  it('overrides the configured step cap for that case only', async () => {
+    const inputs: AgentRunInput[] = [];
+    const harness = recordingHarness(inputs);
+
+    await harness.runCase('hello', 'empty', MODEL, 2);
+    await harness.runCase('hello', 'empty', MODEL);
+
+    expect(inputs.map((input) => input.maxSteps)).toStrictEqual([2, 8]);
+  });
 });
 
 describe('history replay through harness, real orchestrator and AI SDK', () => {
