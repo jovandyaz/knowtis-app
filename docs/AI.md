@@ -1375,7 +1375,7 @@ A continuation of a capped turn is sent as `agent:message` too, with `continuesT
 }
 ```
 
-Both forms are strict objects: a payload with a key outside its form, such as a `message` beside `continuesTurnId`, is refused with `VALIDATION_ERROR`.
+Both forms are strict objects: a payload with a key outside its form, such as a `message` beside `continuesTurnId`, is refused with `VALIDATION_ERROR`, and so is a `continuesTurnId` equal to the request's own `turnId`.
 
 The client sends every `agent:*` request with a socket.io acknowledgement (`ackTimeout: 10000`) and the gateway acknowledges on receipt, before validation. socket.io's default delivery is at most once: an event written to a transport that has already died is lost and never replayed after the reconnect, which used to leave the copilot in "Thinking…" until the 310 s inactivity backstop. A request that is never acknowledged now ends with `CONNECTION_FAILED` and the retry banner; the client never resends on its own, since a turn start is not idempotent and a copy replayed after a reconnect would run twice. The receipt only means "delivered"; the outcome still arrives as `agent:error` / `agent:done`.
 
