@@ -47,6 +47,8 @@ export interface TurnClaimRequest {
   readonly conversationId: string;
   readonly noteId?: string | undefined;
   readonly content: string;
+  /** The turn a continue request continues; absent on a message. */
+  readonly continuesTurnId?: string | undefined;
 }
 
 const storedClaimSchema = z.object({
@@ -138,6 +140,8 @@ function keyOf(request: TurnClaimRequest): string {
   return `${KEY_PREFIX}${request.userId}:${request.turnId}`;
 }
 
+// A message keeps the fingerprint it had before continue requests existed, so
+// a claim stored by the previous deploy still recognizes its resend.
 function fingerprintOf(request: TurnClaimRequest): string {
   return createHash('sha256')
     .update(
@@ -145,6 +149,7 @@ function fingerprintOf(request: TurnClaimRequest): string {
         request.conversationId,
         request.noteId ?? '',
         request.content,
+        ...(request.continuesTurnId ? [request.continuesTurnId] : []),
       ])
     )
     .digest('hex');

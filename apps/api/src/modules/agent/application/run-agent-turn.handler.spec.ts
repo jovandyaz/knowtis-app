@@ -13,6 +13,7 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
   type AgentStopReason,
   type AiQuota,
   type ByokProvider,
@@ -51,10 +52,12 @@ import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port'
 import type {
   ConversationMessageRow,
   ConversationRepository,
+  LastConversationMessage,
 } from '../domain/ports/conversation.repository';
 import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { ProposedMutation } from '../domain/proposed-mutation';
+import { CONTINUE_REQUEST } from '../domain/prune-transcript';
 import {
   projectReplayText,
   REPLAY_REDACTION_MARKER,
@@ -7009,4 +7012,375 @@ describe('RunAgentTurnHandler daily message quota', () => {
       );
     });
   });
+});
+
+describe('RunAgentTurnHandler continuing a capped turn', () => {
+  const CONTINUED = TURN_ID;
+  const CONTINUATION = SECOND_TURN_ID;
+  const RESETS_AT = '2026-09-29T00:00:00.000Z';
+  const RECEIPT: QuotaReceipt = {
+    turn: {
+      subjects: [USER],
+      turnId: CONTINUATION,
+      day: utcDayOf(new Date('2026-09-28T12:00:00.000Z')),
+    },
+    tier: 'free',
+    limit: 30,
+    store: QUOTA_STORES.REDIS,
+  };
+  const NOT_CONTINUABLE = {
+    code: AGENT_TURN_NOT_CONTINUABLE_CODE,
+    message: 'This turn cannot be continued',
+  };
+  const CAPPED_HISTORY = [
+    historyRow({ role: 'user', content: 'research X', turnId: CONTINUED }),
+    historyRow({
+      role: 'assistant',
+      content: 'Found A. Pending: B.',
+      turnId: CONTINUED,
+      stopReason: 'max_steps',
+    }),
+  ];
+  const CAPPED_LAST: LastConversationMessage = {
+    turnId: CONTINUED,
+    role: 'assistant',
+    stopReason: 'max_steps',
+  };
+  const request = {
+    userId: USER,
+    turnId: CONTINUATION,
+    conversationId: 'conv-1',
+    continuesTurnId: CONTINUED,
+  };
+
+  function doneWith(stopReason: AgentStopReason): AgentEvent[] {
+    return [
+      { type: 'chunk', text: 'Found B.' },
+      {
+        type: 'done',
+        usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+        stopReason,
+      },
+    ];
+  }
+
+  function consumedQuota(used = 2): MessageQuotaService {
+    return createMessageQuotaStub({
+      kind: 'consumed',
+      receipt: RECEIPT,
+      quota: {
+        tier: 'free',
+        messages: { used, limit: 30, resetsAt: RESETS_AT },
+      },
+    });
+  }
+
+  function setup(
+    over: {
+      last?: LastConversationMessage | null;
+      history?: ConversationMessageRow[];
+      quota?: MessageQuotaService;
+      events?: AgentEvent[];
+    } = {}
+  ) {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
+      events: over.events ?? doneWith('completed'),
+    });
+    const conversations = makeConversations(over.history ?? CAPPED_HISTORY);
+    Object.assign(conversations, {
+      findLastMessage: vi
+        .fn()
+        .mockResolvedValue(over.last === undefined ? CAPPED_LAST : over.last),
+    });
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const embed = makeEmbed();
+    const guard = makeGuard();
+    const quota = over.quota ?? consumedQuota();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      memory,
+      embed,
+      makeModelPreference(),
+      makeByok(),
+      guard,
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      quota
+    );
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+      onModelStart: vi.fn(),
+      onQuota: vi.fn(),
+    };
+    return {
+      handler,
+      callbacks,
+      conversations,
+      orchestrator,
+      quota,
+      guard,
+      embed,
+    };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function expectRefusedBeforeAnyWork(
+    ctx: ReturnType<typeof setup>,
+    error: { code: string; message: string }
+  ) {
+    expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(ctx.quota.consume).not.toHaveBeenCalled();
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+    expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+    expect(ctx.callbacks.onModelStart).not.toHaveBeenCalled();
+  }
+
+  it('refuses a turn that is no longer the newest one of the conversation', async () => {
+    const ctx = setup({ last: { ...CAPPED_LAST, turnId: 'other' } });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expectRefusedBeforeAnyWork(ctx, NOT_CONTINUABLE);
+  });
+
+  it.each([
+    ['completed', { ...CAPPED_LAST, stopReason: 'completed' }],
+    ['failed', { ...CAPPED_LAST, stopReason: 'error' }],
+    ['with no stop reason', { ...CAPPED_LAST, stopReason: null }],
+    [
+      'that ends on its user message',
+      { turnId: CONTINUED, role: 'user', stopReason: null },
+    ],
+    ['in an empty conversation', null],
+  ] as const)(
+    'refuses a turn %s, which stopped at no checkpoint',
+    async (_label, last) => {
+      const ctx = setup({ last });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expectRefusedBeforeAnyWork(ctx, NOT_CONTINUABLE);
+    }
+  );
+
+  it('refuses a conversation the caller does not own', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(
+      { ...request, conversationId: 'conv-unknown' },
+      ctx.callbacks
+    );
+
+    expectRefusedBeforeAnyWork(ctx, {
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'Conversation not found',
+    });
+  });
+
+  it('refuses effort on an anonymous continuation before any work', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(
+      { ...request, isAnonymous: true, effort: 'high' },
+      ctx.callbacks
+    );
+
+    expect(ctx.callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.VALIDATION_ERROR })
+    );
+    expect(ctx.quota.consume).not.toHaveBeenCalled();
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('draws a message for the continuation under its own turn id', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.quota.consume).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      CONTINUATION
+    );
+    expect(ctx.callbacks.onQuota).toHaveBeenCalledOnce();
+    expect(ctx.callbacks.onModelStart).toHaveBeenCalledOnce();
+  });
+
+  it('asks the model to continue after the capped synthesis, without guarding its own request', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    const [{ messages }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
+    expect(messages).toEqual([
+      { role: 'user', content: 'research X' },
+      { role: 'assistant', content: 'Found A. Pending: B.' },
+      { role: 'user', content: CONTINUE_REQUEST },
+    ]);
+    expect(ctx.guard.guard).not.toHaveBeenCalled();
+  });
+
+  it('stores the continuation as an empty continue marker under its own turn', async () => {
+    const ctx = setup();
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
+      conversationId: 'conv-1',
+      turnId: CONTINUATION,
+      messages: [
+        { role: 'user', content: '', kind: 'continue' },
+        {
+          role: 'assistant',
+          content: 'Found B.',
+          sources: [],
+          stopReason: 'completed',
+        },
+      ],
+    });
+  });
+
+  it.each([
+    ['capped again with messages left', 'token_budget', 2, true],
+    ['capped again on the last message', 'token_budget', 30, false],
+    ['completed', 'completed', 2, false],
+  ] as const)(
+    'reports a continuation %s as continuable: %s',
+    async (_label, stopReason, used, continuable) => {
+      const ctx = setup({
+        quota: consumedQuota(used),
+        events: doneWith(stopReason),
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stopReason,
+          continuable,
+          conversationId: 'conv-1',
+        })
+      );
+    }
+  );
+
+  it('retrieves memories for the last message the user wrote, not for a continue request', async () => {
+    const ctx = setup({
+      history: [
+        ...CAPPED_HISTORY,
+        historyRow({
+          role: 'user',
+          content: '',
+          turnId: 'earlier-continuation',
+          kind: 'continue',
+        }),
+        historyRow({
+          role: 'assistant',
+          content: 'Found B. Pending: C.',
+          turnId: 'earlier-continuation',
+          stopReason: 'max_steps',
+        }),
+      ],
+      last: { ...CAPPED_LAST, turnId: 'earlier-continuation' },
+    });
+
+    await ctx.handler.continueTurn(
+      { ...request, continuesTurnId: 'earlier-continuation' },
+      ctx.callbacks
+    );
+
+    expect(ctx.embed.embedQuery).toHaveBeenCalledExactlyOnceWith('research X');
+    expect(ctx.orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ userMemories: ['Is vegan'] })
+    );
+  });
+
+  it('retrieves memories for the last message the user wrote when a continuation resumes after a proposal', async () => {
+    const ctx = setup({
+      history: [
+        ...CAPPED_HISTORY,
+        historyRow({
+          role: 'user',
+          content: '',
+          turnId: CONTINUATION,
+          kind: 'continue',
+        }),
+        historyRow({
+          role: 'assistant',
+          content: 'Shall I save B?',
+          turnId: CONTINUATION,
+          stopReason: 'completed',
+        }),
+      ],
+    });
+
+    await ctx.handler.resumeTurn(
+      {
+        userId: USER,
+        turnId: CONTINUATION,
+        conversationId: 'conv-1',
+        resume: { outcome: 'created' },
+      },
+      ctx.callbacks
+    );
+
+    expect(ctx.embed.embedQuery).toHaveBeenCalledExactlyOnceWith('research X');
+  });
+
+  it('answers an exhausted caller with the quota error, not a refusal to continue', async () => {
+    const ctx = setup({
+      quota: createMessageQuotaStub({
+        kind: 'exhausted',
+        resetsAt: new Date(RESETS_AT),
+        upgrade: 'register',
+      }),
+    });
+
+    await ctx.handler.continueTurn(request, ctx.callbacks);
+
+    expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith({
+      code: 'AI_QUOTA_EXHAUSTED',
+      message: expect.any(String),
+      resetsAt: RESETS_AT,
+      upgrade: 'register',
+    });
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+    expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+  ] as const)(
+    'a %s abort before any text %s the message, as for any turn',
+    async (reason, _verb, refunds) => {
+      const controller = new AbortController();
+      const ctx = setup();
+      vi.mocked(ctx.orchestrator.run).mockImplementation(async function* () {
+        controller.abort(reason);
+        yield {
+          type: 'aborted',
+          usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
+        };
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks, controller.signal);
+
+      expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+    }
+  );
 });

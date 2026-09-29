@@ -1688,6 +1688,171 @@ describe('AgentGateway', () => {
         expect(claimOf(redis)).toMatchObject({ status: 'settled' });
       });
     });
+
+    describe('a continue request', () => {
+      const CONTINUED = '88888888-8888-4888-8888-888888888888';
+      const NOTE = '99999999-9999-4999-8999-999999999999';
+      const continueRequest = (over: Record<string, unknown> = {}) => ({
+        turnId: TURN,
+        conversationId: CONVERSATION,
+        continuesTurnId: CONTINUED,
+        ...over,
+      });
+
+      it('runs a continuation of the named turn instead of a message', async () => {
+        const execute = vi.fn();
+        const continueTurn = vi.fn<Execute>(completes);
+        const gateway = makeGateway({
+          handler: { execute, continueTurn } as never,
+        });
+        const client = makeClient('u1');
+        Object.assign(client.data, { isAnonymous: true, clientIp: '10.0.0.1' });
+
+        await gateway.handleMessage(
+          client as never,
+          continueRequest({ noteId: NOTE, model: 'm', effort: 'high' })
+        );
+
+        expect(execute).not.toHaveBeenCalled();
+        expect(continueTurn).toHaveBeenCalledOnce();
+        expect(continueTurn.mock.calls[0][0]).toEqual({
+          userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
+          continuesTurnId: CONTINUED,
+          isAnonymous: true,
+          clientIp: '10.0.0.1',
+          noteId: NOTE,
+          model: 'm',
+          effort: 'high',
+        });
+        expect(client.emit).toHaveBeenCalledWith(
+          'agent:done',
+          expect.objectContaining({ turnId: TURN })
+        );
+      });
+
+      it('streams the proposal and quota of the continuation under its own turn id', async () => {
+        const proposal = ProposedMutation.create({
+          id: '77777777-7777-4777-8777-777777777777',
+          kind: 'create',
+          payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+          summary: 'Create GTD',
+        })._unsafeUnwrap();
+        const continueTurn = vi.fn<Execute>(async (_input, cb) => {
+          cb.onQuota?.({
+            tier: 'free',
+            messages: { used: 2, limit: 30, resetsAt: '2026-09-29T00:00:00Z' },
+          });
+          cb.onModelStart?.();
+          cb.onProposal(proposal);
+        });
+        const redis = createInMemoryClaimRedis();
+        const gateway = makeGateway({
+          handler: { continueTurn } as never,
+          redis,
+        });
+        const client = makeClient('u1');
+
+        await gateway.handleMessage(client as never, continueRequest());
+
+        expect(client.emit).toHaveBeenCalledWith(
+          'agent:quota',
+          expect.objectContaining({ turnId: TURN })
+        );
+        expect(client.emit).toHaveBeenCalledWith(
+          'agent:proposal',
+          expect.objectContaining({ turnId: TURN, id: proposal.id })
+        );
+        expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+      });
+
+      it('answers a resend of a settled continuation with agent:turn_settled and never runs it twice', async () => {
+        const continueTurn = vi.fn<Execute>(completes);
+        const gateway = makeGateway({ handler: { continueTurn } as never });
+        await gateway.handleMessage(
+          makeClient('u1') as never,
+          continueRequest()
+        );
+        const resent = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(resent as never, continueRequest());
+
+        expect(resent.emit.mock.calls).toEqual([
+          [
+            'agent:turn_settled',
+            { turnId: TURN, conversationId: CONVERSATION },
+          ],
+        ]);
+        expect(continueTurn).toHaveBeenCalledOnce();
+      });
+
+      it('refuses its turn id once a message ran under it', async () => {
+        const execute = vi.fn<Execute>(completes);
+        const continueTurn = vi.fn<Execute>(completes);
+        const gateway = makeGateway({
+          handler: { execute, continueTurn } as never,
+        });
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+        const client = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(client as never, continueRequest());
+
+        expect(turnErrors(client)).toEqual([
+          expect.objectContaining({ code: 'TURN_ID_REUSED', turnId: TURN }),
+        ]);
+        expect(continueTurn).not.toHaveBeenCalled();
+      });
+
+      it('still routes a plain message to execute', async () => {
+        const execute = vi.fn<Execute>(completes);
+        const continueTurn = vi.fn();
+        const gateway = makeGateway({
+          handler: { execute, continueTurn } as never,
+        });
+
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+
+        expect(execute).toHaveBeenCalledOnce();
+        expect(continueTurn).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['without a conversation', { conversationId: undefined }],
+        ['without a turn id', { turnId: undefined }],
+        ['with a message', { message: { content: 'hi' } }],
+        [
+          'with a continued turn id that is not a uuid',
+          { continuesTurnId: 'x' },
+        ],
+      ])('is refused as invalid %s', async (_label, over) => {
+        const execute = vi.fn();
+        const continueTurn = vi.fn();
+        const gateway = makeGateway({ handler: { execute, continueTurn } });
+        const client = makeClient('u1');
+
+        await gateway.handleMessage(client as never, continueRequest(over));
+
+        expect(turnErrors(client)).toEqual([
+          expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+        ]);
+        expect(execute).not.toHaveBeenCalled();
+        expect(continueTurn).not.toHaveBeenCalled();
+      });
+
+      it('refuses a message carrying a field the protocol does not define', async () => {
+        const execute = vi.fn();
+        const gateway = makeGateway({ handler: { execute } });
+        const client = makeClient('u1');
+
+        await gateway.handleMessage(client as never, turn({ history: [] }));
+
+        expect(turnErrors(client)).toEqual([
+          expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+        ]);
+        expect(execute).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('a socket whose token expires', () => {

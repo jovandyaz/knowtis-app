@@ -58,14 +58,31 @@ import {
  * `agent:error`. */
 type DeliveryAck = () => void;
 
-const agentTurnSchema = z.object({
-  turnId: z.uuid().optional(),
-  conversationId: z.string().uuid().optional(),
-  message: z.object({ content: z.string().min(1).max(20000) }),
+const turnFields = {
   noteId: z.string().uuid().optional(),
   model: z.string().trim().min(1).max(MODEL_ID_MAX_LENGTH).optional(),
   effort: z.enum(REASONING_EFFORTS).optional(),
+};
+
+// Strict, so a continue request that also carries a message is refused
+// instead of running as that message with continuesTurnId stripped.
+const agentMessageSchema = z.strictObject({
+  turnId: z.uuid().optional(),
+  conversationId: z.string().uuid().optional(),
+  message: z.object({ content: z.string().min(1).max(20000) }),
+  ...turnFields,
 });
+
+const agentContinueSchema = z.strictObject({
+  turnId: z.uuid(),
+  conversationId: z.string().uuid(),
+  continuesTurnId: z.uuid(),
+  ...turnFields,
+});
+
+const agentTurnSchema = z.union([agentMessageSchema, agentContinueSchema]);
+
+type AgentTurnPayload = z.infer<typeof agentTurnSchema>;
 
 const agentApprovePayloadSchema = z.object({
   proposalId: z.string().uuid(),
@@ -80,6 +97,34 @@ const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
 const TURN_LEG = { MESSAGE: 'message', RESUME: 'resume' } as const;
 
 type TurnLeg = (typeof TURN_LEG)[keyof typeof TURN_LEG];
+
+function turnClaimOf(
+  userId: string,
+  turnId: string,
+  data: AgentTurnPayload
+): TurnClaimRequest | undefined {
+  if (!data.turnId) {
+    return undefined;
+  }
+  if ('continuesTurnId' in data) {
+    return {
+      userId,
+      turnId,
+      conversationId: data.conversationId,
+      noteId: data.noteId,
+      content: '',
+      continuesTurnId: data.continuesTurnId,
+    };
+  }
+  return {
+    userId,
+    turnId,
+    conversationId:
+      data.conversationId ?? conversationIdForTurn(userId, turnId),
+    noteId: data.noteId,
+    content: data.message.content,
+  };
+}
 
 @WebSocketGateway({ namespace: '/agent' })
 export class AgentGateway
@@ -245,16 +290,6 @@ export class AgentGateway
 
     const data = parsed.data;
     const turnId = data.turnId ?? randomUUID();
-    const claim: TurnClaimRequest | undefined = data.turnId
-      ? {
-          userId,
-          turnId,
-          conversationId:
-            data.conversationId ?? conversationIdForTurn(userId, turnId),
-          noteId: data.noteId,
-          content: data.message.content,
-        }
-      : undefined;
     const onProposal: RunAgentTurnCallbacks['onProposal'] = (proposal) =>
       client.emit('agent:proposal', {
         turnId,
@@ -264,6 +299,15 @@ export class AgentGateway
         summary: proposal.summary,
         payload: proposal.payload,
       });
+    const turn = {
+      userId,
+      turnId,
+      ...(client.data.isAnonymous && { isAnonymous: true }),
+      ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
+      ...(data.noteId && { noteId: data.noteId }),
+      ...(data.model && { model: data.model }),
+      ...(data.effort && { effort: data.effort }),
+    };
 
     await this.runInTurnSlot(
       client,
@@ -271,31 +315,38 @@ export class AgentGateway
       turnId,
       TURN_LEG.MESSAGE,
       (controller) =>
-        this.withTurnClaim(client, claim, (onModelStart) =>
-          this.runAgentTurn.execute(
-            {
-              userId,
-              turnId,
-              message: { content: data.message.content },
-              ...(data.conversationId && {
-                conversationId: data.conversationId,
-              }),
-              ...(client.data.isAnonymous && { isAnonymous: true }),
-              ...(client.data.clientIp
-                ? { clientIp: client.data.clientIp }
-                : {}),
-              ...(data.noteId && { noteId: data.noteId }),
-              ...(data.model && { model: data.model }),
-              ...(data.effort && { effort: data.effort }),
-            },
-            {
+        this.withTurnClaim(
+          client,
+          turnClaimOf(userId, turnId, data),
+          (onModelStart) => {
+            const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
               onProposal,
               onModelStart,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
-            },
-            controller.signal
-          )
+            };
+            return 'continuesTurnId' in data
+              ? this.runAgentTurn.continueTurn(
+                  {
+                    ...turn,
+                    conversationId: data.conversationId,
+                    continuesTurnId: data.continuesTurnId,
+                  },
+                  callbacks,
+                  controller.signal
+                )
+              : this.runAgentTurn.execute(
+                  {
+                    ...turn,
+                    message: { content: data.message.content },
+                    ...(data.conversationId && {
+                      conversationId: data.conversationId,
+                    }),
+                  },
+                  callbacks,
+                  controller.signal
+                );
+          }
         )
     );
   }

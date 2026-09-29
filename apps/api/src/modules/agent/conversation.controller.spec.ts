@@ -96,6 +96,7 @@ describe('ConversationController over HTTP', () => {
   };
   const tierResolver = { resolve: vi.fn() };
   const quota = { snapshot: vi.fn() };
+  let caller: { id: string; isAnonymous?: boolean };
 
   async function call(
     method: string,
@@ -117,6 +118,7 @@ describe('ConversationController over HTTP', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    caller = { id: USER_ID };
     const moduleRef = await Test.createTestingModule({
       controllers: [ConversationController],
       providers: [
@@ -129,8 +131,8 @@ describe('ConversationController over HTTP', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          context.switchToHttp().getRequest<{ user?: { id: string } }>().user =
-            { id: USER_ID };
+          context.switchToHttp().getRequest<{ user?: typeof caller }>().user =
+            caller;
           return true;
         },
       })
@@ -244,6 +246,25 @@ describe('ConversationController over HTTP', () => {
         clientIp: CLIENT_IP,
       });
       expect(quota.snapshot).toHaveBeenCalledWith(execution);
+    });
+
+    it('resolves the tier of an anonymous caller as anonymous', async () => {
+      caller = { id: USER_ID, isAnonymous: true };
+      repo.loadTranscriptForUser.mockResolvedValue(
+        transcriptOf([ASK, reply({})])
+      );
+      tierResolver.resolve.mockResolvedValue(
+        createExecutionContext({ userId: USER_ID, tier: 'anonymous' })
+      );
+      quota.snapshot.mockResolvedValue(freeQuota(1));
+
+      await call('GET', transcriptPath, undefined, { 'x-real-ip': CLIENT_IP });
+
+      expect(tierResolver.resolve).toHaveBeenCalledWith({
+        userId: USER_ID,
+        isAnonymous: true,
+        clientIp: CLIENT_IP,
+      });
     });
 
     it('is null when the caller has no messages left today', async () => {

@@ -16,6 +16,10 @@ const ONE_DAY_SECONDS = 86_400;
 const AGENT_MAX_MS = 300_000;
 const RUNNING_LEASE_SECONDS = 360;
 const STALLED_CLAIM_BOUND_MS = 3_000;
+const CONTINUED_TURN = '55555555-5555-4555-8555-555555555555';
+const OTHER_CONTINUED_TURN = '66666666-6666-4666-8666-666666666666';
+const REQUEST_FINGERPRINT =
+  '4319723b66719cd60cefe583fc9e98a4196784c898fc196afd823e87c9a244c8';
 
 const REQUEST: TurnClaimRequest = {
   userId: USER,
@@ -129,6 +133,54 @@ describe('TurnClaimService', () => {
     await claims.claim(noteInText);
 
     expect(await claims.claim(noteAsField)).toBe('reused');
+  });
+
+  it('keeps the fingerprint of a message turn, so its resend across a deploy is the same turn', async () => {
+    const { redis, claims } = setup();
+
+    await claims.claim(REQUEST);
+
+    expect(stored(redis).value).toEqual({
+      status: 'running',
+      fingerprint: REQUEST_FINGERPRINT,
+    });
+  });
+
+  describe('a continue request', () => {
+    const CONTINUE: TurnClaimRequest = {
+      userId: USER,
+      turnId: TURN,
+      conversationId: CONVERSATION,
+      content: '',
+      continuesTurnId: CONTINUED_TURN,
+    };
+
+    it('is the same turn when resent', async () => {
+      const { claims } = setup();
+      await claims.claim(CONTINUE);
+      await claims.settle(CONTINUE);
+
+      expect(await claims.claim(CONTINUE)).toBe('settled');
+    });
+
+    it('is another request when it continues another turn', async () => {
+      const { claims } = setup();
+      await claims.claim(CONTINUE);
+
+      expect(
+        await claims.claim({
+          ...CONTINUE,
+          continuesTurnId: OTHER_CONTINUED_TURN,
+        })
+      ).toBe('reused');
+    });
+
+    it('is another request than a message under the same turn id', async () => {
+      const { claims } = setup();
+      await claims.claim({ ...CONTINUE, continuesTurnId: undefined });
+
+      expect(await claims.claim(CONTINUE)).toBe('reused');
+    });
   });
 
   it('frees a released turn for its next delivery', async () => {

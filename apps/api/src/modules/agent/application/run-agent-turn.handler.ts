@@ -12,8 +12,10 @@ import {
 import {
   AGENT_STOP_REASON,
   deriveConversationTitle,
+  MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
+  type MessageKind,
   type MessageStopReason,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
@@ -90,6 +92,7 @@ import {
 } from '../domain/ports/pending-mutation.store';
 import type { ProposedMutation } from '../domain/proposed-mutation';
 import {
+  CONTINUE_REQUEST,
   fitHistoryToBudget,
   pruneTranscript,
 } from '../domain/prune-transcript';
@@ -118,6 +121,19 @@ interface RunAgentTurnInput {
   readonly effort?: ReasoningEffort;
 }
 
+interface ContinueTurnInput {
+  readonly userId: string;
+  readonly turnId: string;
+  readonly conversationId: string;
+  /** The capped turn this one continues; it must be the conversation's newest. */
+  readonly continuesTurnId: string;
+  readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
+  readonly noteId?: string;
+  readonly model?: string;
+  readonly effort?: ReasoningEffort;
+}
+
 type TurnInput = Omit<
   RunAgentTurnInput,
   'userId' | 'isAnonymous' | 'clientIp'
@@ -125,6 +141,8 @@ type TurnInput = Omit<
   readonly execution: AiExecutionContext;
   /** The text long-term memory is retrieved for; absent when there is none. */
   readonly memoryQuery?: string;
+  /** The turn's user message is the server's own CONTINUE_REQUEST, which the injection guard skips. */
+  readonly continuation?: boolean;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -166,6 +184,7 @@ interface PersistenceContext {
   readonly conversationId: string;
   readonly turnId: string;
   readonly userContent?: string;
+  readonly userKind?: MessageKind;
 }
 
 interface TurnLoopPolicy {
@@ -213,6 +232,28 @@ function detectionRows(
     redactedSpans,
     role: messages[index].role,
   }));
+}
+
+// A continuation's user message is our own CONTINUE_REQUEST, so memory
+// retrieval embeds the last message the user actually wrote.
+function lastWrittenUserMessage(
+  history: readonly AgentMessage[]
+): string | undefined {
+  return history.findLast(
+    (m) => m.role === 'user' && m.content !== CONTINUE_REQUEST
+  )?.content;
+}
+
+function freshUserMessageOf(
+  input: TurnInput,
+  resume: { outcome: string } | undefined
+): AgentMessage | undefined {
+  if (input.continuation) {
+    return { role: 'user', content: CONTINUE_REQUEST };
+  }
+  return resume === undefined && input.message
+    ? { role: 'user', content: input.message.content }
+    : undefined;
 }
 
 function messageTooLongError() {
@@ -470,6 +511,7 @@ export class RunAgentTurnHandler {
   ): Promise<void> {
     const messages = buildTurnRows({
       userContent: persistence.userContent,
+      ...(persistence.userKind ? { userKind: persistence.userKind } : {}),
       turnMessages,
       assistantText,
       sources,
@@ -566,7 +608,7 @@ export class RunAgentTurnHandler {
     );
     // A resume carries a tool-confirmation outcome, not the user's words, so
     // memory retrieval embeds the last real user message instead.
-    const memoryQuery = history.findLast((m) => m.role === 'user')?.content;
+    const memoryQuery = lastWrittenUserMessage(history);
     const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
@@ -586,6 +628,74 @@ export class RunAgentTurnHandler {
       signal,
       this.resumePolicy(callbacks),
       { conversationId: input.conversationId, turnId: input.turnId }
+    );
+  }
+
+  /** Runs a new turn that picks up where a capped one stopped; it draws a message, streams and persists like any turn. */
+  async continueTurn(
+    input: ContinueTurnInput,
+    callbacks: RunAgentTurnCallbacks,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const execution = await this.resolveExecution(input, callbacks);
+    if (!execution) {
+      return;
+    }
+    if (input.effort && !execution.policy.effortSelectable) {
+      callbacks.onError(
+        AIErrors.validationError('effort is not available on anonymous turns')
+      );
+      return;
+    }
+    const found = await this.conversations.findByIdForUser(
+      input.conversationId,
+      input.userId
+    );
+    if (!found) {
+      callbacks.onError(AgentErrors.conversationNotFound());
+      return;
+    }
+    const last = await this.conversations.findLastMessage(
+      input.conversationId,
+      input.userId
+    );
+    if (
+      last?.role !== 'assistant' ||
+      last.turnId !== input.continuesTurnId ||
+      !isContinuableStop(last.stopReason)
+    ) {
+      callbacks.onError(AgentErrors.turnNotContinuable());
+      return;
+    }
+    const { history, knownNotes } = await this.loadConversationContext(
+      input.conversationId,
+      input.userId
+    );
+    const memoryQuery = lastWrittenUserMessage(history);
+    const persistence: PersistenceContext = {
+      conversationId: input.conversationId,
+      turnId: input.turnId,
+      userContent: '',
+      userKind: MESSAGE_KIND.CONTINUE,
+    };
+    return this.runLoop(
+      {
+        turnId: input.turnId,
+        messages: history,
+        execution,
+        continuation: true,
+        knownNotes,
+        conversationModel: found.model,
+        ...(memoryQuery ? { memoryQuery } : {}),
+        ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+      },
+      undefined,
+      callbacks,
+      signal,
+      this.executePolicy(callbacks, persistence),
+      persistence
     );
   }
 
@@ -658,10 +768,7 @@ export class RunAgentTurnHandler {
       }
     }
 
-    const freshUserMessage: AgentMessage | undefined =
-      resume === undefined && input.message
-        ? { role: 'user', content: input.message.content }
-        : undefined;
+    const freshUserMessage = freshUserMessageOf(input, resume);
     if (
       freshUserMessage &&
       freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS
@@ -999,7 +1106,7 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
   ): Promise<PreparedTurn> {
     const { userId } = execution.subject;
-    if (freshUserMessage) {
+    if (freshUserMessage && !input.continuation) {
       const verdict = await this.injectionGuard.guard(
         freshUserMessage.content,
         execution

@@ -4,6 +4,9 @@ export const CONVERSATION_TITLE_MAX = 120;
 
 export const AGENT_CONVERSATION_NOT_FOUND_CODE = 'AGENT_CONVERSATION_NOT_FOUND';
 
+/** `agent:error` code for a continue request whose turn is not the conversation's newest, or stopped at no checkpoint. */
+export const AGENT_TURN_NOT_CONTINUABLE_CODE = 'AGENT_TURN_NOT_CONTINUABLE';
+
 /**
  * `agent:error` codes for a turn id that cannot run now. A resend of the same turn
  * clears `TURN_IN_PROGRESS` and `TURN_CLAIM_UNAVAILABLE`; `TURN_ID_REUSED` never clears.
