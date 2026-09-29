@@ -13,7 +13,11 @@ import {
   providerOf,
   type ProviderCooldown,
 } from '@knowtis/ai-gateway';
-import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
+import {
+  AGENT_STOP_REASON,
+  type AgentStopReason,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
@@ -71,6 +75,11 @@ const SYNTHESIS_REQUEST_TOKENS = estimateMessageTokens({
   role: 'user',
   content: SYNTHESIS_REQUEST,
 });
+
+// Reasoning shares the output cap with the answer, which a synthesis may get
+// little of. Lowered, never turned off: Opus and Sonnet 5.5 reject disabled
+// thinking, and mandatory-reasoning OpenRouter models reject effort none.
+const TOOL_FREE_REASONING_EFFORT: ReasoningEffort = 'low';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -213,13 +222,24 @@ export async function* runAgentStepLoop(
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
 
-  const optionsFor = async (model: string) =>
-    turnProviderOptions({
+  const optionsFor = async (model: string) => {
+    const reasoningEffort = await input.effortFor?.(model);
+    const routing = {
       model,
-      reasoningEffort: await input.effortFor?.(model),
       providerOrder: input.openrouterProviderOrder,
       ignoredProviders: input.openrouterIgnoredProviders,
-    });
+    };
+    return {
+      step: turnProviderOptions({ ...routing, reasoningEffort }),
+      toolFree: turnProviderOptions({
+        ...routing,
+        reasoningEffort:
+          reasoningEffort === undefined
+            ? undefined
+            : TOOL_FREE_REASONING_EFFORT,
+      }),
+    };
+  };
 
   let currentModel = params.model;
   let providerOptions = await optionsFor(currentModel);
@@ -287,7 +307,9 @@ export async function* runAgentStepLoop(
         failOnToolMarkup: toolFree,
         telemetry: params.telemetry,
         traceIdentity: params.traceIdentity,
-        providerOptions,
+        providerOptions: toolFree
+          ? providerOptions.toolFree
+          : providerOptions.step,
         history: withoutTools ? toToolFreeTranscript(history) : history,
         ...(synthesizing
           ? { trailingMessage: { role: 'user', content: SYNTHESIS_REQUEST } }
