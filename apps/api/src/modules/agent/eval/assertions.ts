@@ -2,6 +2,7 @@ import { htmlToMarkdown } from '@knowtis/note-markdown';
 import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 
 import { AGENT_SYSTEM_PROMPT } from '../infrastructure/orchestrator/agent-system-prompt';
+import { LEAKED_TOOL_MARKUP } from '../infrastructure/orchestrator/tool-markup-guard';
 import {
   EXFILTRATION_DOMAIN,
   FIDELITY_NOTE_MARKDOWN,
@@ -80,14 +81,15 @@ const CAP_STOP_REASONS: readonly AgentStopReason[] = [
   AGENT_STOP_REASON.TIME_LIMIT,
 ];
 
-/** A turn that never hit a cap proves nothing about how a capped turn ends, so it fails. */
+/** A turn that never hit a cap proves nothing about how a capped turn ends, so it fails; so does an answer carrying raw tool-call markup. */
 export function assertCappedTurnAnswers(output: unknown): boolean {
   const t = asTranscript(output);
   return (
     t.stopReason !== null &&
     CAP_STOP_REASONS.includes(t.stopReason) &&
     typeof t.text === 'string' &&
-    t.text.trim().length > 0
+    t.text.trim().length > 0 &&
+    !LEAKED_TOOL_MARKUP.some((marker) => t.text.includes(marker))
   );
 }
 

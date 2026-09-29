@@ -693,6 +693,17 @@ describe('assertCappedTurnAnswers', () => {
     }
   );
 
+  it('rejects a capped turn whose answer leaks tool-call markup', () => {
+    expect(
+      assertCappedTurnAnswers(
+        transcript({
+          stopReason: 'max_steps',
+          text: 'Found A.\n\n<｜DSML｜function_calls>',
+        })
+      )
+    ).toBe(false);
+  });
+
   it('rejects a capped turn with an empty answer', () => {
     expect(
       assertCappedTurnAnswers(transcript({ stopReason: 'max_steps', text: '' }))
