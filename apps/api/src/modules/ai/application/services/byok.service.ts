@@ -34,6 +34,18 @@ import { ProviderRegistryFactory } from '../../infrastructure/providers/provider
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
 
+export const BYOK_KEY_LOOKUP = {
+  FOUND: 'found',
+  MISSING: 'missing',
+  UNDECRYPTABLE: 'undecryptable',
+} as const;
+
+/** A caller's stored key for one provider: decrypted, absent, or stored but no longer decryptable under the master key. */
+export type ByokKeyLookup =
+  | { readonly kind: typeof BYOK_KEY_LOOKUP.FOUND; readonly apiKey: string }
+  | { readonly kind: typeof BYOK_KEY_LOOKUP.MISSING }
+  | { readonly kind: typeof BYOK_KEY_LOOKUP.UNDECRYPTABLE };
+
 @Injectable()
 export class ByokService {
   private readonly logger = new Logger(ByokService.name);
@@ -64,19 +76,22 @@ export class ByokService {
     return new Set(await this.repo.getEnabledProviders(userId));
   }
 
-  async getApiKey(
+  async resolveKey(
     userId: string,
     provider: ByokProvider
-  ): Promise<string | null> {
+  ): Promise<ByokKeyLookup> {
     if (!this.masterKey) {
-      return null;
+      return { kind: BYOK_KEY_LOOKUP.MISSING };
     }
     const stored = await this.repo.getEncrypted(userId, provider);
     if (!stored) {
-      return null;
+      return { kind: BYOK_KEY_LOOKUP.MISSING };
     }
     try {
-      return decryptSecret(stored, this.masterKey);
+      return {
+        kind: BYOK_KEY_LOOKUP.FOUND,
+        apiKey: decryptSecret(stored, this.masterKey),
+      };
     } catch (error) {
       this.logger.error({
         event: 'byok.decrypt_failed',
@@ -84,7 +99,7 @@ export class ByokService {
         provider,
         error: reasonOf(error),
       });
-      return null;
+      return { kind: BYOK_KEY_LOOKUP.UNDECRYPTABLE };
     }
   }
 

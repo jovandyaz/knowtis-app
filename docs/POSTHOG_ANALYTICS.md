@@ -57,6 +57,7 @@ environment variable. Local runs report `0.1.0`.
 | `ai quota exhausted`         | API on a caller's first turn refused for a spent quota each UTC day                      | `source=api`, `tier`                                                                                                                                             |
 | `ai turn checkpoint reached` | API on a copilot turn's `done` with a continuable `stop_reason`, a resumed turn included | `source=api`, `tier`, `stop_reason` (`max_steps`, `token_budget`, or `time_limit`), `segment_index` (`0` for a message's own turn, `n` for its nth continuation) |
 | `ai turn continued`          | API once per continuation, when its model call starts                                    | `source=api`, `tier`, `segment_index`                                                                                                                            |
+| `byok key failed`            | API when a BYOK turn's key is refused by the provider or no longer decrypts              | `source=api`, `provider`, `kind` (`auth`, `credit`, `permission`)                                                                                                |
 
 Browser anonymous creation is deliberately browser-authoritative so it retains
 the browser distinct ID and joins the pre-signup funnel. Registered API events
@@ -161,7 +162,8 @@ WHERE timestamp >= now() - INTERVAL 24 HOUR
   AND event IN ('user signed up', 'email verified', 'note created',
     'note activated', 'note shared', 'shared note viewed',
     'ai response completed', 'mcp key created', 'ai quota consumed',
-    'ai quota exhausted', 'ai turn checkpoint reached', 'ai turn continued')
+    'ai quota exhausted', 'ai turn checkpoint reached', 'ai turn continued',
+    'byok key failed')
 GROUP BY event
 ORDER BY event
 ```

@@ -20,6 +20,7 @@ export const PRODUCT_EVENT_NAMES = [
   'ai quota exhausted',
   'ai turn checkpoint reached',
   'ai turn continued',
+  'byok key failed',
 ] as const;
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];
 

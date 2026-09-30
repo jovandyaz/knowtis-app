@@ -131,6 +131,15 @@ export {
 } from './lib/ai-quota.types';
 
 export {
+  BYOK_KEY_FAILURE_KINDS,
+  BYOK_KEY_FAILURE_KIND,
+  type ByokKeyFailureKind,
+  AI_BYOK_KEY_FAILED_CODE,
+  type AgentByokKeyFailedError,
+  isByokKeyFailedError,
+} from './lib/byok-key-failure.types';
+
+export {
   ARTIFACT_TYPE,
   ARTIFACT_TYPES,
   type ArtifactType,

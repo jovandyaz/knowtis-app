@@ -66,7 +66,7 @@ export function AIStreamingPreview({
 
       {status === 'error' && (
         <div role="alert" className="px-4 pt-3 pb-2 text-sm text-destructive">
-          {t(aiErrorMessageKey(error?.code ?? ''))}
+          {t(aiErrorMessageKey(error))}
         </div>
       )}
 

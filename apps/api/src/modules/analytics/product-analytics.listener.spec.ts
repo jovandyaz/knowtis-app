@@ -11,6 +11,7 @@ import type { QuizScoreBucket } from '@knowtis/shared-types';
 import { CONTINUABLE_STOP_REASONS } from '../agent/domain/continuable';
 import { TurnCheckpointReachedEvent } from '../agent/domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../agent/domain/events/turn-continued.event';
+import { ByokKeyFailedEvent } from '../ai/domain/events/byok-key-failed.event';
 import { MessageQuotaConsumedEvent } from '../ai/domain/events/message-quota-consumed.event';
 import { MessageQuotaExhaustedEvent } from '../ai/domain/events/message-quota-exhausted.event';
 import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
@@ -377,6 +378,19 @@ describe('ProductAnalyticsListener', () => {
       event: 'ai turn continued',
       properties: { source: 'api', tier: 'anonymous', segment_index: 2 },
       actor: { actor_type: 'anonymous', is_internal: false, locale: 'en' },
+    });
+  });
+
+  it('captures a failed BYOK key with only its provider and kind', async () => {
+    await listener.handleByokKeyFailed(
+      new ByokKeyFailedEvent(USER.id, 'openai', 'credit')
+    );
+
+    expect(capture).toHaveBeenCalledExactlyOnceWith({
+      distinctId: USER.id,
+      event: 'byok key failed',
+      properties: { source: 'api', provider: 'openai', kind: 'credit' },
+      actor: { actor_type: 'registered', is_internal: false, locale: 'en' },
     });
   });
 

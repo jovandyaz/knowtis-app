@@ -30,6 +30,7 @@ const EVENT_PROPERTY_KEYS = {
     'segment_index',
   ],
   'ai turn continued': ['source', 'tier', 'segment_index'],
+  'byok key failed': ['source', 'provider', 'kind'],
 } as const satisfies {
   [E in ServerProductEventName]: readonly (keyof ServerProductEventMap[E])[];
 };

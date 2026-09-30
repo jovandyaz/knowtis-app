@@ -174,7 +174,7 @@ describe('ByokService', () => {
     expect([...(await service.enabledProviders('u1'))]).toEqual(['openai']);
   });
 
-  it('getApiKey decrypts a stored key', async () => {
+  it('resolveKey finds and decrypts a stored key', async () => {
     const { service } = makeService({
       repo: {
         getEncrypted: vi.fn().mockResolvedValue({
@@ -183,10 +183,13 @@ describe('ByokService', () => {
         }),
       },
     });
-    expect(await service.getApiKey('u1', 'anthropic')).toBe('sk-live');
+    expect(await service.resolveKey('u1', 'anthropic')).toEqual({
+      kind: 'found',
+      apiKey: 'sk-live',
+    });
   });
 
-  it('getApiKey returns null when decryption fails', async () => {
+  it('resolveKey reports a key that no longer decrypts', async () => {
     const { service } = makeService({
       repo: {
         getEncrypted: vi.fn().mockResolvedValue({
@@ -197,7 +200,18 @@ describe('ByokService', () => {
         }),
       },
     });
-    expect(await service.getApiKey('u1', 'anthropic')).toBeNull();
+    expect(await service.resolveKey('u1', 'anthropic')).toEqual({
+      kind: 'undecryptable',
+    });
+  });
+
+  it('resolveKey reports a key deleted since the tier was resolved', async () => {
+    const { service } = makeService({
+      repo: { getEncrypted: vi.fn().mockResolvedValue(null) },
+    });
+    expect(await service.resolveKey('u1', 'anthropic')).toEqual({
+      kind: 'missing',
+    });
   });
 
   it('validates the key against a provider that rejects maxOutputTokens below 16 (OpenAI minimum)', async () => {

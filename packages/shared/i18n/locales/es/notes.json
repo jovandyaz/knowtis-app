@@ -427,7 +427,12 @@
       "noteNotFound": "La nota ya no existe.",
       "invalidProposal": "No se pudo procesar esa solicitud. Inténtalo de nuevo.",
       "emailNotVerified": "Verifica tu correo electrónico antes de compartir esta nota.",
-      "modelUnavailable": "Este modelo no está disponible en tu plan. Elige otro en el menú de modelos."
+      "modelUnavailable": "Este modelo no está disponible en tu plan. Elige otro en el menú de modelos.",
+      "byokKeyFailed": {
+        "auth": "El proveedor rechazó tu API key. Revísala en Configuración → Asistente IA.",
+        "credit": "Tu cuenta del proveedor se quedó sin créditos o alcanzó su límite de gasto. Recárgala o sube el límite con el proveedor.",
+        "permission": "El proveedor rechazó esta solicitud con tu API key. Revisa los permisos de la key, la disponibilidad del modelo y tu región con el proveedor."
+      }
     },
     "copilot": {
       "tab": "Copilot",

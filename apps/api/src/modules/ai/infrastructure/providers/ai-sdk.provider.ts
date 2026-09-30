@@ -12,6 +12,7 @@ import type {
 import { cacheableInstructions } from './anthropic-cache';
 import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
+import { logStreamErrorRedacted } from './redacted-stream-error';
 import { buildRedactedTelemetry } from './redacted-telemetry';
 import { withTraceIdentity } from './trace-identity';
 import {
@@ -147,6 +148,7 @@ export class AISDKProvider implements AICompletionProvider {
           ...(options.signal ? { abortSignal: options.signal } : {}),
           ...this.buildTimeoutParam(options.timeout),
           ...this.buildTelemetryParam(options.telemetry),
+          onError: logStreamErrorRedacted(this.logger, { model }),
         })
       );
       activeModel = model;

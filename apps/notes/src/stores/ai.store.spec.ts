@@ -217,25 +217,33 @@ describe('useAIStore', () => {
 
 describe('aiErrorMessageKey', () => {
   it('maps known server and client codes to specific keys', () => {
-    expect(aiErrorMessageKey('AI_RATE_LIMIT_EXCEEDED')).toBe(
+    expect(aiErrorMessageKey({ code: 'AI_RATE_LIMIT_EXCEEDED' })).toBe(
       'ai.errors.rateLimited'
     );
-    expect(aiErrorMessageKey('AI_PROVIDER_ERROR')).toBe('ai.errors.provider');
-    expect(aiErrorMessageKey('AI_INTERNAL_ERROR')).toBe('ai.errors.provider');
-    expect(aiErrorMessageKey('AI_TIMEOUT')).toBe('ai.errors.timeout');
-    expect(aiErrorMessageKey('CONNECTION_FAILED')).toBe('ai.errors.connection');
-    expect(aiErrorMessageKey('AI_FEATURE_DISABLED')).toBe(
+    expect(aiErrorMessageKey({ code: 'AI_PROVIDER_ERROR' })).toBe(
+      'ai.errors.provider'
+    );
+    expect(aiErrorMessageKey({ code: 'AI_INTERNAL_ERROR' })).toBe(
+      'ai.errors.provider'
+    );
+    expect(aiErrorMessageKey({ code: 'AI_TIMEOUT' })).toBe('ai.errors.timeout');
+    expect(aiErrorMessageKey({ code: 'CONNECTION_FAILED' })).toBe(
+      'ai.errors.connection'
+    );
+    expect(aiErrorMessageKey({ code: 'AI_FEATURE_DISABLED' })).toBe(
       'ai.errors.featureDisabled'
     );
-    expect(aiErrorMessageKey('AUTH_REQUIRED')).toBe('ai.errors.auth');
-    expect(aiErrorMessageKey('VALIDATION_ERROR')).toBe('ai.errors.validation');
-    expect(aiErrorMessageKey('PROMPT_INJECTION_DETECTED')).toBe(
+    expect(aiErrorMessageKey({ code: 'AUTH_REQUIRED' })).toBe('ai.errors.auth');
+    expect(aiErrorMessageKey({ code: 'VALIDATION_ERROR' })).toBe(
+      'ai.errors.validation'
+    );
+    expect(aiErrorMessageKey({ code: 'PROMPT_INJECTION_DETECTED' })).toBe(
       'ai.errors.injection'
     );
   });
 
   it('names an exhausted daily quota with the usage-limit message', () => {
-    expect(aiErrorMessageKey(AI_QUOTA_EXHAUSTED_CODE)).toBe(
+    expect(aiErrorMessageKey({ code: AI_QUOTA_EXHAUSTED_CODE })).toBe(
       'ai.errors.rateLimited'
     );
   });
@@ -247,11 +255,13 @@ describe('aiErrorMessageKey', () => {
     ['AGENT_ANSWER_UNAVAILABLE', 'ai.errors.answerUnavailable'],
     ['AGENT_TURN_INTERRUPTED', 'ai.errors.turnInterrupted'],
   ])('names why the copilot turn %s did not show an answer', (code, key) => {
-    expect(aiErrorMessageKey(code)).toBe(key);
+    expect(aiErrorMessageKey({ code })).toBe(key);
   });
 
   it('falls back to the generic key for unknown codes', () => {
-    expect(aiErrorMessageKey('SOMETHING_ELSE')).toBe('ai.errors.generic');
-    expect(aiErrorMessageKey('')).toBe('ai.errors.generic');
+    expect(aiErrorMessageKey({ code: 'SOMETHING_ELSE' })).toBe(
+      'ai.errors.generic'
+    );
+    expect(aiErrorMessageKey({ code: '' })).toBe('ai.errors.generic');
   });
 });

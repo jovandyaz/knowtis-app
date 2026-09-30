@@ -16,6 +16,7 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { TurnCheckpointReachedEvent } from '../agent/domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../agent/domain/events/turn-continued.event';
+import { ByokKeyFailedEvent } from '../ai/domain/events/byok-key-failed.event';
 import { MessageQuotaConsumedEvent } from '../ai/domain/events/message-quota-consumed.event';
 import { MessageQuotaExhaustedEvent } from '../ai/domain/events/message-quota-exhausted.event';
 import { ArtifactGeneratedEvent } from '../artifacts/domain/events/artifact-generated.event';
@@ -239,6 +240,22 @@ export class ProductAnalyticsListener {
           source: 'api',
           tier: event.tier,
           segment_index: event.segmentIndex,
+        },
+      })
+    );
+  }
+
+  @OnEvent(ByokKeyFailedEvent.EVENT_NAME, { async: true })
+  async handleByokKeyFailed(event: ByokKeyFailedEvent): Promise<void> {
+    await this.captureForUser(
+      ByokKeyFailedEvent.EVENT_NAME,
+      event.userId,
+      () => ({
+        event: 'byok key failed',
+        properties: {
+          source: 'api',
+          provider: event.provider,
+          kind: event.kind,
         },
       })
     );

@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { streamText } from 'ai';
+import { APICallError, streamText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -193,6 +193,22 @@ describe('AiSdkAgentOrchestrator', () => {
     );
 
     expect(lastSystemPrompt()).toContain('note-xyz');
+  });
+
+  it('hands streamText a redacting onError on BYOK turns', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+    await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
+    const onError = streamTextMock.mock.calls[0][0].onError;
+    expect(onError).toEqual(expect.any(Function));
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    onError({ error: new Error('boom') });
+
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('passes the reasoning effort to openrouter models as an openrouter block', async () => {
@@ -534,6 +550,125 @@ describe('AiSdkAgentOrchestrator', () => {
       'done',
     ]);
     logSpy.mockRestore();
+  });
+
+  function refusedStream(statusCode: number, responseBody: string) {
+    return () => ({
+      stream: (async function* () {
+        yield { type: 'start' };
+        yield {
+          type: 'error',
+          error: new APICallError({
+            message: 'refused',
+            url: 'https://provider.test/v1',
+            requestBodyValues: {},
+            statusCode,
+            responseBody,
+          }),
+        };
+      })(),
+      usage: rejectedUsage('No output generated. Check the stream for errors.'),
+    });
+  }
+
+  it.each([
+    {
+      statusCode: 401,
+      body: '{"error":{"type":"authentication_error"}}',
+      kind: 'auth',
+    },
+    {
+      statusCode: 402,
+      body: '{"error":{"type":"billing_error"}}',
+      kind: 'credit',
+    },
+    {
+      statusCode: 403,
+      body: '{"error":{"type":"permission_error"}}',
+      kind: 'permission',
+    },
+  ])(
+    'ends a BYOK turn the provider refuses as AI_BYOK_KEY_FAILED ($kind) without retrying',
+    async ({ statusCode, body, kind }) => {
+      streamTextMock.mockClear();
+      streamTextMock.mockImplementationOnce(refusedStream(statusCode, body));
+      const orchestrator = makeOrchestrator();
+
+      const events = await collect(
+        orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+      );
+
+      expect(streamTextMock).toHaveBeenCalledTimes(1);
+      expect(events.at(-1)).toMatchObject({
+        type: 'error',
+        error: {
+          code: 'AI_BYOK_KEY_FAILED',
+          provider: 'anthropic',
+          kind,
+        },
+      });
+    }
+  );
+
+  it('does not retry an OpenAI key out of credit although its status is 429', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      refusedStream(429, '{"error":{"code":"insufficient_quota"}}')
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openai:gpt-5.6-terra',
+        byokApiKey: 'user-key',
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({
+      error: { code: 'AI_BYOK_KEY_FAILED', provider: 'openai', kind: 'credit' },
+    });
+  });
+
+  it('still retries a BYOK rate limit the classifier leaves unclassified', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        refusedStream(429, '{"error":{"code":"rate_limit_exceeded"}}')
+      )
+      .mockImplementationOnce(happyStream);
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openai:gpt-5.6-terra',
+        byokApiKey: 'user-key',
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('never reports the platform key a provider refuses as the caller’s key', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      refusedStream(401, '{"error":{"type":"authentication_error"}}')
+    );
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      MODEL
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+    });
   });
 
   it('fails a non-transient BYOK error immediately', async () => {

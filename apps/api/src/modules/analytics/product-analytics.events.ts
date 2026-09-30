@@ -3,6 +3,8 @@ import type { EmailVerificationSource } from '@jovandyaz/auth/server';
 import type {
   AccessTier,
   ArtifactType,
+  ByokKeyFailureKind,
+  ByokProvider,
   FlashcardReviewKind,
   McpScopeLevel,
   NoteShareType,
@@ -61,6 +63,11 @@ export interface ServerProductEventMap {
     source: 'api';
     tier: AccessTier;
     segment_index: number;
+  };
+  'byok key failed': {
+    source: 'api';
+    provider: ByokProvider;
+    kind: ByokKeyFailureKind;
   };
 }
 

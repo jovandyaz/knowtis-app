@@ -117,7 +117,7 @@ export function AgentCopilotPanel() {
   const errorMessageKey =
     isVerificationGate && !canVerify
       ? GENERIC_AI_ERROR_KEY
-      : aiErrorMessageKey(error?.code ?? '');
+      : aiErrorMessageKey(error);
 
   // Retrying a share the account is not allowed to make would only fail again,
   // so the one useful answer to this code is the verification dialog itself.
