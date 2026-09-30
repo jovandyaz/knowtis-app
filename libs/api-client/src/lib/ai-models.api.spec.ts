@@ -45,6 +45,27 @@ describe('aiModelsApi', () => {
     await expect(aiModelsApi.getModels()).resolves.toEqual(envelope);
   });
 
+  it('getModels defaults the intents and tier an envelope leaves out', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({ models: [] });
+
+    await expect(aiModelsApi.getModels()).resolves.toEqual({
+      tier: null,
+      models: [],
+      intents: [],
+    });
+  });
+
+  it.each([null, {}, { models: 'x' }])(
+    'getModels rejects the malformed body %j',
+    async (body) => {
+      vi.mocked(httpClient.get).mockResolvedValue(body);
+
+      await expect(aiModelsApi.getModels()).rejects.toThrow(
+        'Malformed /ai/models response'
+      );
+    }
+  );
+
   it('getPreferences hits GET /ai/preferences', async () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       preferredModel: null,

@@ -14,17 +14,27 @@ export type ModelCatalogView = Omit<ModelCatalogResponse, 'tier'> & {
 };
 
 function toCatalogView(
-  body: ModelCatalogResponse | SelectableModel[]
+  body: Partial<ModelCatalogResponse> | SelectableModel[] | null
 ): ModelCatalogView {
-  return Array.isArray(body) ? { tier: null, models: body, intents: [] } : body;
+  if (Array.isArray(body)) {
+    return { tier: null, models: body, intents: [] };
+  }
+  if (body && Array.isArray(body.models)) {
+    return {
+      tier: body.tier ?? null,
+      models: body.models,
+      intents: Array.isArray(body.intents) ? body.intents : [],
+    };
+  }
+  throw new Error('Malformed /ai/models response');
 }
 
 export const aiModelsApi = {
   async getModels(): Promise<ModelCatalogView> {
     return toCatalogView(
-      await httpClient.get<ModelCatalogResponse | SelectableModel[]>(
-        '/ai/models'
-      )
+      await httpClient.get<
+        Partial<ModelCatalogResponse> | SelectableModel[] | null
+      >('/ai/models')
     );
   },
   getPreferences(): Promise<AIPreferences> {
