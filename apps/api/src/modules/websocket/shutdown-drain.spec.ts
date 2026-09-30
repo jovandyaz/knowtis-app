@@ -1,12 +1,20 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { USAGE_WRITE_WAIT_MS } from '../ai/application/commands/stream-text.handler';
+import { POSTHOG_SHUTDOWN_TIMEOUT_MS } from '../analytics/product-analytics.service';
+import { LANGFUSE_SHUTDOWN_TIMEOUT_MS } from '../observability/langfuse-tracing.service';
 import { ConcurrencySlotTracker } from './concurrency-slot-tracker';
 import {
   SHUTDOWN_ABORT_REASON,
   SHUTDOWN_DRAIN_TIMEOUT_MS,
   ShutdownDrain,
 } from './shutdown-drain';
+
+// Copied, not imported: .railway/railway.ts sits outside the api project, so a
+// change to its DRAINING_SECONDS must be made here too.
+const RAILWAY_DRAINING_MS = 10_000;
+const POOL_CLOSE_ROOM_MS = 1_000;
 
 function flushAsync() {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -22,6 +30,19 @@ describe('ShutdownDrain', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('leaves room in the draining window for the shutdown flushes and the pools', () => {
+    expect(
+      SHUTDOWN_DRAIN_TIMEOUT_MS +
+        POSTHOG_SHUTDOWN_TIMEOUT_MS +
+        LANGFUSE_SHUTDOWN_TIMEOUT_MS +
+        POOL_CLOSE_ROOM_MS
+    ).toBeLessThanOrEqual(RAILWAY_DRAINING_MS);
+  });
+
+  it('lets a stream wait out its whole usage write inside the deadline', () => {
+    expect(USAGE_WRITE_WAIT_MS).toBeLessThan(SHUTDOWN_DRAIN_TIMEOUT_MS);
   });
 
   it('is not draining until the shutdown starts, then refuses from the first moment', () => {

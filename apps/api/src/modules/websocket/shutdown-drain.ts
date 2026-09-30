@@ -4,8 +4,11 @@ import {
   type BeforeApplicationShutdown,
 } from '@nestjs/common';
 
-/** Below Railway's 10 s draining window, so dispose and the shutdown hooks still run before SIGKILL. */
-export const SHUTDOWN_DRAIN_TIMEOUT_MS = 8_000;
+/**
+ * With the 1 s PostHog and Langfuse flushes after it, leaves about 1 s of Railway's
+ * 10 s draining window for dispose and the pools to close before SIGKILL.
+ */
+export const SHUTDOWN_DRAIN_TIMEOUT_MS = 7_000;
 
 /** The reason every signal the drain aborts carries: never a user cancel. */
 export const SHUTDOWN_ABORT_REASON = 'shutdown';
