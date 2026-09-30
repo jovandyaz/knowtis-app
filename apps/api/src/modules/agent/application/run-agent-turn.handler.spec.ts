@@ -2095,7 +2095,10 @@ describe('RunAgentTurnHandler', () => {
   describe('execution context', () => {
     const ANTHROPIC_MODEL = SERVED_MODEL;
 
-    function makeContextHandler(history: ConversationMessageRow[] = []) {
+    function makeContextHandler(
+      history: ConversationMessageRow[] = [],
+      quota: MessageQuotaService = createMessageQuotaStub()
+    ) {
       const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
       const conversations = makeConversations(history);
       const byok = makeByok();
@@ -2117,7 +2120,7 @@ describe('RunAgentTurnHandler', () => {
         makeAIConfig(),
         makeTurnEffort(),
         tierResolver,
-        createMessageQuotaStub(),
+        quota,
         makeEvents()
       );
       const callbacks = {
@@ -2134,6 +2137,7 @@ describe('RunAgentTurnHandler', () => {
         byok,
         tierResolver,
         injectionGuard,
+        quota,
         callbacks,
       };
     }
@@ -2192,6 +2196,96 @@ describe('RunAgentTurnHandler', () => {
 
       await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
 
+      expect(callbacks.onError).toHaveBeenCalledWith({
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Model resolution failed',
+      });
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('stores no explicit model when the daily quota refuses the turn', async () => {
+      const { handler, orchestrator, conversations, callbacks } =
+        makeContextHandler(
+          [],
+          createMessageQuotaStub({
+            kind: 'exhausted',
+            resetsAt: new Date('2026-09-28T00:00:00.000Z'),
+            upgrade: 'register',
+          })
+        );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'AI_QUOTA_EXHAUSTED' })
+      );
+      expect(conversations.setModel).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('stores no explicit model when the injection guard refuses the turn', async () => {
+      const {
+        handler,
+        orchestrator,
+        conversations,
+        injectionGuard,
+        callbacks,
+      } = makeContextHandler();
+      vi.mocked(injectionGuard.guard).mockResolvedValue({
+        safe: false,
+        score: 0.9,
+      });
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PROMPT_INJECTION_DETECTED' })
+      );
+      expect(conversations.setModel).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('refunds the drawn message and releases the budget when storing the explicit model fails', async () => {
+      const receipt: QuotaReceipt = {
+        turn: {
+          subjects: [USER],
+          turnId: TURN_ID,
+          day: utcDayOf(new Date('2026-09-27T12:00:00.000Z')),
+        },
+        tier: 'free',
+        limit: 30,
+        store: QUOTA_STORES.REDIS,
+      };
+      const {
+        handler,
+        orchestrator,
+        conversations,
+        rateLimit,
+        quota,
+        callbacks,
+      } = makeContextHandler(
+        [],
+        createMessageQuotaStub({
+          kind: 'consumed',
+          receipt,
+          quota: {
+            tier: 'free',
+            messages: {
+              used: 1,
+              limit: 30,
+              resetsAt: '2026-09-28T00:00:00.000Z',
+            },
+          },
+        })
+      );
+      vi.mocked(conversations.setModel).mockRejectedValue(
+        new Error('pg connection to 10.0.0.7 refused')
+      );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(quota.refund).toHaveBeenCalledWith(receipt);
+      expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
       expect(callbacks.onError).toHaveBeenCalledWith({
         code: 'AI_PROVIDER_ERROR',
         message: 'AI provider error: Model resolution failed',

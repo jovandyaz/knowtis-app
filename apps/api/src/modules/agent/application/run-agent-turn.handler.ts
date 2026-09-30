@@ -797,9 +797,6 @@ export class RunAgentTurnHandler {
       callbacks.onError(AIErrors.modelUnavailable('not_in_tier', null));
       return;
     }
-    if (!(await this.persistRequestedModel(input, persistence, callbacks))) {
-      return;
-    }
     let byokApiKey: string | null = null;
     if (execution.billing.kind === 'byok') {
       byokApiKey = await this.byok.getApiKey(
@@ -864,6 +861,18 @@ export class RunAgentTurnHandler {
       resolution: resolved.resolution,
       reconciled: false,
     };
+    // Only an admitted turn may repin the conversation: a HITL resume serves
+    // the stored model, so a refused turn must leave it untouched.
+    if (!(await this.persistRequestedModel(input, persistence))) {
+      await this.recordUsageSafe(ctx, {
+        inputTokens: 0,
+        outputTokens: 0,
+        model,
+      });
+      await hold.refund();
+      callbacks.onError(AIErrors.providerError('Model resolution failed'));
+      return;
+    }
 
     const turnMessages: AgentMessage[] = [];
     let assistantText = '';
@@ -1315,8 +1324,7 @@ export class RunAgentTurnHandler {
 
   private async persistRequestedModel(
     input: TurnInput,
-    persistence: PersistenceContext | undefined,
-    callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
+    persistence: PersistenceContext | undefined
   ): Promise<boolean> {
     if (!input.model || !persistence) {
       return true;
@@ -1335,7 +1343,6 @@ export class RunAgentTurnHandler {
         userId,
         error: reasonOf(error),
       });
-      callbacks.onError(AIErrors.providerError('Model resolution failed'));
       return false;
     }
   }
