@@ -108,6 +108,11 @@ export {
 } from './lib/ai.types';
 
 export {
+  type IntentAvailability,
+  type ModelCatalogResponse,
+} from './lib/ai-catalog.types';
+
+export {
   AI_QUOTA_EXHAUSTED_CODE,
   type QuotaUpgrade,
   type AiMessageQuota,

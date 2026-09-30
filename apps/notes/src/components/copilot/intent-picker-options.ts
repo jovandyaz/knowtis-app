@@ -20,11 +20,14 @@ export interface ModelPreference {
   preferredIntent?: ModelIntent | null;
 }
 
+/** A model the server lists without `access` is one it already scoped to the caller. */
+function isGranted(model: SelectableModel): boolean {
+  return (model.access ?? 'granted') === 'granted';
+}
+
 /** A catalogue model the caller may pick from "more models": unassigned to an intent and runnable for them. */
 function isMoreModel(model: SelectableModel): boolean {
-  return (
-    !model.servesIntent && (model.billedToUser || model.access === 'granted')
-  );
+  return !model.servesIntent && (model.billedToUser || isGranted(model));
 }
 
 /**
@@ -70,7 +73,7 @@ function modelDescription(
 export function advancedModelOptions(
   models: readonly SelectableModel[] | undefined
 ): SelectableModel[] {
-  return (models ?? []).filter((m) => m.access === 'granted' && m.billedToUser);
+  return (models ?? []).filter((m) => isGranted(m) && m.billedToUser);
 }
 
 /**
