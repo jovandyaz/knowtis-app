@@ -134,6 +134,19 @@ describe('ShutdownDrain', () => {
     await expect(work).rejects.toThrow('commit failed');
   });
 
+  it('returns a rejected promise when tracked work throws synchronously, after starting it synchronously', async () => {
+    const drain = new ShutdownDrain();
+    const work = vi.fn((): Promise<void> => {
+      throw new Error('threw before returning');
+    });
+
+    const tracked = drain.track(work);
+
+    expect(work).toHaveBeenCalledTimes(1);
+    await expect(tracked).rejects.toThrow('threw before returning');
+    await expect(drain.beforeApplicationShutdown()).resolves.toBeUndefined();
+  });
+
   it('gives tracked work the same deadline as the sources', async () => {
     vi.useFakeTimers();
     const drain = new ShutdownDrain();

@@ -45,7 +45,12 @@ export class ShutdownDrain implements BeforeApplicationShutdown {
 
   /** Runs work the drain waits for but never aborts, such as a commit that must land once started. */
   track<T>(work: () => Promise<T>): Promise<T> {
-    const running = work();
+    let running: Promise<T>;
+    try {
+      running = work();
+    } catch (error) {
+      running = Promise.reject(error);
+    }
     const settled = running.then(
       () => undefined,
       () => undefined
