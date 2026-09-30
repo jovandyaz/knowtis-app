@@ -22,9 +22,11 @@ import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
+import type { ProbeResult } from '../../infrastructure/providers/provider-probe';
 import { ByokService } from './byok.service';
 
-vi.mock('ai', () => ({
+vi.mock('ai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('ai')>()),
   generateText: vi.fn().mockResolvedValue({ usage: { outputTokens: 16 } }),
 }));
 
@@ -33,7 +35,8 @@ const masterKey = Buffer.from(masterKeyB64, 'base64');
 
 interface MakeOverrides {
   identity?: IdentityState;
-  validate?: (provider: ByokProvider, key: string) => Promise<void>;
+  validate?: (provider: ByokProvider, key: string) => Promise<ProbeResult>;
+  realProbe?: boolean;
   repo?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
   settings?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
 }
@@ -75,8 +78,12 @@ function makeService(overrides: MakeOverrides) {
     policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED),
     settings as never
   );
-  const validateKey = vi.fn(overrides.validate ?? (async () => undefined));
-  (service as never as { validateKey: unknown }).validateKey = validateKey;
+  const validateKey = vi.fn(
+    overrides.validate ?? (async () => ({ valid: true }) as ProbeResult)
+  );
+  if (!overrides.realProbe) {
+    (service as never as { validateKey: unknown }).validateKey = validateKey;
+  }
   return { service, repo, store, validateKey, settings };
 }
 
@@ -96,14 +103,55 @@ describe('ByokService', () => {
 
   it('rejects an invalid key with 422', async () => {
     const { service } = makeService({
-      validate: async () => {
-        throw new Error('401 unauthorized');
-      },
+      validate: async () => ({
+        valid: false,
+        reason: 'rejected',
+        error: '401 unauthorized',
+      }),
     });
     await expect(service.setKey('u1', 'openai', 'bad')).rejects.toBeInstanceOf(
       UnprocessableEntityException
     );
   });
+
+  it.each(['unavailable', 'timeout'] as const)(
+    'answers 503, not 422, when the probe is %s',
+    async (reason) => {
+      const { service, repo } = makeService({
+        validate: async () => ({ valid: false, reason, error: 'boom' }),
+      });
+      const failure = await service
+        .setKey('u1', 'openai', 'sk-good-123456')
+        .catch((e: unknown) => e);
+      expect(failure).toBeInstanceOf(ServiceUnavailableException);
+      expect((failure as Error).message).toMatch(/could not be reached/i);
+      expect(repo.upsert).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['rejected', 'unavailable', 'timeout'] as const)(
+    'logs provider, reason and error when the probe is %s',
+    async (reason) => {
+      const warn = vi
+        .spyOn((await import('@nestjs/common')).Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { service } = makeService({
+        validate: async () => ({
+          valid: false,
+          reason,
+          error: 'why it failed',
+        }),
+      });
+      await service.setKey('u1', 'openai', 'sk-x-123456').catch(() => null);
+      expect(warn).toHaveBeenCalledWith({
+        event: 'byok.validation_failed',
+        provider: 'openai',
+        reason,
+        error: 'why it failed',
+      });
+      warn.mockRestore();
+    }
+  );
 
   it('throws 503 when no master key is configured', async () => {
     const { service } = makeService({});
@@ -250,19 +298,22 @@ describe('ByokService', () => {
       .mockImplementation(() => undefined);
 
     const { service } = makeService({
-      validate: vi
-        .fn()
-        .mockRejectedValue(
-          new Error('Incorrect API key provided: sk-proj-ABCDEF1234567890')
-        ),
+      realProbe: true,
     });
-
-    await expect(service.setKey('user-1', 'openai', 'sk-bad')).rejects.toThrow(
-      UnprocessableEntityException
+    vi.mocked(generateText).mockRejectedValueOnce(
+      Object.assign(
+        new Error('Incorrect API key provided: sk-proj-ABCDEF1234567890'),
+        {}
+      )
     );
+
+    await expect(
+      service.setKey('user-1', 'openai', 'sk-proj-ABCDEF1234567890')
+    ).rejects.toThrow(ServiceUnavailableException);
 
     const loggedPayloads = warn.mock.calls.map((c) => JSON.stringify(c[0]));
     expect(loggedPayloads.some((p) => p.includes('sk-proj'))).toBe(false);
+    expect(loggedPayloads.some((p) => p.includes('[redacted]'))).toBe(true);
     expect(
       loggedPayloads.some((p) => p.includes('byok.validation_failed'))
     ).toBe(true);

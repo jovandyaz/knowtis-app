@@ -1,5 +1,4 @@
 import {
-  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -26,7 +25,10 @@ import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
-import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
+import {
+  probeProviderKey,
+  type ProbeResult,
+} from '../../infrastructure/providers/provider-probe';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const KEY_PREFIX_LENGTH = 8;
@@ -102,19 +104,21 @@ export class ByokService {
       userId,
       'Verify your email address to store a provider key'
     );
-    try {
-      await this.validateKey(provider, apiKey);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
+    const probe = await this.validateKey(provider, apiKey);
+    if (!probe.valid) {
       this.logger.warn({
         event: 'byok.validation_failed',
         provider,
-        error: error instanceof Error ? error.name : 'unknown',
+        reason: probe.reason,
+        error: probe.error,
       });
-      throw new UnprocessableEntityException(
-        `The ${provider} key was rejected. Check it is valid and has quota.`
+      if (probe.reason === 'rejected') {
+        throw new UnprocessableEntityException(
+          `The ${provider} key was rejected. Check it is valid and has quota.`
+        );
+      }
+      throw new ServiceUnavailableException(
+        `${provider} could not be reached to check the key. Try again in a moment.`
       );
     }
     const secret = encryptSecret(apiKey, this.masterKey);
@@ -144,13 +148,10 @@ export class ByokService {
     }
   }
 
-  private async validateKey(
+  private validateKey(
     provider: ByokProvider,
     apiKey: string
-  ): Promise<void> {
-    const probe = await probeProviderKey(this.registry, provider, apiKey);
-    if (!probe.valid) {
-      throw new Error(probe.error ?? 'probe failed');
-    }
+  ): Promise<ProbeResult> {
+    return probeProviderKey(this.registry, provider, apiKey);
   }
 }
