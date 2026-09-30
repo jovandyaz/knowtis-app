@@ -1,6 +1,6 @@
 export const AGENT_HEALTH_SIGNAL = {
   TOOL_ERROR_RATE: 'tool_error_rate',
-  STOP_ANOMALY_RATE: 'stop_anomaly_rate',
+  NO_ANSWER_RATE: 'no_answer_rate',
 } as const;
 
 export type AgentHealthSignalKind =
@@ -9,13 +9,13 @@ export type AgentHealthSignalKind =
 export interface AgentHealthWindowStats {
   readonly toolCalls: number;
   readonly toolErrors: number;
-  readonly stopTurns: number;
-  readonly anomalousStops: number;
+  readonly terminalTurns: number;
+  readonly noAnswerTurns: number;
 }
 
 export interface AgentHealthThresholds {
   readonly toolErrorRate: number;
-  readonly stopAnomalyRate: number;
+  readonly noAnswerRate: number;
   readonly minSamples: number;
 }
 
@@ -47,16 +47,16 @@ export function evaluateAgentHealth(
       threshold: thresholds.toolErrorRate,
     });
   }
-  const stopAnomalyRate = rateOf(stats.anomalousStops, stats.stopTurns);
+  const noAnswerRate = rateOf(stats.noAnswerTurns, stats.terminalTurns);
   if (
-    stats.stopTurns >= thresholds.minSamples &&
-    stopAnomalyRate >= thresholds.stopAnomalyRate
+    stats.terminalTurns >= thresholds.minSamples &&
+    noAnswerRate >= thresholds.noAnswerRate
   ) {
     signals.push({
-      signal: AGENT_HEALTH_SIGNAL.STOP_ANOMALY_RATE,
-      rate: stopAnomalyRate,
-      samples: stats.stopTurns,
-      threshold: thresholds.stopAnomalyRate,
+      signal: AGENT_HEALTH_SIGNAL.NO_ANSWER_RATE,
+      rate: noAnswerRate,
+      samples: stats.terminalTurns,
+      threshold: thresholds.noAnswerRate,
     });
   }
   return signals;

@@ -5,6 +5,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { MessageStopReason } from '@knowtis/shared-types';
+
 import { validateEnv } from '../../../../config/env.config';
 import {
   conversationMessages,
@@ -13,6 +15,7 @@ import {
   DatabaseModule,
   users,
   type Database,
+  type NewConversationMessage,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import {
@@ -39,6 +42,64 @@ function toolResultParts(outputType: ToolOutputType): PersistedParts {
       },
     ],
   };
+}
+
+function toolStep(
+  turnId: string,
+  toolName: string,
+  output: unknown = { ok: true, proposalId: randomUUID(), summary: 'Draft' }
+): NewConversationMessage[] {
+  return [
+    {
+      conversationId: CONVERSATION,
+      turnId,
+      role: 'assistant',
+      content: '',
+      parts: {
+        v: AGENT_MESSAGE_PARTS_VERSION,
+        parts: [{ type: 'tool-call', toolCallId: 't1', toolName, input: {} }],
+      },
+    },
+    {
+      conversationId: CONVERSATION,
+      turnId,
+      role: 'tool',
+      content: '',
+      parts: {
+        v: AGENT_MESSAGE_PARTS_VERSION,
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 't1',
+            toolName,
+            output,
+            outputType: 'json',
+          },
+        ],
+      },
+    },
+  ];
+}
+
+function blankReply(
+  turnId: string,
+  stopReason: MessageStopReason
+): NewConversationMessage {
+  return {
+    conversationId: CONVERSATION,
+    turnId,
+    role: 'assistant',
+    content: '',
+    stopReason,
+  };
+}
+
+function toolTurn(
+  toolName: string,
+  stopReason: MessageStopReason
+): NewConversationMessage[] {
+  const turnId = randomUUID();
+  return [...toolStep(turnId, toolName), blankReply(turnId, stopReason)];
 }
 
 describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
@@ -145,7 +206,7 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
         conversationId: CONVERSATION,
         turnId: randomUUID(),
         role: 'assistant',
-        content: 'a',
+        content: '',
         stopReason: 'error',
         createdAt: outOfWindow,
       },
@@ -157,18 +218,114 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
     await moduleRef.close();
   });
 
-  it('counts tool results, tool errors, stop turns, and anomalous stops inside the window', async () => {
+  async function deltaAfter(
+    rows: NewConversationMessage[]
+  ): Promise<Pick<AgentHealthWindowStats, 'terminalTurns' | 'noAnswerTurns'>> {
+    const before = await queries.collectWindowStats(since);
+    await db.insert(conversationMessages).values(rows);
+    const after = await queries.collectWindowStats(since);
+    return {
+      terminalTurns: after.terminalTurns - before.terminalTurns,
+      noAnswerTurns: after.noAnswerTurns - before.noAnswerTurns,
+    };
+  }
+
+  it('counts tool results, tool errors, and terminal turns inside the window', async () => {
     const stats = await queries.collectWindowStats(since);
     expect({
       toolCalls: stats.toolCalls - baseline.toolCalls,
       toolErrors: stats.toolErrors - baseline.toolErrors,
-      stopTurns: stats.stopTurns - baseline.stopTurns,
-      anomalousStops: stats.anomalousStops - baseline.anomalousStops,
+      terminalTurns: stats.terminalTurns - baseline.terminalTurns,
+      noAnswerTurns: stats.noAnswerTurns - baseline.noAnswerTurns,
     }).toEqual({
       toolCalls: 3,
       toolErrors: 1,
-      stopTurns: 3,
-      anomalousStops: 1,
+      terminalTurns: 3,
+      noAnswerTurns: 0,
     });
+  });
+
+  it.each<[MessageStopReason | null, string, number, number]>([
+    ['completed', 'answer', 1, 0],
+    ['max_steps', 'answer', 1, 0],
+    ['token_budget', 'answer', 1, 0],
+    ['time_limit', 'answer', 1, 0],
+    ['error', 'partial', 1, 1],
+    ['length', 'answer', 1, 1],
+    ['content_filter', 'answer', 1, 1],
+    ['content_filter', '', 1, 1],
+    ['completed', '', 1, 1],
+    ['completed', ' \n\t ', 1, 1],
+    ['max_steps', '', 1, 1],
+    ['max_steps', '\n\n', 1, 1],
+    ['aborted', 'answer', 0, 0],
+    ['aborted', '', 0, 0],
+    [null, '', 0, 0],
+  ])(
+    'counts a %s row with content %j as %i terminal and %i no-answer',
+    async (stopReason, content, terminalTurns, noAnswerTurns) => {
+      const delta = await deltaAfter([
+        {
+          conversationId: CONVERSATION,
+          turnId: randomUUID(),
+          role: 'assistant',
+          content,
+          stopReason,
+        },
+      ]);
+      expect(delta).toEqual({ terminalTurns, noAnswerTurns });
+    }
+  );
+
+  it('counts a blank proposal turn as answered, since the proposal card is the answer', async () => {
+    const delta = await deltaAfter(toolTurn('proposeCreateNote', 'completed'));
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 0 });
+  });
+
+  it('counts a blank turn after a read tool as no-answer', async () => {
+    const delta = await deltaAfter(toolTurn('getNote', 'token_budget'));
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
+  });
+
+  it('counts a proposal turn that ended on error as no-answer', async () => {
+    const delta = await deltaAfter(toolTurn('proposeCreateNote', 'error'));
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
+  });
+
+  it('does not let a proposal in one turn mask a blank row in another turn of the conversation', async () => {
+    const delta = await deltaAfter([
+      ...toolTurn('proposeCreateNote', 'completed'),
+      ...toolTurn('getNote', 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 2, noAnswerTurns: 1 });
+  });
+
+  it('counts a blank approval follow-up under the proposal turn id as no-answer', async () => {
+    const turnId = randomUUID();
+    const delta = await deltaAfter([
+      ...toolStep(turnId, 'proposeCreateNote'),
+      blankReply(turnId, 'completed'),
+      blankReply(turnId, 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 2, noAnswerTurns: 1 });
+  });
+
+  it('does not let a proposal the model moved past answer a later blank reply', async () => {
+    const turnId = randomUUID();
+    const delta = await deltaAfter([
+      ...toolStep(turnId, 'proposeCreateNote'),
+      ...toolStep(turnId, 'getNote'),
+      blankReply(turnId, 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
+  });
+
+  it('does not let a refused proposal answer the blank reply after it', async () => {
+    const turnId = randomUUID();
+    const delta = await deltaAfter([
+      ...toolStep(turnId, 'proposeCreateNote', { error: 'Note not found' }),
+      blankReply(turnId, 'completed'),
+    ]);
+    expect(delta).toEqual({ terminalTurns: 1, noAnswerTurns: 1 });
   });
 });

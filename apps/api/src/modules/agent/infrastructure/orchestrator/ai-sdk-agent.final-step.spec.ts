@@ -962,7 +962,7 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
           .map(([entry]) => entry as { event?: string; outcome?: string })
           .filter((entry) => entry.event === 'agent.turn.health')
           .map((entry) => entry.outcome)
-      ).toEqual(['continued', 'empty']);
+      ).toEqual(['continued', 'leaked']);
     }
   );
 
@@ -970,12 +970,20 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
     const model = inOrder(toolResponse, () => leakResponse(), textResponse);
     const { orchestrator } = fixture(model, ROUTABLE_RESCUE, NATIVE_NONE_MODEL);
 
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+
     const events = await collect(
       orchestrator.run({ ...INPUT, maxTurnTokens: UNLIMITED })
     );
 
     expect(model.doStreamCalls).toHaveLength(3);
     expect(chunksOf(events)).toEqual([ANSWER]);
+    expect(
+      logSpy.mock.calls
+        .map(([entry]) => entry as { event?: string; outcome?: string })
+        .filter((entry) => entry.event === 'agent.turn.health')
+        .map((entry) => entry.outcome)
+    ).toEqual(['continued', 'leaked', 'done']);
     expect(thinkingOf(events)).toEqual(['I should read n1 again.']);
     expect(JSON.stringify(events)).not.toContain(DSML_MARKER);
     expect(JSON.stringify(model.doStreamCalls[2].prompt)).not.toContain(
@@ -1025,10 +1033,25 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
     );
     const { orchestrator } = fixture(model, ROUTABLE_RESCUE, NATIVE_NONE_MODEL);
 
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+
     const events = await collect(orchestrator.run({ ...INPUT, maxSteps: 1 }));
 
     expect(model.doStreamCalls).toHaveLength(1);
     expect(events.map((event) => event.type)).toEqual(['thinking', 'error']);
+    expect(
+      logSpy.mock.calls
+        .map(([entry]) => entry as { event?: string; outcome?: string })
+        .filter((entry) => entry.event === 'agent.turn.health')
+        .map((entry) => entry.outcome)
+    ).toEqual(['leaked']);
+    expect(
+      warnSpy.mock.calls
+        .map(([entry]) => entry as { event?: string; call?: string })
+        .filter((entry) => entry.event === 'agent.turn.markup_leak')
+        .map((entry) => entry.call)
+    ).toEqual(['final_step']);
     expect(JSON.stringify(events)).not.toContain(DSML_MARKER);
     expect(events.at(-1)).toEqual({
       type: 'error',

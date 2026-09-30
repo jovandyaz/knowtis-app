@@ -60,7 +60,7 @@ export class AgentHealthReportTask {
     const stats = await this.queries.collectWindowStats(since);
     const signals = evaluateAgentHealth(stats, {
       toolErrorRate: this.config.get('AGENT_TOOL_ERROR_ALERT_RATE'),
-      stopAnomalyRate: this.config.get('AGENT_STOP_ANOMALY_ALERT_RATE'),
+      noAnswerRate: this.config.get('AGENT_NO_ANSWER_ALERT_RATE'),
       minSamples: MIN_SAMPLES,
     });
     this.logger.log({

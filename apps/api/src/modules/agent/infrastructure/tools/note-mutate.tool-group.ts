@@ -16,6 +16,15 @@ import {
   wrapUpstreamFailure,
 } from './tool-execution.error';
 
+/** The tools whose call parks a proposal for the user to confirm; `build` must define exactly these. */
+export const PROPOSAL_TOOL_NAMES = [
+  'proposeCreateNote',
+  'proposeEditNote',
+  'proposeUpdateNote',
+  'proposeShareNote',
+] as const;
+type ProposalToolName = (typeof PROPOSAL_TOOL_NAMES)[number];
+
 const MAX_EDITS_PER_PROPOSAL = 20;
 const MAX_MARKDOWN_CHARS = 20_000;
 const MERMAID_ESCAPE_GUIDANCE =
@@ -220,6 +229,6 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             : { error: r.error.message };
         },
       }),
-    };
+    } satisfies Record<ProposalToolName, ToolSet[string]>;
   }
 }

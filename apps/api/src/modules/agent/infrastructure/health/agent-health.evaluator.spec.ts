@@ -7,14 +7,14 @@ import {
 
 const THRESHOLDS: AgentHealthThresholds = {
   toolErrorRate: 0.1,
-  stopAnomalyRate: 0.2,
+  noAnswerRate: 0.1,
   minSamples: 20,
 };
 
 describe('evaluateAgentHealth', () => {
   it('returns no signals when both rates are under their thresholds', () => {
     const signals = evaluateAgentHealth(
-      { toolCalls: 100, toolErrors: 5, stopTurns: 100, anomalousStops: 10 },
+      { toolCalls: 100, toolErrors: 5, terminalTurns: 100, noAnswerTurns: 5 },
       THRESHOLDS
     );
     expect(signals).toEqual([]);
@@ -22,7 +22,7 @@ describe('evaluateAgentHealth', () => {
 
   it('fires tool_error_rate at or above the threshold', () => {
     const signals = evaluateAgentHealth(
-      { toolCalls: 100, toolErrors: 10, stopTurns: 0, anomalousStops: 0 },
+      { toolCalls: 100, toolErrors: 10, terminalTurns: 0, noAnswerTurns: 0 },
       THRESHOLDS
     );
     expect(signals).toEqual([
@@ -30,30 +30,30 @@ describe('evaluateAgentHealth', () => {
     ]);
   });
 
-  it('fires stop_anomaly_rate at or above the threshold', () => {
+  it('fires no_answer_rate at or above the threshold', () => {
     const signals = evaluateAgentHealth(
-      { toolCalls: 0, toolErrors: 0, stopTurns: 50, anomalousStops: 10 },
+      { toolCalls: 0, toolErrors: 0, terminalTurns: 50, noAnswerTurns: 5 },
       THRESHOLDS
     );
     expect(signals).toEqual([
-      { signal: 'stop_anomaly_rate', rate: 0.2, samples: 50, threshold: 0.2 },
+      { signal: 'no_answer_rate', rate: 0.1, samples: 50, threshold: 0.1 },
     ]);
   });
 
   it('fires both signals together when both cross', () => {
     const signals = evaluateAgentHealth(
-      { toolCalls: 20, toolErrors: 20, stopTurns: 20, anomalousStops: 20 },
+      { toolCalls: 20, toolErrors: 20, terminalTurns: 20, noAnswerTurns: 20 },
       THRESHOLDS
     );
     expect(signals.map((s) => s.signal)).toEqual([
       'tool_error_rate',
-      'stop_anomaly_rate',
+      'no_answer_rate',
     ]);
   });
 
   it('suppresses signals below the minimum sample size', () => {
     const signals = evaluateAgentHealth(
-      { toolCalls: 19, toolErrors: 19, stopTurns: 19, anomalousStops: 19 },
+      { toolCalls: 19, toolErrors: 19, terminalTurns: 19, noAnswerTurns: 19 },
       THRESHOLDS
     );
     expect(signals).toEqual([]);
@@ -61,7 +61,7 @@ describe('evaluateAgentHealth', () => {
 
   it('treats zero totals as zero rates', () => {
     const signals = evaluateAgentHealth(
-      { toolCalls: 0, toolErrors: 0, stopTurns: 0, anomalousStops: 0 },
+      { toolCalls: 0, toolErrors: 0, terminalTurns: 0, noAnswerTurns: 0 },
       THRESHOLDS
     );
     expect(signals).toEqual([]);

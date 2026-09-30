@@ -696,13 +696,14 @@ describe('tool-free calls on the provider wire', () => {
     expect(
       warnSpy.mock.calls
         .map(([entry]) => entry as { event?: string })
-        .filter((entry) => entry.event === 'agent.synthesis.markup_leak')
+        .filter((entry) => entry.event === 'agent.turn.markup_leak')
     ).toEqual([
       {
-        event: 'agent.synthesis.markup_leak',
+        event: 'agent.turn.markup_leak',
         userId: 'fixture-user',
         model: OPENROUTER_MODEL,
         upstream: 'SiliconFlow',
+        call: 'synthesis',
       },
     ]);
     expect(events.at(-1)).toMatchObject({
