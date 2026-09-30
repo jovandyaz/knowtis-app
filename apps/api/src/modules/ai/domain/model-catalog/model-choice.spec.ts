@@ -20,7 +20,10 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 };
 const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
+const OPEN_MODEL = 'openrouter:z-ai/glm-5.2';
+const OPEN_TIER_IDS: readonly string[] = [...PLATFORM_INTENT_IDS, OPEN_MODEL];
 const RETIRED = 'anthropic:claude-sonnet-3';
+const platformRoutes = (id: string) => id.startsWith('openrouter:');
 const offered = (id: string): OfferedModel => ({
   id,
   label: id,
@@ -28,8 +31,7 @@ const offered = (id: string): OfferedModel => ({
   tier: 'open',
 });
 const OFFERED = [
-  ...PLATFORM_INTENT_IDS,
-  'openrouter:z-ai/glm-5.2',
+  ...OPEN_TIER_IDS,
   'anthropic:claude-haiku-4-5',
   'anthropic:claude-sonnet-5',
   'anthropic:claude-opus-5',
@@ -43,7 +45,9 @@ function setup(
   const facts: ModelFacts = {
     heldProviders: new Set(held),
     isSupported,
-    isPlatformBilled: (id) => PLATFORM_INTENT_IDS.includes(id),
+    isPlatformBilled: (id) =>
+      PLATFORM_INTENT_IDS.includes(id) ||
+      (OPEN_TIER_IDS.includes(id) && platformRoutes(id)),
   };
   const catalog = tierCatalog({
     tier,
@@ -52,7 +56,7 @@ function setup(
     platformIntents: PLATFORM_INTENTS,
     offered: OFFERED,
     isSupported,
-    isPlatformRoutable: (id) => id.startsWith('openrouter:'),
+    isPlatformRoutable: platformRoutes,
   });
   return (request: Partial<ModelRequest>) =>
     chooseModel(
@@ -100,7 +104,7 @@ describe('chooseModel', () => {
   });
 
   it('refuses an explicit model outside the tier and suggests the default', () => {
-    expect(setup('free')({ explicit: 'openrouter:z-ai/glm-5.2' })).toEqual({
+    expect(setup('free')({ explicit: OPEN_MODEL })).toEqual({
       kind: 'unavailable',
       reason: 'not_in_tier',
       suggestedModel: PLATFORM_INTENTS.balanced,
@@ -132,7 +136,7 @@ describe('chooseModel', () => {
   it('ignores a platform pick stored by a byok caller and serves their key intent', () => {
     expect(
       setup('byok', ['anthropic'])({
-        preferredModel: 'openrouter:z-ai/glm-5.2',
+        preferredModel: OPEN_MODEL,
       })
     ).toEqual({
       kind: 'resolved',
@@ -218,11 +222,19 @@ describe('chooseModel', () => {
     });
   });
 
-  it('refuses a pinned routable model the platform does not pay for', () => {
-    expect(setup('free')({ pinned: 'openrouter:z-ai/glm-5.2' })).toEqual({
-      kind: 'unavailable',
-      reason: 'key_removed',
-      suggestedModel: PLATFORM_INTENTS.balanced,
+  it("falls back visibly from a free caller's old open-model pin onto the free intent", () => {
+    expect(setup('free')({ pinned: OPEN_MODEL })).toEqual({
+      kind: 'resolved',
+      model: PLATFORM_INTENTS.balanced,
+      resolution: {
+        requested: OPEN_MODEL,
+        resolved: PLATFORM_INTENTS.balanced,
+        fallback: {
+          reason: 'not_in_tier',
+          from: OPEN_MODEL,
+          to: PLATFORM_INTENTS.balanced,
+        },
+      },
     });
   });
 
