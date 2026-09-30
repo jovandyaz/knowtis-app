@@ -166,6 +166,18 @@ describe('ModelPreferenceService', () => {
       ]);
     });
 
+    it.each([
+      ['anonymous', createExecutionContext({ tier: 'anonymous' })],
+      ['free', FREE_CALLER],
+    ] as const)(
+      'lists models to a %s caller without reading their settings',
+      async (_tier, execution) => {
+        const { svc, repo } = makeChooser();
+        await svc.listModels(execution);
+        expect(repo.getSettings).not.toHaveBeenCalled();
+      }
+    );
+
     it('marks the model serving a byok caller’s balanced intent as the default', async () => {
       const catalog = await makeChooser().svc.listModels(BYOK_ANTHROPIC);
       expect(
@@ -544,6 +556,20 @@ describe('ModelPreferenceService', () => {
         available: true,
         modelId: 'openrouter:anthropic/claude-sonnet-5',
         substituted: false,
+      });
+    });
+
+    it('serves a stored routed model over the key the primary provider picks, with no fallback', async () => {
+      const route = 'openrouter:anthropic/claude-sonnet-5';
+      await expect(
+        makeChooser({
+          preferredModel: route,
+          primaryProvider: 'anthropic',
+        }).svc.chooseTurnModel(BYOK_ANTHROPIC_OPENROUTER, {})
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: 'anthropic:claude-sonnet-5',
+        resolution: { requested: route, resolved: 'anthropic:claude-sonnet-5' },
       });
     });
 

@@ -21,6 +21,7 @@ import type {
   AiCaller,
   AiExecutionContext,
 } from '../../domain/execution-context/ai-execution-context';
+import { CATALOG_SCOPE } from '../../domain/execution-context/tier-policy';
 import {
   chooseModel,
   MODEL_CHOICE,
@@ -33,7 +34,6 @@ import {
 } from '../../domain/model-catalog/tier-catalog';
 import {
   USER_AI_SETTINGS_REPOSITORY,
-  type UserAiSettings,
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
@@ -54,7 +54,15 @@ export class ModelPreferenceService {
   async listModels(
     execution: AiExecutionContext
   ): Promise<ModelCatalogResponse> {
-    const { catalog } = await this.readScope(execution);
+    const [platformIntents, primaryProvider] = await Promise.all([
+      this.aiConfig.getIntentModels(),
+      this.storedPrimaryOf(execution),
+    ]);
+    const catalog = this.selectable.catalogFor(
+      execution,
+      platformIntents,
+      primaryProvider
+    );
     return {
       tier: catalog.tier,
       models: this.selectable.toSelectable(catalog),
@@ -73,7 +81,15 @@ export class ModelPreferenceService {
     execution: AiExecutionContext,
     request: { explicit?: string; pinned?: string | null }
   ): Promise<ModelChoice> {
-    const { catalog, facts, settings } = await this.readScope(execution);
+    const [platformIntents, settings] = await Promise.all([
+      this.aiConfig.getIntentModels(),
+      this.settings.getSettings(execution.subject.userId),
+    ]);
+    const { catalog, facts } = this.scopeOf(
+      execution,
+      platformIntents,
+      settings.primaryProvider
+    );
     const { preferredModel, preferredIntent } = servedPreference(catalog, {
       preferredModel: settings.preferredModel,
       preferredIntent: settings.preferredIntent,
@@ -177,7 +193,17 @@ export class ModelPreferenceService {
       await this.settings.patchSettings(caller.userId, patch);
       return;
     }
-    const { catalog, facts } = await this.readScope(execution, patch);
+    const [platformIntents, primaryProvider] = await Promise.all([
+      this.aiConfig.getIntentModels(),
+      patch.primaryProvider === undefined
+        ? this.storedPrimaryOf(execution)
+        : patch.primaryProvider,
+    ]);
+    const { catalog, facts } = this.scopeOf(
+      execution,
+      platformIntents,
+      primaryProvider
+    );
     const choice = chooseModel(
       catalog,
       {
@@ -196,26 +222,18 @@ export class ModelPreferenceService {
     );
   }
 
-  private async readScope(
-    execution: AiExecutionContext,
-    written: Pick<UpdateAiPreferencesInput, 'primaryProvider'> = {}
-  ): Promise<{
-    catalog: TierCatalog;
-    facts: ModelFacts;
-    settings: UserAiSettings;
-  }> {
-    const [platformIntents, settings] = await Promise.all([
-      this.aiConfig.getIntentModels(),
-      this.settings.getSettings(execution.subject.userId),
-    ]);
-    const primaryProvider =
-      written.primaryProvider === undefined
-        ? settings.primaryProvider
-        : written.primaryProvider;
-    return {
-      ...this.scopeOf(execution, platformIntents, primaryProvider),
-      settings,
-    };
+  // The primary provider only orders routes over the caller's own keys, so no
+  // other catalog reads it.
+  private async storedPrimaryOf(
+    execution: AiExecutionContext
+  ): Promise<ByokProvider | null> {
+    if (execution.policy.catalog !== CATALOG_SCOPE.OWN_KEYS) {
+      return null;
+    }
+    const { primaryProvider } = await this.settings.getSettings(
+      execution.subject.userId
+    );
+    return primaryProvider;
   }
 
   private scopeOf(

@@ -40,21 +40,27 @@ const OFFERED = [
 function setup(
   tier: AccessTier,
   held: readonly ByokProvider[] = [],
-  isSupported: (id: string) => boolean = (id) => id !== RETIRED
+  isSupported: (id: string) => boolean = (id) => id !== RETIRED,
+  options: {
+    storedPrimary?: ByokProvider | null;
+    platformIntents?: Record<ModelIntent, string>;
+  } = {}
 ) {
+  const platformIntents = options.platformIntents ?? PLATFORM_INTENTS;
+  const platformIntentIds: readonly string[] = Object.values(platformIntents);
   const facts: ModelFacts = {
     heldProviders: new Set(held),
     isSupported,
     isPlatformBilled: (id) =>
-      PLATFORM_INTENT_IDS.includes(id) ||
+      platformIntentIds.includes(id) ||
       (OPEN_TIER_IDS.includes(id) && platformRoutes(id)),
   };
   const catalog = tierCatalog({
     tier,
     scope: TIER_POLICIES[tier].catalog,
     heldProviders: held,
-    storedPrimary: null,
-    platformIntents: PLATFORM_INTENTS,
+    storedPrimary: options.storedPrimary ?? null,
+    platformIntents,
     offered: OFFERED,
     isSupported,
     isPlatformRoutable: platformRoutes,
@@ -286,6 +292,89 @@ describe('chooseModel', () => {
       kind: 'unavailable',
       reason: 'not_in_tier',
       suggestedModel: 'anthropic:claude-sonnet-5',
+    });
+  });
+
+  describe('a pick of a canonical model served over another held key', () => {
+    const DIRECT_SONNET = 'anthropic:claude-sonnet-5';
+    const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5';
+
+    it.each(['preferredModel', 'pinned'] as const)(
+      'runs the route the primary provider picks, with no fallback, given as %s',
+      (field) => {
+        expect(
+          setup('byok', ['anthropic', 'openrouter'], undefined, {
+            storedPrimary: 'anthropic',
+          })({ [field]: ROUTED_SONNET })
+        ).toEqual({
+          kind: 'resolved',
+          model: DIRECT_SONNET,
+          resolution: { requested: ROUTED_SONNET, resolved: DIRECT_SONNET },
+        });
+      }
+    );
+
+    it('keeps a pinned model on a removed key when another held key routes it', () => {
+      expect(
+        setup('byok', ['openrouter'])({ pinned: 'anthropic:claude-opus-5' })
+      ).toEqual({
+        kind: 'resolved',
+        model: 'openrouter:anthropic/claude-opus-5',
+        resolution: {
+          requested: 'anthropic:claude-opus-5',
+          resolved: 'openrouter:anthropic/claude-opus-5',
+        },
+      });
+    });
+
+    it('still falls back visibly when no route of the model is servable', () => {
+      const routedOpusUnpriced = (id: string) =>
+        id !== 'openrouter:anthropic/claude-opus-5';
+      expect(
+        setup(
+          'byok',
+          ['openrouter'],
+          routedOpusUnpriced
+        )({ pinned: 'anthropic:claude-opus-5' })
+      ).toEqual({
+        kind: 'resolved',
+        model: ROUTED_SONNET,
+        resolution: {
+          requested: 'anthropic:claude-opus-5',
+          resolved: ROUTED_SONNET,
+          fallback: {
+            reason: 'key_removed',
+            from: 'anthropic:claude-opus-5',
+            to: ROUTED_SONNET,
+          },
+        },
+      });
+    });
+
+    it('never moves a pinned platform-billed route onto the caller key', () => {
+      const platformHaiku = 'openrouter:anthropic/claude-haiku-4.5';
+      expect(
+        setup('byok', ['anthropic'], undefined, {
+          platformIntents: { ...PLATFORM_INTENTS, fast: platformHaiku },
+        })({ pinned: platformHaiku })
+      ).toEqual({
+        kind: 'unavailable',
+        reason: 'not_in_tier',
+        suggestedModel: DIRECT_SONNET,
+      });
+    });
+
+    it('never moves a pinned key-billed model onto a platform route of it', () => {
+      const platformHaiku = 'openrouter:anthropic/claude-haiku-4.5';
+      expect(
+        setup('free', [], undefined, {
+          platformIntents: { ...PLATFORM_INTENTS, fast: platformHaiku },
+        })({ pinned: 'anthropic:claude-haiku-4-5' })
+      ).toEqual({
+        kind: 'unavailable',
+        reason: 'key_removed',
+        suggestedModel: PLATFORM_INTENTS.balanced,
+      });
     });
   });
 
