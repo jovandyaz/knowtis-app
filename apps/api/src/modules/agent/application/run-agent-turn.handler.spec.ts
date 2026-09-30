@@ -54,6 +54,7 @@ import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
 import { CONTINUABLE_STOP_REASONS } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
+import { estimateMessageTokens } from '../domain/message-tokens';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type {
   ConversationMessageRow,
@@ -143,6 +144,8 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     AI_AGENT_MAX_STEPS: 8,
     AI_AGENT_BYOK_MAX_STEPS: 20,
     AI_AGENT_TURN_TOKEN_BUDGET: 150000,
+    AI_AGENT_MAX_OUTPUT_TOKENS: 8192,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 12000,
   };
   const config = {
     get: vi.fn((k: string) => settings[k] ?? 0),
@@ -183,6 +186,14 @@ function historyRow(
     kind: null,
     ...row,
   };
+}
+
+function rowOfTokens(role: 'user' | 'assistant', tokens: number) {
+  let content = 'palabra';
+  while (estimateMessageTokens({ role, content }) < tokens) {
+    content += ' palabra';
+  }
+  return historyRow({ role, content });
 }
 
 function makeConversations(history: ConversationMessageRow[] = []) {
@@ -7251,6 +7262,84 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
     expect(orchestrator.run).toHaveBeenCalledOnce();
     expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  describe('first call budget', () => {
+    const HISTORY = [
+      rowOfTokens('user', 50),
+      rowOfTokens('assistant', 5750),
+      rowOfTokens('user', 50),
+      rowOfTokens('assistant', 5750),
+    ];
+
+    it('drops the older turn an anonymous first call cannot afford with its synthesis', async () => {
+      const { handler, orchestrator } = build({
+        quota: consumedQuota(),
+        conversations: makeConversations(HISTORY),
+      });
+
+      await handler.execute(
+        { ...turn, isAnonymous: true, conversationId: 'conv-1' },
+        callbacks()
+      );
+
+      expect(
+        vi.mocked(orchestrator.run).mock.calls[0][0].messages
+      ).toHaveLength(3);
+    });
+
+    it('keeps both turns for a free caller', async () => {
+      const { handler, orchestrator } = build({
+        quota: consumedQuota(),
+        conversations: makeConversations(HISTORY),
+      });
+
+      await handler.execute({ ...turn, conversationId: 'conv-1' }, callbacks());
+
+      expect(
+        vi.mocked(orchestrator.run).mock.calls[0][0].messages
+      ).toHaveLength(5);
+    });
+
+    it('refuses a turn whose first call cannot fit, and gives the message back', async () => {
+      const quota = consumedQuota();
+      const { handler, orchestrator, rateLimit } = build({ quota });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+      const cb = callbacks();
+
+      await handler.execute({ ...turn, isAnonymous: true }, cb);
+
+      expect(cb.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'AI_RATE_LIMIT_EXCEEDED' })
+      );
+      expect(orchestrator.run).not.toHaveBeenCalled();
+      expect(quota.refund).toHaveBeenCalled();
+    });
+
+    it('discards, unannounced, the conversation a first turn that cannot fit opened', async () => {
+      const conversations = makeConversations();
+      const { handler, rateLimit } = build({
+        quota: consumedQuota(),
+        conversations,
+      });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+      const cb = { ...callbacks(), onConversation: vi.fn() };
+
+      await handler.execute({ ...turn, isAnonymous: true }, cb);
+
+      expect(conversations.create).toHaveBeenCalledOnce();
+      expect(conversations.deleteForUser).toHaveBeenCalledExactlyOnceWith(
+        'conv-1',
+        USER
+      );
+      expect(cb.onConversation).not.toHaveBeenCalled();
+    });
   });
 
   describe('continuable on done', () => {

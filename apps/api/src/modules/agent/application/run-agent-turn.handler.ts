@@ -85,6 +85,10 @@ import {
 } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
+import {
+  firstCallHistoryBudget,
+  firstCallRoom,
+} from '../domain/first-call-budget';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -1288,6 +1292,27 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
   ): Promise<PreparedTurn> {
     const { userId } = execution.subject;
+    // Resolve turn settings before the budget reservation: a settings-store
+    // failure must escape before any reservation exists, else the held
+    // reservation leaks with no client-facing error.
+    const limits = segmentLimits(execution, {
+      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
+      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
+      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
+      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
+    });
+    const firstCall = {
+      maxTurnTokens: limits.maxTurnTokens,
+      maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
+      synthesisReserveTokens: this.configService.get(
+        'AI_AGENT_SYNTHESIS_RESERVE_TOKENS'
+      ),
+      promptOverheadTokens: AGENT_PROMPT_OVERHEAD_TOKENS,
+    };
+    const historyBudget = firstCallHistoryBudget({
+      ...firstCall,
+      historyCap: AGENT_HISTORY_TOKEN_BUDGET,
+    });
     if (freshUserMessage && !input.continuation) {
       const verdict = await this.injectionGuard.guard(
         freshUserMessage.content,
@@ -1303,7 +1328,8 @@ export class RunAgentTurnHandler {
     const fitted = await this.fitGuardedHistory(
       sanitized.messages,
       freshUserMessage,
-      execution
+      execution,
+      historyBudget
     );
     logInputDetections(
       this.logger,
@@ -1320,6 +1346,17 @@ export class RunAgentTurnHandler {
     );
     const messages = fitted.messages;
     const estimatedTokens = this.estimateTokens(messages);
+    // The newest turn is kept past the history cap, so only a turn that
+    // overruns the first call's whole room is refused.
+    if (
+      estimatedTokens - AGENT_PROMPT_OVERHEAD_TOKENS >
+      firstCallRoom(firstCall)
+    ) {
+      return {
+        kind: 'budget_denied',
+        reason: 'This message does not fit in the tokens left for this turn.',
+      };
+    }
     const pricing = this.modelCatalog.getPricing(model);
     const estimatedCostUsd = pricing
       ? computeTokenCostUsd(
@@ -1330,15 +1367,6 @@ export class RunAgentTurnHandler {
     const userMemories = input.memoryQuery
       ? await this.loadUserMemories(execution, input.memoryQuery)
       : [];
-    // Resolve turn settings before the budget reservation: a settings-store
-    // failure must escape before any reservation exists, else the held
-    // reservation leaks with no client-facing error.
-    const limits = segmentLimits(execution, {
-      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
-      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
-      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
-      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
-    });
     const [openrouterProviderOrder, openrouterIgnoredProviders] =
       await Promise.all([
         this.aiConfig.getOpenRouterProviderOrder(),
@@ -1496,7 +1524,8 @@ export class RunAgentTurnHandler {
   private async fitGuardedHistory(
     history: readonly AgentMessage[],
     fresh: AgentMessage | undefined,
-    execution: AiExecutionContext
+    execution: AiExecutionContext,
+    budget: number
   ): Promise<{
     messages: AgentMessage[];
     detections: ReplayDetection[];
@@ -1507,10 +1536,7 @@ export class RunAgentTurnHandler {
     let replay = history;
     let firstDrop: DroppedUserTurn | undefined;
     for (;;) {
-      const fitted = fitHistoryToBudget(
-        withFresh(replay),
-        AGENT_HISTORY_TOKEN_BUDGET
-      );
+      const fitted = fitHistoryToBudget(withFresh(replay), budget);
       const guarded = await this.guardReplayedUserTurn(
         fresh ? fitted.slice(0, -1) : fitted,
         fresh,
@@ -1522,7 +1548,7 @@ export class RunAgentTurnHandler {
         continue;
       }
       const settled = guarded.dropped
-        ? fitHistoryToBudget(guarded.messages, AGENT_HISTORY_TOKEN_BUDGET)
+        ? fitHistoryToBudget(guarded.messages, budget)
         : fitted;
       return {
         ...coalesceReplayHistory(settled),
