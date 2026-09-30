@@ -645,10 +645,10 @@ An intent with no servable model is reported `{ available: false, reason: 'no_ro
 
 1. The per-turn `model` of the request. It is never substituted: a model outside the catalog is refused.
 2. `conversations.model` — honored only on HITL resume, where it is the sole carrier of the model that served the first half of the turn; fresh turns resolve through the layers below.
-3. `user_ai_settings.preferred_model` — the account override set from the picker. It counts only when the caller holds a key for its provider; any other stored value is ignored without being reported. A stored model that is a route of a canonical BYOK candidate stands for that candidate: it runs over whichever held key serves it (see [Primary provider](#primary-provider)).
+3. `user_ai_settings.preferred_model` — the account override set from the picker. It counts only when the caller holds a key for its provider; any other stored value is ignored without being reported. A stored model that is a route of a canonical BYOK candidate stands for that candidate: while its route stays in the catalog it runs on its own key, and once the route has left the catalog it runs on another held key that serves the same model (see [Primary provider](#primary-provider)).
 4. `user_ai_settings.preferred_intent` (null = `balanced`) — the model the tier's catalog routes that intent to.
 
-A stored model that has left the catalog **falls back visibly, and only within the same billing class**: the turn runs on the model of the caller's preferred intent (else balanced) and reports why (`model_retired` when the catalog no longer supports it, `key_removed` when the caller's key for it is gone and no other held key serves the same model — which only a resumed conversation's pinned model can report, since a stored `preferred_model` on a key the caller no longer holds is ignored without a report — `not_in_tier` otherwise), and the server logs `ai.model.fallback`. A stored or pinned model that is a route of a canonical candidate is never a fallback while another held key serves the same model: the turn re-routes silently, so `requested` differs from `resolved` and no `fallback` is present. That covers a primary provider switch, a single vendor id that has retired, and a removed key when another key serves the model. When the stored model and the substitute bill differently, or no intent model is servable, the turn ends with `AI_MODEL_UNAVAILABLE` `{ reason, suggestedModel }` (`agent:error`, logged `ai.model.unavailable`) and nothing is consumed. `reason` is one of `model_retired`, `key_removed`, `not_in_tier` or `no_route`; `suggestedModel` is the model the caller would have been given, or `null`.
+A stored model that has left the catalog **falls back visibly, and only within the same billing class**: the turn runs on the model of the caller's preferred intent (else balanced) and reports why (`model_retired` when the catalog no longer supports it, `key_removed` when the caller's key for it is gone and no other held key serves the same model — which only a resumed conversation's pinned model can report, since a stored `preferred_model` on a key the caller no longer holds is ignored without a report — `not_in_tier` otherwise), and the server logs `ai.model.fallback`. A stored or pinned model that is a route of a canonical candidate is never a fallback while another held key serves the same model: the turn re-routes silently, so `requested` differs from `resolved` and no `fallback` is present. The other route is the first one still in the catalog, in the canonical model's declared order (the direct provider before OpenRouter), not the primary's. This happens only once the stored route has left the catalog: a routed model displaced by a primary switch, a single vendor id that has retired, or a removed key when another key serves the model. When the stored model and the substitute bill differently, or no intent model is servable, the turn ends with `AI_MODEL_UNAVAILABLE` `{ reason, suggestedModel }` (`agent:error`, logged `ai.model.unavailable`) and nothing is consumed. `reason` is one of `model_retired`, `key_removed`, `not_in_tier` or `no_route`; `suggestedModel` is the model the caller would have been given, or `null`.
 
 Every `agent:done` — a completed turn, a checkpoint stop and the resume after an approval or a rejection — carries `modelResolution: { requested, resolved, fallback? }`, where `fallback` (`{ reason, from, to }`) is present only when the server substituted the model. The reported model is the one the turn was routed to; the [fallback chain](#cross-provider-fallback-chain) may still relay it to another model if its provider is down or out of credit, and the model reported in `usage.model` is the one that actually served the turn.
 
@@ -671,7 +671,7 @@ A byok-tier caller who holds keys for several providers picks which one their in
 - A non-null value is validated against the caller's held keys; naming a provider the caller holds no key for answers **400**. `{ primaryProvider: null }` never reads the key store, so a clear stays writable while it is down.
 - Deleting a provider's key (`DELETE /ai/keys/:provider`) clears the primary along with a stored model on that provider, so re-adding the key does not silently revive either.
 - `GET /ai/models` reads the settings row only for byok callers; the other tiers ignore the primary.
-- Changing the primary re-routes a stored or pinned model of a canonical candidate to the new primary's route without a `fallback` (see [Send-time resolution](#send-time-resolution)).
+- Changing the primary does not move a stored or pinned model whose route is still in the catalog: it keeps running on its own key. Only when that route has left the catalog (a routed model displaced by the switch, a retired vendor id, a removed key) does the turn re-route silently to the first remaining route of the same model, without a `fallback` (see [Send-time resolution](#send-time-resolution)).
 
 The agent WebSocket payload accepts a per-turn `model` override (`{ conversationId?, message, model?, effort? }`) — it is resolved as an explicit request above and persisted on the conversation — but no shipped surface sends it: both pickers write the account preference instead, so the cascade serves every turn. `effort` is the one per-turn field the UI does send — see below.
 
@@ -904,13 +904,14 @@ A CHECK enforces that the four secret columns are all null or all present — a 
 
 ### `user_ai_settings`
 
-| Column             | Type          | Notes                                                |
-| ------------------ | ------------- | ---------------------------------------------------- |
-| `user_id`          | uuid (PK, FK) | → users, CASCADE on delete                           |
-| `preferred_model`  | varchar(120)  | Account-default copilot model id                     |
-| `preferred_intent` | varchar(16)   | `fast` / `balanced` / `powerful`; null = balanced    |
-| `primary_provider` | varchar(20)   | BYOK provider intents prefer; null = first key added |
-| `updated_at`       | timestamptz   | Auto-set on upsert                                   |
+| Column               | Type          | Notes                                                |
+| -------------------- | ------------- | ---------------------------------------------------- |
+| `user_id`            | uuid (PK, FK) | → users, CASCADE on delete                           |
+| `preferred_model`    | varchar(120)  | Account-default copilot model id                     |
+| `preferred_intent`   | varchar(16)   | `fast` / `balanced` / `powerful`; null = balanced    |
+| `primary_provider`   | varchar(20)   | BYOK provider intents prefer; null = first key added |
+| `ghost_text_enabled` | boolean       | Inline autocomplete toggle; default true             |
+| `updated_at`         | timestamptz   | Auto-set on upsert                                   |
 
 Holds each user's account-default copilot model and intent. Created in migration `0013` (with `preferred_model`); `0025` added `preferred_intent`. Unknown stored intent values read back as null. Migration `0054` added `primary_provider` as a nullable column with a CHECK limiting it to `anthropic`, `openai`, `google` or `openrouter` (or null), created `NOT VALID` so existing rows are not scanned; new writes are checked. See [Primary provider](#primary-provider). The per-conversation override lives on `conversations.model` (varchar(120), nullable, also added in `0013`) in the agent module. See [Copilot Model Selection](#copilot-model-selection).
 
