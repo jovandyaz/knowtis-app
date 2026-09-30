@@ -867,6 +867,17 @@ describe('agent.store server-authoritative wire', () => {
             message: 'send it again',
           }),
       ],
+      [
+        'a new proposal',
+        (cbs: Cbs) =>
+          cbs.onProposal?.({
+            id: 'p2',
+            kind: 'update',
+            targetNoteId: 'n1',
+            summary: 'Update "My Note"',
+            payload: {},
+          }),
+      ],
       ['Stop', () => useAgentStore.getState().cancel()],
       [
         'a conversation switch',

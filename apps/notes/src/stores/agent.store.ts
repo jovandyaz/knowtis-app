@@ -507,6 +507,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           set((s) => ({
             status: 'pendingProposal',
             pendingProposal: proposal,
+            decisionInFlight: null,
             thinkingText: '',
             messages: s.messages.map((m) =>
               m.id === id ? { ...m, proposal: { kind: proposal.kind } } : m
