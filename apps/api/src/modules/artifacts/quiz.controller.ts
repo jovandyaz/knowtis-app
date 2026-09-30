@@ -14,7 +14,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { SubmitQuizAttemptHandler } from './application/commands/submit-quiz-attempt.handler';
 import { GetLatestQuizAttemptHandler } from './application/queries/get-latest-quiz-attempt.handler';
 import { GetQuizAttemptsHandler } from './application/queries/get-quiz-attempts.handler';

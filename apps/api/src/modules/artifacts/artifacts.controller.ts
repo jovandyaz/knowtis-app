@@ -26,7 +26,10 @@ import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiServiceUnavailable } from '../../core/swagger/api-responses.decorator';
 import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { GetNoteHandler } from '../notes/application';
 import { NoteErrorCodes } from '../notes/domain/errors/note.errors';
 import { DeleteArtifactHandler } from './application/commands/delete-artifact.handler';

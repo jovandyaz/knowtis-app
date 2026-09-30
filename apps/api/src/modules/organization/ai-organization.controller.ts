@@ -34,7 +34,10 @@ import {
 import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { SuggestOrganizationHandler } from './application/commands/suggest-organization.handler';
 import { SuggestOrganizationDto } from './dto/suggest-organization.dto';
 

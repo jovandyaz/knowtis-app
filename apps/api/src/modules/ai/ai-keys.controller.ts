@@ -15,7 +15,10 @@ import { Throttle } from '@nestjs/throttler';
 
 import { FEATURE_FLAG_KEYS, type ProviderKeyInfo } from '@knowtis/shared-types';
 
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { ByokService } from './application/services/byok.service';
 import { ProviderParamDto } from './dto/provider-param.dto';
 import { SetProviderKeyDto } from './dto/set-provider-key.dto';
