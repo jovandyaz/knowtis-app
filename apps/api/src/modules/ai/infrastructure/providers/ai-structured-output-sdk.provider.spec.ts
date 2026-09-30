@@ -14,6 +14,7 @@ vi.mock('ai', () => ({
   generateText: vi.fn(),
   Output: { object: vi.fn((value) => value) },
   createProviderRegistry: vi.fn(() => ({ languageModel })),
+  wrapLanguageModel: vi.fn(({ model }: { model: unknown }) => model),
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({

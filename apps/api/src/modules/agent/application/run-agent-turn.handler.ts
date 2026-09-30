@@ -85,6 +85,12 @@ import {
 } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
+import {
+  AGENT_FIRST_CALL_COSTS,
+  AGENT_PROMPT_OVERHEAD_TOKENS,
+  firstCallHistoryBudget,
+  firstCallRoom,
+} from '../domain/first-call-budget';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -182,12 +188,14 @@ export interface RunAgentTurnCallbacks {
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
-  /** Fires once, when the turn named no conversation, with the one it opened; the id must not wait for `done`. */
+  /** Fires once, just before the model runs, when the turn named no conversation, with the one it opened; the id must not wait for `done`. A turn refused before the model runs keeps no conversation, so it announces none. */
   readonly onConversation?: (conversationId: string) => void;
   /** Fires once, just before the model runs; a turn that ends without it was refused before any model call. */
   readonly onModelStart?: () => void;
   /** Fires after the turn draws or gives back one of today's messages. */
   readonly onQuota?: (quota: AiQuota) => void;
+  /** Fires instead of running when the turn id is already stored in the conversation. */
+  readonly onTurnSettled?: (conversationId: string) => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -230,11 +238,22 @@ const NO_QUOTA_HOLD: QuotaHold = {
   quota: () => null,
 };
 
+const PREPARED_TURN = {
+  REFUSED: 'refused',
+  TOO_LARGE: 'too_large',
+  BUDGET_DENIED: 'budget_denied',
+  READY: 'ready',
+} as const;
+
 type PreparedTurn =
-  | { readonly kind: 'refused' }
-  | { readonly kind: 'budget_denied'; readonly reason?: string }
+  | { readonly kind: typeof PREPARED_TURN.REFUSED }
+  | { readonly kind: typeof PREPARED_TURN.TOO_LARGE }
   | {
-      readonly kind: 'ready';
+      readonly kind: typeof PREPARED_TURN.BUDGET_DENIED;
+      readonly reason?: string;
+    }
+  | {
+      readonly kind: typeof PREPARED_TURN.READY;
       readonly messages: AgentMessage[];
       readonly userMemories: string[];
       readonly limits: SegmentLimits;
@@ -243,8 +262,8 @@ type PreparedTurn =
       readonly reservation: Reservation;
     };
 
-const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
+const FIRST_CALL_UNAFFORDABLE_EVENT = 'agent.turn.first_call_unaffordable';
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
 function detectionRows(
@@ -284,6 +303,12 @@ function freshUserMessageOf(
 function messageTooLongError() {
   return AIErrors.invalidInput(
     `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
+  );
+}
+
+function turnTooLargeError() {
+  return AIErrors.invalidInput(
+    'Message and conversation exceed what one turn can process'
   );
 }
 
@@ -403,39 +428,89 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
-    if (conversation.opened) {
-      callbacks.onConversation?.(conversationId);
+    // A turn refused before the model runs deletes the conversation it
+    // created, so the client learns the id only once the model starts.
+    let modelStarted = false;
+    const onModelStart = () => {
+      modelStarted = true;
+      if (conversation.opened) {
+        callbacks.onConversation?.(conversationId);
+      }
+      callbacks.onModelStart?.();
+    };
+    try {
+      if (await this.alreadyStored(conversationId, input.turnId, callbacks)) {
+        return;
+      }
+      const { history, knownNotes } = await this.loadConversationContext(
+        conversationId,
+        input.userId
+      );
+      const synthInput: TurnInput = {
+        turnId: input.turnId,
+        messages: history,
+        message,
+        execution,
+        memoryQuery: message.content,
+        ...(input.noteId ? { noteId: input.noteId } : {}),
+        knownNotes,
+        segmentIndex: 0,
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+        conversationModel: conversation.model,
+      };
+      const persistence: PersistenceContext = {
+        conversationId,
+        turnId: input.turnId,
+        userContent: message.content,
+      };
+      await this.runLoop(
+        synthInput,
+        undefined,
+        { ...callbacks, onModelStart },
+        signal,
+        this.executePolicy(callbacks, persistence),
+        persistence
+      );
+    } finally {
+      if (conversation.created && !modelStarted) {
+        await this.discardUnusedConversation(conversationId, input.userId);
+      }
     }
-    const { history, knownNotes } = await this.loadConversationContext(
+  }
+
+  private async discardUnusedConversation(
+    conversationId: string,
+    userId: string
+  ): Promise<void> {
+    try {
+      await this.conversations.deleteForUser(conversationId, userId);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.conversation.discard_failed',
+        conversationId,
+        error: reasonOf(error),
+      });
+    }
+  }
+
+  // The turn claim expires after 24 h; past it, only the stored row proves the
+  // turn ran, so it is checked before any message is drawn.
+  private async alreadyStored(
+    conversationId: string,
+    turnId: string,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onTurnSettled'>
+  ): Promise<boolean> {
+    if (!(await this.conversations.hasTurn(conversationId, turnId))) {
+      return false;
+    }
+    this.logger.log({
+      event: 'agent.turn.already_stored',
       conversationId,
-      input.userId
-    );
-    const synthInput: TurnInput = {
-      turnId: input.turnId,
-      messages: history,
-      message,
-      execution,
-      memoryQuery: message.content,
-      ...(input.noteId ? { noteId: input.noteId } : {}),
-      knownNotes,
-      segmentIndex: 0,
-      ...(input.model ? { model: input.model } : {}),
-      ...(input.effort ? { effort: input.effort } : {}),
-      conversationModel: conversation.model,
-    };
-    const persistence: PersistenceContext = {
-      conversationId,
-      turnId: input.turnId,
-      userContent: message.content,
-    };
-    return this.runLoop(
-      synthInput,
-      undefined,
-      callbacks,
-      signal,
-      this.executePolicy(callbacks, persistence),
-      persistence
-    );
+      turnId,
+    });
+    callbacks.onTurnSettled?.(conversationId);
+    return true;
   }
 
   private async loadUserMemories(
@@ -480,18 +555,23 @@ export class RunAgentTurnHandler {
   private async resolveConversation(
     input: RunAgentTurnInput,
     message: { content: string }
-  ): Promise<{ id: string; model: string | null; opened: boolean } | null> {
+  ): Promise<{
+    id: string;
+    model: string | null;
+    opened: boolean;
+    created: boolean;
+  } | null> {
     if (input.conversationId) {
       const existing = await this.conversations.findByIdForUser(
         input.conversationId,
         input.userId
       );
-      return existing ? { ...existing, opened: false } : null;
+      return existing ? { ...existing, opened: false, created: false } : null;
     }
     const id = conversationIdForTurn(input.userId, input.turnId);
     const replayed = await this.conversations.findByIdForUser(id, input.userId);
     if (replayed) {
-      return { ...replayed, opened: true };
+      return { ...replayed, opened: true, created: false };
     }
     const created = await this.conversations.create({
       id,
@@ -499,7 +579,7 @@ export class RunAgentTurnHandler {
       ...(input.noteId ? { noteId: input.noteId } : {}),
       title: deriveConversationTitle(message.content) || null,
     });
-    return { id: created.id, model: null, opened: true };
+    return { id: created.id, model: null, opened: true, created: true };
   }
 
   private async loadConversationContext(
@@ -690,6 +770,11 @@ export class RunAgentTurnHandler {
       callbacks.onError(AgentErrors.conversationNotFound());
       return;
     }
+    if (
+      await this.alreadyStored(input.conversationId, input.turnId, callbacks)
+    ) {
+      return;
+    }
     const last = await this.conversations.findLastMessage(
       input.conversationId,
       input.userId
@@ -870,10 +955,15 @@ export class RunAgentTurnHandler {
       await hold.refund();
       throw error;
     }
-    if (prepared.kind === 'refused') {
+    if (prepared.kind === PREPARED_TURN.REFUSED) {
       return;
     }
-    if (prepared.kind === 'budget_denied') {
+    if (prepared.kind === PREPARED_TURN.TOO_LARGE) {
+      await hold.refund();
+      callbacks.onError(turnTooLargeError());
+      return;
+    }
+    if (prepared.kind === PREPARED_TURN.BUDGET_DENIED) {
       await hold.refund();
       callbacks.onError(AIErrors.rateLimitExceeded(prepared.reason));
       return;
@@ -1226,6 +1316,38 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
   ): Promise<PreparedTurn> {
     const { userId } = execution.subject;
+    // Resolve turn settings before the budget reservation: a settings-store
+    // failure must escape before any reservation exists, else the held
+    // reservation leaks with no client-facing error.
+    const limits = segmentLimits(execution, {
+      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
+      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
+      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
+      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
+    });
+    const firstCall = {
+      ...AGENT_FIRST_CALL_COSTS,
+      maxTurnTokens: limits.maxTurnTokens,
+      maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
+    };
+    const room = firstCallRoom(firstCall);
+    const historyBudget = firstCallHistoryBudget({
+      ...firstCall,
+      historyCap: AGENT_HISTORY_TOKEN_BUDGET,
+    });
+    // The guard's gray-zone classifier bills the payer, so an oversized
+    // message must not reach it.
+    const freshTokens = freshUserMessage
+      ? estimateMessageTokens(freshUserMessage)
+      : 0;
+    if (freshTokens > room) {
+      return this.firstCallUnaffordable(
+        execution,
+        firstCall,
+        room,
+        freshTokens
+      );
+    }
     if (freshUserMessage && !input.continuation) {
       const verdict = await this.injectionGuard.guard(
         freshUserMessage.content,
@@ -1233,7 +1355,7 @@ export class RunAgentTurnHandler {
       );
       if (!verdict.safe) {
         callbacks.onError(AIErrors.promptInjectionDetected());
-        return { kind: 'refused' };
+        return { kind: PREPARED_TURN.REFUSED };
       }
     }
     const inputMessages = input.messages ?? [];
@@ -1241,7 +1363,8 @@ export class RunAgentTurnHandler {
     const fitted = await this.fitGuardedHistory(
       sanitized.messages,
       freshUserMessage,
-      execution
+      execution,
+      historyBudget
     );
     logInputDetections(
       this.logger,
@@ -1258,6 +1381,17 @@ export class RunAgentTurnHandler {
     );
     const messages = fitted.messages;
     const estimatedTokens = this.estimateTokens(messages);
+    const fittedTokens = estimatedTokens - AGENT_PROMPT_OVERHEAD_TOKENS;
+    // The newest turn is kept past the history cap, so only a turn that
+    // overruns the first call's whole room is refused.
+    if (fittedTokens > room) {
+      return this.firstCallUnaffordable(
+        execution,
+        firstCall,
+        room,
+        fittedTokens
+      );
+    }
     const pricing = this.modelCatalog.getPricing(model);
     const estimatedCostUsd = pricing
       ? computeTokenCostUsd(
@@ -1268,15 +1402,6 @@ export class RunAgentTurnHandler {
     const userMemories = input.memoryQuery
       ? await this.loadUserMemories(execution, input.memoryQuery)
       : [];
-    // Resolve turn settings before the budget reservation: a settings-store
-    // failure must escape before any reservation exists, else the held
-    // reservation leaks with no client-facing error.
-    const limits = segmentLimits(execution, {
-      maxSteps: this.configService.get('AI_AGENT_MAX_STEPS'),
-      byokMaxSteps: this.configService.get('AI_AGENT_BYOK_MAX_STEPS'),
-      turnTokenBudget: this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET'),
-      dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
-    });
     const [openrouterProviderOrder, openrouterIgnoredProviders] =
       await Promise.all([
         this.aiConfig.getOpenRouterProviderOrder(),
@@ -1288,12 +1413,12 @@ export class RunAgentTurnHandler {
     });
     if (!limit.allowed) {
       return {
-        kind: 'budget_denied',
+        kind: PREPARED_TURN.BUDGET_DENIED,
         ...(limit.reason !== undefined ? { reason: limit.reason } : {}),
       };
     }
     return {
-      kind: 'ready',
+      kind: PREPARED_TURN.READY,
       messages,
       userMemories,
       limits,
@@ -1301,6 +1426,23 @@ export class RunAgentTurnHandler {
       openrouterIgnoredProviders,
       reservation: limit.reservation,
     };
+  }
+
+  private firstCallUnaffordable(
+    execution: AiExecutionContext,
+    firstCall: { readonly maxTurnTokens: number },
+    room: number,
+    fittedTokens: number
+  ): PreparedTurn {
+    this.logger.warn({
+      event: FIRST_CALL_UNAFFORDABLE_EVENT,
+      userId: execution.subject.userId,
+      tier: execution.tier,
+      room,
+      fittedTokens,
+      maxTurnTokens: firstCall.maxTurnTokens,
+    });
+    return { kind: PREPARED_TURN.TOO_LARGE };
   }
 
   /**
@@ -1434,7 +1576,8 @@ export class RunAgentTurnHandler {
   private async fitGuardedHistory(
     history: readonly AgentMessage[],
     fresh: AgentMessage | undefined,
-    execution: AiExecutionContext
+    execution: AiExecutionContext,
+    budget: number
   ): Promise<{
     messages: AgentMessage[];
     detections: ReplayDetection[];
@@ -1445,10 +1588,7 @@ export class RunAgentTurnHandler {
     let replay = history;
     let firstDrop: DroppedUserTurn | undefined;
     for (;;) {
-      const fitted = fitHistoryToBudget(
-        withFresh(replay),
-        AGENT_HISTORY_TOKEN_BUDGET
-      );
+      const fitted = fitHistoryToBudget(withFresh(replay), budget);
       const guarded = await this.guardReplayedUserTurn(
         fresh ? fitted.slice(0, -1) : fitted,
         fresh,
@@ -1460,7 +1600,7 @@ export class RunAgentTurnHandler {
         continue;
       }
       const settled = guarded.dropped
-        ? fitHistoryToBudget(guarded.messages, AGENT_HISTORY_TOKEN_BUDGET)
+        ? fitHistoryToBudget(guarded.messages, budget)
         : fitted;
       return {
         ...coalesceReplayHistory(settled),

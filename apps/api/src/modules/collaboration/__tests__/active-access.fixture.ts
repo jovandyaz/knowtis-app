@@ -238,7 +238,7 @@ export class ActiveAccessServer {
         this.server.hocuspocus.unloadingDocuments.size === 0
     );
     await this.server.destroy();
-    await this.pool.onModuleDestroy();
+    await this.pool.onApplicationShutdown();
   }
 }
 

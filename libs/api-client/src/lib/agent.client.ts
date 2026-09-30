@@ -173,6 +173,28 @@ const RESENDABLE_TURN_ERROR_CODES: ReadonlySet<string> = new Set([
   AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
 ]);
 
+// Every error after the server took a proposal names its turn, so a decision
+// refused without one was never applied and resending it cannot apply it twice.
+function isDecisionNotTaken(
+  request: PendingRequest,
+  error: AgentErrorPayload
+): boolean {
+  return (
+    request.kind !== 'message' &&
+    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
+    error.turnId === undefined
+  );
+}
+
+function isResendable(
+  request: PendingRequest,
+  error: AgentErrorPayload
+): boolean {
+  return request.kind === 'message'
+    ? RESENDABLE_TURN_ERROR_CODES.has(error.code)
+    : isDecisionNotTaken(request, error);
+}
+
 export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
@@ -431,11 +453,7 @@ export class AgentClient {
   ): boolean {
     const request = this.pending;
     const delay = TURN_RESEND_DELAYS_MS[this.turnResends];
-    if (
-      request?.kind !== 'message' ||
-      !RESENDABLE_TURN_ERROR_CODES.has(error.code) ||
-      delay === undefined
-    ) {
+    if (!request || !isResendable(request, error) || delay === undefined) {
       return false;
     }
     this.turnResends++;
@@ -630,11 +648,7 @@ export class AgentClient {
     });
 
     onCurrentSocket('agent:proposal', (payload: AgentProposalPayload) => {
-      this.pending = null;
-      this.awaitingReceipt = null;
-      this.awaitingDecision = true;
-      this.unfinishedTurnId = undefined;
-      this.cancelTurnResend();
+      this.awaitDecision();
       this.activeCallbacks?.onProposal?.(payload);
     });
 
@@ -676,11 +690,26 @@ export class AgentClient {
       if (this.scheduleTurnResend(payload, callbacks)) {
         return;
       }
+      // The proposal is still stored, so the turn stays open for the user to
+      // decide again once the server can take it.
+      if (this.pending && isDecisionNotTaken(this.pending, payload)) {
+        this.awaitDecision();
+        callbacks.onError(payload);
+        return;
+      }
       if (!RESENDABLE_TURN_ERROR_CODES.has(payload.code)) {
         this.unfinishedTurnId = undefined;
       }
       this.failRequest(callbacks, payload);
     });
+  }
+
+  private awaitDecision(): void {
+    this.pending = null;
+    this.awaitingReceipt = null;
+    this.awaitingDecision = true;
+    this.unfinishedTurnId = undefined;
+    this.cancelTurnResend();
   }
 
   private isForeignTurn(payload: { turnId?: string }): boolean {

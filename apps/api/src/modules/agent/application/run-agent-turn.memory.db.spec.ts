@@ -6,7 +6,11 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { AGENT_CONVERSATION_NOT_FOUND_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { validateEnv } from '../../../config/env.config';
@@ -22,6 +26,7 @@ import { DB_AVAILABLE } from '../../../test-support/database';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
+import type { MessageQuotaService } from '../../ai/application/services/message-quota.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
@@ -285,7 +290,93 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     expect(await repo.loadMessages(foreign.id, OTHER, 10)).toEqual([]);
   });
 
-  it('lands the replay of a turn refused before the model ran in the conversation its first delivery opened', async () => {
+  it.each([
+    [
+      'its model is not selectable',
+      AI_MODEL_UNAVAILABLE_CODE,
+      {
+        modelPreference: {
+          chooseTurnModel: vi.fn().mockResolvedValue({
+            kind: 'unavailable',
+            reason: 'not_in_tier',
+            suggestedModel: MODEL,
+          }),
+          reasoningFor: vi.fn().mockResolvedValue(null),
+        } as unknown as ModelPreferenceService,
+      },
+    ],
+    [
+      'no message is left today',
+      AI_QUOTA_EXHAUSTED_CODE,
+      {
+        quota: createMessageQuotaStub({
+          kind: 'exhausted',
+          resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+          upgrade: 'register',
+        }),
+      },
+    ],
+  ])(
+    'leaves no conversation row behind when a first turn is refused because %s',
+    async (
+      _refusal,
+      code,
+      over: {
+        modelPreference?: ModelPreferenceService;
+        quota?: MessageQuotaService;
+      }
+    ) => {
+      const rateLimit = {
+        checkLimit: vi.fn().mockResolvedValue(ALLOWED),
+        dailyAllowance: vi
+          .fn()
+          .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
+        recordUsage: vi.fn().mockResolvedValue(undefined),
+        releaseReservation: vi.fn().mockResolvedValue(undefined),
+        recordSideCost: vi.fn().mockResolvedValue(undefined),
+      } as unknown as AIRateLimitService;
+      const pendingStore = {
+        save: vi.fn(),
+        take: vi.fn().mockResolvedValue(null),
+      } as unknown as PendingMutationStore;
+      const handler = new RunAgentTurnHandler(
+        orchestrator,
+        rateLimit,
+        config,
+        pendingStore,
+        createTestCatalog(),
+        new DrizzleConversationRepository(db),
+        noMemories,
+        embedStub,
+        over.modelPreference ?? modelPreferenceStub,
+        byokStub,
+        guardStub,
+        aiConfigStub,
+        turnEffortStub,
+        tierResolverStub,
+        over.quota ?? createMessageQuotaStub(),
+        eventsStub
+      );
+      const turnId = randomUUID();
+      const onError = vi.fn();
+
+      await handler.execute(
+        { userId: USER, turnId, message: { content: 'plan my week' } },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+      );
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code })
+      );
+      const rows = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, conversationIdForTurn(USER, turnId)));
+      expect(rows).toEqual([]);
+    }
+  );
+
+  it('lands the replay of a turn refused before the model ran in the conversation its turn id derives', async () => {
     const rateLimit = {
       checkLimit: vi
         .fn()
@@ -346,6 +437,10 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     const refused = vi.fn();
     const firstAnnounce = vi.fn();
     await deliver({ onError: refused, onConversation: firstAnnounce });
+    const afterRefusal = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(eq(conversations.id, opened));
     const replayAnnounce = vi.fn();
     let doneConversationId: string | undefined;
     await deliver({
@@ -356,7 +451,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     });
 
     expect(refused).toHaveBeenCalledOnce();
-    expect(firstAnnounce).toHaveBeenCalledWith(opened);
+    expect(firstAnnounce).not.toHaveBeenCalled();
+    expect(afterRefusal).toEqual([]);
     expect(replayAnnounce).toHaveBeenCalledWith(opened);
     expect(doneConversationId).toBe(opened);
     const rows = await db

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
@@ -17,6 +17,7 @@ import { AIRateLimitService } from '../services/ai-rate-limit.service';
 import { PromptLoaderService } from '../services/prompt-loader.service';
 import {
   StreamTextHandler,
+  USAGE_WRITE_WAIT_MS,
   type StreamTextCallbacks,
 } from './stream-text.handler';
 
@@ -288,9 +289,70 @@ describe('StreamTextHandler', () => {
     );
 
     expect(collectedChunks).toEqual(['First']);
+    expect(doneResult).toBeNull();
+    expect(errorResult).toBeNull();
     expect(mockProvider.streamCompletion).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ signal: controller.signal })
+    );
+  });
+
+  it('ends a stream its abort closed without reporting it done', async () => {
+    const controller = new AbortController();
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: (async function* () {
+        yield 'partial';
+        controller.abort();
+      })(),
+      usage: Promise.resolve({
+        promptTokens: 0,
+        completionTokens: 0,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+
+    await handler.execute(
+      {
+        execution: createExecutionContext({ userId: 'user-123' }),
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks,
+      controller.signal
+    );
+
+    expect(collectedChunks).toEqual(['partial']);
+    expect(doneResult).toBeNull();
+    expect(errorResult).toBeNull();
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a stream done when the abort lands only after it finished', async () => {
+    const controller = new AbortController();
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: createAsyncStream(['Hello', ' world']),
+      get usage() {
+        controller.abort();
+        return Promise.resolve({
+          promptTokens: 80,
+          completionTokens: 30,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        });
+      },
+    });
+
+    await handler.execute(
+      {
+        execution: createExecutionContext({ userId: 'user-123' }),
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks,
+      controller.signal
+    );
+
+    expect(doneResult).toEqual(
+      expect.objectContaining({ inputTokens: 80, outputTokens: 30 })
     );
   });
 
@@ -626,6 +688,175 @@ describe('StreamTextHandler', () => {
     expect(recorded.outputTokens).toBeGreaterThan(0);
     expect(cache.set).not.toHaveBeenCalled();
     expect(releaseSpy).not.toHaveBeenCalled();
+  });
+
+  describe('holds the request open until its usage is written', () => {
+    function holdUsageWrite(): () => void {
+      let finish!: () => void;
+      vi.mocked(mockUsageRepo.recordUsage).mockReturnValue(
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+      );
+      return () => finish();
+    }
+
+    async function expectSettledOnlyAfterWrite(
+      run: Promise<void>,
+      finishWrite: () => void
+    ): Promise<void> {
+      let settled = false;
+      const tracked = run.then(() => {
+        settled = true;
+      });
+      await vi.waitFor(() =>
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalled()
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(settled).toBe(false);
+
+      finishWrite();
+      await tracked;
+      expect(settled).toBe(true);
+    }
+
+    const input = () => ({
+      execution: createExecutionContext({ userId: 'user-123' }),
+      action: AI_ACTION.SUMMARIZE,
+      content: 'Some content',
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('but sends done for a finished stream before the write settles', async () => {
+      const finishWrite = holdUsageWrite();
+      let settled = false;
+      const running = handler.execute(input(), callbacks).then(() => {
+        settled = true;
+      });
+
+      await vi.waitFor(() => expect(doneResult).not.toBeNull());
+
+      expect(settled).toBe(false);
+      finishWrite();
+      await running;
+    });
+
+    it('but sends a cache hit and its done before the write settles', async () => {
+      const finishWrite = holdUsageWrite();
+      const cachedHandler = buildHandler({
+        isCacheable: vi.fn().mockReturnValue(true),
+        get: vi.fn().mockResolvedValue({
+          text: 'cached summary',
+          model: 'anthropic:claude-sonnet-4-20250514',
+          inputTokens: 10,
+          outputTokens: 5,
+          costUsd: 0.5,
+        }),
+        set: vi.fn().mockResolvedValue(undefined),
+      } as unknown as AICache);
+      let settled = false;
+      const running = cachedHandler.execute(input(), callbacks).then(() => {
+        settled = true;
+      });
+
+      await vi.waitFor(() => expect(doneResult).not.toBeNull());
+
+      expect(collectedChunks).toEqual(['cached summary']);
+      expect(settled).toBe(false);
+      finishWrite();
+      await running;
+    });
+
+    it('for no longer than USAGE_WRITE_WAIT_MS when the write hangs', async () => {
+      vi.useFakeTimers();
+      vi.mocked(mockUsageRepo.recordUsage).mockReturnValue(
+        new Promise<void>(() => undefined)
+      );
+      let settled = false;
+      const running = handler.execute(input(), callbacks).then(() => {
+        settled = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(USAGE_WRITE_WAIT_MS - 1);
+      expect(doneResult).not.toBeNull();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+      await running;
+    });
+
+    it('for a finished stream', async () => {
+      const finishWrite = holdUsageWrite();
+
+      await expectSettledOnlyAfterWrite(
+        handler.execute(input(), callbacks),
+        finishWrite
+      );
+    });
+
+    it('for a stream the caller aborted', async () => {
+      const finishWrite = holdUsageWrite();
+      const controller = new AbortController();
+      vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+        textStream: (async function* () {
+          yield 'partial';
+          controller.abort();
+          yield 'never delivered';
+        })(),
+        usage: Promise.resolve({
+          promptTokens: 0,
+          completionTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        }),
+      });
+
+      await expectSettledOnlyAfterWrite(
+        handler.execute(input(), callbacks, controller.signal),
+        finishWrite
+      );
+    });
+
+    it('for a stream an abort cut with an error', async () => {
+      const finishWrite = holdUsageWrite();
+      const controller = new AbortController();
+      vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+        textStream: (async function* () {
+          yield 'partial';
+          controller.abort();
+          throw new Error('The operation was aborted');
+        })(),
+        usage: new Promise(() => undefined),
+      });
+
+      await expectSettledOnlyAfterWrite(
+        handler.execute(input(), callbacks, controller.signal),
+        finishWrite
+      );
+    });
+
+    it('for a cache hit', async () => {
+      const finishWrite = holdUsageWrite();
+      const cachedHandler = buildHandler({
+        isCacheable: vi.fn().mockReturnValue(true),
+        get: vi.fn().mockResolvedValue({
+          text: 'cached summary',
+          model: 'anthropic:claude-sonnet-4-20250514',
+          inputTokens: 10,
+          outputTokens: 5,
+          costUsd: 0.5,
+        }),
+        set: vi.fn().mockResolvedValue(undefined),
+      } as unknown as AICache);
+
+      await expectSettledOnlyAfterWrite(
+        cachedHandler.execute(input(), callbacks),
+        finishWrite
+      );
+    });
   });
 
   it('should build tone prompt correctly', async () => {

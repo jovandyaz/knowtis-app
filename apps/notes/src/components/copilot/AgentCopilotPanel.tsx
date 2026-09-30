@@ -144,14 +144,24 @@ export function AgentCopilotPanel() {
     toast.info(t('ai.copilot.history.gone'));
   }, [error, conversationWasGone, answeredError, markErrorAnswered, t]);
 
+  const errorBanner = (status === 'error' ||
+    (status === 'pendingProposal' && error)) && (
+    <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
+  );
+
   if (updateProposal && reviewOpen) {
     return (
-      <ProposalReview
-        proposal={updateProposal}
-        onApprove={approveProposal}
-        onReject={rejectProposal}
-        onBack={closeReview}
-      />
+      <div className="flex h-full flex-col min-h-0">
+        {errorBanner}
+        <div className="flex-1 min-h-0">
+          <ProposalReview
+            proposal={updateProposal}
+            onApprove={approveProposal}
+            onReject={rejectProposal}
+            onBack={closeReview}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -186,9 +196,7 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
-      {status === 'error' && (
-        <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
-      )}
+      {errorBanner}
       {status === 'timeout' && (
         <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
       )}

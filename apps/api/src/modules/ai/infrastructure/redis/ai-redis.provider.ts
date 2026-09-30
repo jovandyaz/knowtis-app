@@ -1,7 +1,7 @@
 import {
   Injectable,
   Logger,
-  type OnModuleDestroy,
+  type OnApplicationShutdown,
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -18,7 +18,7 @@ export const AI_REDIS = Symbol('AI_REDIS');
 const COMMAND_TIMEOUT_MS = 2_000;
 
 @Injectable()
-export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
+export class AIRedisProvider implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(AIRedisProvider.name);
   readonly client: Redis;
 
@@ -53,7 +53,7 @@ export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async onModuleDestroy() {
+  async onApplicationShutdown() {
     if (
       this.client.status === 'ready' ||
       this.client.status === 'connecting' ||

@@ -33,7 +33,7 @@ vi.mock('ai', () => ({
 }));
 
 vi.mock('./byok-key-failure', () => ({
-  byokKeyRefusalMiddleware: vi.fn(
+  keyRefusalMiddleware: vi.fn(
     (provider: string) => `refusal-final-for-${provider}`
   ),
 }));
@@ -92,12 +92,12 @@ async function routeKeyThroughMocks() {
 }
 
 describe('ProviderRegistryFactory', () => {
-  it('should resolve a model id through the registry', () => {
+  it('should resolve a model id through the registry, keeping the SDK from retrying a refusal of the server key', () => {
     const factory = makeFactory();
 
     const model = factory.languageModel('anthropic:claude-sonnet-4-20250514');
 
-    expect(model).toBe('mock-model');
+    expect(model).toBe('refusal-final-for-anthropic(mock-model)');
     expect(languageModel).toHaveBeenCalledWith(
       'anthropic:claude-sonnet-4-20250514'
     );
@@ -233,7 +233,7 @@ describe('ProviderRegistryFactory', () => {
 
     const model = factory.languageModel('openrouter:deepseek/deepseek-v3.2');
 
-    expect(model).toBe('mock-model');
+    expect(model).toBe('refusal-final-for-openrouter(mock-model)');
     expect(languageModel).toHaveBeenCalledWith(
       'openrouter:deepseek/deepseek-v3.2'
     );
@@ -327,7 +327,7 @@ describe('ProviderRegistryFactory', () => {
       await stale;
 
       expect(factory.languageModel('anthropic:claude-sonnet-5')).toBe(
-        'model-from:fresh-key'
+        'refusal-final-for-anthropic(model-from:fresh-key)'
       );
     });
 

@@ -1,18 +1,25 @@
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { ShutdownDrain } from '../websocket/shutdown-drain';
 import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AIGateway } from './ai.gateway';
 import type { StreamTextCallbacks } from './application/commands/stream-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
+import type { AICompletionPipeline } from './application/services/ai-completion-pipeline.service';
 import type { TierResolver } from './application/services/tier-resolver.service';
+import { AIErrors } from './domain/errors/ai.errors';
 import type { AiCaller } from './domain/execution-context/ai-execution-context';
+import type { AICompletionProvider } from './domain/ports/ai-provider.port';
 import { createExecutionContext } from './testing/create-execution-context';
+import { createMockConfig } from './testing/create-mock-config';
+import { createTestCatalog } from './testing/create-test-catalog';
 
 function createMockAISocket(overrides: Record<string, unknown> = {}) {
   return {
@@ -92,6 +99,61 @@ function createBlockingExecute() {
   };
 }
 
+const STREAM_MODEL = 'anthropic:claude-sonnet-4-20250514';
+
+/** Streams one chunk, then closes without throwing once the signal aborts, as the AI SDK does. */
+function createAbortClosedProvider(): AICompletionProvider {
+  return {
+    generateCompletion: vi.fn(),
+    streamCompletion: vi.fn(
+      (_prompt: string, options: { signal?: AbortSignal }) => ({
+        textStream: (async function* () {
+          yield 'partial';
+          await new Promise<void>((resolve) =>
+            options.signal?.addEventListener('abort', () => resolve(), {
+              once: true,
+            })
+          );
+        })(),
+        usage: Promise.resolve({
+          promptTokens: 0,
+          completionTokens: 0,
+          model: STREAM_MODEL,
+        }),
+      })
+    ),
+  } as unknown as AICompletionProvider;
+}
+
+function createReadyPipeline(
+  recordCompletion: () => Promise<void>
+): AICompletionPipeline {
+  return {
+    preflight: vi.fn(async () =>
+      ok({
+        kind: 'ready',
+        context: {
+          requestId: 'req-1',
+          startTime: Date.now(),
+          action: AI_ACTION.SUMMARIZE,
+          model: STREAM_MODEL,
+          systemPrompt: 'system',
+          userPrompt: 'user',
+          reservation: { estimate: { tokens: 10, costUsd: 0 } },
+        },
+      })
+    ),
+    recordCompletion: vi.fn(recordCompletion),
+    releaseReservation: vi.fn(),
+  } as unknown as AICompletionPipeline;
+}
+
+function emittedEvents(
+  client: ReturnType<typeof createMockAISocket>
+): string[] {
+  return vi.mocked(client.emit).mock.calls.map(([event]) => String(event));
+}
+
 describe('AIGateway', () => {
   let gateway: AIGateway;
   let mockStreamHandler: StreamTextHandler;
@@ -119,6 +181,7 @@ describe('AIGateway', () => {
       tierResolver,
       mockJwtService,
       mockFeatureFlags,
+      new ShutdownDrain(),
       createMockConfigService()
     );
   });
@@ -387,6 +450,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(1)
       );
       const client = createMockAISocket();
@@ -508,6 +572,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(1)
       );
 
@@ -543,6 +608,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(1)
       );
 
@@ -580,6 +646,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(1)
       );
 
@@ -617,6 +684,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(1)
       );
 
@@ -663,6 +731,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService()
       );
 
@@ -691,6 +760,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(1)
       );
 
@@ -719,6 +789,38 @@ describe('AIGateway', () => {
       blocking.resolveAll();
       await p2;
     });
+
+    it('ends a cancelled stream with neither ai:done nor ai:error', async () => {
+      const gw = new AIGateway(
+        new StreamTextHandler(
+          createAbortClosedProvider(),
+          createTestCatalog(),
+          createReadyPipeline(async () => undefined),
+          createMockConfig()
+        ),
+        tierResolver,
+        mockJwtService,
+        mockFeatureFlags,
+        new ShutdownDrain(),
+        createMockConfigService()
+      );
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      const running = gw.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+      await vi.waitFor(() =>
+        expect(client.emit).toHaveBeenCalledWith('ai:chunk', {
+          text: 'partial',
+        })
+      );
+      gw.handleCancel(client);
+      await running;
+
+      expect(emittedEvents(client)).toEqual(['ai:chunk']);
+    });
   });
 
   describe('handleDisconnect', () => {
@@ -729,6 +831,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService()
       );
 
@@ -756,6 +859,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService(2)
       );
 
@@ -855,6 +959,7 @@ describe('AIGateway', () => {
         tierResolver,
         mockJwtService,
         mockFeatureFlags,
+        new ShutdownDrain(),
         createMockConfigService()
       );
       const client = createMockAISocket({
@@ -992,5 +1097,136 @@ describe('AIGateway', () => {
       expect(emitted(client)).toEqual(['ai:chunk', 'ai:error:AUTH_REQUIRED']);
       expect(client.disconnect).toHaveBeenCalledWith(true);
     });
+  });
+
+  describe('shutdown drain', () => {
+    function signedInClient() {
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+      return client;
+    }
+
+    it('refuses a stream that arrives while draining with the retryable provider error', async () => {
+      const drain = new ShutdownDrain();
+      const gw = new AIGateway(
+        mockStreamHandler,
+        tierResolver,
+        mockJwtService,
+        mockFeatureFlags,
+        drain,
+        createMockConfigService()
+      );
+      await drain.beforeApplicationShutdown();
+      const client = signedInClient();
+
+      await gw.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+
+      expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+      expect(client.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+      );
+    });
+
+    it('resolves only after the aborted stream has written its usage, then tells the client to retry', async () => {
+      const order: string[] = [];
+      let finishWrite!: () => void;
+      const provider = createAbortClosedProvider();
+      const pipeline = createReadyPipeline(
+        () =>
+          new Promise<void>((resolve) => {
+            finishWrite = () => {
+              order.push('usage written');
+              resolve();
+            };
+          })
+      );
+      const drain = new ShutdownDrain();
+      const gw = new AIGateway(
+        new StreamTextHandler(
+          provider,
+          createTestCatalog(),
+          pipeline,
+          createMockConfig()
+        ),
+        tierResolver,
+        mockJwtService,
+        mockFeatureFlags,
+        drain,
+        createMockConfigService()
+      );
+
+      const client = signedInClient();
+      const running = gw.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+      await vi.waitFor(() =>
+        expect(provider.streamCompletion).toHaveBeenCalled()
+      );
+      const draining = drain.beforeApplicationShutdown().then(() => {
+        order.push('drained');
+      });
+      await vi.waitFor(() =>
+        expect(pipeline.recordCompletion).toHaveBeenCalled()
+      );
+      await flushAsync();
+      finishWrite();
+      await Promise.all([draining, running]);
+
+      expect(order).toEqual(['usage written', 'drained']);
+      expect(emittedEvents(client)).toEqual(['ai:chunk', 'ai:error']);
+      expect(client.emit).toHaveBeenLastCalledWith(
+        'ai:error',
+        AIErrors.providerError('server restarting')
+      );
+    });
+
+    it.each([
+      [
+        'ai:done',
+        (callbacks?: StreamTextCallbacks) =>
+          callbacks?.onDone({
+            inputTokens: 1,
+            outputTokens: 1,
+            model: STREAM_MODEL,
+            costUsd: 0,
+          }),
+      ],
+      [
+        'ai:error',
+        (callbacks?: StreamTextCallbacks) =>
+          callbacks?.onError(AIErrors.providerError('AI streaming failed')),
+      ],
+    ])(
+      'sends nothing more for a stream that already sent %s when the drain aborts it',
+      async (event, end) => {
+        const blocking = createBlockingExecute();
+        const drain = new ShutdownDrain();
+        const gw = new AIGateway(
+          { execute: blocking.fn } as unknown as StreamTextHandler,
+          tierResolver,
+          mockJwtService,
+          mockFeatureFlags,
+          drain,
+          createMockConfigService()
+        );
+        const client = signedInClient();
+        const running = gw.handleComplete(client, {
+          action: AI_ACTION.SUMMARIZE,
+          content: 'Some content',
+        });
+        await vi.waitFor(() => expect(blocking.callbacks).toBeDefined());
+
+        end(blocking.callbacks);
+        await drain.beforeApplicationShutdown();
+        await running;
+
+        expect(emittedEvents(client)).toEqual([event]);
+      }
+    );
   });
 });

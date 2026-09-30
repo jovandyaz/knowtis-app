@@ -5,7 +5,7 @@ import { AccessDatabase } from './access-database';
 
 let pool: AccessDatabase | undefined;
 afterEach(async () => {
-  await pool?.onModuleDestroy();
+  await pool?.onApplicationShutdown();
 });
 describe('dedicated access authority database', () => {
   it('pins statement timeout and primary selection despite URL session overrides, including reconnect', async () => {

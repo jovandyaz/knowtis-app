@@ -12,14 +12,22 @@ import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import {
+  SHUTDOWN_ABORT_REASON,
+  ShutdownDrain,
+} from '../websocket/shutdown-drain';
 import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AgentGateway } from './agent.gateway';
-import type { ApproveMutationHandler } from './application/approve-mutation.handler';
-import type { RejectMutationHandler } from './application/reject-mutation.handler';
+import { ApproveMutationHandler } from './application/approve-mutation.handler';
+import { RejectMutationHandler } from './application/reject-mutation.handler';
 import type {
   RunAgentTurnCallbacks,
   RunAgentTurnHandler,
 } from './application/run-agent-turn.handler';
+import type {
+  PendingMutationRecord,
+  PendingMutationStore,
+} from './domain/ports/pending-mutation.store';
 import { ProposedMutation } from './domain/proposed-mutation';
 import { TURN_ABORT_REASON } from './domain/turn-abort';
 import { KNOWTIS_CONVERSATION_NAMESPACE } from './domain/turn-identity';
@@ -36,6 +44,7 @@ interface MakeGatewayOptions {
   jwt?: Partial<JwtService>;
   featureFlags?: Partial<FeatureFlagsService>;
   redis?: InMemoryClaimRedis;
+  drain?: ShutdownDrain;
 }
 
 function makeGateway({
@@ -45,6 +54,7 @@ function makeGateway({
   jwt = {},
   featureFlags,
   redis = createInMemoryClaimRedis(),
+  drain = new ShutdownDrain(),
 }: MakeGatewayOptions = {}) {
   const config = {
     get: vi.fn(() => 2),
@@ -58,6 +68,7 @@ function makeGateway({
     (featureFlags ?? {
       isEnabled: vi.fn().mockResolvedValue(true),
     }) as unknown as FeatureFlagsService,
+    drain,
     config
   );
 }
@@ -119,6 +130,29 @@ describe('AgentGateway', () => {
 
     expect(execute).toHaveBeenCalledOnce();
     expect(execute.mock.calls[0][0]).toMatchObject({ userId: 'u1' });
+  });
+
+  it('emits agent:turn_settled when the handler finds the turn already stored', async () => {
+    const execute = vi.fn(
+      async (_input: unknown, cb: { onTurnSettled?: (id: string) => void }) => {
+        cb.onTurnSettled?.('conv-9');
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+    const turnId = '99999999-9999-4999-8999-999999999999';
+
+    await gateway.handleMessage(client as never, {
+      turnId,
+      message: { content: 'hi' },
+    });
+
+    expect(client.emit).toHaveBeenCalledWith('agent:turn_settled', {
+      turnId,
+      conversationId: 'conv-9',
+    });
   });
 
   it('forwards the client IP to the turn handler', async () => {
@@ -686,6 +720,58 @@ describe('AgentGateway', () => {
     await turn;
   });
 
+  it('drains: aborts running turns as a shutdown and waits for them to settle', async () => {
+    let settled = false;
+    const execute = vi.fn(
+      async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve())
+        );
+        await flushAsync();
+        settled = true;
+      }
+    );
+    const drain = new ShutdownDrain();
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+      drain,
+    });
+    const client = makeClient('u1');
+
+    const running = gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+    await flushAsync();
+    await drain.beforeApplicationShutdown();
+
+    expect(settled).toBe(true);
+    await running;
+    expect((execute.mock.calls[0][2] as AbortSignal).reason).toBe(
+      SHUTDOWN_ABORT_REASON
+    );
+  });
+
+  it('refuses a turn that arrives while draining', async () => {
+    const execute = vi.fn();
+    const drain = new ShutdownDrain();
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+      drain,
+    });
+    await drain.beforeApplicationShutdown();
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'TURN_CLAIM_UNAVAILABLE' })
+    );
+  });
+
   it('disconnects and emits AUTH_REQUIRED for MCP-source tokens', async () => {
     const jwt = {
       verify: vi.fn().mockReturnValue({ sub: 'u1', source: 'mcp' }),
@@ -840,6 +926,355 @@ describe('AgentGateway', () => {
       expect.anything()
     );
     expect(resumeTurn).toHaveBeenCalledOnce();
+  });
+
+  describe('while the server drains', () => {
+    const PROPOSAL_ID = 'd4816ca2-7965-46ea-b828-3ecfe32428be';
+    const DRAINED_TURN = '88888888-8888-4888-8888-888888888888';
+
+    function untilAborted(signal: AbortSignal): Promise<void> {
+      return new Promise<void>((resolve) =>
+        signal.addEventListener('abort', () => resolve(), { once: true })
+      );
+    }
+
+    function turnErrors(client: ReturnType<typeof makeClient>) {
+      return client.emit.mock.calls.filter(
+        ([event]) => event === 'agent:error'
+      );
+    }
+
+    it('tells the client to resend a message turn it aborted mid-run', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+          await untilAborted(signal);
+        }
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: DRAINED_TURN,
+        message: { content: 'hi' },
+      });
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+      await drain.beforeApplicationShutdown();
+      await running;
+
+      expect(turnErrors(client)).toEqual([
+        [
+          'agent:error',
+          expect.objectContaining({
+            code: 'TURN_CLAIM_UNAVAILABLE',
+            turnId: DRAINED_TURN,
+          }),
+        ],
+      ]);
+    });
+
+    it('tells the client a resume it aborted mid-run under the turn id', async () => {
+      const approveExecute = vi.fn().mockResolvedValue(
+        ok({
+          result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+          outcome: 'created the note "GTD"',
+          conversationId: 'conv-1',
+          turnId: PROPOSAL_TURN,
+        })
+      );
+      const resumeTurn = vi.fn(
+        async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+          await untilAborted(signal);
+        }
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        approve: { execute: approveExecute },
+        handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const approving = gateway.handleApprove(
+        client as never,
+        approvePayload()
+      );
+      await vi.waitFor(() => expect(resumeTurn).toHaveBeenCalled());
+      await drain.beforeApplicationShutdown();
+      await approving;
+
+      expect(turnErrors(client)).toEqual([
+        [
+          'agent:error',
+          expect.objectContaining({
+            code: 'TURN_CLAIM_UNAVAILABLE',
+            turnId: PROPOSAL_TURN,
+          }),
+        ],
+      ]);
+    });
+
+    it('keeps a turn the user cancelled silent', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+          await untilAborted(signal);
+        }
+      );
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+      });
+      const client = makeClient('u1');
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: DRAINED_TURN,
+        message: { content: 'hi' },
+      });
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+      gateway.handleCancel(client as never);
+      await running;
+
+      expect(turnErrors(client)).toEqual([]);
+    });
+
+    it('never follows a proposal it already sent with the notice', async () => {
+      const proposal = ProposedMutation.create({
+        id: PROPOSAL_ID,
+        kind: 'create',
+        payload: { title: 'GTD', contentHtml: '<p>GTD</p>' },
+        summary: 'Create "GTD"',
+      })._unsafeUnwrap();
+      const execute = vi.fn(
+        async (
+          _input: unknown,
+          cb: RunAgentTurnCallbacks,
+          signal: AbortSignal
+        ) => {
+          cb.onProposal(proposal);
+          await untilAborted(signal);
+        }
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: DRAINED_TURN,
+        message: { content: 'create a note' },
+      });
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+      await drain.beforeApplicationShutdown();
+      await running;
+
+      expect(turnErrors(client)).toEqual([]);
+    });
+
+    it.each([
+      [
+        'an error',
+        (cb: RunAgentTurnCallbacks) =>
+          cb.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' }),
+        [
+          [
+            'agent:error',
+            {
+              code: 'AI_PROVIDER_ERROR',
+              message: 'boom',
+              turnId: DRAINED_TURN,
+            },
+          ],
+        ],
+      ],
+      [
+        'a done',
+        (cb: RunAgentTurnCallbacks) =>
+          cb.onDone({
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'm',
+            costUsd: 0,
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'completed',
+            continuable: false,
+          }),
+        [],
+      ],
+      [
+        'a turn_settled',
+        (cb: RunAgentTurnCallbacks) => cb.onTurnSettled?.('conv-9'),
+        [],
+      ],
+    ] as const)(
+      'never follows %s it already sent with the notice',
+      async (_ending, end, errors) => {
+        const execute = vi.fn(
+          async (
+            _input: unknown,
+            cb: RunAgentTurnCallbacks,
+            signal: AbortSignal
+          ) => {
+            end(cb);
+            await untilAborted(signal);
+          }
+        );
+        const drain = new ShutdownDrain();
+        const gateway = makeGateway({
+          handler: { execute } as Partial<RunAgentTurnHandler>,
+          drain,
+        });
+        const client = makeClient('u1');
+
+        const running = gateway.handleMessage(client as never, {
+          turnId: DRAINED_TURN,
+          message: { content: 'hi' },
+        });
+        await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+        await drain.beforeApplicationShutdown();
+        await running;
+
+        expect(turnErrors(client)).toEqual(errors);
+      }
+    );
+
+    function pendingProposals() {
+      const mutation = ProposedMutation.create({
+        id: PROPOSAL_ID,
+        kind: 'create',
+        payload: { title: 'GTD', contentHtml: '<p>GTD</p>' },
+        summary: 'Create "GTD"',
+      })._unsafeUnwrap();
+      const records = new Map<string, PendingMutationRecord>([
+        [
+          PROPOSAL_ID,
+          {
+            userId: 'u1',
+            turnId: PROPOSAL_TURN,
+            conversationId: 'conv-1',
+            mutation,
+          },
+        ],
+      ]);
+      const store: PendingMutationStore = {
+        save: async (record) => {
+          records.set(record.mutation.id, record);
+        },
+        take: async (proposalId, userId) => {
+          const record = records.get(proposalId);
+          records.delete(proposalId);
+          return record?.userId === userId ? record : null;
+        },
+      };
+      return { records, store };
+    }
+
+    it('refuses an approve before taking its proposal, so the proposal survives', async () => {
+      const { records, store } = pendingProposals();
+      const handler = new ApproveMutationHandler(
+        store,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        approve: { execute: (input) => handler.execute(input) },
+        drain,
+      });
+      await drain.beforeApplicationShutdown();
+      const client = makeClient('u1');
+
+      await gateway.handleApprove(client as never, approvePayload(PROPOSAL_ID));
+
+      expect(records.has(PROPOSAL_ID)).toBe(true);
+      expect(client.emit).toHaveBeenCalledWith('agent:error', {
+        code: 'TURN_CLAIM_UNAVAILABLE',
+        message: expect.any(String),
+      });
+    });
+
+    it('refuses a reject before taking its proposal, so the proposal survives', async () => {
+      const { records, store } = pendingProposals();
+      const handler = new RejectMutationHandler(store);
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        reject: { execute: (input) => handler.execute(input) },
+        drain,
+      });
+      await drain.beforeApplicationShutdown();
+      const client = makeClient('u1');
+
+      await gateway.handleReject(client as never, approvePayload(PROPOSAL_ID));
+
+      expect(records.has(PROPOSAL_ID)).toBe(true);
+      expect(client.emit).toHaveBeenCalledWith('agent:error', {
+        code: 'TURN_CLAIM_UNAVAILABLE',
+        message: expect.any(String),
+      });
+    });
+
+    it('waits for an approve already committing, then refuses its resume under the turn id', async () => {
+      const order: string[] = [];
+      let finishCommit!: () => void;
+      const approveExecute = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finishCommit = () => {
+              order.push('committed');
+              resolve(
+                ok({
+                  result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+                  outcome: 'created the note "GTD"',
+                  conversationId: 'conv-1',
+                  turnId: PROPOSAL_TURN,
+                })
+              );
+            };
+          })
+      );
+      const resumeTurn = vi.fn();
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        approve: { execute: approveExecute } as Partial<ApproveMutationHandler>,
+        handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const approving = gateway.handleApprove(
+        client as never,
+        approvePayload()
+      );
+      await vi.waitFor(() => expect(approveExecute).toHaveBeenCalled());
+      const draining = drain.beforeApplicationShutdown().then(() => {
+        order.push('drained');
+      });
+      await flushAsync();
+      finishCommit();
+      await Promise.all([draining, approving]);
+
+      expect(order).toEqual(['committed', 'drained']);
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:committed',
+        expect.objectContaining({ turnId: PROPOSAL_TURN })
+      );
+      expect(resumeTurn).not.toHaveBeenCalled();
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:error',
+        expect.objectContaining({
+          code: 'TURN_CLAIM_UNAVAILABLE',
+          turnId: PROPOSAL_TURN,
+        })
+      );
+    });
   });
 
   it('rejects an unauthenticated approve', async () => {
@@ -1576,6 +2011,61 @@ describe('AgentGateway', () => {
       ).rejects.toThrow('persistence exploded');
 
       expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+    });
+
+    describe('a resend the conversation already stores, once its claim expired', () => {
+      const alreadyStored: Execute = async (_input, cb) => {
+        cb.onTurnSettled?.(CONVERSATION);
+      };
+
+      it('settles the claim for a day instead of releasing it', async () => {
+        const redis = createInMemoryClaimRedis();
+        const gateway = makeGateway({
+          handler: { execute: vi.fn<Execute>(alreadyStored) } as never,
+          redis,
+        });
+
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+
+        expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+        expect(redis.entries.get(`agent:turn:u1:${TURN}`)?.ttlSeconds).toBe(
+          86_400
+        );
+      });
+
+      it('answers a later resend from the claim, without asking the handler again', async () => {
+        const execute = vi.fn<Execute>(alreadyStored);
+        const gateway = makeGateway({ handler: { execute } as never });
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+        const resent = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(resent as never, turn());
+
+        expect(resent.emit.mock.calls).toEqual([
+          [
+            'agent:turn_settled',
+            { turnId: TURN, conversationId: CONVERSATION },
+          ],
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+      });
+
+      it('refuses a later resend of its turn id with another message as reused', async () => {
+        const execute = vi.fn<Execute>(alreadyStored);
+        const gateway = makeGateway({ handler: { execute } as never });
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+        const reused = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(
+          reused as never,
+          turn({ message: { content: 'something else' } })
+        );
+
+        expect(turnErrors(reused)).toEqual([
+          expect.objectContaining({ code: 'TURN_ID_REUSED', turnId: TURN }),
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+      });
     });
 
     describe('a rejection before the model runs leaves the turn id free, so its replay runs', () => {

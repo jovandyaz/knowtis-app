@@ -28,6 +28,10 @@ import { reasonOf } from '../../core/errors/reason-of';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
 import {
+  SHUTDOWN_ABORT_REASON,
+  ShutdownDrain,
+} from '../websocket/shutdown-drain';
+import {
   authenticateSocket,
   socketAuthFailureMessage,
   type AuthenticatedSocket,
@@ -37,6 +41,8 @@ import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { TierResolver } from './application/services/tier-resolver.service';
 import { AIErrors } from './domain/errors/ai.errors';
 import type { AiExecutionContext } from './domain/execution-context/ai-execution-context';
+
+const SERVER_RESTARTING = 'server restarting';
 
 const aiCompletePayloadSchema = z.object({
   action: z.enum(COMPLETION_AI_ACTIONS),
@@ -64,10 +70,12 @@ export class AIGateway
     private readonly tierResolver: TierResolver,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly drain: ShutdownDrain,
     configService: ConfigService<EnvConfig, true>
   ) {
     this.maxConcurrentStreams = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.streams = new ConcurrencySlotTracker(this.maxConcurrentStreams);
+    drain.register(this.streams);
     this.tokenExpiry = new SocketTokenExpiry({
       slots: this.streams,
       logger: this.logger,
@@ -183,6 +191,10 @@ export class AIGateway
     if (!client.connected) {
       return;
     }
+    if (this.drain.isDraining) {
+      client.emit('ai:error', AIErrors.providerError(SERVER_RESTARTING));
+      return;
+    }
     const streamId = randomUUID();
     const controller = new AbortController();
     if (!this.streams.acquire(userId, client.id, streamId, controller)) {
@@ -195,6 +207,7 @@ export class AIGateway
       return;
     }
 
+    let ended = false;
     try {
       await this.streamTextHandler.execute(
         {
@@ -208,9 +221,13 @@ export class AIGateway
         },
         {
           onChunk: (text) => client.emit('ai:chunk', { text }),
-          onDone: (usage) => client.emit('ai:done', { usage }),
+          onDone: (usage) => {
+            ended = true;
+            client.emit('ai:done', { usage });
+          },
           onError: (error) => {
             if (!controller.signal.aborted) {
+              ended = true;
               client.emit('ai:error', error);
             }
           },
@@ -224,9 +241,15 @@ export class AIGateway
         error: reasonOf(error),
       });
       if (!controller.signal.aborted) {
+        ended = true;
         client.emit('ai:error', AIErrors.providerError('AI streaming failed'));
       }
     } finally {
+      // The handler ends an aborted stream without a word, so a stream the drain
+      // cut is told to retry instead of being left hanging.
+      if (controller.signal.reason === SHUTDOWN_ABORT_REASON && !ended) {
+        client.emit('ai:error', AIErrors.providerError(SERVER_RESTARTING));
+      }
       this.streams.release(userId, client.id, streamId);
       this.tokenExpiry.afterSlotRelease(client);
     }

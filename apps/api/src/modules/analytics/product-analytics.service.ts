@@ -50,6 +50,9 @@ const PERSON_PROPERTY_KEYS = [
 /** Build stamp when the deploy wrote no `REVISION` (local runs). */
 const UNKNOWN_APP_VERSION = '0.1.0';
 
+/** How long shutdown waits for PostHog to send its queue; past it the SDK logs the loss and returns. */
+export const POSTHOG_SHUTDOWN_TIMEOUT_MS = 1_000;
+
 @Injectable()
 export class ProductAnalytics implements OnApplicationShutdown {
   private readonly logger = new Logger(ProductAnalytics.name);
@@ -109,7 +112,7 @@ export class ProductAnalytics implements OnApplicationShutdown {
     }
 
     try {
-      await this.client.shutdown();
+      await this.client.shutdown(POSTHOG_SHUTDOWN_TIMEOUT_MS);
     } catch {
       this.logger.error('PostHog shutdown failed');
     }

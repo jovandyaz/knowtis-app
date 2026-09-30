@@ -223,8 +223,32 @@ describe('env.config agent vars', () => {
       ...baseEnv,
       AI_AGENT_MAX_OUTPUT_TOKENS: '12000',
       AI_AGENT_SYNTHESIS_RESERVE_TOKENS: '12000',
+      AI_ANONYMOUS_DAILY_LIMIT_PCT: '0.5',
     });
     expect(env.AI_AGENT_SYNTHESIS_RESERVE_TOKENS).toBe(12000);
+  });
+
+  it('rejects a turn token budget with no room for a first call at full output and its synthesis', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, AI_AGENT_TURN_TOKEN_BUDGET: '20000' })
+    ).toThrow(
+      /AI_AGENT_TURN_TOKEN_BUDGET leaves a turn no room for its first call/
+    );
+  });
+
+  it('rejects an anonymous daily share with no room for a first call at full output and its synthesis', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, AI_ANONYMOUS_DAILY_LIMIT_PCT: '0.1' })
+    ).toThrow(/leaves an anonymous turn no room for its first call/);
+  });
+
+  it('accepts an anonymous daily share whose turn fits a first call and its synthesis', () => {
+    const env = validateEnv({
+      ...baseEnv,
+      AI_DAILY_TOKEN_LIMIT: '100000',
+      AI_ANONYMOUS_DAILY_LIMIT_PCT: '0.33',
+    });
+    expect(env.AI_ANONYMOUS_DAILY_LIMIT_PCT).toBe(0.33);
   });
 
   it('rejects a synthesis time reserve at or above the segment clock', () => {

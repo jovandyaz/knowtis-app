@@ -14,6 +14,8 @@ import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
   type AgentStopReason,
   type AiQuota,
   type ByokProvider,
@@ -52,6 +54,12 @@ import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
 import { CONTINUABLE_STOP_REASONS } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
+import {
+  AGENT_FIRST_CALL_COSTS,
+  AGENT_PROMPT_OVERHEAD_TOKENS,
+  firstCallRoom,
+} from '../domain/first-call-budget';
+import { estimateMessageTokens } from '../domain/message-tokens';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type {
   ConversationMessageRow,
@@ -118,6 +126,9 @@ function orchestratorYielding(events: AgentEvent[]): AgentOrchestrator {
   };
 }
 
+const ANONYMOUS_TURN_TOKENS = 33_000;
+const AGENT_MAX_OUTPUT_TOKENS = 8192;
+
 function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
   const rateLimit = {
     checkLimit: vi.fn(
@@ -131,7 +142,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordSideCost: vi.fn().mockResolvedValue(undefined),
     dailyAllowance: vi
       .fn()
-      .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
+      .mockReturnValue({ tokenLimit: ANONYMOUS_TURN_TOKENS, costLimit: 0.33 }),
   } as unknown as AIRateLimitService;
   const settings: Record<string, number> = {
     AI_AGENT_MAX_MS: 120000,
@@ -141,6 +152,8 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     AI_AGENT_MAX_STEPS: 8,
     AI_AGENT_BYOK_MAX_STEPS: 20,
     AI_AGENT_TURN_TOKEN_BUDGET: 150000,
+    AI_AGENT_MAX_OUTPUT_TOKENS: AGENT_MAX_OUTPUT_TOKENS,
+    AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 12000,
   };
   const config = {
     get: vi.fn((k: string) => settings[k] ?? 0),
@@ -183,6 +196,14 @@ function historyRow(
   };
 }
 
+function rowOfTokens(role: 'user' | 'assistant', tokens: number) {
+  let content = 'palabra';
+  while (estimateMessageTokens({ role, content }) < tokens) {
+    content += ' palabra';
+  }
+  return historyRow({ role, content });
+}
+
 function makeConversations(history: ConversationMessageRow[] = []) {
   return {
     create: vi.fn().mockResolvedValue({ id: 'conv-1' }),
@@ -192,6 +213,8 @@ function makeConversations(history: ConversationMessageRow[] = []) {
     setModel: vi.fn().mockResolvedValue(undefined),
     loadMessages: vi.fn().mockResolvedValue(history),
     appendTurn: vi.fn().mockResolvedValue(true),
+    hasTurn: vi.fn().mockResolvedValue(false),
+    deleteForUser: vi.fn().mockResolvedValue(true),
   } as unknown as ConversationRepository;
 }
 
@@ -1100,15 +1123,16 @@ describe('RunAgentTurnHandler', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('announces a freshly created conversation before the turn can end', async () => {
+  it('discards, unannounced, the conversation a first turn opened when it is aborted before the model runs', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations(),
+      conversations,
       makeMemory(),
       makeEmbed(),
       makeModelPreference(),
@@ -1137,7 +1161,12 @@ describe('RunAgentTurnHandler', () => {
       controller.signal
     );
 
-    expect(onConversation).toHaveBeenCalledWith('conv-1');
+    expect(conversations.create).toHaveBeenCalledOnce();
+    expect(conversations.deleteForUser).toHaveBeenCalledExactlyOnceWith(
+      'conv-1',
+      USER
+    );
+    expect(onConversation).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
   });
 
@@ -2484,7 +2513,10 @@ describe('RunAgentTurnHandler', () => {
     );
 
     const estimated = vi.mocked(rateLimit.checkLimit).mock.calls[0][1].tokens;
-    expect(estimated).toBe(estimateTokenCount('hi') + 1500);
+    expect(estimated).toBeGreaterThan(AGENT_PROMPT_OVERHEAD_TOKENS);
+    expect(estimated).toBe(
+      estimateTokenCount('hi') + AGENT_PROMPT_OVERHEAD_TOKENS
+    );
   });
 
   it('drops oldest messages beyond the history token budget while keeping the final user message', async () => {
@@ -6248,6 +6280,7 @@ describe('RunAgentTurnHandler turn identity', () => {
       conversations?: ConversationRepository;
       guard?: InjectionGuardService;
       modelPreference?: ModelPreferenceService;
+      quota?: MessageQuotaService;
     } = {}
   ) {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
@@ -6270,7 +6303,7 @@ describe('RunAgentTurnHandler turn identity', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub(),
+      over.quota ?? createMessageQuotaStub(),
       makeEvents()
     );
     const callbacks = {
@@ -6397,6 +6430,184 @@ describe('RunAgentTurnHandler turn identity', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
+  const unselectableModel = () => {
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: SERVED_MODEL,
+    });
+    return modelPreference;
+  };
+
+  it.each([
+    [
+      'the model is not selectable',
+      AI_MODEL_UNAVAILABLE_CODE,
+      () => setup({ modelPreference: unselectableModel() }),
+    ],
+    [
+      'no message is left today',
+      AI_QUOTA_EXHAUSTED_CODE,
+      () =>
+        setup({
+          quota: createMessageQuotaStub({
+            kind: 'exhausted',
+            resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+            upgrade: 'register',
+          }),
+        }),
+    ],
+    [
+      'the budget is spent',
+      AIErrorCodes.RATE_LIMIT_EXCEEDED,
+      () => setup({ allowed: false }),
+    ],
+    [
+      'the message is an injection',
+      AIErrorCodes.PROMPT_INJECTION_DETECTED,
+      () => setup({ guard: makeGuard(false) }),
+    ],
+  ])(
+    'discards, unannounced, the conversation a first turn opened when %s',
+    async (_refusal, code, makeSetup) => {
+      const { handler, callbacks, conversations } = makeSetup();
+
+      await handler.execute(
+        { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+        callbacks
+      );
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code })
+      );
+      expect(conversations.create).toHaveBeenCalledOnce();
+      expect(conversations.deleteForUser).toHaveBeenCalledExactlyOnceWith(
+        'conv-1',
+        USER
+      );
+      expect(callbacks.onConversation).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps a conversation the refused turn did not open', async () => {
+    const { handler, callbacks, conversations } = setup({
+      modelPreference: unselectableModel(),
+    });
+
+    await handler.execute(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        message: { content: 'hi' },
+      },
+      callbacks
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps the conversation an earlier delivery of a refused turn opened', async () => {
+    const opened = conversationIdForTurn(USER, TURN_ID);
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockImplementation(
+      async (id: string) => (id === opened ? { id: opened, model: null } : null)
+    );
+    const { handler, callbacks } = setup({
+      conversations,
+      modelPreference: unselectableModel(),
+    });
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+  });
+
+  it('answers a first turn resent with no conversation as settled when the conversation it opened stores it', async () => {
+    const opened = conversationIdForTurn(USER, TURN_ID);
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockImplementation(
+      async (id: string) => (id === opened ? { id: opened, model: null } : null)
+    );
+    vi.mocked(conversations.hasTurn).mockResolvedValue(true);
+    const quota = createMessageQuotaStub();
+    const modelPreference = makeModelPreference();
+    const { handler, callbacks, orchestrator, rateLimit } = setup({
+      conversations,
+      quota,
+      modelPreference,
+    });
+    const onTurnSettled = vi.fn();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      { ...callbacks, onTurnSettled }
+    );
+
+    expect(conversations.hasTurn).toHaveBeenCalledWith(opened, TURN_ID);
+    expect(onTurnSettled).toHaveBeenCalledExactlyOnceWith(opened);
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(modelPreference.chooseTurnModel).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(callbacks.onModelStart).not.toHaveBeenCalled();
+    expect(callbacks.onConversation).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('still reports the refusal when discarding the opened conversation fails', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const conversations = makeConversations();
+    vi.mocked(conversations.deleteForUser).mockRejectedValue(
+      new Error('db down')
+    );
+    const { handler, callbacks } = setup({
+      conversations,
+      modelPreference: unselectableModel(),
+    });
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: AI_MODEL_UNAVAILABLE_CODE })
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.conversation.discard_failed',
+        conversationId: 'conv-1',
+      })
+    );
+  });
+
+  it('announces the conversation a first turn opened just before the model runs, and keeps it', async () => {
+    const { handler, callbacks, conversations, orchestrator } = setup();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks
+    );
+
+    expect(callbacks.onConversation).toHaveBeenCalledExactlyOnceWith('conv-1');
+    expect(callbacks.onConversation.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(orchestrator.run).mock.invocationCallOrder[0]
+    );
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+  });
+
   it('signals the model start once, just before the model runs', async () => {
     const { handler, callbacks, orchestrator } = setup();
 
@@ -6494,6 +6705,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
     modelPreference?: ModelPreferenceService;
     embed?: EmbeddingPort;
     eventBus?: EventEmitter2;
+    conversations?: ConversationRepository;
   }) {
     const deps = makeDeps({
       ...(over.allowed === false ? { allowed: false } : {}),
@@ -6509,7 +6721,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       deps.config,
       deps.pendingStore,
       createTestCatalog(),
-      makeConversations(),
+      over.conversations ?? makeConversations(),
       makeMemory(),
       embed,
       over.modelPreference ?? makeModelPreference(),
@@ -6610,6 +6822,21 @@ describe('RunAgentTurnHandler daily message quota', () => {
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(cb.onModelStart).not.toHaveBeenCalled();
+  });
+
+  it('answers a replay of a stored turn as settled without drawing a message', async () => {
+    const quota = consumedQuota();
+    const conversations = makeConversations();
+    vi.mocked(conversations.hasTurn).mockResolvedValue(true);
+    const { handler, orchestrator } = build({ quota, conversations });
+    const cb = { ...callbacks(), onTurnSettled: vi.fn() };
+
+    await handler.execute({ ...turn, conversationId: 'conv-1' }, cb);
+
+    expect(conversations.hasTurn).toHaveBeenCalledWith('conv-1', TURN_ID);
+    expect(cb.onTurnSettled).toHaveBeenCalledWith('conv-1');
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
   });
 
   it('fails the turn closed with a resendable code when the quota store is unavailable', async () => {
@@ -7046,6 +7273,209 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
     expect(orchestrator.run).toHaveBeenCalledOnce();
     expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  describe('first call budget', () => {
+    const ANONYMOUS_ROOM = firstCallRoom({
+      ...AGENT_FIRST_CALL_COSTS,
+      maxTurnTokens: ANONYMOUS_TURN_TOKENS,
+      maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+    });
+    const QUESTION_TOKENS = 50;
+    const REPLY_TOKENS = Math.floor(ANONYMOUS_ROOM * 0.9);
+    const HISTORY = [
+      rowOfTokens('user', QUESTION_TOKENS),
+      rowOfTokens('assistant', REPLY_TOKENS),
+      rowOfTokens('user', QUESTION_TOKENS),
+      rowOfTokens('assistant', REPLY_TOKENS),
+    ];
+
+    it('sizes the history so one turn fits an anonymous room and both fit the history cap', () => {
+      const turnTokens = QUESTION_TOKENS + REPLY_TOKENS;
+      expect(ANONYMOUS_ROOM).toBeGreaterThan(0);
+      expect(turnTokens).toBeLessThan(ANONYMOUS_ROOM);
+      expect(2 * turnTokens).toBeGreaterThan(ANONYMOUS_ROOM);
+      expect(2 * turnTokens).toBeLessThan(AGENT_HISTORY_TOKEN_BUDGET);
+    });
+
+    it('drops the older turn an anonymous first call cannot afford with its synthesis', async () => {
+      const { handler, orchestrator } = build({
+        quota: consumedQuota(),
+        conversations: makeConversations(HISTORY),
+      });
+
+      await handler.execute(
+        { ...turn, isAnonymous: true, conversationId: 'conv-1' },
+        callbacks()
+      );
+
+      expect(
+        vi.mocked(orchestrator.run).mock.calls[0][0].messages
+      ).toHaveLength(3);
+    });
+
+    it('keeps both turns for a free caller', async () => {
+      const { handler, orchestrator } = build({
+        quota: consumedQuota(),
+        conversations: makeConversations(HISTORY),
+      });
+
+      await handler.execute({ ...turn, conversationId: 'conv-1' }, callbacks());
+
+      expect(
+        vi.mocked(orchestrator.run).mock.calls[0][0].messages
+      ).toHaveLength(5);
+    });
+
+    it('refuses a turn whose first call cannot fit as invalid input, and gives the message back', async () => {
+      const quota = consumedQuota();
+      const { handler, orchestrator, rateLimit } = build({ quota });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+      const cb = callbacks();
+
+      await handler.execute({ ...turn, isAnonymous: true }, cb);
+
+      expect(cb.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code: AIErrorCodes.INVALID_INPUT })
+      );
+      expect(orchestrator.run).not.toHaveBeenCalled();
+      expect(quota.refund).toHaveBeenCalled();
+    });
+
+    it('refuses a fresh message that alone overruns the room before the injection check', async () => {
+      const guard = makeGuard();
+      const { handler, orchestrator, rateLimit } = build({
+        quota: consumedQuota(),
+        guard,
+      });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+      const cb = callbacks();
+
+      await handler.execute({ ...turn, isAnonymous: true }, cb);
+
+      expect(cb.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code: AIErrorCodes.INVALID_INPUT })
+      );
+      expect(guard.guard).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('logs a turn whose first call cannot fit with its numbers', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { handler, rateLimit } = build({ quota: consumedQuota() });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+
+      await handler.execute({ ...turn, isAnonymous: true }, callbacks());
+
+      expect(warn).toHaveBeenCalledWith({
+        event: 'agent.turn.first_call_unaffordable',
+        userId: USER,
+        tier: 'anonymous',
+        room: 0,
+        fittedTokens: estimateMessageTokens({
+          role: 'user',
+          content: turn.message.content,
+        }),
+        maxTurnTokens: 20_000,
+      });
+    });
+
+    it('discards, unannounced, the conversation a first turn that cannot fit opened', async () => {
+      const conversations = makeConversations();
+      const { handler, rateLimit } = build({
+        quota: consumedQuota(),
+        conversations,
+      });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+      const cb = { ...callbacks(), onConversation: vi.fn() };
+
+      await handler.execute({ ...turn, isAnonymous: true }, cb);
+
+      expect(conversations.create).toHaveBeenCalledOnce();
+      expect(conversations.deleteForUser).toHaveBeenCalledExactlyOnceWith(
+        'conv-1',
+        USER
+      );
+      expect(cb.onConversation).not.toHaveBeenCalled();
+    });
+
+    describe('at the room boundary', () => {
+      const MESSAGE = rowOfTokens('user', 2_000).content;
+      const MESSAGE_TOKENS = estimateMessageTokens({
+        role: 'user',
+        content: MESSAGE,
+      });
+
+      function anonymousTurnTokensWithRoom(room: number): number {
+        return (
+          2 *
+            (room +
+              AGENT_MAX_OUTPUT_TOKENS +
+              AGENT_FIRST_CALL_COSTS.promptOverheadTokens) +
+          AGENT_FIRST_CALL_COSTS.synthesisRequestTokens +
+          AGENT_FIRST_CALL_COSTS.minSynthesisOutputTokens
+        );
+      }
+
+      function buildWithRoom(room: number) {
+        const maxTurnTokens = anonymousTurnTokensWithRoom(room);
+        expect(
+          firstCallRoom({
+            ...AGENT_FIRST_CALL_COSTS,
+            maxTurnTokens,
+            maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+          })
+        ).toBe(room);
+        const built = build({ quota: consumedQuota() });
+        vi.mocked(built.rateLimit.dailyAllowance).mockReturnValue({
+          tokenLimit: maxTurnTokens,
+          costLimit: 0.2,
+        });
+        return built;
+      }
+
+      it('runs a fitted turn exactly at the room', async () => {
+        const { handler, orchestrator } = buildWithRoom(MESSAGE_TOKENS);
+        const cb = callbacks();
+
+        await handler.execute(
+          { ...turn, isAnonymous: true, message: { content: MESSAGE } },
+          cb
+        );
+
+        expect(cb.onError).not.toHaveBeenCalled();
+        expect(orchestrator.run).toHaveBeenCalledOnce();
+      });
+
+      it('refuses a fitted turn one token over the room', async () => {
+        const { handler, orchestrator } = buildWithRoom(MESSAGE_TOKENS - 1);
+        const cb = callbacks();
+
+        await handler.execute(
+          { ...turn, isAnonymous: true, message: { content: MESSAGE } },
+          cb
+        );
+
+        expect(cb.onError).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ code: AIErrorCodes.INVALID_INPUT })
+        );
+        expect(orchestrator.run).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('continuable on done', () => {
@@ -7620,6 +8050,27 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       message: 'Conversation not found',
     });
     expect(ctx.conversations.findLastMessage).not.toHaveBeenCalled();
+  });
+
+  it('answers a replay of a stored continuation as settled without drawing a message', async () => {
+    const ctx = setup();
+    vi.mocked(ctx.conversations.hasTurn).mockResolvedValue(true);
+    const callbacks = { ...ctx.callbacks, onTurnSettled: vi.fn() };
+
+    await ctx.handler.continueTurn(
+      { ...request, turnId: SECOND_TURN_ID },
+      callbacks
+    );
+
+    expect(ctx.conversations.hasTurn).toHaveBeenCalledWith(
+      'conv-1',
+      SECOND_TURN_ID
+    );
+    expect(callbacks.onTurnSettled).toHaveBeenCalledWith('conv-1');
+    expect(ctx.conversations.findLastMessage).not.toHaveBeenCalled();
+    expect(ctx.quota.consume).not.toHaveBeenCalled();
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
   it('refuses effort on an anonymous continuation before any work', async () => {

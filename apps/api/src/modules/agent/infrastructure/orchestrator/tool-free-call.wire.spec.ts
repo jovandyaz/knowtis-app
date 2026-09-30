@@ -12,7 +12,7 @@ import { createTestChain } from '../../../ai/testing/create-test-chain';
 import type { AgentEvent } from '../../domain/agent-event';
 import type { AgentMessage } from '../../domain/agent-message';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
-import { SYNTHESIS_REQUEST } from './agent-step-loop';
+import { SYNTHESIS_REQUEST } from '../../domain/synthesis-request';
 import { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
 

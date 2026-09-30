@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { firstCallRoom } from '../../domain/first-call-budget';
 import { estimateMessageTokens } from '../../domain/message-tokens';
 import {
   MIN_SYNTHESIS_OUTPUT_TOKENS,
+  SYNTHESIS_REQUEST_TOKENS,
+} from '../../domain/synthesis-request';
+import {
   nextInputTokens,
   segmentEndAfterToolStep,
   synthesisOutputCap,
@@ -239,4 +243,41 @@ describe('nextInputTokens', () => {
   it('treats unreported usage as zero rather than guessing', () => {
     expect(nextInputTokens(undefined, undefined, [])).toBe(0);
   });
+});
+
+describe('a synthesis after a first call sized by firstCallRoom', () => {
+  const COSTS = {
+    maxOutputTokens: 8192,
+    promptOverheadTokens: 1500,
+    synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
+    minSynthesisOutputTokens: MIN_SYNTHESIS_OUTPUT_TOKENS,
+  };
+
+  function synthesisCapAfter(firstCallInput: number, maxTurnTokens: number) {
+    const spent = firstCallInput + COSTS.maxOutputTokens;
+    return synthesisOutputCap(
+      {
+        spentTurnTokens: spent,
+        nextInputTokens: spent,
+        synthesisRequestTokens: SYNTHESIS_REQUEST_TOKENS,
+        maxTurnTokens,
+      },
+      COSTS.maxOutputTokens
+    );
+  }
+
+  it.each([33_000, 33_001, 150_000])(
+    'keeps its minimum output when the first call fills the room at full output (budget %i)',
+    (maxTurnTokens) => {
+      const room = firstCallRoom({ ...COSTS, maxTurnTokens });
+      expect(room).toBeGreaterThan(0);
+
+      expect(
+        synthesisCapAfter(COSTS.promptOverheadTokens + room, maxTurnTokens)
+      ).toBeGreaterThanOrEqual(MIN_SYNTHESIS_OUTPUT_TOKENS);
+      expect(
+        synthesisCapAfter(COSTS.promptOverheadTokens + room + 1, maxTurnTokens)
+      ).toBe(0);
+    }
+  );
 });

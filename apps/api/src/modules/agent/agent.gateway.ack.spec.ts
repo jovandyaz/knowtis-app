@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../config/env.config';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { ShutdownDrain } from '../websocket/shutdown-drain';
 import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
@@ -53,6 +54,7 @@ describe('AgentGateway acknowledgements over socket.io', () => {
           useValue: { isEnabled: vi.fn().mockResolvedValue(true) },
         },
         { provide: ConfigService, useValue: { get: () => 2 } },
+        ShutdownDrain,
       ],
     }).compile();
     app = moduleRef.createNestApplication();

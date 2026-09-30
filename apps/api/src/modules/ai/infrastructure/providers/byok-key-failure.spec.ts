@@ -13,8 +13,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ByokKeyFailureKind, ByokProvider } from '@knowtis/shared-types';
 
 import {
-  byokKeyRefusalMiddleware,
   classifyByokKeyFailure,
+  keyRefusalMiddleware,
 } from './byok-key-failure';
 
 function callError(statusCode: number, responseBody = '') {
@@ -261,7 +261,7 @@ describe('classifyByokKeyFailure', () => {
   });
 });
 
-describe('byokKeyRefusalMiddleware', () => {
+describe('keyRefusalMiddleware', () => {
   const SDK_RETRIES = 3;
   const OUT_OF_QUOTA = '{"error":{"code":"insufficient_quota"}}';
   const RATE_LIMITED = '{"error":{"code":"rate_limit_exceeded"}}';
@@ -286,7 +286,7 @@ describe('byokKeyRefusalMiddleware', () => {
     });
     const model = wrapLanguageModel({
       model: new MockLanguageModelV4({ doStream, doGenerate }),
-      middleware: byokKeyRefusalMiddleware('openai'),
+      middleware: keyRefusalMiddleware('openai'),
     });
     return { model, doStream, doGenerate };
   }
@@ -406,7 +406,7 @@ describe('byokKeyRefusalMiddleware', () => {
     });
     const model = wrapLanguageModel({
       model: new MockLanguageModelV4({ doStream }),
-      middleware: byokKeyRefusalMiddleware('openai'),
+      middleware: keyRefusalMiddleware('openai'),
     });
 
     await expect(streamedError(model)).resolves.toBe(outage);

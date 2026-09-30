@@ -3,7 +3,7 @@ import {
   Inject,
   Logger,
   Module,
-  type OnModuleDestroy,
+  type OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
@@ -43,10 +43,12 @@ export type Database = PostgresJsDatabase<typeof schema>;
   ],
   exports: [DATABASE_CONNECTION, DATABASE_CLIENT],
 })
-export class DatabaseModule implements OnModuleDestroy {
+export class DatabaseModule implements OnApplicationShutdown {
   constructor(@Inject(DATABASE_CLIENT) private readonly client: Sql) {}
 
-  async onModuleDestroy() {
+  // Closed after the socket servers are disposed: turns drained on shutdown
+  // still persist and refund through this pool.
+  async onApplicationShutdown() {
     await this.client.end();
   }
 }

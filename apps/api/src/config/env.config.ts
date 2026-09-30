@@ -3,6 +3,14 @@ import { parseCIDR, parse as parseIp } from 'ipaddr.js';
 import { z } from 'zod';
 
 import {
+  AGENT_FIRST_CALL_COSTS,
+  firstCallRoom,
+} from '../modules/agent/domain/first-call-budget';
+import {
+  dailyAllowance,
+  TIER_POLICIES,
+} from '../modules/ai/domain/execution-context/tier-policy';
+import {
   INVALID_OAUTH_JWKS_MESSAGE,
   parseOauthJwks,
 } from './oauth-public-keys';
@@ -247,6 +255,43 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
         'AI_AGENT_SYNTHESIS_RESERVE_TOKENS must be at least AI_AGENT_MAX_OUTPUT_TOKENS — a smaller reserve lets one tool step’s output pass the turn token budget',
       path: ['AI_AGENT_SYNTHESIS_RESERVE_TOKENS'],
       input: data.AI_AGENT_SYNTHESIS_RESERVE_TOKENS,
+    });
+  }
+
+  const firstCallRoomWithin = (maxTurnTokens: number) =>
+    firstCallRoom({
+      ...AGENT_FIRST_CALL_COSTS,
+      maxTurnTokens,
+      maxOutputTokens: data.AI_AGENT_MAX_OUTPUT_TOKENS,
+    });
+  if (firstCallRoomWithin(data.AI_AGENT_TURN_TOKEN_BUDGET) === 0) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_TURN_TOKEN_BUDGET leaves a turn no room for its first call — the prompt, a full AI_AGENT_MAX_OUTPUT_TOKENS answer and a synthesis that re-sends both must fit it, or every turn is refused',
+      path: ['AI_AGENT_TURN_TOKEN_BUDGET'],
+      input: data.AI_AGENT_TURN_TOKEN_BUDGET,
+    });
+  }
+
+  const anonymousTurnTokens = Math.min(
+    data.AI_AGENT_TURN_TOKEN_BUDGET,
+    dailyAllowance(
+      TIER_POLICIES.anonymous,
+      {
+        tokenLimit: data.AI_DAILY_TOKEN_LIMIT,
+        costLimit: data.AI_DAILY_COST_LIMIT_USD,
+      },
+      data.AI_ANONYMOUS_DAILY_LIMIT_PCT
+    ).tokenLimit
+  );
+  if (firstCallRoomWithin(anonymousTurnTokens) === 0) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_DAILY_TOKEN_LIMIT × AI_ANONYMOUS_DAILY_LIMIT_PCT leaves an anonymous turn no room for its first call — the prompt, a full AI_AGENT_MAX_OUTPUT_TOKENS answer and a synthesis that re-sends both must fit it, or every anonymous turn is refused',
+      path: ['AI_ANONYMOUS_DAILY_LIMIT_PCT'],
+      input: data.AI_ANONYMOUS_DAILY_LIMIT_PCT,
     });
   }
 

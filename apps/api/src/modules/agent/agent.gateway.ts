@@ -31,6 +31,10 @@ import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
 import {
+  SHUTDOWN_ABORT_REASON,
+  ShutdownDrain,
+} from '../websocket/shutdown-drain';
+import {
   authenticateSocket,
   socketAuthFailureMessage,
   type AuthenticatedSocket,
@@ -139,6 +143,7 @@ export class AgentGateway
   private readonly turns: ConcurrencySlotTracker;
   private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentTurns: number;
+  private readonly endedLegs = new WeakSet<AbortController>();
 
   @WebSocketServer()
   server!: Server;
@@ -150,10 +155,12 @@ export class AgentGateway
     private readonly turnClaims: TurnClaimService,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly drain: ShutdownDrain,
     configService: ConfigService<EnvConfig, true>
   ) {
     this.maxConcurrentTurns = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.turns = new ConcurrencySlotTracker(this.maxConcurrentTurns);
+    drain.register(this.turns);
     this.tokenExpiry = new SocketTokenExpiry({
       slots: this.turns,
       logger: this.logger,
@@ -322,13 +329,22 @@ export class AgentGateway
       (controller) =>
         this.withTurnClaim(
           client,
+          controller,
           turnClaimOf(userId, turnId, data),
-          (onModelStart) => {
+          (markSettled) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
-              onProposal,
-              onModelStart,
+              onProposal: (proposal) => {
+                this.endedLegs.add(controller);
+                onProposal(proposal);
+              },
+              onModelStart: markSettled,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
+              onTurnSettled: (conversationId) => {
+                markSettled();
+                this.endedLegs.add(controller);
+                client.emit('agent:turn_settled', { turnId, conversationId });
+              },
             };
             return 'continuesTurnId' in data
               ? this.runAgentTurn.continueTurn(
@@ -372,10 +388,15 @@ export class AgentGateway
       );
       return;
     }
-    const res = await this.approveMutation.execute({
-      proposalId: parsed.data.proposalId,
-      userId,
-    });
+    if (this.refuseDecisionWhileDraining(client)) {
+      return;
+    }
+    const res = await this.drain.track(() =>
+      this.approveMutation.execute({
+        proposalId: parsed.data.proposalId,
+        userId,
+      })
+    );
     if (res.isErr()) {
       client.emit('agent:error', {
         code: res.error.code,
@@ -408,11 +429,16 @@ export class AgentGateway
       );
       return;
     }
-    const res = await this.rejectMutation.execute({
-      proposalId: parsed.data.proposalId,
-      userId,
-      ...(parsed.data.reason && { reason: parsed.data.reason }),
-    });
+    if (this.refuseDecisionWhileDraining(client)) {
+      return;
+    }
+    const res = await this.drain.track(() =>
+      this.rejectMutation.execute({
+        proposalId: parsed.data.proposalId,
+        userId,
+        ...(parsed.data.reason && { reason: parsed.data.reason }),
+      })
+    );
     if (res.isErr()) {
       client.emit('agent:error', {
         code: res.error.code,
@@ -421,6 +447,17 @@ export class AgentGateway
       return;
     }
     await this.resumeAfter(client, userId, parsed.data, res.value);
+  }
+
+  // Refused before the proposal is taken, so it stays stored for the resend
+  // the client makes to the next instance; the error names no turn for the
+  // same reason, which is how the client knows nothing was applied.
+  private refuseDecisionWhileDraining(client: AuthenticatedSocket): boolean {
+    if (!this.drain.isDraining) {
+      return false;
+    }
+    client.emit('agent:error', AgentErrors.turnClaimUnavailable());
+    return true;
   }
 
   private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {
@@ -462,27 +499,30 @@ export class AgentGateway
   }
 
   // Stripe's rule: a turn refused before the model ran saves nothing, so its
-  // claim is released and a resend of it runs.
+  // claim is released and a resend of it runs. A turn the conversation
+  // already stores outlived its claim, so it is settled like one that ran.
   private async withTurnClaim(
     client: AuthenticatedSocket,
+    controller: AbortController,
     claim: TurnClaimRequest | undefined,
-    turn: (onModelStart: () => void) => Promise<void>
+    turn: (markSettled: () => void) => Promise<void>
   ): Promise<void> {
     if (!claim) {
       return turn(() => undefined);
     }
     const outcome = await this.turnClaims.claim(claim);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
+      this.endedLegs.add(controller);
       this.refuseClaimedTurn(client, claim, outcome);
       return;
     }
-    let modelStarted = false;
+    let settled = false;
     try {
       await turn(() => {
-        modelStarted = true;
+        settled = true;
       });
     } finally {
-      await (modelStarted
+      await (settled
         ? this.turnClaims.settle(claim)
         : this.turnClaims.release(claim));
     }
@@ -526,6 +566,13 @@ export class AgentGateway
     leg: TurnLeg,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
+    if (this.drain.isDraining) {
+      client.emit('agent:error', {
+        ...AgentErrors.turnClaimUnavailable(),
+        turnId,
+      });
+      return;
+    }
     // A disconnect or cancel handled during an earlier await found no slot to
     // abort, so a turn started now would run to completion for nobody.
     if (!client.connected) {
@@ -554,6 +601,17 @@ export class AgentGateway
     try {
       await body(controller);
     } finally {
+      // The handler ends a turn the drain aborted without a word, so the client
+      // is told it is unavailable: it resends a message and ends a resume.
+      if (
+        controller.signal.reason === SHUTDOWN_ABORT_REASON &&
+        !this.endedLegs.has(controller)
+      ) {
+        client.emit('agent:error', {
+          ...AgentErrors.turnClaimUnavailable(),
+          turnId,
+        });
+      }
       this.turns.release(userId, client.id, slotId);
       this.tokenExpiry.afterSlotRelease(client);
     }
@@ -591,7 +649,8 @@ export class AgentGateway
       onThinking: (text) => client.emit('agent:thinking', { turnId, text }),
       onConversation: (conversationId) =>
         client.emit('agent:conversation', { turnId, conversationId }),
-      onDone: (usage) =>
+      onDone: (usage) => {
+        this.endedLegs.add(controller);
         client.emit('agent:done', {
           turnId,
           usage: {
@@ -611,9 +670,11 @@ export class AgentGateway
           ...(usage.modelResolution
             ? { modelResolution: usage.modelResolution }
             : {}),
-        }),
+        });
+      },
       onError: (error) => {
         if (!controller.signal.aborted) {
+          this.endedLegs.add(controller);
           client.emit('agent:error', { ...error, turnId });
         }
       },

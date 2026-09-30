@@ -12,7 +12,10 @@ import type {
   AgentThinkingPayload,
 } from '@knowtis/api-client';
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
-import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_TURN_ERROR_CODE,
+  AI_INVALID_INPUT_CODE,
+} from '@knowtis/shared-types';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
@@ -33,6 +36,12 @@ vi.mock('@knowtis/api-client', () => ({
     approve: vi.fn(),
     reject: vi.fn(),
     resetConversation: vi.fn(),
+    resumeConversation: vi.fn(),
+  },
+  conversationsApi: {
+    transcript: vi
+      .fn()
+      .mockResolvedValue({ messages: [], title: null, hasEarlier: false }),
   },
 }));
 vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
@@ -404,6 +413,17 @@ describe('useAgentStore', () => {
     expect(messages[0].content).toBe('hello');
     const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
     expect(sent).toBe('hello');
+  });
+
+  it('offers no retry for a message the server refused as invalid input', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hello');
+    get().onError({ code: AI_INVALID_INPUT_CODE, message: 'too large' });
+
+    useAgentStore.getState().retryLast();
+
+    expect(useAgentStore.getState().retryMode).toBe('none');
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
   });
 
   it('retries a turn that timed out under its own id', () => {
@@ -810,6 +830,260 @@ describe('agent.store server-authoritative wire', () => {
     expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
       'what did you just do?'
     );
+  });
+
+  describe('the decision in flight', () => {
+    function approve() {
+      const turn = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      turn.get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      return turn;
+    }
+
+    it('is forgotten on logout', () => {
+      approve();
+      expect(useAgentStore.getState().decisionInFlight?.proposal).toEqual(
+        PROPOSAL
+      );
+
+      useAgentStore.getState().newConversation();
+
+      expect(useAgentStore.getState().decisionInFlight).toBeNull();
+    });
+
+    it.each([
+      [
+        'its done',
+        (cbs: Cbs) =>
+          cbs.onDone({
+            usage: USAGE,
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'completed',
+          }),
+      ],
+      [
+        'an error',
+        (cbs: Cbs) =>
+          cbs.onError({
+            code: 'AI_PROVIDER_ERROR',
+            message: 'boom',
+            turnId: 'turn-1',
+          }),
+      ],
+      [
+        'a refusal that gives the card back',
+        (cbs: Cbs) =>
+          cbs.onError({
+            code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+            message: 'send it again',
+          }),
+      ],
+      [
+        'a new proposal',
+        (cbs: Cbs) =>
+          cbs.onProposal?.({
+            id: 'p2',
+            kind: 'update',
+            targetNoteId: 'n1',
+            summary: 'Update "My Note"',
+            payload: {},
+          }),
+      ],
+      ['Stop', () => useAgentStore.getState().cancel()],
+      [
+        'a conversation switch',
+        () => void useAgentStore.getState().openConversation('c2', 'switcher'),
+      ],
+      [
+        'the watchdog',
+        () => vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS),
+      ],
+    ])('is forgotten once the turn ends with %s', (_end, end) => {
+      const { get } = approve();
+
+      end(get());
+
+      expect(useAgentStore.getState().decisionInFlight).toBeNull();
+    });
+  });
+
+  describe('a card the drain gave back', () => {
+    const refusedBeforeTake = {
+      code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      message: 'The turn could not be started right now; send it again',
+    };
+
+    function approveAgainAfterTheCardCameBack() {
+      const turn = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      turn.get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      turn.get().onError(refusedBeforeTake);
+      useAgentStore.getState().approveProposal();
+      return turn;
+    }
+
+    it('still lets Stop end the client turn', () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      useAgentStore.getState().cancel();
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('still ends the client turn on a conversation switch', async () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      await useAgentStore.getState().openConversation('conv-2', 'switcher');
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('still ends the client turn on logout', () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      useAgentStore.getState().newConversation();
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('still lets the watchdog end the client turn', () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('a decision applied by a server too busy draining to resume it', () => {
+    const resumeRefused = {
+      code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      message: 'The turn could not be started right now; send it again',
+      turnId: 'turn-1',
+    };
+
+    it('ends an approved turn without an error and keeps its commit marker', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+
+      get().onError(resumeRefused);
+
+      const { status, error, messages } = useAgentStore.getState();
+      expect(status).toBe('done');
+      expect(error).toBeNull();
+      expect(messages.find((m) => m.committed)?.committed).toEqual({
+        kind: 'create',
+        title: 'My Note',
+      });
+    });
+
+    it('ends a resume the drain cut mid-reply as done, keeping its text and commit marker', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+      get().onChunk({ text: 'Done, your note' });
+
+      get().onError(resumeRefused);
+
+      const { status, error, messages } = useAgentStore.getState();
+      expect(status).toBe('done');
+      expect(error).toBeNull();
+      expect(messages.at(-1)).toMatchObject({
+        content: 'Done, your note',
+        committed: { kind: 'create', title: 'My Note' },
+      });
+    });
+
+    it('ends a rejected turn without an error or an empty reply', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().rejectProposal();
+
+      get().onError(resumeRefused);
+
+      const { status, error, messages } = useAgentStore.getState();
+      expect(status).toBe('done');
+      expect(error).toBeNull();
+      expect(
+        messages.filter((m) => m.role === 'assistant' && m.content === '')
+      ).toEqual([expect.objectContaining({ discarded: true })]);
+    });
+
+    it('gives the card back when an approve was refused before the server took it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      const refused = {
+        code: resumeRefused.code,
+        message: resumeRefused.message,
+      };
+
+      get().onError(refused);
+
+      const { status, error, pendingProposal, messages } =
+        useAgentStore.getState();
+      expect(status).toBe('pendingProposal');
+      expect(error).toEqual(refused);
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
+      useAgentStore.getState().approveProposal();
+      expect(vi.mocked(agentClient.approve).mock.calls).toEqual([
+        ['p1'],
+        ['p1'],
+      ]);
+      expect(useAgentStore.getState().error).toBeNull();
+    });
+
+    it('queues a message sent while the card is back, as behind any pending proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onError({
+        code: resumeRefused.code,
+        message: resumeRefused.message,
+      });
+
+      useAgentStore.getState().sendMessage('and tag it');
+
+      const { queue, pendingProposal } = useAgentStore.getState();
+      expect(queue.map((q) => q.text)).toEqual(['and tag it']);
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(agentClient.sendMessage).toHaveBeenCalledOnce();
+    });
+
+    it('undoes the discard mark when a reject was refused before the server took it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().rejectProposal('too long');
+
+      get().onError({
+        code: resumeRefused.code,
+        message: resumeRefused.message,
+      });
+
+      const { pendingProposal, messages } = useAgentStore.getState();
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(messages.some((m) => m.discarded)).toBe(false);
+    });
   });
 
   it.each(['create', 'update', 'share'] as const)(

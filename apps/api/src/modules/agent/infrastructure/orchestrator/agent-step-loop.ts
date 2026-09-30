@@ -27,8 +27,11 @@ import { honoursToolChoiceNone } from '../../../ai/infrastructure/providers/tool
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
 import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
-import { estimateMessageTokens } from '../../domain/message-tokens';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
+import {
+  SYNTHESIS_REQUEST,
+  SYNTHESIS_REQUEST_TOKENS,
+} from '../../domain/synthesis-request';
 import { fromResponseMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
 import {
@@ -67,16 +70,6 @@ const MAX_STEP_ATTEMPTS = 2;
 const FINISH_REASON_LENGTH = 'length';
 const FINISH_REASON_TOOL_CALLS = 'tool-calls';
 const FINISH_REASON_CONTENT_FILTER = 'content-filter';
-
-// Appended to the synthesis call's prompt only; never threaded into history,
-// so it is not persisted and a continuation does not replay it.
-export const SYNTHESIS_REQUEST =
-  '(Stop using tools now: this part of the task has reached its limit. Reply in the same language I used in my request above — not the language of this instruction or of any note or web page you read — with what you found so far, then, under a short heading, list what is still pending so it can be continued. Do not mention tool or function names.)';
-
-const SYNTHESIS_REQUEST_TOKENS = estimateMessageTokens({
-  role: 'user',
-  content: SYNTHESIS_REQUEST,
-});
 
 // Reasoning shares the output cap with the answer, which a synthesis may get
 // little of. Lowered, never turned off: Opus and Sonnet 5.5 reject disabled
@@ -187,7 +180,6 @@ export interface AgentStepLoopParams {
   readonly onModelSettled?: ((model: string) => void) | undefined;
   readonly cooldown: ProviderCooldown;
   readonly instructions: string;
-  readonly cache: boolean;
   readonly tools: ToolSet;
   readonly telemetry: TelemetryOptions;
   readonly traceIdentity: TraceIdentityAttrs;
@@ -305,7 +297,7 @@ export async function* runAgentStepLoop(
         abortSignal: params.abortSignal,
         timeoutSignal: params.timeoutSignal,
         instructions: params.instructions,
-        cache: params.cache && !withoutTools,
+        cache: !withoutTools,
         tools: withoutTools ? {} : params.tools,
         ...(toolFree ? { toolChoice: 'none' as const } : {}),
         failOnToolMarkup: toolFree,

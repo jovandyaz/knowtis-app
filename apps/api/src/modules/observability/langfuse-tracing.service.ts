@@ -13,6 +13,9 @@ import { registerTelemetry } from 'ai';
 import type { EnvConfig } from '../../config/env.config';
 import { reasonOf } from '../../core/errors/reason-of';
 
+/** How long shutdown waits for pending spans to export before it drops them. */
+export const LANGFUSE_SHUTDOWN_TIMEOUT_MS = 1_000;
+
 @Injectable()
 export class LangfuseTracingService
   implements OnApplicationBootstrap, OnApplicationShutdown
@@ -53,14 +56,36 @@ export class LangfuseTracingService
   }
 
   async onApplicationShutdown(): Promise<void> {
-    if (!this.sdk) {
+    const sdk = this.sdk;
+    if (!sdk) {
       return;
     }
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<'timed_out'>((resolve) => {
+      timer = setTimeout(
+        () => resolve('timed_out'),
+        LANGFUSE_SHUTDOWN_TIMEOUT_MS
+      );
+      timer.unref();
+    });
     try {
-      await this.spanProcessor?.forceFlush();
-      await this.sdk.shutdown();
+      const outcome = await Promise.race([this.flushAndStop(sdk), deadline]);
+      if (outcome === 'timed_out') {
+        this.logger.warn({
+          event: 'langfuse.shutdown.timed_out',
+          timeoutMs: LANGFUSE_SHUTDOWN_TIMEOUT_MS,
+        });
+      }
     } catch (error) {
       this.logger.warn(`Langfuse shutdown failed: ${reasonOf(error)}`);
+    } finally {
+      clearTimeout(timer);
     }
+  }
+
+  private async flushAndStop(sdk: NodeSDK): Promise<'stopped'> {
+    await this.spanProcessor?.forceFlush();
+    await sdk.shutdown();
+    return 'stopped';
   }
 }

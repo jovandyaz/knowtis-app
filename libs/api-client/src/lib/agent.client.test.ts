@@ -1869,6 +1869,105 @@ describe('AgentClient – turn identity', () => {
     expect(client.canResume()).toBe(true);
   });
 
+  describe('a decision the draining server refused', () => {
+    const sentDecisions = (event: 'agent:approve' | 'agent:reject') =>
+      (fake.socket.emit.mock.calls as unknown[][])
+        .filter((call) => call[0] === event)
+        .map((call) => (call[1] as { proposalId: string }).proposalId);
+    const refusedBeforeTake = {
+      code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      message: 'The turn could not be started right now; send it again',
+    };
+
+    function suspendOnProposal() {
+      const callbacks = callbacksOf();
+      const handle = client.sendMessage('create a note', callbacks);
+      fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+      return { callbacks, handle };
+    }
+
+    it('resends an approve refused before its proposal was taken', () => {
+      vi.useFakeTimers();
+      const { callbacks } = suspendOnProposal();
+      client.approve(PROPOSAL.id);
+
+      fake.trigger('agent:error', refusedBeforeTake);
+      vi.advanceTimersByTime(1_000);
+
+      expect(sentDecisions('agent:approve')).toEqual([
+        PROPOSAL.id,
+        PROPOSAL.id,
+      ]);
+      expect(callbacks.onError).not.toHaveBeenCalled();
+    });
+
+    it('resends a reject refused before its proposal was taken', () => {
+      vi.useFakeTimers();
+      const { callbacks } = suspendOnProposal();
+      client.reject(PROPOSAL.id, 'too long');
+
+      fake.trigger('agent:error', refusedBeforeTake);
+      vi.advanceTimersByTime(1_000);
+
+      expect(sentDecisions('agent:reject')).toEqual([PROPOSAL.id, PROPOSAL.id]);
+      expect(callbacks.onError).not.toHaveBeenCalled();
+    });
+
+    it('keeps the turn open for the decision once every resend was refused', () => {
+      vi.useFakeTimers();
+      const { callbacks } = suspendOnProposal();
+      client.approve(PROPOSAL.id);
+
+      for (const delay of RESEND_DELAYS_MS) {
+        fake.trigger('agent:error', refusedBeforeTake);
+        vi.advanceTimersByTime(delay);
+      }
+      fake.trigger('agent:error', refusedBeforeTake);
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        refusedBeforeTake
+      );
+      expect(client.canResume()).toBe(true);
+      client.approve(PROPOSAL.id);
+      expect(sentDecisions('agent:approve')).toHaveLength(5);
+    });
+
+    it('drops the resend of a decision approved again when the user stops the turn', () => {
+      vi.useFakeTimers();
+      const { handle } = suspendOnProposal();
+      client.approve(PROPOSAL.id);
+      for (const delay of RESEND_DELAYS_MS) {
+        fake.trigger('agent:error', refusedBeforeTake);
+        vi.advanceTimersByTime(delay);
+      }
+      fake.trigger('agent:error', refusedBeforeTake);
+      client.approve(PROPOSAL.id);
+      fake.trigger('agent:error', refusedBeforeTake);
+
+      handle.cancel();
+      vi.runAllTimers();
+
+      expect(sentDecisions('agent:approve')).toHaveLength(5);
+      expect(client.canResume()).toBe(false);
+    });
+
+    it('never resends a decision whose resume was refused after it took effect', () => {
+      vi.useFakeTimers();
+      const { callbacks, handle } = suspendOnProposal();
+      client.approve(PROPOSAL.id);
+      const resumeRefused = turnError(
+        AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+        handle.turnId
+      );
+
+      fake.trigger('agent:error', resumeRefused);
+      vi.runAllTimers();
+
+      expect(sentDecisions('agent:approve')).toEqual([PROPOSAL.id]);
+      expect(callbacks.onError).toHaveBeenCalledWith(resumeRefused);
+    });
+  });
+
   it('resends the body frozen at send time even after the turn announced its conversation', () => {
     vi.useFakeTimers();
     const handle = client.sendMessage('hi', callbacksOf(), 'note-1', {

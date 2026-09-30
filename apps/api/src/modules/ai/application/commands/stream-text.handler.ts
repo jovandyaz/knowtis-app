@@ -28,6 +28,24 @@ interface StreamTextInput {
   readonly targetTone?: string;
 }
 
+/** How long a stream keeps its concurrency slot for its usage write; a slower write goes on without it. */
+export const USAGE_WRITE_WAIT_MS = 5_000;
+
+async function settleUsageWrite(write: Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      write,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, USAGE_WRITE_WAIT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** A stream the signal cuts ends with neither `onDone` nor `onError`. */
 export interface StreamTextCallbacks {
   readonly onChunk: (text: string) => void;
   readonly onDone: (usage: {
@@ -66,19 +84,23 @@ export class StreamTextHandler {
     const preflight = preflightResult.value;
     if (preflight.kind === 'cache_hit') {
       const { context, data } = preflight;
-      this.pipeline.recordUsage(context, input, {
+      const recorded = this.pipeline.recordUsage(context, input, {
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
         costUsd: 0,
       });
-      callbacks.onChunk(data.text);
-      callbacks.onDone({
-        inputTokens: data.inputTokens,
-        outputTokens: data.outputTokens,
-        model: data.model,
-        costUsd: 0,
-      });
+      try {
+        callbacks.onChunk(data.text);
+        callbacks.onDone({
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          model: data.model,
+          costUsd: 0,
+        });
+      } finally {
+        await settleUsageWrite(recorded);
+      }
       return;
     }
 
@@ -109,12 +131,6 @@ export class StreamTextHandler {
 
       for await (const chunk of streamResult.textStream) {
         if (signal?.aborted) {
-          this.logger.log({
-            event: 'ai.request.cancelled',
-            requestId: context.requestId,
-            userId,
-            latencyMs: Date.now() - context.startTime,
-          });
           break;
         }
         if (chunk !== '') {
@@ -122,10 +138,12 @@ export class StreamTextHandler {
           callbacks.onChunk(chunk);
         }
       }
+      // The AI SDK closes an aborted stream without throwing. The signal is read
+      // before the usage await so an abort after the last chunk still reports done.
+      const aborted = signal?.aborted ?? false;
 
       const actualUsage = await streamResult.usage;
       const servedModel = actualUsage.model;
-      const aborted = signal?.aborted ?? false;
       const zeroSettled =
         actualUsage.promptTokens === 0 && actualUsage.completionTokens === 0;
       const inputTokens =
@@ -145,7 +163,7 @@ export class StreamTextHandler {
         this.modelCatalog.getPricing(servedModel)
       );
 
-      this.pipeline.recordCompletion(
+      const recorded = this.pipeline.recordCompletion(
         context,
         input,
         {
@@ -159,12 +177,27 @@ export class StreamTextHandler {
       );
       usageSettled = true;
 
-      callbacks.onDone({
-        inputTokens,
-        outputTokens,
-        model: servedModel,
-        costUsd: usage.costUsd,
-      });
+      if (aborted) {
+        this.logger.log({
+          event: 'ai.request.cancelled',
+          requestId: context.requestId,
+          userId,
+          latencyMs: Date.now() - context.startTime,
+        });
+        await settleUsageWrite(recorded);
+        return;
+      }
+
+      try {
+        callbacks.onDone({
+          inputTokens,
+          outputTokens,
+          model: servedModel,
+          costUsd: usage.costUsd,
+        });
+      } finally {
+        await settleUsageWrite(recorded);
+      }
     } catch (error) {
       if (usageSettled) {
         this.logger.error({
@@ -185,16 +218,18 @@ export class StreamTextHandler {
           },
           this.modelCatalog.getPricing(context.model)
         );
-        this.pipeline.recordCompletion(
-          context,
-          input,
-          {
-            inputTokens: estimatedTokens,
-            outputTokens,
-            model: context.model,
-            costUsd: usage.costUsd,
-          },
-          { mode: 'stream', aborted: true }
+        await settleUsageWrite(
+          this.pipeline.recordCompletion(
+            context,
+            input,
+            {
+              inputTokens: estimatedTokens,
+              outputTokens,
+              model: context.model,
+              costUsd: usage.costUsd,
+            },
+            { mode: 'stream', aborted: true }
+          )
         );
         this.logger.log({
           event: 'ai.request.cancelled',

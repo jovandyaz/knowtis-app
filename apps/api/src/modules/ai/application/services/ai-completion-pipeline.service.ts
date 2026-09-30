@@ -190,12 +190,13 @@ export class AICompletionPipeline {
     return ok({ kind: 'ready' as const, context });
   }
 
+  /** Settles once the usage row is written; never rejects, a failed write is logged. */
   recordUsage(
     context: PreflightContext,
     input: TextCompletionInput,
     result: Omit<RecordCompletionParams, 'text'>
-  ): void {
-    this.rateLimitService
+  ): Promise<void> {
+    return this.rateLimitService
       .recordUsage(input.execution, context.reservation, {
         action: context.action,
         model: result.model,
@@ -223,20 +224,21 @@ export class AICompletionPipeline {
     );
   }
 
-  recordCompletion(
+  /** Settles once the usage row and any cache entry are written; never rejects, a failed write is logged. */
+  async recordCompletion(
     context: PreflightContext,
     input: TextCompletionInput,
     result: RecordCompletionParams,
     opts?: { mode?: string; aborted?: boolean }
-  ): void {
-    this.recordUsage(context, input, result);
+  ): Promise<void> {
+    const writes = [this.recordUsage(context, input, result)];
 
     if (
       this.cache?.isCacheable(context.action) &&
       !opts?.aborted &&
       result.text
     ) {
-      this.cache
+      const cached = this.cache
         .set(
           input.execution.subject.userId,
           context.action,
@@ -257,6 +259,7 @@ export class AICompletionPipeline {
             error: reasonOf(error),
           })
         );
+      writes.push(cached);
     }
 
     this.logger.log({
@@ -274,5 +277,6 @@ export class AICompletionPipeline {
       status: 'success',
       ...(opts?.mode && { mode: opts.mode }),
     });
+    await Promise.all(writes);
   }
 }

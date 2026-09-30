@@ -2,12 +2,16 @@ import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { EnvConfig } from '../../config/env.config';
 import { DATABASE_CONNECTION } from '../../database';
 import { AnalyticsModule } from './analytics.module';
 import type { ServerProductEventMap } from './product-analytics.events';
-import { ProductAnalytics } from './product-analytics.service';
+import {
+  POSTHOG_SHUTDOWN_TIMEOUT_MS,
+  ProductAnalytics,
+} from './product-analytics.service';
 
 const { capture, shutdown, PostHog } = vi.hoisted(() => {
   const capture = vi.fn();
@@ -34,7 +38,7 @@ class StubInfrastructureModule {}
 function createConfigService(env: Record<string, string | undefined>) {
   return {
     get: vi.fn((key: string) => env[key]),
-  } as unknown as ConfigService;
+  } as unknown as ConfigService<EnvConfig, true>;
 }
 
 async function createAnalytics(env: Record<string, string | undefined>) {
@@ -398,5 +402,50 @@ describe('ProductAnalytics', () => {
 
     errorSpy.mockRestore();
     await close();
+  });
+
+  describe('with the real PostHog client', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it('stops waiting for a hung flush after POSTHOG_SHUTDOWN_TIMEOUT_MS, and PostHog logs it', async () => {
+      vi.useFakeTimers();
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+      const { PostHog: RealPostHog } =
+        await vi.importActual<typeof import('posthog-node')>('posthog-node');
+      const client = new RealPostHog('project-token', {
+        host: 'https://us.i.posthog.com',
+        flushAt: 1,
+        fetch: () => new Promise(() => undefined),
+      });
+      const analytics = new ProductAnalytics(
+        client,
+        createConfigService({ NODE_ENV: 'production' })
+      );
+      analytics.capture({
+        distinctId: 'user-1',
+        event: 'user signed up',
+        properties: { source: 'api' },
+        actor: { actor_type: 'registered', is_internal: false, locale: 'en' },
+      });
+
+      let settled = false;
+      const shutdown = analytics.onApplicationShutdown().then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(POSTHOG_SHUTDOWN_TIMEOUT_MS - 1);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await shutdown;
+      expect(settled).toBe(true);
+      expect(consoleError.mock.calls.flat().join(' ')).toContain(
+        'Timeout while shutting down PostHog'
+      );
+    });
   });
 });
