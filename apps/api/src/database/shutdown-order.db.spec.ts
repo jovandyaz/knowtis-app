@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AgentGateway } from '../modules/agent/agent.gateway';
 import { AIRedisProvider } from '../modules/ai/infrastructure/redis/ai-redis.provider';
 import { FeatureFlagsService } from '../modules/feature-flags/feature-flags.service';
 import { AccessDatabase } from '../modules/notes/infrastructure/persistence/access-database';
+import { ShutdownDrain } from '../modules/websocket/shutdown-drain';
 import {
   DATABASE_CLIENT,
   DATABASE_CONNECTION,
@@ -71,8 +71,8 @@ describe('shutdown hook order', () => {
     );
   });
 
-  it('drains agent turns before shutdown and closes the access pool on shutdown', () => {
-    expect(AgentGateway.prototype).toHaveProperty('beforeApplicationShutdown');
+  it('drains socket work before shutdown and closes the access pool on shutdown', () => {
+    expect(ShutdownDrain.prototype).toHaveProperty('beforeApplicationShutdown');
     expect(AccessDatabase.prototype).toHaveProperty('onApplicationShutdown');
     expect(AccessDatabase.prototype).not.toHaveProperty('onModuleDestroy');
   });

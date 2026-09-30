@@ -12,6 +12,10 @@ import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import {
+  SHUTDOWN_ABORT_REASON,
+  ShutdownDrain,
+} from '../websocket/shutdown-drain';
 import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AgentGateway } from './agent.gateway';
 import type { ApproveMutationHandler } from './application/approve-mutation.handler';
@@ -36,6 +40,7 @@ interface MakeGatewayOptions {
   jwt?: Partial<JwtService>;
   featureFlags?: Partial<FeatureFlagsService>;
   redis?: InMemoryClaimRedis;
+  drain?: ShutdownDrain;
 }
 
 function makeGateway({
@@ -45,6 +50,7 @@ function makeGateway({
   jwt = {},
   featureFlags,
   redis = createInMemoryClaimRedis(),
+  drain = new ShutdownDrain(),
 }: MakeGatewayOptions = {}) {
   const config = {
     get: vi.fn(() => 2),
@@ -58,6 +64,7 @@ function makeGateway({
     (featureFlags ?? {
       isEnabled: vi.fn().mockResolvedValue(true),
     }) as unknown as FeatureFlagsService,
+    drain,
     config
   );
 }
@@ -697,8 +704,10 @@ describe('AgentGateway', () => {
         settled = true;
       }
     );
+    const drain = new ShutdownDrain();
     const gateway = makeGateway({
       handler: { execute } as Partial<RunAgentTurnHandler>,
+      drain,
     });
     const client = makeClient('u1');
 
@@ -706,21 +715,23 @@ describe('AgentGateway', () => {
       message: { content: 'hi' },
     });
     await flushAsync();
-    await gateway.beforeApplicationShutdown();
+    await drain.beforeApplicationShutdown();
 
     expect(settled).toBe(true);
     await running;
     expect((execute.mock.calls[0][2] as AbortSignal).reason).toBe(
-      TURN_ABORT_REASON.SHUTDOWN
+      SHUTDOWN_ABORT_REASON
     );
   });
 
   it('refuses a turn that arrives while draining', async () => {
     const execute = vi.fn();
+    const drain = new ShutdownDrain();
     const gateway = makeGateway({
       handler: { execute } as Partial<RunAgentTurnHandler>,
+      drain,
     });
-    await gateway.beforeApplicationShutdown();
+    await drain.beforeApplicationShutdown();
     const client = makeClient('u1');
 
     await gateway.handleMessage(client as never, {

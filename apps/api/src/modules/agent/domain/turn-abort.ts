@@ -1,7 +1,6 @@
 export const TURN_ABORT_REASON = {
   CANCELLED: 'cancelled',
   DISCONNECTED: 'disconnected',
-  SHUTDOWN: 'shutdown',
 } as const;
 
 export type TurnAbortReason =

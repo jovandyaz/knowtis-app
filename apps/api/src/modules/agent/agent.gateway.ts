@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Logger, type BeforeApplicationShutdown } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -30,6 +30,7 @@ import { reasonOf } from '../../core/errors/reason-of';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
+import { ShutdownDrain } from '../websocket/shutdown-drain';
 import {
   authenticateSocket,
   socketAuthFailureMessage,
@@ -98,9 +99,6 @@ const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
   reason: z.string().max(1000).optional(),
 });
 
-/** Below Railway's 10 s draining window, so dispose and the shutdown hooks still run before SIGKILL. */
-export const AGENT_DRAIN_TIMEOUT_MS = 8_000;
-
 /** The legs of a turn hold separate slots: a resume can start while the leg that proposed is still settling its claim. */
 const TURN_LEG = { MESSAGE: 'message', RESUME: 'resume' } as const;
 
@@ -136,17 +134,12 @@ function turnClaimOf(
 
 @WebSocketGateway({ namespace: '/agent' })
 export class AgentGateway
-  implements
-    OnGatewayInit,
-    OnGatewayConnection,
-    OnGatewayDisconnect,
-    BeforeApplicationShutdown
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(AgentGateway.name);
   private readonly turns: ConcurrencySlotTracker;
   private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentTurns: number;
-  private draining = false;
 
   @WebSocketServer()
   server!: Server;
@@ -158,10 +151,12 @@ export class AgentGateway
     private readonly turnClaims: TurnClaimService,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly drain: ShutdownDrain,
     configService: ConfigService<EnvConfig, true>
   ) {
     this.maxConcurrentTurns = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.turns = new ConcurrencySlotTracker(this.maxConcurrentTurns);
+    drain.register(this.turns);
     this.tokenExpiry = new SocketTokenExpiry({
       slots: this.turns,
       logger: this.logger,
@@ -175,18 +170,6 @@ export class AgentGateway
 
   afterInit(): void {
     this.logger.log('Agent WebSocket Gateway initialized');
-  }
-
-  async beforeApplicationShutdown(): Promise<void> {
-    this.draining = true;
-    const startedAt = Date.now();
-    this.turns.abortAll(TURN_ABORT_REASON.SHUTDOWN);
-    const drained = await this.turns.whenIdle(AGENT_DRAIN_TIMEOUT_MS);
-    this.logger.log({
-      event: 'agent.shutdown.drained',
-      drained,
-      durationMs: Date.now() - startedAt,
-    });
   }
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
@@ -546,7 +529,7 @@ export class AgentGateway
     leg: TurnLeg,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
-    if (this.draining) {
+    if (this.drain.isDraining) {
       client.emit('agent:error', {
         ...AgentErrors.turnClaimUnavailable(),
         turnId,
