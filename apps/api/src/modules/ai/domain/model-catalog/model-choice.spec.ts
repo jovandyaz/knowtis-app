@@ -188,6 +188,30 @@ describe('chooseModel', () => {
     }
   );
 
+  it('treats a platform-billed model on a held key as key-billed', () => {
+    const fastRetired = (id: string) => id !== PLATFORM_INTENTS.fast;
+    const keyIntent = 'openrouter:anthropic/claude-sonnet-5';
+    expect(
+      setup(
+        'byok',
+        ['openrouter'],
+        fastRetired
+      )({ pinned: PLATFORM_INTENTS.fast })
+    ).toEqual({
+      kind: 'resolved',
+      model: keyIntent,
+      resolution: {
+        requested: PLATFORM_INTENTS.fast,
+        resolved: keyIntent,
+        fallback: {
+          reason: 'model_retired',
+          from: PLATFORM_INTENTS.fast,
+          to: keyIntent,
+        },
+      },
+    });
+  });
+
   it('falls back from a pinned model on a removed key onto another held key', () => {
     expect(
       setup('byok', ['openai'])({ pinned: 'anthropic:claude-opus-5' })
