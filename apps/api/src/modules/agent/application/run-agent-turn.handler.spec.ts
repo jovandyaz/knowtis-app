@@ -6508,6 +6508,40 @@ describe('RunAgentTurnHandler turn identity', () => {
     expect(conversations.deleteForUser).not.toHaveBeenCalled();
   });
 
+  it('answers a first turn resent with no conversation as settled when the conversation it opened stores it', async () => {
+    const opened = conversationIdForTurn(USER, TURN_ID);
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockImplementation(
+      async (id: string) => (id === opened ? { id: opened, model: null } : null)
+    );
+    vi.mocked(conversations.hasTurn).mockResolvedValue(true);
+    const quota = createMessageQuotaStub();
+    const modelPreference = makeModelPreference();
+    const { handler, callbacks, orchestrator, rateLimit } = setup({
+      conversations,
+      quota,
+      modelPreference,
+    });
+    const onTurnSettled = vi.fn();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      { ...callbacks, onTurnSettled }
+    );
+
+    expect(conversations.hasTurn).toHaveBeenCalledWith(opened, TURN_ID);
+    expect(onTurnSettled).toHaveBeenCalledExactlyOnceWith(opened);
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(modelPreference.chooseTurnModel).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(callbacks.onModelStart).not.toHaveBeenCalled();
+    expect(callbacks.onConversation).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
   it('still reports the refusal when discarding the opened conversation fails', async () => {
     const warn = vi
       .spyOn(Logger.prototype, 'warn')
