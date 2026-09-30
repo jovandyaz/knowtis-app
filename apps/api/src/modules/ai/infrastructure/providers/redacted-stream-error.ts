@@ -1,6 +1,6 @@
 import type { Logger } from '@nestjs/common';
 
-function statusCodeOf(error: unknown): { statusCode: number } | object {
+function statusCodeOf(error: unknown): { statusCode?: number } {
   const status =
     typeof error === 'object' && error !== null
       ? (error as { statusCode?: unknown }).statusCode
