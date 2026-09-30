@@ -15,6 +15,8 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
+  type AgentByokKeyFailedError,
   type ConversationTranscript,
 } from '@knowtis/shared-types';
 
@@ -143,6 +145,24 @@ describe('AgentCopilotPanel', () => {
     failWith(AGENT_EMAIL_NOT_VERIFIED_CODE);
 
     expect(screen.getByText('ai.errors.emailNotVerified')).toBeInTheDocument();
+  });
+
+  it('names what the provider refused about the caller’s own key', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    const refused: AgentByokKeyFailedError = {
+      code: AI_BYOK_KEY_FAILED_CODE,
+      message: 'Your API key was refused by the provider.',
+      provider: 'openai',
+      kind: 'credit',
+    };
+
+    act(() => {
+      useAgentStore.setState({ status: 'error', error: refused });
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.byokKeyFailed.credit'
+    );
   });
 
   it('does not offer a code to a visitor with no address', () => {

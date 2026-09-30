@@ -15,11 +15,13 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AGENT_STOP_REASON,
+  isByokProvider,
   type AgentStopReason,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
+import { classifyByokKeyFailure } from '../../../ai/infrastructure/providers/byok-key-failure';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import { honoursToolChoiceNone } from '../../../ai/infrastructure/providers/tool-choice-none';
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
@@ -218,6 +220,9 @@ export async function* runAgentStepLoop(
   const { userId } = input.execution.subject;
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
+  // A BYOK turn never fails over, so this is the provider of every attempt.
+  const keyProvider = providerOf(params.model);
+  const byokProvider = byok && isByokProvider(keyProvider) ? keyProvider : null;
 
   const optionsFor = async (model: string) => {
     const reasoningEffort = await input.effortFor?.(model);
@@ -375,7 +380,14 @@ export async function* runAgentStepLoop(
         }
         case STEP_CALL_KIND.ERRORED: {
           const { cause, fromStream } = result;
-          if (canRetryTransientStep(result.health, attempt, cause, byok)) {
+          const keyFailure =
+            byokProvider === null
+              ? null
+              : classifyByokKeyFailure(cause, byokProvider);
+          if (
+            keyFailure === null &&
+            canRetryTransientStep(result.health, attempt, cause, byok)
+          ) {
             emitTurnHealth(
               logger,
               userId,
@@ -410,6 +422,7 @@ export async function* runAgentStepLoop(
               userId,
               model: currentModel,
               error: errorMessage(cause, byok),
+              ...(keyFailure ? { keyFailure } : {}),
             });
           }
           emitTurnHealth(
@@ -422,7 +435,9 @@ export async function* runAgentStepLoop(
             modelsUsed
           );
           yield errorEvent(
-            toError(cause, byok),
+            byokProvider !== null && keyFailure !== null
+              ? AIErrors.byokKeyFailed(byokProvider, keyFailure)
+              : toError(cause, byok),
             fromStream
               ? bestEffortUsage(currentModel, turn.stepUsage)
               : undefined

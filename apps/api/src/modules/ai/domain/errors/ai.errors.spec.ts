@@ -65,4 +65,13 @@ describe('AIErrors', () => {
       suggestedModel: 'openrouter:m',
     });
   });
+
+  it('byokKeyFailed names the provider and what it refused about the key', () => {
+    expect(AIErrors.byokKeyFailed('openai', 'credit')).toEqual({
+      code: 'AI_BYOK_KEY_FAILED',
+      message: 'Your API key was refused by the provider.',
+      provider: 'openai',
+      kind: 'credit',
+    });
+  });
 });

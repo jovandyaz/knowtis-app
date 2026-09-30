@@ -1,7 +1,11 @@
 import {
+  AI_BYOK_KEY_FAILED_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  type AgentByokKeyFailedError,
   type AgentQuotaExhaustedError,
+  type ByokKeyFailureKind,
+  type ByokProvider,
   type ModelUnavailableError,
   type ModelUnavailableReason,
   type QuotaUpgrade,
@@ -110,5 +114,15 @@ export const AIErrors = {
     message: 'This model is not available to you.',
     reason,
     suggestedModel,
+  }),
+
+  byokKeyFailed: (
+    provider: ByokProvider,
+    kind: ByokKeyFailureKind
+  ): Omit<AgentByokKeyFailedError, 'turnId'> => ({
+    code: AI_BYOK_KEY_FAILED_CODE,
+    message: 'Your API key was refused by the provider.',
+    provider,
+    kind,
   }),
 } as const;

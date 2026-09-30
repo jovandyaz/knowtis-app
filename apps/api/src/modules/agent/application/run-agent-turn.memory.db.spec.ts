@@ -68,7 +68,7 @@ const modelPreferenceStub = {
   reasoningFor: vi.fn().mockResolvedValue(null),
 } as unknown as ModelPreferenceService;
 const byokStub = {
-  getApiKey: vi.fn().mockResolvedValue(null),
+  resolveKey: vi.fn().mockResolvedValue({ kind: 'missing' }),
   enabledProviders: vi.fn().mockResolvedValue(new Set()),
   markUsed: vi.fn().mockResolvedValue(undefined),
 } as unknown as ByokService;

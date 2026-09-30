@@ -1,8 +1,11 @@
 import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AGENT_TURN_ERROR_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  BYOK_KEY_FAILURE_KIND,
+  type ByokKeyFailureKind,
 } from '@knowtis/shared-types';
 
 type AIErrorMessageKey =
@@ -29,7 +32,10 @@ type AIErrorMessageKey =
   | 'ai.errors.noteNotFound'
   | 'ai.errors.invalidProposal'
   | 'ai.errors.emailNotVerified'
-  | 'ai.errors.modelUnavailable';
+  | 'ai.errors.modelUnavailable'
+  | 'ai.errors.byokKeyFailed.auth'
+  | 'ai.errors.byokKeyFailed.credit'
+  | 'ai.errors.byokKeyFailed.permission';
 
 export const GENERIC_AI_ERROR_KEY: AIErrorMessageKey = 'ai.errors.generic';
 
@@ -63,7 +69,26 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   [AI_MODEL_UNAVAILABLE_CODE]: 'ai.errors.modelUnavailable',
 };
 
-/** Maps a server/client AI error code to an i18n key, falling back to the generic message. */
-export function aiErrorMessageKey(code: string): AIErrorMessageKey {
-  return CODE_TO_KEY[code] ?? GENERIC_AI_ERROR_KEY;
+const BYOK_KEY_FAILURE_TO_KEY: Record<string, AIErrorMessageKey> = {
+  [BYOK_KEY_FAILURE_KIND.AUTH]: 'ai.errors.byokKeyFailed.auth',
+  [BYOK_KEY_FAILURE_KIND.CREDIT]: 'ai.errors.byokKeyFailed.credit',
+  [BYOK_KEY_FAILURE_KIND.PERMISSION]: 'ai.errors.byokKeyFailed.permission',
+} satisfies Record<ByokKeyFailureKind, AIErrorMessageKey>;
+
+/**
+ * Maps a server/client AI error to an i18n key, falling back to the generic
+ * message. A refused BYOK key reads by its `kind`, since what the provider
+ * refused decides what the user can do about it.
+ */
+export function aiErrorMessageKey(
+  error: { readonly code: string; readonly kind?: string } | null
+): AIErrorMessageKey {
+  if (!error) {
+    return GENERIC_AI_ERROR_KEY;
+  }
+  const key =
+    error.code === AI_BYOK_KEY_FAILED_CODE
+      ? BYOK_KEY_FAILURE_TO_KEY[error.kind ?? '']
+      : CODE_TO_KEY[error.code];
+  return key ?? GENERIC_AI_ERROR_KEY;
 }

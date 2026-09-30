@@ -36,6 +36,7 @@ import type { ModelPreferenceService } from '../../ai/application/services/model
 import type { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrorCodes, AIErrors } from '../../ai/domain/errors/ai.errors';
+import { ByokKeyFailedEvent } from '../../ai/domain/events/byok-key-failed.event';
 import {
   PLATFORM_BILLING,
   type AiCaller,
@@ -236,7 +237,7 @@ function makeModelPreference(
 
 function makeByok() {
   return {
-    getApiKey: vi.fn().mockResolvedValue(null),
+    resolveKey: vi.fn().mockResolvedValue({ kind: 'missing' }),
     enabledProviders: vi.fn().mockResolvedValue(new Set()),
     markUsed: vi.fn().mockResolvedValue(undefined),
   } as unknown as ByokService;
@@ -2102,7 +2103,10 @@ describe('RunAgentTurnHandler', () => {
       const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
       const conversations = makeConversations(history);
       const byok = makeByok();
-      vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+      vi.mocked(byok.resolveKey).mockResolvedValue({
+        kind: 'found',
+        apiKey: 'user-key',
+      });
       const tierResolver = makeTierResolver();
       const injectionGuard = makeGuard();
       const handler = new RunAgentTurnHandler(
@@ -2318,7 +2322,7 @@ describe('RunAgentTurnHandler', () => {
           maxTurnTokens: Number.POSITIVE_INFINITY,
         })
       );
-      expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'anthropic');
+      expect(byok.resolveKey).toHaveBeenCalledWith(USER, 'anthropic');
       expect(rateLimit.checkLimit).toHaveBeenCalledWith(
         expect.objectContaining({
           tier: 'byok',
@@ -3027,7 +3031,10 @@ describe('RunAgentTurnHandler', () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
     const byok = makeByok();
-    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    vi.mocked(byok.resolveKey).mockResolvedValue({
+      kind: 'found',
+      apiKey: 'user-key',
+    });
     const turnEffort = makeTurnEffort('max');
     const handler = new RunAgentTurnHandler(
       orchestrator,
@@ -4609,7 +4616,10 @@ describe('RunAgentTurnHandler', () => {
     ]);
     const modelPreference = makeModelPreference();
     const byok = makeByok();
-    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    vi.mocked(byok.resolveKey).mockResolvedValue({
+      kind: 'found',
+      apiKey: 'user-key',
+    });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -4644,7 +4654,7 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'google');
+    expect(byok.resolveKey).toHaveBeenCalledWith(USER, 'google');
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ byokApiKey: 'user-key' })
     );
@@ -4662,7 +4672,7 @@ describe('RunAgentTurnHandler', () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
     const byok = makeByok();
-    vi.mocked(byok.getApiKey).mockResolvedValue(null);
+    vi.mocked(byok.resolveKey).mockResolvedValue({ kind: 'missing' });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -4693,9 +4703,12 @@ describe('RunAgentTurnHandler', () => {
       { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
     );
 
-    expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'google');
+    expect(byok.resolveKey).toHaveBeenCalledWith(USER, 'google');
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+      expect.objectContaining({
+        code: 'AI_MODEL_UNAVAILABLE',
+        reason: 'key_removed',
+      })
     );
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
@@ -4890,7 +4903,10 @@ describe('RunAgentTurnHandler', () => {
     };
     const modelPreference = makeModelPreference();
     const byok = makeByok();
-    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    vi.mocked(byok.resolveKey).mockResolvedValue({
+      kind: 'found',
+      apiKey: 'user-key',
+    });
     const handler = new RunAgentTurnHandler(
       throwingOrchestrator,
       rateLimit,
@@ -6477,6 +6493,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
     aiConfig?: AIConfigService;
     modelPreference?: ModelPreferenceService;
     embed?: EmbeddingPort;
+    eventBus?: EventEmitter2;
   }) {
     const deps = makeDeps({
       ...(over.allowed === false ? { allowed: false } : {}),
@@ -6485,6 +6502,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
     const orchestrator = over.orchestrator ?? deps.orchestrator;
     const guard = over.guard ?? makeGuard();
     const embed = over.embed ?? makeEmbed();
+    const eventBus = over.eventBus ?? makeEvents();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       deps.rateLimit,
@@ -6501,7 +6519,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       makeTurnEffort(),
       over.tierResolver ?? makeTierResolver(),
       over.quota,
-      makeEvents()
+      eventBus
     );
     return {
       handler,
@@ -6510,6 +6528,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       orchestrator,
       guard,
       embed,
+      eventBus,
     };
   }
 
@@ -7198,11 +7217,99 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
     expect(cb.onError).toHaveBeenCalledWith(
       expect.objectContaining({
-        code: AIErrorCodes.PROVIDER_ERROR,
-        message: expect.stringContaining('saved key'),
+        code: 'AI_MODEL_UNAVAILABLE',
+        reason: 'key_removed',
       })
     );
     expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  it('reports an undecryptable key as a failed key and announces it', async () => {
+    const quota = consumedQuota();
+    const byok = makeByok();
+    vi.mocked(byok.resolveKey).mockResolvedValue({ kind: 'undecryptable' });
+    const eventBus = makeEvents();
+    const { handler, orchestrator } = build({
+      quota,
+      byok,
+      eventBus,
+      tierResolver: makeTierResolver(['google']),
+    });
+    const cb = callbacks();
+
+    await handler.execute({ ...turn, model: USER_KEYED_MODEL }, cb);
+
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'AI_BYOK_KEY_FAILED',
+        provider: 'google',
+        kind: 'auth',
+      })
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      ByokKeyFailedEvent.EVENT_NAME,
+      expect.objectContaining({ provider: 'google', kind: 'auth' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  it('announces a key the provider refused mid-turn', async () => {
+    const quota = consumedQuota();
+    const byok = makeByok();
+    vi.mocked(byok.resolveKey).mockResolvedValue({
+      kind: 'found',
+      apiKey: 'sk-user',
+    });
+    const eventBus = makeEvents();
+    const { handler } = build({
+      quota,
+      byok,
+      eventBus,
+      tierResolver: makeTierResolver(['google']),
+      events: [
+        { type: 'error', error: AIErrors.byokKeyFailed('google', 'credit') },
+      ],
+    });
+    const cb = callbacks();
+
+    await handler.execute({ ...turn, model: USER_KEYED_MODEL }, cb);
+
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      ByokKeyFailedEvent.EVENT_NAME,
+      expect.objectContaining({
+        userId: USER,
+        provider: 'google',
+        kind: 'credit',
+      })
+    );
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_BYOK_KEY_FAILED', kind: 'credit' })
+    );
+  });
+
+  it('announces no key failure for any other error of a byok turn', async () => {
+    const quota = consumedQuota();
+    const byok = makeByok();
+    vi.mocked(byok.resolveKey).mockResolvedValue({
+      kind: 'found',
+      apiKey: 'sk-user',
+    });
+    const eventBus = makeEvents();
+    const { handler } = build({
+      quota,
+      byok,
+      eventBus,
+      tierResolver: makeTierResolver(['google']),
+      events: [{ type: 'error', error: AIErrors.providerOverloaded() }],
+    });
+
+    await handler.execute({ ...turn, model: USER_KEYED_MODEL }, callbacks());
+
+    expect(eventBus.emit).not.toHaveBeenCalledWith(
+      ByokKeyFailedEvent.EVENT_NAME,
+      expect.anything()
+    );
   });
 
   it('refuses a byok-tier turn that would bill the platform, before any message is drawn', async () => {
@@ -7299,7 +7406,10 @@ describe('RunAgentTurnHandler daily message quota', () => {
     it("never touches the counters for a turn billed to the caller's key", async () => {
       const { service, counters } = realQuota();
       const byok = makeByok();
-      vi.mocked(byok.getApiKey).mockResolvedValue('sk-user-key');
+      vi.mocked(byok.resolveKey).mockResolvedValue({
+        kind: 'found',
+        apiKey: 'sk-user-key',
+      });
       const { handler, orchestrator } = build({
         quota: service,
         byok,

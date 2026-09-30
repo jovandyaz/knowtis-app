@@ -12,7 +12,9 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AGENT_STOP_REASON,
+  BYOK_KEY_FAILURE_KIND,
   deriveConversationTitle,
+  isByokKeyFailedError,
   MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
@@ -44,6 +46,7 @@ import {
   type TurnEffortRequest,
 } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
+import { ByokKeyFailedEvent } from '../../ai/domain/events/byok-key-failed.event';
 import {
   billingFor,
   billingMatchesTier,
@@ -799,19 +802,38 @@ export class RunAgentTurnHandler {
     }
     let byokApiKey: string | null = null;
     if (execution.billing.kind === 'byok') {
-      byokApiKey = await this.byok.getApiKey(
-        userId,
-        execution.billing.provider
-      );
+      const { provider } = execution.billing;
+      const key = await this.byok.resolveKey(userId, provider);
       // Fail closed: the model was selectable on the user's key, so never bill
       // the server's key as a silent fallback when that key is unavailable.
-      if (!byokApiKey) {
-        callbacks.onError(
-          AIErrors.providerError(
-            'Your saved key for this provider is unavailable. Re-add it in settings.'
-          )
-        );
-        return;
+      switch (key.kind) {
+        case 'found':
+          byokApiKey = key.apiKey;
+          break;
+        case 'undecryptable':
+          this.announce(
+            new ByokKeyFailedEvent(userId, provider, BYOK_KEY_FAILURE_KIND.AUTH)
+          );
+          callbacks.onError(
+            AIErrors.byokKeyFailed(provider, BYOK_KEY_FAILURE_KIND.AUTH)
+          );
+          return;
+        case 'missing': {
+          const refusal = AIErrors.modelUnavailable('key_removed', null);
+          this.logger.warn({
+            event: 'ai.model.unavailable',
+            userId,
+            tier: execution.tier,
+            reason: refusal.reason,
+            model,
+          });
+          callbacks.onError(refusal);
+          return;
+        }
+        default: {
+          const _exhaustive: never = key;
+          throw new Error(`Unhandled key lookup: ${String(_exhaustive)}`);
+        }
       }
     }
 
@@ -948,6 +970,18 @@ export class RunAgentTurnHandler {
             await persistTurnOnce([], 'error');
             if (!answered) {
               await hold.refund();
+            }
+            if (
+              isByokKeyFailedError(event.error) &&
+              execution.billing.kind === 'byok'
+            ) {
+              this.announce(
+                new ByokKeyFailedEvent(
+                  userId,
+                  execution.billing.provider,
+                  event.error.kind
+                )
+              );
             }
             callbacks.onError(event.error);
             return;
@@ -1167,7 +1201,7 @@ export class RunAgentTurnHandler {
   }
 
   private announce(
-    event: TurnCheckpointReachedEvent | TurnContinuedEvent
+    event: TurnCheckpointReachedEvent | TurnContinuedEvent | ByokKeyFailedEvent
   ): void {
     try {
       this.events.emit(event.name, event);
