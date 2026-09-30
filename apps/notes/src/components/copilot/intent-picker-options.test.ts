@@ -7,6 +7,7 @@ import {
   advancedModelOptions,
   effortOptions,
   moreModelGroups,
+  resolveSelectedModel,
 } from './intent-picker-options';
 
 const t = ((key: string) => key) as unknown as TFunction<'common'>;
@@ -66,5 +67,36 @@ describe('models outside an intent', () => {
 
     expect(advancedModelOptions([serving])).toEqual([]);
     expect(moreModelGroups([serving], t)).toEqual([]);
+  });
+});
+
+describe('resolveSelectedModel', () => {
+  const fast = {
+    ...model,
+    id: 'anthropic:claude-haiku-4-5',
+    servesIntent: 'fast' as const,
+  };
+  const balanced = {
+    ...model,
+    id: 'anthropic:claude-sonnet-5',
+    servesIntent: 'balanced' as const,
+  };
+
+  it('resolves an advanced pick that also serves an intent over the stored intent', () => {
+    expect(
+      resolveSelectedModel([fast, balanced], {
+        preferredModel: 'anthropic:claude-sonnet-5',
+        preferredIntent: 'fast',
+      })
+    ).toBe(balanced);
+  });
+
+  it('falls back to the stored intent when the picked model is no longer listed', () => {
+    expect(
+      resolveSelectedModel([fast, balanced], {
+        preferredModel: 'anthropic:claude-opus-5',
+        preferredIntent: 'fast',
+      })
+    ).toBe(fast);
   });
 });

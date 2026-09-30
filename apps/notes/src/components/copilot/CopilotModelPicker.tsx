@@ -121,7 +121,9 @@ export function CopilotModelPicker() {
   // Anonymous: the row serving the running default renders checked and inert;
   // the settings endpoints reject a guest, so no selection may ever mutate.
   const anonymousValue = primary[0]?.id ?? null;
-  const menuValue = isAnonymous ? anonymousValue : (override ?? intent);
+  const menuValue = isAnonymous
+    ? anonymousValue
+    : (override ?? selectedModel?.servesIntent ?? intent);
 
   const select = (id: string) => {
     if (isAnonymous) {

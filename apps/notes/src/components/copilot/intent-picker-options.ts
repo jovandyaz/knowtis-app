@@ -27,8 +27,9 @@ function isMoreModel(model: SelectableModel): boolean {
 
 /**
  * The model a turn resolves to: the stored override while the list still
- * offers it, else the model serving the preferred intent. A stale override
- * falls back rather than resolving to nothing, so every surface agrees.
+ * offers it — an Advanced pick may also serve an intent — else the model
+ * serving the preferred intent. A stale override falls back rather than
+ * resolving to nothing, so every surface agrees.
  */
 export function resolveSelectedModel(
   models: readonly SelectableModel[] | undefined,
@@ -37,9 +38,7 @@ export function resolveSelectedModel(
   const list = models ?? [];
   const preferred = prefs?.preferredModel ?? null;
   const override =
-    preferred === null
-      ? undefined
-      : list.find((m) => m.id === preferred && isMoreModel(m));
+    preferred === null ? undefined : list.find((m) => m.id === preferred);
   if (override) {
     return override;
   }

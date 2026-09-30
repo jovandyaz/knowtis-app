@@ -269,6 +269,28 @@ describe('CopilotModelPicker', () => {
     });
   });
 
+  it('shows a key model picked in Advanced even when it serves an intent', async () => {
+    const user = userEvent.setup();
+    keysData.mockReturnValue(anthropicKey);
+    modelsData.mockReturnValue(byokListing);
+    prefsData.mockReturnValue({
+      preferredModel: 'anthropic:sonnet-5',
+      preferredIntent: 'fast',
+    });
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    ).toHaveTextContent('Sonnet 5');
+    await openMenu(user);
+    expect(
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ })
+    ).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('anonymous: the only row is checked and inert, and the footer routes to register', async () => {
     const user = userEvent.setup();
     authUser.mockReturnValue({ isAnonymous: true });

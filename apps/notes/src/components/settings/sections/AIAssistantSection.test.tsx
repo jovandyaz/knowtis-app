@@ -254,6 +254,34 @@ describe('AIAssistantSection', () => {
     expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
   });
 
+  it('shows a key model picked in Advanced as selected even when it serves an intent', async () => {
+    const keyServingIntent = { ...intentServingModels[0], billedToUser: true };
+    modelsData.mockReturnValue([keyServingIntent, intentServingModels[1]]);
+    const { rerender } = render(<AIAssistantSection />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+    );
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: /Balanced One/ })
+    );
+    expect(update).toHaveBeenCalledWith({ preferredModel: 'a:bal' });
+
+    prefsData.mockReturnValue({
+      preferredModel: 'a:bal',
+      preferredIntent: 'fast',
+      ghostTextEnabled: true,
+    });
+    rerender(<AIAssistantSection />);
+
+    expect(
+      screen.getByRole('button', { name: /Balanced One/ })
+    ).toBeInTheDocument();
+    for (const chip of screen.getAllByRole('radio')) {
+      expect(chip).toHaveAttribute('data-state', 'off');
+    }
+  });
+
   it('shows autocomplete as on while the account preference is on', () => {
     render(<AIAssistantSection />);
 
