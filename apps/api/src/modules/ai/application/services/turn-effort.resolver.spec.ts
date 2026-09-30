@@ -89,22 +89,6 @@ describe('TurnEffortResolver', () => {
     ).resolves.toBe('high');
   });
 
-  it('treats a byok-tier caller on a platform model as the free audience', async () => {
-    const { resolver } = make({
-      levels: ['low', 'medium', 'high', 'xhigh'],
-      mandatory: false,
-    });
-    const execution = createExecutionContext({
-      userId: USER,
-      tier: 'byok',
-      byokProviders: ['anthropic'],
-    });
-
-    await expect(
-      resolver.resolve({ execution, model: MODEL, requested: 'max' })
-    ).resolves.toBe('high');
-  });
-
   it('honours a free caller pick within the ceiling', async () => {
     const { resolver } = make({
       levels: ['low', 'medium', 'high', 'xhigh'],

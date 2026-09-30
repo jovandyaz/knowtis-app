@@ -28,7 +28,7 @@ describe('segmentLimits', () => {
     });
   });
 
-  it('keeps platform limits for a byok-tier caller whose turn runs on a platform model', () => {
+  it('keys the limits on billing: platform billing keeps the platform limits even on the byok tier', () => {
     expect(
       segmentLimits(createExecutionContext({ tier: 'byok' }), settings)
     ).toEqual({ maxSteps: 8, maxTurnTokens: 150_000 });
