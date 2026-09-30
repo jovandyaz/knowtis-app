@@ -742,6 +742,8 @@ Anthropic caching is a **prefix match**: the request renders as `tools → syste
 
 Cache read/write tokens from `usage.inputTokenDetails` are carried on `AgentTurnUsage` and priced by `TokenUsage.create` (Anthropic cache rates from the model catalog, with 0.1×/1.25× fallbacks), so `costUsd` no longer over-bills cache reads at the full input price.
 
+The economics are the same for a BYOK turn billed to the key owner's Anthropic account: the first call pays one 1.25× write on the cached prefix, then every later call of the turn (each tool step and the synthesis) and of a follow-up turn within 5 minutes reads it at 0.1×. A turn of one call pays +25% on the prefix it writes; every multi-call turn pays less than it would uncached.
+
 **Minimum cacheable prefix.** Anthropic ignores breakpoints below a per-model minimum (≈1024–4096 tokens depending on the model). Breakpoints are free, so an under-minimum turn 1 is harmless — multi-turn conversations clear the minimum quickly. This is also why **single-shot completions** (`AISDKProvider`, ~60–150-token rendered prompts) still carry the breakpoint but typically don't cache.
 
 **Confirming it works:** run a 3-turn dev conversation against Anthropic and confirm `cacheReadTokens > 0` on turns 2–3 (visible in the recorded usage). If reads stay at zero, a prefix invalidator (non-deterministic tool order, per-request content in the system prompt) is at work — fix that first, or every turn only pays the 1.25× write premium with no read discount.
@@ -1411,6 +1413,8 @@ Both forms are strict objects: a payload with a key outside its form, such as a 
 
 The client sends every `agent:*` request with a socket.io acknowledgement (`ackTimeout: 10000`) and the gateway acknowledges on receipt, before validation. socket.io's default delivery is at most once: an event written to a transport that has already died is lost and never replayed after the reconnect, which used to leave the copilot in "Thinking…" until the 310 s inactivity backstop. A request that is never acknowledged now ends with `CONNECTION_FAILED` and the retry banner; the client never resends on its own, since a turn start is not idempotent and a copy replayed after a reconnect would run twice. The receipt only means "delivered"; the outcome still arrives as `agent:error` / `agent:done`.
 
+`agent:turn_settled` (`{ turnId, conversationId }`) answers a resend of a `turnId` instead of running it again, in two cases: the turn's claim in Redis is settled (the turn reached the model, kept for a day), or the claim has expired or was lost but the conversation already stores the turn's user row (`ConversationRepository.hasTurn`, checked before the quota is drawn, so the resend consumes nothing). A resend found that way settles its claim again, so later resends are answered from Redis.
+
 The legacy `{ messages[] }` payload (where the client shipped its own history) was removed — the server is the single source of truth for the thread.
 
 ### Persistence
@@ -1568,6 +1572,18 @@ Checkpoints and continuations are captured as `ai turn checkpoint reached` and `
 ### Timeouts and budgets
 
 Env: `AI_AGENT_MAX_STEPS`, `AI_AGENT_BYOK_MAX_STEPS`, `AI_AGENT_TTFT_MS`, `AI_AGENT_STALL_MS`, `AI_AGENT_MAX_MS`, `AI_AGENT_MAX_OUTPUT_TOKENS`, `AI_AGENT_TURN_TOKEN_BUDGET`, `AI_AGENT_SYNTHESIS_RESERVE_TOKENS`, `AI_AGENT_SYNTHESIS_RESERVE_MS`, `AI_AGENT_HISTORY_LIMIT`, `AI_AGENT_PROPOSAL_TTL_SECONDS` — see [Environment Variables](#environment-variables).
+
+**First-call budget.** A turn's first call re-sends its input in the closing synthesis, so the turn budget must cover it twice. The room for the first call's messages is `floor((maxTurnTokens − synthesis request tokens − MIN_SYNTHESIS_OUTPUT_TOKENS) / 2) − AI_AGENT_MAX_OUTPUT_TOKENS − 4 000` (`firstCallRoom`, `domain/first-call-budget.ts`; the 4 000 is `AGENT_PROMPT_OVERHEAD_TOKENS`, the system prompt, viewed note, retrieved memories and tool definitions; `MIN_SYNTHESIS_OUTPUT_TOKENS` is 1 024), floored at 0; `maxTurnTokens` is `AI_AGENT_TURN_TOKEN_BUDGET`, or the smaller anonymous daily allowance for an anonymous turn, and unbounded for a BYOK turn. The history the turn replays is kept up to `min(12 000, room)` (`AGENT_HISTORY_TOKEN_BUDGET`, see [Persistence](#persistence)). A fresh message alone above the room is refused before the injection classifier runs, so an oversized message never bills it: `AI_INVALID_INPUT`, which the client does not offer to retry, the message refunded, and `agent.turn.first_call_unaffordable` logged with `userId`, `tier`, `room`, `fittedTokens` and `maxTurnTokens`. The newest turn is kept past the history cap, so a history that still overruns the whole room after fitting is refused the same way.
+
+With the defaults:
+
+| Tier                             | `maxTurnTokens` | History kept | Fresh message refused above |
+| -------------------------------- | --------------- | ------------ | --------------------------- |
+| Anonymous (`33 000` daily share) | 33 000          | 3 757        | 3 757                       |
+| Free                             | 150 000         | 12 000       | 62 257                      |
+| BYOK                             | unbounded       | 12 000       | never                       |
+
+The API refuses to start when the room is 0 for `AI_AGENT_TURN_TOKEN_BUDGET`, or for the anonymous budget, `min(AI_AGENT_TURN_TOKEN_BUDGET, AI_DAILY_TOKEN_LIMIT × AI_ANONYMOUS_DAILY_LIMIT_PCT)`: a budget that small would refuse every turn.
 
 **Stall detection, not a wall-clock budget.** A reasoning model can legitimately work for minutes, so the operative limit is **silence**, not elapsed time — the orchestrator caps how long a call can go quiet, not how long the turn runs. The turn is an **agent-owned step loop**: one `streamText` call per step (`stopWhen: isStepCount(1)`), each step's tool results threaded into the message history for the next, so every LLM call is independently budgeted. Each call gets its own `AbortController` and a `AI_AGENT_STALL_MS` timer that every `result.stream` part re-arms (reasoning, text, tool and step events all count as activity). Only a call that emits nothing for the whole budget is aborted. `AI_AGENT_MAX_MS` is a per-segment clock: the loop starts the closing synthesis (below) `AI_AGENT_SYNTHESIS_RESERVE_MS` before it runs out, and its hard stop remains the backstop against a runaway call that never stops producing parts.
 
