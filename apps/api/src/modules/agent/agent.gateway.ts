@@ -500,7 +500,7 @@ export class AgentGateway
 
   // Stripe's rule: a turn refused before the model ran saves nothing, so its
   // claim is released and a resend of it runs. A turn the conversation
-  // already stores ran on an expired claim, so it is settled like one that ran.
+  // already stores outlived its claim, so it is settled like one that ran.
   private async withTurnClaim(
     client: AuthenticatedSocket,
     controller: AbortController,
