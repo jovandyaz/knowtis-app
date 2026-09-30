@@ -307,20 +307,47 @@ describe('byokKeyRefusalMiddleware', () => {
   }
 
   it('sends a key the provider refused only once, whatever its status', async () => {
-    const refused = tooManyRequests(OUT_OF_QUOTA);
+    const upstream = new Error('upstream refusal');
+    const refused = new APICallError({
+      message: 'You exceeded your current quota.',
+      url: 'https://provider.test/v1/responses',
+      requestBodyValues: { model: 'gpt-5.6-terra', input: 'ping' },
+      statusCode: 429,
+      responseHeaders: { 'retry-after-ms': '0', 'x-request-id': 'req_1' },
+      responseBody: OUT_OF_QUOTA,
+      cause: upstream,
+      data: { error: { code: 'insufficient_quota' } },
+    });
     expect(refused.isRetryable).toBe(true);
     const { model, doStream } = refusingModel(refused);
 
     const error = await streamedError(model);
 
     expect(doStream).toHaveBeenCalledTimes(1);
-    expect(APICallError.isInstance(error) && error.isRetryable).toBe(false);
+    if (!APICallError.isInstance(error)) {
+      throw new Error('expected the refusal to surface as an APICallError');
+    }
+    expect(error).not.toBe(refused);
+    expect(error.isRetryable).toBe(false);
     expect(classifyByokKeyFailure(error, 'openai')).toBe('credit');
-    expect(error).toMatchObject({
+    expect({
+      message: error.message,
+      url: error.url,
+      requestBodyValues: error.requestBodyValues,
+      statusCode: error.statusCode,
+      responseHeaders: error.responseHeaders,
+      responseBody: error.responseBody,
+      data: error.data,
+    }).toEqual({
+      message: 'You exceeded your current quota.',
+      url: 'https://provider.test/v1/responses',
+      requestBodyValues: { model: 'gpt-5.6-terra', input: 'ping' },
       statusCode: 429,
+      responseHeaders: { 'retry-after-ms': '0', 'x-request-id': 'req_1' },
       responseBody: OUT_OF_QUOTA,
-      url: 'https://provider.test/v1',
+      data: { error: { code: 'insufficient_quota' } },
     });
+    expect(error.cause).toBe(upstream);
   });
 
   it('keeps the SDK retries for a genuine rate limit', async () => {
@@ -343,6 +370,33 @@ describe('byokKeyRefusalMiddleware', () => {
 
     expect(doGenerate).toHaveBeenCalledTimes(1);
     expect(APICallError.isInstance(error) && error.isRetryable).toBe(false);
+  });
+
+  it.each([
+    {
+      case: 'an unclassified retryable call error',
+      error: new APICallError({
+        message: 'overloaded',
+        url: 'https://provider.test/v1',
+        requestBodyValues: {},
+        statusCode: 503,
+      }),
+    },
+    {
+      case: 'a key refusal the SDK already will not retry',
+      error: new APICallError({
+        message: 'invalid key',
+        url: 'https://provider.test/v1',
+        requestBodyValues: {},
+        statusCode: 401,
+        responseBody: '{"error":{"code":"invalid_api_key"}}',
+      }),
+    },
+  ])('rethrows $case as the same object', async ({ error }) => {
+    const { model } = refusingModel(error);
+
+    await expect(model.doStream({ prompt: [] })).rejects.toBe(error);
+    await expect(model.doGenerate({ prompt: [] })).rejects.toBe(error);
   });
 
   it('passes an unclassified failure through untouched', async () => {
