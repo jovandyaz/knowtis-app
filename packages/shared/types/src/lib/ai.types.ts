@@ -212,7 +212,7 @@ export interface SelectableModel {
    * caller's BYOK key reaches it, so it is inert in any server-global config.
    */
   routableByServer: boolean;
-  /** Whether this caller may run the model: open tier is free for everyone; other tiers need the caller's own provider key while tier gating is on. Absent from servers that list only the caller tier's models. */
+  /** Absent from servers that list only the caller tier's models. */
   access?: ModelAccess;
   reasoning?: ModelReasoning;
   servesIntent?: ModelIntent;

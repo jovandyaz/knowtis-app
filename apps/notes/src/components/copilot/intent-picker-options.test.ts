@@ -7,6 +7,7 @@ import {
   advancedModelOptions,
   effortOptions,
   moreModelGroups,
+  primaryRows,
 } from './intent-picker-options';
 
 const t = ((key: string) => key) as unknown as TFunction<'common'>;
@@ -55,9 +56,19 @@ describe('models listed without access', () => {
     expect(advancedModelOptions([listed])).toEqual([listed]);
   });
 
-  it('keeps a key-billed model the server lists without access in more models', () => {
+  it('keeps an unbilled model the server lists without access in more models', () => {
     expect(
-      moreModelGroups([listed], t).flatMap((group) => group.options)
+      moreModelGroups([{ ...listed, billedToUser: false }], t).flatMap(
+        (group) => group.options
+      )
     ).toEqual([expect.objectContaining({ id: 'anthropic:claude-opus-5' })]);
+  });
+
+  it('does not lock an intent row for a model the server lists without access', () => {
+    expect(
+      primaryRows([{ ...listed, servesIntent: 'balanced' }], t).map(
+        (row) => row.locked
+      )
+    ).toEqual([false]);
   });
 });
