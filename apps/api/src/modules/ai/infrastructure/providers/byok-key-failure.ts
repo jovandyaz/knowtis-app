@@ -14,7 +14,6 @@ const OPENAI_NO_CREDIT = new Set([
   'insufficient_quota',
   'credit_balance_exhausted',
 ]);
-const GEMINI_INVALID_ARGUMENT = 'INVALID_ARGUMENT';
 const GEMINI_BAD_KEY_REASON = 'API_KEY_INVALID';
 
 const optionalText = z.string().optional().catch(undefined);
@@ -22,7 +21,6 @@ const providerErrorBody = z.object({
   error: z.object({
     type: optionalText,
     code: optionalText,
-    status: optionalText,
     message: optionalText,
     details: z.array(z.object({ reason: optionalText }).catch({})).catch([]),
   }),
@@ -93,8 +91,9 @@ function geminiKind(
   }
   const badKey =
     status === HttpStatus.BAD_REQUEST &&
-    fields?.status === GEMINI_INVALID_ARGUMENT &&
-    fields.details.some((detail) => detail.reason === GEMINI_BAD_KEY_REASON);
+    fields?.details.some(
+      (detail) => detail.reason === GEMINI_BAD_KEY_REASON
+    ) === true;
   return badKey ? BYOK_KEY_FAILURE_KIND.AUTH : null;
 }
 

@@ -45,6 +45,18 @@ describe('classifyByokKeyFailure', () => {
     },
     {
       provider: 'anthropic',
+      status: 400,
+      body: '{"type":"error","error":{"type":"api_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+      expected: null,
+    },
+    {
+      provider: 'anthropic',
+      status: 400,
+      body: '{"type":"error","error":{"message":"Your credit balance is too low to access the Anthropic API."}}',
+      expected: null,
+    },
+    {
+      provider: 'anthropic',
       status: 402,
       body: '{"type":"error","error":{"type":"billing_error"}}',
       expected: 'credit',
@@ -95,6 +107,12 @@ describe('classifyByokKeyFailure', () => {
       provider: 'openai',
       status: 429,
       body: '{"error":{"type":"insufficient_quota","code":"organization_spend_limit_exceeded"}}',
+      expected: 'credit',
+    },
+    {
+      provider: 'openai',
+      status: 429,
+      body: '{"error":{"type":"insufficient_quota","code":429}}',
       expected: 'credit',
     },
     {
@@ -178,7 +196,12 @@ describe('classifyByokKeyFailure', () => {
       400,
       '{"error":{"code":400,"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}'
     );
+    const badKeyWithoutStatus = callError(
+      400,
+      '{"error":{"code":400,"message":"API key not valid.","details":[{"reason":"API_KEY_INVALID"}]}}'
+    );
     expect(classifyByokKeyFailure(badKey, 'google')).toBe('auth');
+    expect(classifyByokKeyFailure(badKeyWithoutStatus, 'google')).toBe('auth');
   });
 
   it('reads the last attempt of a retried call', () => {
