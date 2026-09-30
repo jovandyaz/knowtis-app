@@ -7,6 +7,7 @@ import {
   AI_CONFIG_KEYS,
   COMPLETION_AI_ACTIONS,
   GLOBAL_REASONING_EFFORTS,
+  isByokProvider,
   isGlobalReasoningEffort,
   isReasoningEffort,
   MESSAGE_STOP_REASON,
@@ -96,5 +97,18 @@ describe('AI config keys', () => {
     for (const key of keys) {
       expect(key).toMatch(/^ai_[a-z_]+$/);
     }
+  });
+});
+
+describe('isByokProvider', () => {
+  it.each(['anthropic', 'openai', 'google', 'openrouter'])(
+    'accepts %s',
+    (provider) => {
+      expect(isByokProvider(provider)).toBe(true);
+    }
+  );
+
+  it('rejects a provider that takes no stored key', () => {
+    expect(isByokProvider('mistral')).toBe(false);
   });
 });

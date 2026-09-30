@@ -105,11 +105,19 @@ export {
   type SetSystemProviderResult,
   type SystemProviderInfo,
   type EncryptedSecret,
+  isByokProvider,
 } from './lib/ai.types';
 
 export {
   type IntentAvailability,
   type ModelCatalogResponse,
+  MODEL_FALLBACK_REASONS,
+  type ModelFallbackReason,
+  MODEL_UNAVAILABLE_REASONS,
+  type ModelUnavailableReason,
+  type ModelResolution,
+  AI_MODEL_UNAVAILABLE_CODE,
+  type ModelUnavailableError,
 } from './lib/ai-catalog.types';
 
 export {

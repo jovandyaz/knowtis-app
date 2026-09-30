@@ -247,6 +247,10 @@ export const BYOK_PROVIDERS = [
 ] as const;
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
 
+export function isByokProvider(value: string): value is ByokProvider {
+  return (BYOK_PROVIDERS as readonly string[]).includes(value);
+}
+
 /** Where the server-side key for a provider actually resolves from, in precedence order. */
 export const PROVIDER_KEY_SOURCES = [
   'database',
