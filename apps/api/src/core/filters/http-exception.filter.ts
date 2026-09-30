@@ -31,6 +31,7 @@ interface ErrorResponse {
   error: string;
   code?: string;
   errors?: FieldError[];
+  details?: Record<string, unknown>;
   timestamp: string;
   path: string;
 }
@@ -49,6 +50,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let error = 'Internal Server Error';
     let code: string | undefined;
     let errors: FieldError[] | undefined;
+    let details: Record<string, unknown> | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -60,6 +62,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         error =
           (responseObj['error'] as string) || this.getDefaultErrorName(status);
         code = responseObj['code'] as string | undefined;
+        const rawDetails = responseObj['details'];
+        if (
+          typeof rawDetails === 'object' &&
+          rawDetails !== null &&
+          !Array.isArray(rawDetails)
+        ) {
+          details = rawDetails as Record<string, unknown>;
+        }
 
         if (Array.isArray(responseObj['errors'])) {
           errors = responseObj['errors'] as FieldError[];
@@ -87,6 +97,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error = 'Internal Server Error';
       code = undefined;
       errors = undefined;
+      details = undefined;
     }
 
     // The throttler sets its own Retry-After before it throws, so only our
@@ -104,6 +115,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error,
       ...(code && { code }),
       ...(errors && { errors }),
+      ...(details && { details }),
       timestamp: new Date().toISOString(),
       path: request.url,
     };

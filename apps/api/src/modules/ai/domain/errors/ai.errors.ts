@@ -1,6 +1,9 @@
 import {
+  AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
   type AgentQuotaExhaustedError,
+  type ModelUnavailableError,
+  type ModelUnavailableReason,
   type QuotaUpgrade,
 } from '@knowtis/shared-types';
 
@@ -29,6 +32,7 @@ export const AIErrorCodes = {
 type AIErrorCode = (typeof AIErrorCodes)[keyof typeof AIErrorCodes];
 
 export type AIQuotaExhaustedError = Omit<AgentQuotaExhaustedError, 'turnId'>;
+export type AIModelUnavailableError = Omit<ModelUnavailableError, 'turnId'>;
 
 function createAIError(code: AIErrorCode, message: string): AIDomainError {
   return { code, message };
@@ -96,5 +100,15 @@ export const AIErrors = {
     message: "Today's AI messages are used up.",
     resetsAt: resetsAt.toISOString(),
     upgrade,
+  }),
+
+  modelUnavailable: (
+    reason: ModelUnavailableReason,
+    suggestedModel: string | null
+  ): AIModelUnavailableError => ({
+    code: AI_MODEL_UNAVAILABLE_CODE,
+    message: 'This model is not available to you.',
+    reason,
+    suggestedModel,
   }),
 } as const;

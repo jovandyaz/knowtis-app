@@ -8,6 +8,7 @@ import {
 import { ThrottlerException } from '@nestjs/throttler';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ModelUnavailableException } from '../../modules/ai/model-unavailable.exception';
 import { failedQuery } from '../../test-support/database-errors';
 import { RetryAfterHttpException } from '../http/retry-after.exception';
 import { GlobalExceptionFilter } from './http-exception.filter';
@@ -17,6 +18,7 @@ interface CapturedResponse {
   message: string | string[];
   error: string;
   errors?: { field: string; message: string }[];
+  details?: Record<string, unknown>;
 }
 
 function createHost() {
@@ -224,5 +226,30 @@ describe('GlobalExceptionFilter', () => {
 
       expect(setHeader).not.toHaveBeenCalled();
     });
+  });
+
+  it('passes a refusal’s details through to the body', () => {
+    const { host, getStatus, getBody } = createHost();
+    new GlobalExceptionFilter().catch(
+      new ModelUnavailableException('not_in_tier', 'openrouter:m'),
+      host
+    );
+    expect(getStatus()).toBe(422);
+    expect(getBody()).toEqual(
+      expect.objectContaining({
+        statusCode: 422,
+        code: 'AI_MODEL_UNAVAILABLE',
+        details: { reason: 'not_in_tier', suggestedModel: 'openrouter:m' },
+      })
+    );
+  });
+
+  it('never leaks details on a 5xx', () => {
+    const { host, getBody } = createHost();
+    new GlobalExceptionFilter().catch(
+      new InternalServerErrorException({ message: 'x', details: { a: 1 } }),
+      host
+    );
+    expect(getBody()).not.toHaveProperty('details');
   });
 });
