@@ -28,6 +28,23 @@ interface StreamTextInput {
   readonly targetTone?: string;
 }
 
+/** How long a stream keeps its concurrency slot for its usage write; a slower write goes on without it. */
+export const USAGE_WRITE_WAIT_MS = 5_000;
+
+async function settleUsageWrite(write: Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      write,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, USAGE_WRITE_WAIT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface StreamTextCallbacks {
   readonly onChunk: (text: string) => void;
   readonly onDone: (usage: {
@@ -66,19 +83,23 @@ export class StreamTextHandler {
     const preflight = preflightResult.value;
     if (preflight.kind === 'cache_hit') {
       const { context, data } = preflight;
-      await this.pipeline.recordUsage(context, input, {
+      const recorded = this.pipeline.recordUsage(context, input, {
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
         costUsd: 0,
       });
-      callbacks.onChunk(data.text);
-      callbacks.onDone({
-        inputTokens: data.inputTokens,
-        outputTokens: data.outputTokens,
-        model: data.model,
-        costUsd: 0,
-      });
+      try {
+        callbacks.onChunk(data.text);
+        callbacks.onDone({
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          model: data.model,
+          costUsd: 0,
+        });
+      } finally {
+        await settleUsageWrite(recorded);
+      }
       return;
     }
 
@@ -145,7 +166,7 @@ export class StreamTextHandler {
         this.modelCatalog.getPricing(servedModel)
       );
 
-      await this.pipeline.recordCompletion(
+      const recorded = this.pipeline.recordCompletion(
         context,
         input,
         {
@@ -159,12 +180,16 @@ export class StreamTextHandler {
       );
       usageSettled = true;
 
-      callbacks.onDone({
-        inputTokens,
-        outputTokens,
-        model: servedModel,
-        costUsd: usage.costUsd,
-      });
+      try {
+        callbacks.onDone({
+          inputTokens,
+          outputTokens,
+          model: servedModel,
+          costUsd: usage.costUsd,
+        });
+      } finally {
+        await settleUsageWrite(recorded);
+      }
     } catch (error) {
       if (usageSettled) {
         this.logger.error({
@@ -185,16 +210,18 @@ export class StreamTextHandler {
           },
           this.modelCatalog.getPricing(context.model)
         );
-        await this.pipeline.recordCompletion(
-          context,
-          input,
-          {
-            inputTokens: estimatedTokens,
-            outputTokens,
-            model: context.model,
-            costUsd: usage.costUsd,
-          },
-          { mode: 'stream', aborted: true }
+        await settleUsageWrite(
+          this.pipeline.recordCompletion(
+            context,
+            input,
+            {
+              inputTokens: estimatedTokens,
+              outputTokens,
+              model: context.model,
+              costUsd: usage.costUsd,
+            },
+            { mode: 'stream', aborted: true }
+          )
         );
         this.logger.log({
           event: 'ai.request.cancelled',

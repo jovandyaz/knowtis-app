@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
@@ -17,6 +17,7 @@ import { AIRateLimitService } from '../services/ai-rate-limit.service';
 import { PromptLoaderService } from '../services/prompt-loader.service';
 import {
   StreamTextHandler,
+  USAGE_WRITE_WAIT_MS,
   type StreamTextCallbacks,
 } from './stream-text.handler';
 
@@ -662,6 +663,69 @@ describe('StreamTextHandler', () => {
       execution: createExecutionContext({ userId: 'user-123' }),
       action: AI_ACTION.SUMMARIZE,
       content: 'Some content',
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('but sends done for a finished stream before the write settles', async () => {
+      const finishWrite = holdUsageWrite();
+      let settled = false;
+      const running = handler.execute(input(), callbacks).then(() => {
+        settled = true;
+      });
+
+      await vi.waitFor(() => expect(doneResult).not.toBeNull());
+
+      expect(settled).toBe(false);
+      finishWrite();
+      await running;
+    });
+
+    it('but sends a cache hit and its done before the write settles', async () => {
+      const finishWrite = holdUsageWrite();
+      const cachedHandler = buildHandler({
+        isCacheable: vi.fn().mockReturnValue(true),
+        get: vi.fn().mockResolvedValue({
+          text: 'cached summary',
+          model: 'anthropic:claude-sonnet-4-20250514',
+          inputTokens: 10,
+          outputTokens: 5,
+          costUsd: 0.5,
+        }),
+        set: vi.fn().mockResolvedValue(undefined),
+      } as unknown as AICache);
+      let settled = false;
+      const running = cachedHandler.execute(input(), callbacks).then(() => {
+        settled = true;
+      });
+
+      await vi.waitFor(() => expect(doneResult).not.toBeNull());
+
+      expect(collectedChunks).toEqual(['cached summary']);
+      expect(settled).toBe(false);
+      finishWrite();
+      await running;
+    });
+
+    it('for no longer than USAGE_WRITE_WAIT_MS when the write hangs', async () => {
+      vi.useFakeTimers();
+      vi.mocked(mockUsageRepo.recordUsage).mockReturnValue(
+        new Promise<void>(() => undefined)
+      );
+      let settled = false;
+      const running = handler.execute(input(), callbacks).then(() => {
+        settled = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(USAGE_WRITE_WAIT_MS - 1);
+      expect(doneResult).not.toBeNull();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+      await running;
     });
 
     it('for a finished stream', async () => {
