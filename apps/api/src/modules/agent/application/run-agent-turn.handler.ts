@@ -37,7 +37,10 @@ import {
   AIRateLimitService,
   type Reservation,
 } from '../../ai/application/services/ai-rate-limit.service';
-import { ByokService } from '../../ai/application/services/byok.service';
+import {
+  BYOK_KEY_LOOKUP,
+  ByokService,
+} from '../../ai/application/services/byok.service';
 import { MessageQuotaService } from '../../ai/application/services/message-quota.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { TierResolver } from '../../ai/application/services/tier-resolver.service';
@@ -807,10 +810,10 @@ export class RunAgentTurnHandler {
       // Fail closed: the model was selectable on the user's key, so never bill
       // the server's key as a silent fallback when that key is unavailable.
       switch (key.kind) {
-        case 'found':
+        case BYOK_KEY_LOOKUP.FOUND:
           byokApiKey = key.apiKey;
           break;
-        case 'undecryptable':
+        case BYOK_KEY_LOOKUP.UNDECRYPTABLE:
           this.announce(
             new ByokKeyFailedEvent(userId, provider, BYOK_KEY_FAILURE_KIND.AUTH)
           );
@@ -818,7 +821,7 @@ export class RunAgentTurnHandler {
             AIErrors.byokKeyFailed(provider, BYOK_KEY_FAILURE_KIND.AUTH)
           );
           return;
-        case 'missing': {
+        case BYOK_KEY_LOOKUP.MISSING: {
           const refusal = AIErrors.modelUnavailable('key_removed', null);
           this.logger.warn({
             event: 'ai.model.unavailable',
