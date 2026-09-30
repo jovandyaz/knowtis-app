@@ -143,7 +143,6 @@ export class AgentGateway
   private readonly turns: ConcurrencySlotTracker;
   private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentTurns: number;
-  /** Legs whose client already heard how they ended: a done, a proposal or an error. */
   private readonly endedLegs = new WeakSet<AbortController>();
 
   @WebSocketServer()

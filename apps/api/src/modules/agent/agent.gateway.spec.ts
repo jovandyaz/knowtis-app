@@ -1051,6 +1051,70 @@ describe('AgentGateway', () => {
       expect(turnErrors(client)).toEqual([]);
     });
 
+    it.each([
+      [
+        'an error',
+        (cb: RunAgentTurnCallbacks) =>
+          cb.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' }),
+        [
+          [
+            'agent:error',
+            {
+              code: 'AI_PROVIDER_ERROR',
+              message: 'boom',
+              turnId: DRAINED_TURN,
+            },
+          ],
+        ],
+      ],
+      [
+        'a done',
+        (cb: RunAgentTurnCallbacks) =>
+          cb.onDone({
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'm',
+            costUsd: 0,
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'completed',
+            continuable: false,
+          }),
+        [],
+      ],
+    ] as const)(
+      'never follows %s it already sent with the notice',
+      async (_ending, end, errors) => {
+        const execute = vi.fn(
+          async (
+            _input: unknown,
+            cb: RunAgentTurnCallbacks,
+            signal: AbortSignal
+          ) => {
+            end(cb);
+            await untilAborted(signal);
+          }
+        );
+        const drain = new ShutdownDrain();
+        const gateway = makeGateway({
+          handler: { execute } as Partial<RunAgentTurnHandler>,
+          drain,
+        });
+        const client = makeClient('u1');
+
+        const running = gateway.handleMessage(client as never, {
+          turnId: DRAINED_TURN,
+          message: { content: 'hi' },
+        });
+        await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+        await drain.beforeApplicationShutdown();
+        await running;
+
+        expect(turnErrors(client)).toEqual(errors);
+      }
+    );
+
     function pendingProposals() {
       const mutation = ProposedMutation.create({
         id: PROPOSAL_ID,
