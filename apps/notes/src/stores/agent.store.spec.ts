@@ -856,19 +856,45 @@ describe('agent.store server-authoritative wire', () => {
       ).toEqual([expect.objectContaining({ discarded: true })]);
     });
 
-    it('still reports a decision the server refused before applying it', () => {
+    it('gives the card back when an approve was refused before the server took it', () => {
       const { get } = capture();
       useAgentStore.getState().sendMessage('create a note');
       get().onProposal?.(PROPOSAL);
       useAgentStore.getState().approveProposal();
+      const refused = {
+        code: resumeRefused.code,
+        message: resumeRefused.message,
+      };
+
+      get().onError(refused);
+
+      const { status, error, pendingProposal, messages } =
+        useAgentStore.getState();
+      expect(status).toBe('error');
+      expect(error).toEqual(refused);
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
+      useAgentStore.getState().approveProposal();
+      expect(vi.mocked(agentClient.approve).mock.calls).toEqual([
+        ['p1'],
+        ['p1'],
+      ]);
+    });
+
+    it('undoes the discard mark when a reject was refused before the server took it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().rejectProposal('too long');
 
       get().onError({
         code: resumeRefused.code,
         message: resumeRefused.message,
       });
 
-      expect(useAgentStore.getState().status).toBe('error');
-      expect(useAgentStore.getState().error?.code).toBe(resumeRefused.code);
+      const { pendingProposal, messages } = useAgentStore.getState();
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(messages.some((m) => m.discarded)).toBe(false);
     });
   });
 

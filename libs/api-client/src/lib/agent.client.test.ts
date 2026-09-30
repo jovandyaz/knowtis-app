@@ -1913,6 +1913,25 @@ describe('AgentClient – turn identity', () => {
       expect(callbacks.onError).not.toHaveBeenCalled();
     });
 
+    it('keeps the turn open for the decision once every resend was refused', () => {
+      vi.useFakeTimers();
+      const { callbacks } = suspendOnProposal();
+      client.approve(PROPOSAL.id);
+
+      for (const delay of RESEND_DELAYS_MS) {
+        fake.trigger('agent:error', refusedBeforeTake);
+        vi.advanceTimersByTime(delay);
+      }
+      fake.trigger('agent:error', refusedBeforeTake);
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        refusedBeforeTake
+      );
+      expect(client.canResume()).toBe(true);
+      client.approve(PROPOSAL.id);
+      expect(sentDecisions('agent:approve')).toHaveLength(5);
+    });
+
     it('never resends a decision whose resume was refused after it took effect', () => {
       vi.useFakeTimers();
       const { callbacks, handle } = suspendOnProposal();

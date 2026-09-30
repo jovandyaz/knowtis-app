@@ -210,9 +210,21 @@ interface PersistedConversation {
   conversationId: string | null;
 }
 
-// A draining server refuses a decision before taking its proposal, without a
-// turn id; one that names the turn came after the decision was applied, so
-// only the reply that follows it is missing.
+interface DecisionInFlight {
+  readonly proposal: PendingProposal;
+  readonly discardedId: string | undefined;
+}
+
+// A draining server refuses a decision before taking its proposal without a
+// turn id, so the proposal is still there to decide on; a refusal that names
+// the turn came after the decision was applied, and only its reply is missing.
+function isDecisionNotTaken(error: AgentErrorPayload): boolean {
+  return (
+    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
+    error.turnId === undefined
+  );
+}
+
 function isUnresumedDecision(error: AgentErrorPayload): boolean {
   return (
     error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
@@ -240,6 +252,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let activeAssistantId: string | null = null;
   let liveTurnId: string | undefined;
   let resumingDecision = false;
+  let decision: DecisionInFlight | undefined;
   let streamVersion = 0;
   let threadVersion = 0;
   let hydrationRequest = 0;
@@ -299,6 +312,24 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     activeAssistantId = assistant.id;
     thinkingBuffer.discard();
     return assistant;
+  };
+
+  const restoreDecision = (
+    error: AgentErrorPayload,
+    { proposal, discardedId }: DecisionInFlight
+  ) => {
+    const id = activeAssistantId;
+    set((s) => ({
+      status: 'error',
+      error,
+      retryMode: 'none',
+      pendingProposal: proposal,
+      _streamHandle: null,
+      thinkingText: '',
+      messages: s.messages
+        .filter((m) => m.id !== id)
+        .map((m) => (m.id === discardedId ? { ...m, discarded: false } : m)),
+    }));
   };
 
   const endUnresumedDecision = () => {
@@ -441,6 +472,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             forgetGoneConversation(error);
             return;
           }
+          if (resumingDecision && decision && isDecisionNotTaken(error)) {
+            restoreDecision(error, decision);
+            return;
+          }
           if (resumingDecision && isUnresumedDecision(error)) {
             endUnresumedDecision();
             return;
@@ -533,6 +568,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     lastNoteId = noteId;
     unsentText = text;
     resumingDecision = false;
+    decision = undefined;
     buffer.clearInactivityTimer();
     buffer.discard();
     thinkingBuffer.discard();
@@ -926,6 +962,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         return;
       }
       const assistant = beginResumedTurn();
+      decision = { proposal: p, discardedId: undefined };
       set((s) => ({
         status: 'streaming',
         pendingProposal: null,
@@ -949,26 +986,21 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         return;
       }
       const assistant = beginResumedTurn();
-      set((s) => {
-        let marked = false;
-        const messages = [...s.messages];
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const m = messages[i];
-          if (m.proposal && !m.committed && !m.discarded) {
-            messages[i] = { ...m, discarded: true };
-            marked = true;
-            break;
-          }
-        }
-        return {
-          status: 'streaming',
-          pendingProposal: null,
-          thinkingText: '',
-          messages: marked
-            ? [...messages, assistant]
-            : [...s.messages, assistant],
-        };
-      });
+      const discardedId = get().messages.findLast(
+        (m) => m.proposal && !m.committed && !m.discarded
+      )?.id;
+      decision = { proposal: p, discardedId };
+      set((s) => ({
+        status: 'streaming',
+        pendingProposal: null,
+        thinkingText: '',
+        messages: [
+          ...s.messages.map((m) =>
+            m.id === discardedId ? { ...m, discarded: true } : m
+          ),
+          assistant,
+        ],
+      }));
       agentClient.reject(p.id, reason);
       if (get().status !== 'streaming') {
         return;
