@@ -228,28 +228,43 @@ describe('GlobalExceptionFilter', () => {
     });
   });
 
-  it('passes a refusal’s details through to the body', () => {
-    const { host, getStatus, getBody } = createHost();
-    new GlobalExceptionFilter().catch(
-      new ModelUnavailableException('not_in_tier', 'openrouter:m'),
-      host
-    );
-    expect(getStatus()).toBe(422);
-    expect(getBody()).toEqual(
-      expect.objectContaining({
-        statusCode: 422,
-        code: 'AI_MODEL_UNAVAILABLE',
-        details: { reason: 'not_in_tier', suggestedModel: 'openrouter:m' },
-      })
-    );
-  });
+  describe('details', () => {
+    it('passes a refusal’s details through to the body', () => {
+      const { host, getStatus, getBody } = createHost();
+      new GlobalExceptionFilter().catch(
+        new ModelUnavailableException('not_in_tier', 'openrouter:m'),
+        host
+      );
+      expect(getStatus()).toBe(422);
+      expect(getBody()).toEqual(
+        expect.objectContaining({
+          statusCode: 422,
+          code: 'AI_MODEL_UNAVAILABLE',
+          details: { reason: 'not_in_tier', suggestedModel: 'openrouter:m' },
+        })
+      );
+    });
 
-  it('never leaks details on a 5xx', () => {
-    const { host, getBody } = createHost();
-    new GlobalExceptionFilter().catch(
-      new InternalServerErrorException({ message: 'x', details: { a: 1 } }),
-      host
-    );
-    expect(getBody()).not.toHaveProperty('details');
+    it('never leaks details on a 5xx', () => {
+      const { host, getBody } = createHost();
+      new GlobalExceptionFilter().catch(
+        new InternalServerErrorException({ message: 'x', details: { a: 1 } }),
+        host
+      );
+      expect(getBody()).not.toHaveProperty('details');
+    });
+
+    it.each([
+      ['a string', 'oops'],
+      ['an array', [1]],
+      ['null', null],
+    ])('drops details that are %s on a 4xx', (_label, details) => {
+      const { host, getBody } = createHost();
+      new GlobalExceptionFilter().catch(
+        new BadRequestException({ message: 'x', details }),
+        host
+      );
+      expect(getBody()).not.toHaveProperty('details');
+    });
   });
 });
