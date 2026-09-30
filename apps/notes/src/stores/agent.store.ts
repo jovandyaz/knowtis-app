@@ -322,7 +322,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   ) => {
     const id = activeAssistantId;
     set((s) => ({
-      status: 'error',
+      status: 'pendingProposal',
       error,
       retryMode: 'none',
       pendingProposal: proposal,
@@ -979,6 +979,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       const assistant = beginResumedTurn();
       set((s) => ({
         status: 'streaming',
+        error: null,
         pendingProposal: null,
         decisionInFlight: { proposal: p, discardedId: undefined },
         thinkingText: '',
@@ -1006,6 +1007,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       )?.id;
       set((s) => ({
         status: 'streaming',
+        error: null,
         pendingProposal: null,
         decisionInFlight: { proposal: p, discardedId },
         thinkingText: '',

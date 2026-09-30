@@ -1014,7 +1014,7 @@ describe('agent.store server-authoritative wire', () => {
 
       const { status, error, pendingProposal, messages } =
         useAgentStore.getState();
-      expect(status).toBe('error');
+      expect(status).toBe('pendingProposal');
       expect(error).toEqual(refused);
       expect(pendingProposal).toEqual(PROPOSAL);
       expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
@@ -1023,6 +1023,25 @@ describe('agent.store server-authoritative wire', () => {
         ['p1'],
         ['p1'],
       ]);
+      expect(useAgentStore.getState().error).toBeNull();
+    });
+
+    it('queues a message sent while the card is back, as behind any pending proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onError({
+        code: resumeRefused.code,
+        message: resumeRefused.message,
+      });
+
+      useAgentStore.getState().sendMessage('and tag it');
+
+      const { queue, pendingProposal } = useAgentStore.getState();
+      expect(queue.map((q) => q.text)).toEqual(['and tag it']);
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(agentClient.sendMessage).toHaveBeenCalledOnce();
     });
 
     it('undoes the discard mark when a reject was refused before the server took it', () => {

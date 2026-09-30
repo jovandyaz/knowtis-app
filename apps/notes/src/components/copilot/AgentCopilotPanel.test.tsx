@@ -15,6 +15,7 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_TURN_ERROR_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   type AgentByokKeyFailedError,
   type ConversationTranscript,
@@ -764,6 +765,43 @@ describe('AgentCopilotPanel proposal routing', () => {
       screen.getByRole('button', { name: 'ai.copilot.review.pendingReview' })
     );
     expect(screen.getByTestId('review')).toBeInTheDocument();
+  });
+
+  it('shows the refusal above a card the server gave back', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: createProposal,
+        error: {
+          code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+          message: 'send it again',
+        },
+        retryMode: 'none',
+      });
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.turnUnavailable'
+    );
+    expect(
+      screen.getByRole('group', { name: 'ai.copilot.proposal.createTitle' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'ai.preview.retry' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows no notice above an ordinary pending proposal', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: createProposal,
+      });
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('keeps the card for create proposals', () => {

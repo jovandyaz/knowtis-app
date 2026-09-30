@@ -186,7 +186,7 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
-      {status === 'error' && (
+      {(status === 'error' || (status === 'pendingProposal' && error)) && (
         <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
       )}
       {status === 'timeout' && (
