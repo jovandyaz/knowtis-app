@@ -7387,6 +7387,70 @@ describe('RunAgentTurnHandler daily message quota', () => {
       );
       expect(cb.onConversation).not.toHaveBeenCalled();
     });
+
+    describe('at the room boundary', () => {
+      const MESSAGE = rowOfTokens('user', 2_000).content;
+      const MESSAGE_TOKENS = estimateMessageTokens({
+        role: 'user',
+        content: MESSAGE,
+      });
+
+      function anonymousTurnTokensWithRoom(room: number): number {
+        return (
+          2 *
+            (room +
+              AGENT_MAX_OUTPUT_TOKENS +
+              AGENT_FIRST_CALL_COSTS.promptOverheadTokens) +
+          AGENT_FIRST_CALL_COSTS.synthesisRequestTokens +
+          AGENT_FIRST_CALL_COSTS.minSynthesisOutputTokens
+        );
+      }
+
+      function buildWithRoom(room: number) {
+        const maxTurnTokens = anonymousTurnTokensWithRoom(room);
+        expect(
+          firstCallRoom({
+            ...AGENT_FIRST_CALL_COSTS,
+            maxTurnTokens,
+            maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+          })
+        ).toBe(room);
+        const built = build({ quota: consumedQuota() });
+        vi.mocked(built.rateLimit.dailyAllowance).mockReturnValue({
+          tokenLimit: maxTurnTokens,
+          costLimit: 0.2,
+        });
+        return built;
+      }
+
+      it('runs a fitted turn exactly at the room', async () => {
+        const { handler, orchestrator } = buildWithRoom(MESSAGE_TOKENS);
+        const cb = callbacks();
+
+        await handler.execute(
+          { ...turn, isAnonymous: true, message: { content: MESSAGE } },
+          cb
+        );
+
+        expect(cb.onError).not.toHaveBeenCalled();
+        expect(orchestrator.run).toHaveBeenCalledOnce();
+      });
+
+      it('refuses a fitted turn one token over the room', async () => {
+        const { handler, orchestrator } = buildWithRoom(MESSAGE_TOKENS - 1);
+        const cb = callbacks();
+
+        await handler.execute(
+          { ...turn, isAnonymous: true, message: { content: MESSAGE } },
+          cb
+        );
+
+        expect(cb.onError).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ code: AIErrorCodes.INVALID_INPUT })
+        );
+        expect(orchestrator.run).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('continuable on done', () => {
