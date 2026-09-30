@@ -16,7 +16,7 @@ import {
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { byokKeyRefusalMiddleware } from './byok-key-failure';
+import { keyRefusalMiddleware } from './byok-key-failure';
 
 const OPENROUTER_SPECIFICATION_VERSION = 'v4' as const;
 const shimLogger = new Logger('OpenRouterProviderShim');
@@ -147,7 +147,10 @@ export class ProviderRegistryFactory implements OnModuleInit {
    * `byokKey` always wins: it builds an ephemeral provider from that key so the
    * turn bills the user, never the server/gateway. Otherwise routes through the
    * Vercel AI Gateway when AI_GATEWAY_API_KEY is set, else the direct registry,
-   * whose per-provider key resolves DB row over env value.
+   * whose per-provider key resolves DB row over env value. A refusal of a caller
+   * or direct-registry key that `classifyByokKeyFailure` recognises is never
+   * retried by the SDK, so a chain fails over at once; the gateway reports its
+   * own errors, which pass through unchanged.
    * Throws ProviderNotConfiguredError on malformed ids, disabled or keyless
    * providers, or 'openrouter:*' ids in gateway mode — OpenRouter slugs are a
    * different catalog than the gateway's.
@@ -173,7 +176,9 @@ export class ProviderRegistryFactory implements OnModuleInit {
     }
     this.refreshSystemConfigsIfStale();
     this.assertProviderRoutable(modelId);
-    return this.registry.languageModel(modelId);
+    const model = this.registry.languageModel(modelId);
+    const provider = providerOf(modelId);
+    return isByokProvider(provider) ? withKeyRefusal(model, provider) : model;
   }
 
   /**
@@ -194,10 +199,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
         `Provider '${provider}' does not support a caller-supplied key`
       );
     }
-    return wrapLanguageModel({
-      model: callerKeyedModel(provider, bareId, apiKey),
-      middleware: byokKeyRefusalMiddleware(provider),
-    });
+    return withKeyRefusal(callerKeyedModel(provider, bareId, apiKey), provider);
   }
 
   /** True when this process can route the model: gateway mode accepts any qualified id except 'openrouter:*' (a different catalog); direct mode requires the provider to be enabled and hold a key. */
@@ -352,6 +354,16 @@ export class ProviderRegistryFactory implements OnModuleInit {
         this.logger.warn('Failed to refresh system provider config', error)
       );
   }
+}
+
+function withKeyRefusal(
+  model: Parameters<typeof wrapLanguageModel>[0]['model'],
+  provider: ByokProvider
+): LanguageModel {
+  return wrapLanguageModel({
+    model,
+    middleware: keyRefusalMiddleware(provider),
+  });
 }
 
 function callerKeyedModel(

@@ -23,6 +23,7 @@ vi.mock('ai', () => ({
   createProviderRegistry: vi.fn().mockReturnValue({
     languageModel: vi.fn().mockReturnValue('mock-model'),
   }),
+  wrapLanguageModel: vi.fn(({ model }: { model: unknown }) => model),
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({

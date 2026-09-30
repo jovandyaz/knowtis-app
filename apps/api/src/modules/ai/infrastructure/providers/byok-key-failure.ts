@@ -161,13 +161,14 @@ function finalRefusal(error: unknown, provider: ByokProvider): unknown {
 }
 
 /**
- * Marks a provider's refusal of the caller's own key as not retryable, so the
- * AI SDK does not resend it: the same key is refused again, and each retry's
- * backoff runs down the turn's stall timer. OpenAI reports spent credit as a
+ * Marks a provider's refusal of the key a model was built with, the caller's
+ * or the server's, as not retryable, so the AI SDK does not resend it: the
+ * same key is refused again, and each retry's backoff runs down the turn's
+ * stall timer or delays the fallback chain. OpenAI reports spent credit as a
  * 429, which the SDK would otherwise retry. Every other failure, a genuine
  * rate limit included, keeps the SDK's retries.
  */
-export function byokKeyRefusalMiddleware(
+export function keyRefusalMiddleware(
   provider: ByokProvider
 ): LanguageModelMiddleware {
   return {
