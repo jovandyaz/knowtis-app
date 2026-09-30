@@ -9,6 +9,7 @@ import type {
 import { aiClient } from '@knowtis/api-client';
 import {
   AGENT_TURN_ERROR_CODE,
+  AI_INVALID_INPUT_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
 } from '@knowtis/shared-types';
 
@@ -239,6 +240,12 @@ describe('aiErrorMessageKey', () => {
     );
     expect(aiErrorMessageKey({ code: 'PROMPT_INJECTION_DETECTED' })).toBe(
       'ai.errors.injection'
+    );
+  });
+
+  it('asks to adjust an input the server refused as invalid, without suggesting a retry', () => {
+    expect(aiErrorMessageKey({ code: AI_INVALID_INPUT_CODE })).toBe(
+      'ai.errors.validation'
     );
   });
 

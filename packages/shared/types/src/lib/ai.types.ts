@@ -139,6 +139,9 @@ export interface ModelReasoning {
   mandatory: boolean;
 }
 
+/** Error code for AI input the server refuses as it stands, such as a message longer than a turn can carry; sending it again unchanged is refused again. */
+export const AI_INVALID_INPUT_CODE = 'AI_INVALID_INPUT';
+
 /** Why an agent turn stopped; carried on the `done` event and, persisted, on the last assistant message of a turn. */
 export const AGENT_STOP_REASON = {
   COMPLETED: 'completed',

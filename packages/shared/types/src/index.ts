@@ -72,6 +72,7 @@ export {
   CHAIN_SEPARATOR,
   parseChain,
   AGENT_STOP_REASON,
+  AI_INVALID_INPUT_CODE,
   MESSAGE_STOP_REASON,
   type AIConfigKey,
   type AIConfigSource,

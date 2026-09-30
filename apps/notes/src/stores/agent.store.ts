@@ -22,6 +22,7 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AI_INVALID_INPUT_CODE,
   deriveConversationTitle,
   type AgentStopReason,
   type ReasoningEffort,
@@ -232,6 +233,10 @@ function isUnresumedDecision(error: AgentErrorPayload): boolean {
     error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
     error.turnId !== undefined
   );
+}
+
+function refusesResend(error: AgentErrorPayload): boolean {
+  return error.code === AI_INVALID_INPUT_CODE;
 }
 
 function isPersistedConversation(
@@ -489,7 +494,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           set({
             status: 'error',
             error,
-            retryMode: resumingDecision ? 'none' : 'resend',
+            retryMode:
+              resumingDecision || refusesResend(error) ? 'none' : 'resend',
             _streamHandle: null,
             thinkingText: '',
             decisionInFlight: null,

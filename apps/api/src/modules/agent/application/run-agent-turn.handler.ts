@@ -238,11 +238,22 @@ const NO_QUOTA_HOLD: QuotaHold = {
   quota: () => null,
 };
 
+const PREPARED_TURN = {
+  REFUSED: 'refused',
+  TOO_LARGE: 'too_large',
+  BUDGET_DENIED: 'budget_denied',
+  READY: 'ready',
+} as const;
+
 type PreparedTurn =
-  | { readonly kind: 'refused' }
-  | { readonly kind: 'budget_denied'; readonly reason?: string }
+  | { readonly kind: typeof PREPARED_TURN.REFUSED }
+  | { readonly kind: typeof PREPARED_TURN.TOO_LARGE }
   | {
-      readonly kind: 'ready';
+      readonly kind: typeof PREPARED_TURN.BUDGET_DENIED;
+      readonly reason?: string;
+    }
+  | {
+      readonly kind: typeof PREPARED_TURN.READY;
       readonly messages: AgentMessage[];
       readonly userMemories: string[];
       readonly limits: SegmentLimits;
@@ -252,6 +263,7 @@ type PreparedTurn =
     };
 
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
+const FIRST_CALL_UNAFFORDABLE_EVENT = 'agent.turn.first_call_unaffordable';
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
 function detectionRows(
@@ -291,6 +303,12 @@ function freshUserMessageOf(
 function messageTooLongError() {
   return AIErrors.invalidInput(
     `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
+  );
+}
+
+function turnTooLargeError() {
+  return AIErrors.invalidInput(
+    'Message and conversation exceed what one turn can process'
   );
 }
 
@@ -937,10 +955,15 @@ export class RunAgentTurnHandler {
       await hold.refund();
       throw error;
     }
-    if (prepared.kind === 'refused') {
+    if (prepared.kind === PREPARED_TURN.REFUSED) {
       return;
     }
-    if (prepared.kind === 'budget_denied') {
+    if (prepared.kind === PREPARED_TURN.TOO_LARGE) {
+      await hold.refund();
+      callbacks.onError(turnTooLargeError());
+      return;
+    }
+    if (prepared.kind === PREPARED_TURN.BUDGET_DENIED) {
       await hold.refund();
       callbacks.onError(AIErrors.rateLimitExceeded(prepared.reason));
       return;
@@ -1319,7 +1342,7 @@ export class RunAgentTurnHandler {
       );
       if (!verdict.safe) {
         callbacks.onError(AIErrors.promptInjectionDetected());
-        return { kind: 'refused' };
+        return { kind: PREPARED_TURN.REFUSED };
       }
     }
     const inputMessages = input.messages ?? [];
@@ -1345,13 +1368,16 @@ export class RunAgentTurnHandler {
     );
     const messages = fitted.messages;
     const estimatedTokens = this.estimateTokens(messages);
+    const fittedTokens = estimatedTokens - AGENT_PROMPT_OVERHEAD_TOKENS;
     // The newest turn is kept past the history cap, so only a turn that
     // overruns the first call's whole room is refused.
-    if (estimatedTokens - AGENT_PROMPT_OVERHEAD_TOKENS > room) {
-      return {
-        kind: 'budget_denied',
-        reason: 'This message does not fit in the tokens left for this turn.',
-      };
+    if (fittedTokens > room) {
+      return this.firstCallUnaffordable(
+        execution,
+        firstCall,
+        room,
+        fittedTokens
+      );
     }
     const pricing = this.modelCatalog.getPricing(model);
     const estimatedCostUsd = pricing
@@ -1374,12 +1400,12 @@ export class RunAgentTurnHandler {
     });
     if (!limit.allowed) {
       return {
-        kind: 'budget_denied',
+        kind: PREPARED_TURN.BUDGET_DENIED,
         ...(limit.reason !== undefined ? { reason: limit.reason } : {}),
       };
     }
     return {
-      kind: 'ready',
+      kind: PREPARED_TURN.READY,
       messages,
       userMemories,
       limits,
@@ -1387,6 +1413,23 @@ export class RunAgentTurnHandler {
       openrouterIgnoredProviders,
       reservation: limit.reservation,
     };
+  }
+
+  private firstCallUnaffordable(
+    execution: AiExecutionContext,
+    firstCall: { readonly maxTurnTokens: number },
+    room: number,
+    fittedTokens: number
+  ): PreparedTurn {
+    this.logger.warn({
+      event: FIRST_CALL_UNAFFORDABLE_EVENT,
+      userId: execution.subject.userId,
+      tier: execution.tier,
+      room,
+      fittedTokens,
+      maxTurnTokens: firstCall.maxTurnTokens,
+    });
+    return { kind: PREPARED_TURN.TOO_LARGE };
   }
 
   /**

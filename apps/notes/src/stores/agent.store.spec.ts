@@ -12,7 +12,10 @@ import type {
   AgentThinkingPayload,
 } from '@knowtis/api-client';
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
-import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_TURN_ERROR_CODE,
+  AI_INVALID_INPUT_CODE,
+} from '@knowtis/shared-types';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
@@ -410,6 +413,17 @@ describe('useAgentStore', () => {
     expect(messages[0].content).toBe('hello');
     const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
     expect(sent).toBe('hello');
+  });
+
+  it('offers no retry for a message the server refused as invalid input', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hello');
+    get().onError({ code: AI_INVALID_INPUT_CODE, message: 'too large' });
+
+    useAgentStore.getState().retryLast();
+
+    expect(useAgentStore.getState().retryMode).toBe('none');
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
   });
 
   it('retries a turn that timed out under its own id', () => {

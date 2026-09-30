@@ -7323,7 +7323,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       ).toHaveLength(5);
     });
 
-    it('refuses a turn whose first call cannot fit, and gives the message back', async () => {
+    it('refuses a turn whose first call cannot fit as invalid input, and gives the message back', async () => {
       const quota = consumedQuota();
       const { handler, orchestrator, rateLimit } = build({ quota });
       vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
@@ -7334,11 +7334,36 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
       await handler.execute({ ...turn, isAnonymous: true }, cb);
 
-      expect(cb.onError).toHaveBeenCalledWith(
-        expect.objectContaining({ code: 'AI_RATE_LIMIT_EXCEEDED' })
+      expect(cb.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code: AIErrorCodes.INVALID_INPUT })
       );
       expect(orchestrator.run).not.toHaveBeenCalled();
       expect(quota.refund).toHaveBeenCalled();
+    });
+
+    it('logs a turn whose first call cannot fit with its numbers', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { handler, rateLimit } = build({ quota: consumedQuota() });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+
+      await handler.execute({ ...turn, isAnonymous: true }, callbacks());
+
+      expect(warn).toHaveBeenCalledWith({
+        event: 'agent.turn.first_call_unaffordable',
+        userId: USER,
+        tier: 'anonymous',
+        room: 0,
+        fittedTokens: estimateMessageTokens({
+          role: 'user',
+          content: turn.message.content,
+        }),
+        maxTurnTokens: 20_000,
+      });
     });
 
     it('discards, unannounced, the conversation a first turn that cannot fit opened', async () => {
