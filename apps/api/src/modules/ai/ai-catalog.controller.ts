@@ -130,8 +130,7 @@ export class AiCatalogController {
 
   @ApiOperation({
     summary: 'Promote a catalog model',
-    description:
-      'Offers the model to users in the chosen tier. Pricing still decides who pays: above the free-tier ceiling it stays BYOK-only whatever the tier.',
+    description: 'Offers the model to users in the chosen tier.',
   })
   @ApiResponse({ status: 200, description: 'The promoted model' })
   @ApiResponse({ status: 404, description: UNKNOWN_MODEL })

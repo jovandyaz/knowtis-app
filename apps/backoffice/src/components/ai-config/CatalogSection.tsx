@@ -16,7 +16,6 @@ import {
 import type { CatalogSyncSkipReason } from '@knowtis/shared-types';
 
 import { CandidatesTable } from './CandidatesTable';
-import { freeTierCeilingFrom } from './catalog-pricing';
 import { CatalogAlerts } from './CatalogAlerts';
 import { ConfigSection } from './ConfigSection';
 import { PromotedTable } from './PromotedTable';
@@ -51,7 +50,6 @@ export function CatalogSection() {
   const failed = mutations.find((mutation) => mutation.isError);
 
   const overview = catalog.isError ? null : (catalog.data ?? null);
-  const maxOutputCostPerToken = freeTierCeilingFrom(config.data);
   const servingRoles = config.data ? servingRolesFrom(config.data) : null;
 
   return (
@@ -99,16 +97,12 @@ export function CatalogSection() {
         <LoadingState />
       )}
 
-      <CandidatesTable
-        disabled={mutating}
-        maxOutputCostPerToken={maxOutputCostPerToken}
-      />
+      <CandidatesTable disabled={mutating} />
 
       {overview ? (
         <PromotedTable
           models={overview.promoted}
           disabled={mutating}
-          maxOutputCostPerToken={maxOutputCostPerToken}
           servingRoles={servingRoles}
           onSave={({ id, label, description }) =>
             updateCopy.mutate({ id, patch: { label, description } })

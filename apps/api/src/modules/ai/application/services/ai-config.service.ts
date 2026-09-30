@@ -4,7 +4,6 @@ import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
-  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   CHAIN_SEPARATOR,
   GLOBAL_REASONING_EFFORTS,
   isGlobalReasoningEffort,
@@ -12,8 +11,6 @@ import {
   MODEL_INTENTS,
   parseChain,
   parseDailyMessageLimit,
-  TOKENS_PER_MILLION,
-  USD_PER_MILLION_FORMAT,
   type AIConfigKey,
   type AIConfigSource,
   type GlobalReasoningEffort,
@@ -44,7 +41,6 @@ export const AI_CONFIG_KINDS = [
   'chain',
   'choice',
   'list',
-  'money',
   'count',
 ] as const;
 export type AIConfigKind = (typeof AI_CONFIG_KINDS)[number];
@@ -54,19 +50,6 @@ type ConfigKeyDef =
   | { default: string; kind: 'choice'; allowed: readonly string[] };
 
 type DailyMessageLimitKey = 'ai_anon_daily_messages' | 'ai_free_daily_messages';
-
-/** Above the price that admits a model into the catalog at all, a higher ceiling can only be a typo: nothing that expensive is ever promotable. */
-const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
-  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN * TOKENS_PER_MILLION;
-
-function parseUsdPerMillion(value: string): number | null {
-  const trimmed = value.trim();
-  if (!USD_PER_MILLION_FORMAT.test(trimmed)) {
-    return null;
-  }
-  const parsed = Number(trimmed);
-  return parsed <= MAX_FREE_TIER_CEILING_USD_PER_MILLION ? parsed : null;
-}
 
 /**
  * Parses a CSV of unique OpenRouter provider slugs. Empty means no constraint;
@@ -108,10 +91,6 @@ const CONFIG_KEYS = {
   ai_openrouter_ignored_providers: {
     default: AI_SETTING_DEFAULTS.ai_openrouter_ignored_providers,
     kind: 'list',
-  },
-  ai_free_tier_ceiling: {
-    default: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
-    kind: 'money',
   },
   ai_anon_daily_messages: {
     default: AI_SETTING_DEFAULTS.ai_anon_daily_messages,
@@ -362,13 +341,6 @@ export class AIConfigService {
           );
         }
         return;
-      case 'money':
-        if (parseUsdPerMillion(value) === null) {
-          throw new InvalidAIConfigError(
-            `'${value}' is not a valid ceiling: dollars per million output tokens, up to two decimals, at most ${MAX_FREE_TIER_CEILING_USD_PER_MILLION}`
-          );
-        }
-        return;
       case 'list':
         if (parseProviderList(value) === null) {
           throw new InvalidAIConfigError(
@@ -461,7 +433,7 @@ export class AIConfigService {
     if (kind === 'chain') {
       return parseChain(value).join(CHAIN_SEPARATOR);
     }
-    return kind === 'money' || kind === 'count' ? value.trim() : value;
+    return kind === 'count' ? value.trim() : value;
   }
 
   /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
@@ -492,10 +464,6 @@ export class AIConfigService {
           : def.default;
       case 'list':
         return parseProviderList(row.value) !== null ? row.value : def.default;
-      case 'money':
-        return parseUsdPerMillion(row.value) !== null
-          ? row.value.trim()
-          : def.default;
       case 'count':
         return parseDailyMessageLimit(row.value) !== null
           ? row.value.trim()

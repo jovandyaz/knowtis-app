@@ -2,12 +2,14 @@ import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MODEL_PRICES_SNAPSHOT } from '@knowtis/ai-gateway';
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { ModelCatalogAdapter } from './model-catalog.adapter';
+
+/** The most a code default may cost per output token: the platform absorbs every default. */
+const PLATFORM_ABSORBABLE_OUTPUT_COST_PER_TOKEN = 0.000004;
 
 function mockRefresh(payload: unknown) {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -218,9 +220,7 @@ describe('ModelCatalogAdapter', () => {
     }
   });
 
-  // These are what a caller with no key runs, so the platform pays for every one
-  // of them. A default over the ceiling contradicts the free tier it defines.
-  it('keeps every model the code defaults name within the free-tier ceiling', () => {
+  it('keeps every model the code defaults name within what the platform absorbs', () => {
     const adapter = makeAdapter();
     const defaults = [
       AI_SETTING_DEFAULTS.ai_default_model,
@@ -233,7 +233,7 @@ describe('ModelCatalogAdapter', () => {
 
     for (const id of defaults) {
       expect(adapter.getPricing(id)?.outputCostPerToken).toBeLessThanOrEqual(
-        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+        PLATFORM_ABSORBABLE_OUTPUT_COST_PER_TOKEN
       );
     }
   });

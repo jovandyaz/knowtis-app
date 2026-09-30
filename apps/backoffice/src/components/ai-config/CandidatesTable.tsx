@@ -11,7 +11,6 @@ import {
   type CatalogModel,
 } from '@knowtis/data-access-admin';
 import {
-  Badge,
   Button,
   Card,
   DataTable,
@@ -21,8 +20,6 @@ import {
 } from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
 import type { ModelTier } from '@knowtis/shared-types';
-
-import { isByokOnly } from './catalog-pricing';
 
 /** One screenful next to the promoted table; the API caps requests at 100 rows. */
 export const CANDIDATES_PAGE_SIZE = 10;
@@ -34,7 +31,6 @@ const columnHelper = createColumnHelper<CatalogModel>();
 
 function candidateColumns(
   disabled: boolean,
-  maxOutputCostPerToken: number,
   onPromote: (model: CatalogModel) => void
 ): ColumnDef<CatalogModel, unknown>[] {
   return [
@@ -43,12 +39,7 @@ function candidateColumns(
       header: () => <span className="whitespace-nowrap">Model</span>,
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col">
-          <span className="flex flex-wrap items-center gap-2">
-            {row.original.label}
-            {isByokOnly(row.original, maxOutputCostPerToken) ? (
-              <Badge variant="outline">BYOK only</Badge>
-            ) : null}
-          </span>
+          <span>{row.original.label}</span>
           <span className="font-mono text-xs text-(--muted-foreground)">
             {row.original.id}
           </span>
@@ -115,13 +106,9 @@ function candidateColumns(
 
 interface CandidatesTableProps {
   disabled?: boolean;
-  maxOutputCostPerToken: number;
 }
 
-export function CandidatesTable({
-  disabled = false,
-  maxOutputCostPerToken,
-}: CandidatesTableProps) {
+export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -140,10 +127,10 @@ export function CandidatesTable({
   const promoteModel = promote.mutate;
   const columns = useMemo(
     () =>
-      candidateColumns(locked, maxOutputCostPerToken, (model) =>
+      candidateColumns(locked, (model) =>
         promoteModel({ id: model.id, tier: PROMOTION_TIER })
       ),
-    [locked, maxOutputCostPerToken, promoteModel]
+    [locked, promoteModel]
   );
 
   return (

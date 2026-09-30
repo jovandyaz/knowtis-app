@@ -475,15 +475,6 @@ describe('AIConfigService', () => {
         updatedAt: null,
       },
       {
-        key: 'ai_free_tier_ceiling',
-        value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
-        kind: 'money',
-        source: 'default',
-        storedValue: null,
-        description: null,
-        updatedAt: null,
-      },
-      {
         key: 'ai_anon_daily_messages',
         value: '5',
         kind: 'count',
@@ -572,15 +563,6 @@ describe('AIConfigService', () => {
         updatedAt: null,
       },
       {
-        key: 'ai_free_tier_ceiling',
-        value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
-        kind: 'money',
-        source: 'default',
-        storedValue: null,
-        description: null,
-        updatedAt: null,
-      },
-      {
         key: 'ai_anon_daily_messages',
         value: '5',
         kind: 'count',
@@ -601,40 +583,14 @@ describe('AIConfigService', () => {
     ]);
   });
 
-  describe('free-tier ceiling', () => {
-    it('should reject a ceiling that is not a two-decimal dollar amount', async () => {
-      for (const value of ['-1', '1.234', 'abc', '', '1e3', '101']) {
-        await expect(
-          service.setConfig('ai_free_tier_ceiling', value, ACTOR)
-        ).rejects.toThrow(InvalidAIConfigError);
-      }
-    });
-
-    it('should read a padded ceiling as the operator set it, not as a stale row', async () => {
-      const row = {
-        key: 'ai_free_tier_ceiling',
-        value: ' 2.50 ',
-        description: null,
-        updatedAt: null,
-      };
-      mockRepo.getAllRows.mockResolvedValue([row]);
-
-      const entries = await service.getEffectiveConfig();
-
-      expect(
-        entries.find((e) => e.key === 'ai_free_tier_ceiling')
-      ).toMatchObject({ source: 'custom', value: '2.50', storedValue: null });
-    });
-
-    it('should persist a valid ceiling', async () => {
-      await service.setConfig('ai_free_tier_ceiling', '2.50', ACTOR);
-
-      expect(mockRepo.set).toHaveBeenCalledWith(
-        'ai_free_tier_ceiling',
-        '2.50',
-        undefined
-      );
-    });
+  it('no longer serves or accepts a free-tier ceiling', async () => {
+    const entries = await service.getEffectiveConfig();
+    expect(entries.map((entry) => entry.key)).not.toContain(
+      'ai_free_tier_ceiling'
+    );
+    await expect(
+      service.setConfig('ai_free_tier_ceiling', '4.00', ACTOR)
+    ).rejects.toThrow("Unknown AI config key: 'ai_free_tier_ceiling'");
   });
 
   describe('fallback chain', () => {

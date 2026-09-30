@@ -168,7 +168,6 @@ export const AI_CONFIG_KEYS = {
   REASONING_EFFORT: 'ai_reasoning_effort',
   OPENROUTER_PROVIDERS: 'ai_openrouter_providers',
   OPENROUTER_IGNORED_PROVIDERS: 'ai_openrouter_ignored_providers',
-  FREE_TIER_CEILING: 'ai_free_tier_ceiling',
   ANON_DAILY_MESSAGES: 'ai_anon_daily_messages',
   FREE_DAILY_MESSAGES: 'ai_free_daily_messages',
 } as const;

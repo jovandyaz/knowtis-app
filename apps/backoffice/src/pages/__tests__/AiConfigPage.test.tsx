@@ -282,31 +282,6 @@ describe('AiConfigPage', () => {
     ).toHaveValue('parasail');
   });
 
-  it('routes the money kind to the free-tier ceiling editor', () => {
-    useAiConfigMock.mockReturnValue({
-      data: [
-        {
-          key: 'ai_free_tier_ceiling',
-          value: '4.00',
-          kind: 'money',
-          source: 'default',
-          description: null,
-          updatedAt: null,
-        },
-      ],
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
-
-    renderPage();
-
-    expect(
-      screen.getByRole('heading', { name: 'Free tier' })
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText(/ceiling/i)).toHaveValue('4.00');
-  });
-
   it('routes count entries to the daily message limits editor', () => {
     useAiConfigMock.mockReturnValue({
       data: [

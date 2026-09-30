@@ -11,8 +11,6 @@ import {
   vi,
 } from 'vitest';
 
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
-
 import { validateEnv } from '../../../../config/env.config';
 import {
   aiCatalogModels,
@@ -34,9 +32,7 @@ import { AiCatalogAdminService } from './ai-catalog-admin.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 const ACTOR_ID = '00000000-0000-4000-8000-0000000000cf';
-const CHEAP_MODEL_ID = 'openrouter:spec-promo/cheap';
-const EXPENSIVE_MODEL_ID = 'openrouter:spec-promo/expensive';
-const TEST_MODEL_IDS = [CHEAP_MODEL_ID, EXPENSIVE_MODEL_ID];
+const PROMO_MODEL_ID = 'openrouter:spec-promo/model';
 
 const PLATFORM_INTENTS = {
   fast: 'openrouter:minimax/minimax-m2.5',
@@ -49,8 +45,7 @@ const OPENROUTER_KEY = createExecutionContext({
   byokProviders: ['openrouter'],
 });
 
-const BELOW_CEILING_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN / 2;
-const ABOVE_CEILING_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4;
+const OUTPUT_COST_PER_TOKEN = 0.000002;
 
 function candidate(id: string, outputCostPerToken: number): CandidateUpsert {
   return {
@@ -113,7 +108,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   afterAll(async () => {
     await db
       .delete(aiCatalogModels)
-      .where(inArray(aiCatalogModels.id, TEST_MODEL_IDS));
+      .where(inArray(aiCatalogModels.id, [PROMO_MODEL_ID]));
     await db.delete(users).where(eq(users.id, ACTOR_ID));
     await moduleRef.close();
   });
@@ -121,12 +116,9 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   beforeEach(async () => {
     await db
       .delete(aiCatalogModels)
-      .where(inArray(aiCatalogModels.id, TEST_MODEL_IDS));
+      .where(inArray(aiCatalogModels.id, [PROMO_MODEL_ID]));
     await repo.upsertCandidate(
-      candidate(CHEAP_MODEL_ID, BELOW_CEILING_OUTPUT_COST)
-    );
-    await repo.upsertCandidate(
-      candidate(EXPENSIVE_MODEL_ID, ABOVE_CEILING_OUTPUT_COST)
+      candidate(PROMO_MODEL_ID, OUTPUT_COST_PER_TOKEN)
     );
 
     promotedCache = new PromotedModelsCache(repo);
@@ -150,73 +142,66 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   });
 
   it('leaves a candidate out of the catalog until it is promoted', () => {
-    expect(listedIds(OPENROUTER_KEY)).not.toContain(CHEAP_MODEL_ID);
+    expect(listedIds(OPENROUTER_KEY)).not.toContain(PROMO_MODEL_ID);
   });
 
   it('lists a promoted open-tier model to an OpenRouter key holder, billed to their key', async () => {
-    await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
+    await admin.promote(PROMO_MODEL_ID, 'open', ACTOR_ID);
 
     const offered = listedTo(OPENROUTER_KEY).find(
-      (m) => m.id === CHEAP_MODEL_ID
+      (m) => m.id === PROMO_MODEL_ID
     );
 
     expect(offered).toMatchObject({
-      label: `Label ${CHEAP_MODEL_ID}`,
+      label: `Label ${PROMO_MODEL_ID}`,
       tier: 'open',
       billedToUser: true,
       contextWindow: 262_144,
     });
-    expect(listedIds(FREE_CALLER)).not.toContain(CHEAP_MODEL_ID);
+    expect(listedIds(FREE_CALLER)).not.toContain(PROMO_MODEL_ID);
   });
 
   it('lists a promoted model whatever its tier to the key holder only', async () => {
-    await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
+    await admin.promote(PROMO_MODEL_ID, 'powerful', ACTOR_ID);
 
-    expect(listedIds(OPENROUTER_KEY)).toContain(CHEAP_MODEL_ID);
-    expect(listedIds(FREE_CALLER)).not.toContain(CHEAP_MODEL_ID);
+    expect(listedIds(OPENROUTER_KEY)).toContain(PROMO_MODEL_ID);
+    expect(listedIds(FREE_CALLER)).not.toContain(PROMO_MODEL_ID);
   });
 
   it('reaches the picker without waiting for the cache interval', async () => {
     const beforePromotion = promotedCache.snapshot().map((m) => m.id);
 
-    await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
+    await admin.promote(PROMO_MODEL_ID, 'open', ACTOR_ID);
 
-    expect(beforePromotion).not.toContain(CHEAP_MODEL_ID);
-    expect(promotedCache.snapshot().map((m) => m.id)).toContain(CHEAP_MODEL_ID);
-  });
-
-  it('never gives away a promoted model priced above the free ceiling', async () => {
-    await admin.promote(EXPENSIVE_MODEL_ID, 'open', ACTOR_ID);
-
-    expect(listedIds(FREE_CALLER)).not.toContain(EXPENSIVE_MODEL_ID);
-    expect(listedIds(OPENROUTER_KEY)).toContain(EXPENSIVE_MODEL_ID);
+    expect(beforePromotion).not.toContain(PROMO_MODEL_ID);
+    expect(promotedCache.snapshot().map((m) => m.id)).toContain(PROMO_MODEL_ID);
   });
 
   it('withdraws a retired model from the catalog', async () => {
-    await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
+    await admin.promote(PROMO_MODEL_ID, 'open', ACTOR_ID);
 
-    await admin.retire(CHEAP_MODEL_ID, ACTOR_ID);
+    await admin.retire(PROMO_MODEL_ID, ACTOR_ID);
 
-    expect(listedIds(OPENROUTER_KEY)).not.toContain(CHEAP_MODEL_ID);
+    expect(listedIds(OPENROUTER_KEY)).not.toContain(PROMO_MODEL_ID);
     expect(promotedCache.snapshot().map((m) => m.id)).not.toContain(
-      CHEAP_MODEL_ID
+      PROMO_MODEL_ID
     );
   });
 
   it('returns a retired model to the candidates queue', async () => {
-    const promoted = await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
+    const promoted = await admin.promote(PROMO_MODEL_ID, 'powerful', ACTOR_ID);
     expect(promoted?.status).toBe('promoted');
 
-    const retired = await admin.retire(CHEAP_MODEL_ID, ACTOR_ID);
+    const retired = await admin.retire(PROMO_MODEL_ID, ACTOR_ID);
     expect(retired?.status).toBe('candidate');
 
     const { items } = await admin.listCandidates({
       page: 1,
       limit: 25,
-      search: CHEAP_MODEL_ID,
+      search: PROMO_MODEL_ID,
     });
-    expect(items.map((model) => model.id)).toContain(CHEAP_MODEL_ID);
-    expect(items.find((model) => model.id === CHEAP_MODEL_ID)).toMatchObject({
+    expect(items.map((model) => model.id)).toContain(PROMO_MODEL_ID);
+    expect(items.find((model) => model.id === PROMO_MODEL_ID)).toMatchObject({
       status: 'candidate',
       tier: 'open',
       promotedAt: null,
@@ -225,45 +210,45 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
   it('stores candidate reasoning and lets the next sync clear it', async () => {
     await repo.upsertCandidate({
-      ...candidate(CHEAP_MODEL_ID, BELOW_CEILING_OUTPUT_COST),
+      ...candidate(PROMO_MODEL_ID, OUTPUT_COST_PER_TOKEN),
       reasoning: { levels: ['low', 'high'], mandatory: true },
     });
 
     const { items } = await repo.listCandidates({
       page: 1,
       limit: 25,
-      search: CHEAP_MODEL_ID,
+      search: PROMO_MODEL_ID,
     });
     expect(
-      items.find((model) => model.id === CHEAP_MODEL_ID)?.reasoning
+      items.find((model) => model.id === PROMO_MODEL_ID)?.reasoning
     ).toEqual({ levels: ['low', 'high'], mandatory: true });
 
     await repo.upsertCandidate({
-      ...candidate(CHEAP_MODEL_ID, BELOW_CEILING_OUTPUT_COST),
+      ...candidate(PROMO_MODEL_ID, OUTPUT_COST_PER_TOKEN),
       reasoning: null,
     });
 
     const after = await repo.listCandidates({
       page: 1,
       limit: 25,
-      search: CHEAP_MODEL_ID,
+      search: PROMO_MODEL_ID,
     });
     expect(
-      after.items.find((model) => model.id === CHEAP_MODEL_ID)?.reasoning
+      after.items.find((model) => model.id === PROMO_MODEL_ID)?.reasoning
     ).toBeNull();
   });
 
   it('serves edited copy to the picker straight away', async () => {
-    await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
+    await admin.promote(PROMO_MODEL_ID, 'open', ACTOR_ID);
 
     await admin.updateCopy(
-      CHEAP_MODEL_ID,
+      PROMO_MODEL_ID,
       { label: 'Renamed by admin' },
       ACTOR_ID
     );
 
     expect(
-      listedTo(OPENROUTER_KEY).find((m) => m.id === CHEAP_MODEL_ID)?.label
+      listedTo(OPENROUTER_KEY).find((m) => m.id === PROMO_MODEL_ID)?.label
     ).toBe('Renamed by admin');
   });
 });

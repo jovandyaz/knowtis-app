@@ -11,7 +11,7 @@ export class PromoteCatalogModelDto implements PromoteCatalogModelInput {
   @ApiProperty({
     enum: MODEL_TIERS,
     description:
-      'Pool the model joins. `open` is the free pool, capped by the free-tier price ceiling; the others need the caller’s own provider key.',
+      'Pool the model joins. `open` is the free pool; the others need the caller’s own provider key.',
     example: 'open',
   })
   @IsIn([...MODEL_TIERS])
