@@ -8,6 +8,10 @@ import {
   ShutdownDrain,
 } from './shutdown-drain';
 
+function flushAsync() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function holdSlot(tracker: ConcurrencySlotTracker, slotId: string) {
   const controller = new AbortController();
   tracker.acquire(slotId, slotId, slotId, controller);
@@ -47,7 +51,7 @@ describe('ShutdownDrain', () => {
       SHUTDOWN_ABORT_REASON,
     ]);
     agentTurns.release('t1', 't1', 't1');
-    await Promise.resolve();
+    await flushAsync();
     expect(drained).toBe(false);
 
     aiStreams.release('s1', 's1', 's1');
@@ -90,7 +94,7 @@ describe('ShutdownDrain', () => {
     const draining = drain.beforeApplicationShutdown().then(() => {
       drained = true;
     });
-    await Promise.resolve();
+    await flushAsync();
     expect(drained).toBe(false);
 
     finish('committed');
