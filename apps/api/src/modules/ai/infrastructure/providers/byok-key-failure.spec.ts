@@ -33,6 +33,18 @@ describe('classifyByokKeyFailure', () => {
     },
     {
       provider: 'anthropic',
+      status: 400,
+      body: '{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}',
+      expected: 'credit',
+    },
+    {
+      provider: 'anthropic',
+      status: 400,
+      body: '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified workspace API usage limits."}}',
+      expected: null,
+    },
+    {
+      provider: 'anthropic',
       status: 402,
       body: '{"type":"error","error":{"type":"billing_error"}}',
       expected: 'credit',
@@ -82,7 +94,20 @@ describe('classifyByokKeyFailure', () => {
     {
       provider: 'openai',
       status: 429,
+      body: '{"error":{"type":"insufficient_quota","code":"organization_spend_limit_exceeded"}}',
+      expected: 'credit',
+    },
+    {
+      provider: 'openai',
+      status: 429,
       body: '{"error":{"type":"requests","code":"rate_limit_exceeded"}}',
+      expected: null,
+    },
+    { provider: 'openai', status: 429, body: '', expected: null },
+    {
+      provider: 'openai',
+      status: 429,
+      body: 'upstream said insufficient_quota',
       expected: null,
     },
     {
@@ -107,6 +132,12 @@ describe('classifyByokKeyFailure', () => {
       provider: 'google',
       status: 400,
       body: '{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"bad schema"}}',
+      expected: null,
+    },
+    {
+      provider: 'google',
+      status: 400,
+      body: '{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"API_KEY_INVALID is not a valid enum value","details":[{"reason":"FIELD_INVALID"}]}}',
       expected: null,
     },
     {
@@ -184,5 +215,14 @@ describe('classifyByokKeyFailure', () => {
       null
     );
     expect(classifyByokKeyFailure({ statusCode: 401 }, 'openai')).toBe(null);
+  });
+
+  it('classifies nothing from a call error that carries no status', () => {
+    const statusless = new APICallError({
+      message: 'Failed to process successful response',
+      url: 'https://provider.test/v1',
+      requestBodyValues: {},
+    });
+    expect(classifyByokKeyFailure(statusless, 'anthropic')).toBe(null);
   });
 });

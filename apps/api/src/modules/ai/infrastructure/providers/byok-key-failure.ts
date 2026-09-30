@@ -1,5 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
 import { APICallError, RetryError } from 'ai';
+import { z } from 'zod';
 
 import {
   BYOK_KEY_FAILURE_KIND,
@@ -7,11 +8,26 @@ import {
   type ByokProvider,
 } from '@knowtis/shared-types';
 
-const OPENAI_NO_CREDIT_MARKERS = [
+const ANTHROPIC_INVALID_REQUEST = 'invalid_request_error';
+const ANTHROPIC_NO_CREDIT_PHRASE = 'credit balance is too low';
+const OPENAI_NO_CREDIT = new Set([
   'insufficient_quota',
   'credit_balance_exhausted',
-] as const;
+]);
+const GEMINI_INVALID_ARGUMENT = 'INVALID_ARGUMENT';
 const GEMINI_BAD_KEY_REASON = 'API_KEY_INVALID';
+
+const optionalText = z.string().optional().catch(undefined);
+const providerErrorBody = z.object({
+  error: z.object({
+    type: optionalText,
+    code: optionalText,
+    status: optionalText,
+    message: optionalText,
+    details: z.array(z.object({ reason: optionalText }).catch({})).catch([]),
+  }),
+});
+type ProviderErrorFields = z.infer<typeof providerErrorBody>['error'];
 
 function lastCallError(error: unknown): APICallError | null {
   if (APICallError.isInstance(error)) {
@@ -20,17 +36,75 @@ function lastCallError(error: unknown): APICallError | null {
   return RetryError.isInstance(error) ? lastCallError(error.lastError) : null;
 }
 
-function bodyOf(error: APICallError): string {
-  return `${error.responseBody ?? ''}${
-    error.data === undefined ? '' : JSON.stringify(error.data)
-  }`;
+function parsedJson(text: string | undefined): unknown {
+  try {
+    return JSON.parse(text ?? '');
+  } catch {
+    return undefined;
+  }
+}
+
+function errorFieldsOf(call: APICallError): ProviderErrorFields | undefined {
+  const parsed = providerErrorBody.safeParse(parsedJson(call.responseBody));
+  return parsed.success ? parsed.data.error : undefined;
+}
+
+function anthropicKind(
+  status: number,
+  fields: ProviderErrorFields | undefined
+): ByokKeyFailureKind | null {
+  if (status === HttpStatus.PAYMENT_REQUIRED) {
+    return BYOK_KEY_FAILURE_KIND.CREDIT;
+  }
+  if (status === HttpStatus.FORBIDDEN) {
+    return BYOK_KEY_FAILURE_KIND.PERMISSION;
+  }
+  const spentCredit =
+    status === HttpStatus.BAD_REQUEST &&
+    fields?.type === ANTHROPIC_INVALID_REQUEST &&
+    fields.message?.toLowerCase().includes(ANTHROPIC_NO_CREDIT_PHRASE) === true;
+  return spentCredit ? BYOK_KEY_FAILURE_KIND.CREDIT : null;
+}
+
+function openaiKind(
+  status: number,
+  fields: ProviderErrorFields | undefined
+): ByokKeyFailureKind | null {
+  if (status === HttpStatus.FORBIDDEN) {
+    return BYOK_KEY_FAILURE_KIND.PERMISSION;
+  }
+  const spentCredit =
+    status === HttpStatus.TOO_MANY_REQUESTS &&
+    [fields?.type, fields?.code].some(
+      (field) => field !== undefined && OPENAI_NO_CREDIT.has(field)
+    );
+  return spentCredit ? BYOK_KEY_FAILURE_KIND.CREDIT : null;
+}
+
+function geminiKind(
+  status: number,
+  fields: ProviderErrorFields | undefined
+): ByokKeyFailureKind | null {
+  if (status === HttpStatus.PAYMENT_REQUIRED) {
+    return BYOK_KEY_FAILURE_KIND.CREDIT;
+  }
+  if (status === HttpStatus.FORBIDDEN) {
+    return BYOK_KEY_FAILURE_KIND.PERMISSION;
+  }
+  const badKey =
+    status === HttpStatus.BAD_REQUEST &&
+    fields?.status === GEMINI_INVALID_ARGUMENT &&
+    fields.details.some((detail) => detail.reason === GEMINI_BAD_KEY_REASON);
+  return badKey ? BYOK_KEY_FAILURE_KIND.AUTH : null;
 }
 
 /**
- * Whether the provider refused the caller's own key, per provider because
- * the same status means different things (OpenRouter's 403 is mostly a
- * content block; OpenAI reports spent credit as a 429; Gemini reports a bad
- * key as a 400). Null means "not the key's fault".
+ * Which part of the caller's own key the provider refused, read from the
+ * status and the parsed error body per provider, because the same status means
+ * different things: OpenRouter's 403 is mostly a content block, OpenAI reports
+ * spent credit as a 429, Anthropic's spent prepaid credit and Gemini's bad key
+ * arrive as a 400. Null means unclassified, not "the key is fine": a caller
+ * must never read it as leave to retry on another key or model.
  */
 export function classifyByokKeyFailure(
   error: unknown,
@@ -46,39 +120,15 @@ export function classifyByokKeyFailure(
   }
   switch (provider) {
     case 'anthropic':
-      if (status === HttpStatus.PAYMENT_REQUIRED) {
-        return BYOK_KEY_FAILURE_KIND.CREDIT;
-      }
-      return status === HttpStatus.FORBIDDEN
-        ? BYOK_KEY_FAILURE_KIND.PERMISSION
-        : null;
-    case 'openai': {
-      if (status === HttpStatus.FORBIDDEN) {
-        return BYOK_KEY_FAILURE_KIND.PERMISSION;
-      }
-      const body = bodyOf(call);
-      return status === HttpStatus.TOO_MANY_REQUESTS &&
-        OPENAI_NO_CREDIT_MARKERS.some((marker) => body.includes(marker))
-        ? BYOK_KEY_FAILURE_KIND.CREDIT
-        : null;
-    }
+      return anthropicKind(status, errorFieldsOf(call));
+    case 'openai':
+      return openaiKind(status, errorFieldsOf(call));
     case 'openrouter':
       return status === HttpStatus.PAYMENT_REQUIRED
         ? BYOK_KEY_FAILURE_KIND.CREDIT
         : null;
     case 'google':
-      if (
-        status === HttpStatus.BAD_REQUEST &&
-        bodyOf(call).includes(GEMINI_BAD_KEY_REASON)
-      ) {
-        return BYOK_KEY_FAILURE_KIND.AUTH;
-      }
-      if (status === HttpStatus.PAYMENT_REQUIRED) {
-        return BYOK_KEY_FAILURE_KIND.CREDIT;
-      }
-      return status === HttpStatus.FORBIDDEN
-        ? BYOK_KEY_FAILURE_KIND.PERMISSION
-        : null;
+      return geminiKind(status, errorFieldsOf(call));
     default: {
       const _exhaustive: never = provider;
       throw new Error(`Unhandled BYOK provider: ${String(_exhaustive)}`);
