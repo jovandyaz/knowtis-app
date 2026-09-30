@@ -1,8 +1,9 @@
-import type { ModelIntent } from '@knowtis/shared-types';
+import type { ByokProvider, ModelIntent } from '@knowtis/shared-types';
 
 export interface UserAiSettings {
   preferredModel: string | null;
   preferredIntent: ModelIntent | null;
+  primaryProvider: ByokProvider | null;
   ghostTextEnabled: boolean;
 }
 

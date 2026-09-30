@@ -7,6 +7,7 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
+  type ByokProvider,
   type ModelIntent,
   type ModelReasoning,
   type SelectableModel,
@@ -73,12 +74,14 @@ export class SelectableModelsService {
 
   catalogFor(
     execution: Pick<AiExecutionContext, 'tier' | 'policy' | 'byokProviders'>,
-    platformIntents: Readonly<Record<ModelIntent, string>>
+    platformIntents: Readonly<Record<ModelIntent, string>>,
+    storedPrimary: ByokProvider | null
   ): TierCatalog {
     return tierCatalog({
       tier: execution.tier,
       scope: execution.policy.catalog,
       heldProviders: [...execution.byokProviders],
+      storedPrimary,
       platformIntents,
       offered: this.offered(),
       isSupported: (id) => this.catalog.isSupported(id),

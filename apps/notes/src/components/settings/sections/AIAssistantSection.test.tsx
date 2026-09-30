@@ -91,6 +91,7 @@ describe('AIAssistantSection', () => {
     prefsData.mockReturnValue({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
   });
@@ -270,6 +271,7 @@ describe('AIAssistantSection', () => {
     prefsData.mockReturnValue({
       preferredModel: 'a:bal',
       preferredIntent: 'fast',
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
     rerender(<AIAssistantSection />);
@@ -294,6 +296,7 @@ describe('AIAssistantSection', () => {
     prefsData.mockReturnValue({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: false,
     });
     render(<AIAssistantSection />);

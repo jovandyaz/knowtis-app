@@ -2,6 +2,8 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { describe, expect, it } from 'vitest';
 
+import { BYOK_PROVIDERS } from '@knowtis/shared-types';
+
 import { UpdateAiPreferencesDto } from './update-ai-preferences.dto';
 
 function errorsFor(payload: object) {
@@ -42,4 +44,20 @@ describe('UpdateAiPreferencesDto', () => {
   it('should still clear a preferred model with null', async () => {
     expect(await errorsFor({ preferredModel: null })).toHaveLength(0);
   });
+
+  it.each([...BYOK_PROVIDERS, null])(
+    'should accept the primary provider %p',
+    async (primaryProvider) => {
+      expect(await errorsFor({ primaryProvider })).toHaveLength(0);
+    }
+  );
+
+  it.each(['mistral', 'OpenAI', ''])(
+    'should reject the primary provider %p',
+    async (primaryProvider) => {
+      const errors = await errorsFor({ primaryProvider });
+
+      expect(errors.map((e) => e.property)).toEqual(['primaryProvider']);
+    }
+  );
 });

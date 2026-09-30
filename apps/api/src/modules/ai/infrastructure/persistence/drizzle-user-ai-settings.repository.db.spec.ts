@@ -57,6 +57,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect(await repo.getSettings(USER_ID)).toEqual({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
   });
@@ -105,6 +106,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect(await repo.getSettings(USER_ID)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'powerful',
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
   });
@@ -119,6 +121,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
   it('a model patch leaves the ghost text preference untouched', async () => {
     await repo.patchSettings(USER_ID, {
       preferredIntent: 'balanced',
+      primaryProvider: null,
       ghostTextEnabled: false,
     });
     await repo.patchSettings(USER_ID, {
@@ -127,7 +130,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect(await repo.getSettings(USER_ID)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
+      primaryProvider: null,
       ghostTextEnabled: false,
     });
+  });
+
+  it('stores and reads the primary provider, and reads a missing one as null', async () => {
+    expect((await repo.getSettings(USER_ID)).primaryProvider).toBeNull();
+    await repo.patchSettings(USER_ID, { primaryProvider: 'openai' });
+    expect((await repo.getSettings(USER_ID)).primaryProvider).toBe('openai');
   });
 });

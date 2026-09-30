@@ -7,6 +7,7 @@ import {
   type ModelUnavailableReason,
 } from '@knowtis/shared-types';
 
+import { canonicalOf } from './byok-intent-routes';
 import {
   CATALOG_BILLING,
   findInCatalog,
@@ -93,7 +94,26 @@ function billingOf(modelId: string, facts: ModelFacts): CatalogBilling {
     : CATALOG_BILLING.PLATFORM;
 }
 
-/** The model a turn runs on: substituted only inside the same billing class, and the substitution is reported, never silent. */
+// A key-billed pick of a canonical model stands for that model: the primary
+// provider only chooses which held key serves it, so running another of its
+// routes is no fallback.
+function sameModelRoute(
+  catalog: TierCatalog,
+  modelId: string,
+  facts: ModelFacts
+): string | undefined {
+  if (
+    catalog.billing !== CATALOG_BILLING.KEY ||
+    billingOf(modelId, facts) !== CATALOG_BILLING.KEY
+  ) {
+    return undefined;
+  }
+  return Object.values(canonicalOf(modelId)?.routes ?? {}).find(
+    (route) => findInCatalog(catalog, route) !== undefined
+  );
+}
+
+/** The model a turn runs on: another model is substituted only inside the same billing class, and the substitution is reported, never silent; another held key's route of the same model is no substitution. */
 export function chooseModel(
   catalog: TierCatalog,
   request: ModelRequest,
@@ -126,6 +146,10 @@ export function chooseModel(
   }
   if (findInCatalog(catalog, wanted)) {
     return resolved(wanted, wanted);
+  }
+  const route = sameModelRoute(catalog, wanted, facts);
+  if (route) {
+    return resolved(wanted, route);
   }
   const reason = fallbackReason(wanted, facts);
   if (substitute && billingOf(wanted, facts) === catalog.billing) {

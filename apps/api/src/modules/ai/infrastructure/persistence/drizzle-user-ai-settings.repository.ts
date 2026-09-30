@@ -1,7 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 
-import { isModelIntent, type ModelIntent } from '@knowtis/shared-types';
+import {
+  isByokProvider,
+  isModelIntent,
+  type ByokProvider,
+  type ModelIntent,
+} from '@knowtis/shared-types';
 
 import {
   DATABASE_CONNECTION,
@@ -17,6 +22,10 @@ function toIntent(value: string | null): ModelIntent | null {
   return value !== null && isModelIntent(value) ? value : null;
 }
 
+function toProvider(value: string | null): ByokProvider | null {
+  return value !== null && isByokProvider(value) ? value : null;
+}
+
 @Injectable()
 export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
@@ -26,6 +35,7 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
       .select({
         preferredModel: userAiSettings.preferredModel,
         preferredIntent: userAiSettings.preferredIntent,
+        primaryProvider: userAiSettings.primaryProvider,
         ghostTextEnabled: userAiSettings.ghostTextEnabled,
       })
       .from(userAiSettings)
@@ -34,6 +44,7 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
     return {
       preferredModel: row?.preferredModel ?? null,
       preferredIntent: toIntent(row?.preferredIntent ?? null),
+      primaryProvider: toProvider(row?.primaryProvider ?? null),
       ghostTextEnabled: row?.ghostTextEnabled ?? true,
     };
   }

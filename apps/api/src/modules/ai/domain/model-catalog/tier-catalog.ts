@@ -51,6 +51,7 @@ export interface TierCatalogInput {
   readonly scope: CatalogScope;
   /** Oldest key first: the first one is the default primary provider. */
   readonly heldProviders: readonly ByokProvider[];
+  readonly storedPrimary: ByokProvider | null;
   readonly platformIntents: Readonly<Record<ModelIntent, string>>;
   readonly offered: readonly OfferedModel[];
   readonly isSupported: (modelId: string) => boolean;
@@ -134,7 +135,7 @@ function platformCatalog(
 
 function keyCatalog(input: TierCatalogInput): TierCatalog {
   const held = new Set<string>(input.heldProviders);
-  const primary = effectivePrimary(input.heldProviders);
+  const primary = effectivePrimary(input.heldProviders, input.storedPrimary);
   const intentOf = new Map<string, ModelIntent>();
   const availability: IntentAvailability[] = [];
   const routed: OfferedModel[] = [];

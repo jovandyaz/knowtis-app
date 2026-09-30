@@ -70,6 +70,7 @@ describe('aiModelsApi', () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
     await aiModelsApi.getPreferences();
@@ -80,6 +81,7 @@ describe('aiModelsApi', () => {
     vi.mocked(httpClient.put).mockResolvedValue({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
     await aiModelsApi.updatePreferences({
@@ -96,6 +98,7 @@ describe('aiModelsApi', () => {
     vi.mocked(httpClient.put).mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'fast',
+      primaryProvider: null,
       ghostTextEnabled: false,
     });
     await aiModelsApi.updatePreferences({ preferredIntent: 'fast' });

@@ -21,6 +21,7 @@ import {
 import { clientIpOf } from '../../core/http/client-ip';
 import {
   ApiAuthErrors,
+  ApiBadRequest,
   ApiServiceUnavailable,
 } from '../../core/swagger/api-responses.decorator';
 import {
@@ -72,8 +73,11 @@ export class AiModelsController {
     description:
       'AI_MODEL_UNAVAILABLE: the model is outside your tier; details carry reason and suggestedModel',
   })
+  @ApiBadRequest(
+    'invalid input, or a primaryProvider the caller holds no key for'
+  )
   @ApiServiceUnavailable(
-    "a model write could not resolve the caller's tier; retry after 5s"
+    "a model or primary provider write could not resolve the caller's tier; retry after 5s"
   )
   @ApiAuthErrors('AI feature is disabled, or the caller is anonymous')
   @Put('preferences')

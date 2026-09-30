@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AiModelsController } from './ai-models.controller';
@@ -25,6 +25,7 @@ function make() {
     getUserPreferences: vi.fn().mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
+      primaryProvider: null,
       ghostTextEnabled: true,
     }),
     setUserPreferences: vi.fn().mockResolvedValue(undefined),
@@ -60,6 +61,7 @@ function makeWired(
   const repo = {
     getSettings: vi.fn().mockResolvedValue({
       ...stored,
+      primaryProvider: null,
       ghostTextEnabled: true,
     }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
@@ -109,6 +111,7 @@ describe('AiModelsController', () => {
     expect(await ctrl.getPreferences(user, req)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
   });
@@ -118,6 +121,7 @@ describe('AiModelsController', () => {
     pref.getUserPreferences.mockResolvedValueOnce({
       preferredModel: 'anthropic:claude-sonnet-5',
       preferredIntent: 'balanced',
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
     const res = await ctrl.updatePreferences(
@@ -138,6 +142,7 @@ describe('AiModelsController', () => {
     expect(res).toEqual({
       preferredModel: 'anthropic:claude-sonnet-5',
       preferredIntent: 'balanced',
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
   });
@@ -191,11 +196,13 @@ describe('AiModelsController', () => {
     pref.getUserPreferences.mockResolvedValueOnce({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
     expect(await ctrl.getPreferences(user, req)).toEqual({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
   });
@@ -237,12 +244,14 @@ describe('AiModelsController', () => {
       await ctrl.updatePreferences(user, { ghostTextEnabled: false }, req);
       await ctrl.updatePreferences(user, { preferredIntent: 'fast' }, req);
       await ctrl.updatePreferences(user, { preferredModel: null }, req);
+      await ctrl.updatePreferences(user, { primaryProvider: null }, req);
 
       expect(tiers.resolve).not.toHaveBeenCalled();
       expect(repo.patchSettings.mock.calls).toEqual([
         ['u1', { ghostTextEnabled: false }],
         ['u1', { preferredIntent: 'fast' }],
         ['u1', { preferredModel: null }],
+        ['u1', { primaryProvider: null }],
       ]);
     });
 
@@ -270,6 +279,16 @@ describe('AiModelsController', () => {
       expect(repo.patchSettings.mock.calls).toEqual([
         ['u1', { preferredModel: null, preferredIntent: 'fast' }],
       ]);
+    });
+
+    it("refuses a primary provider outside the caller's keys with 400", async () => {
+      const { ctrl, repo, tiers } = makeWired();
+
+      await expect(
+        ctrl.updatePreferences(user, { primaryProvider: 'openrouter' }, req)
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tiers.resolve).toHaveBeenCalledTimes(1);
+      expect(repo.patchSettings).not.toHaveBeenCalled();
     });
 
     it('surfaces a key-store outage on a model write', async () => {
@@ -304,6 +323,7 @@ describe('AiModelsController', () => {
       expect(res).toEqual({
         preferredModel: null,
         preferredIntent: 'fast',
+        primaryProvider: null,
         ghostTextEnabled: true,
       });
     });
@@ -332,6 +352,7 @@ describe('AiModelsController', () => {
     expect(await ctrl.getPreferences(user, req)).toEqual({
       preferredModel: null,
       preferredIntent: 'fast',
+      primaryProvider: null,
       ghostTextEnabled: true,
     });
     expect(tiers.resolve).toHaveBeenCalledWith({
