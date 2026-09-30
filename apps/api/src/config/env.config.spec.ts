@@ -223,6 +223,7 @@ describe('env.config agent vars', () => {
       ...baseEnv,
       AI_AGENT_MAX_OUTPUT_TOKENS: '12000',
       AI_AGENT_SYNTHESIS_RESERVE_TOKENS: '12000',
+      AI_ANONYMOUS_DAILY_LIMIT_PCT: '0.5',
     });
     expect(env.AI_AGENT_SYNTHESIS_RESERVE_TOKENS).toBe(12000);
   });

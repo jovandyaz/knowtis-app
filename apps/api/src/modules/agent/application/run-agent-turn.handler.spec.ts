@@ -56,6 +56,7 @@ import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-rea
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
 import {
   AGENT_FIRST_CALL_COSTS,
+  AGENT_PROMPT_OVERHEAD_TOKENS,
   firstCallRoom,
 } from '../domain/first-call-budget';
 import { estimateMessageTokens } from '../domain/message-tokens';
@@ -2512,7 +2513,10 @@ describe('RunAgentTurnHandler', () => {
     );
 
     const estimated = vi.mocked(rateLimit.checkLimit).mock.calls[0][1].tokens;
-    expect(estimated).toBe(estimateTokenCount('hi') + 1500);
+    expect(estimated).toBeGreaterThan(AGENT_PROMPT_OVERHEAD_TOKENS);
+    expect(estimated).toBe(
+      estimateTokenCount('hi') + AGENT_PROMPT_OVERHEAD_TOKENS
+    );
   });
 
   it('drops oldest messages beyond the history token budget while keeping the final user message', async () => {

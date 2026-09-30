@@ -3,8 +3,12 @@ import {
   SYNTHESIS_REQUEST_TOKENS,
 } from './synthesis-request';
 
-/** Tokens a turn's first call carries besides its messages: the system prompt with its memories, and the tool definitions. */
-export const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
+/**
+ * Tokens a turn's first call carries besides its messages: the system prompt
+ * with the viewed note and the most memories a turn retrieves by default, plus
+ * every tool definition, with a margin. Known-note titles are not counted.
+ */
+export const AGENT_PROMPT_OVERHEAD_TOKENS = 4000;
 
 export interface FirstCallCosts {
   readonly promptOverheadTokens: number;
