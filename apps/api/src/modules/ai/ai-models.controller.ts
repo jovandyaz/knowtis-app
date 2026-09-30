@@ -1,29 +1,60 @@
 import { CurrentUser, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Put,
+  Req,
+  UseFilters,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 
 import {
   FEATURE_FLAG_KEYS,
   type AIPreferences,
-  type SelectableModel,
+  type ModelCatalogResponse,
 } from '@knowtis/shared-types';
 
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import { clientIpOf } from '../../core/http/client-ip';
+import {
+  ApiAuthErrors,
+  ApiServiceUnavailable,
+} from '../../core/swagger/api-responses.decorator';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
+import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
 import { ModelPreferenceService } from './application/services/model-preference.service';
+import { TierResolver } from './application/services/tier-resolver.service';
 import { UpdateAiPreferencesDto } from './dto/update-ai-preferences.dto';
+
+const TIER_UNAVAILABLE =
+  "the caller's tier could not be resolved; retry after 5s";
 
 @ApiTags('AI')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@UseFilters(AiUnavailableExceptionFilter)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Controller('ai')
 export class AiModelsController {
-  constructor(private readonly preferences: ModelPreferenceService) {}
+  constructor(
+    private readonly preferences: ModelPreferenceService,
+    private readonly tierResolver: TierResolver
+  ) {}
 
+  @ApiServiceUnavailable(TIER_UNAVAILABLE)
+  @ApiAuthErrors('AI feature is disabled')
   @Get('models')
-  listModels(@CurrentUser() user: RequestUser): Promise<SelectableModel[]> {
-    return this.preferences.listModels(user);
+  async listModels(
+    @CurrentUser() user: RequestUser,
+    @Req() req: Request
+  ): Promise<ModelCatalogResponse> {
+    return this.preferences.listModels(await this.executionOf(user, req));
   }
 
   @Get('preferences')
@@ -31,12 +62,31 @@ export class AiModelsController {
     return this.preferences.getUserPreferences(user.id);
   }
 
+  @ApiResponse({
+    status: 422,
+    description:
+      'AI_MODEL_UNAVAILABLE: the model is outside your tier; details carry reason and suggestedModel',
+  })
+  @ApiServiceUnavailable(TIER_UNAVAILABLE)
+  @ApiAuthErrors('AI feature is disabled, or the caller is anonymous')
   @Put('preferences')
   async updatePreferences(
     @CurrentUser() user: RequestUser,
-    @Body() dto: UpdateAiPreferencesDto
+    @Body() dto: UpdateAiPreferencesDto,
+    @Req() req: Request
   ): Promise<AIPreferences> {
-    await this.preferences.setUserPreferences(user, dto);
+    await this.preferences.setUserPreferences(
+      await this.executionOf(user, req),
+      dto
+    );
     return this.preferences.getUserPreferences(user.id);
+  }
+
+  private executionOf(user: RequestUser, req: Request) {
+    return this.tierResolver.resolve({
+      userId: user.id,
+      isAnonymous: user.isAnonymous === true,
+      clientIp: clientIpOf(req),
+    });
   }
 }

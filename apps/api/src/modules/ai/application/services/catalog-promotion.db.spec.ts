@@ -22,12 +22,13 @@ import {
   type Database,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { DrizzleAiCatalogRepository } from '../../infrastructure/persistence/drizzle-ai-catalog.repository';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { AiCatalogAdminService } from './ai-catalog-admin.service';
 import { SelectableModelsService } from './selectable-models.service';
@@ -37,9 +38,16 @@ const CHEAP_MODEL_ID = 'openrouter:spec-promo/cheap';
 const EXPENSIVE_MODEL_ID = 'openrouter:spec-promo/expensive';
 const TEST_MODEL_IDS = [CHEAP_MODEL_ID, EXPENSIVE_MODEL_ID];
 
-const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
-const NO_BYOK: ReadonlySet<string> = new Set();
-const OPENROUTER_BYOK: ReadonlySet<string> = new Set(['openrouter']);
+const PLATFORM_INTENTS = {
+  fast: 'openrouter:minimax/minimax-m2.5',
+  balanced: 'openrouter:deepseek/deepseek-v3.2',
+  powerful: 'openrouter:moonshotai/kimi-k2.5',
+} as const;
+const FREE_CALLER = createExecutionContext({ tier: 'free' });
+const OPENROUTER_KEY = createExecutionContext({
+  tier: 'byok',
+  byokProviders: ['openrouter'],
+});
 
 const BELOW_CEILING_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN / 2;
 const ABOVE_CEILING_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4;
@@ -60,11 +68,6 @@ function candidate(id: string, outputCostPerToken: number): CandidateUpsert {
   };
 }
 
-/** Stands for a config that still points at every curated model, so these cases isolate promotion. */
-const ALL_CURATED: ReadonlySet<string> = new Set(
-  CURATED_MODELS.map((model) => model.id)
-);
-
 describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   let moduleRef: TestingModule;
   let db: Database;
@@ -72,6 +75,16 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   let promotedCache: PromotedModelsCache;
   let admin: AiCatalogAdminService;
   let selectable: SelectableModelsService;
+
+  function listedTo(execution: AiExecutionContext) {
+    return selectable.toSelectable(
+      selectable.catalogFor(execution, PLATFORM_INTENTS)
+    );
+  }
+
+  function listedIds(execution: AiExecutionContext) {
+    return listedTo(execution).map((model) => model.id);
+  }
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -136,42 +149,31 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     );
   });
 
-  it('leaves a candidate out of the offered catalog until it is promoted', () => {
-    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
-      false
-    );
+  it('leaves a candidate out of the catalog until it is promoted', () => {
+    expect(listedIds(OPENROUTER_KEY)).not.toContain(CHEAP_MODEL_ID);
   });
 
-  it('makes a promoted open-tier model selectable by a user with no key at all', async () => {
+  it('lists a promoted open-tier model to an OpenRouter key holder, billed to their key', async () => {
     await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
 
-    const offered = selectable
-      .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
-      .find((m) => m.id === CHEAP_MODEL_ID);
+    const offered = listedTo(OPENROUTER_KEY).find(
+      (m) => m.id === CHEAP_MODEL_ID
+    );
 
     expect(offered).toMatchObject({
       label: `Label ${CHEAP_MODEL_ID}`,
       tier: 'open',
-      access: 'granted',
-      billedToUser: false,
+      billedToUser: true,
       contextWindow: 262_144,
     });
-    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
-      true
-    );
+    expect(listedIds(FREE_CALLER)).not.toContain(CHEAP_MODEL_ID);
   });
 
-  it('grants a cheap promoted model whatever its tier, as prod does today', async () => {
+  it('lists a promoted model whatever its tier to the key holder only', async () => {
     await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
 
-    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
-      true
-    );
-    expect(
-      selectable
-        .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
-        .find((m) => m.id === CHEAP_MODEL_ID)?.access
-    ).toBe('granted');
+    expect(listedIds(OPENROUTER_KEY)).toContain(CHEAP_MODEL_ID);
+    expect(listedIds(FREE_CALLER)).not.toContain(CHEAP_MODEL_ID);
   });
 
   it('reaches the picker without waiting for the cache interval', async () => {
@@ -186,22 +188,16 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   it('never gives away a promoted model priced above the free ceiling', async () => {
     await admin.promote(EXPENSIVE_MODEL_ID, 'open', ACTOR_ID);
 
-    expect(
-      selectable.isSelectable(EXPENSIVE_MODEL_ID, ALL_CURATED, NO_BYOK)
-    ).toBe(false);
-    expect(
-      selectable.isSelectable(EXPENSIVE_MODEL_ID, ALL_CURATED, OPENROUTER_BYOK)
-    ).toBe(true);
+    expect(listedIds(FREE_CALLER)).not.toContain(EXPENSIVE_MODEL_ID);
+    expect(listedIds(OPENROUTER_KEY)).toContain(EXPENSIVE_MODEL_ID);
   });
 
-  it('withdraws a retired model from the offered catalog', async () => {
+  it('withdraws a retired model from the catalog', async () => {
     await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
 
     await admin.retire(CHEAP_MODEL_ID, ACTOR_ID);
 
-    expect(selectable.isSelectable(CHEAP_MODEL_ID, ALL_CURATED, NO_BYOK)).toBe(
-      false
-    );
+    expect(listedIds(OPENROUTER_KEY)).not.toContain(CHEAP_MODEL_ID);
     expect(promotedCache.snapshot().map((m) => m.id)).not.toContain(
       CHEAP_MODEL_ID
     );
@@ -267,9 +263,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     );
 
     expect(
-      selectable
-        .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
-        .find((m) => m.id === CHEAP_MODEL_ID)?.label
+      listedTo(OPENROUTER_KEY).find((m) => m.id === CHEAP_MODEL_ID)?.label
     ).toBe('Renamed by admin');
   });
 });

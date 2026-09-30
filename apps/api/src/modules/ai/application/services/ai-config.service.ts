@@ -6,7 +6,6 @@ import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   CHAIN_SEPARATOR,
-  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   GLOBAL_REASONING_EFFORTS,
   isGlobalReasoningEffort,
   MAX_DAILY_MESSAGE_LIMIT,
@@ -202,7 +201,7 @@ export class AIConfigService {
     }
   }
 
-  async getIntentModel(intent: ModelIntent): Promise<string> {
+  private async getIntentModel(intent: ModelIntent): Promise<string> {
     return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
   }
 
@@ -230,21 +229,6 @@ export class AIConfigService {
     return supported;
   }
 
-  /**
-   * Every model the running configuration points at: the three intent models
-   * plus the fallback chain. These stay offerable even when they are not
-   * promoted, so an operator can never configure a model the picker hides.
-   */
-  async getConfiguredModelIds(): Promise<ReadonlySet<string>> {
-    const [fast, balanced, deep, chain] = await Promise.all([
-      this.getIntentModel('fast'),
-      this.getIntentModel('balanced'),
-      this.getIntentModel('powerful'),
-      this.getFallbackChain(),
-    ]);
-    return new Set([fast, balanced, deep, ...chain]);
-  }
-
   async getReasoningEffort(): Promise<GlobalReasoningEffort> {
     const value = await this.getConfigValue('ai_reasoning_effort');
     if (isGlobalReasoningEffort(value)) {
@@ -254,19 +238,6 @@ export class AIConfigService {
       `Ignoring unknown reasoning effort '${value}', using the code default`
     );
     return AI_SETTING_DEFAULTS.ai_reasoning_effort;
-  }
-
-  /** Resolves the operator's free-tier ceiling as a per-token rate. Falls back to the code default so a bad row never opens the tier wider than shipped. */
-  async getFreeTierMaxOutputCostPerToken(): Promise<number> {
-    const value = await this.getConfigValue('ai_free_tier_ceiling');
-    const parsed = parseUsdPerMillion(value);
-    if (parsed !== null) {
-      return parsed / TOKENS_PER_MILLION;
-    }
-    this.logger.warn(
-      `Ignoring invalid free-tier ceiling '${value}', using the code default`
-    );
-    return FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
   }
 
   /** The daily copilot messages each tier gets on platform-billed turns. A bad row falls back to the code default, so a typo never opens a tier wider than shipped. */

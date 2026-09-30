@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-  GLOBAL_REASONING_EFFORTS,
-} from '@knowtis/shared-types';
+import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
@@ -605,28 +602,6 @@ describe('AIConfigService', () => {
   });
 
   describe('free-tier ceiling', () => {
-    it('should serve the code default as a per-token rate', async () => {
-      mockRepo.get.mockResolvedValue(null);
-
-      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(
-        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-      );
-    });
-
-    it('should convert the stored dollars per million into a per-token rate', async () => {
-      mockRepo.get.mockResolvedValue('2.50');
-
-      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(0.0000025);
-    });
-
-    it('should fall back to the code default rather than widen the tier on a bad row', async () => {
-      mockRepo.get.mockResolvedValue('not-a-price');
-
-      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(
-        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-      );
-    });
-
     it('should reject a ceiling that is not a two-decimal dollar amount', async () => {
       for (const value of ['-1', '1.234', 'abc', '', '1e3', '101']) {
         await expect(
@@ -987,20 +962,6 @@ describe('AIConfigService', () => {
     });
   });
 
-  describe('getIntentModel', () => {
-    it('maps each intent to its config key default', async () => {
-      expect(await service.getIntentModel('fast')).toBe(
-        AI_SETTING_DEFAULTS.ai_fast_model
-      );
-      expect(await service.getIntentModel('balanced')).toBe(
-        AI_SETTING_DEFAULTS.ai_default_model
-      );
-      expect(await service.getIntentModel('powerful')).toBe(
-        AI_SETTING_DEFAULTS.ai_deep_model
-      );
-    });
-  });
-
   describe('getIntentModels', () => {
     it('resolves every intent to its served model in one map', async () => {
       expect(await service.getIntentModels()).toEqual({
@@ -1094,7 +1055,7 @@ describe('AIConfigService', () => {
         (id: string) => id !== PROMOTED_ID
       );
 
-      expect(await service.getIntentModel('powerful')).toBe(
+      expect((await service.getIntentModels()).powerful).toBe(
         AI_SETTING_DEFAULTS.ai_deep_model
       );
       expect(await service.getFastModel()).toBe(
@@ -1106,7 +1067,7 @@ describe('AIConfigService', () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
 
       expect(await service.getDefaultModel()).toBe(PROMOTED_ID);
-      expect(await service.getIntentModel('fast')).toBe(PROMOTED_ID);
+      expect((await service.getIntentModels()).fast).toBe(PROMOTED_ID);
     });
 
     it('should serve a retired promoted default from the code default through the real catalog', async () => {

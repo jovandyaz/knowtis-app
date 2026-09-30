@@ -14,7 +14,7 @@ const OPENAI_CURATED = 'openai:gpt-5.6-sol';
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_LABEL = 'Promoted One';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
-/** A promoted row sharing a curated id: curated must win, mirroring catalogUnion. */
+/** A promoted row sharing a curated id: curated must win, mirroring SelectableModelsService.offered(). */
 const CURATED_COLLISION_ID = ANTHROPIC_CURATED;
 
 type RegistryStub = Pick<ProviderRegistryFactory, 'isModelAvailable'>;

@@ -307,7 +307,6 @@ describe('TurnEffortResolver', () => {
 
   describe('with the real model preference service', () => {
     function makeReal() {
-      const byok = { enabledProviders: vi.fn() };
       const selectable = new SelectableModelsService(
         {
           isSupported: () => true,
@@ -323,17 +322,13 @@ describe('TurnEffortResolver', () => {
       const modelPreference = new ModelPreferenceService(
         {} as never,
         selectable,
-        aiConfig as never,
-        byok as never
+        aiConfig as never
       );
-      return {
-        byok,
-        resolver: new TurnEffortResolver(aiConfig as never, modelPreference),
-      };
+      return new TurnEffortResolver(aiConfig as never, modelPreference);
     }
 
-    it("applies the declared level of a model the turn's key unlocks, never re-reading the key store", async () => {
-      const { resolver, byok } = makeReal();
+    it("applies the declared level of a model the turn's key unlocks", async () => {
+      const resolver = makeReal();
       const execution = billedToKey(DIRECT_MODEL);
 
       await expect(
@@ -342,11 +337,10 @@ describe('TurnEffortResolver', () => {
       await expect(
         resolver.resolve({ execution, model: DIRECT_MODEL })
       ).resolves.toBe(GLOBAL_DEFAULT);
-      expect(byok.enabledProviders).not.toHaveBeenCalled();
     });
 
-    it('sends no effort to a model the turn holds no key for, never re-reading the key store', async () => {
-      const { resolver, byok } = makeReal();
+    it('sends no effort to a model the turn holds no key for', async () => {
+      const resolver = makeReal();
 
       await expect(
         resolver.resolve({
@@ -358,7 +352,6 @@ describe('TurnEffortResolver', () => {
       await expect(
         resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
       ).resolves.toBeUndefined();
-      expect(byok.enabledProviders).not.toHaveBeenCalled();
     });
   });
 });

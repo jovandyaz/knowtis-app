@@ -6,8 +6,7 @@ import {
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
 import {
-  MODEL_INTENTS,
-  type ModelAccess,
+  DEFAULT_MODEL_INTENT,
   type ModelIntent,
   type ModelReasoning,
   type SelectableModel,
@@ -15,16 +14,13 @@ import {
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
-import {
-  accessFor,
-  type AccessCandidate,
-} from '../../domain/model-catalog/model-access.policy';
 import type { ModelFacts } from '../../domain/model-catalog/model-choice';
 import {
   CURATED_MODEL_IDS,
   CURATED_MODELS,
 } from '../../domain/model-catalog/selectable-models.catalog';
 import {
+  CATALOG_BILLING,
   routeReasoning,
   tierCatalog,
   type OfferedModel,
@@ -32,8 +28,6 @@ import {
 } from '../../domain/model-catalog/tier-catalog';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
-
-const NO_BYOK: ReadonlySet<string> = new Set();
 
 /** The ladder this caller may pick from — the model's own when the turn bills their key, else the server-billed slice — or undefined when none survives. */
 function offeredReasoning(
@@ -136,57 +130,26 @@ export class SelectableModelsService {
     return offeredReasoning(reasoning, billedToUser) ?? null;
   }
 
-  /**
-   * What the product offers: every promoted model, the curated ones the running
-   * config points at, and the curated models of each provider the caller brings
-   * a BYOK key for. The rest stay seeds for defaults and validation.
-   */
-  private catalogUnion(
-    configured: ReadonlySet<string>,
-    byokProviders: ReadonlySet<string>
-  ): readonly OfferedModel[] {
-    return this.offered().filter(
-      (model) =>
-        !CURATED_MODEL_IDS.has(model.id) ||
-        configured.has(model.id) ||
-        byokProviders.has(providerOf(model.id))
-    );
-  }
-
-  private invocable(
-    model: OfferedModel,
-    byokProviders: ReadonlySet<string>
-  ): boolean {
-    return (
-      this.catalog.isSupported(model.id) &&
-      (this.registry.isModelAvailable(model.id) ||
-        byokProviders.has(providerOf(model.id)))
-    );
-  }
-
-  private selectable(
-    model: OfferedModel,
-    byokProviders: ReadonlySet<string>,
-    maxOutputCostPerToken?: number
-  ): boolean {
-    return (
-      this.invocable(model, byokProviders) &&
-      this.accessFor(model, byokProviders, maxOutputCostPerToken) === 'granted'
-    );
-  }
-
-  /** Prices the model through the catalog port, which is what serves a promoted row's stored cost. */
-  private accessFor(
-    model: OfferedModel,
-    byokProviders: ReadonlySet<string>,
-    maxOutputCostPerToken?: number
-  ): ModelAccess {
-    const candidate: AccessCandidate = {
-      id: model.id,
-      outputCostPerToken:
-        this.catalog.getPricing(model.id)?.outputCostPerToken ?? null,
-    };
-    return accessFor(candidate, byokProviders, maxOutputCostPerToken);
+  toSelectable(catalog: TierCatalog): SelectableModel[] {
+    const billedToUser = catalog.billing === CATALOG_BILLING.KEY;
+    return catalog.models.map(({ model, servesIntent }) => {
+      const reasoning = offeredReasoning(model.reasoning, billedToUser);
+      return {
+        id: model.id,
+        label: model.label,
+        descriptionKey: model.descriptionKey,
+        ...(model.description ? { description: model.description } : {}),
+        tier: model.tier,
+        contextWindow:
+          this.catalog.getContextWindow(model.id)?.maxInputTokens ?? 0,
+        costClass: this.costClass(model.id),
+        isDefault: servesIntent === DEFAULT_MODEL_INTENT,
+        billedToUser,
+        routableByServer: this.registry.isModelAvailable(model.id),
+        ...(reasoning ? { reasoning } : {}),
+        ...(servesIntent ? { servesIntent } : {}),
+      };
+    });
   }
 
   private costClass(id: string): 1 | 2 | 3 {
@@ -201,69 +164,5 @@ export class SelectableModelsService {
       return 2;
     }
     return 1;
-  }
-
-  list(
-    systemDefault: string,
-    configured: ReadonlySet<string>,
-    byokProviders: ReadonlySet<string> = NO_BYOK,
-    maxOutputCostPerToken?: number,
-    intentModels?: Readonly<Record<ModelIntent, string>>
-  ): SelectableModel[] {
-    return this.catalogUnion(configured, byokProviders)
-      .filter((m) => this.invocable(m, byokProviders))
-      .map((m) => {
-        const billedToUser = byokProviders.has(providerOf(m.id));
-        const reasoning = offeredReasoning(m.reasoning, billedToUser);
-        const servesIntent = intentModels
-          ? MODEL_INTENTS.find((intent) => intentModels[intent] === m.id)
-          : undefined;
-        return {
-          id: m.id,
-          label: m.label,
-          descriptionKey: m.descriptionKey,
-          ...(m.description ? { description: m.description } : {}),
-          tier: m.tier,
-          contextWindow:
-            this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
-          costClass: this.costClass(m.id),
-          isDefault: m.id === systemDefault,
-          billedToUser,
-          routableByServer: this.registry.isModelAvailable(m.id),
-          access: this.accessFor(m, byokProviders, maxOutputCostPerToken),
-          ...(reasoning ? { reasoning } : {}),
-          ...(servesIntent ? { servesIntent } : {}),
-        };
-      });
-  }
-
-  isSelectable(
-    modelId: string,
-    configured: ReadonlySet<string>,
-    byokProviders: ReadonlySet<string> = NO_BYOK,
-    maxOutputCostPerToken?: number
-  ): boolean {
-    const offered = this.catalogUnion(configured, byokProviders).find(
-      (m) => m.id === modelId
-    );
-    return (
-      !!offered &&
-      this.selectable(offered, byokProviders, maxOutputCostPerToken)
-    );
-  }
-
-  /** First offered model of the tier the caller's own keys can run, or null — catalog order is the rank, curated ahead of promoted. */
-  firstOfTier(
-    tier: ModelIntent,
-    configured: ReadonlySet<string>,
-    byokProviders: ReadonlySet<string>
-  ): string | null {
-    const match = this.catalogUnion(configured, byokProviders).find(
-      (m) =>
-        m.tier === tier &&
-        byokProviders.has(providerOf(m.id)) &&
-        this.invocable(m, byokProviders)
-    );
-    return match?.id ?? null;
   }
 }

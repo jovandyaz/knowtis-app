@@ -1,15 +1,11 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 
-import type {
-  AIPreferences,
-  ModelReasoning,
-  SelectableModel,
-  UpdateAiPreferencesInput,
+import {
+  DEFAULT_MODEL_INTENT,
+  type AIPreferences,
+  type ModelCatalogResponse,
+  type ModelReasoning,
+  type UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
@@ -18,11 +14,15 @@ import {
   type ModelChoice,
 } from '../../domain/model-catalog/model-choice';
 import {
+  findInCatalog,
+  intentModelOf,
+} from '../../domain/model-catalog/tier-catalog';
+import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
+import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { AIConfigService } from './ai-config.service';
-import { ByokService } from './byok.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 @Injectable()
@@ -31,44 +31,21 @@ export class ModelPreferenceService {
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
     private readonly selectable: SelectableModelsService,
-    private readonly aiConfig: AIConfigService,
-    private readonly byok: ByokService
+    private readonly aiConfig: AIConfigService
   ) {}
 
-  async listModels(user: {
-    id: string;
-    isAnonymous?: boolean;
-  }): Promise<SelectableModel[]> {
-    const models = await this.offeredModels(
-      await this.byok.enabledProviders(user.id, user.isAnonymous === true)
+  async listModels(
+    execution: AiExecutionContext
+  ): Promise<ModelCatalogResponse> {
+    const catalog = this.selectable.catalogFor(
+      execution,
+      await this.aiConfig.getIntentModels()
     );
-    if (user.isAnonymous !== true) {
-      return models;
-    }
-    // Anonymous sessions see the three intent picks only; everything but the
-    // running default renders locked so the menu can upsell an account.
-    return models
-      .filter((m) => m.servesIntent)
-      .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
-  }
-
-  private async offeredModels(
-    byokProviders: ReadonlySet<string>
-  ): Promise<SelectableModel[]> {
-    const [systemDefault, configured, ceiling, intentModels] =
-      await Promise.all([
-        this.aiConfig.getDefaultModel(),
-        this.aiConfig.getConfiguredModelIds(),
-        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-        this.aiConfig.getIntentModels(),
-      ]);
-    return this.selectable.list(
-      systemDefault,
-      configured,
-      byokProviders,
-      ceiling,
-      intentModels
-    );
+    return {
+      tier: catalog.tier,
+      models: this.selectable.toSelectable(catalog),
+      intents: [...catalog.intents],
+    };
   }
 
   async reasoningFor(
@@ -104,10 +81,10 @@ export class ModelPreferenceService {
   }
 
   async setUserPreferences(
-    user: { id: string; isAnonymous?: boolean },
+    execution: AiExecutionContext,
     patch: UpdateAiPreferencesInput
   ): Promise<void> {
-    if (user.isAnonymous === true) {
+    if (execution.tier === 'anonymous') {
       throw new ForbiddenException(
         'AI preferences require a registered account'
       );
@@ -116,24 +93,21 @@ export class ModelPreferenceService {
       return;
     }
     if (typeof patch.preferredModel === 'string') {
-      const [byokProviders, offered, ceiling] = await Promise.all([
-        this.byok.enabledProviders(user.id),
-        this.aiConfig.getConfiguredModelIds(),
-        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-      ]);
-      if (
-        !this.selectable.isSelectable(
-          patch.preferredModel,
-          offered,
-          byokProviders,
-          ceiling
-        )
-      ) {
-        throw new BadRequestException(
-          `Model not selectable: ${patch.preferredModel}`
+      const platformIntents = await this.aiConfig.getIntentModels();
+      const catalog = this.selectable.catalogFor(execution, platformIntents);
+      if (!findInCatalog(catalog, patch.preferredModel)) {
+        const facts = this.selectable.factsFor(
+          execution.byokProviders,
+          platformIntents
+        );
+        throw new ModelUnavailableException(
+          facts.isSupported(patch.preferredModel)
+            ? 'not_in_tier'
+            : 'model_retired',
+          intentModelOf(catalog, DEFAULT_MODEL_INTENT)
         );
       }
     }
-    await this.settings.patchSettings(user.id, patch);
+    await this.settings.patchSettings(execution.subject.userId, patch);
   }
 }
