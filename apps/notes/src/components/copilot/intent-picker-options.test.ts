@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { SelectableModel } from '@knowtis/shared-types';
 
-import { effortOptions } from './intent-picker-options';
+import {
+  advancedModelOptions,
+  effortOptions,
+  moreModelGroups,
+  primaryRows,
+} from './intent-picker-options';
 
 const t = ((key: string) => key) as unknown as TFunction<'common'>;
 
@@ -38,5 +43,32 @@ describe('effortOptions', () => {
     expect(
       effortOptions({ ...model, reasoning: { levels: [], mandatory: true } }, t)
     ).toEqual([]);
+  });
+});
+
+describe('models listed without access', () => {
+  const { access: _omitted, ...listed } = {
+    ...model,
+    id: 'anthropic:claude-opus-5',
+  };
+
+  it('offers a key-billed model the server lists without access in Advanced', () => {
+    expect(advancedModelOptions([listed])).toEqual([listed]);
+  });
+
+  it('keeps an unbilled model the server lists without access in more models', () => {
+    expect(
+      moreModelGroups([{ ...listed, billedToUser: false }], t).flatMap(
+        (group) => group.options
+      )
+    ).toEqual([expect.objectContaining({ id: 'anthropic:claude-opus-5' })]);
+  });
+
+  it('does not lock an intent row for a model the server lists without access', () => {
+    expect(
+      primaryRows([{ ...listed, servesIntent: 'balanced' }], t).map(
+        (row) => row.locked
+      )
+    ).toEqual([false]);
   });
 });

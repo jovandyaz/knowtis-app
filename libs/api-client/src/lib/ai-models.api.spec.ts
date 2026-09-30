@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  ModelCatalogResponse,
+  SelectableModel,
+} from '@knowtis/shared-types';
+
 import { aiModelsApi } from './ai-models.api';
 import { httpClient } from './http-client';
 
@@ -17,6 +22,49 @@ describe('aiModelsApi', () => {
     await aiModelsApi.getModels();
     expect(httpClient.get).toHaveBeenCalledWith('/ai/models');
   });
+
+  it('getModels reads a bare array as a catalog with no tier', async () => {
+    const model = { id: 'openrouter:vendor/model' } as SelectableModel;
+    vi.mocked(httpClient.get).mockResolvedValue([model]);
+
+    await expect(aiModelsApi.getModels()).resolves.toEqual({
+      tier: null,
+      models: [model],
+      intents: [],
+    });
+  });
+
+  it('getModels passes the tier envelope through unchanged', async () => {
+    const envelope: ModelCatalogResponse = {
+      tier: 'free',
+      models: [],
+      intents: [{ intent: 'balanced', available: false, reason: 'no_route' }],
+    };
+    vi.mocked(httpClient.get).mockResolvedValue(envelope);
+
+    await expect(aiModelsApi.getModels()).resolves.toEqual(envelope);
+  });
+
+  it('getModels defaults the intents and tier an envelope leaves out', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({ models: [] });
+
+    await expect(aiModelsApi.getModels()).resolves.toEqual({
+      tier: null,
+      models: [],
+      intents: [],
+    });
+  });
+
+  it.each([null, {}, { models: 'x' }])(
+    'getModels rejects the malformed body %j',
+    async (body) => {
+      vi.mocked(httpClient.get).mockResolvedValue(body);
+
+      await expect(aiModelsApi.getModels()).rejects.toThrow(
+        'Malformed /ai/models response'
+      );
+    }
+  );
 
   it('getPreferences hits GET /ai/preferences', async () => {
     vi.mocked(httpClient.get).mockResolvedValue({

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { aiModelsApi } from '@knowtis/api-client';
+import { aiModelsApi, type ModelCatalogView } from '@knowtis/api-client';
 
 export const aiModelsQueryKeys = {
   all: ['ai-models'] as const,
@@ -12,6 +12,7 @@ export function useAvailableModels(enabled = true) {
   return useQuery({
     queryKey: aiModelsQueryKeys.list(),
     queryFn: () => aiModelsApi.getModels(),
+    select: (catalog: ModelCatalogView) => catalog.models,
     staleTime: 1000 * 60 * 10,
     enabled,
   });

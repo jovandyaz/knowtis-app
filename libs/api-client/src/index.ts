@@ -92,7 +92,7 @@ export {
   type UploadImageResponse,
 } from './lib/images.api';
 
-export { aiModelsApi } from './lib/ai-models.api';
+export { aiModelsApi, type ModelCatalogView } from './lib/ai-models.api';
 export { aiKeysApi } from './lib/ai-keys.api';
 
 export {
