@@ -188,6 +188,8 @@ export interface RunAgentTurnCallbacks {
   readonly onModelStart?: () => void;
   /** Fires after the turn draws or gives back one of today's messages. */
   readonly onQuota?: (quota: AiQuota) => void;
+  /** Fires instead of running when the turn id is already stored in the conversation. */
+  readonly onTurnSettled?: (conversationId: string) => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -403,6 +405,9 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
+    if (await this.alreadyStored(conversationId, input.turnId, callbacks)) {
+      return;
+    }
     if (conversation.opened) {
       callbacks.onConversation?.(conversationId);
     }
@@ -436,6 +441,25 @@ export class RunAgentTurnHandler {
       this.executePolicy(callbacks, persistence),
       persistence
     );
+  }
+
+  // The turn claim expires after 24 h; past it, only the stored row proves the
+  // turn ran, so it is checked before any message is drawn.
+  private async alreadyStored(
+    conversationId: string,
+    turnId: string,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onTurnSettled'>
+  ): Promise<boolean> {
+    if (!(await this.conversations.hasTurn(conversationId, turnId))) {
+      return false;
+    }
+    this.logger.log({
+      event: 'agent.turn.already_stored',
+      conversationId,
+      turnId,
+    });
+    callbacks.onTurnSettled?.(conversationId);
+    return true;
   }
 
   private async loadUserMemories(
@@ -688,6 +712,11 @@ export class RunAgentTurnHandler {
     );
     if (!found) {
       callbacks.onError(AgentErrors.conversationNotFound());
+      return;
+    }
+    if (
+      await this.alreadyStored(input.conversationId, input.turnId, callbacks)
+    ) {
       return;
     }
     const last = await this.conversations.findLastMessage(

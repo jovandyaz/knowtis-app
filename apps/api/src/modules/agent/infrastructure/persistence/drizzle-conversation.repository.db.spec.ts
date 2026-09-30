@@ -1430,6 +1430,32 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       });
     });
 
+    it('knows which turns a conversation already stores', async () => {
+      const { id: conversationId } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      const { id: otherConversationId } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      const storedTurn = randomUUID();
+      await repo.appendTurn({
+        conversationId,
+        turnId: storedTurn,
+        messages: [
+          { role: 'user', content: 'hola' },
+          { role: 'assistant', content: 'hola', stopReason: 'completed' },
+        ],
+      });
+
+      expect(await repo.hasTurn(conversationId, storedTurn)).toBe(true);
+      expect(await repo.hasTurn(conversationId, randomUUID())).toBe(false);
+      expect(await repo.hasTurn(otherConversationId, storedTurn)).toBe(false);
+    });
+
     it('appends rows without a user row to a turn already stored', async () => {
       const { id } = await repo.create({
         id: randomUUID(),

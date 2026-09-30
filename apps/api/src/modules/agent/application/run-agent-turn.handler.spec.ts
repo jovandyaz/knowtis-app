@@ -192,6 +192,7 @@ function makeConversations(history: ConversationMessageRow[] = []) {
     setModel: vi.fn().mockResolvedValue(undefined),
     loadMessages: vi.fn().mockResolvedValue(history),
     appendTurn: vi.fn().mockResolvedValue(true),
+    hasTurn: vi.fn().mockResolvedValue(false),
   } as unknown as ConversationRepository;
 }
 
@@ -6494,6 +6495,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
     modelPreference?: ModelPreferenceService;
     embed?: EmbeddingPort;
     eventBus?: EventEmitter2;
+    conversations?: ConversationRepository;
   }) {
     const deps = makeDeps({
       ...(over.allowed === false ? { allowed: false } : {}),
@@ -6509,7 +6511,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       deps.config,
       deps.pendingStore,
       createTestCatalog(),
-      makeConversations(),
+      over.conversations ?? makeConversations(),
       makeMemory(),
       embed,
       over.modelPreference ?? makeModelPreference(),
@@ -6610,6 +6612,21 @@ describe('RunAgentTurnHandler daily message quota', () => {
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(cb.onModelStart).not.toHaveBeenCalled();
+  });
+
+  it('answers a replay of a stored turn as settled without drawing a message', async () => {
+    const quota = consumedQuota();
+    const conversations = makeConversations();
+    vi.mocked(conversations.hasTurn).mockResolvedValue(true);
+    const { handler, orchestrator } = build({ quota, conversations });
+    const cb = { ...callbacks(), onTurnSettled: vi.fn() };
+
+    await handler.execute({ ...turn, conversationId: 'conv-1' }, cb);
+
+    expect(conversations.hasTurn).toHaveBeenCalledWith('conv-1', TURN_ID);
+    expect(cb.onTurnSettled).toHaveBeenCalledWith('conv-1');
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
   });
 
   it('fails the turn closed with a resendable code when the quota store is unavailable', async () => {
@@ -7620,6 +7637,27 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       message: 'Conversation not found',
     });
     expect(ctx.conversations.findLastMessage).not.toHaveBeenCalled();
+  });
+
+  it('answers a replay of a stored continuation as settled without drawing a message', async () => {
+    const ctx = setup();
+    vi.mocked(ctx.conversations.hasTurn).mockResolvedValue(true);
+    const callbacks = { ...ctx.callbacks, onTurnSettled: vi.fn() };
+
+    await ctx.handler.continueTurn(
+      { ...request, turnId: SECOND_TURN_ID },
+      callbacks
+    );
+
+    expect(ctx.conversations.hasTurn).toHaveBeenCalledWith(
+      'conv-1',
+      SECOND_TURN_ID
+    );
+    expect(callbacks.onTurnSettled).toHaveBeenCalledWith('conv-1');
+    expect(ctx.conversations.findLastMessage).not.toHaveBeenCalled();
+    expect(ctx.quota.consume).not.toHaveBeenCalled();
+    expect(ctx.orchestrator.run).not.toHaveBeenCalled();
+    expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
   it('refuses effort on an anonymous continuation before any work', async () => {

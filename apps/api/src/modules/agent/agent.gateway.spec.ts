@@ -132,6 +132,27 @@ describe('AgentGateway', () => {
     expect(execute.mock.calls[0][0]).toMatchObject({ userId: 'u1' });
   });
 
+  it('emits agent:turn_settled when the handler finds the turn already stored', async () => {
+    const execute = vi.fn(
+      async (_input: unknown, cb: { onTurnSettled?: (id: string) => void }) => {
+        cb.onTurnSettled?.('conv-9');
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:turn_settled',
+      expect.objectContaining({ conversationId: 'conv-9' })
+    );
+  });
+
   it('forwards the client IP to the turn handler', async () => {
     const execute = vi.fn().mockResolvedValue(undefined);
     const gateway = makeGateway({ handler: { execute } });
@@ -1081,6 +1102,11 @@ describe('AgentGateway', () => {
             stopReason: 'completed',
             continuable: false,
           }),
+        [],
+      ],
+      [
+        'a turn_settled',
+        (cb: RunAgentTurnCallbacks) => cb.onTurnSettled?.('conv-9'),
         [],
       ],
     ] as const)(

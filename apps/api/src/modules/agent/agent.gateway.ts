@@ -340,6 +340,10 @@ export class AgentGateway
               },
               onModelStart,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
+              onTurnSettled: (conversationId) => {
+                this.endedLegs.add(controller);
+                client.emit('agent:turn_settled', { turnId, conversationId });
+              },
             };
             return 'continuesTurnId' in data
               ? this.runAgentTurn.continueTurn(

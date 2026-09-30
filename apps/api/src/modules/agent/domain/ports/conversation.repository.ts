@@ -80,6 +80,8 @@ export interface ConversationRepository {
    * Resolves whether rows were stored: `false` for an empty turn or a replay.
    */
   appendTurn(input: AppendTurnInput): Promise<boolean>;
+  /** Whether the conversation already stores the user row of `turnId`: a stored turn never runs again. */
+  hasTurn(conversationId: string, turnId: string): Promise<boolean>;
   findExtractable(
     quietSeconds: number,
     limit: number

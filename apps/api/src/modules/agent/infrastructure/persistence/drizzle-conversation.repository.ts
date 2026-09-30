@@ -373,6 +373,21 @@ export class DrizzleConversationRepository implements ConversationRepository {
     };
   }
 
+  async hasTurn(conversationId: string, turnId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversationMessages.turnId, turnId),
+          eq(conversationMessages.role, 'user')
+        )
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+
   async findLastMessage(
     conversationId: string,
     userId: string
