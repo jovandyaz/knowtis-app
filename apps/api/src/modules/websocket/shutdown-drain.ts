@@ -28,6 +28,7 @@ export interface DrainSource {
 export class ShutdownDrain implements BeforeApplicationShutdown {
   private readonly logger = new Logger(ShutdownDrain.name);
   private readonly sources = new Set<DrainSource>();
+  private readonly tracked = new Set<Promise<void>>();
   private draining = false;
 
   /** True from the moment the shutdown starts; new work must be refused from then on. */
@@ -39,6 +40,18 @@ export class ShutdownDrain implements BeforeApplicationShutdown {
     this.sources.add(source);
   }
 
+  /** Runs work the drain waits for but never aborts, such as a commit that must land once started. */
+  track<T>(work: () => Promise<T>): Promise<T> {
+    const running = work();
+    const settled = running.then(
+      () => undefined,
+      () => undefined
+    );
+    this.tracked.add(settled);
+    void settled.then(() => this.tracked.delete(settled));
+    return running;
+  }
+
   async beforeApplicationShutdown(): Promise<void> {
     this.draining = true;
     const startedAt = Date.now();
@@ -46,9 +59,10 @@ export class ShutdownDrain implements BeforeApplicationShutdown {
     for (const source of sources) {
       source.abortAll(SHUTDOWN_ABORT_REASON);
     }
-    const idle = await Promise.all(
-      sources.map((source) => source.whenIdle(SHUTDOWN_DRAIN_TIMEOUT_MS))
-    );
+    const idle = await Promise.all([
+      ...sources.map((source) => source.whenIdle(SHUTDOWN_DRAIN_TIMEOUT_MS)),
+      this.whenTrackedSettled(SHUTDOWN_DRAIN_TIMEOUT_MS),
+    ]);
     const drained = idle.every(Boolean);
     const entry = {
       event: 'shutdown.drained',
@@ -59,6 +73,24 @@ export class ShutdownDrain implements BeforeApplicationShutdown {
       this.logger.log(entry);
     } else {
       this.logger.warn(entry);
+    }
+  }
+
+  private async whenTrackedSettled(timeoutMs: number): Promise<boolean> {
+    if (this.tracked.size === 0) {
+      return true;
+    }
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        Promise.all(this.tracked).then(() => true),
+        deadline,
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

@@ -173,6 +173,21 @@ const RESENDABLE_TURN_ERROR_CODES: ReadonlySet<string> = new Set([
   AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
 ]);
 
+// Every error after the server took a proposal names its turn, so a decision
+// refused without one was never applied and resending it cannot apply it twice.
+function isResendable(
+  request: PendingRequest,
+  error: AgentErrorPayload
+): boolean {
+  if (request.kind === 'message') {
+    return RESENDABLE_TURN_ERROR_CODES.has(error.code);
+  }
+  return (
+    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
+    error.turnId === undefined
+  );
+}
+
 export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
@@ -431,11 +446,7 @@ export class AgentClient {
   ): boolean {
     const request = this.pending;
     const delay = TURN_RESEND_DELAYS_MS[this.turnResends];
-    if (
-      request?.kind !== 'message' ||
-      !RESENDABLE_TURN_ERROR_CODES.has(error.code) ||
-      delay === undefined
-    ) {
+    if (!request || !isResendable(request, error) || delay === undefined) {
       return false;
     }
     this.turnResends++;

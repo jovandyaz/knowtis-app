@@ -375,10 +375,15 @@ export class AgentGateway
       );
       return;
     }
-    const res = await this.approveMutation.execute({
-      proposalId: parsed.data.proposalId,
-      userId,
-    });
+    if (this.refuseDecisionWhileDraining(client)) {
+      return;
+    }
+    const res = await this.drain.track(() =>
+      this.approveMutation.execute({
+        proposalId: parsed.data.proposalId,
+        userId,
+      })
+    );
     if (res.isErr()) {
       client.emit('agent:error', {
         code: res.error.code,
@@ -411,11 +416,16 @@ export class AgentGateway
       );
       return;
     }
-    const res = await this.rejectMutation.execute({
-      proposalId: parsed.data.proposalId,
-      userId,
-      ...(parsed.data.reason && { reason: parsed.data.reason }),
-    });
+    if (this.refuseDecisionWhileDraining(client)) {
+      return;
+    }
+    const res = await this.drain.track(() =>
+      this.rejectMutation.execute({
+        proposalId: parsed.data.proposalId,
+        userId,
+        ...(parsed.data.reason && { reason: parsed.data.reason }),
+      })
+    );
     if (res.isErr()) {
       client.emit('agent:error', {
         code: res.error.code,
@@ -424,6 +434,17 @@ export class AgentGateway
       return;
     }
     await this.resumeAfter(client, userId, parsed.data, res.value);
+  }
+
+  // Refused before the proposal is taken, so it stays stored for the resend
+  // the client makes to the next instance; the error names no turn for the
+  // same reason, which is how the client knows nothing was applied.
+  private refuseDecisionWhileDraining(client: AuthenticatedSocket): boolean {
+    if (!this.drain.isDraining) {
+      return false;
+    }
+    client.emit('agent:error', AgentErrors.turnClaimUnavailable());
+    return true;
   }
 
   private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {

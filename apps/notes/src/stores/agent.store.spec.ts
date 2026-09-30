@@ -812,6 +812,66 @@ describe('agent.store server-authoritative wire', () => {
     );
   });
 
+  describe('a decision applied by a server too busy draining to resume it', () => {
+    const resumeRefused = {
+      code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      message: 'The turn could not be started right now; send it again',
+      turnId: 'turn-1',
+    };
+
+    it('ends an approved turn without an error and keeps its commit marker', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+
+      get().onError(resumeRefused);
+
+      const { status, error, messages } = useAgentStore.getState();
+      expect(status).toBe('done');
+      expect(error).toBeNull();
+      expect(messages.find((m) => m.committed)?.committed).toEqual({
+        kind: 'create',
+        title: 'My Note',
+      });
+    });
+
+    it('ends a rejected turn without an error or an empty reply', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().rejectProposal();
+
+      get().onError(resumeRefused);
+
+      const { status, error, messages } = useAgentStore.getState();
+      expect(status).toBe('done');
+      expect(error).toBeNull();
+      expect(
+        messages.filter((m) => m.role === 'assistant' && m.content === '')
+      ).toEqual([expect.objectContaining({ discarded: true })]);
+    });
+
+    it('still reports a decision the server refused before applying it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+
+      get().onError({
+        code: resumeRefused.code,
+        message: resumeRefused.message,
+      });
+
+      expect(useAgentStore.getState().status).toBe('error');
+      expect(useAgentStore.getState().error?.code).toBe(resumeRefused.code);
+    });
+  });
+
   it.each(['create', 'update', 'share'] as const)(
     'invalidates the notes caches when a %s proposal is committed',
     (kind) => {

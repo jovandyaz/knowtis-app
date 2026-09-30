@@ -21,6 +21,7 @@ import {
 } from '@knowtis/data-access-notes';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_TURN_ERROR_CODE,
   deriveConversationTitle,
   type AgentStopReason,
   type ReasoningEffort,
@@ -209,6 +210,16 @@ interface PersistedConversation {
   conversationId: string | null;
 }
 
+// A draining server refuses a decision before taking its proposal, without a
+// turn id; one that names the turn came after the decision was applied, so
+// only the reply that follows it is missing.
+function isUnresumedDecision(error: AgentErrorPayload): boolean {
+  return (
+    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
+    error.turnId !== undefined
+  );
+}
+
 function isPersistedConversation(
   value: unknown
 ): value is PersistedConversation {
@@ -288,6 +299,19 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     activeAssistantId = assistant.id;
     thinkingBuffer.discard();
     return assistant;
+  };
+
+  const endUnresumedDecision = () => {
+    const id = activeAssistantId;
+    set((s) => ({
+      status: 'done',
+      _streamHandle: null,
+      thinkingText: '',
+      messages: s.messages.filter(
+        (m) => m.id !== id || m.content.length > 0 || m.committed !== undefined
+      ),
+    }));
+    drainQueue();
   };
 
   const failResume = () => {
@@ -415,6 +439,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           thinkingBuffer.discard();
           if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
             forgetGoneConversation(error);
+            return;
+          }
+          if (resumingDecision && isUnresumedDecision(error)) {
+            endUnresumedDecision();
             return;
           }
           set({

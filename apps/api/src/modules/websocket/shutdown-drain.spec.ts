@@ -76,6 +76,57 @@ describe('ShutdownDrain', () => {
     await draining;
   });
 
+  it('waits for tracked work without aborting it', async () => {
+    const drain = new ShutdownDrain();
+    let finish!: (value: string) => void;
+    const work = drain.track(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        })
+    );
+    let drained = false;
+
+    const draining = drain.beforeApplicationShutdown().then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+
+    finish('committed');
+    await draining;
+
+    expect(drained).toBe(true);
+    await expect(work).resolves.toBe('committed');
+  });
+
+  it('does not let failed tracked work hold the drain', async () => {
+    const drain = new ShutdownDrain();
+    const work = drain.track(() => Promise.reject(new Error('commit failed')));
+
+    await drain.beforeApplicationShutdown();
+
+    await expect(work).rejects.toThrow('commit failed');
+  });
+
+  it('gives tracked work the same deadline as the sources', async () => {
+    vi.useFakeTimers();
+    const drain = new ShutdownDrain();
+    const tracker = new ConcurrencySlotTracker(1);
+    drain.register(tracker);
+    holdSlot(tracker, 'a');
+    void drain.track(() => new Promise<void>(() => undefined));
+    let drained = false;
+
+    const draining = drain.beforeApplicationShutdown().then(() => {
+      drained = true;
+    });
+    await vi.advanceTimersByTimeAsync(SHUTDOWN_DRAIN_TIMEOUT_MS);
+
+    expect(drained).toBe(true);
+    await draining;
+  });
+
   it('warns when the deadline passes with work still in flight', async () => {
     vi.useFakeTimers();
     const warn = vi
