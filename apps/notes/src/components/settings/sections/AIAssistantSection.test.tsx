@@ -31,7 +31,7 @@ vi.mock('@/hooks', () => ({
   useUpdateAISettings: () => ({ mutate: update }),
 }));
 
-const grantedModels = [
+const intentServingModels = [
   {
     id: 'a:bal',
     label: 'Balanced One',
@@ -79,14 +79,14 @@ const byokModel = {
   billedToUser: true,
 };
 
-const withPowerfulModel = [...grantedModels, powerfulModel];
-const withByokModel = [...grantedModels, powerfulModel, byokModel];
+const withPowerfulModel = [...intentServingModels, powerfulModel];
+const withByokModel = [...intentServingModels, powerfulModel, byokModel];
 
 describe('AIAssistantSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSettingsStore.setState({ focusTarget: null });
-    modelsData.mockReturnValue(grantedModels);
+    modelsData.mockReturnValue(intentServingModels);
     modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
       preferredModel: null,

@@ -56,4 +56,15 @@ describe('models outside an intent', () => {
       moreModelGroups([listed], t).flatMap((group) => group.options)
     ).toEqual([expect.objectContaining({ id: 'anthropic:claude-opus-5' })]);
   });
+
+  it('keeps an intent-serving model out of more models and Advanced', () => {
+    const serving = {
+      ...model,
+      billedToUser: false,
+      servesIntent: 'fast' as const,
+    };
+
+    expect(advancedModelOptions([serving])).toEqual([]);
+    expect(moreModelGroups([serving], t)).toEqual([]);
+  });
 });
