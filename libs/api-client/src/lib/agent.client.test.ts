@@ -1932,6 +1932,25 @@ describe('AgentClient – turn identity', () => {
       expect(sentDecisions('agent:approve')).toHaveLength(5);
     });
 
+    it('drops the resend of a decision approved again when the user stops the turn', () => {
+      vi.useFakeTimers();
+      const { handle } = suspendOnProposal();
+      client.approve(PROPOSAL.id);
+      for (const delay of RESEND_DELAYS_MS) {
+        fake.trigger('agent:error', refusedBeforeTake);
+        vi.advanceTimersByTime(delay);
+      }
+      fake.trigger('agent:error', refusedBeforeTake);
+      client.approve(PROPOSAL.id);
+      fake.trigger('agent:error', refusedBeforeTake);
+
+      handle.cancel();
+      vi.runAllTimers();
+
+      expect(sentDecisions('agent:approve')).toHaveLength(5);
+      expect(client.canResume()).toBe(false);
+    });
+
     it('never resends a decision whose resume was refused after it took effect', () => {
       vi.useFakeTimers();
       const { callbacks, handle } = suspendOnProposal();

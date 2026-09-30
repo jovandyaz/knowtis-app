@@ -33,6 +33,12 @@ vi.mock('@knowtis/api-client', () => ({
     approve: vi.fn(),
     reject: vi.fn(),
     resetConversation: vi.fn(),
+    resumeConversation: vi.fn(),
+  },
+  conversationsApi: {
+    transcript: vi
+      .fn()
+      .mockResolvedValue({ messages: [], title: null, hasEarlier: false }),
   },
 }));
 vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
@@ -810,6 +816,55 @@ describe('agent.store server-authoritative wire', () => {
     expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
       'what did you just do?'
     );
+  });
+
+  describe('a card the drain gave back', () => {
+    const refusedBeforeTake = {
+      code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+      message: 'The turn could not be started right now; send it again',
+    };
+
+    function approveAgainAfterTheCardCameBack() {
+      const turn = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      turn.get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      turn.get().onError(refusedBeforeTake);
+      useAgentStore.getState().approveProposal();
+      return turn;
+    }
+
+    it('still lets Stop end the client turn', () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      useAgentStore.getState().cancel();
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('still ends the client turn on a conversation switch', async () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      await useAgentStore.getState().openConversation('conv-2', 'switcher');
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('still ends the client turn on logout', () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      useAgentStore.getState().newConversation();
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it('still lets the watchdog end the client turn', () => {
+      const { cancel } = approveAgainAfterTheCardCameBack();
+
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+
+      expect(cancel).toHaveBeenCalledOnce();
+    });
   });
 
   describe('a decision applied by a server too busy draining to resume it', () => {

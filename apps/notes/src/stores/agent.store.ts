@@ -324,7 +324,6 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       error,
       retryMode: 'none',
       pendingProposal: proposal,
-      _streamHandle: null,
       thinkingText: '',
       messages: s.messages
         .filter((m) => m.id !== id)
