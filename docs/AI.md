@@ -581,13 +581,13 @@ The same run watches the **curated and promoted** models for upstream drift and 
 | ------------------------------------- | ------- | -------------------------------------------------------- |
 | `CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN` | $20 / M | Admission. Above this a model never becomes a candidate. |
 
-Promotion decides what a BYOK OpenRouter key can reach and what an operator can assign to an intent. It never decides who pays: a promoted model is billed to the caller's key unless an operator assigns it to an intent, in which case the platform runs it for everyone (see [Tier catalog](#tier-catalog)). A model the catalog cannot price is never offered.
+Promotion decides what a BYOK OpenRouter key can reach and what an operator can assign to an intent. It never decides who pays: a caller who reaches a promoted model through their own key pays with that key. Assigning the model to an intent exposes it through the platform intent catalogs, which serve the anonymous and free tiers on the platform's bill; it never moves a BYOK caller onto platform billing, because a BYOK catalog lists only models the caller's own keys serve (see [Tier catalog](#tier-catalog)). A model the catalog cannot price is never offered.
 
 ### Promotion
 
 Promoted rows join the model list through `CompositeModelCatalog`, backed by `PromotedModelsCache` (60s refresh, plus an immediate refresh on promote and retire so a change is not invisible for a minute). A read that resolves out of order is discarded, so a slow refresh cannot overwrite a newer one.
 
-A promoted model reaches only callers whose BYOK key serves it (an OpenRouter key, for an `openrouter:` model), or everyone once an operator assigns it to an intent through `ai_fast_model`, `ai_default_model` or `ai_deep_model`. In the notes menu it surfaces under **Más modelos** for a caller whose key serves it (see [Copilot Model Selection](#copilot-model-selection)).
+A promoted model reaches callers whose BYOK key serves it (an OpenRouter key, for an `openrouter:` model). Once an operator assigns it to an intent through `ai_fast_model`, `ai_default_model` or `ai_deep_model`, it also serves anonymous and free callers through the platform intent catalogs; a BYOK caller still reaches it only through their own key. In the notes menu it surfaces under **Más modelos** for a caller whose key serves it (see [Copilot Model Selection](#copilot-model-selection)).
 
 Admin surface: the **Model catalog** section of the backoffice AI Config page, over these endpoints (admin JWT; model ids contain `/` and must be percent-encoded in the path).
 

@@ -153,8 +153,9 @@ export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
       </div>
       <p className="text-xs text-(--muted-foreground)">
         Ranked by intelligence index, unscored last. A promoted model reaches
-        only callers whose key serves it, or everyone once an intent is assigned
-        to it.
+        callers whose key serves it. Assigning it to an intent also offers it to
+        anonymous and free callers on the platform; a key holder's turns stay on
+        their key.
       </p>
       <MutationErrorAlert
         error={promote.error}
