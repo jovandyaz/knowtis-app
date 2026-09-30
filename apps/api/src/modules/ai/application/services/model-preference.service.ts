@@ -1,4 +1,4 @@
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 
 import type {
   AIPreferences,
@@ -8,6 +8,8 @@ import type {
   UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
+import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type {
   AiCaller,
   AiExecutionContext,
@@ -19,7 +21,7 @@ import {
   type ModelFacts,
 } from '../../domain/model-catalog/model-choice';
 import {
-  platformIntentOf,
+  servedPreference,
   type TierCatalog,
 } from '../../domain/model-catalog/tier-catalog';
 import {
@@ -32,6 +34,8 @@ import { SelectableModelsService } from './selectable-models.service';
 
 @Injectable()
 export class ModelPreferenceService {
+  private readonly logger = new Logger(ModelPreferenceService.name);
+
   constructor(
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
@@ -69,24 +73,61 @@ export class ModelPreferenceService {
       this.settings.getSettings(execution.subject.userId),
     ]);
     const { catalog, facts } = this.scopeOf(execution, platformIntents);
-    const pickedIntent = settings.preferredModel
-      ? platformIntentOf(catalog, settings.preferredModel)
-      : undefined;
+    const { preferredModel, preferredIntent } = servedPreference(catalog, {
+      preferredModel: settings.preferredModel,
+      preferredIntent: settings.preferredIntent,
+    });
     return chooseModel(
       catalog,
-      {
-        ...request,
-        preferredModel: pickedIntent ? null : settings.preferredModel,
-        preferredIntent: pickedIntent ?? settings.preferredIntent,
-      },
+      { ...request, preferredModel, preferredIntent },
       facts
     );
   }
 
-  async getUserPreferences(userId: string): Promise<AIPreferences> {
+  /**
+   * The stored preferences as a turn reads them, so every surface shows the
+   * intent a turn serves. The tier is read, through `tierOf`, only for a
+   * stored model an intent is configured to; when it cannot be resolved the
+   * stored row is answered as is.
+   */
+  async getUserPreferences(
+    userId: string,
+    tierOf: () => Promise<AiExecutionContext>
+  ): Promise<AIPreferences> {
     const { preferredModel, preferredIntent, ghostTextEnabled } =
       await this.settings.getSettings(userId);
-    return { preferredModel, preferredIntent, ghostTextEnabled };
+    const stored: AIPreferences = {
+      preferredModel,
+      preferredIntent,
+      ghostTextEnabled,
+    };
+    if (!preferredModel) {
+      return stored;
+    }
+    const platformIntents = await this.aiConfig.getIntentModels();
+    // A platform catalog lists only the configured intent models, so any other
+    // pick reads as stored without touching the key store behind the tier.
+    if (!Object.values(platformIntents).includes(preferredModel)) {
+      return stored;
+    }
+    let execution: AiExecutionContext;
+    try {
+      execution = await tierOf();
+    } catch (error) {
+      if (!(error instanceof AiUnavailableError)) {
+        throw error;
+      }
+      this.logger.warn({
+        event: 'ai.preferences.tier_unavailable',
+        userId,
+        error: reasonOf(error),
+      });
+      return stored;
+    }
+    return servedPreference(
+      this.scopeOf(execution, platformIntents).catalog,
+      stored
+    );
   }
 
   /**
@@ -129,12 +170,9 @@ export class ModelPreferenceService {
     if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
       throw new ModelUnavailableException(choice.reason, choice.suggestedModel);
     }
-    const pickedIntent = platformIntentOf(catalog, patch.preferredModel);
     await this.settings.patchSettings(
       caller.userId,
-      pickedIntent
-        ? { ...patch, preferredModel: null, preferredIntent: pickedIntent }
-        : patch
+      servedPreference(catalog, patch)
     );
   }
 

@@ -39,8 +39,13 @@ function make() {
   };
 }
 
-/** The real preference service behind the controller, so a PUT shows when the tier is resolved. */
-function makeWired() {
+/** The real preference service behind the controller, so a request shows when the tier is resolved. */
+function makeWired(
+  stored: {
+    preferredModel: string | null;
+    preferredIntent: 'fast' | 'balanced' | 'powerful' | null;
+  } = { preferredModel: null, preferredIntent: null }
+) {
   const selectable = new SelectableModelsService(
     {
       isSupported: () => true,
@@ -54,8 +59,7 @@ function makeWired() {
   );
   const repo = {
     getSettings: vi.fn().mockResolvedValue({
-      preferredModel: null,
-      preferredIntent: null,
+      ...stored,
       ghostTextEnabled: true,
     }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
@@ -102,7 +106,7 @@ describe('AiModelsController', () => {
 
   it('GET /ai/preferences returns both stored preferences', async () => {
     const { ctrl } = make();
-    expect(await ctrl.getPreferences(user)).toEqual({
+    expect(await ctrl.getPreferences(user, req)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
       ghostTextEnabled: true,
@@ -127,7 +131,10 @@ describe('AiModelsController', () => {
       expect.any(Function)
     );
     expect(tiers.resolve).not.toHaveBeenCalled();
-    expect(pref.getUserPreferences).toHaveBeenCalledWith('u1');
+    expect(pref.getUserPreferences).toHaveBeenCalledWith(
+      'u1',
+      expect.any(Function)
+    );
     expect(res).toEqual({
       preferredModel: 'anthropic:claude-sonnet-5',
       preferredIntent: 'balanced',
@@ -186,7 +193,7 @@ describe('AiModelsController', () => {
       preferredIntent: null,
       ghostTextEnabled: true,
     });
-    expect(await ctrl.getPreferences(user)).toEqual({
+    expect(await ctrl.getPreferences(user, req)).toEqual({
       preferredModel: null,
       preferredIntent: null,
       ghostTextEnabled: true,
@@ -281,6 +288,26 @@ describe('AiModelsController', () => {
       expect(repo.patchSettings).not.toHaveBeenCalled();
     });
 
+    it('resolves the tier once when the re-read needs it too', async () => {
+      const { ctrl, tiers } = makeWired({
+        preferredModel: 'openrouter:minimax/minimax-m2.5',
+        preferredIntent: 'powerful',
+      });
+
+      const res = await ctrl.updatePreferences(
+        user,
+        { preferredModel: 'openrouter:deepseek/deepseek-v3.2' },
+        req
+      );
+
+      expect(tiers.resolve).toHaveBeenCalledTimes(1);
+      expect(res).toEqual({
+        preferredModel: null,
+        preferredIntent: 'fast',
+        ghostTextEnabled: true,
+      });
+    });
+
     it('refuses an anonymous session without resolving its tier', async () => {
       const { ctrl, repo, tiers } = makeWired();
 
@@ -293,6 +320,24 @@ describe('AiModelsController', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(tiers.resolve).not.toHaveBeenCalled();
       expect(repo.patchSettings).not.toHaveBeenCalled();
+    });
+  });
+
+  it('GET /ai/preferences answers a stored platform model as the intent it serves', async () => {
+    const { ctrl, tiers } = makeWired({
+      preferredModel: 'openrouter:minimax/minimax-m2.5',
+      preferredIntent: 'powerful',
+    });
+
+    expect(await ctrl.getPreferences(user, req)).toEqual({
+      preferredModel: null,
+      preferredIntent: 'fast',
+      ghostTextEnabled: true,
+    });
+    expect(tiers.resolve).toHaveBeenCalledWith({
+      userId: 'u1',
+      isAnonymous: false,
+      clientIp: '203.0.113.7',
     });
   });
 });

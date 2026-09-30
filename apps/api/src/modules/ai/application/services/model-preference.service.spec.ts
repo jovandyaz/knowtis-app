@@ -360,16 +360,20 @@ describe('ModelPreferenceService', () => {
   });
 
   describe('getUserPreferences', () => {
-    it('returns the stored model and intent', async () => {
+    const MINIMAX = 'openrouter:minimax/minimax-m2.5';
+
+    it('returns a stored model no intent is configured to without resolving the tier', async () => {
       const { svc } = makeChooser({
         preferredModel: 'openai:gpt-4o-mini',
         preferredIntent: 'powerful',
       });
-      expect(await svc.getUserPreferences('u1')).toEqual({
+      const tierOf = vi.fn();
+      expect(await svc.getUserPreferences('u1', tierOf)).toEqual({
         preferredModel: 'openai:gpt-4o-mini',
         preferredIntent: 'powerful',
         ghostTextEnabled: true,
       });
+      expect(tierOf).not.toHaveBeenCalled();
     });
 
     it('returns the ghost text preference', async () => {
@@ -379,7 +383,72 @@ describe('ModelPreferenceService', () => {
         preferredIntent: null,
         ghostTextEnabled: false,
       });
-      expect((await svc.getUserPreferences('u1')).ghostTextEnabled).toBe(false);
+      expect(
+        (await svc.getUserPreferences('u1', async () => FREE_CALLER))
+          .ghostTextEnabled
+      ).toBe(false);
+    });
+
+    it('answers a free caller’s stored platform model as the intent a turn serves', async () => {
+      const { svc } = makeChooser({
+        preferredModel: MINIMAX,
+        preferredIntent: 'powerful',
+      });
+
+      const answered = await svc.getUserPreferences(
+        'user-1',
+        async () => FREE_CALLER
+      );
+      const served = await svc.chooseTurnModel(FREE_CALLER, {});
+
+      expect(answered).toEqual({
+        preferredModel: null,
+        preferredIntent: 'fast',
+        ghostTextEnabled: true,
+      });
+      expect(served).toMatchObject({ model: MINIMAX });
+    });
+
+    it('keeps a key-billed pick of a platform intent model a model', async () => {
+      const { svc } = makeChooser({
+        preferredModel: 'openrouter:deepseek/deepseek-v3.2',
+        preferredIntent: 'fast',
+      });
+      expect(
+        await svc.getUserPreferences('user-1', async () =>
+          createExecutionContext({
+            tier: 'byok',
+            byokProviders: ['openrouter'],
+          })
+        )
+      ).toEqual({
+        preferredModel: 'openrouter:deepseek/deepseek-v3.2',
+        preferredIntent: 'fast',
+        ghostTextEnabled: true,
+      });
+    });
+
+    it('answers the stored row when the tier cannot be resolved', async () => {
+      const { svc } = makeChooser({
+        preferredModel: MINIMAX,
+        preferredIntent: 'powerful',
+      });
+      expect(
+        await svc.getUserPreferences('user-1', () =>
+          Promise.reject(new AiUnavailableError('tier', 'key store down'))
+        )
+      ).toEqual({
+        preferredModel: MINIMAX,
+        preferredIntent: 'powerful',
+        ghostTextEnabled: true,
+      });
+    });
+
+    it('surfaces a tier failure that is not an outage', async () => {
+      const { svc } = makeChooser({ preferredModel: MINIMAX });
+      await expect(
+        svc.getUserPreferences('user-1', () => Promise.reject(new Error('bug')))
+      ).rejects.toThrow('bug');
     });
   });
 

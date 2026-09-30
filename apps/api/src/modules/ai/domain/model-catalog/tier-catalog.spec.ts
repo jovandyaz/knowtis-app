@@ -11,7 +11,7 @@ import { TIER_POLICIES } from '../execution-context/tier-policy';
 import {
   findInCatalog,
   intentModelOf,
-  platformIntentOf,
+  servedPreference,
   tierCatalog,
   type OfferedModel,
 } from './tier-catalog';
@@ -223,22 +223,43 @@ describe('tierCatalog', () => {
   });
 });
 
-describe('platformIntentOf', () => {
-  it('reads a platform model pick as the intent it serves', () => {
-    const catalog = catalogFor('free');
-    expect(platformIntentOf(catalog, PLATFORM_INTENTS.fast)).toBe('fast');
+describe('servedPreference', () => {
+  it('reads a platform model pick as the intent it serves, ahead of a stored intent', () => {
     expect(
-      platformIntentOf(catalog, 'openrouter:z-ai/glm-5.2')
-    ).toBeUndefined();
+      servedPreference(catalogFor('free'), {
+        preferredModel: PLATFORM_INTENTS.fast,
+        preferredIntent: 'powerful',
+        ghostTextEnabled: false,
+      })
+    ).toEqual({
+      preferredModel: null,
+      preferredIntent: 'fast',
+      ghostTextEnabled: false,
+    });
+  });
+
+  it('leaves a pick the platform catalog does not serve untouched', () => {
+    const stored = {
+      preferredModel: 'openrouter:z-ai/glm-5.2',
+      preferredIntent: 'powerful' as const,
+    };
+    expect(servedPreference(catalogFor('free'), stored)).toBe(stored);
   });
 
   it('keeps a key-billed pick a model even when it serves an intent', () => {
     const catalog = catalogFor('byok', { heldProviders: ['anthropic'] });
+    const stored = {
+      preferredModel: 'anthropic:claude-sonnet-5',
+      preferredIntent: null,
+    };
     expect(
       findInCatalog(catalog, 'anthropic:claude-sonnet-5')?.servesIntent
     ).toBe('balanced');
-    expect(
-      platformIntentOf(catalog, 'anthropic:claude-sonnet-5')
-    ).toBeUndefined();
+    expect(servedPreference(catalog, stored)).toBe(stored);
+  });
+
+  it('leaves a patch that names no model untouched', () => {
+    const patch = { preferredIntent: 'fast' as const, ghostTextEnabled: true };
+    expect(servedPreference(catalogFor('free'), patch)).toBe(patch);
   });
 });

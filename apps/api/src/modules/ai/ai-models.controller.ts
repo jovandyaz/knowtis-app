@@ -30,6 +30,7 @@ import {
 import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
 import { ModelPreferenceService } from './application/services/model-preference.service';
 import { TierResolver } from './application/services/tier-resolver.service';
+import type { AiExecutionContext } from './domain/execution-context/ai-execution-context';
 import { UpdateAiPreferencesDto } from './dto/update-ai-preferences.dto';
 
 @ApiTags('AI')
@@ -57,8 +58,13 @@ export class AiModelsController {
   }
 
   @Get('preferences')
-  getPreferences(@CurrentUser() user: RequestUser): Promise<AIPreferences> {
-    return this.preferences.getUserPreferences(user.id);
+  getPreferences(
+    @CurrentUser() user: RequestUser,
+    @Req() req: Request
+  ): Promise<AIPreferences> {
+    return this.preferences.getUserPreferences(user.id, () =>
+      this.executionOf(user, req)
+    );
   }
 
   @ApiResponse({
@@ -76,12 +82,13 @@ export class AiModelsController {
     @Body() dto: UpdateAiPreferencesDto,
     @Req() req: Request
   ): Promise<AIPreferences> {
+    const tierOf = this.onceExecutionOf(user, req);
     await this.preferences.setUserPreferences(
       { userId: user.id, isAnonymous: user.isAnonymous === true },
       dto,
-      () => this.executionOf(user, req)
+      tierOf
     );
-    return this.preferences.getUserPreferences(user.id);
+    return this.preferences.getUserPreferences(user.id, tierOf);
   }
 
   private executionOf(user: RequestUser, req: Request) {
@@ -90,5 +97,13 @@ export class AiModelsController {
       isAnonymous: user.isAnonymous === true,
       clientIp: clientIpOf(req),
     });
+  }
+
+  private onceExecutionOf(
+    user: RequestUser,
+    req: Request
+  ): () => Promise<AiExecutionContext> {
+    let execution: Promise<AiExecutionContext> | undefined;
+    return () => (execution ??= this.executionOf(user, req));
   }
 }

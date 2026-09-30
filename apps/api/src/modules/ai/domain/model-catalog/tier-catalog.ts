@@ -198,12 +198,18 @@ export function intentModelOf(
   return row?.available ? row.modelId : null;
 }
 
-/** The intent a pick on a platform-billed model stands for: the platform serves intents, so only a key-billed pick stays a model. */
-export function platformIntentOf(
-  catalog: TierCatalog,
-  modelId: string
-): ModelIntent | undefined {
-  return catalog.billing === CATALOG_BILLING.PLATFORM
-    ? findInCatalog(catalog, modelId)?.servesIntent
-    : undefined;
+/** A model preference as the platform serves it: a platform-billed pick stands for the intent it serves, since the platform serves intents; a key-billed pick stays a model. */
+export function servedPreference<
+  T extends {
+    readonly preferredModel?: string | null;
+    readonly preferredIntent?: ModelIntent | null;
+  },
+>(catalog: TierCatalog, preference: T): T {
+  const intent =
+    preference.preferredModel && catalog.billing === CATALOG_BILLING.PLATFORM
+      ? findInCatalog(catalog, preference.preferredModel)?.servesIntent
+      : undefined;
+  return intent
+    ? { ...preference, preferredModel: null, preferredIntent: intent }
+    : preference;
 }
