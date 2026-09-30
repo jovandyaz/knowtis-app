@@ -202,7 +202,7 @@ describe('classifyByokKeyFailure', () => {
     }
   );
 
-  it('reads a Gemini 400 API_KEY_INVALID as a bad key (UNCONFIRMED against the live API)', () => {
+  it('reads a Gemini 400 API_KEY_INVALID as a bad key', () => {
     const badKey = callError(
       400,
       '{"error":{"code":400,"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}'
