@@ -66,7 +66,7 @@ export class StreamTextHandler {
     const preflight = preflightResult.value;
     if (preflight.kind === 'cache_hit') {
       const { context, data } = preflight;
-      this.pipeline.recordUsage(context, input, {
+      await this.pipeline.recordUsage(context, input, {
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
@@ -145,7 +145,7 @@ export class StreamTextHandler {
         this.modelCatalog.getPricing(servedModel)
       );
 
-      this.pipeline.recordCompletion(
+      await this.pipeline.recordCompletion(
         context,
         input,
         {
@@ -185,7 +185,7 @@ export class StreamTextHandler {
           },
           this.modelCatalog.getPricing(context.model)
         );
-        this.pipeline.recordCompletion(
+        await this.pipeline.recordCompletion(
           context,
           input,
           {

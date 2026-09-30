@@ -628,6 +628,112 @@ describe('StreamTextHandler', () => {
     expect(releaseSpy).not.toHaveBeenCalled();
   });
 
+  describe('holds the request open until its usage is written', () => {
+    function holdUsageWrite(): () => void {
+      let finish!: () => void;
+      vi.mocked(mockUsageRepo.recordUsage).mockReturnValue(
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+      );
+      return () => finish();
+    }
+
+    async function expectSettledOnlyAfterWrite(
+      run: Promise<void>,
+      finishWrite: () => void
+    ): Promise<void> {
+      let settled = false;
+      const tracked = run.then(() => {
+        settled = true;
+      });
+      await vi.waitFor(() =>
+        expect(mockUsageRepo.recordUsage).toHaveBeenCalled()
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(settled).toBe(false);
+
+      finishWrite();
+      await tracked;
+      expect(settled).toBe(true);
+    }
+
+    const input = () => ({
+      execution: createExecutionContext({ userId: 'user-123' }),
+      action: AI_ACTION.SUMMARIZE,
+      content: 'Some content',
+    });
+
+    it('for a finished stream', async () => {
+      const finishWrite = holdUsageWrite();
+
+      await expectSettledOnlyAfterWrite(
+        handler.execute(input(), callbacks),
+        finishWrite
+      );
+    });
+
+    it('for a stream the caller aborted', async () => {
+      const finishWrite = holdUsageWrite();
+      const controller = new AbortController();
+      vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+        textStream: (async function* () {
+          yield 'partial';
+          controller.abort();
+          yield 'never delivered';
+        })(),
+        usage: Promise.resolve({
+          promptTokens: 0,
+          completionTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        }),
+      });
+
+      await expectSettledOnlyAfterWrite(
+        handler.execute(input(), callbacks, controller.signal),
+        finishWrite
+      );
+    });
+
+    it('for a stream an abort cut with an error', async () => {
+      const finishWrite = holdUsageWrite();
+      const controller = new AbortController();
+      vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+        textStream: (async function* () {
+          yield 'partial';
+          controller.abort();
+          throw new Error('The operation was aborted');
+        })(),
+        usage: new Promise(() => undefined),
+      });
+
+      await expectSettledOnlyAfterWrite(
+        handler.execute(input(), callbacks, controller.signal),
+        finishWrite
+      );
+    });
+
+    it('for a cache hit', async () => {
+      const finishWrite = holdUsageWrite();
+      const cachedHandler = buildHandler({
+        isCacheable: vi.fn().mockReturnValue(true),
+        get: vi.fn().mockResolvedValue({
+          text: 'cached summary',
+          model: 'anthropic:claude-sonnet-4-20250514',
+          inputTokens: 10,
+          outputTokens: 5,
+          costUsd: 0.5,
+        }),
+        set: vi.fn().mockResolvedValue(undefined),
+      } as unknown as AICache);
+
+      await expectSettledOnlyAfterWrite(
+        cachedHandler.execute(input(), callbacks),
+        finishWrite
+      );
+    });
+  });
+
   it('should build tone prompt correctly', async () => {
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
       textStream: createAsyncStream(['Rewritten']),

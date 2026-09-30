@@ -27,6 +27,7 @@ import type { EnvConfig } from '../../config/env.config';
 import { reasonOf } from '../../core/errors/reason-of';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
+import { ShutdownDrain } from '../websocket/shutdown-drain';
 import {
   authenticateSocket,
   socketAuthFailureMessage,
@@ -64,10 +65,12 @@ export class AIGateway
     private readonly tierResolver: TierResolver,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly drain: ShutdownDrain,
     configService: ConfigService<EnvConfig, true>
   ) {
     this.maxConcurrentStreams = configService.get('AI_MAX_CONCURRENT_STREAMS');
     this.streams = new ConcurrencySlotTracker(this.maxConcurrentStreams);
+    drain.register(this.streams);
     this.tokenExpiry = new SocketTokenExpiry({
       slots: this.streams,
       logger: this.logger,
@@ -181,6 +184,10 @@ export class AIGateway
     // A disconnect handled during the flag read or the tier resolution found no
     // stream to abort, so a stream started now would be billed and sent to nobody.
     if (!client.connected) {
+      return;
+    }
+    if (this.drain.isDraining) {
+      client.emit('ai:error', AIErrors.providerError('server restarting'));
       return;
     }
     const streamId = randomUUID();

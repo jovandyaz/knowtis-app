@@ -55,7 +55,7 @@ export class CompleteTextHandler {
     const preflight = preflightResult.value;
     if (preflight.kind === 'cache_hit') {
       const { context, data } = preflight;
-      this.pipeline.recordUsage(context, input, {
+      void this.pipeline.recordUsage(context, input, {
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
@@ -97,7 +97,7 @@ export class CompleteTextHandler {
         this.modelCatalog.getPricing(result.model)
       );
 
-      this.pipeline.recordCompletion(context, input, {
+      void this.pipeline.recordCompletion(context, input, {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         model: result.model,
