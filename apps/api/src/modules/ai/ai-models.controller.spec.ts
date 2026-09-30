@@ -261,7 +261,7 @@ describe('AiModelsController', () => {
         clientIp: '203.0.113.7',
       });
       expect(repo.patchSettings.mock.calls).toEqual([
-        ['u1', { preferredModel: 'openrouter:minimax/minimax-m2.5' }],
+        ['u1', { preferredModel: null, preferredIntent: 'fast' }],
       ]);
     });
 

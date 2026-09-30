@@ -11,6 +11,7 @@ import { TIER_POLICIES } from '../execution-context/tier-policy';
 import {
   findInCatalog,
   intentModelOf,
+  platformIntentOf,
   tierCatalog,
   type OfferedModel,
 } from './tier-catalog';
@@ -219,5 +220,25 @@ describe('tierCatalog', () => {
       findInCatalog(catalog, 'openrouter:anthropic/claude-opus-5')?.model
         .reasoning
     ).toEqual(OPUS_LADDER);
+  });
+});
+
+describe('platformIntentOf', () => {
+  it('reads a platform model pick as the intent it serves', () => {
+    const catalog = catalogFor('free');
+    expect(platformIntentOf(catalog, PLATFORM_INTENTS.fast)).toBe('fast');
+    expect(
+      platformIntentOf(catalog, 'openrouter:z-ai/glm-5.2')
+    ).toBeUndefined();
+  });
+
+  it('keeps a key-billed pick a model even when it serves an intent', () => {
+    const catalog = catalogFor('byok', { heldProviders: ['anthropic'] });
+    expect(
+      findInCatalog(catalog, 'anthropic:claude-sonnet-5')?.servesIntent
+    ).toBe('balanced');
+    expect(
+      platformIntentOf(catalog, 'anthropic:claude-sonnet-5')
+    ).toBeUndefined();
   });
 });

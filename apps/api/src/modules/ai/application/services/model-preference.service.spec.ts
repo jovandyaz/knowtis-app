@@ -183,17 +183,20 @@ describe('ModelPreferenceService', () => {
       'accepts every model it lists as a preference (%s, %s)',
       async (_tier, _keys, execution) => {
         const { svc, repo } = makeChooser();
-        const listed = (await svc.listModels(execution)).models.map(
-          (m) => m.id
-        );
+        const listed = (await svc.listModels(execution)).models;
 
-        for (const id of listed) {
-          await writeAs(svc, execution, { preferredModel: id });
+        for (const model of listed) {
+          await writeAs(svc, execution, { preferredModel: model.id });
         }
 
         expect(listed.length).toBeGreaterThan(0);
         expect(repo.patchSettings.mock.calls).toEqual(
-          listed.map((id) => [execution.subject.userId, { preferredModel: id }])
+          listed.map((model) => [
+            execution.subject.userId,
+            model.billedToUser
+              ? { preferredModel: model.id }
+              : { preferredModel: null, preferredIntent: model.servesIntent },
+          ])
         );
       }
     );
@@ -285,6 +288,34 @@ describe('ModelPreferenceService', () => {
       expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
         preferredModel: 'anthropic:claude-opus-5',
       });
+    });
+
+    it('stores a free caller’s pick of a platform model as the intent it serves', async () => {
+      const { svc, repo } = makeChooser();
+      await writeAs(svc, FREE_CALLER, {
+        preferredModel: 'openrouter:minimax/minimax-m2.5',
+        preferredIntent: 'powerful',
+      });
+      expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
+        preferredModel: null,
+        preferredIntent: 'fast',
+      });
+    });
+
+    it('keeps a key-billed pick a model even when it serves an intent', async () => {
+      const { svc, repo } = makeChooser();
+      await writeAs(
+        svc,
+        createExecutionContext({ tier: 'byok', byokProviders: ['openrouter'] }),
+        { preferredModel: 'openrouter:deepseek/deepseek-v3.2' }
+      );
+      await writeAs(svc, BYOK_ANTHROPIC, {
+        preferredModel: 'anthropic:claude-sonnet-5',
+      });
+      expect(repo.patchSettings.mock.calls).toEqual([
+        ['user-1', { preferredModel: 'openrouter:deepseek/deepseek-v3.2' }],
+        ['user-1', { preferredModel: 'anthropic:claude-sonnet-5' }],
+      ]);
     });
 
     it('clears the model without reading the catalog', async () => {
@@ -407,6 +438,39 @@ describe('ModelPreferenceService', () => {
           {}
         )
       ).resolves.toMatchObject({ model: 'openrouter:minimax/minimax-m2.5' });
+    });
+
+    it('serves a free caller’s stored platform model as the intent it serves, ahead of a stored intent', async () => {
+      await expect(
+        makeChooser({
+          preferredModel: 'openrouter:minimax/minimax-m2.5',
+          preferredIntent: 'powerful',
+        }).svc.chooseTurnModel(FREE_CALLER, {})
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: 'openrouter:minimax/minimax-m2.5',
+        resolution: {
+          requested: null,
+          resolved: 'openrouter:minimax/minimax-m2.5',
+        },
+      });
+    });
+
+    it('keeps a stored intent when the stored platform model left the catalog', async () => {
+      await expect(
+        makeChooser({
+          preferredModel: 'openrouter:z-ai/glm-5.2',
+          preferredIntent: 'powerful',
+        }).svc.chooseTurnModel(FREE_CALLER, {})
+      ).resolves.toMatchObject({ model: 'openrouter:moonshotai/kimi-k2.5' });
+    });
+
+    it('serves a byok caller’s stored key-billed model as that model', async () => {
+      await expect(
+        makeChooser({
+          preferredModel: 'anthropic:claude-opus-5',
+        }).svc.chooseTurnModel(BYOK_ANTHROPIC, {})
+      ).resolves.toMatchObject({ model: 'anthropic:claude-opus-5' });
     });
 
     it('refuses an explicit model outside the tier', async () => {

@@ -197,3 +197,13 @@ export function intentModelOf(
   const row = catalog.intents.find((entry) => entry.intent === intent);
   return row?.available ? row.modelId : null;
 }
+
+/** The intent a pick on a platform-billed model stands for: the platform serves intents, so only a key-billed pick stays a model. */
+export function platformIntentOf(
+  catalog: TierCatalog,
+  modelId: string
+): ModelIntent | undefined {
+  return catalog.billing === CATALOG_BILLING.PLATFORM
+    ? findInCatalog(catalog, modelId)?.servesIntent
+    : undefined;
+}

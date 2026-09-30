@@ -16,8 +16,12 @@ import {
   chooseModel,
   MODEL_CHOICE,
   type ModelChoice,
-  type ModelRequest,
+  type ModelFacts,
 } from '../../domain/model-catalog/model-choice';
+import {
+  platformIntentOf,
+  type TierCatalog,
+} from '../../domain/model-catalog/tier-catalog';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -64,11 +68,19 @@ export class ModelPreferenceService {
       this.aiConfig.getIntentModels(),
       this.settings.getSettings(execution.subject.userId),
     ]);
-    return this.chooseWithin(execution, platformIntents, {
-      ...request,
-      preferredModel: settings.preferredModel,
-      preferredIntent: settings.preferredIntent,
-    });
+    const { catalog, facts } = this.scopeOf(execution, platformIntents);
+    const pickedIntent = settings.preferredModel
+      ? platformIntentOf(catalog, settings.preferredModel)
+      : undefined;
+    return chooseModel(
+      catalog,
+      {
+        ...request,
+        preferredModel: pickedIntent ? null : settings.preferredModel,
+        preferredIntent: pickedIntent ?? settings.preferredIntent,
+      },
+      facts
+    );
   }
 
   async getUserPreferences(userId: string): Promise<AIPreferences> {
@@ -80,7 +92,8 @@ export class ModelPreferenceService {
   /**
    * Only a model write reads the caller's tier, through `tierOf`: a toggle or
    * an intent pick stays writable while the key store is down. A model is
-   * accepted exactly when a turn would accept it as an explicit request.
+   * accepted exactly when a turn would accept it as an explicit request, and a
+   * platform-billed one is stored as the intent it serves.
    */
   async setUserPreferences(
     caller: Pick<AiCaller, 'userId' | 'isAnonymous'>,
@@ -95,35 +108,43 @@ export class ModelPreferenceService {
     if (Object.values(patch).every((value) => value === undefined)) {
       return;
     }
-    if (typeof patch.preferredModel === 'string') {
-      const [execution, platformIntents] = await Promise.all([
-        tierOf(),
-        this.aiConfig.getIntentModels(),
-      ]);
-      const choice = this.chooseWithin(execution, platformIntents, {
+    if (typeof patch.preferredModel !== 'string') {
+      await this.settings.patchSettings(caller.userId, patch);
+      return;
+    }
+    const [execution, platformIntents] = await Promise.all([
+      tierOf(),
+      this.aiConfig.getIntentModels(),
+    ]);
+    const { catalog, facts } = this.scopeOf(execution, platformIntents);
+    const choice = chooseModel(
+      catalog,
+      {
         explicit: patch.preferredModel,
         preferredModel: null,
         preferredIntent: null,
-      });
-      if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
-        throw new ModelUnavailableException(
-          choice.reason,
-          choice.suggestedModel
-        );
-      }
+      },
+      facts
+    );
+    if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
+      throw new ModelUnavailableException(choice.reason, choice.suggestedModel);
     }
-    await this.settings.patchSettings(caller.userId, patch);
+    const pickedIntent = platformIntentOf(catalog, patch.preferredModel);
+    await this.settings.patchSettings(
+      caller.userId,
+      pickedIntent
+        ? { ...patch, preferredModel: null, preferredIntent: pickedIntent }
+        : patch
+    );
   }
 
-  private chooseWithin(
+  private scopeOf(
     execution: AiExecutionContext,
-    platformIntents: Readonly<Record<ModelIntent, string>>,
-    request: ModelRequest
-  ): ModelChoice {
-    return chooseModel(
-      this.selectable.catalogFor(execution, platformIntents),
-      request,
-      this.selectable.factsFor(execution.byokProviders, platformIntents)
-    );
+    platformIntents: Readonly<Record<ModelIntent, string>>
+  ): { catalog: TierCatalog; facts: ModelFacts } {
+    return {
+      catalog: this.selectable.catalogFor(execution, platformIntents),
+      facts: this.selectable.factsFor(execution.byokProviders, platformIntents),
+    };
   }
 }
