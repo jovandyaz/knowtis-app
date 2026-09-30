@@ -1335,6 +1335,19 @@ export class RunAgentTurnHandler {
       ...firstCall,
       historyCap: AGENT_HISTORY_TOKEN_BUDGET,
     });
+    // The guard's gray-zone classifier bills the payer, so an oversized
+    // message must not reach it.
+    const freshTokens = freshUserMessage
+      ? estimateMessageTokens(freshUserMessage)
+      : 0;
+    if (freshTokens > room) {
+      return this.firstCallUnaffordable(
+        execution,
+        firstCall,
+        room,
+        freshTokens
+      );
+    }
     if (freshUserMessage && !input.continuation) {
       const verdict = await this.injectionGuard.guard(
         freshUserMessage.content,

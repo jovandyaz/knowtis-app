@@ -7345,6 +7345,27 @@ describe('RunAgentTurnHandler daily message quota', () => {
       expect(quota.refund).toHaveBeenCalled();
     });
 
+    it('refuses a fresh message that alone overruns the room before the injection check', async () => {
+      const guard = makeGuard();
+      const { handler, orchestrator, rateLimit } = build({
+        quota: consumedQuota(),
+        guard,
+      });
+      vi.mocked(rateLimit.dailyAllowance).mockReturnValue({
+        tokenLimit: 20_000,
+        costLimit: 0.2,
+      });
+      const cb = callbacks();
+
+      await handler.execute({ ...turn, isAnonymous: true }, cb);
+
+      expect(cb.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code: AIErrorCodes.INVALID_INPUT })
+      );
+      expect(guard.guard).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
     it('logs a turn whose first call cannot fit with its numbers', async () => {
       const warn = vi
         .spyOn(Logger.prototype, 'warn')
