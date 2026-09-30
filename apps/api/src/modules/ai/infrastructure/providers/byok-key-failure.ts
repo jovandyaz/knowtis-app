@@ -1,5 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
-import { APICallError, RetryError } from 'ai';
+import { APICallError, RetryError, type LanguageModelMiddleware } from 'ai';
 import { z } from 'zod';
 
 import {
@@ -133,4 +133,57 @@ export function classifyByokKeyFailure(
       throw new Error(`Unhandled BYOK provider: ${String(_exhaustive)}`);
     }
   }
+}
+
+function finalRefusal(error: unknown, provider: ByokProvider): unknown {
+  if (
+    !APICallError.isInstance(error) ||
+    !error.isRetryable ||
+    classifyByokKeyFailure(error, provider) === null
+  ) {
+    return error;
+  }
+  return new APICallError({
+    message: error.message,
+    url: error.url,
+    requestBodyValues: error.requestBodyValues,
+    ...(error.statusCode === undefined ? {} : { statusCode: error.statusCode }),
+    ...(error.responseHeaders === undefined
+      ? {}
+      : { responseHeaders: error.responseHeaders }),
+    ...(error.responseBody === undefined
+      ? {}
+      : { responseBody: error.responseBody }),
+    cause: error.cause,
+    data: error.data,
+    isRetryable: false,
+  });
+}
+
+/**
+ * Marks a provider's refusal of the caller's own key as not retryable, so the
+ * AI SDK does not resend it: the same key is refused again, and each retry's
+ * backoff runs down the turn's stall timer. OpenAI reports spent credit as a
+ * 429, which the SDK would otherwise retry. Every other failure, a genuine
+ * rate limit included, keeps the SDK's retries.
+ */
+export function byokKeyRefusalMiddleware(
+  provider: ByokProvider
+): LanguageModelMiddleware {
+  return {
+    wrapGenerate: async ({ doGenerate }) => {
+      try {
+        return await doGenerate();
+      } catch (error) {
+        throw finalRefusal(error, provider);
+      }
+    },
+    wrapStream: async ({ doStream }) => {
+      try {
+        return await doStream();
+      } catch (error) {
+        throw finalRefusal(error, provider);
+      }
+    },
+  };
 }

@@ -4,13 +4,19 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { createGateway, createProviderRegistry } from 'ai';
+import { createGateway, createProviderRegistry, wrapLanguageModel } from 'ai';
 import type { LanguageModel, ProviderRegistryProvider } from 'ai';
 
 import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
-import { AI_PROVIDERS, type AIProvider } from '@knowtis/shared-types';
+import {
+  AI_PROVIDERS,
+  isByokProvider,
+  type AIProvider,
+  type ByokProvider,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { byokKeyRefusalMiddleware } from './byok-key-failure';
 
 const OPENROUTER_SPECIFICATION_VERSION = 'v4' as const;
 const shimLogger = new Logger('OpenRouterProviderShim');
@@ -174,7 +180,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
    * Builds a model from a caller-supplied key, bypassing the registry entirely.
    * Serves both BYOK turns and probing a candidate server key before storing it;
    * whether a given provider is offered for BYOK is gated upstream by
-   * BYOK_PROVIDERS, not here.
+   * BYOK_PROVIDERS, not here. A refusal of that key is never retried by the SDK.
    */
   private ephemeralLanguageModel(
     modelId: QualifiedModelId,
@@ -183,20 +189,15 @@ export class ProviderRegistryFactory implements OnModuleInit {
     const separator = modelId.indexOf(':');
     const provider = modelId.slice(0, separator);
     const bareId = modelId.slice(separator + 1);
-    switch (provider) {
-      case 'anthropic':
-        return createAnthropic({ apiKey })(bareId);
-      case 'openai':
-        return createOpenAI({ apiKey })(bareId);
-      case 'google':
-        return createGoogle({ apiKey })(bareId);
-      case 'openrouter':
-        return createOpenRouter({ apiKey })(bareId);
-      default:
-        throw new ProviderNotConfiguredError(
-          `Provider '${provider}' does not support a caller-supplied key`
-        );
+    if (!isByokProvider(provider)) {
+      throw new ProviderNotConfiguredError(
+        `Provider '${provider}' does not support a caller-supplied key`
+      );
     }
+    return wrapLanguageModel({
+      model: callerKeyedModel(provider, bareId, apiKey),
+      middleware: byokKeyRefusalMiddleware(provider),
+    });
   }
 
   /** True when this process can route the model: gateway mode accepts any qualified id except 'openrouter:*' (a different catalog); direct mode requires the provider to be enabled and hold a key. */
@@ -350,6 +351,27 @@ export class ProviderRegistryFactory implements OnModuleInit {
       .catch((error) =>
         this.logger.warn('Failed to refresh system provider config', error)
       );
+  }
+}
+
+function callerKeyedModel(
+  provider: ByokProvider,
+  bareId: string,
+  apiKey: string
+) {
+  switch (provider) {
+    case 'anthropic':
+      return createAnthropic({ apiKey })(bareId);
+    case 'openai':
+      return createOpenAI({ apiKey })(bareId);
+    case 'google':
+      return createGoogle({ apiKey })(bareId);
+    case 'openrouter':
+      return createOpenRouter({ apiKey })(bareId);
+    default: {
+      const _exhaustive: never = provider;
+      throw new Error(`Unhandled BYOK provider: ${String(_exhaustive)}`);
+    }
   }
 }
 

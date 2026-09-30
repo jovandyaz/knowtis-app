@@ -1,10 +1,21 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { APICallError, generateText, RetryError } from 'ai';
+import {
+  APICallError,
+  generateText,
+  RetryError,
+  streamText,
+  wrapLanguageModel,
+  type LanguageModel,
+} from 'ai';
+import { MockLanguageModelV4 } from 'ai/test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ByokKeyFailureKind, ByokProvider } from '@knowtis/shared-types';
 
-import { classifyByokKeyFailure } from './byok-key-failure';
+import {
+  byokKeyRefusalMiddleware,
+  classifyByokKeyFailure,
+} from './byok-key-failure';
 
 function callError(statusCode: number, responseBody = '') {
   return new APICallError({
@@ -247,5 +258,103 @@ describe('classifyByokKeyFailure', () => {
       requestBodyValues: {},
     });
     expect(classifyByokKeyFailure(statusless, 'anthropic')).toBe(null);
+  });
+});
+
+describe('byokKeyRefusalMiddleware', () => {
+  const SDK_RETRIES = 3;
+  const OUT_OF_QUOTA = '{"error":{"code":"insufficient_quota"}}';
+  const RATE_LIMITED = '{"error":{"code":"rate_limit_exceeded"}}';
+
+  function tooManyRequests(responseBody: string) {
+    return new APICallError({
+      message: 'provider refused',
+      url: 'https://provider.test/v1',
+      requestBodyValues: {},
+      statusCode: 429,
+      responseHeaders: { 'retry-after-ms': '0' },
+      responseBody,
+    });
+  }
+
+  function refusingModel(error: APICallError) {
+    const doStream = vi.fn(async () => {
+      throw error;
+    });
+    const doGenerate = vi.fn(async () => {
+      throw error;
+    });
+    const model = wrapLanguageModel({
+      model: new MockLanguageModelV4({ doStream, doGenerate }),
+      middleware: byokKeyRefusalMiddleware('openai'),
+    });
+    return { model, doStream, doGenerate };
+  }
+
+  async function streamedError(model: LanguageModel): Promise<unknown> {
+    const result = streamText({
+      model,
+      prompt: 'ping',
+      maxRetries: SDK_RETRIES,
+      onError: () => undefined,
+    });
+    for await (const part of result.stream) {
+      if (part.type === 'error') {
+        return part.error;
+      }
+    }
+    return undefined;
+  }
+
+  it('sends a key the provider refused only once, whatever its status', async () => {
+    const refused = tooManyRequests(OUT_OF_QUOTA);
+    expect(refused.isRetryable).toBe(true);
+    const { model, doStream } = refusingModel(refused);
+
+    const error = await streamedError(model);
+
+    expect(doStream).toHaveBeenCalledTimes(1);
+    expect(APICallError.isInstance(error) && error.isRetryable).toBe(false);
+    expect(classifyByokKeyFailure(error, 'openai')).toBe('credit');
+    expect(error).toMatchObject({
+      statusCode: 429,
+      responseBody: OUT_OF_QUOTA,
+      url: 'https://provider.test/v1',
+    });
+  });
+
+  it('keeps the SDK retries for a genuine rate limit', async () => {
+    const { model, doStream } = refusingModel(tooManyRequests(RATE_LIMITED));
+
+    const error = await streamedError(model);
+
+    expect(doStream).toHaveBeenCalledTimes(SDK_RETRIES + 1);
+    expect(RetryError.isInstance(error)).toBe(true);
+  });
+
+  it('sends a generate call the provider refused for the key only once', async () => {
+    const { model, doGenerate } = refusingModel(tooManyRequests(OUT_OF_QUOTA));
+
+    const error = await generateText({
+      model,
+      prompt: 'ping',
+      maxRetries: SDK_RETRIES,
+    }).catch((failure: unknown) => failure);
+
+    expect(doGenerate).toHaveBeenCalledTimes(1);
+    expect(APICallError.isInstance(error) && error.isRetryable).toBe(false);
+  });
+
+  it('passes an unclassified failure through untouched', async () => {
+    const outage = new Error('socket hang up');
+    const doStream = vi.fn(async () => {
+      throw outage;
+    });
+    const model = wrapLanguageModel({
+      model: new MockLanguageModelV4({ doStream }),
+      middleware: byokKeyRefusalMiddleware('openai'),
+    });
+
+    await expect(streamedError(model)).resolves.toBe(outage);
   });
 });

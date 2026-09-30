@@ -26,6 +26,16 @@ const { languageModel, gatewayLanguageModel, createGateway } = vi.hoisted(
 vi.mock('ai', () => ({
   createProviderRegistry: vi.fn(() => ({ languageModel })),
   createGateway,
+  wrapLanguageModel: vi.fn(
+    ({ model, middleware }: { model: string; middleware: string }) =>
+      `${middleware}(${model})`
+  ),
+}));
+
+vi.mock('./byok-key-failure', () => ({
+  byokKeyRefusalMiddleware: vi.fn(
+    (provider: string) => `refusal-final-for-${provider}`
+  ),
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({
@@ -449,10 +459,18 @@ describe('ProviderRegistryFactory', () => {
         'user-key'
       );
 
-      expect(model).toBe('mock-google-byok-model');
+      expect(model).toBe('refusal-final-for-google(mock-google-byok-model)');
       expect(createGoogle).toHaveBeenCalledWith({
         apiKey: 'user-key',
       });
+    });
+
+    it('should keep the SDK from retrying a refusal of the caller key', () => {
+      const factory = makeFactory();
+
+      const model = factory.languageModel('openai:gpt-5.6-terra', 'user-key');
+
+      expect(model).toBe('refusal-final-for-openai(mock-openai-byok-model)');
     });
 
     it('should throw for an unknown provider under BYOK', () => {
@@ -471,7 +489,9 @@ describe('ProviderRegistryFactory', () => {
         'user-key'
       );
 
-      expect(model).toBe('mock-anthropic-byok-model');
+      expect(model).toBe(
+        'refusal-final-for-anthropic(mock-anthropic-byok-model)'
+      );
       expect(createAnthropic).toHaveBeenCalledWith({ apiKey: 'user-key' });
     });
 
@@ -483,7 +503,7 @@ describe('ProviderRegistryFactory', () => {
         'probe-key'
       );
 
-      expect(model).toBe('mock-openrouter');
+      expect(model).toBe('refusal-final-for-openrouter(mock-openrouter)');
       expect(createOpenRouter).toHaveBeenCalledWith({ apiKey: 'probe-key' });
     });
   });
