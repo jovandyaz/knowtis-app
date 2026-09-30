@@ -818,6 +818,73 @@ describe('agent.store server-authoritative wire', () => {
     );
   });
 
+  describe('the decision in flight', () => {
+    function approve() {
+      const turn = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      turn.get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      return turn;
+    }
+
+    it('is forgotten on logout', () => {
+      approve();
+      expect(useAgentStore.getState().decisionInFlight?.proposal).toEqual(
+        PROPOSAL
+      );
+
+      useAgentStore.getState().newConversation();
+
+      expect(useAgentStore.getState().decisionInFlight).toBeNull();
+    });
+
+    it.each([
+      [
+        'its done',
+        (cbs: Cbs) =>
+          cbs.onDone({
+            usage: USAGE,
+            sources: [],
+            knownNotes: [],
+            webSources: [],
+            stopReason: 'completed',
+          }),
+      ],
+      [
+        'an error',
+        (cbs: Cbs) =>
+          cbs.onError({
+            code: 'AI_PROVIDER_ERROR',
+            message: 'boom',
+            turnId: 'turn-1',
+          }),
+      ],
+      [
+        'a refusal that gives the card back',
+        (cbs: Cbs) =>
+          cbs.onError({
+            code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+            message: 'send it again',
+          }),
+      ],
+      ['Stop', () => useAgentStore.getState().cancel()],
+      [
+        'a conversation switch',
+        () => void useAgentStore.getState().openConversation('c2', 'switcher'),
+      ],
+      [
+        'the watchdog',
+        () => vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS),
+      ],
+    ])('is forgotten once the turn ends with %s', (_end, end) => {
+      const { get } = approve();
+
+      end(get());
+
+      expect(useAgentStore.getState().decisionInFlight).toBeNull();
+    });
+  });
+
   describe('a card the drain gave back', () => {
     const refusedBeforeTake = {
       code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,

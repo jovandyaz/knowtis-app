@@ -163,6 +163,8 @@ interface AgentState {
   /** The failure the UI has already answered with an offer, if any. */
   answeredError: AgentErrorPayload | null;
   pendingProposal: PendingProposal | null;
+  /** The proposal a sent approve or reject is deciding, kept until the turn ends so a refusal can give its card back. */
+  decisionInFlight: DecisionInFlight | null;
   /** Rolling tail of the model's live reasoning; ephemeral, never persisted into a message. */
   thinkingText: string;
   /** Per-conversation reasoning effort for the registered caller; never a stored preference. */
@@ -210,7 +212,7 @@ interface PersistedConversation {
   conversationId: string | null;
 }
 
-interface DecisionInFlight {
+export interface DecisionInFlight {
   readonly proposal: PendingProposal;
   readonly discardedId: string | undefined;
 }
@@ -252,7 +254,6 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let activeAssistantId: string | null = null;
   let liveTurnId: string | undefined;
   let resumingDecision = false;
-  let decision: DecisionInFlight | undefined;
   let streamVersion = 0;
   let threadVersion = 0;
   let hydrationRequest = 0;
@@ -288,6 +289,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         retryMode: resumingDecision ? 'none' : 'resend',
         _streamHandle: null,
         thinkingText: '',
+        decisionInFlight: null,
       });
     },
   });
@@ -324,6 +326,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       error,
       retryMode: 'none',
       pendingProposal: proposal,
+      decisionInFlight: null,
       thinkingText: '',
       messages: s.messages
         .filter((m) => m.id !== id)
@@ -337,6 +340,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       status: 'done',
       _streamHandle: null,
       thinkingText: '',
+      decisionInFlight: null,
       messages: s.messages.filter(
         (m) => m.id !== id || m.content.length > 0 || m.committed !== undefined
       ),
@@ -377,6 +381,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       status: 'idle',
       error,
       pendingProposal: null,
+      decisionInFlight: null,
       thinkingText: '',
       _streamHandle: null,
       conversationId: null,
@@ -449,6 +454,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             status: 'done',
             _streamHandle: null,
             thinkingText: '',
+            decisionInFlight: null,
             messages: s.messages.map((m) =>
               m.id === id ? { ...m, sources, webSources, stopReason } : m
             ),
@@ -471,8 +477,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             forgetGoneConversation(error);
             return;
           }
-          if (resumingDecision && decision && isDecisionNotTaken(error)) {
-            restoreDecision(error, decision);
+          const inFlight = get().decisionInFlight;
+          if (resumingDecision && inFlight && isDecisionNotTaken(error)) {
+            restoreDecision(error, inFlight);
             return;
           }
           if (resumingDecision && isUnresumedDecision(error)) {
@@ -485,6 +492,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             retryMode: resumingDecision ? 'none' : 'resend',
             _streamHandle: null,
             thinkingText: '',
+            decisionInFlight: null,
           });
         },
         onProposal: (proposal) => {
@@ -544,7 +552,11 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
-          set({ _streamHandle: null, thinkingText: '' });
+          set({
+            _streamHandle: null,
+            thinkingText: '',
+            decisionInFlight: null,
+          });
           void showStoredAnswer(turnId);
         },
       },
@@ -567,7 +579,6 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     lastNoteId = noteId;
     unsentText = text;
     resumingDecision = false;
-    decision = undefined;
     buffer.clearInactivityTimer();
     buffer.discard();
     thinkingBuffer.discard();
@@ -588,6 +599,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       status: 'streaming',
       error: null,
       pendingProposal: null,
+      decisionInFlight: null,
       thinkingText: '',
       _streamHandle: null,
     });
@@ -731,6 +743,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     error: null,
     answeredError: null,
     pendingProposal: null,
+    decisionInFlight: null,
     thinkingText: '',
     reasoningEffort: 'auto',
     userId: null,
@@ -781,6 +794,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         error: null,
         retryMode: 'resend',
         pendingProposal: null,
+        decisionInFlight: null,
         thinkingText: '',
         _streamHandle: null,
         hydration: 'loading',
@@ -886,6 +900,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         error: null,
         retryMode: 'resend',
         pendingProposal: null,
+        decisionInFlight: null,
         thinkingText: '',
         reasoningEffort: 'auto',
         conversationId: null,
@@ -906,6 +921,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       set({
         status: 'idle',
         pendingProposal: null,
+        decisionInFlight: null,
         thinkingText: '',
         _streamHandle: null,
       });
@@ -961,10 +977,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         return;
       }
       const assistant = beginResumedTurn();
-      decision = { proposal: p, discardedId: undefined };
       set((s) => ({
         status: 'streaming',
         pendingProposal: null,
+        decisionInFlight: { proposal: p, discardedId: undefined },
         thinkingText: '',
         messages: [...s.messages, assistant],
       }));
@@ -988,10 +1004,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       const discardedId = get().messages.findLast(
         (m) => m.proposal && !m.committed && !m.discarded
       )?.id;
-      decision = { proposal: p, discardedId };
       set((s) => ({
         status: 'streaming',
         pendingProposal: null,
+        decisionInFlight: { proposal: p, discardedId },
         thinkingText: '',
         messages: [
           ...s.messages.map((m) =>
