@@ -20,16 +20,7 @@ export type CatalogAlertKind = (typeof CATALOG_ALERT_KINDS)[number];
 export const CATALOG_LABEL_MAX_LENGTH = 100;
 export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
 
-/** Ceiling the platform absorbs on the free tier: $4.00 per million output tokens. Above it a model is reachable only with BYOK. */
-export const FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN = 0.000004;
-
-/** Model prices are quoted per million tokens but stored and compared per token; API and backoffice must convert identically. */
-export const TOKENS_PER_MILLION = 1_000_000;
-
-/** The one shape a stored money value may take — dollars with up to two decimals; API validation and backoffice hints must agree on it. */
-export const USD_PER_MILLION_FORMAT = /^\d+(\.\d{1,2})?$/;
-
-/** Ceiling for admission into the catalog. Anything between this and the free-tier ceiling is only reachable with BYOK or a paid plan. */
+/** Most a model may cost per output token to be admitted into the catalog. */
 export const CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN = 0.00002;
 
 export interface CatalogModelDto {

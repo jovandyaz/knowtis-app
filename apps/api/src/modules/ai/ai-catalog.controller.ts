@@ -41,7 +41,10 @@ import {
   ApiBadRequest,
 } from '../../core/swagger/api-responses.decorator';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
 import { AssignableModelsService } from './application/services/assignable-models.service';
 import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
@@ -130,8 +133,7 @@ export class AiCatalogController {
 
   @ApiOperation({
     summary: 'Promote a catalog model',
-    description:
-      'Offers the model to users in the chosen tier. Pricing still decides who pays: above the free-tier ceiling it stays BYOK-only whatever the tier.',
+    description: 'Offers the model to users in the chosen tier.',
   })
   @ApiResponse({ status: 200, description: 'The promoted model' })
   @ApiResponse({ status: 404, description: UNKNOWN_MODEL })

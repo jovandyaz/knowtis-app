@@ -27,7 +27,6 @@ import {
   CATALOG_LABEL_MAX_LENGTH,
 } from '@knowtis/shared-types';
 
-import { isByokOnly } from './catalog-pricing';
 import type { ServingRole } from './serving-roles';
 
 const ROLE_SEPARATOR = ' · ';
@@ -41,7 +40,6 @@ interface PromotedCopyEdit {
 interface PromotedModelRowProps {
   model: CatalogModel;
   disabled: boolean;
-  maxOutputCostPerToken: number;
   /** `null` while the config query is unresolved: the guard cannot rule the model out, so retiring asks. */
   roles: readonly ServingRole[] | null;
   onSave: (label: string, description: string) => void;
@@ -51,7 +49,6 @@ interface PromotedModelRowProps {
 function PromotedModelRow({
   model,
   disabled,
-  maxOutputCostPerToken,
   roles,
   onSave,
   onRetire,
@@ -83,9 +80,6 @@ function PromotedModelRow({
           >
             {model.id}
           </span>
-          {isByokOnly(model, maxOutputCostPerToken) ? (
-            <Badge variant="outline">BYOK only</Badge>
-          ) : null}
           {roles !== null && roles.length > 0 ? (
             <Badge variant="secondary">
               Serves {roles.join(ROLE_SEPARATOR)}
@@ -197,7 +191,6 @@ function PromotedModelRow({
 interface PromotedTableProps {
   models: CatalogModel[];
   disabled: boolean;
-  maxOutputCostPerToken: number;
   /** `null` while the config query is unresolved; see PromotedModelRowProps.roles. */
   servingRoles: ReadonlyMap<string, readonly ServingRole[]> | null;
   onSave: (edit: PromotedCopyEdit) => void;
@@ -207,7 +200,6 @@ interface PromotedTableProps {
 export function PromotedTable({
   models,
   disabled,
-  maxOutputCostPerToken,
   servingRoles,
   onSave,
   onRetire,
@@ -270,7 +262,6 @@ export function PromotedTable({
                 key={model.id}
                 model={model}
                 disabled={disabled}
-                maxOutputCostPerToken={maxOutputCostPerToken}
                 roles={
                   servingRoles === null
                     ? null

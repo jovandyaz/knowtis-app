@@ -20,7 +20,7 @@ export class AssignableModelsService {
   /**
    * Every model an admin may assign as an intent default: all curated models —
    * unconfigured providers surface as `needsKey` instead of disappearing — plus
-   * every promoted model. Curated wins a duplicate id, mirroring catalogUnion.
+   * every promoted model. Curated wins a duplicate id, mirroring SelectableModelsService.offered().
    */
   async list(): Promise<AssignableModelDto[]> {
     const curated = CURATED_MODELS.map((model): AssignableModelDto => {

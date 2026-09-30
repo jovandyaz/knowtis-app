@@ -44,7 +44,7 @@ export class CompositeModelCatalog implements ModelCatalog {
     return this.inner.getContextWindow(modelId);
   }
 
-  /** A curated id is never overridden by a promoted model — matches the exclusion in SelectableModelsService.catalogUnion(). */
+  /** A curated id is never overridden by a promoted model — matches the exclusion in SelectableModelsService.offered(). */
   private find(modelId: string): CatalogModel | undefined {
     if (CURATED_MODEL_IDS.has(modelId)) {
       return undefined;

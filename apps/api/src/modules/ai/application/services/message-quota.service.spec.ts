@@ -99,28 +99,6 @@ describe('MessageQuotaService', () => {
       expect(persisted.countUserMessages).not.toHaveBeenCalled();
     });
 
-    it('meters a byok-tier caller on a platform model under the free limit, showing no counter', async () => {
-      const { service, counters } = setup();
-
-      const outcome = await service.consume(
-        createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
-        TURN
-      );
-
-      expect(counters.consume).toHaveBeenCalledWith(
-        {
-          subjects: ['user-1'],
-          turnId: TURN,
-          day: expect.objectContaining({ key: '2026-09-27' }),
-        },
-        30
-      );
-      expect(outcome).toMatchObject({
-        kind: 'consumed',
-        quota: { tier: 'byok', messages: null },
-      });
-    });
-
     it('meters an anonymous caller under its session and its IP together', async () => {
       const { service, counters } = setup();
 

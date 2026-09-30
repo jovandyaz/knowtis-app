@@ -7,7 +7,7 @@ import {
   advancedModelOptions,
   effortOptions,
   moreModelGroups,
-  primaryRows,
+  resolveSelectedModel,
 } from './intent-picker-options';
 
 const t = ((key: string) => key) as unknown as TFunction<'common'>;
@@ -22,7 +22,6 @@ const model = {
   isDefault: true,
   billedToUser: true,
   routableByServer: true,
-  access: 'granted',
 } satisfies SelectableModel;
 
 describe('effortOptions', () => {
@@ -46,29 +45,58 @@ describe('effortOptions', () => {
   });
 });
 
-describe('models listed without access', () => {
-  const { access: _omitted, ...listed } = {
-    ...model,
-    id: 'anthropic:claude-opus-5',
-  };
+describe('models outside an intent', () => {
+  const listed = { ...model, id: 'anthropic:claude-opus-5' };
 
-  it('offers a key-billed model the server lists without access in Advanced', () => {
+  it('offers a key-billed model in Advanced', () => {
     expect(advancedModelOptions([listed])).toEqual([listed]);
   });
 
-  it('keeps an unbilled model the server lists without access in more models', () => {
+  it('keeps a key-billed model in more models', () => {
     expect(
-      moreModelGroups([{ ...listed, billedToUser: false }], t).flatMap(
-        (group) => group.options
-      )
+      moreModelGroups([listed], t).flatMap((group) => group.options)
     ).toEqual([expect.objectContaining({ id: 'anthropic:claude-opus-5' })]);
   });
 
-  it('does not lock an intent row for a model the server lists without access', () => {
+  it('keeps an intent-serving model out of more models and Advanced', () => {
+    const serving = {
+      ...model,
+      billedToUser: false,
+      servesIntent: 'fast' as const,
+    };
+
+    expect(advancedModelOptions([serving])).toEqual([]);
+    expect(moreModelGroups([serving], t)).toEqual([]);
+  });
+});
+
+describe('resolveSelectedModel', () => {
+  const fast = {
+    ...model,
+    id: 'anthropic:claude-haiku-4-5',
+    servesIntent: 'fast' as const,
+  };
+  const balanced = {
+    ...model,
+    id: 'anthropic:claude-sonnet-5',
+    servesIntent: 'balanced' as const,
+  };
+
+  it('resolves an advanced pick that also serves an intent over the stored intent', () => {
     expect(
-      primaryRows([{ ...listed, servesIntent: 'balanced' }], t).map(
-        (row) => row.locked
-      )
-    ).toEqual([false]);
+      resolveSelectedModel([fast, balanced], {
+        preferredModel: 'anthropic:claude-sonnet-5',
+        preferredIntent: 'fast',
+      })
+    ).toBe(balanced);
+  });
+
+  it('falls back to the stored intent when the picked model is no longer listed', () => {
+    expect(
+      resolveSelectedModel([fast, balanced], {
+        preferredModel: 'anthropic:claude-opus-5',
+        preferredIntent: 'fast',
+      })
+    ).toBe(fast);
   });
 });

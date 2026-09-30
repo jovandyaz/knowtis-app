@@ -31,7 +31,7 @@ vi.mock('@/hooks', () => ({
   useUpdateAISettings: () => ({ mutate: update }),
 }));
 
-const grantedModels = [
+const intentServingModels = [
   {
     id: 'a:bal',
     label: 'Balanced One',
@@ -41,7 +41,6 @@ const grantedModels = [
     costClass: 2,
     isDefault: true,
     billedToUser: false,
-    access: 'granted',
     servesIntent: 'balanced',
   },
   {
@@ -53,12 +52,11 @@ const grantedModels = [
     costClass: 1,
     isDefault: false,
     billedToUser: false,
-    access: 'granted',
     servesIntent: 'fast',
   },
 ];
 
-const lockedModel = {
+const powerfulModel = {
   id: 'x:premium',
   label: 'Premium One',
   descriptionKey: 'aiModels.gpt56Sol',
@@ -67,7 +65,6 @@ const lockedModel = {
   costClass: 3,
   isDefault: false,
   billedToUser: false,
-  access: 'requires_byok',
   servesIntent: 'powerful',
 };
 
@@ -80,17 +77,16 @@ const byokModel = {
   costClass: 3,
   isDefault: false,
   billedToUser: true,
-  access: 'granted',
 };
 
-const withLockedModel = [...grantedModels, lockedModel];
-const withByokModel = [...grantedModels, lockedModel, byokModel];
+const withPowerfulModel = [...intentServingModels, powerfulModel];
+const withByokModel = [...intentServingModels, powerfulModel, byokModel];
 
 describe('AIAssistantSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSettingsStore.setState({ focusTarget: null });
-    modelsData.mockReturnValue(grantedModels);
+    modelsData.mockReturnValue(intentServingModels);
     modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
       preferredModel: null,
@@ -100,7 +96,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('offers only the three intent chips to a user without BYOK models', () => {
-    modelsData.mockReturnValue(withLockedModel);
+    modelsData.mockReturnValue(withPowerfulModel);
     render(<AIAssistantSection />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(3);
@@ -122,7 +118,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('keeps the keys manager reachable so a free user can add a BYOK key', () => {
-    modelsData.mockReturnValue(withLockedModel);
+    modelsData.mockReturnValue(withPowerfulModel);
     render(<AIAssistantSection />);
 
     expect(screen.getByText('byok-keys-manager')).toBeInTheDocument();
@@ -212,7 +208,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('drops any model override when an intent chip is picked', async () => {
-    modelsData.mockReturnValue(withLockedModel);
+    modelsData.mockReturnValue(withPowerfulModel);
     prefsData.mockReturnValue({
       preferredModel: 'a:fast',
       preferredIntent: null,
@@ -256,6 +252,34 @@ describe('AIAssistantSection', () => {
     await userEvent.click(screen.getByText('Byok One'));
 
     expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
+  });
+
+  it('shows a key model picked in Advanced as selected even when it serves an intent', async () => {
+    const keyServingIntent = { ...intentServingModels[0], billedToUser: true };
+    modelsData.mockReturnValue([keyServingIntent, intentServingModels[1]]);
+    const { rerender } = render(<AIAssistantSection />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+    );
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: /Balanced One/ })
+    );
+    expect(update).toHaveBeenCalledWith({ preferredModel: 'a:bal' });
+
+    prefsData.mockReturnValue({
+      preferredModel: 'a:bal',
+      preferredIntent: 'fast',
+      ghostTextEnabled: true,
+    });
+    rerender(<AIAssistantSection />);
+
+    expect(
+      screen.getByRole('button', { name: /Balanced One/ })
+    ).toBeInTheDocument();
+    for (const chip of screen.getAllByRole('radio')) {
+      expect(chip).toHaveAttribute('data-state', 'off');
+    }
   });
 
   it('shows autocomplete as on while the account preference is on', () => {

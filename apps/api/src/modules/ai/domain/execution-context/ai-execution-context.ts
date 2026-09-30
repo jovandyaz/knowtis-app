@@ -48,3 +48,10 @@ export function billingFor(
     ? { ...execution, billing: { kind: 'byok', provider } }
     : execution;
 }
+
+/** A byok-tier turn must bill the caller's key: its catalog holds nothing else. */
+export function billingMatchesTier(
+  execution: Pick<AiExecutionContext, 'tier' | 'billing'>
+): boolean {
+  return execution.tier !== 'byok' || execution.billing.kind === 'byok';
+}

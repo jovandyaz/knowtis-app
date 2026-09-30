@@ -10,6 +10,7 @@ import type {
 import { createExecutionContext } from '../../testing/create-execution-context';
 import type { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
+import { SelectableModelsService } from './selectable-models.service';
 import { TurnEffortResolver } from './turn-effort.resolver';
 
 const USER = 'user-1';
@@ -85,22 +86,6 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'max',
       })
-    ).resolves.toBe('high');
-  });
-
-  it('treats a byok-tier caller on a platform model as the free audience', async () => {
-    const { resolver } = make({
-      levels: ['low', 'medium', 'high', 'xhigh'],
-      mandatory: false,
-    });
-    const execution = createExecutionContext({
-      userId: USER,
-      tier: 'byok',
-      byokProviders: ['anthropic'],
-    });
-
-    await expect(
-      resolver.resolve({ execution, model: MODEL, requested: 'max' })
     ).resolves.toBe('high');
   });
 
@@ -322,44 +307,28 @@ describe('TurnEffortResolver', () => {
 
   describe('with the real model preference service', () => {
     function makeReal() {
-      const byok = { enabledProviders: vi.fn() };
-      const list = (
-        _systemDefault: string,
-        _configured: ReadonlySet<string>,
-        byokProviders: ReadonlySet<string>
-      ) =>
-        byokProviders.has(providerOf(DIRECT_MODEL))
-          ? [
-              {
-                id: DIRECT_MODEL,
-                reasoning: {
-                  levels: ['low', 'medium', 'high'],
-                  mandatory: false,
-                },
-              },
-            ]
-          : [];
+      const selectable = new SelectableModelsService(
+        {
+          isSupported: () => true,
+          getPricing: () => undefined,
+          getContextWindow: () => undefined,
+        },
+        { isModelAvailable: () => false } as never,
+        { snapshot: () => [] } as never
+      );
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),
-        getDefaultModel: vi.fn().mockResolvedValue(MODEL),
-        getConfiguredModelIds: vi.fn().mockResolvedValue(new Set([MODEL])),
-        getFreeTierMaxOutputCostPerToken: vi.fn().mockResolvedValue(0.001),
-        getIntentModels: vi.fn().mockResolvedValue({}),
       };
       const modelPreference = new ModelPreferenceService(
         {} as never,
-        { list } as never,
-        aiConfig as never,
-        byok as never
+        selectable,
+        aiConfig as never
       );
-      return {
-        byok,
-        resolver: new TurnEffortResolver(aiConfig as never, modelPreference),
-      };
+      return new TurnEffortResolver(aiConfig as never, modelPreference);
     }
 
-    it("applies the declared level of a model the turn's key unlocks, never re-reading the key store", async () => {
-      const { resolver, byok } = makeReal();
+    it("applies the declared level of a model the turn's key unlocks", async () => {
+      const resolver = makeReal();
       const execution = billedToKey(DIRECT_MODEL);
 
       await expect(
@@ -368,11 +337,10 @@ describe('TurnEffortResolver', () => {
       await expect(
         resolver.resolve({ execution, model: DIRECT_MODEL })
       ).resolves.toBe(GLOBAL_DEFAULT);
-      expect(byok.enabledProviders).not.toHaveBeenCalled();
     });
 
-    it('sends no effort to a model the turn holds no key for, never re-reading the key store', async () => {
-      const { resolver, byok } = makeReal();
+    it('sends no effort to a model the turn holds no key for', async () => {
+      const resolver = makeReal();
 
       await expect(
         resolver.resolve({
@@ -384,7 +352,6 @@ describe('TurnEffortResolver', () => {
       await expect(
         resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
       ).resolves.toBeUndefined();
-      expect(byok.enabledProviders).not.toHaveBeenCalled();
     });
   });
 });

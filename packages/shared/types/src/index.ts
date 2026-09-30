@@ -60,7 +60,6 @@ export {
   MODEL_TIERS,
   AI_ACCESS_TIERS,
   type AccessTier,
-  MODEL_ACCESS,
   MODEL_INTENTS,
   DEFAULT_MODEL_INTENT,
   isModelIntent,
@@ -81,7 +80,6 @@ export {
   type AILanguage,
   type AITone,
   type ModelTier,
-  type ModelAccess,
   type ModelIntent,
   type ReasoningEffort,
   type GlobalReasoningEffort,
@@ -105,11 +103,19 @@ export {
   type SetSystemProviderResult,
   type SystemProviderInfo,
   type EncryptedSecret,
+  isByokProvider,
 } from './lib/ai.types';
 
 export {
   type IntentAvailability,
   type ModelCatalogResponse,
+  MODEL_FALLBACK_REASONS,
+  type ModelFallbackReason,
+  MODEL_UNAVAILABLE_REASONS,
+  type ModelUnavailableReason,
+  type ModelResolution,
+  AI_MODEL_UNAVAILABLE_CODE,
+  type ModelUnavailableError,
 } from './lib/ai-catalog.types';
 
 export {
@@ -179,9 +185,6 @@ export {
   type CatalogAlertKind,
   CATALOG_LABEL_MAX_LENGTH,
   CATALOG_DESCRIPTION_MAX_LENGTH,
-  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-  TOKENS_PER_MILLION,
-  USD_PER_MILLION_FORMAT,
   CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   type CatalogModelDto,
   type CatalogAlertDto,

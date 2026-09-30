@@ -216,10 +216,20 @@ function makeModelPreference(
   effectiveDefault = 'anthropic:claude-sonnet-4-20250514'
 ) {
   return {
-    getEffectiveDefault: vi.fn().mockResolvedValue(effectiveDefault),
-    assertSelectable: vi.fn(),
-    isSelectable: vi.fn().mockReturnValue(true),
-    isSelectableWith: vi.fn().mockResolvedValue(true),
+    chooseTurnModel: vi.fn(
+      async (
+        _execution: AiExecutionContext,
+        request: { explicit?: string; pinned?: string | null }
+      ) => {
+        const requested = request.explicit ?? request.pinned ?? null;
+        const model = requested ?? effectiveDefault;
+        return {
+          kind: 'resolved',
+          model,
+          resolution: { requested, resolved: model },
+        };
+      }
+    ),
     reasoningFor: vi.fn().mockResolvedValue(null),
   } as unknown as ModelPreferenceService;
 }
@@ -966,7 +976,7 @@ describe('RunAgentTurnHandler', () => {
   it('calls onError with a generic message, not the raw internal error, when model resolution throws', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.getEffectiveDefault).mockRejectedValue(
+    vi.mocked(modelPreference.chooseTurnModel).mockRejectedValue(
       new Error('pg connection to 10.0.0.9 refused')
     );
     const handler = new RunAgentTurnHandler(
@@ -1560,6 +1570,71 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it("reports a resumed turn's model fallback when it ends on a dropped proposal", async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+        usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+      },
+    ]);
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: 'anthropic:claude-sonnet-3',
+    });
+    const modelPreference = makeModelPreference();
+    const resolution = {
+      requested: 'anthropic:claude-sonnet-3',
+      resolved: SERVED_MODEL,
+      fallback: {
+        reason: 'model_retired',
+        from: 'anthropic:claude-sonnet-3',
+        to: SERVED_MODEL,
+      },
+    } as const;
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'resolved',
+      model: SERVED_MODEL,
+      resolution,
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const onDone = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        resume: { outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError: vi.fn() }
+    );
+
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ modelResolution: resolution })
+    );
+  });
+
   it('resumeTurn calls onError when the orchestrator throws', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {
@@ -2018,10 +2093,12 @@ describe('RunAgentTurnHandler', () => {
   });
 
   describe('execution context', () => {
-    const PLATFORM_MODEL = 'openai:gpt-4o-mini';
     const ANTHROPIC_MODEL = SERVED_MODEL;
 
-    function makeContextHandler(history: ConversationMessageRow[] = []) {
+    function makeContextHandler(
+      history: ConversationMessageRow[] = [],
+      quota: MessageQuotaService = createMessageQuotaStub()
+    ) {
       const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
       const conversations = makeConversations(history);
       const byok = makeByok();
@@ -2043,7 +2120,7 @@ describe('RunAgentTurnHandler', () => {
         makeAIConfig(),
         makeTurnEffort(),
         tierResolver,
-        createMessageQuotaStub(),
+        quota,
         makeEvents()
       );
       const callbacks = {
@@ -2060,6 +2137,7 @@ describe('RunAgentTurnHandler', () => {
         byok,
         tierResolver,
         injectionGuard,
+        quota,
         callbacks,
       };
     }
@@ -2089,33 +2167,130 @@ describe('RunAgentTurnHandler', () => {
       );
     });
 
-    it('keeps platform limits for a byok-tier caller whose turn runs on a platform model', async () => {
-      const {
-        handler,
-        orchestrator,
-        rateLimit,
-        byok,
-        tierResolver,
-        callbacks,
-      } = makeContextHandler();
+    it('stores no explicit model when the billing guard refuses the turn', async () => {
+      const { handler, orchestrator, conversations, tierResolver, callbacks } =
+        makeContextHandler();
       vi.mocked(tierResolver.resolve).mockResolvedValue(
         createExecutionContext({
           userId: USER,
           tier: 'byok',
-          byokProviders: ['anthropic'],
+          byokProviders: ['google'],
         })
       );
 
-      await handler.execute(turnInput({ model: PLATFORM_MODEL }), callbacks);
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
 
-      expect(orchestrator.run).toHaveBeenCalledWith(
-        expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'AI_MODEL_UNAVAILABLE' })
       );
-      expect(byok.getApiKey).not.toHaveBeenCalled();
-      expect(rateLimit.checkLimit).toHaveBeenCalledWith(
-        expect.objectContaining({ tier: 'byok', billing: PLATFORM_BILLING }),
-        expect.anything()
+      expect(conversations.setModel).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('fails the turn with a generic error when storing the explicit model fails', async () => {
+      const { handler, orchestrator, conversations, callbacks } =
+        makeContextHandler();
+      vi.mocked(conversations.setModel).mockRejectedValue(
+        new Error('pg connection to 10.0.0.7 refused')
       );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith({
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Model resolution failed',
+      });
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('stores no explicit model when the daily quota refuses the turn', async () => {
+      const { handler, orchestrator, conversations, callbacks } =
+        makeContextHandler(
+          [],
+          createMessageQuotaStub({
+            kind: 'exhausted',
+            resetsAt: new Date('2026-09-28T00:00:00.000Z'),
+            upgrade: 'register',
+          })
+        );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'AI_QUOTA_EXHAUSTED' })
+      );
+      expect(conversations.setModel).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('stores no explicit model when the injection guard refuses the turn', async () => {
+      const {
+        handler,
+        orchestrator,
+        conversations,
+        injectionGuard,
+        callbacks,
+      } = makeContextHandler();
+      vi.mocked(injectionGuard.guard).mockResolvedValue({
+        safe: false,
+        score: 0.9,
+      });
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'PROMPT_INJECTION_DETECTED' })
+      );
+      expect(conversations.setModel).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('refunds the drawn message and releases the budget when storing the explicit model fails', async () => {
+      const receipt: QuotaReceipt = {
+        turn: {
+          subjects: [USER],
+          turnId: TURN_ID,
+          day: utcDayOf(new Date('2026-09-27T12:00:00.000Z')),
+        },
+        tier: 'free',
+        limit: 30,
+        store: QUOTA_STORES.REDIS,
+      };
+      const {
+        handler,
+        orchestrator,
+        conversations,
+        rateLimit,
+        quota,
+        callbacks,
+      } = makeContextHandler(
+        [],
+        createMessageQuotaStub({
+          kind: 'consumed',
+          receipt,
+          quota: {
+            tier: 'free',
+            messages: {
+              used: 1,
+              limit: 30,
+              resetsAt: '2026-09-28T00:00:00.000Z',
+            },
+          },
+        })
+      );
+      vi.mocked(conversations.setModel).mockRejectedValue(
+        new Error('pg connection to 10.0.0.7 refused')
+      );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(quota.refund).toHaveBeenCalledWith(receipt);
+      expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+      expect(callbacks.onError).toHaveBeenCalledWith({
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Model resolution failed',
+      });
+      expect(orchestrator.run).not.toHaveBeenCalled();
     });
 
     it('bills the key, lifts the budget and widens the steps when the model runs on the caller key', async () => {
@@ -2848,57 +3023,9 @@ describe('RunAgentTurnHandler', () => {
     });
   });
 
-  it('grades a server-billed rescue model as free even when the user keys its provider', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const modelPreference = makeModelPreference();
-    const turnEffort = makeTurnEffort('high');
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      modelPreference,
-      makeByok(),
-      makeGuard(),
-      makeAIConfig(),
-      turnEffort,
-      makeTierResolver([providerOf(USER_KEYED_MODEL) as ByokProvider]),
-      createMessageQuotaStub(),
-      makeEvents()
-    );
-
-    await handler.execute(
-      {
-        userId: USER,
-        turnId: TURN_ID,
-        message: { content: 'hi' },
-        effort: 'max',
-      },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
-    await effortFor?.(USER_KEYED_MODEL);
-    expect(turnEffort.resolve).toHaveBeenCalledWith({
-      execution: expect.objectContaining({ billing: PLATFORM_BILLING }),
-      model: USER_KEYED_MODEL,
-      requested: 'max',
-    });
-  });
-
   it("grades every model of a byok turn against the user's own key", async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
     const turnEffort = makeTurnEffort('max');
@@ -4302,9 +4429,9 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
     );
-    expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
-      USER,
-      expect.anything()
+    expect(modelPreference.chooseTurnModel).toHaveBeenCalledWith(
+      executionFor(USER),
+      { pinned: null }
     );
   });
 
@@ -4353,7 +4480,10 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'openai:gpt-4o-mini' })
     );
-    expect(modelPreference.getEffectiveDefault).not.toHaveBeenCalled();
+    expect(modelPreference.chooseTurnModel).toHaveBeenCalledWith(
+      executionFor(USER),
+      { pinned: 'openai:gpt-4o-mini' }
+    );
   });
 
   it('validates, persists, and uses an explicit valid model from the turn', async () => {
@@ -4399,9 +4529,9 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(modelPreference.isSelectableWith).toHaveBeenCalledWith(
-      'openai:gpt-4o-mini',
-      expect.any(Set)
+    expect(modelPreference.chooseTurnModel).toHaveBeenCalledWith(
+      executionFor(USER),
+      { explicit: 'openai:gpt-4o-mini', pinned: null }
     );
     expect(conversations.setModel).toHaveBeenCalledWith(
       'conv-1',
@@ -4417,7 +4547,11 @@ describe('RunAgentTurnHandler', () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: SERVED_MODEL,
+    });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -4449,7 +4583,7 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'AI_INVALID_MODEL' })
+      expect.objectContaining({ code: 'AI_MODEL_UNAVAILABLE' })
     );
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(conversations.setModel).not.toHaveBeenCalled();
@@ -4474,7 +4608,6 @@ describe('RunAgentTurnHandler', () => {
       },
     ]);
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
     const handler = new RunAgentTurnHandler(
@@ -4528,7 +4661,6 @@ describe('RunAgentTurnHandler', () => {
   it('fails closed without server billing when an advertised BYOK key is unavailable', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue(null);
     const handler = new RunAgentTurnHandler(
@@ -4757,7 +4889,6 @@ describe('RunAgentTurnHandler', () => {
       }),
     };
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
     const handler = new RunAgentTurnHandler(
@@ -6279,7 +6410,11 @@ describe('RunAgentTurnHandler turn identity', () => {
       'the requested model is not selectable',
       () => {
         const modelPreference = makeModelPreference();
-        vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
+        vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+          kind: 'unavailable',
+          reason: 'not_in_tier',
+          suggestedModel: SERVED_MODEL,
+        });
         return setup({ modelPreference });
       },
     ],
@@ -7035,14 +7170,18 @@ describe('RunAgentTurnHandler daily message quota', () => {
   it('never consumes when the requested model is not selectable', async () => {
     const quota = consumedQuota();
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: SERVED_MODEL,
+    });
     const { handler } = build({ quota, modelPreference });
     const cb = callbacks();
 
     await handler.execute({ ...turn, model: SERVED_MODEL }, cb);
 
     expect(cb.onError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: AIErrorCodes.INVALID_MODEL })
+      expect.objectContaining({ code: 'AI_MODEL_UNAVAILABLE' })
     );
     expect(quota.consume).not.toHaveBeenCalled();
   });
@@ -7064,6 +7203,75 @@ describe('RunAgentTurnHandler daily message quota', () => {
       })
     );
     expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  it('refuses a byok-tier turn that would bill the platform, before any message is drawn', async () => {
+    const quota = consumedQuota();
+    const { handler, orchestrator } = build({
+      quota,
+      tierResolver: makeTierResolver(['google']),
+    });
+    const cb = callbacks();
+
+    await handler.execute({ ...turn, model: SERVED_MODEL }, cb);
+
+    expect(cb.onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'AI_MODEL_UNAVAILABLE',
+        reason: 'not_in_tier',
+      })
+    );
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unavailable model with the reason and the suggested model', async () => {
+    const quota = consumedQuota();
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'unavailable',
+      reason: 'key_removed',
+      suggestedModel: SERVED_MODEL,
+    });
+    const { handler } = build({ quota, modelPreference });
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(cb.onError).toHaveBeenCalledWith({
+      code: 'AI_MODEL_UNAVAILABLE',
+      message: 'This model is not available to you.',
+      reason: 'key_removed',
+      suggestedModel: SERVED_MODEL,
+    });
+    expect(quota.consume).not.toHaveBeenCalled();
+  });
+
+  it('reports a substituted model on done', async () => {
+    const quota = consumedQuota();
+    const modelPreference = makeModelPreference();
+    const resolution = {
+      requested: 'anthropic:claude-sonnet-3',
+      resolved: SERVED_MODEL,
+      fallback: {
+        reason: 'model_retired',
+        from: 'anthropic:claude-sonnet-3',
+        to: SERVED_MODEL,
+      },
+    } as const;
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'resolved',
+      model: SERVED_MODEL,
+      resolution,
+    });
+    const { handler } = build({ quota, modelPreference });
+    const cb = callbacks();
+
+    await handler.execute(turn, cb);
+
+    expect(cb.onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ modelResolution: resolution })
+    );
   });
 
   describe('with the real quota service', () => {
@@ -7102,21 +7310,6 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
       expect(orchestrator.run).toHaveBeenCalledOnce();
       expect(counters.consume).not.toHaveBeenCalled();
-    });
-
-    it('meters a byok-tier caller on a platform model under the free limit', async () => {
-      const { service, counters } = realQuota();
-      const { handler } = build({
-        quota: service,
-        tierResolver: makeTierResolver(['google']),
-      });
-
-      await handler.execute({ ...turn, model: SERVED_MODEL }, callbacks());
-
-      expect(counters.consume).toHaveBeenCalledWith(
-        expect.objectContaining({ subjects: [USER], turnId: TURN_ID }),
-        30
-      );
     });
   });
 });

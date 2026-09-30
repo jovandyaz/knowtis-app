@@ -1,32 +1,44 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ModelCatalog } from '@knowtis/ai-gateway';
+import type { ModelIntent } from '@knowtis/shared-types';
 
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import type { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { SelectableModelsService } from './selectable-models.service';
 
-const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
+const SONNET_5 = 'anthropic:claude-sonnet-5';
 const NO_BYOK: ReadonlySet<string> = new Set();
-/** Stands for a config that still points at every curated model, which is what these cases assume. */
-const ALL_CURATED: ReadonlySet<string> = new Set(
-  CURATED_MODELS.map((model) => model.id)
-);
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PORT_CONTEXT_WINDOW = 262_144;
 const ROW_CONTEXT_WINDOW = 4_096;
 const CURATED_OUTPUT_COST = 0.000015;
 const SHADOWING_OUTPUT_COST = 0.0000001;
-/** Below FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, like every open-tier model the platform absorbs. */
-const FREE_TIER_OUTPUT_COST = 0.000001;
-const ABOVE_CEILING_OUTPUT_COST = 0.000015;
+const OPEN_TIER_OUTPUT_COST = 0.000001;
+const INTENTS = {
+  fast: 'openrouter:minimax/minimax-m2.5',
+  balanced: 'openrouter:deepseek/deepseek-v3.2',
+  powerful: 'openrouter:moonshotai/kimi-k2.5',
+} as const;
+const PROMOTED_FAST_INTENTS = { ...INTENTS, fast: PROMOTED_ID } as const;
+
+const FREE_CALLER = createExecutionContext({ tier: 'free' });
+const ANTHROPIC_KEY = createExecutionContext({
+  tier: 'byok',
+  byokProviders: ['anthropic'],
+});
+const OPENROUTER_KEY = createExecutionContext({
+  tier: 'byok',
+  byokProviders: ['openrouter'],
+});
 
 type RegistryStub = Pick<ProviderRegistryFactory, 'isModelAvailable'>;
 type PromotedCacheStub = Pick<PromotedModelsCache, 'snapshot'>;
@@ -51,7 +63,7 @@ function promotedCache(models: readonly CatalogModel[]): PromotedCacheStub {
 function makeOpenService(promoted: readonly CatalogModel[] = []) {
   const catalog: ModelCatalog = {
     isSupported: () => true,
-    getPricing: () => ({ outputCostPerToken: FREE_TIER_OUTPUT_COST }),
+    getPricing: () => ({ outputCostPerToken: OPEN_TIER_OUTPUT_COST }),
     getContextWindow: () => ({ maxInputTokens: 1000 }),
   };
   const registry: RegistryStub = { isModelAvailable: () => true };
@@ -83,7 +95,7 @@ function makeService(opts: {
       (opts.supported.has(id)
         ? {
             inputCostPerToken: 0.000001,
-            outputCostPerToken: FREE_TIER_OUTPUT_COST,
+            outputCostPerToken: OPEN_TIER_OUTPUT_COST,
           }
         : undefined),
   };
@@ -97,122 +109,15 @@ function makeService(opts: {
   );
 }
 
+function listed(
+  service: SelectableModelsService,
+  execution: AiExecutionContext,
+  intents: Readonly<Record<ModelIntent, string>> = INTENTS
+) {
+  return service.toSelectable(service.catalogFor(execution, intents));
+}
+
 describe('SelectableModelsService', () => {
-  it('omits curated models whose provider key is not configured', () => {
-    const svc = makeService({
-      supported: new Set(['anthropic:claude-sonnet-5', 'openai:gpt-5.6-sol']),
-      available: new Set(['anthropic:claude-sonnet-5']),
-    });
-    const ids = svc.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => m.id);
-    expect(ids).toContain('anthropic:claude-sonnet-5');
-    expect(ids).not.toContain('openai:gpt-5.6-sol');
-  });
-
-  it('unlocks a model when the user has a BYOK key for its provider', () => {
-    const registry: RegistryStub = {
-      isModelAvailable: (id: string) => id.startsWith('anthropic:'),
-    };
-    const catalog: ModelCatalog = {
-      isSupported: () => true,
-      getPricing: () => ({ outputCostPerToken: 0.000005 }),
-      getContextWindow: () => ({ maxInputTokens: 1000 }),
-    };
-    const svc = makeSelectableModelsService(
-      catalog,
-      registry,
-      promotedCache([])
-    );
-    const withByok = svc.list(
-      'anthropic:claude-sonnet-5',
-      ALL_CURATED,
-      new Set(['google'])
-    );
-    expect(withByok.some((m) => m.id.startsWith('google:'))).toBe(true);
-    const without = svc.list('anthropic:claude-sonnet-5', ALL_CURATED);
-    expect(without.some((m) => m.id.startsWith('google:'))).toBe(false);
-  });
-
-  it('flags billedToUser only for models whose provider has a BYOK key', () => {
-    const svc = makeOpenService();
-    const models = svc.list(
-      'anthropic:claude-sonnet-5',
-      ALL_CURATED,
-      new Set(['google'])
-    );
-    expect(models.find((m) => m.id.startsWith('google:'))?.billedToUser).toBe(
-      true
-    );
-    expect(
-      models.find((m) => m.id.startsWith('anthropic:'))?.billedToUser
-    ).toBe(false);
-  });
-
-  it('isSelectable unlocks a curated model via a matching BYOK provider', () => {
-    const svc = makeService({
-      supported: new Set(['google:gemini-3.7-flash']),
-      available: new Set(),
-    });
-    expect(svc.isSelectable('google:gemini-3.7-flash', ALL_CURATED)).toBe(
-      false
-    );
-    expect(
-      svc.isSelectable(
-        'google:gemini-3.7-flash',
-        ALL_CURATED,
-        new Set(['google'])
-      )
-    ).toBe(true);
-  });
-
-  it('drops a curated model the running config no longer points at', () => {
-    const svc = makeService({
-      supported: new Set(['anthropic:claude-sonnet-5', 'openai:gpt-5.6-sol']),
-      available: new Set(['anthropic:claude-sonnet-5', 'openai:gpt-5.6-sol']),
-    });
-    const configured: ReadonlySet<string> = new Set([
-      'anthropic:claude-sonnet-5',
-    ]);
-
-    const ids = svc.list(SYSTEM_DEFAULT, configured).map((m) => m.id);
-
-    expect(ids).toEqual(['anthropic:claude-sonnet-5']);
-    expect(svc.isSelectable('openai:gpt-5.6-sol', configured)).toBe(false);
-  });
-
-  it('offers a promoted model without any config pointing at it', () => {
-    const promoted = createCatalogModel({
-      id: PROMOTED_ID,
-      tier: 'open',
-      outputCostPerToken: FREE_TIER_OUTPUT_COST,
-    });
-    const svc = makeOpenService([promoted]);
-
-    const ids = svc.list(SYSTEM_DEFAULT, new Set()).map((m) => m.id);
-
-    expect(ids).toEqual([PROMOTED_ID]);
-  });
-
-  it('marks the system default with isDefault', () => {
-    const svc = makeService({
-      supported: new Set([SYSTEM_DEFAULT]),
-      available: new Set([SYSTEM_DEFAULT]),
-    });
-    const def = svc
-      .list(SYSTEM_DEFAULT, ALL_CURATED)
-      .find((m) => m.id === SYSTEM_DEFAULT);
-    expect(def?.isDefault).toBe(true);
-  });
-
-  it('isSelectable is false for an uncurated or unavailable id', () => {
-    const svc = makeService({
-      supported: new Set([SYSTEM_DEFAULT]),
-      available: new Set([SYSTEM_DEFAULT]),
-    });
-    expect(svc.isSelectable(SYSTEM_DEFAULT, ALL_CURATED)).toBe(true);
-    expect(svc.isSelectable('anthropic:not-curated', ALL_CURATED)).toBe(false);
-    expect(svc.isSelectable('openai:gpt-5.6-sol', ALL_CURATED)).toBe(false); // curated but unavailable
-  });
-
   it('derives costClass from outputCostPerToken across tiers', () => {
     const ids = [
       'anthropic:claude-haiku-4-5',
@@ -238,7 +143,7 @@ describe('SelectableModelsService', () => {
       },
     });
     const byId = Object.fromEntries(
-      svc.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => [m.id, m.costClass])
+      listed(svc, ANTHROPIC_KEY).map((m) => [m.id, m.costClass])
     );
     expect(byId['anthropic:claude-haiku-4-5']).toBe(1);
     expect(byId['anthropic:claude-sonnet-5']).toBe(2);
@@ -275,7 +180,13 @@ describe('SelectableModelsService', () => {
       },
     });
     const byId = Object.fromEntries(
-      svc.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => [m.id, m.costClass])
+      listed(
+        svc,
+        createExecutionContext({
+          tier: 'byok',
+          byokProviders: ['openai', 'anthropic'],
+        })
+      ).map((m) => [m.id, m.costClass])
     );
     expect(byId['openai:gpt-5.6-luna']).toBe(1);
     expect(byId['anthropic:claude-sonnet-5']).toBe(2);
@@ -283,24 +194,25 @@ describe('SelectableModelsService', () => {
     expect(byId['anthropic:claude-opus-5']).toBe(3);
   });
 
-  it('grants every offered model access, as prod runs today', () => {
-    const service = makeOpenService();
-    expect(
-      service
-        .list('openrouter:deepseek/deepseek-v3.2', ALL_CURATED, NO_BYOK)
-        .every((m) => m.access === 'granted')
-    ).toBe(true);
+  it('lists a key-billed model the server cannot route on its own keys', () => {
+    const service = makeService({
+      supported: new Set([SONNET_5]),
+      available: new Set(),
+      context: { [SONNET_5]: PORT_CONTEXT_WINDOW },
+    });
+
+    const models = listed(service, ANTHROPIC_KEY);
+
+    expect(models.map((m) => m.id)).toEqual([SONNET_5]);
+    expect(models[0]).toMatchObject({
+      routableByServer: false,
+      billedToUser: true,
+      contextWindow: PORT_CONTEXT_WINDOW,
+    });
   });
 
   describe('promoted catalog models', () => {
-    it('lists exactly the curated set while nothing is promoted', () => {
-      const service = makeOpenService();
-      expect(
-        service.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => m.id)
-      ).toEqual(CURATED_MODELS.map((m) => m.id));
-    });
-
-    it('serves a promoted row as a free open-tier model with its description', () => {
+    it('serves a promoted row’s copy when it serves a platform intent', () => {
       const service = makeOpenService([
         createCatalogModel({
           id: PROMOTED_ID,
@@ -310,19 +222,16 @@ describe('SelectableModelsService', () => {
         }),
       ]);
 
-      const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED);
-      const promoted = listed.find((m) => m.id === PROMOTED_ID);
+      const promoted = listed(service, FREE_CALLER, PROMOTED_FAST_INTENTS).find(
+        (m) => m.id === PROMOTED_ID
+      );
 
-      expect(listed.map((m) => m.id)).toEqual([
-        ...CURATED_MODELS.map((m) => m.id),
-        PROMOTED_ID,
-      ]);
       expect(promoted).toMatchObject({
         label: 'Promoted One',
         descriptionKey: '',
         description: PROMOTED_DESCRIPTION,
         tier: 'open',
-        access: 'granted',
+        servesIntent: 'fast',
         billedToUser: false,
         routableByServer: true,
       });
@@ -348,24 +257,12 @@ describe('SelectableModelsService', () => {
         ],
       });
 
-      const promoted = service
-        .list(SYSTEM_DEFAULT, ALL_CURATED)
-        .find((m) => m.id === PROMOTED_ID);
+      const promoted = listed(service, OPENROUTER_KEY).find(
+        (m) => m.id === PROMOTED_ID
+      );
 
       expect(promoted?.contextWindow).toBe(PORT_CONTEXT_WINDOW);
       expect(promoted?.costClass).toBe(3);
-    });
-
-    it('bills a promoted model to the user holding its provider key', () => {
-      const service = makeOpenService([
-        createCatalogModel({ id: PROMOTED_ID, tier: 'open' }),
-      ]);
-
-      const promoted = service
-        .list(SYSTEM_DEFAULT, ALL_CURATED, new Set(['openrouter']))
-        .find((m) => m.id === PROMOTED_ID);
-
-      expect(promoted?.billedToUser).toBe(true);
     });
 
     it('omits the description of a promoted row that carries none', () => {
@@ -373,11 +270,12 @@ describe('SelectableModelsService', () => {
         createCatalogModel({ id: PROMOTED_ID, description: '' }),
       ]);
 
-      const promoted = service
-        .list(SYSTEM_DEFAULT, ALL_CURATED)
-        .find((m) => m.id === PROMOTED_ID);
+      const promoted = listed(service, OPENROUTER_KEY).find(
+        (m) => m.id === PROMOTED_ID
+      );
 
-      expect(promoted?.description).toBeUndefined();
+      expect(promoted).toBeDefined();
+      expect(promoted && 'description' in promoted).toBe(false);
     });
 
     it('keeps the curated entry when a promoted row repeats its id', async () => {
@@ -391,7 +289,7 @@ describe('SelectableModelsService', () => {
       const promoted = new PromotedModelsCache(
         createCatalogRepositoryStub(async () => [
           createCatalogModel({
-            id: SYSTEM_DEFAULT,
+            id: SONNET_5,
             label: 'Shadowed',
             description: PROMOTED_DESCRIPTION,
             tier: 'open',
@@ -407,9 +305,9 @@ describe('SelectableModelsService', () => {
         promoted
       );
 
-      const matches = service
-        .list(SYSTEM_DEFAULT, ALL_CURATED)
-        .filter((m) => m.id === SYSTEM_DEFAULT);
+      const matches = listed(service, ANTHROPIC_KEY).filter(
+        (m) => m.id === SONNET_5
+      );
 
       expect(matches).toHaveLength(1);
       expect(matches[0]).toMatchObject({
@@ -422,195 +320,7 @@ describe('SelectableModelsService', () => {
       expect(matches[0]?.description).toBeUndefined();
     });
 
-    /** The promote button is not a code review: the stored price, not the tier, decides who pays. */
-    describe('a model promoted above the free-tier ceiling', () => {
-      async function serviceWithPromotedPrice(outputCostPerToken: number) {
-        const promoted = new PromotedModelsCache(
-          createCatalogRepositoryStub(async () => [
-            createCatalogModel({
-              id: PROMOTED_ID,
-              tier: 'open',
-              outputCostPerToken,
-            }),
-          ])
-        );
-        await promoted.onModuleInit();
-        const curatedOnly = {
-          isSupported: () => false,
-          getPricing: () => undefined,
-          getContextWindow: () => undefined,
-        };
-        return new SelectableModelsService(
-          new CompositeModelCatalog(promoted, curatedOnly as never),
-          { isModelAvailable: () => true } as never,
-          promoted
-        );
-      }
-
-      it('is unreachable without a key even though it stays above the ceiling', async () => {
-        const service = await serviceWithPromotedPrice(
-          ABOVE_CEILING_OUTPUT_COST
-        );
-
-        expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
-          false
-        );
-        expect(
-          service
-            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK)
-            .find((m) => m.id === PROMOTED_ID)?.access
-        ).toBe('requires_byok');
-      });
-
-      it('opens up to the caller who brings the provider key', async () => {
-        const service = await serviceWithPromotedPrice(
-          ABOVE_CEILING_OUTPUT_COST
-        );
-
-        expect(
-          service.isSelectable(
-            PROMOTED_ID,
-            ALL_CURATED,
-            new Set(['openrouter'])
-          )
-        ).toBe(true);
-      });
-
-      it('stays free when the stored price is under the ceiling', async () => {
-        const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
-
-        expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
-          true
-        );
-      });
-
-      it('honours a tightened ceiling the operator configured', async () => {
-        const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
-        const tightened = FREE_TIER_OUTPUT_COST / 2;
-
-        expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
-          true
-        );
-        expect(
-          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, tightened)
-        ).toBe(false);
-        expect(
-          service
-            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, tightened)
-            .find((m) => m.id === PROMOTED_ID)?.access
-        ).toBe('requires_byok');
-      });
-    });
-
-    it('selects a promoted model the curated catalog does not know', () => {
-      const service = makeService({
-        supported: new Set([PROMOTED_ID]),
-        available: new Set([PROMOTED_ID]),
-        promoted: [createCatalogModel({ id: PROMOTED_ID })],
-      });
-
-      expect(service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK)).toBe(
-        true
-      );
-    });
-
-    it('offers a promoted model of a tier no curated key of the caller reaches', () => {
-      const service = makeOpenService([
-        createCatalogModel({ id: PROMOTED_ID, tier: 'powerful' }),
-      ]);
-
-      expect(
-        service.firstOfTier('powerful', ALL_CURATED, new Set(['openrouter']))
-      ).toBe(PROMOTED_ID);
-    });
-
-    it('ranks curated models of a tier above promoted ones', () => {
-      const service = makeOpenService([
-        createCatalogModel({ id: PROMOTED_ID, tier: 'powerful' }),
-      ]);
-
-      expect(
-        service.firstOfTier(
-          'powerful',
-          ALL_CURATED,
-          new Set(['anthropic', 'openrouter'])
-        )
-      ).toBe('anthropic:claude-opus-5');
-    });
-  });
-
-  describe('reasoning and intent assignment', () => {
-    const MINIMAX_M3 = 'openrouter:minimax/minimax-m3';
-    const INTENTS = {
-      fast: MINIMAX_M3,
-      balanced: 'anthropic:claude-sonnet-5',
-      powerful: 'anthropic:claude-opus-5',
-    } as const;
-
-    it('marks the entry serving each configured intent', () => {
-      const service = makeOpenService([
-        createCatalogModel({ id: MINIMAX_M3, tier: 'open' }),
-      ]);
-
-      const listed = service.list(
-        SYSTEM_DEFAULT,
-        ALL_CURATED,
-        NO_BYOK,
-        undefined,
-        INTENTS
-      );
-
-      expect(listed.find((m) => m.id === MINIMAX_M3)?.servesIntent).toBe(
-        'fast'
-      );
-      expect(
-        listed.find((m) => m.id === 'anthropic:claude-sonnet-5')?.servesIntent
-      ).toBe('balanced');
-      expect(
-        listed.find((m) => m.id === 'anthropic:claude-opus-5')?.servesIntent
-      ).toBe('powerful');
-      const unassigned = listed.filter(
-        (m) => !Object.values(INTENTS).includes(m.id as never)
-      );
-      expect(unassigned.every((m) => !('servesIntent' in m))).toBe(true);
-    });
-
-    it('emits declared reasoning for every provider', () => {
-      const service = makeOpenService();
-
-      const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED);
-
-      expect(
-        listed.find((m) => m.id === 'anthropic:claude-sonnet-5')?.reasoning
-      ).toEqual({ levels: ['low', 'medium', 'high'], mandatory: false });
-      expect(
-        listed.find((m) => m.id === 'google:gemini-3.7-flash')?.reasoning
-      ).toEqual({ levels: ['low', 'medium', 'high'], mandatory: true });
-      const haiku = listed.find((m) => m.id === 'anthropic:claude-haiku-4-5');
-      expect(haiku && 'reasoning' in haiku).toBe(false);
-    });
-
-    it('serves the full declared ladder to a caller whose key bills the model', () => {
-      const service = makeOpenService();
-
-      const listed = service.list(
-        SYSTEM_DEFAULT,
-        ALL_CURATED,
-        new Set(['anthropic'])
-      );
-
-      expect(
-        listed.find((m) => m.id === 'anthropic:claude-opus-5')?.reasoning
-      ).toEqual({
-        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
-        mandatory: false,
-      });
-      expect(
-        listed.find((m) => m.id === 'openai:gpt-5.6-sol')?.reasoning
-      ).toEqual({ levels: ['low', 'medium', 'high'], mandatory: false });
-    });
-
-    it('omits reasoning when nothing survives the free ceiling', () => {
+    it('omits reasoning when nothing survives the platform-billed slice', () => {
       const service = makeOpenService([
         createCatalogModel({
           id: PROMOTED_ID,
@@ -618,14 +328,15 @@ describe('SelectableModelsService', () => {
         }),
       ]);
 
-      const promoted = service
-        .list(SYSTEM_DEFAULT, ALL_CURATED)
-        .find((m) => m.id === PROMOTED_ID);
+      const promoted = listed(service, FREE_CALLER, PROMOTED_FAST_INTENTS).find(
+        (m) => m.id === PROMOTED_ID
+      );
 
+      expect(promoted).toBeDefined();
       expect(promoted && 'reasoning' in promoted).toBe(false);
     });
 
-    it('serves promoted reasoning from the catalog snapshot', () => {
+    it('trims promoted reasoning to the platform-billed slice unless the caller’s key bills it', () => {
       const service = makeOpenService([
         createCatalogModel({
           id: PROMOTED_ID,
@@ -634,152 +345,121 @@ describe('SelectableModelsService', () => {
       ]);
 
       expect(
-        service
-          .list(SYSTEM_DEFAULT, ALL_CURATED)
-          .find((m) => m.id === PROMOTED_ID)?.reasoning
+        listed(service, FREE_CALLER, PROMOTED_FAST_INTENTS).find(
+          (m) => m.id === PROMOTED_ID
+        )?.reasoning
       ).toEqual({ levels: ['low', 'high'], mandatory: true });
       expect(
-        service
-          .list(SYSTEM_DEFAULT, ALL_CURATED, new Set(['openrouter']))
-          .find((m) => m.id === PROMOTED_ID)?.reasoning
+        listed(service, OPENROUTER_KEY).find((m) => m.id === PROMOTED_ID)
+          ?.reasoning
       ).toEqual({ levels: ['low', 'high', 'max'], mandatory: true });
     });
+  });
 
-    it('an intent pointing at an unofferable model marks no entry', () => {
-      const service = makeOpenService();
-
-      const listed = service.list(
-        SYSTEM_DEFAULT,
-        ALL_CURATED,
-        NO_BYOK,
-        undefined,
-        {
-          fast: 'openrouter:vendor/not-offered',
-          balanced: 'anthropic:claude-sonnet-5',
-          powerful: 'anthropic:claude-opus-5',
-        }
+  describe('toSelectable', () => {
+    it('lists a free caller’s intent models as platform-billed, the balanced one default, with no access field', () => {
+      const svc = makeOpenService();
+      const models = svc.toSelectable(
+        svc.catalogFor(createExecutionContext({ tier: 'free' }), INTENTS)
       );
+      expect(models.map((m) => [m.id, m.servesIntent, m.isDefault])).toEqual([
+        [INTENTS.fast, 'fast', false],
+        [INTENTS.balanced, 'balanced', true],
+        [INTENTS.powerful, 'powerful', false],
+      ]);
+      expect(models.every((m) => !m.billedToUser)).toBe(true);
+      expect(models.every((m) => !('access' in m))).toBe(true);
+    });
 
-      expect(listed.some((m) => m.servesIntent === 'fast')).toBe(false);
+    it('lists a byok caller’s models as billed to their key with the full effort ladder', () => {
+      const svc = makeOpenService();
+      const models = svc.toSelectable(
+        svc.catalogFor(
+          createExecutionContext({
+            tier: 'byok',
+            byokProviders: ['anthropic'],
+          }),
+          INTENTS
+        )
+      );
+      expect(models.every((m) => m.billedToUser)).toBe(true);
       expect(
-        listed.find((m) => m.id === 'anthropic:claude-sonnet-5')?.servesIntent
-      ).toBe('balanced');
+        models.find((m) => m.id === 'anthropic:claude-opus-5')?.reasoning
+          ?.levels
+      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     });
   });
 
-  describe('firstOfTier', () => {
-    it('returns the first curated model of the tier the caller has a key for', () => {
-      const service = makeOpenService();
-      expect(
-        service.firstOfTier('powerful', ALL_CURATED, new Set(['anthropic']))
-      ).toBe('anthropic:claude-opus-5');
-      expect(
-        service.firstOfTier('powerful', ALL_CURATED, new Set(['openai']))
-      ).toBe('openai:gpt-5.6-sol');
-    });
-
-    it('ranks by catalog order when the caller holds keys for several providers of the tier', () => {
-      const service = makeOpenService();
-      expect(
-        service.firstOfTier(
-          'powerful',
-          ALL_CURATED,
-          new Set(['openai', 'anthropic'])
-        )
-      ).toBe('anthropic:claude-opus-5');
-      expect(
-        service.firstOfTier('fast', ALL_CURATED, new Set(['google', 'openai']))
-      ).toBe('openai:gpt-5.6-luna');
-    });
-
-    it('returns null when no curated model of the tier matches the BYOK set', () => {
-      const service = makeOpenService();
-      expect(service.firstOfTier('powerful', ALL_CURATED, NO_BYOK)).toBeNull();
-      expect(
-        service.firstOfTier('powerful', ALL_CURATED, new Set(['openrouter']))
-      ).toBeNull();
-    });
-
-    it('returns null when the tier model the caller holds a key for is uninvocable', () => {
-      const service = makeService({
-        supported: new Set(),
-        available: new Set(),
-      });
-      expect(
-        service.firstOfTier('fast', ALL_CURATED, new Set(['anthropic']))
-      ).toBeNull();
-    });
-  });
-
-  describe('curated models unlocked by BYOK', () => {
-    const NOTHING_CONFIGURED: ReadonlySet<string> = new Set();
-    const anthropicCuratedIds = CURATED_MODELS.filter((m) =>
-      m.id.startsWith('anthropic:')
-    ).map((m) => m.id);
-
-    it('offers every curated model of a provider the caller brings a key for', () => {
-      const service = makeOpenService();
-      const listed = service.list(
-        SYSTEM_DEFAULT,
-        NOTHING_CONFIGURED,
-        new Set(['anthropic'])
+  describe('catalogFor', () => {
+    it('scopes a free caller to the platform intent models', () => {
+      const catalog = makeOpenService().catalogFor(
+        createExecutionContext({ tier: 'free' }),
+        INTENTS
       );
-      expect(listed.map((m) => m.id)).toEqual(anthropicCuratedIds);
-      for (const model of listed) {
-        expect(model.billedToUser).toBe(true);
-        expect(model.access).toBe('granted');
-      }
-    });
-
-    it('keeps unconfigured curated models hidden without that provider key', () => {
-      const service = makeOpenService();
-      const openaiOnly = service
-        .list(SYSTEM_DEFAULT, NOTHING_CONFIGURED, new Set(['openai']))
-        .map((m) => m.id);
-      expect(openaiOnly.every((id) => id.startsWith('openai:'))).toBe(true);
-      expect(service.list(SYSTEM_DEFAULT, NOTHING_CONFIGURED, NO_BYOK)).toEqual(
-        []
+      expect(catalog.models.map((m) => m.model.id)).toEqual(
+        Object.values(INTENTS)
       );
     });
 
-    it('lets a BYOK holder select an unconfigured curated model', () => {
-      const service = makeOpenService();
+    it('scopes a byok caller to their own key and routes the intents over it', () => {
+      const catalog = makeOpenService([
+        createCatalogModel({ id: PROMOTED_ID, tier: 'balanced' }),
+      ]).catalogFor(
+        createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
+        INTENTS
+      );
       expect(
-        service.isSelectable(
-          SYSTEM_DEFAULT,
-          NOTHING_CONFIGURED,
-          new Set(['anthropic'])
-        )
+        catalog.models.every((m) => m.model.id.startsWith('anthropic:'))
       ).toBe(true);
-      expect(
-        service.isSelectable(SYSTEM_DEFAULT, NOTHING_CONFIGURED, NO_BYOK)
-      ).toBe(false);
-    });
-
-    it('offers a BYOK-unlocked model even when the server has no key for its provider', () => {
-      const service = makeService({
-        supported: new Set([SYSTEM_DEFAULT]),
-        available: new Set(),
-        context: { [SYSTEM_DEFAULT]: PORT_CONTEXT_WINDOW },
+      expect(catalog.intents).toContainEqual({
+        intent: 'balanced',
+        available: true,
+        modelId: 'anthropic:claude-sonnet-5',
+        substituted: false,
       });
-      const listed = service.list(
-        SYSTEM_DEFAULT,
-        NOTHING_CONFIGURED,
-        new Set(['anthropic'])
-      );
-      expect(listed.map((m) => m.id)).toEqual([SYSTEM_DEFAULT]);
-      expect(listed[0].routableByServer).toBe(false);
     });
 
-    it('feeds firstOfTier from the BYOK-unlocked catalog when nothing is configured', () => {
-      const service = makeOpenService();
+    it('lets a curated id win over a promoted row with the same id', () => {
+      const offered = makeOpenService([
+        createCatalogModel({
+          id: 'anthropic:claude-sonnet-5',
+          label: 'Shadow',
+        }),
+      ]).offered();
       expect(
-        service.firstOfTier(
-          'balanced',
-          NOTHING_CONFIGURED,
-          new Set(['anthropic'])
-        )
-      ).toBe(SYSTEM_DEFAULT);
+        offered.filter((m) => m.id === 'anthropic:claude-sonnet-5')
+      ).toEqual([expect.objectContaining({ label: 'Sonnet 5' })]);
+    });
+
+    it('reads the ladder of a chain model outside the tier, trimmed to the free slice', () => {
+      const service = makeOpenService();
+      const free = service.catalogFor(
+        createExecutionContext({ tier: 'free' }),
+        INTENTS
+      );
+
+      expect(free.models.map((m) => m.model.id)).not.toContain(
+        'openai:gpt-5.6-sol'
+      );
+      expect(
+        service.reasoningOf('openai:gpt-5.6-sol', NO_BYOK)?.levels
+      ).toEqual(['low', 'medium', 'high']);
+    });
+
+    it('reads the full ladder of a model on the caller key', () => {
+      expect(
+        makeOpenService().reasoningOf('openai:gpt-5.6-sol', new Set(['openai']))
+          ?.levels
+      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    });
+
+    it('gives a model reached only over an OpenRouter key the curated ladder of the same model', () => {
+      expect(
+        makeOpenService().reasoningOf(
+          'openrouter:anthropic/claude-opus-5',
+          new Set(['openrouter'])
+        )?.levels
+      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     });
   });
 });

@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CatalogModel } from '@knowtis/data-access-admin';
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
 
 import { PromotedTable } from '../PromotedTable';
 import type { ServingRole } from '../serving-roles';
@@ -33,7 +32,6 @@ function model(overrides: Partial<CatalogModel> = {}): CatalogModel {
 
 function renderTable(
   models: CatalogModel[] = [model()],
-  maxOutputCostPerToken: number = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   options: {
     servingRoles?: ReadonlyMap<string, readonly ServingRole[]>;
     onRetire?: (id: string) => void;
@@ -43,7 +41,6 @@ function renderTable(
     <PromotedTable
       models={models}
       disabled={false}
-      maxOutputCostPerToken={maxOutputCostPerToken}
       servingRoles={options.servingRoles ?? NO_ROLES}
       onSave={vi.fn()}
       onRetire={options.onRetire ?? vi.fn()}
@@ -82,28 +79,6 @@ describe('PromotedTable', () => {
     expect(within(rowFor(MODEL_ID)).getByText('0')).toBeInTheDocument();
   });
 
-  it('should mark a promoted model the free tier cannot absorb as BYOK only', () => {
-    renderTable([
-      model({ outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4 }),
-    ]);
-
-    expect(
-      within(rowFor(MODEL_ID)).getByText(/byok only/i)
-    ).toBeInTheDocument();
-  });
-
-  // A promoted model can outlive the ceiling that admitted it; the row has to
-  // say so rather than keep vouching for the default the bundle shipped with.
-  it('should mark a promoted model the operator ceiling now excludes', () => {
-    const price = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
-
-    renderTable([model({ outputCostPerToken: price })], price / 2);
-
-    expect(
-      within(rowFor(MODEL_ID)).getByText(/byok only/i)
-    ).toBeInTheDocument();
-  });
-
   it('should name Save and Retire after the label being edited', async () => {
     renderTable();
 
@@ -118,7 +93,7 @@ describe('PromotedTable', () => {
   });
 
   it('should say which config keys a promoted model is serving', () => {
-    renderTable([model()], FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, {
+    renderTable([model()], {
       servingRoles: new Map([[MODEL_ID, ['Default', 'Fallback'] as const]]),
     });
 
@@ -137,7 +112,7 @@ describe('PromotedTable', () => {
 
   it('should ask before retiring a model the config still points at', async () => {
     const onRetire = vi.fn();
-    renderTable([model()], FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, {
+    renderTable([model()], {
       servingRoles: new Map([[MODEL_ID, ['Default'] as const]]),
       onRetire,
     });
@@ -166,7 +141,6 @@ describe('PromotedTable', () => {
       <PromotedTable
         models={[model()]}
         disabled={false}
-        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
         servingRoles={null}
         onSave={vi.fn()}
         onRetire={onRetire}
@@ -192,7 +166,6 @@ describe('PromotedTable', () => {
       <PromotedTable
         models={[model()]}
         disabled={disabled}
-        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
         servingRoles={roles}
         onSave={vi.fn()}
         onRetire={onRetire}
@@ -214,7 +187,7 @@ describe('PromotedTable', () => {
 
   it('should drop the retire when the admin cancels the confirmation', async () => {
     const onRetire = vi.fn();
-    renderTable([model()], FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, {
+    renderTable([model()], {
       servingRoles: new Map([[MODEL_ID, ['Fast'] as const]]),
       onRetire,
     });
@@ -246,7 +219,6 @@ describe('PromotedTable', () => {
       <PromotedTable
         models={models}
         disabled={false}
-        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
         servingRoles={roles}
         onSave={vi.fn()}
         onRetire={vi.fn()}
@@ -279,7 +251,6 @@ describe('PromotedTable', () => {
       <PromotedTable
         models={models}
         disabled={false}
-        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
         servingRoles={roles}
         onSave={vi.fn()}
         onRetire={vi.fn()}
@@ -314,7 +285,6 @@ describe('PromotedTable', () => {
       <PromotedTable
         models={models}
         disabled={false}
-        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
         servingRoles={roles}
         onSave={vi.fn()}
         onRetire={vi.fn()}
@@ -342,7 +312,7 @@ describe('PromotedTable', () => {
 
   it('should retire an unreferenced model without asking', async () => {
     const onRetire = vi.fn();
-    renderTable([model()], FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, { onRetire });
+    renderTable([model()], { onRetire });
 
     await userEvent.click(
       screen.getByRole('button', { name: /retire live one/i })

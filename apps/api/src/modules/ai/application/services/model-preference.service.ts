@@ -1,155 +1,147 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 
-import { providerOf } from '@knowtis/ai-gateway';
-import {
-  DEFAULT_MODEL_INTENT,
-  type AIPreferences,
-  type ModelReasoning,
-  type SelectableModel,
-  type UpdateAiPreferencesInput,
+import type {
+  AIPreferences,
+  ModelCatalogResponse,
+  ModelIntent,
+  ModelReasoning,
+  UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
+import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
+import type {
+  AiCaller,
+  AiExecutionContext,
+} from '../../domain/execution-context/ai-execution-context';
+import {
+  chooseModel,
+  MODEL_CHOICE,
+  type ModelChoice,
+  type ModelFacts,
+} from '../../domain/model-catalog/model-choice';
+import {
+  servedPreference,
+  type TierCatalog,
+} from '../../domain/model-catalog/tier-catalog';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
+import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { AIConfigService } from './ai-config.service';
-import { ByokService } from './byok.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 @Injectable()
 export class ModelPreferenceService {
+  private readonly logger = new Logger(ModelPreferenceService.name);
+
   constructor(
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
     private readonly selectable: SelectableModelsService,
-    private readonly aiConfig: AIConfigService,
-    private readonly byok: ByokService
+    private readonly aiConfig: AIConfigService
   ) {}
 
-  async listModels(user: {
-    id: string;
-    isAnonymous?: boolean;
-  }): Promise<SelectableModel[]> {
-    const models = await this.offeredModels(
-      await this.byok.enabledProviders(user.id, user.isAnonymous === true)
+  async listModels(
+    execution: AiExecutionContext
+  ): Promise<ModelCatalogResponse> {
+    const catalog = this.selectable.catalogFor(
+      execution,
+      await this.aiConfig.getIntentModels()
     );
-    if (user.isAnonymous !== true) {
-      return models;
-    }
-    // Anonymous sessions see the three intent picks only; everything but the
-    // running default renders locked so the menu can upsell an account.
-    return models
-      .filter((m) => m.servesIntent)
-      .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
+    return {
+      tier: catalog.tier,
+      models: this.selectable.toSelectable(catalog),
+      intents: [...catalog.intents],
+    };
   }
 
-  private async offeredModels(
-    byokProviders: ReadonlySet<string>
-  ): Promise<SelectableModel[]> {
-    const [systemDefault, configured, ceiling, intentModels] =
-      await Promise.all([
-        this.aiConfig.getDefaultModel(),
-        this.aiConfig.getConfiguredModelIds(),
-        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-        this.aiConfig.getIntentModels(),
-      ]);
-    return this.selectable.list(
-      systemDefault,
-      configured,
-      byokProviders,
-      ceiling,
-      intentModels
-    );
-  }
-
-  /**
-   * Declared reasoning of a model offered to a caller holding keys for
-   * `byokProviders`, trimmed to what their tier may spend. A ladder is a
-   * capability statement, so it reads the offered union itself, never the
-   * anonymous menu view: a chain candidate the upsell menu hides still declares
-   * what it can do. Null when unoffered or undeclared.
-   */
   async reasoningFor(
     modelId: string,
     byokProviders: ReadonlySet<string>
   ): Promise<ModelReasoning | null> {
-    const models = await this.offeredModels(byokProviders);
-    return models.find((model) => model.id === modelId)?.reasoning ?? null;
+    return this.selectable.reasoningOf(modelId, byokProviders);
   }
 
-  async isSelectableWith(
-    modelId: string,
-    byokProviders: ReadonlySet<string>
-  ): Promise<boolean> {
-    const [configured, ceiling] = await Promise.all([
-      this.aiConfig.getConfiguredModelIds(),
-      this.aiConfig.getFreeTierMaxOutputCostPerToken(),
+  async chooseTurnModel(
+    execution: AiExecutionContext,
+    request: { explicit?: string; pinned?: string | null }
+  ): Promise<ModelChoice> {
+    const [platformIntents, settings] = await Promise.all([
+      this.aiConfig.getIntentModels(),
+      this.settings.getSettings(execution.subject.userId),
     ]);
-    return this.selectable.isSelectable(
-      modelId,
-      configured,
-      byokProviders,
-      ceiling
+    const { catalog, facts } = this.scopeOf(execution, platformIntents);
+    const { preferredModel, preferredIntent } = servedPreference(catalog, {
+      preferredModel: settings.preferredModel,
+      preferredIntent: settings.preferredIntent,
+    });
+    return chooseModel(
+      catalog,
+      { ...request, preferredModel, preferredIntent },
+      facts
     );
   }
 
-  async getUserPreferences(userId: string): Promise<AIPreferences> {
+  /**
+   * The stored preferences as a turn reads them, so every surface shows the
+   * intent a turn serves. The tier is read, through `tierOf`, only for a
+   * stored model an intent is configured to; when it cannot be resolved the
+   * stored row is answered as is.
+   */
+  async getUserPreferences(
+    userId: string,
+    tierOf: () => Promise<AiExecutionContext>
+  ): Promise<AIPreferences> {
     const { preferredModel, preferredIntent, ghostTextEnabled } =
       await this.settings.getSettings(userId);
-    return { preferredModel, preferredIntent, ghostTextEnabled };
+    const stored: AIPreferences = {
+      preferredModel,
+      preferredIntent,
+      ghostTextEnabled,
+    };
+    if (!preferredModel) {
+      return stored;
+    }
+    const platformIntents = await this.aiConfig.getIntentModels();
+    // A platform catalog lists only the configured intent models, so any other
+    // pick reads as stored without touching the key store behind the tier.
+    if (!Object.values(platformIntents).includes(preferredModel)) {
+      return stored;
+    }
+    let execution: AiExecutionContext;
+    try {
+      execution = await tierOf();
+    } catch (error) {
+      if (!(error instanceof AiUnavailableError)) {
+        throw error;
+      }
+      this.logger.warn({
+        event: 'ai.preferences.tier_unavailable',
+        userId,
+        error: reasonOf(error),
+      });
+      return stored;
+    }
+    return servedPreference(
+      this.scopeOf(execution, platformIntents).catalog,
+      stored
+    );
   }
 
-  async getEffectiveDefault(
-    userId: string,
-    byokProviders?: ReadonlySet<string>
-  ): Promise<string> {
-    const providers =
-      byokProviders ?? (await this.byok.enabledProviders(userId));
-    const [offered, ceiling] = await Promise.all([
-      this.aiConfig.getConfiguredModelIds(),
-      this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-    ]);
-    const { preferredModel, preferredIntent } =
-      await this.settings.getSettings(userId);
-    // Only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
-    if (
-      preferredModel &&
-      providers.has(providerOf(preferredModel)) &&
-      this.selectable.isSelectable(preferredModel, offered, providers, ceiling)
-    ) {
-      return preferredModel;
-    }
-    const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
-    // Only an intent the user stored may steer their default onto their own
-    // key; the implicit fallback must never move billing without an opt-in.
-    const byokPick = preferredIntent
-      ? this.selectable.firstOfTier(preferredIntent, offered, providers)
-      : null;
-    // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
-    if (
-      byokPick &&
-      this.selectable.isSelectable(byokPick, offered, providers, ceiling)
-    ) {
-      return byokPick;
-    }
-    const configured = await this.aiConfig.getIntentModel(intent);
-    if (this.selectable.isSelectable(configured, offered, providers, ceiling)) {
-      return configured;
-    }
-    return await this.aiConfig.getDefaultModel();
-  }
-
+  /**
+   * Only a model write reads the caller's tier, through `tierOf`: a toggle or
+   * an intent pick stays writable while the key store is down. A model is
+   * accepted exactly when a turn would accept it as an explicit request, and a
+   * platform-billed one is stored as the intent it serves.
+   */
   async setUserPreferences(
-    user: { id: string; isAnonymous?: boolean },
-    patch: UpdateAiPreferencesInput
+    caller: Pick<AiCaller, 'userId' | 'isAnonymous'>,
+    patch: UpdateAiPreferencesInput,
+    tierOf: () => Promise<AiExecutionContext>
   ): Promise<void> {
-    if (user.isAnonymous === true) {
+    if (caller.isAnonymous) {
       throw new ForbiddenException(
         'AI preferences require a registered account'
       );
@@ -157,25 +149,40 @@ export class ModelPreferenceService {
     if (Object.values(patch).every((value) => value === undefined)) {
       return;
     }
-    if (typeof patch.preferredModel === 'string') {
-      const [byokProviders, offered, ceiling] = await Promise.all([
-        this.byok.enabledProviders(user.id),
-        this.aiConfig.getConfiguredModelIds(),
-        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-      ]);
-      if (
-        !this.selectable.isSelectable(
-          patch.preferredModel,
-          offered,
-          byokProviders,
-          ceiling
-        )
-      ) {
-        throw new BadRequestException(
-          `Model not selectable: ${patch.preferredModel}`
-        );
-      }
+    if (typeof patch.preferredModel !== 'string') {
+      await this.settings.patchSettings(caller.userId, patch);
+      return;
     }
-    await this.settings.patchSettings(user.id, patch);
+    const [execution, platformIntents] = await Promise.all([
+      tierOf(),
+      this.aiConfig.getIntentModels(),
+    ]);
+    const { catalog, facts } = this.scopeOf(execution, platformIntents);
+    const choice = chooseModel(
+      catalog,
+      {
+        explicit: patch.preferredModel,
+        preferredModel: null,
+        preferredIntent: null,
+      },
+      facts
+    );
+    if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
+      throw new ModelUnavailableException(choice.reason, choice.suggestedModel);
+    }
+    await this.settings.patchSettings(
+      caller.userId,
+      servedPreference(catalog, patch)
+    );
+  }
+
+  private scopeOf(
+    execution: AiExecutionContext,
+    platformIntents: Readonly<Record<ModelIntent, string>>
+  ): { catalog: TierCatalog; facts: ModelFacts } {
+    return {
+      catalog: this.selectable.catalogFor(execution, platformIntents),
+      facts: this.selectable.factsFor(execution.byokProviders, platformIntents),
+    };
   }
 }

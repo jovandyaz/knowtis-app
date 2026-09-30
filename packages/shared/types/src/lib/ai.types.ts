@@ -109,13 +109,6 @@ export function isModelIntent(value: string): value is ModelIntent {
   return (MODEL_INTENTS as readonly string[]).includes(value);
 }
 
-export const MODEL_ACCESS = [
-  'granted',
-  'requires_byok',
-  'requires_account',
-] as const;
-export type ModelAccess = (typeof MODEL_ACCESS)[number];
-
 /** How much hidden reasoning budget a reasoning model may spend before emitting visible tokens. */
 export const REASONING_EFFORTS = [
   'low',
@@ -175,7 +168,6 @@ export const AI_CONFIG_KEYS = {
   REASONING_EFFORT: 'ai_reasoning_effort',
   OPENROUTER_PROVIDERS: 'ai_openrouter_providers',
   OPENROUTER_IGNORED_PROVIDERS: 'ai_openrouter_ignored_providers',
-  FREE_TIER_CEILING: 'ai_free_tier_ceiling',
   ANON_DAILY_MESSAGES: 'ai_anon_daily_messages',
   FREE_DAILY_MESSAGES: 'ai_free_daily_messages',
 } as const;
@@ -212,8 +204,6 @@ export interface SelectableModel {
    * caller's BYOK key reaches it, so it is inert in any server-global config.
    */
   routableByServer: boolean;
-  /** Absent from servers that list only the caller tier's models. */
-  access?: ModelAccess;
   reasoning?: ModelReasoning;
   servesIntent?: ModelIntent;
 }
@@ -246,6 +236,10 @@ export const BYOK_PROVIDERS = [
   'openrouter',
 ] as const;
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
+
+export function isByokProvider(value: string): value is ByokProvider {
+  return (BYOK_PROVIDERS as readonly string[]).includes(value);
+}
 
 /** Where the server-side key for a provider actually resolves from, in precedence order. */
 export const PROVIDER_KEY_SOURCES = [

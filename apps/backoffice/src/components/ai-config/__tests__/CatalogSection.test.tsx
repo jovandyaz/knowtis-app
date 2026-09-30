@@ -130,31 +130,8 @@ describe('CatalogSection', () => {
     syncStateMock.mockReturnValue(IDLE_SYNC);
   });
 
-  // The ceiling is operator-set, so the badge has to come from the effective
-  // config. Reading the constant the bundle shipped with makes the section
-  // vouch for models the server already gates behind BYOK.
-  it('marks a promoted model against the operator ceiling, not the shipped default', () => {
-    useAiConfigMock.mockReturnValue({
-      data: [{ key: 'ai_free_tier_ceiling', value: '2.50' }],
-    });
-
-    renderSection({
-      promoted: [
-        model({
-          id: 'openrouter:vendor/mid-priced',
-          outputCostPerToken: 0.0000035,
-        }),
-      ],
-    });
-
-    const promotedTable = screen.getByRole('table', {
-      name: 'Promoted models',
-    });
-    expect(within(promotedTable).getByText(/byok only/i)).toBeInTheDocument();
-  });
-
-  // Same lesson as the ceiling: roles are derived from the effective config,
-  // so the wiring from useAiConfig into the table is what this test guards.
+  // Roles are derived from the effective config, so the wiring from
+  // useAiConfig into the table is what this test guards.
   it('marks the promoted rows the effective config is serving', () => {
     useAiConfigMock.mockReturnValue({
       data: [

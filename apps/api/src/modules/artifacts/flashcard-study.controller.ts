@@ -15,7 +15,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { ReviewCardHandler } from './application/commands/review-card.handler';
 import { GetFlashcardProgressHandler } from './application/queries/get-flashcard-progress.handler';
 import { GetStudySessionHandler } from './application/queries/get-study-session.handler';

@@ -608,6 +608,9 @@ export class AgentGateway
           ...(usage.conversationId
             ? { conversationId: usage.conversationId }
             : {}),
+          ...(usage.modelResolution
+            ? { modelResolution: usage.modelResolution }
+            : {}),
         }),
       onError: (error) => {
         if (!controller.signal.aborted) {

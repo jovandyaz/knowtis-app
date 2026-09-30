@@ -7,10 +7,10 @@ import {
   AI_CONFIG_KEYS,
   COMPLETION_AI_ACTIONS,
   GLOBAL_REASONING_EFFORTS,
+  isByokProvider,
   isGlobalReasoningEffort,
   isReasoningEffort,
   MESSAGE_STOP_REASON,
-  MODEL_ACCESS,
   REASONING_EFFORTS,
 } from './ai.types';
 
@@ -60,12 +60,6 @@ describe('completion actions', () => {
   });
 });
 
-describe('model access', () => {
-  it('distinguishes account-gated models from BYOK-gated ones', () => {
-    expect(MODEL_ACCESS).toContain('requires_account');
-  });
-});
-
 describe('stop reasons', () => {
   it('lists every loop stop reason plus the two interrupted outcomes', () => {
     expect(MESSAGE_STOP_REASON).toEqual([
@@ -96,5 +90,18 @@ describe('AI config keys', () => {
     for (const key of keys) {
       expect(key).toMatch(/^ai_[a-z_]+$/);
     }
+  });
+});
+
+describe('isByokProvider', () => {
+  it.each(['anthropic', 'openai', 'google', 'openrouter'])(
+    'accepts %s',
+    (provider) => {
+      expect(isByokProvider(provider)).toBe(true);
+    }
+  );
+
+  it('rejects a provider that takes no stored key', () => {
+    expect(isByokProvider('mistral')).toBe(false);
   });
 });

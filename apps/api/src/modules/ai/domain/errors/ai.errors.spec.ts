@@ -56,4 +56,13 @@ describe('AIErrors', () => {
       upgrade: 'byok',
     });
   });
+
+  it('modelUnavailable carries the reason and the suggested model', () => {
+    expect(AIErrors.modelUnavailable('key_removed', 'openrouter:m')).toEqual({
+      code: 'AI_MODEL_UNAVAILABLE',
+      message: 'This model is not available to you.',
+      reason: 'key_removed',
+      suggestedModel: 'openrouter:m',
+    });
+  });
 });

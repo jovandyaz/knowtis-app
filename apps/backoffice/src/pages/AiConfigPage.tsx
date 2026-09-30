@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react';
 
 import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeader';
 import { CatalogSection } from '@/components/ai-config/CatalogSection';
-import { CeilingSection } from '@/components/ai-config/CeilingSection';
 import { MessageLimitsSection } from '@/components/ai-config/MessageLimitsSection';
 import { ModelsSection } from '@/components/ai-config/ModelsSection';
 import { ProvidersSection } from '@/components/ai-config/ProvidersSection';
@@ -47,7 +46,6 @@ export function AiConfigPage() {
   const [tab, setTab] = useState<AiConfigTabValue>(TAB.models);
 
   const chain = config.data?.find((entry) => entry.kind === 'chain');
-  const ceiling = config.data?.find((entry) => entry.kind === 'money');
   const effort = config.data?.find((entry) => entry.kind === 'choice');
   const upstreams = config.data?.find(
     (entry) => entry.key === AI_CONFIG_KEYS.OPENROUTER_PROVIDERS
@@ -126,7 +124,6 @@ export function AiConfigPage() {
               >
                 {chain ? <RoutingSection entry={chain} /> : null}
                 {effort ? <ReasoningSection entry={effort} /> : null}
-                {ceiling ? <CeilingSection entry={ceiling} /> : null}
                 {messageLimits.length > 0 ? (
                   <MessageLimitsSection entries={messageLimits} />
                 ) : null}

@@ -3,6 +3,7 @@ import { io, type Socket } from 'socket.io-client';
 import {
   AGENT_TURN_ERROR_CODE,
   type AgentStopReason,
+  type ModelResolution,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
@@ -57,6 +58,8 @@ export interface AgentDonePayload {
   /** Absent from servers that predate turn continuation. */
   continuable?: boolean;
   conversationId?: string;
+  /** Absent from servers that predate tier-scoped catalogs. */
+  modelResolution?: ModelResolution;
 }
 
 export interface AgentErrorPayload {

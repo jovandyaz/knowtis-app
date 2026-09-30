@@ -9,26 +9,30 @@ describe('TIER_POLICIES', () => {
       longTermMemory: false,
       effortSelectable: false,
       allowance: 'anonymous-share',
+      catalog: 'default-intent',
     },
     {
       tier: 'free',
       longTermMemory: true,
       effortSelectable: true,
       allowance: 'full',
+      catalog: 'platform-intents',
     },
     {
       tier: 'byok',
       longTermMemory: true,
       effortSelectable: true,
       allowance: 'full',
+      catalog: 'own-keys',
     },
   ] as const)(
-    '$tier: memory=$longTermMemory effort=$effortSelectable allowance=$allowance',
-    ({ tier, longTermMemory, effortSelectable, allowance }) => {
+    '$tier: memory=$longTermMemory effort=$effortSelectable allowance=$allowance catalog=$catalog',
+    ({ tier, longTermMemory, effortSelectable, allowance, catalog }) => {
       expect(TIER_POLICIES[tier]).toEqual({
         longTermMemory,
         effortSelectable,
         dailyAllowance: allowance,
+        catalog,
       });
     }
   );

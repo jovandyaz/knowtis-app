@@ -65,7 +65,6 @@ describe('servingRolesFrom', () => {
   it('ignores keys that do not name models', () => {
     const roles = servingRolesFrom([
       entry('ai_reasoning_effort', 'medium', 'choice'),
-      entry('ai_free_tier_ceiling', '4.00', 'money'),
     ]);
 
     expect(roles.size).toBe(0);

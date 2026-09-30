@@ -10,6 +10,7 @@ export interface StoredProviderKey extends EncryptedSecret {
 
 export interface UserProviderKeysRepository {
   listForUser(userId: string): Promise<ProviderKeyInfo[]>;
+  /** Oldest key first; the first is the default primary provider. */
   getEnabledProviders(userId: string): Promise<ByokProvider[]>;
   getEncrypted(
     userId: string,

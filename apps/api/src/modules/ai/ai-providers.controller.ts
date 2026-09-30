@@ -29,7 +29,10 @@ import {
 
 import { reasonOf } from '../../core/errors/reason-of';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import { CURATED_MODELS } from './domain/model-catalog/selectable-models.catalog';
 import { SetSystemProviderDto } from './dto/set-system-provider.dto';

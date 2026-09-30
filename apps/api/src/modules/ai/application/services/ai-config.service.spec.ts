@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-  GLOBAL_REASONING_EFFORTS,
-} from '@knowtis/shared-types';
+import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
@@ -478,15 +475,6 @@ describe('AIConfigService', () => {
         updatedAt: null,
       },
       {
-        key: 'ai_free_tier_ceiling',
-        value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
-        kind: 'money',
-        source: 'default',
-        storedValue: null,
-        description: null,
-        updatedAt: null,
-      },
-      {
         key: 'ai_anon_daily_messages',
         value: '5',
         kind: 'count',
@@ -575,15 +563,6 @@ describe('AIConfigService', () => {
         updatedAt: null,
       },
       {
-        key: 'ai_free_tier_ceiling',
-        value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
-        kind: 'money',
-        source: 'default',
-        storedValue: null,
-        description: null,
-        updatedAt: null,
-      },
-      {
         key: 'ai_anon_daily_messages',
         value: '5',
         kind: 'count',
@@ -604,62 +583,14 @@ describe('AIConfigService', () => {
     ]);
   });
 
-  describe('free-tier ceiling', () => {
-    it('should serve the code default as a per-token rate', async () => {
-      mockRepo.get.mockResolvedValue(null);
-
-      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(
-        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-      );
-    });
-
-    it('should convert the stored dollars per million into a per-token rate', async () => {
-      mockRepo.get.mockResolvedValue('2.50');
-
-      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(0.0000025);
-    });
-
-    it('should fall back to the code default rather than widen the tier on a bad row', async () => {
-      mockRepo.get.mockResolvedValue('not-a-price');
-
-      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(
-        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-      );
-    });
-
-    it('should reject a ceiling that is not a two-decimal dollar amount', async () => {
-      for (const value of ['-1', '1.234', 'abc', '', '1e3', '101']) {
-        await expect(
-          service.setConfig('ai_free_tier_ceiling', value, ACTOR)
-        ).rejects.toThrow(InvalidAIConfigError);
-      }
-    });
-
-    it('should read a padded ceiling as the operator set it, not as a stale row', async () => {
-      const row = {
-        key: 'ai_free_tier_ceiling',
-        value: ' 2.50 ',
-        description: null,
-        updatedAt: null,
-      };
-      mockRepo.getAllRows.mockResolvedValue([row]);
-
-      const entries = await service.getEffectiveConfig();
-
-      expect(
-        entries.find((e) => e.key === 'ai_free_tier_ceiling')
-      ).toMatchObject({ source: 'custom', value: '2.50', storedValue: null });
-    });
-
-    it('should persist a valid ceiling', async () => {
-      await service.setConfig('ai_free_tier_ceiling', '2.50', ACTOR);
-
-      expect(mockRepo.set).toHaveBeenCalledWith(
-        'ai_free_tier_ceiling',
-        '2.50',
-        undefined
-      );
-    });
+  it('no longer serves or accepts a free-tier ceiling', async () => {
+    const entries = await service.getEffectiveConfig();
+    expect(entries.map((entry) => entry.key)).not.toContain(
+      'ai_free_tier_ceiling'
+    );
+    await expect(
+      service.setConfig('ai_free_tier_ceiling', '4.00', ACTOR)
+    ).rejects.toThrow("Unknown AI config key: 'ai_free_tier_ceiling'");
   });
 
   describe('fallback chain', () => {
@@ -987,20 +918,6 @@ describe('AIConfigService', () => {
     });
   });
 
-  describe('getIntentModel', () => {
-    it('maps each intent to its config key default', async () => {
-      expect(await service.getIntentModel('fast')).toBe(
-        AI_SETTING_DEFAULTS.ai_fast_model
-      );
-      expect(await service.getIntentModel('balanced')).toBe(
-        AI_SETTING_DEFAULTS.ai_default_model
-      );
-      expect(await service.getIntentModel('powerful')).toBe(
-        AI_SETTING_DEFAULTS.ai_deep_model
-      );
-    });
-  });
-
   describe('getIntentModels', () => {
     it('resolves every intent to its served model in one map', async () => {
       expect(await service.getIntentModels()).toEqual({
@@ -1094,7 +1011,7 @@ describe('AIConfigService', () => {
         (id: string) => id !== PROMOTED_ID
       );
 
-      expect(await service.getIntentModel('powerful')).toBe(
+      expect((await service.getIntentModels()).powerful).toBe(
         AI_SETTING_DEFAULTS.ai_deep_model
       );
       expect(await service.getFastModel()).toBe(
@@ -1106,7 +1023,7 @@ describe('AIConfigService', () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
 
       expect(await service.getDefaultModel()).toBe(PROMOTED_ID);
-      expect(await service.getIntentModel('fast')).toBe(PROMOTED_ID);
+      expect((await service.getIntentModels()).fast).toBe(PROMOTED_ID);
     });
 
     it('should serve a retired promoted default from the code default through the real catalog', async () => {

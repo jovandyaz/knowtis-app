@@ -44,7 +44,10 @@ import {
   ApiServiceUnavailable,
 } from '../../core/swagger/api-responses.decorator';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
-import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import {
+  FeatureFlagGuard,
+  RequireFeatureFlag,
+} from '../feature-flags/feature-flag.guard';
 import { AiUnavailableExceptionFilter } from './ai-unavailable.filter';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';

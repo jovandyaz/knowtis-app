@@ -27,7 +27,7 @@ import { ArtifactsModule } from '../modules/artifacts';
 import { AuthModule } from '../modules/auth';
 import { AuthorizationModule } from '../modules/authorization';
 import { CollaborationModule } from '../modules/collaboration';
-import { FeatureFlagsModule } from '../modules/feature-flags';
+import { FeatureFlagsModule } from '../modules/feature-flags/feature-flags.module';
 import { HealthModule } from '../modules/health';
 import { McpModule } from '../modules/mcp/mcp.module';
 import { NotesModule } from '../modules/notes';

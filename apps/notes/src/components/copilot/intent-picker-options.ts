@@ -20,20 +20,16 @@ export interface ModelPreference {
   preferredIntent?: ModelIntent | null;
 }
 
-/** A model the server lists without `access` is one it already scoped to the caller. */
-function isGranted(model: SelectableModel): boolean {
-  return (model.access ?? 'granted') === 'granted';
-}
-
-/** A catalogue model the caller may pick from "more models": unassigned to an intent and runnable for them. */
+/** A catalogue model the caller may pick from "more models": one no intent is assigned to. */
 function isMoreModel(model: SelectableModel): boolean {
-  return !model.servesIntent && (model.billedToUser || isGranted(model));
+  return !model.servesIntent;
 }
 
 /**
  * The model a turn resolves to: the stored override while the list still
- * offers it, else the model serving the preferred intent. A stale override
- * falls back rather than resolving to nothing, so every surface agrees.
+ * offers it — an Advanced pick may also serve an intent — else the model
+ * serving the preferred intent. A stale override falls back rather than
+ * resolving to nothing, so every surface agrees.
  */
 export function resolveSelectedModel(
   models: readonly SelectableModel[] | undefined,
@@ -42,9 +38,7 @@ export function resolveSelectedModel(
   const list = models ?? [];
   const preferred = prefs?.preferredModel ?? null;
   const override =
-    preferred === null
-      ? undefined
-      : list.find((m) => m.id === preferred && isMoreModel(m));
+    preferred === null ? undefined : list.find((m) => m.id === preferred);
   if (override) {
     return override;
   }
@@ -73,7 +67,7 @@ function modelDescription(
 export function advancedModelOptions(
   models: readonly SelectableModel[] | undefined
 ): SelectableModel[] {
-  return (models ?? []).filter((m) => isGranted(m) && m.billedToUser);
+  return (models ?? []).filter((m) => m.billedToUser);
 }
 
 /**
@@ -115,7 +109,6 @@ export function primaryRows(
         id: intent,
         label: model.label,
         description: t(`aiAssistant.intent.${intent}Hint` as never),
-        locked: model.access === 'requires_account',
       },
     ];
   });

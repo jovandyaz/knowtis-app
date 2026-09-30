@@ -25,8 +25,6 @@ export interface ModelMenuPrimaryRow {
   label: string;
   /** Job line, e.g. "Balance entre calidad y velocidad". */
   description: string;
-  /** Anonymous: lock glyph instead of check slot, and the row acts as the upsell. */
-  locked?: boolean;
 }
 
 export interface ModelMenuModelRow {
@@ -66,8 +64,6 @@ export interface ModelMenuProps {
   moreModels?: ModelMenuMoreModels;
   /** Anonymous upsell. */
   footerCta?: { label: string; onClick: () => void };
-  /** Accessible suffix for a locked row, e.g. "requiere cuenta". */
-  lockedHint?: string;
   /**
    * Renders the effort and more-models sections inline instead of as side
    * flyouts. Required below ~768px, where a flyout cannot fit beside the menu.
@@ -140,7 +136,6 @@ export function ModelMenu({
   effort,
   moreModels,
   footerCta,
-  lockedHint,
   inlineSections = false,
   triggerLabel,
   triggerDetail,
@@ -259,40 +254,15 @@ export function ModelMenu({
               {...(value !== null && { value })}
               onValueChange={onSelect}
             >
-              {primary.map((row) =>
-                row.locked ? (
-                  <DropdownMenuItem
-                    key={row.id}
-                    className={cn(OPTION_ROW_CLASSES, 'pr-7')}
-                    // Inert without a CTA behind it, so it announces as disabled
-                    // rather than closing the menu and doing nothing.
-                    disabled={!footerCta}
-                    {...(footerCta && { onSelect: footerCta.onClick })}
-                    {...(lockedHint && {
-                      'aria-label': `${row.label}, ${lockedHint}`,
-                    })}
-                  >
-                    <OptionRow
-                      label={row.label}
-                      description={row.description}
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2">
-                      <Lock className={LOCK_GLYPH_CLASSES} />
-                    </span>
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuRadioItem
-                    key={row.id}
-                    value={row.id}
-                    className={OPTION_ROW_CLASSES}
-                  >
-                    <OptionRow
-                      label={row.label}
-                      description={row.description}
-                    />
-                  </DropdownMenuRadioItem>
-                )
-              )}
+              {primary.map((row) => (
+                <DropdownMenuRadioItem
+                  key={row.id}
+                  value={row.id}
+                  className={OPTION_ROW_CLASSES}
+                >
+                  <OptionRow label={row.label} description={row.description} />
+                </DropdownMenuRadioItem>
+              ))}
             </DropdownMenuRadioGroup>
             {(effort || moreModels) && <DropdownMenuSeparator />}
             {effort &&

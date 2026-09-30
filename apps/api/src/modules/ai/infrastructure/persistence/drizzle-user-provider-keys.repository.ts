@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import {
   BYOK_PROVIDERS,
@@ -53,7 +53,8 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
     const rows = await this.db
       .select({ provider: userProviderKeys.provider })
       .from(userProviderKeys)
-      .where(eq(userProviderKeys.userId, userId));
+      .where(eq(userProviderKeys.userId, userId))
+      .orderBy(asc(userProviderKeys.createdAt), asc(userProviderKeys.provider));
     return rows.map((r) => toByokProvider(r.provider));
   }
 
