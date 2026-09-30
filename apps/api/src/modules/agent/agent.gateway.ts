@@ -331,16 +331,17 @@ export class AgentGateway
           client,
           controller,
           turnClaimOf(userId, turnId, data),
-          (onModelStart) => {
+          (markSettled) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
               onProposal: (proposal) => {
                 this.endedLegs.add(controller);
                 onProposal(proposal);
               },
-              onModelStart,
+              onModelStart: markSettled,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
               onTurnSettled: (conversationId) => {
+                markSettled();
                 this.endedLegs.add(controller);
                 client.emit('agent:turn_settled', { turnId, conversationId });
               },
@@ -498,12 +499,13 @@ export class AgentGateway
   }
 
   // Stripe's rule: a turn refused before the model ran saves nothing, so its
-  // claim is released and a resend of it runs.
+  // claim is released and a resend of it runs. A turn the conversation
+  // already stores ran on an expired claim, so it is settled like one that ran.
   private async withTurnClaim(
     client: AuthenticatedSocket,
     controller: AbortController,
     claim: TurnClaimRequest | undefined,
-    turn: (onModelStart: () => void) => Promise<void>
+    turn: (markSettled: () => void) => Promise<void>
   ): Promise<void> {
     if (!claim) {
       return turn(() => undefined);
@@ -514,13 +516,13 @@ export class AgentGateway
       this.refuseClaimedTurn(client, claim, outcome);
       return;
     }
-    let modelStarted = false;
+    let settled = false;
     try {
       await turn(() => {
-        modelStarted = true;
+        settled = true;
       });
     } finally {
-      await (modelStarted
+      await (settled
         ? this.turnClaims.settle(claim)
         : this.turnClaims.release(claim));
     }

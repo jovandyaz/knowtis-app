@@ -2011,6 +2011,61 @@ describe('AgentGateway', () => {
       expect(claimOf(redis)).toMatchObject({ status: 'settled' });
     });
 
+    describe('a resend the conversation already stores, once its claim expired', () => {
+      const alreadyStored: Execute = async (_input, cb) => {
+        cb.onTurnSettled?.(CONVERSATION);
+      };
+
+      it('settles the claim for a day instead of releasing it', async () => {
+        const redis = createInMemoryClaimRedis();
+        const gateway = makeGateway({
+          handler: { execute: vi.fn<Execute>(alreadyStored) } as never,
+          redis,
+        });
+
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+
+        expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+        expect(redis.entries.get(`agent:turn:u1:${TURN}`)?.ttlSeconds).toBe(
+          86_400
+        );
+      });
+
+      it('answers a later resend from the claim, without asking the handler again', async () => {
+        const execute = vi.fn<Execute>(alreadyStored);
+        const gateway = makeGateway({ handler: { execute } as never });
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+        const resent = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(resent as never, turn());
+
+        expect(resent.emit.mock.calls).toEqual([
+          [
+            'agent:turn_settled',
+            { turnId: TURN, conversationId: CONVERSATION },
+          ],
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+      });
+
+      it('refuses a later resend of its turn id with another message as reused', async () => {
+        const execute = vi.fn<Execute>(alreadyStored);
+        const gateway = makeGateway({ handler: { execute } as never });
+        await gateway.handleMessage(makeClient('u1') as never, turn());
+        const reused = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(
+          reused as never,
+          turn({ message: { content: 'something else' } })
+        );
+
+        expect(turnErrors(reused)).toEqual([
+          expect.objectContaining({ code: 'TURN_ID_REUSED', turnId: TURN }),
+        ]);
+        expect(execute).toHaveBeenCalledOnce();
+      });
+    });
+
     describe('a rejection before the model runs leaves the turn id free, so its replay runs', () => {
       it('an unauthenticated delivery', async () => {
         const execute = vi.fn<Execute>(completes);
