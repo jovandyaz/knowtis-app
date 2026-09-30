@@ -142,15 +142,17 @@ describe('AgentGateway', () => {
       handler: { execute } as Partial<RunAgentTurnHandler>,
     });
     const client = makeClient('u1');
+    const turnId = '99999999-9999-4999-8999-999999999999';
 
     await gateway.handleMessage(client as never, {
+      turnId,
       message: { content: 'hi' },
     });
 
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:turn_settled',
-      expect.objectContaining({ conversationId: 'conv-9' })
-    );
+    expect(client.emit).toHaveBeenCalledWith('agent:turn_settled', {
+      turnId,
+      conversationId: 'conv-9',
+    });
   });
 
   it('forwards the client IP to the turn handler', async () => {
