@@ -195,6 +195,7 @@ interface TurnLoopContext {
   readonly execution: AiExecutionContext;
   readonly reservation: Reservation;
   readonly model: string;
+  readonly resolution: ModelResolution;
   reconciled: boolean;
 }
 
@@ -600,6 +601,7 @@ export class RunAgentTurnHandler {
           webSources: [],
           stopReason: AGENT_STOP_REASON.COMPLETED,
           continuable: false,
+          modelResolution: ctx.resolution,
         });
         return 'stop';
       },
@@ -764,12 +766,7 @@ export class RunAgentTurnHandler {
     // of them; a BYOK turn also skips the daily token/cost ceiling.
     let resolved: ResolvedModel | null;
     try {
-      resolved = await this.resolveModel(
-        input,
-        persistence?.conversationId,
-        callbacks,
-        Boolean(resume)
-      );
+      resolved = await this.resolveModel(input, callbacks, Boolean(resume));
     } catch (error) {
       this.logger.error({
         event: 'agent.model_resolution_failed',
@@ -798,6 +795,9 @@ export class RunAgentTurnHandler {
         model,
       });
       callbacks.onError(AIErrors.modelUnavailable('not_in_tier', null));
+      return;
+    }
+    if (!(await this.persistRequestedModel(input, persistence, callbacks))) {
       return;
     }
     let byokApiKey: string | null = null;
@@ -861,6 +861,7 @@ export class RunAgentTurnHandler {
       execution,
       reservation: prepared.reservation,
       model,
+      resolution: resolved.resolution,
       reconciled: false,
     };
 
@@ -1004,7 +1005,7 @@ export class RunAgentTurnHandler {
               ...(persistence
                 ? { conversationId: persistence.conversationId }
                 : {}),
-              modelResolution: resolved.resolution,
+              modelResolution: ctx.resolution,
             });
             return;
           }
@@ -1279,14 +1280,14 @@ export class RunAgentTurnHandler {
 
   private async resolveModel(
     input: TurnInput,
-    conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
     resuming: boolean
   ): Promise<ResolvedModel | null> {
     const { userId } = input.execution.subject;
+    const pinned = resuming ? (input.conversationModel ?? null) : null;
     const choice = await this.modelPreference.chooseTurnModel(input.execution, {
       ...(input.model ? { explicit: input.model } : {}),
-      pinned: resuming ? (input.conversationModel ?? null) : null,
+      pinned,
     });
     if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
       this.logger.warn({
@@ -1294,7 +1295,7 @@ export class RunAgentTurnHandler {
         userId,
         tier: input.execution.tier,
         reason: choice.reason,
-        ...(input.model ? { model: input.model } : {}),
+        model: input.model ?? pinned,
       });
       callbacks.onError(
         AIErrors.modelUnavailable(choice.reason, choice.suggestedModel)
@@ -1309,10 +1310,34 @@ export class RunAgentTurnHandler {
         ...choice.resolution.fallback,
       });
     }
-    if (input.model && conversationId) {
-      await this.conversations.setModel(conversationId, userId, input.model);
-    }
     return { model: choice.model, resolution: choice.resolution };
+  }
+
+  private async persistRequestedModel(
+    input: TurnInput,
+    persistence: PersistenceContext | undefined,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onError'>
+  ): Promise<boolean> {
+    if (!input.model || !persistence) {
+      return true;
+    }
+    const { userId } = input.execution.subject;
+    try {
+      await this.conversations.setModel(
+        persistence.conversationId,
+        userId,
+        input.model
+      );
+      return true;
+    } catch (error) {
+      this.logger.error({
+        event: 'agent.model_resolution_failed',
+        userId,
+        error: reasonOf(error),
+      });
+      callbacks.onError(AIErrors.providerError('Model resolution failed'));
+      return false;
+    }
   }
 
   private async recordUsageSafe(

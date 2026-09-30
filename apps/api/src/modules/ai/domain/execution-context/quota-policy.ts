@@ -12,9 +12,8 @@ const BYOK = 'byok' satisfies AccessTier & QuotaUpgrade;
 const REGISTER_UPGRADE = 'register' satisfies QuotaUpgrade;
 
 /**
- * The daily messages a turn draws from, or null when it draws from none. The
- * quota follows billing, not tier: a turn billed to the caller's key never
- * consumes, and a byok-tier caller on a platform model is metered like free.
+ * The daily messages a turn draws from, or null when it draws from none: a
+ * turn billed to the caller's key never consumes one.
  */
 export function messageQuotaLimit(
   tier: AccessTier,

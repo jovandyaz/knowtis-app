@@ -1570,6 +1570,71 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it("reports a resumed turn's model fallback when it ends on a dropped proposal", async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+        usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+      },
+    ]);
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: 'anthropic:claude-sonnet-3',
+    });
+    const modelPreference = makeModelPreference();
+    const resolution = {
+      requested: 'anthropic:claude-sonnet-3',
+      resolved: SERVED_MODEL,
+      fallback: {
+        reason: 'model_retired',
+        from: 'anthropic:claude-sonnet-3',
+        to: SERVED_MODEL,
+      },
+    } as const;
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'resolved',
+      model: SERVED_MODEL,
+      resolution,
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const onDone = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        resume: { outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError: vi.fn() }
+    );
+
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ modelResolution: resolution })
+    );
+  });
+
   it('resumeTurn calls onError when the orchestrator throws', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {
@@ -2096,6 +2161,42 @@ describe('RunAgentTurnHandler', () => {
       expect(orchestrator.run).toHaveBeenCalledWith(
         expect.objectContaining({ maxSteps: 8, maxTurnTokens: 150000 })
       );
+    });
+
+    it('stores no explicit model when the billing guard refuses the turn', async () => {
+      const { handler, orchestrator, conversations, tierResolver, callbacks } =
+        makeContextHandler();
+      vi.mocked(tierResolver.resolve).mockResolvedValue(
+        createExecutionContext({
+          userId: USER,
+          tier: 'byok',
+          byokProviders: ['google'],
+        })
+      );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'AI_MODEL_UNAVAILABLE' })
+      );
+      expect(conversations.setModel).not.toHaveBeenCalled();
+      expect(orchestrator.run).not.toHaveBeenCalled();
+    });
+
+    it('fails the turn with a generic error when storing the explicit model fails', async () => {
+      const { handler, orchestrator, conversations, callbacks } =
+        makeContextHandler();
+      vi.mocked(conversations.setModel).mockRejectedValue(
+        new Error('pg connection to 10.0.0.7 refused')
+      );
+
+      await handler.execute(turnInput({ model: ANTHROPIC_MODEL }), callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledWith({
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: Model resolution failed',
+      });
+      expect(orchestrator.run).not.toHaveBeenCalled();
     });
 
     it('bills the key, lifts the budget and widens the steps when the model runs on the caller key', async () => {

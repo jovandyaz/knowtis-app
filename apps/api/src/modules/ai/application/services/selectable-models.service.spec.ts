@@ -831,18 +831,26 @@ describe('SelectableModelsService', () => {
       ).toEqual([expect.objectContaining({ label: 'Sonnet 5' })]);
     });
 
-    it('reads the effort ladder of a chain model outside the tier', () => {
+    it('reads the ladder of a chain model outside the tier, trimmed to the free slice', () => {
+      const service = makeOpenService();
+      const free = service.catalogFor(
+        createExecutionContext({ tier: 'free' }),
+        INTENTS
+      );
+
+      expect(free.models.map((m) => m.model.id)).not.toContain(
+        'openai:gpt-5.6-sol'
+      );
+      expect(
+        service.reasoningOf('openai:gpt-5.6-sol', NO_BYOK)?.levels
+      ).toEqual(['low', 'medium', 'high']);
+    });
+
+    it('reads the full ladder of a model on the caller key', () => {
       expect(
         makeOpenService().reasoningOf('openai:gpt-5.6-sol', new Set(['openai']))
           ?.levels
       ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
-    });
-
-    it('trims the ladder of a platform-billed model to the free slice', () => {
-      expect(
-        makeOpenService().reasoningOf('anthropic:claude-sonnet-5', NO_BYOK)
-          ?.levels
-      ).toEqual(['low', 'medium', 'high']);
     });
 
     it('gives a model reached only over an OpenRouter key the curated ladder of the same model', () => {

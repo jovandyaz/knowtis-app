@@ -15,9 +15,9 @@ export interface SegmentSettings {
 }
 
 /**
- * Limits follow billing, not tier: a turn on the caller's key has no token
- * budget and the wider step cap, while a byok-tier caller on a platform model
- * keeps the platform limits.
+ * Limits follow billing: a turn on the caller's key has no token budget and the
+ * wider step cap, while a platform-billed turn keeps the platform budget,
+ * capped at the daily allowance for an anonymous-share tier.
  */
 export function segmentLimits(
   execution: AiExecutionContext,
