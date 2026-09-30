@@ -178,6 +178,22 @@ describe('AISDKProvider', () => {
     ).rejects.toThrow('Model unavailable');
   });
 
+  it('should hand streamText a redacting onError', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+      })
+    );
+
+    expect(streamText.mock.calls[0][0]).toHaveProperty(
+      'onError',
+      expect.any(Function)
+    );
+  });
+
   it('should add Anthropic cache control to system prompt for streaming', async () => {
     const { streamText } = vi.mocked(await import('ai'));
 

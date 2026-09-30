@@ -26,6 +26,7 @@ import {
   withLastMessageCache,
 } from '../../../ai/infrastructure/providers/anthropic-cache';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import { logStreamErrorRedacted } from '../../../ai/infrastructure/providers/redacted-stream-error';
 import {
   withTraceIdentity,
   type TraceIdentityAttrs,
@@ -259,6 +260,7 @@ export async function* runStepCall(
         temperature: AGENT_TEMPERATURE,
         ...params.providerOptions,
         abortSignal: runSignal,
+        onError: logStreamErrorRedacted(logger, { userId, model }),
         onStepEnd: ({ toolResults, usage }) => {
           turn.progressed = true;
           collectSources(toolResults, turn.sources);

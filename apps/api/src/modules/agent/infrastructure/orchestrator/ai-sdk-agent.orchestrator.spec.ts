@@ -195,6 +195,22 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(lastSystemPrompt()).toContain('note-xyz');
   });
 
+  it('hands streamText a redacting onError on BYOK turns', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+    await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
+    const onError = streamTextMock.mock.calls[0][0].onError;
+    expect(onError).toEqual(expect.any(Function));
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    onError({ error: new Error('boom') });
+
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('passes the reasoning effort to openrouter models as an openrouter block', async () => {
     streamTextMock.mockClear();
     const orchestrator = makeOrchestrator();
