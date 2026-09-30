@@ -9,29 +9,43 @@ describe('TIER_POLICIES', () => {
       longTermMemory: false,
       effortSelectable: false,
       allowance: 'anonymous-share',
+      catalog: 'default-intent',
     },
     {
       tier: 'free',
       longTermMemory: true,
       effortSelectable: true,
       allowance: 'full',
+      catalog: 'platform-intents',
     },
     {
       tier: 'byok',
       longTermMemory: true,
       effortSelectable: true,
       allowance: 'full',
+      catalog: 'own-keys',
     },
   ] as const)(
-    '$tier: memory=$longTermMemory effort=$effortSelectable allowance=$allowance',
-    ({ tier, longTermMemory, effortSelectable, allowance }) => {
+    '$tier: memory=$longTermMemory effort=$effortSelectable allowance=$allowance catalog=$catalog',
+    ({ tier, longTermMemory, effortSelectable, allowance, catalog }) => {
       expect(TIER_POLICIES[tier]).toEqual({
         longTermMemory,
         effortSelectable,
         dailyAllowance: allowance,
+        catalog,
       });
     }
   );
+});
+
+describe('catalog scope', () => {
+  it.each([
+    { tier: 'anonymous', scope: 'default-intent' },
+    { tier: 'free', scope: 'platform-intents' },
+    { tier: 'byok', scope: 'own-keys' },
+  ] as const)('a $tier caller sees the $scope catalog', ({ tier, scope }) => {
+    expect(TIER_POLICIES[tier].catalog).toBe(scope);
+  });
 });
 
 describe('dailyAllowance', () => {
