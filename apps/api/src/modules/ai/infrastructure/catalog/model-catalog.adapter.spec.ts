@@ -8,7 +8,7 @@ import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.cat
 import { createMockConfig } from '../../testing/create-mock-config';
 import { ModelCatalogAdapter } from './model-catalog.adapter';
 
-/** The most a code default may cost per output token: the platform absorbs every default. */
+/** Test threshold for catalog admission: the most a model may cost per output token. */
 const PLATFORM_ABSORBABLE_OUTPUT_COST_PER_TOKEN = 0.000004;
 
 function mockRefresh(payload: unknown) {
@@ -220,7 +220,7 @@ describe('ModelCatalogAdapter', () => {
     }
   });
 
-  it('keeps every model the code defaults name within what the platform absorbs', () => {
+  it('keeps every model the code defaults name within the admission threshold', () => {
     const adapter = makeAdapter();
     const defaults = [
       AI_SETTING_DEFAULTS.ai_default_model,

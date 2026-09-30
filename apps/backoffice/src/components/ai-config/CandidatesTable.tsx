@@ -152,9 +152,9 @@ export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
         />
       </div>
       <p className="text-xs text-(--muted-foreground)">
-        Ranked by intelligence index, unscored last. A model marked “BYOK only”
-        costs more per token than the free tier absorbs: promoting it offers it
-        to users who bring their own key, not to everyone.
+        Ranked by intelligence index, unscored last. A promoted model reaches
+        only callers whose key serves it, or everyone once an intent is assigned
+        to it.
       </p>
       <MutationErrorAlert
         error={promote.error}

@@ -9,7 +9,7 @@ import {
   toCandidateUpsert,
 } from './candidate-filter';
 
-/** The most a code default may cost per output token: the platform absorbs every default. */
+/** Test threshold for catalog admission: the most a model may cost per output token. */
 const PLATFORM_ABSORBABLE_OUTPUT_COST_PER_TOKEN = 0.000004;
 
 const GLM_45_CREATED_AT = new Date('2025-07-25T18:02:27.000Z');
@@ -102,7 +102,7 @@ describe('isCatalogCandidate', () => {
     ).toBe(true);
   });
 
-  it('should admit a model priced above what the platform absorbs but under the admission ceiling', () => {
+  it('should admit a model priced above the test threshold but under the admission ceiling', () => {
     const kimiK3 = upstream({
       id: 'moonshotai/kimi-k3',
       name: 'MoonshotAI: Kimi K3',
