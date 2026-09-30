@@ -6543,6 +6543,13 @@ describe('RunAgentTurnHandler daily message quota', () => {
     };
   }
 
+  function keyFailedAnnouncements(eventBus: EventEmitter2): unknown[] {
+    return vi
+      .mocked(eventBus.emit)
+      .mock.calls.filter(([name]) => name === ByokKeyFailedEvent.EVENT_NAME)
+      .map(([, event]) => event);
+  }
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -7246,10 +7253,13 @@ describe('RunAgentTurnHandler daily message quota', () => {
         kind: 'auth',
       })
     );
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      ByokKeyFailedEvent.EVENT_NAME,
-      expect.objectContaining({ provider: 'google', kind: 'auth' })
-    );
+    expect(keyFailedAnnouncements(eventBus)).toEqual([
+      expect.objectContaining({
+        userId: USER,
+        provider: 'google',
+        kind: 'auth',
+      }),
+    ]);
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(quota.consume).not.toHaveBeenCalled();
   });
@@ -7262,7 +7272,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
       apiKey: 'sk-user',
     });
     const eventBus = makeEvents();
-    const { handler } = build({
+    const { handler, rateLimit } = build({
       quota,
       byok,
       eventBus,
@@ -7275,17 +7285,23 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
     await handler.execute({ ...turn, model: USER_KEYED_MODEL }, cb);
 
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      ByokKeyFailedEvent.EVENT_NAME,
+    expect(keyFailedAnnouncements(eventBus)).toEqual([
       expect.objectContaining({
         userId: USER,
         provider: 'google',
         kind: 'credit',
-      })
-    );
+      }),
+    ]);
     expect(cb.onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AI_BYOK_KEY_FAILED', kind: 'credit' })
     );
+    expect(rateLimit.releaseReservation).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        billing: { kind: 'byok', provider: 'google' },
+      }),
+      ANY_RESERVATION
+    );
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });
 
   it('announces no key failure for any other error of a byok turn', async () => {
@@ -7306,10 +7322,7 @@ describe('RunAgentTurnHandler daily message quota', () => {
 
     await handler.execute({ ...turn, model: USER_KEYED_MODEL }, callbacks());
 
-    expect(eventBus.emit).not.toHaveBeenCalledWith(
-      ByokKeyFailedEvent.EVENT_NAME,
-      expect.anything()
-    );
+    expect(keyFailedAnnouncements(eventBus)).toEqual([]);
   });
 
   it('refuses a byok-tier turn that would bill the platform, before any message is drawn', async () => {
