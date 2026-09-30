@@ -14,6 +14,7 @@ import type { StreamTextCallbacks } from './application/commands/stream-text.han
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import type { AICompletionPipeline } from './application/services/ai-completion-pipeline.service';
 import type { TierResolver } from './application/services/tier-resolver.service';
+import { AIErrors } from './domain/errors/ai.errors';
 import type { AiCaller } from './domain/execution-context/ai-execution-context';
 import type { AICompletionProvider } from './domain/ports/ai-provider.port';
 import { createExecutionContext } from './testing/create-execution-context';
@@ -96,6 +97,61 @@ function createBlockingExecute() {
       pending.length = 0;
     },
   };
+}
+
+const STREAM_MODEL = 'anthropic:claude-sonnet-4-20250514';
+
+/** Streams one chunk, then closes without throwing once the signal aborts, as the AI SDK does. */
+function createAbortClosedProvider(): AICompletionProvider {
+  return {
+    generateCompletion: vi.fn(),
+    streamCompletion: vi.fn(
+      (_prompt: string, options: { signal?: AbortSignal }) => ({
+        textStream: (async function* () {
+          yield 'partial';
+          await new Promise<void>((resolve) =>
+            options.signal?.addEventListener('abort', () => resolve(), {
+              once: true,
+            })
+          );
+        })(),
+        usage: Promise.resolve({
+          promptTokens: 0,
+          completionTokens: 0,
+          model: STREAM_MODEL,
+        }),
+      })
+    ),
+  } as unknown as AICompletionProvider;
+}
+
+function createReadyPipeline(
+  recordCompletion: () => Promise<void>
+): AICompletionPipeline {
+  return {
+    preflight: vi.fn(async () =>
+      ok({
+        kind: 'ready',
+        context: {
+          requestId: 'req-1',
+          startTime: Date.now(),
+          action: AI_ACTION.SUMMARIZE,
+          model: STREAM_MODEL,
+          systemPrompt: 'system',
+          userPrompt: 'user',
+          reservation: { estimate: { tokens: 10, costUsd: 0 } },
+        },
+      })
+    ),
+    recordCompletion: vi.fn(recordCompletion),
+    releaseReservation: vi.fn(),
+  } as unknown as AICompletionPipeline;
+}
+
+function emittedEvents(
+  client: ReturnType<typeof createMockAISocket>
+): string[] {
+  return vi.mocked(client.emit).mock.calls.map(([event]) => String(event));
 }
 
 describe('AIGateway', () => {
@@ -733,6 +789,38 @@ describe('AIGateway', () => {
       blocking.resolveAll();
       await p2;
     });
+
+    it('ends a cancelled stream with neither ai:done nor ai:error', async () => {
+      const gw = new AIGateway(
+        new StreamTextHandler(
+          createAbortClosedProvider(),
+          createTestCatalog(),
+          createReadyPipeline(async () => undefined),
+          createMockConfig()
+        ),
+        tierResolver,
+        mockJwtService,
+        mockFeatureFlags,
+        new ShutdownDrain(),
+        createMockConfigService()
+      );
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      const running = gw.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+      await vi.waitFor(() =>
+        expect(client.emit).toHaveBeenCalledWith('ai:chunk', {
+          text: 'partial',
+        })
+      );
+      gw.handleCancel(client);
+      await running;
+
+      expect(emittedEvents(client)).toEqual(['ai:chunk']);
+    });
   });
 
   describe('handleDisconnect', () => {
@@ -1012,8 +1100,6 @@ describe('AIGateway', () => {
   });
 
   describe('shutdown drain', () => {
-    const MODEL = 'anthropic:claude-sonnet-4-20250514';
-
     function signedInClient() {
       const client = createMockAISocket();
       client.data.userId = 'user-123';
@@ -1045,55 +1131,19 @@ describe('AIGateway', () => {
       );
     });
 
-    it('resolves only after the aborted stream has written its usage', async () => {
+    it('resolves only after the aborted stream has written its usage, then tells the client to retry', async () => {
       const order: string[] = [];
       let finishWrite!: () => void;
-      const provider = {
-        generateCompletion: vi.fn(),
-        streamCompletion: vi.fn(
-          (_prompt: string, options: { signal?: AbortSignal }) => ({
-            textStream: (async function* () {
-              yield 'partial';
-              await new Promise<void>((resolve) =>
-                options.signal?.addEventListener('abort', () => resolve(), {
-                  once: true,
-                })
-              );
-            })(),
-            usage: Promise.resolve({
-              promptTokens: 0,
-              completionTokens: 0,
-              model: MODEL,
-            }),
+      const provider = createAbortClosedProvider();
+      const pipeline = createReadyPipeline(
+        () =>
+          new Promise<void>((resolve) => {
+            finishWrite = () => {
+              order.push('usage written');
+              resolve();
+            };
           })
-        ),
-      } as unknown as AICompletionProvider;
-      const pipeline = {
-        preflight: vi.fn(async () =>
-          ok({
-            kind: 'ready',
-            context: {
-              requestId: 'req-1',
-              startTime: Date.now(),
-              action: AI_ACTION.SUMMARIZE,
-              model: MODEL,
-              systemPrompt: 'system',
-              userPrompt: 'user',
-              reservation: { estimate: { tokens: 10, costUsd: 0 } },
-            },
-          })
-        ),
-        recordCompletion: vi.fn(
-          () =>
-            new Promise<void>((resolve) => {
-              finishWrite = () => {
-                order.push('usage written');
-                resolve();
-              };
-            })
-        ),
-        releaseReservation: vi.fn(),
-      } as unknown as AICompletionPipeline;
+      );
       const drain = new ShutdownDrain();
       const gw = new AIGateway(
         new StreamTextHandler(
@@ -1109,7 +1159,8 @@ describe('AIGateway', () => {
         createMockConfigService()
       );
 
-      const running = gw.handleComplete(signedInClient(), {
+      const client = signedInClient();
+      const running = gw.handleComplete(client, {
         action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
@@ -1127,6 +1178,55 @@ describe('AIGateway', () => {
       await Promise.all([draining, running]);
 
       expect(order).toEqual(['usage written', 'drained']);
+      expect(emittedEvents(client)).toEqual(['ai:chunk', 'ai:error']);
+      expect(client.emit).toHaveBeenLastCalledWith(
+        'ai:error',
+        AIErrors.providerError('server restarting')
+      );
     });
+
+    it.each([
+      [
+        'ai:done',
+        (callbacks?: StreamTextCallbacks) =>
+          callbacks?.onDone({
+            inputTokens: 1,
+            outputTokens: 1,
+            model: STREAM_MODEL,
+            costUsd: 0,
+          }),
+      ],
+      [
+        'ai:error',
+        (callbacks?: StreamTextCallbacks) =>
+          callbacks?.onError(AIErrors.providerError('AI streaming failed')),
+      ],
+    ])(
+      'sends nothing more for a stream that already sent %s when the drain aborts it',
+      async (event, end) => {
+        const blocking = createBlockingExecute();
+        const drain = new ShutdownDrain();
+        const gw = new AIGateway(
+          { execute: blocking.fn } as unknown as StreamTextHandler,
+          tierResolver,
+          mockJwtService,
+          mockFeatureFlags,
+          drain,
+          createMockConfigService()
+        );
+        const client = signedInClient();
+        const running = gw.handleComplete(client, {
+          action: AI_ACTION.SUMMARIZE,
+          content: 'Some content',
+        });
+        await vi.waitFor(() => expect(blocking.callbacks).toBeDefined());
+
+        end(blocking.callbacks);
+        await drain.beforeApplicationShutdown();
+        await running;
+
+        expect(emittedEvents(client)).toEqual([event]);
+      }
+    );
   });
 });

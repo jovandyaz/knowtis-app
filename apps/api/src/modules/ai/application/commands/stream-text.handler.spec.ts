@@ -289,9 +289,70 @@ describe('StreamTextHandler', () => {
     );
 
     expect(collectedChunks).toEqual(['First']);
+    expect(doneResult).toBeNull();
+    expect(errorResult).toBeNull();
     expect(mockProvider.streamCompletion).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ signal: controller.signal })
+    );
+  });
+
+  it('ends a stream its abort closed without reporting it done', async () => {
+    const controller = new AbortController();
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: (async function* () {
+        yield 'partial';
+        controller.abort();
+      })(),
+      usage: Promise.resolve({
+        promptTokens: 0,
+        completionTokens: 0,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+
+    await handler.execute(
+      {
+        execution: createExecutionContext({ userId: 'user-123' }),
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks,
+      controller.signal
+    );
+
+    expect(collectedChunks).toEqual(['partial']);
+    expect(doneResult).toBeNull();
+    expect(errorResult).toBeNull();
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a stream done when the abort lands only after it finished', async () => {
+    const controller = new AbortController();
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: createAsyncStream(['Hello', ' world']),
+      get usage() {
+        controller.abort();
+        return Promise.resolve({
+          promptTokens: 80,
+          completionTokens: 30,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        });
+      },
+    });
+
+    await handler.execute(
+      {
+        execution: createExecutionContext({ userId: 'user-123' }),
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks,
+      controller.signal
+    );
+
+    expect(doneResult).toEqual(
+      expect.objectContaining({ inputTokens: 80, outputTokens: 30 })
     );
   });
 

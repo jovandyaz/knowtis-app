@@ -45,6 +45,7 @@ async function settleUsageWrite(write: Promise<void>): Promise<void> {
   }
 }
 
+/** A stream the signal cuts ends with neither `onDone` nor `onError`. */
 export interface StreamTextCallbacks {
   readonly onChunk: (text: string) => void;
   readonly onDone: (usage: {
@@ -130,12 +131,6 @@ export class StreamTextHandler {
 
       for await (const chunk of streamResult.textStream) {
         if (signal?.aborted) {
-          this.logger.log({
-            event: 'ai.request.cancelled',
-            requestId: context.requestId,
-            userId,
-            latencyMs: Date.now() - context.startTime,
-          });
           break;
         }
         if (chunk !== '') {
@@ -143,10 +138,12 @@ export class StreamTextHandler {
           callbacks.onChunk(chunk);
         }
       }
+      // The AI SDK closes an aborted stream without throwing. The signal is read
+      // before the usage await so an abort after the last chunk still reports done.
+      const aborted = signal?.aborted ?? false;
 
       const actualUsage = await streamResult.usage;
       const servedModel = actualUsage.model;
-      const aborted = signal?.aborted ?? false;
       const zeroSettled =
         actualUsage.promptTokens === 0 && actualUsage.completionTokens === 0;
       const inputTokens =
@@ -179,6 +176,17 @@ export class StreamTextHandler {
         { mode: 'stream', aborted }
       );
       usageSettled = true;
+
+      if (aborted) {
+        this.logger.log({
+          event: 'ai.request.cancelled',
+          requestId: context.requestId,
+          userId,
+          latencyMs: Date.now() - context.startTime,
+        });
+        await settleUsageWrite(recorded);
+        return;
+      }
 
       try {
         callbacks.onDone({
