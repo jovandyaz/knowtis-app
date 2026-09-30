@@ -182,7 +182,7 @@ export interface RunAgentTurnCallbacks {
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
-  /** Fires once, when the turn named no conversation, with the one it opened; the id must not wait for `done`. */
+  /** Fires once, just before the model runs, when the turn named no conversation, with the one it opened; the id must not wait for `done`. A turn refused before the model runs keeps no conversation, so it announces none. */
   readonly onConversation?: (conversationId: string) => void;
   /** Fires once, just before the model runs; a turn that ends without it was refused before any model call. */
   readonly onModelStart?: () => void;
@@ -405,42 +405,70 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
-    if (await this.alreadyStored(conversationId, input.turnId, callbacks)) {
-      return;
-    }
-    if (conversation.opened) {
-      callbacks.onConversation?.(conversationId);
-    }
-    const { history, knownNotes } = await this.loadConversationContext(
-      conversationId,
-      input.userId
-    );
-    const synthInput: TurnInput = {
-      turnId: input.turnId,
-      messages: history,
-      message,
-      execution,
-      memoryQuery: message.content,
-      ...(input.noteId ? { noteId: input.noteId } : {}),
-      knownNotes,
-      segmentIndex: 0,
-      ...(input.model ? { model: input.model } : {}),
-      ...(input.effort ? { effort: input.effort } : {}),
-      conversationModel: conversation.model,
+    // A turn refused before the model runs deletes the conversation it
+    // created, so the client learns the id only once the model starts.
+    let modelStarted = false;
+    const onModelStart = () => {
+      modelStarted = true;
+      if (conversation.opened) {
+        callbacks.onConversation?.(conversationId);
+      }
+      callbacks.onModelStart?.();
     };
-    const persistence: PersistenceContext = {
-      conversationId,
-      turnId: input.turnId,
-      userContent: message.content,
-    };
-    return this.runLoop(
-      synthInput,
-      undefined,
-      callbacks,
-      signal,
-      this.executePolicy(callbacks, persistence),
-      persistence
-    );
+    try {
+      if (await this.alreadyStored(conversationId, input.turnId, callbacks)) {
+        return;
+      }
+      const { history, knownNotes } = await this.loadConversationContext(
+        conversationId,
+        input.userId
+      );
+      const synthInput: TurnInput = {
+        turnId: input.turnId,
+        messages: history,
+        message,
+        execution,
+        memoryQuery: message.content,
+        ...(input.noteId ? { noteId: input.noteId } : {}),
+        knownNotes,
+        segmentIndex: 0,
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.effort ? { effort: input.effort } : {}),
+        conversationModel: conversation.model,
+      };
+      const persistence: PersistenceContext = {
+        conversationId,
+        turnId: input.turnId,
+        userContent: message.content,
+      };
+      await this.runLoop(
+        synthInput,
+        undefined,
+        { ...callbacks, onModelStart },
+        signal,
+        this.executePolicy(callbacks, persistence),
+        persistence
+      );
+    } finally {
+      if (conversation.created && !modelStarted) {
+        await this.discardUnusedConversation(conversationId, input.userId);
+      }
+    }
+  }
+
+  private async discardUnusedConversation(
+    conversationId: string,
+    userId: string
+  ): Promise<void> {
+    try {
+      await this.conversations.deleteForUser(conversationId, userId);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.conversation.discard_failed',
+        conversationId,
+        error: reasonOf(error),
+      });
+    }
   }
 
   // The turn claim expires after 24 h; past it, only the stored row proves the
@@ -504,18 +532,23 @@ export class RunAgentTurnHandler {
   private async resolveConversation(
     input: RunAgentTurnInput,
     message: { content: string }
-  ): Promise<{ id: string; model: string | null; opened: boolean } | null> {
+  ): Promise<{
+    id: string;
+    model: string | null;
+    opened: boolean;
+    created: boolean;
+  } | null> {
     if (input.conversationId) {
       const existing = await this.conversations.findByIdForUser(
         input.conversationId,
         input.userId
       );
-      return existing ? { ...existing, opened: false } : null;
+      return existing ? { ...existing, opened: false, created: false } : null;
     }
     const id = conversationIdForTurn(input.userId, input.turnId);
     const replayed = await this.conversations.findByIdForUser(id, input.userId);
     if (replayed) {
-      return { ...replayed, opened: true };
+      return { ...replayed, opened: true, created: false };
     }
     const created = await this.conversations.create({
       id,
@@ -523,7 +556,7 @@ export class RunAgentTurnHandler {
       ...(input.noteId ? { noteId: input.noteId } : {}),
       title: deriveConversationTitle(message.content) || null,
     });
-    return { id: created.id, model: null, opened: true };
+    return { id: created.id, model: null, opened: true, created: true };
   }
 
   private async loadConversationContext(

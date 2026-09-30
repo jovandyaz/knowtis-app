@@ -14,6 +14,8 @@ import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
   type AgentStopReason,
   type AiQuota,
   type ByokProvider,
@@ -193,6 +195,7 @@ function makeConversations(history: ConversationMessageRow[] = []) {
     loadMessages: vi.fn().mockResolvedValue(history),
     appendTurn: vi.fn().mockResolvedValue(true),
     hasTurn: vi.fn().mockResolvedValue(false),
+    deleteForUser: vi.fn().mockResolvedValue(true),
   } as unknown as ConversationRepository;
 }
 
@@ -1101,15 +1104,16 @@ describe('RunAgentTurnHandler', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('announces a freshly created conversation before the turn can end', async () => {
+  it('discards, unannounced, the conversation a first turn opened when it is aborted before the model runs', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations(),
+      conversations,
       makeMemory(),
       makeEmbed(),
       makeModelPreference(),
@@ -1138,7 +1142,12 @@ describe('RunAgentTurnHandler', () => {
       controller.signal
     );
 
-    expect(onConversation).toHaveBeenCalledWith('conv-1');
+    expect(conversations.create).toHaveBeenCalledOnce();
+    expect(conversations.deleteForUser).toHaveBeenCalledExactlyOnceWith(
+      'conv-1',
+      USER
+    );
+    expect(onConversation).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
   });
 
@@ -6249,6 +6258,7 @@ describe('RunAgentTurnHandler turn identity', () => {
       conversations?: ConversationRepository;
       guard?: InjectionGuardService;
       modelPreference?: ModelPreferenceService;
+      quota?: MessageQuotaService;
     } = {}
   ) {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
@@ -6271,7 +6281,7 @@ describe('RunAgentTurnHandler turn identity', () => {
       makeAIConfig(),
       makeTurnEffort(),
       makeTierResolver(),
-      createMessageQuotaStub(),
+      over.quota ?? createMessageQuotaStub(),
       makeEvents()
     );
     const callbacks = {
@@ -6396,6 +6406,150 @@ describe('RunAgentTurnHandler turn identity', () => {
     expect(conversations.appendTurn).not.toHaveBeenCalled();
     expect(rateLimit.releaseReservation).toHaveBeenCalledOnce();
     expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  const unselectableModel = () => {
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: SERVED_MODEL,
+    });
+    return modelPreference;
+  };
+
+  it.each([
+    [
+      'the model is not selectable',
+      AI_MODEL_UNAVAILABLE_CODE,
+      () => setup({ modelPreference: unselectableModel() }),
+    ],
+    [
+      'no message is left today',
+      AI_QUOTA_EXHAUSTED_CODE,
+      () =>
+        setup({
+          quota: createMessageQuotaStub({
+            kind: 'exhausted',
+            resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+            upgrade: 'register',
+          }),
+        }),
+    ],
+    [
+      'the budget is spent',
+      AIErrorCodes.RATE_LIMIT_EXCEEDED,
+      () => setup({ allowed: false }),
+    ],
+    [
+      'the message is an injection',
+      AIErrorCodes.PROMPT_INJECTION_DETECTED,
+      () => setup({ guard: makeGuard(false) }),
+    ],
+  ])(
+    'discards, unannounced, the conversation a first turn opened when %s',
+    async (_refusal, code, makeSetup) => {
+      const { handler, callbacks, conversations } = makeSetup();
+
+      await handler.execute(
+        { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+        callbacks
+      );
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code })
+      );
+      expect(conversations.create).toHaveBeenCalledOnce();
+      expect(conversations.deleteForUser).toHaveBeenCalledExactlyOnceWith(
+        'conv-1',
+        USER
+      );
+      expect(callbacks.onConversation).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps a conversation the refused turn did not open', async () => {
+    const { handler, callbacks, conversations } = setup({
+      modelPreference: unselectableModel(),
+    });
+
+    await handler.execute(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        message: { content: 'hi' },
+      },
+      callbacks
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps the conversation an earlier delivery of a refused turn opened', async () => {
+    const opened = conversationIdForTurn(USER, TURN_ID);
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockImplementation(
+      async (id: string) => (id === opened ? { id: opened, model: null } : null)
+    );
+    const { handler, callbacks } = setup({
+      conversations,
+      modelPreference: unselectableModel(),
+    });
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
+  });
+
+  it('still reports the refusal when discarding the opened conversation fails', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const conversations = makeConversations();
+    vi.mocked(conversations.deleteForUser).mockRejectedValue(
+      new Error('db down')
+    );
+    const { handler, callbacks } = setup({
+      conversations,
+      modelPreference: unselectableModel(),
+    });
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks
+    );
+
+    expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: AI_MODEL_UNAVAILABLE_CODE })
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.conversation.discard_failed',
+        conversationId: 'conv-1',
+      })
+    );
+  });
+
+  it('announces the conversation a first turn opened just before the model runs, and keeps it', async () => {
+    const { handler, callbacks, conversations, orchestrator } = setup();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      callbacks
+    );
+
+    expect(callbacks.onConversation).toHaveBeenCalledExactlyOnceWith('conv-1');
+    expect(callbacks.onConversation.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(orchestrator.run).mock.invocationCallOrder[0]
+    );
+    expect(conversations.deleteForUser).not.toHaveBeenCalled();
   });
 
   it('signals the model start once, just before the model runs', async () => {
