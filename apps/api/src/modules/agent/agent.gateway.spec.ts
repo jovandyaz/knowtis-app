@@ -693,6 +693,7 @@ describe('AgentGateway', () => {
         await new Promise<void>((resolve) =>
           signal.addEventListener('abort', () => resolve())
         );
+        await flushAsync();
         settled = true;
       }
     );
@@ -706,12 +707,12 @@ describe('AgentGateway', () => {
     });
     await flushAsync();
     await gateway.beforeApplicationShutdown();
-    await running;
 
+    expect(settled).toBe(true);
+    await running;
     expect((execute.mock.calls[0][2] as AbortSignal).reason).toBe(
       TURN_ABORT_REASON.SHUTDOWN
     );
-    expect(settled).toBe(true);
   });
 
   it('refuses a turn that arrives while draining', async () => {
