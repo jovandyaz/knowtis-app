@@ -327,6 +327,21 @@ describe('chooseModel', () => {
       });
     });
 
+    it('re-routes a stored model silently when its vendor id is no longer priced', () => {
+      const directSonnetUnpriced = (id: string) => id !== DIRECT_SONNET;
+      expect(
+        setup(
+          'byok',
+          ['anthropic', 'openrouter'],
+          directSonnetUnpriced
+        )({ preferredModel: DIRECT_SONNET })
+      ).toEqual({
+        kind: 'resolved',
+        model: ROUTED_SONNET,
+        resolution: { requested: DIRECT_SONNET, resolved: ROUTED_SONNET },
+      });
+    });
+
     it('still falls back visibly when no route of the model is servable', () => {
       const routedOpusUnpriced = (id: string) =>
         id !== 'openrouter:anthropic/claude-opus-5';
