@@ -1,22 +1,23 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 
-import {
-  DEFAULT_MODEL_INTENT,
-  type AIPreferences,
-  type ModelCatalogResponse,
-  type ModelReasoning,
-  type UpdateAiPreferencesInput,
+import type {
+  AIPreferences,
+  ModelCatalogResponse,
+  ModelIntent,
+  ModelReasoning,
+  UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
-import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import type {
+  AiCaller,
+  AiExecutionContext,
+} from '../../domain/execution-context/ai-execution-context';
 import {
   chooseModel,
+  MODEL_CHOICE,
   type ModelChoice,
+  type ModelRequest,
 } from '../../domain/model-catalog/model-choice';
-import {
-  findInCatalog,
-  intentModelOf,
-} from '../../domain/model-catalog/tier-catalog';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -63,15 +64,11 @@ export class ModelPreferenceService {
       this.aiConfig.getIntentModels(),
       this.settings.getSettings(execution.subject.userId),
     ]);
-    return chooseModel(
-      this.selectable.catalogFor(execution, platformIntents),
-      {
-        ...request,
-        preferredModel: settings.preferredModel,
-        preferredIntent: settings.preferredIntent,
-      },
-      this.selectable.factsFor(execution.byokProviders, platformIntents)
-    );
+    return this.chooseWithin(execution, platformIntents, {
+      ...request,
+      preferredModel: settings.preferredModel,
+      preferredIntent: settings.preferredIntent,
+    });
   }
 
   async getUserPreferences(userId: string): Promise<AIPreferences> {
@@ -80,11 +77,17 @@ export class ModelPreferenceService {
     return { preferredModel, preferredIntent, ghostTextEnabled };
   }
 
+  /**
+   * Only a model write reads the caller's tier, through `tierOf`: a toggle or
+   * an intent pick stays writable while the key store is down. A model is
+   * accepted exactly when a turn would accept it as an explicit request.
+   */
   async setUserPreferences(
-    execution: AiExecutionContext,
-    patch: UpdateAiPreferencesInput
+    caller: Pick<AiCaller, 'userId' | 'isAnonymous'>,
+    patch: UpdateAiPreferencesInput,
+    tierOf: () => Promise<AiExecutionContext>
   ): Promise<void> {
-    if (execution.tier === 'anonymous') {
+    if (caller.isAnonymous) {
       throw new ForbiddenException(
         'AI preferences require a registered account'
       );
@@ -93,21 +96,34 @@ export class ModelPreferenceService {
       return;
     }
     if (typeof patch.preferredModel === 'string') {
-      const platformIntents = await this.aiConfig.getIntentModels();
-      const catalog = this.selectable.catalogFor(execution, platformIntents);
-      if (!findInCatalog(catalog, patch.preferredModel)) {
-        const facts = this.selectable.factsFor(
-          execution.byokProviders,
-          platformIntents
-        );
+      const [execution, platformIntents] = await Promise.all([
+        tierOf(),
+        this.aiConfig.getIntentModels(),
+      ]);
+      const choice = this.chooseWithin(execution, platformIntents, {
+        explicit: patch.preferredModel,
+        preferredModel: null,
+        preferredIntent: null,
+      });
+      if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
         throw new ModelUnavailableException(
-          facts.isSupported(patch.preferredModel)
-            ? 'not_in_tier'
-            : 'model_retired',
-          intentModelOf(catalog, DEFAULT_MODEL_INTENT)
+          choice.reason,
+          choice.suggestedModel
         );
       }
     }
-    await this.settings.patchSettings(execution.subject.userId, patch);
+    await this.settings.patchSettings(caller.userId, patch);
+  }
+
+  private chooseWithin(
+    execution: AiExecutionContext,
+    platformIntents: Readonly<Record<ModelIntent, string>>,
+    request: ModelRequest
+  ): ModelChoice {
+    return chooseModel(
+      this.selectable.catalogFor(execution, platformIntents),
+      request,
+      this.selectable.factsFor(execution.byokProviders, platformIntents)
+    );
   }
 }

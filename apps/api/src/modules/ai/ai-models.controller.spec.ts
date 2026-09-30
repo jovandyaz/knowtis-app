@@ -1,21 +1,27 @@
+import { ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AiModelsController } from './ai-models.controller';
-import type { ModelPreferenceService } from './application/services/model-preference.service';
+import { ModelPreferenceService } from './application/services/model-preference.service';
+import { SelectableModelsService } from './application/services/selectable-models.service';
 import type { TierResolver } from './application/services/tier-resolver.service';
+import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
+import { ModelUnavailableException } from './model-unavailable.exception';
 import { createExecutionContext } from './testing/create-execution-context';
 
 const user = { id: 'u1' } as never;
 const req = { ip: '203.0.113.7', headers: {} } as never;
-const FREE_EXECUTION = createExecutionContext({ tier: 'free' });
+const CALLER = { userId: 'u1', isAnonymous: false };
+const FREE_EXECUTION = createExecutionContext({ tier: 'free', userId: 'u1' });
+const ENVELOPE = {
+  tier: 'free',
+  models: [{ id: 'openrouter:deepseek/deepseek-v3.2' }],
+  intents: [],
+};
 
 function make() {
   const pref = {
-    listModels: vi.fn().mockResolvedValue({
-      tier: 'free',
-      models: [{ id: 'openrouter:deepseek/deepseek-v3.2' }],
-      intents: [],
-    }),
+    listModels: vi.fn().mockResolvedValue(ENVELOPE),
     getUserPreferences: vi.fn().mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'balanced',
@@ -33,16 +39,55 @@ function make() {
   };
 }
 
+/** The real preference service behind the controller, so a PUT shows when the tier is resolved. */
+function makeWired() {
+  const selectable = new SelectableModelsService(
+    {
+      isSupported: () => true,
+      getPricing: () => undefined,
+      getContextWindow: () => undefined,
+    },
+    {
+      isModelAvailable: (id: string) => id.startsWith('openrouter:'),
+    } as never,
+    { snapshot: () => [] } as never
+  );
+  const repo = {
+    getSettings: vi.fn().mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+      ghostTextEnabled: true,
+    }),
+    patchSettings: vi.fn().mockResolvedValue(undefined),
+  };
+  const aiConfig = {
+    getIntentModels: vi.fn().mockResolvedValue({
+      fast: 'openrouter:minimax/minimax-m2.5',
+      balanced: 'openrouter:deepseek/deepseek-v3.2',
+      powerful: 'openrouter:moonshotai/kimi-k2.5',
+    }),
+  };
+  const tiers = {
+    resolve: vi.fn().mockResolvedValue(FREE_EXECUTION),
+  } satisfies Partial<Record<keyof TierResolver, unknown>>;
+  const ctrl = new AiModelsController(
+    new ModelPreferenceService(repo as never, selectable, aiConfig as never),
+    tiers as never
+  );
+  return { ctrl, repo, tiers };
+}
+
 describe('AiModelsController', () => {
   it('GET /ai/models answers the envelope for the resolved tier', async () => {
     const { ctrl, pref, tiers } = make();
-    await ctrl.listModels(user, req);
+    const answered = await ctrl.listModels(user, req);
     expect(tiers.resolve).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u1', isAnonymous: false })
     );
     expect(pref.listModels).toHaveBeenCalledWith(
       expect.objectContaining({ tier: 'free' })
     );
+    expect(answered).toBe(ENVELOPE);
   });
 
   it('GET /ai/models resolves the tier of an anonymous session with its client ip', async () => {
@@ -64,7 +109,7 @@ describe('AiModelsController', () => {
     });
   });
 
-  it('PUT /ai/preferences validates the patch against the resolved execution and returns the re-read preferences', async () => {
+  it('PUT /ai/preferences stores the patch for the caller and returns the re-read preferences', async () => {
     const { ctrl, pref, tiers } = make();
     pref.getUserPreferences.mockResolvedValueOnce({
       preferredModel: 'anthropic:claude-sonnet-5',
@@ -76,12 +121,12 @@ describe('AiModelsController', () => {
       { preferredModel: 'anthropic:claude-sonnet-5' },
       req
     );
-    expect(tiers.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u1', isAnonymous: false })
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(
+      CALLER,
+      { preferredModel: 'anthropic:claude-sonnet-5' },
+      expect.any(Function)
     );
-    expect(pref.setUserPreferences).toHaveBeenCalledWith(FREE_EXECUTION, {
-      preferredModel: 'anthropic:claude-sonnet-5',
-    });
+    expect(tiers.resolve).not.toHaveBeenCalled();
     expect(pref.getUserPreferences).toHaveBeenCalledWith('u1');
     expect(res).toEqual({
       preferredModel: 'anthropic:claude-sonnet-5',
@@ -90,28 +135,48 @@ describe('AiModelsController', () => {
     });
   });
 
+  it('PUT /ai/preferences takes anonymity from the session', async () => {
+    const { ctrl, pref } = make();
+    await ctrl.updatePreferences(
+      { id: 'a1', isAnonymous: true } as never,
+      { preferredIntent: 'fast' },
+      req
+    );
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(
+      { userId: 'a1', isAnonymous: true },
+      { preferredIntent: 'fast' },
+      expect.any(Function)
+    );
+  });
+
   it('PUT /ai/preferences forwards an intent-only patch without touching the model', async () => {
     const { ctrl, pref } = make();
     await ctrl.updatePreferences(user, { preferredIntent: 'fast' }, req);
-    expect(pref.setUserPreferences).toHaveBeenCalledWith(FREE_EXECUTION, {
-      preferredIntent: 'fast',
-    });
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(
+      CALLER,
+      { preferredIntent: 'fast' },
+      expect.any(Function)
+    );
   });
 
   it('PUT /ai/preferences forwards a null model as a clear', async () => {
     const { ctrl, pref } = make();
     await ctrl.updatePreferences(user, { preferredModel: null }, req);
-    expect(pref.setUserPreferences).toHaveBeenCalledWith(FREE_EXECUTION, {
-      preferredModel: null,
-    });
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(
+      CALLER,
+      { preferredModel: null },
+      expect.any(Function)
+    );
   });
 
   it('PUT /ai/preferences forwards a ghost text toggle', async () => {
     const { ctrl, pref } = make();
     await ctrl.updatePreferences(user, { ghostTextEnabled: false }, req);
-    expect(pref.setUserPreferences).toHaveBeenCalledWith(FREE_EXECUTION, {
-      ghostTextEnabled: false,
-    });
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(
+      CALLER,
+      { ghostTextEnabled: false },
+      expect.any(Function)
+    );
   });
 
   it('GET /ai/preferences returns nulls when nothing is set', async () => {
@@ -153,5 +218,81 @@ describe('AiModelsController', () => {
       'tier unavailable'
     );
     expect(pref.listModels).not.toHaveBeenCalled();
+  });
+
+  describe('PUT /ai/preferences resolves the tier only for a model', () => {
+    it('stores a patch naming no model while the key store is down', async () => {
+      const { ctrl, repo, tiers } = makeWired();
+      tiers.resolve.mockRejectedValue(
+        new AiUnavailableError('tier', 'key store down')
+      );
+
+      await ctrl.updatePreferences(user, { ghostTextEnabled: false }, req);
+      await ctrl.updatePreferences(user, { preferredIntent: 'fast' }, req);
+      await ctrl.updatePreferences(user, { preferredModel: null }, req);
+
+      expect(tiers.resolve).not.toHaveBeenCalled();
+      expect(repo.patchSettings.mock.calls).toEqual([
+        ['u1', { ghostTextEnabled: false }],
+        ['u1', { preferredIntent: 'fast' }],
+        ['u1', { preferredModel: null }],
+      ]);
+    });
+
+    it("validates a model against the caller's resolved tier", async () => {
+      const { ctrl, repo, tiers } = makeWired();
+
+      await expect(
+        ctrl.updatePreferences(
+          user,
+          { preferredModel: 'anthropic:claude-opus-5' },
+          req
+        )
+      ).rejects.toBeInstanceOf(ModelUnavailableException);
+      await ctrl.updatePreferences(
+        user,
+        { preferredModel: 'openrouter:minimax/minimax-m2.5' },
+        req
+      );
+
+      expect(tiers.resolve).toHaveBeenCalledWith({
+        userId: 'u1',
+        isAnonymous: false,
+        clientIp: '203.0.113.7',
+      });
+      expect(repo.patchSettings.mock.calls).toEqual([
+        ['u1', { preferredModel: 'openrouter:minimax/minimax-m2.5' }],
+      ]);
+    });
+
+    it('surfaces a key-store outage on a model write', async () => {
+      const { ctrl, repo, tiers } = makeWired();
+      tiers.resolve.mockRejectedValue(
+        new AiUnavailableError('tier', 'key store down')
+      );
+
+      await expect(
+        ctrl.updatePreferences(
+          user,
+          { preferredModel: 'openrouter:minimax/minimax-m2.5' },
+          req
+        )
+      ).rejects.toBeInstanceOf(AiUnavailableError);
+      expect(repo.patchSettings).not.toHaveBeenCalled();
+    });
+
+    it('refuses an anonymous session without resolving its tier', async () => {
+      const { ctrl, repo, tiers } = makeWired();
+
+      await expect(
+        ctrl.updatePreferences(
+          { id: 'a1', isAnonymous: true } as never,
+          { preferredModel: 'openrouter:deepseek/deepseek-v3.2' },
+          req
+        )
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(tiers.resolve).not.toHaveBeenCalled();
+      expect(repo.patchSettings).not.toHaveBeenCalled();
+    });
   });
 });

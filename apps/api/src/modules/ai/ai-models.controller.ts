@@ -32,9 +32,6 @@ import { ModelPreferenceService } from './application/services/model-preference.
 import { TierResolver } from './application/services/tier-resolver.service';
 import { UpdateAiPreferencesDto } from './dto/update-ai-preferences.dto';
 
-const TIER_UNAVAILABLE =
-  "the caller's tier could not be resolved; retry after 5s";
-
 @ApiTags('AI')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
@@ -47,7 +44,9 @@ export class AiModelsController {
     private readonly tierResolver: TierResolver
   ) {}
 
-  @ApiServiceUnavailable(TIER_UNAVAILABLE)
+  @ApiServiceUnavailable(
+    "the caller's tier could not be resolved; retry after 5s"
+  )
   @ApiAuthErrors('AI feature is disabled')
   @Get('models')
   async listModels(
@@ -67,7 +66,9 @@ export class AiModelsController {
     description:
       'AI_MODEL_UNAVAILABLE: the model is outside your tier; details carry reason and suggestedModel',
   })
-  @ApiServiceUnavailable(TIER_UNAVAILABLE)
+  @ApiServiceUnavailable(
+    "a model write could not resolve the caller's tier; retry after 5s"
+  )
   @ApiAuthErrors('AI feature is disabled, or the caller is anonymous')
   @Put('preferences')
   async updatePreferences(
@@ -76,8 +77,9 @@ export class AiModelsController {
     @Req() req: Request
   ): Promise<AIPreferences> {
     await this.preferences.setUserPreferences(
-      await this.executionOf(user, req),
-      dto
+      { userId: user.id, isAnonymous: user.isAnonymous === true },
+      dto,
+      () => this.executionOf(user, req)
     );
     return this.preferences.getUserPreferences(user.id);
   }

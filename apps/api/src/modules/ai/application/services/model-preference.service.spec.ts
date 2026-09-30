@@ -1,8 +1,13 @@
 import { ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ModelIntent } from '@knowtis/shared-types';
+import type {
+  ModelIntent,
+  UpdateAiPreferencesInput,
+} from '@knowtis/shared-types';
 
+import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { ModelPreferenceService } from './model-preference.service';
@@ -55,6 +60,33 @@ function makeChooser(
 
 const NO_KEYS: ReadonlySet<string> = new Set();
 const FREE_CALLER = createExecutionContext({ tier: 'free' });
+const BYOK_ANTHROPIC = createExecutionContext({
+  tier: 'byok',
+  byokProviders: ['anthropic'],
+});
+const WRITING_TIERS = [
+  FREE_CALLER,
+  BYOK_ANTHROPIC,
+  createExecutionContext({ tier: 'byok', byokProviders: ['openrouter'] }),
+  createExecutionContext({ tier: 'byok', byokProviders: ['openai', 'google'] }),
+];
+
+/** Writes as the session behind `execution`, whose tier is resolved only when the write asks for it. */
+function writeAs(
+  svc: ModelPreferenceService,
+  execution: AiExecutionContext,
+  patch: UpdateAiPreferencesInput,
+  tierOf: () => Promise<AiExecutionContext> = async () => execution
+) {
+  return svc.setUserPreferences(
+    {
+      userId: execution.subject.userId,
+      isAnonymous: execution.tier === 'anonymous',
+    },
+    patch,
+    tierOf
+  );
+}
 
 describe('ModelPreferenceService', () => {
   describe('listModels', () => {
@@ -75,24 +107,151 @@ describe('ModelPreferenceService', () => {
         },
       ]);
     });
+
+    it('answers the platform intents for a free caller', async () => {
+      const catalog = await makeChooser().svc.listModels(FREE_CALLER);
+      expect(catalog.tier).toBe('free');
+      expect(catalog.models.map((m) => m.id)).toEqual([
+        'openrouter:minimax/minimax-m2.5',
+        'openrouter:deepseek/deepseek-v3.2',
+        'openrouter:moonshotai/kimi-k2.5',
+      ]);
+      expect(catalog.intents).toEqual([
+        {
+          intent: 'fast',
+          available: true,
+          modelId: 'openrouter:minimax/minimax-m2.5',
+          substituted: false,
+        },
+        {
+          intent: 'balanced',
+          available: true,
+          modelId: 'openrouter:deepseek/deepseek-v3.2',
+          substituted: false,
+        },
+        {
+          intent: 'powerful',
+          available: true,
+          modelId: 'openrouter:moonshotai/kimi-k2.5',
+          substituted: false,
+        },
+      ]);
+    });
+
+    it('answers the intents a byok caller’s key routes', async () => {
+      const catalog = await makeChooser().svc.listModels(BYOK_ANTHROPIC);
+      expect(catalog.tier).toBe('byok');
+      expect(catalog.intents).toEqual([
+        {
+          intent: 'fast',
+          available: true,
+          modelId: 'anthropic:claude-haiku-4-5',
+          substituted: false,
+        },
+        {
+          intent: 'balanced',
+          available: true,
+          modelId: 'anthropic:claude-sonnet-5',
+          substituted: false,
+        },
+        {
+          intent: 'powerful',
+          available: true,
+          modelId: 'anthropic:claude-opus-5',
+          substituted: false,
+        },
+      ]);
+    });
+
+    it('marks the model serving a byok caller’s balanced intent as the default', async () => {
+      const catalog = await makeChooser().svc.listModels(BYOK_ANTHROPIC);
+      expect(
+        catalog.models.filter((m) => m.isDefault).map((m) => m.id)
+      ).toEqual(['anthropic:claude-sonnet-5']);
+    });
+
+    it.each(
+      WRITING_TIERS.map(
+        (execution) =>
+          [
+            execution.tier,
+            [...execution.byokProviders].join('+') || 'no key',
+            execution,
+          ] as const
+      )
+    )(
+      'accepts every model it lists as a preference (%s, %s)',
+      async (_tier, _keys, execution) => {
+        const { svc, repo } = makeChooser();
+        const listed = (await svc.listModels(execution)).models.map(
+          (m) => m.id
+        );
+
+        for (const id of listed) {
+          await writeAs(svc, execution, { preferredModel: id });
+        }
+
+        expect(listed.length).toBeGreaterThan(0);
+        expect(repo.patchSettings.mock.calls).toEqual(
+          listed.map((id) => [execution.subject.userId, { preferredModel: id }])
+        );
+      }
+    );
   });
 
   describe('setUserPreferences', () => {
     it('refuses an anonymous caller', async () => {
       await expect(
-        makeChooser().svc.setUserPreferences(
+        writeAs(
+          makeChooser().svc,
           createExecutionContext({ tier: 'anonymous' }),
           { preferredIntent: 'fast' }
         )
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('refuses an anonymous caller before resolving the tier', async () => {
+      const tierOf = vi.fn();
+      await expect(
+        writeAs(
+          makeChooser().svc,
+          createExecutionContext({ tier: 'anonymous' }),
+          { preferredModel: 'openrouter:deepseek/deepseek-v3.2' },
+          tierOf
+        )
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(tierOf).not.toHaveBeenCalled();
+    });
+
+    it('resolves the tier only for a patch that names a model', async () => {
+      const { svc, repo } = makeChooser();
+      const tierOf = vi
+        .fn<() => Promise<AiExecutionContext>>()
+        .mockRejectedValue(new AiUnavailableError('tier', 'key store down'));
+
+      await writeAs(svc, FREE_CALLER, { ghostTextEnabled: false }, tierOf);
+      await writeAs(svc, FREE_CALLER, { preferredIntent: 'fast' }, tierOf);
+      await writeAs(svc, FREE_CALLER, { preferredModel: null }, tierOf);
+      expect(tierOf).not.toHaveBeenCalled();
+
+      await expect(
+        writeAs(
+          svc,
+          FREE_CALLER,
+          { preferredModel: 'openrouter:minimax/minimax-m2.5' },
+          tierOf
+        )
+      ).rejects.toBeInstanceOf(AiUnavailableError);
+      expect(tierOf).toHaveBeenCalledTimes(1);
+      expect(repo.patchSettings).toHaveBeenCalledTimes(3);
+    });
+
     it('refuses a model outside the tier with AI_MODEL_UNAVAILABLE and a suggestion', async () => {
-      const error = await makeChooser()
-        .svc.setUserPreferences(createExecutionContext({ tier: 'free' }), {
-          preferredModel: 'anthropic:claude-opus-5',
-        })
-        .catch((e: unknown) => e);
+      const error = await writeAs(
+        makeChooser().svc,
+        createExecutionContext({ tier: 'free' }),
+        { preferredModel: 'anthropic:claude-opus-5' }
+      ).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ModelUnavailableException);
       expect((error as ModelUnavailableException).getResponse()).toEqual({
         message: 'This model is not available to you.',
@@ -106,9 +265,9 @@ describe('ModelPreferenceService', () => {
 
     it('refuses a model the catalog no longer prices as retired, without storing it', async () => {
       const { svc, repo } = makeChooser();
-      const error = await svc
-        .setUserPreferences(FREE_CALLER, { preferredModel: RETIRED_MODEL })
-        .catch((e: unknown) => e);
+      const error = await writeAs(svc, FREE_CALLER, {
+        preferredModel: RETIRED_MODEL,
+      }).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ModelUnavailableException);
       expect((error as ModelUnavailableException).getResponse()).toMatchObject({
         details: { reason: 'model_retired' },
@@ -118,7 +277,8 @@ describe('ModelPreferenceService', () => {
 
     it('stores a model inside the byok scope', async () => {
       const { svc, repo } = makeChooser();
-      await svc.setUserPreferences(
+      await writeAs(
+        svc,
         createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
         { preferredModel: 'anthropic:claude-opus-5' }
       );
@@ -130,7 +290,7 @@ describe('ModelPreferenceService', () => {
     it('clears the model without reading the catalog', async () => {
       const { svc, repo, selectable } = makeChooser();
       const catalogFor = vi.spyOn(selectable, 'catalogFor');
-      await svc.setUserPreferences(FREE_CALLER, { preferredModel: null });
+      await writeAs(svc, FREE_CALLER, { preferredModel: null });
       expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
         preferredModel: null,
       });
@@ -139,19 +299,19 @@ describe('ModelPreferenceService', () => {
 
     it('skips the write when the patch carries no values', async () => {
       const { svc, repo } = makeChooser();
-      await svc.setUserPreferences(FREE_CALLER, {});
+      await writeAs(svc, FREE_CALLER, {});
       const dtoShaped: Parameters<typeof svc.setUserPreferences>[1] = {};
       Object.assign(dtoShaped, {
         preferredModel: undefined,
         preferredIntent: undefined,
       });
-      await svc.setUserPreferences(FREE_CALLER, dtoShaped);
+      await writeAs(svc, FREE_CALLER, dtoShaped);
       expect(repo.patchSettings).not.toHaveBeenCalled();
     });
 
     it('passes an intent-only patch through unvalidated', async () => {
       const { svc, repo } = makeChooser();
-      await svc.setUserPreferences(FREE_CALLER, { preferredIntent: 'fast' });
+      await writeAs(svc, FREE_CALLER, { preferredIntent: 'fast' });
       expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
         preferredIntent: 'fast',
       });
@@ -160,7 +320,7 @@ describe('ModelPreferenceService', () => {
     it('stores a ghost text patch without validating a model', async () => {
       const { svc, repo, selectable } = makeChooser();
       const catalogFor = vi.spyOn(selectable, 'catalogFor');
-      await svc.setUserPreferences(FREE_CALLER, { ghostTextEnabled: false });
+      await writeAs(svc, FREE_CALLER, { ghostTextEnabled: false });
       expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
         ghostTextEnabled: false,
       });
