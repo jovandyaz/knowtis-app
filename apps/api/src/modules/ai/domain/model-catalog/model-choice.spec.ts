@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ByokProvider, ModelIntent } from '@knowtis/shared-types';
+import type {
+  AccessTier,
+  ByokProvider,
+  ModelIntent,
+} from '@knowtis/shared-types';
 
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import {
@@ -15,6 +19,7 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
   balanced: 'openrouter:deepseek/deepseek-v3.2',
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 };
+const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
 const RETIRED = 'anthropic:claude-sonnet-3';
 const offered = (id: string): OfferedModel => ({
   id,
@@ -23,7 +28,7 @@ const offered = (id: string): OfferedModel => ({
   tier: 'open',
 });
 const OFFERED = [
-  ...Object.values(PLATFORM_INTENTS),
+  ...PLATFORM_INTENT_IDS,
   'openrouter:z-ai/glm-5.2',
   'anthropic:claude-haiku-4-5',
   'anthropic:claude-sonnet-5',
@@ -31,14 +36,14 @@ const OFFERED = [
 ].map(offered);
 
 function setup(
-  tier: 'free' | 'byok',
+  tier: AccessTier,
   held: readonly ByokProvider[] = [],
   isSupported: (id: string) => boolean = (id) => id !== RETIRED
 ) {
   const facts: ModelFacts = {
     heldProviders: new Set(held),
     isSupported,
-    isPlatformRoutable: (id) => id.startsWith('openrouter:'),
+    isPlatformBilled: (id) => PLATFORM_INTENT_IDS.includes(id),
   };
   const catalog = tierCatalog({
     tier,
@@ -46,8 +51,8 @@ function setup(
     heldProviders: held,
     platformIntents: PLATFORM_INTENTS,
     offered: OFFERED,
-    isSupported: facts.isSupported,
-    isPlatformRoutable: facts.isPlatformRoutable,
+    isSupported,
+    isPlatformRoutable: (id) => id.startsWith('openrouter:'),
   });
   return (request: Partial<ModelRequest>) =>
     chooseModel(
@@ -72,6 +77,28 @@ describe('chooseModel', () => {
     });
   });
 
+  it('serves the default intent when the stored intent has no route', () => {
+    const fastRetired = (id: string) => id !== PLATFORM_INTENTS.fast;
+    expect(setup('free', [], fastRetired)({ preferredIntent: 'fast' })).toEqual(
+      {
+        kind: 'resolved',
+        model: PLATFORM_INTENTS.balanced,
+        resolution: { requested: null, resolved: PLATFORM_INTENTS.balanced },
+      }
+    );
+  });
+
+  it('accepts an explicit model inside the tier as is', () => {
+    expect(setup('free')({ explicit: PLATFORM_INTENTS.fast })).toEqual({
+      kind: 'resolved',
+      model: PLATFORM_INTENTS.fast,
+      resolution: {
+        requested: PLATFORM_INTENTS.fast,
+        resolved: PLATFORM_INTENTS.fast,
+      },
+    });
+  });
+
   it('refuses an explicit model outside the tier and suggests the default', () => {
     expect(setup('free')({ explicit: 'openrouter:z-ai/glm-5.2' })).toEqual({
       kind: 'unavailable',
@@ -92,7 +119,14 @@ describe('chooseModel', () => {
       setup('byok', ['anthropic'])({
         preferredModel: 'anthropic:claude-opus-5',
       })
-    ).toMatchObject({ kind: 'resolved', model: 'anthropic:claude-opus-5' });
+    ).toEqual({
+      kind: 'resolved',
+      model: 'anthropic:claude-opus-5',
+      resolution: {
+        requested: 'anthropic:claude-opus-5',
+        resolved: 'anthropic:claude-opus-5',
+      },
+    });
   });
 
   it('ignores a platform pick stored by a byok caller and serves their key intent', () => {
@@ -123,13 +157,72 @@ describe('chooseModel', () => {
     });
   });
 
-  it('falls back visibly from a pinned platform model outside the free tier', () => {
-    expect(setup('free')({ pinned: 'openrouter:z-ai/glm-5.2' })).toMatchObject({
+  it.each(['preferredModel', 'pinned'] as const)(
+    'falls back from a retired model on a held OpenRouter key given as %s',
+    (field) => {
+      const retiredRoute = 'openrouter:mistralai/mistral-large-2';
+      const keyIntent = 'openrouter:anthropic/claude-sonnet-5';
+      expect(
+        setup(
+          'byok',
+          ['openrouter'],
+          (id) => id !== retiredRoute
+        )({ [field]: retiredRoute })
+      ).toEqual({
+        kind: 'resolved',
+        model: keyIntent,
+        resolution: {
+          requested: retiredRoute,
+          resolved: keyIntent,
+          fallback: {
+            reason: 'model_retired',
+            from: retiredRoute,
+            to: keyIntent,
+          },
+        },
+      });
+    }
+  );
+
+  it('falls back from a pinned model on a removed key onto another held key', () => {
+    expect(
+      setup('byok', ['openai'])({ pinned: 'anthropic:claude-opus-5' })
+    ).toEqual({
+      kind: 'resolved',
+      model: 'openai:gpt-5.6-terra',
+      resolution: {
+        requested: 'anthropic:claude-opus-5',
+        resolved: 'openai:gpt-5.6-terra',
+        fallback: {
+          reason: 'key_removed',
+          from: 'anthropic:claude-opus-5',
+          to: 'openai:gpt-5.6-terra',
+        },
+      },
+    });
+  });
+
+  it('falls back visibly from a pinned platform model outside the tier', () => {
+    expect(setup('anonymous')({ pinned: PLATFORM_INTENTS.fast })).toEqual({
       kind: 'resolved',
       model: PLATFORM_INTENTS.balanced,
       resolution: {
-        fallback: { reason: 'not_in_tier', from: 'openrouter:z-ai/glm-5.2' },
+        requested: PLATFORM_INTENTS.fast,
+        resolved: PLATFORM_INTENTS.balanced,
+        fallback: {
+          reason: 'not_in_tier',
+          from: PLATFORM_INTENTS.fast,
+          to: PLATFORM_INTENTS.balanced,
+        },
       },
+    });
+  });
+
+  it('refuses a pinned routable model the platform does not pay for', () => {
+    expect(setup('free')({ pinned: 'openrouter:z-ai/glm-5.2' })).toEqual({
+      kind: 'unavailable',
+      reason: 'key_removed',
+      suggestedModel: PLATFORM_INTENTS.balanced,
     });
   });
 

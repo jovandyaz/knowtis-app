@@ -27,7 +27,8 @@ export interface ModelRequest {
 export interface ModelFacts {
   readonly heldProviders: ReadonlySet<string>;
   readonly isSupported: (modelId: string) => boolean;
-  readonly isPlatformRoutable: (modelId: string) => boolean;
+  /** Per model, never per provider: true only for a model the platform pays for, its configured intent models. */
+  readonly isPlatformBilled: (modelId: string) => boolean;
 }
 
 export const MODEL_CHOICE = {
@@ -74,7 +75,7 @@ function fallbackReason(
     return 'model_retired';
   }
   if (
-    !facts.isPlatformRoutable(modelId) &&
+    !facts.isPlatformBilled(modelId) &&
     !facts.heldProviders.has(providerOf(modelId))
   ) {
     return 'key_removed';
@@ -82,11 +83,12 @@ function fallbackReason(
   return 'not_in_tier';
 }
 
-// Billing follows the route, never the fallback reason: a model on a key the
-// caller holds, or one the platform cannot route, was only ever key-billed.
+// Billing is decided per model, never by the fallback reason: a model on a key
+// the caller holds, or one the platform does not pay for, was only ever
+// key-billed.
 function billingOf(modelId: string, facts: ModelFacts): CatalogBilling {
   return facts.heldProviders.has(providerOf(modelId)) ||
-    !facts.isPlatformRoutable(modelId)
+    !facts.isPlatformBilled(modelId)
     ? CATALOG_BILLING.KEY
     : CATALOG_BILLING.PLATFORM;
 }
