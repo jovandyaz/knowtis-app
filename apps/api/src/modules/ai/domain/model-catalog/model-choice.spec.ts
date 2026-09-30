@@ -53,6 +53,7 @@ function setup(
     tier,
     scope: TIER_POLICIES[tier].catalog,
     heldProviders: held,
+    storedPrimary: null,
     platformIntents: PLATFORM_INTENTS,
     offered: OFFERED,
     isSupported,

@@ -66,6 +66,7 @@ function makeService(overrides: MakeOverrides) {
     getSettings: vi.fn().mockResolvedValue({
       preferredModel: null,
       preferredIntent: null,
+      primaryProvider: null,
       ghostTextEnabled: true,
     }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
@@ -243,6 +244,7 @@ describe('ByokService', () => {
         getSettings: vi.fn().mockResolvedValue({
           preferredModel: null,
           preferredIntent: null,
+          primaryProvider: null,
           ghostTextEnabled: true,
         }),
         patchSettings: vi.fn(),
@@ -278,6 +280,7 @@ describe('ByokService', () => {
         getSettings: vi.fn().mockResolvedValue({
           preferredModel: null,
           preferredIntent: null,
+          primaryProvider: null,
           ghostTextEnabled: true,
         }),
         patchSettings: vi.fn(),
@@ -369,6 +372,7 @@ describe('ByokService', () => {
           getSettings: vi.fn().mockResolvedValue({
             preferredModel: 'openai:gpt-6',
             preferredIntent: 'fast',
+            primaryProvider: null,
             ghostTextEnabled: true,
           }),
         },
@@ -388,6 +392,62 @@ describe('ByokService', () => {
           getSettings: vi.fn().mockResolvedValue({
             preferredModel: 'anthropic:claude-sonnet-5',
             preferredIntent: null,
+            primaryProvider: null,
+            ghostTextEnabled: true,
+          }),
+        },
+      });
+
+      await service.deleteKey('u1', 'openai');
+
+      expect(settings.patchSettings).not.toHaveBeenCalled();
+    });
+
+    it('clears the primary provider when its key is deleted', async () => {
+      const { service, settings } = makeService({
+        settings: {
+          getSettings: vi.fn().mockResolvedValue({
+            preferredModel: null,
+            preferredIntent: null,
+            primaryProvider: 'openai',
+            ghostTextEnabled: true,
+          }),
+        },
+      });
+
+      await service.deleteKey('u1', 'openai');
+
+      expect(settings.patchSettings).toHaveBeenCalledWith('u1', {
+        primaryProvider: null,
+      });
+    });
+
+    it('clears both settings honoured only on the deleted key in one write', async () => {
+      const { service, settings } = makeService({
+        settings: {
+          getSettings: vi.fn().mockResolvedValue({
+            preferredModel: 'openai:gpt-6',
+            preferredIntent: null,
+            primaryProvider: 'openai',
+            ghostTextEnabled: true,
+          }),
+        },
+      });
+
+      await service.deleteKey('u1', 'openai');
+
+      expect(settings.patchSettings.mock.calls).toEqual([
+        ['u1', { preferredModel: null, primaryProvider: null }],
+      ]);
+    });
+
+    it('leaves a primary provider on another key alone', async () => {
+      const { service, settings } = makeService({
+        settings: {
+          getSettings: vi.fn().mockResolvedValue({
+            preferredModel: null,
+            preferredIntent: null,
+            primaryProvider: 'anthropic',
             ghostTextEnabled: true,
           }),
         },

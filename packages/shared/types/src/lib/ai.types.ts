@@ -211,6 +211,8 @@ export interface SelectableModel {
 export interface AIPreferences {
   preferredModel: string | null;
   preferredIntent: ModelIntent | null;
+  /** Provider whose key intents prefer; null means the first key added. */
+  primaryProvider: ByokProvider | null;
   ghostTextEnabled: boolean;
 }
 

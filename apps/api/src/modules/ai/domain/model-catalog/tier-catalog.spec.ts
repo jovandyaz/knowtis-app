@@ -53,6 +53,7 @@ function catalogFor(
   tier: 'anonymous' | 'free' | 'byok',
   options: {
     heldProviders?: readonly ByokProvider[];
+    storedPrimary?: ByokProvider | null;
     platformIntents?: Record<ModelIntent, string>;
     offered?: readonly OfferedModel[];
     isSupported?: (id: string) => boolean;
@@ -63,6 +64,7 @@ function catalogFor(
     tier,
     scope: TIER_POLICIES[tier].catalog,
     heldProviders: options.heldProviders ?? [],
+    storedPrimary: options.storedPrimary ?? null,
     platformIntents: options.platformIntents ?? PLATFORM_INTENTS,
     offered: options.offered ?? OFFERED,
     isSupported: options.isSupported ?? pricedAtSnapshot,
@@ -212,6 +214,22 @@ describe('tierCatalog', () => {
       ids(catalog).filter((id) => PLATFORM_INTENT_IDS.includes(id))
     ).toEqual([]);
     expect(catalog.billing).toBe('key');
+  });
+
+  it('lets the stored primary provider pick the route of the winning candidate', () => {
+    const held: ByokProvider[] = ['anthropic', 'openrouter'];
+    expect(
+      intentModelOf(
+        catalogFor('byok', {
+          heldProviders: held,
+          storedPrimary: 'openrouter',
+        }),
+        'fast'
+      )
+    ).toBe('openrouter:anthropic/claude-haiku-4.5');
+    expect(
+      intentModelOf(catalogFor('byok', { heldProviders: held }), 'fast')
+    ).toBe('anthropic:claude-haiku-4-5');
   });
 
   it('gives an OpenRouter route of a curated model that model’s effort ladder', () => {

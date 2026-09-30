@@ -1,7 +1,14 @@
-import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 
 import type {
   AIPreferences,
+  ByokProvider,
   ModelCatalogResponse,
   ModelIntent,
   ModelReasoning,
@@ -26,6 +33,7 @@ import {
 } from '../../domain/model-catalog/tier-catalog';
 import {
   USER_AI_SETTINGS_REPOSITORY,
+  type UserAiSettings,
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
@@ -46,10 +54,7 @@ export class ModelPreferenceService {
   async listModels(
     execution: AiExecutionContext
   ): Promise<ModelCatalogResponse> {
-    const catalog = this.selectable.catalogFor(
-      execution,
-      await this.aiConfig.getIntentModels()
-    );
+    const { catalog } = await this.readScope(execution);
     return {
       tier: catalog.tier,
       models: this.selectable.toSelectable(catalog),
@@ -68,11 +73,7 @@ export class ModelPreferenceService {
     execution: AiExecutionContext,
     request: { explicit?: string; pinned?: string | null }
   ): Promise<ModelChoice> {
-    const [platformIntents, settings] = await Promise.all([
-      this.aiConfig.getIntentModels(),
-      this.settings.getSettings(execution.subject.userId),
-    ]);
-    const { catalog, facts } = this.scopeOf(execution, platformIntents);
+    const { catalog, facts, settings } = await this.readScope(execution);
     const { preferredModel, preferredIntent } = servedPreference(catalog, {
       preferredModel: settings.preferredModel,
       preferredIntent: settings.preferredIntent,
@@ -94,11 +95,16 @@ export class ModelPreferenceService {
     userId: string,
     tierOf: () => Promise<AiExecutionContext>
   ): Promise<AIPreferences> {
-    const { preferredModel, preferredIntent, ghostTextEnabled } =
-      await this.settings.getSettings(userId);
+    const {
+      preferredModel,
+      preferredIntent,
+      primaryProvider,
+      ghostTextEnabled,
+    } = await this.settings.getSettings(userId);
     const stored: AIPreferences = {
       preferredModel,
       preferredIntent,
+      primaryProvider,
       ghostTextEnabled,
     };
     if (!preferredModel) {
@@ -125,16 +131,18 @@ export class ModelPreferenceService {
       return stored;
     }
     return servedPreference(
-      this.scopeOf(execution, platformIntents).catalog,
+      this.scopeOf(execution, platformIntents, primaryProvider).catalog,
       stored
     );
   }
 
   /**
-   * Only a model write reads the caller's tier, through `tierOf`: a toggle or
-   * an intent pick stays writable while the key store is down. A model is
-   * accepted exactly when a turn would accept it as an explicit request, and a
-   * platform-billed one is stored as the intent it serves.
+   * Only a model or primary provider write reads the caller's tier, through
+   * `tierOf`: a toggle, an intent pick or a clear stays writable while the key
+   * store is down. A primary provider must be one the caller holds a key for.
+   * A model is accepted exactly when a turn under the written settings would
+   * accept it as an explicit request, and a platform-billed one is stored as
+   * the intent it serves.
    */
   async setUserPreferences(
     caller: Pick<AiCaller, 'userId' | 'isAnonymous'>,
@@ -149,15 +157,27 @@ export class ModelPreferenceService {
     if (Object.values(patch).every((value) => value === undefined)) {
       return;
     }
+    if (
+      typeof patch.preferredModel !== 'string' &&
+      patch.primaryProvider == null
+    ) {
+      await this.settings.patchSettings(caller.userId, patch);
+      return;
+    }
+    const execution = await tierOf();
+    if (
+      patch.primaryProvider != null &&
+      !execution.byokProviders.has(patch.primaryProvider)
+    ) {
+      throw new BadRequestException(
+        'primaryProvider must name a provider you hold a key for'
+      );
+    }
     if (typeof patch.preferredModel !== 'string') {
       await this.settings.patchSettings(caller.userId, patch);
       return;
     }
-    const [execution, platformIntents] = await Promise.all([
-      tierOf(),
-      this.aiConfig.getIntentModels(),
-    ]);
-    const { catalog, facts } = this.scopeOf(execution, platformIntents);
+    const { catalog, facts } = await this.readScope(execution, patch);
     const choice = chooseModel(
       catalog,
       {
@@ -176,12 +196,39 @@ export class ModelPreferenceService {
     );
   }
 
+  private async readScope(
+    execution: AiExecutionContext,
+    written: Pick<UpdateAiPreferencesInput, 'primaryProvider'> = {}
+  ): Promise<{
+    catalog: TierCatalog;
+    facts: ModelFacts;
+    settings: UserAiSettings;
+  }> {
+    const [platformIntents, settings] = await Promise.all([
+      this.aiConfig.getIntentModels(),
+      this.settings.getSettings(execution.subject.userId),
+    ]);
+    const primaryProvider =
+      written.primaryProvider === undefined
+        ? settings.primaryProvider
+        : written.primaryProvider;
+    return {
+      ...this.scopeOf(execution, platformIntents, primaryProvider),
+      settings,
+    };
+  }
+
   private scopeOf(
     execution: AiExecutionContext,
-    platformIntents: Readonly<Record<ModelIntent, string>>
+    platformIntents: Readonly<Record<ModelIntent, string>>,
+    primaryProvider: ByokProvider | null
   ): { catalog: TierCatalog; facts: ModelFacts } {
     return {
-      catalog: this.selectable.catalogFor(execution, platformIntents),
+      catalog: this.selectable.catalogFor(
+        execution,
+        platformIntents,
+        primaryProvider
+      ),
       facts: this.selectable.factsFor(execution.byokProviders, platformIntents),
     };
   }

@@ -73,7 +73,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
   function listedTo(execution: AiExecutionContext) {
     return selectable.toSelectable(
-      selectable.catalogFor(execution, PLATFORM_INTENTS)
+      selectable.catalogFor(execution, PLATFORM_INTENTS, null)
     );
   }
 

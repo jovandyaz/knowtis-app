@@ -18,18 +18,30 @@ function route(
   return routeIntent(
     BYOK_INTENT_CANDIDATES[intent],
     held,
-    effectivePrimary(held),
+    effectivePrimary(held, null),
     isSupported
   );
 }
 
 describe('effectivePrimary', () => {
-  it('is the first key added', () => {
-    expect(effectivePrimary(['openrouter', 'anthropic'])).toBe('openrouter');
+  it('is the stored provider while the caller still holds its key', () => {
+    expect(effectivePrimary(['anthropic', 'openai'], 'openai')).toBe('openai');
+  });
+
+  it('falls back to the first key added when the stored provider has no key', () => {
+    expect(effectivePrimary(['anthropic', 'openai'], 'google')).toBe(
+      'anthropic'
+    );
+  });
+
+  it('is the first key added when nothing is stored', () => {
+    expect(effectivePrimary(['openrouter', 'anthropic'], null)).toBe(
+      'openrouter'
+    );
   });
 
   it('is null without keys', () => {
-    expect(effectivePrimary([])).toBeNull();
+    expect(effectivePrimary([], 'openai')).toBeNull();
   });
 });
 

@@ -1,7 +1,8 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
+  ByokProvider,
   ModelIntent,
   UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
@@ -19,6 +20,7 @@ function makeChooser(
   settings: {
     preferredModel?: string | null;
     preferredIntent?: ModelIntent | null;
+    primaryProvider?: ByokProvider | null;
   } = {}
 ) {
   const selectable = new SelectableModelsService(
@@ -39,6 +41,7 @@ function makeChooser(
     getSettings: vi.fn().mockResolvedValue({
       preferredModel: settings.preferredModel ?? null,
       preferredIntent: settings.preferredIntent ?? null,
+      primaryProvider: settings.primaryProvider ?? null,
       ghostTextEnabled: true,
     }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
@@ -371,6 +374,7 @@ describe('ModelPreferenceService', () => {
       expect(await svc.getUserPreferences('u1', tierOf)).toEqual({
         preferredModel: 'openai:gpt-4o-mini',
         preferredIntent: 'powerful',
+        primaryProvider: null,
         ghostTextEnabled: true,
       });
       expect(tierOf).not.toHaveBeenCalled();
@@ -381,6 +385,7 @@ describe('ModelPreferenceService', () => {
       repo.getSettings.mockResolvedValue({
         preferredModel: null,
         preferredIntent: null,
+        primaryProvider: null,
         ghostTextEnabled: false,
       });
       expect(
@@ -404,6 +409,7 @@ describe('ModelPreferenceService', () => {
       expect(answered).toEqual({
         preferredModel: null,
         preferredIntent: 'fast',
+        primaryProvider: null,
         ghostTextEnabled: true,
       });
       expect(served).toMatchObject({ model: MINIMAX });
@@ -424,6 +430,7 @@ describe('ModelPreferenceService', () => {
       ).toEqual({
         preferredModel: 'openrouter:deepseek/deepseek-v3.2',
         preferredIntent: 'fast',
+        primaryProvider: null,
         ghostTextEnabled: true,
       });
     });
@@ -440,8 +447,21 @@ describe('ModelPreferenceService', () => {
       ).toEqual({
         preferredModel: MINIMAX,
         preferredIntent: 'powerful',
+        primaryProvider: null,
         ghostTextEnabled: true,
       });
+    });
+
+    it('returns the stored primary provider without resolving the tier', async () => {
+      const tierOf = vi.fn();
+      expect(
+        (
+          await makeChooser({
+            primaryProvider: 'openai',
+          }).svc.getUserPreferences('u1', tierOf)
+        ).primaryProvider
+      ).toBe('openai');
+      expect(tierOf).not.toHaveBeenCalled();
     });
 
     it('surfaces a tier failure that is not an outage', async () => {
@@ -449,6 +469,99 @@ describe('ModelPreferenceService', () => {
       await expect(
         svc.getUserPreferences('user-1', () => Promise.reject(new Error('bug')))
       ).rejects.toThrow('bug');
+    });
+  });
+
+  describe('primary provider', () => {
+    const BYOK_ANTHROPIC_OPENROUTER = createExecutionContext({
+      tier: 'byok',
+      byokProviders: ['anthropic', 'openrouter'],
+    });
+
+    it('rejects a primary provider the caller holds no key for', async () => {
+      const { svc, repo } = makeChooser();
+      await expect(
+        writeAs(svc, BYOK_ANTHROPIC, { primaryProvider: 'openai' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        writeAs(svc, FREE_CALLER, { primaryProvider: 'openrouter' })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.patchSettings).not.toHaveBeenCalled();
+    });
+
+    it('stores a primary provider the caller holds a key for', async () => {
+      const { svc, repo } = makeChooser();
+      await writeAs(
+        svc,
+        createExecutionContext({
+          tier: 'byok',
+          byokProviders: ['anthropic', 'openai'],
+        }),
+        { primaryProvider: 'openai' }
+      );
+      expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
+        primaryProvider: 'openai',
+      });
+    });
+
+    it('resolves the tier to store a primary provider, but not to clear it', async () => {
+      const { svc, repo } = makeChooser();
+      const tierOf = vi
+        .fn<() => Promise<AiExecutionContext>>()
+        .mockRejectedValue(new AiUnavailableError('tier', 'key store down'));
+
+      await writeAs(svc, FREE_CALLER, { primaryProvider: null }, tierOf);
+      expect(tierOf).not.toHaveBeenCalled();
+
+      await expect(
+        writeAs(svc, BYOK_ANTHROPIC, { primaryProvider: 'anthropic' }, tierOf)
+      ).rejects.toBeInstanceOf(AiUnavailableError);
+      expect(repo.patchSettings.mock.calls).toEqual([
+        ['user-1', { primaryProvider: null }],
+      ]);
+    });
+
+    it('routes turns over the stored primary provider', async () => {
+      await expect(
+        makeChooser({ primaryProvider: 'openrouter' }).svc.chooseTurnModel(
+          BYOK_ANTHROPIC_OPENROUTER,
+          {}
+        )
+      ).resolves.toMatchObject({
+        model: 'openrouter:anthropic/claude-sonnet-5',
+      });
+      await expect(
+        makeChooser().svc.chooseTurnModel(BYOK_ANTHROPIC_OPENROUTER, {})
+      ).resolves.toMatchObject({ model: 'anthropic:claude-sonnet-5' });
+    });
+
+    it('lists the intents over the stored primary provider', async () => {
+      const { intents } = await makeChooser({
+        primaryProvider: 'openrouter',
+      }).svc.listModels(BYOK_ANTHROPIC_OPENROUTER);
+      expect(intents).toContainEqual({
+        intent: 'balanced',
+        available: true,
+        modelId: 'openrouter:anthropic/claude-sonnet-5',
+        substituted: false,
+      });
+    });
+
+    it('judges a model written with a primary provider by the primary it stores', async () => {
+      const route = 'openrouter:anthropic/claude-sonnet-5';
+      const { svc, repo } = makeChooser();
+
+      await expect(
+        writeAs(svc, BYOK_ANTHROPIC_OPENROUTER, { preferredModel: route })
+      ).rejects.toBeInstanceOf(ModelUnavailableException);
+      await writeAs(svc, BYOK_ANTHROPIC_OPENROUTER, {
+        preferredModel: route,
+        primaryProvider: 'openrouter',
+      });
+
+      expect(repo.patchSettings.mock.calls).toEqual([
+        ['user-1', { preferredModel: route, primaryProvider: 'openrouter' }],
+      ]);
     });
   });
 

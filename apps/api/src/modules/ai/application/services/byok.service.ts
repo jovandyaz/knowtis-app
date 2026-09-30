@@ -132,11 +132,17 @@ export class ByokService {
 
   async deleteKey(userId: string, provider: ByokProvider): Promise<void> {
     await this.repo.remove(userId, provider);
-    const { preferredModel } = await this.settings.getSettings(userId);
-    // The override was only ever honoured on this key; keeping it would let it
-    // silently resurface the day the user adds the key back.
-    if (preferredModel && providerOf(preferredModel) === provider) {
-      await this.settings.patchSettings(userId, { preferredModel: null });
+    const { preferredModel, primaryProvider } =
+      await this.settings.getSettings(userId);
+    // Settings honoured only on this key must not resurface the day it is added back.
+    const patch = {
+      ...(preferredModel && providerOf(preferredModel) === provider
+        ? { preferredModel: null }
+        : {}),
+      ...(primaryProvider === provider ? { primaryProvider: null } : {}),
+    };
+    if (Object.keys(patch).length > 0) {
+      await this.settings.patchSettings(userId, patch);
     }
   }
 

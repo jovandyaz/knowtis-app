@@ -114,10 +114,12 @@ export function canonicalOf(modelId: string): CanonicalModel | undefined {
   );
 }
 
+/** The stored primary while its key is held, else the first key added. */
 export function effectivePrimary(
-  held: readonly ByokProvider[]
+  held: readonly ByokProvider[],
+  stored: ByokProvider | null
 ): ByokProvider | null {
-  return held[0] ?? null;
+  return stored !== null && held.includes(stored) ? stored : (held[0] ?? null);
 }
 
 function routeOrder(

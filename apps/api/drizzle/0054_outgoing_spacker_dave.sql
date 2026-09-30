@@ -1,0 +1,2 @@
+ALTER TABLE "user_ai_settings" ADD COLUMN "primary_provider" varchar(20);--> statement-breakpoint
+ALTER TABLE "user_ai_settings" ADD CONSTRAINT "user_ai_settings_primary_provider_check" CHECK ("user_ai_settings"."primary_provider" IS NULL OR "user_ai_settings"."primary_provider" in ('anthropic', 'openai', 'google', 'openrouter')) NOT VALID;

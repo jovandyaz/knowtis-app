@@ -114,7 +114,7 @@ function listed(
   execution: AiExecutionContext,
   intents: Readonly<Record<ModelIntent, string>> = INTENTS
 ) {
-  return service.toSelectable(service.catalogFor(execution, intents));
+  return service.toSelectable(service.catalogFor(execution, intents, null));
 }
 
 describe('SelectableModelsService', () => {
@@ -360,7 +360,7 @@ describe('SelectableModelsService', () => {
     it('lists a free caller’s intent models as platform-billed, the balanced one default, with no access field', () => {
       const svc = makeOpenService();
       const models = svc.toSelectable(
-        svc.catalogFor(createExecutionContext({ tier: 'free' }), INTENTS)
+        svc.catalogFor(createExecutionContext({ tier: 'free' }), INTENTS, null)
       );
       expect(models.map((m) => [m.id, m.servesIntent, m.isDefault])).toEqual([
         [INTENTS.fast, 'fast', false],
@@ -379,7 +379,8 @@ describe('SelectableModelsService', () => {
             tier: 'byok',
             byokProviders: ['anthropic'],
           }),
-          INTENTS
+          INTENTS,
+          null
         )
       );
       expect(models.every((m) => m.billedToUser)).toBe(true);
@@ -394,7 +395,8 @@ describe('SelectableModelsService', () => {
     it('scopes a free caller to the platform intent models', () => {
       const catalog = makeOpenService().catalogFor(
         createExecutionContext({ tier: 'free' }),
-        INTENTS
+        INTENTS,
+        null
       );
       expect(catalog.models.map((m) => m.model.id)).toEqual(
         Object.values(INTENTS)
@@ -406,7 +408,8 @@ describe('SelectableModelsService', () => {
         createCatalogModel({ id: PROMOTED_ID, tier: 'balanced' }),
       ]).catalogFor(
         createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
-        INTENTS
+        INTENTS,
+        null
       );
       expect(
         catalog.models.every((m) => m.model.id.startsWith('anthropic:'))
@@ -435,7 +438,8 @@ describe('SelectableModelsService', () => {
       const service = makeOpenService();
       const free = service.catalogFor(
         createExecutionContext({ tier: 'free' }),
-        INTENTS
+        INTENTS,
+        null
       );
 
       expect(free.models.map((m) => m.model.id)).not.toContain(
