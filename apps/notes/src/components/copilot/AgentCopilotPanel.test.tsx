@@ -792,6 +792,31 @@ describe('AgentCopilotPanel proposal routing', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows the refusal above a review the server gave back', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    act(() => {
+      useAgentStore.setState({
+        status: 'pendingProposal',
+        pendingProposal: updateProposal,
+        error: {
+          code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+          message: 'send it again',
+        },
+        retryMode: 'none',
+      });
+    });
+
+    const notice = screen.getByRole('alert');
+    expect(notice).toHaveTextContent('ai.errors.turnUnavailable');
+    expect(
+      notice.compareDocumentPosition(screen.getByTestId('review')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'ai.preview.retry' })
+    ).not.toBeInTheDocument();
+  });
+
   it('shows no notice above an ordinary pending proposal', () => {
     render(<AgentCopilotPanel />, { wrapper });
     act(() => {
