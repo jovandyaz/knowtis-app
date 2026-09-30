@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -9,7 +9,7 @@ import * as schema from '../../../../database/schema';
 export const ACCESS_DATABASE_CONNECTION = Symbol('ACCESS_DATABASE_CONNECTION');
 
 @Injectable()
-export class AccessDatabase implements OnModuleDestroy {
+export class AccessDatabase implements OnApplicationShutdown {
   private readonly logger = new Logger(AccessDatabase.name);
   readonly client;
   readonly db;
@@ -34,7 +34,7 @@ export class AccessDatabase implements OnModuleDestroy {
     this.db = drizzle(this.client, { schema });
   }
 
-  async onModuleDestroy(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     const started = performance.now();
     await this.client.end({ timeout: 1 });
     this.logger.debug({

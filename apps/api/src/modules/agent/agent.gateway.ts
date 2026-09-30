@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Logger } from '@nestjs/common';
+import { Logger, type BeforeApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -98,6 +98,9 @@ const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
   reason: z.string().max(1000).optional(),
 });
 
+/** Below Railway's 10 s draining window, so dispose and the shutdown hooks still run before SIGKILL. */
+export const AGENT_DRAIN_TIMEOUT_MS = 8_000;
+
 /** The legs of a turn hold separate slots: a resume can start while the leg that proposed is still settling its claim. */
 const TURN_LEG = { MESSAGE: 'message', RESUME: 'resume' } as const;
 
@@ -133,12 +136,17 @@ function turnClaimOf(
 
 @WebSocketGateway({ namespace: '/agent' })
 export class AgentGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    BeforeApplicationShutdown
 {
   private readonly logger = new Logger(AgentGateway.name);
   private readonly turns: ConcurrencySlotTracker;
   private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentTurns: number;
+  private draining = false;
 
   @WebSocketServer()
   server!: Server;
@@ -167,6 +175,18 @@ export class AgentGateway
 
   afterInit(): void {
     this.logger.log('Agent WebSocket Gateway initialized');
+  }
+
+  async beforeApplicationShutdown(): Promise<void> {
+    this.draining = true;
+    const startedAt = Date.now();
+    this.turns.abortAll(TURN_ABORT_REASON.SHUTDOWN);
+    const drained = await this.turns.whenIdle(AGENT_DRAIN_TIMEOUT_MS);
+    this.logger.log({
+      event: 'agent.shutdown.drained',
+      drained,
+      durationMs: Date.now() - startedAt,
+    });
   }
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
@@ -526,6 +546,13 @@ export class AgentGateway
     leg: TurnLeg,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
+    if (this.draining) {
+      client.emit('agent:error', {
+        ...AgentErrors.turnClaimUnavailable(),
+        turnId,
+      });
+      return;
+    }
     // A disconnect or cancel handled during an earlier await found no slot to
     // abort, so a turn started now would run to completion for nobody.
     if (!client.connected) {

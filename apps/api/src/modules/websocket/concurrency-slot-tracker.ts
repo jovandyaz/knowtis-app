@@ -7,6 +7,7 @@ export class ConcurrencySlotTracker {
   private readonly controllers = new Map<string, AbortController>();
   private readonly userCounts = new Map<string, number>();
   private readonly clientSlots = new Map<string, Set<string>>();
+  private idleWaiters: Array<() => void> = [];
 
   constructor(private readonly maxConcurrentPerUser: number) {}
 
@@ -49,6 +50,37 @@ export class ConcurrencySlotTracker {
     } else {
       this.userCounts.set(userId, count - 1);
     }
+    if (this.controllers.size === 0 && this.idleWaiters.length > 0) {
+      const waiters = this.idleWaiters;
+      this.idleWaiters = [];
+      for (const waiter of waiters) {
+        waiter();
+      }
+    }
+  }
+
+  abortAll(reason?: unknown): void {
+    for (const controller of this.controllers.values()) {
+      controller.abort(reason);
+    }
+  }
+
+  /** Resolves true once no slot is held, or false when `timeoutMs` passes first. */
+  whenIdle(timeoutMs: number): Promise<boolean> {
+    if (this.controllers.size === 0) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const onIdle = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        this.idleWaiters = this.idleWaiters.filter((w) => w !== onIdle);
+        resolve(false);
+      }, timeoutMs);
+      this.idleWaiters.push(onIdle);
+    });
   }
 
   abortAllForClient(clientId: string, reason?: unknown): void {

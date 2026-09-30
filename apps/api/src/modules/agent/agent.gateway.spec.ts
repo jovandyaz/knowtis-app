@@ -686,6 +686,53 @@ describe('AgentGateway', () => {
     await turn;
   });
 
+  it('drains: aborts running turns as a shutdown and waits for them to settle', async () => {
+    let settled = false;
+    const execute = vi.fn(
+      async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve())
+        );
+        settled = true;
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    const running = gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+    await flushAsync();
+    await gateway.beforeApplicationShutdown();
+    await running;
+
+    expect((execute.mock.calls[0][2] as AbortSignal).reason).toBe(
+      TURN_ABORT_REASON.SHUTDOWN
+    );
+    expect(settled).toBe(true);
+  });
+
+  it('refuses a turn that arrives while draining', async () => {
+    const execute = vi.fn();
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    await gateway.beforeApplicationShutdown();
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'TURN_CLAIM_UNAVAILABLE' })
+    );
+  });
+
   it('disconnects and emits AUTH_REQUIRED for MCP-source tokens', async () => {
     const jwt = {
       verify: vi.fn().mockReturnValue({ sub: 'u1', source: 'mcp' }),

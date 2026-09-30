@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ConcurrencySlotTracker } from './concurrency-slot-tracker';
 
@@ -92,5 +92,53 @@ describe('ConcurrencySlotTracker', () => {
 
     tracker.release('u1', 'c1', 's1');
     expect(tracker.isActive('s1')).toBe(false);
+  });
+
+  describe('draining', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('aborts every held slot with the given reason', () => {
+      const tracker = new ConcurrencySlotTracker(2);
+      const first = new AbortController();
+      const second = new AbortController();
+      tracker.acquire('u1', 'c1', 's1', first);
+      tracker.acquire('u2', 'c2', 's2', second);
+
+      tracker.abortAll('shutdown');
+
+      expect([first.signal.reason, second.signal.reason]).toEqual([
+        'shutdown',
+        'shutdown',
+      ]);
+    });
+
+    it('is idle at once when no slot is held', async () => {
+      await expect(new ConcurrencySlotTracker(2).whenIdle(8_000)).resolves.toBe(
+        true
+      );
+    });
+
+    it('becomes idle when the last slot is released', async () => {
+      const tracker = new ConcurrencySlotTracker(2);
+      tracker.acquire('u1', 'c1', 's1', new AbortController());
+      const idle = tracker.whenIdle(8_000);
+
+      tracker.release('u1', 'c1', 's1');
+
+      await expect(idle).resolves.toBe(true);
+    });
+
+    it('gives up when a slot outlives the timeout', async () => {
+      vi.useFakeTimers();
+      const tracker = new ConcurrencySlotTracker(2);
+      tracker.acquire('u1', 'c1', 's1', new AbortController());
+      const idle = tracker.whenIdle(8_000);
+
+      await vi.advanceTimersByTimeAsync(8_000);
+
+      await expect(idle).resolves.toBe(false);
+    });
   });
 });
