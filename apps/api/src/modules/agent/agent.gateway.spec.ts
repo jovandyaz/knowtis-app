@@ -907,6 +907,149 @@ describe('AgentGateway', () => {
 
   describe('while the server drains', () => {
     const PROPOSAL_ID = 'd4816ca2-7965-46ea-b828-3ecfe32428be';
+    const DRAINED_TURN = '88888888-8888-4888-8888-888888888888';
+
+    function untilAborted(signal: AbortSignal): Promise<void> {
+      return new Promise<void>((resolve) =>
+        signal.addEventListener('abort', () => resolve(), { once: true })
+      );
+    }
+
+    function turnErrors(client: ReturnType<typeof makeClient>) {
+      return client.emit.mock.calls.filter(
+        ([event]) => event === 'agent:error'
+      );
+    }
+
+    it('tells the client to resend a message turn it aborted mid-run', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+          await untilAborted(signal);
+        }
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: DRAINED_TURN,
+        message: { content: 'hi' },
+      });
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+      await drain.beforeApplicationShutdown();
+      await running;
+
+      expect(turnErrors(client)).toEqual([
+        [
+          'agent:error',
+          expect.objectContaining({
+            code: 'TURN_CLAIM_UNAVAILABLE',
+            turnId: DRAINED_TURN,
+          }),
+        ],
+      ]);
+    });
+
+    it('tells the client a resume it aborted mid-run under the turn id', async () => {
+      const approveExecute = vi.fn().mockResolvedValue(
+        ok({
+          result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+          outcome: 'created the note "GTD"',
+          conversationId: 'conv-1',
+          turnId: PROPOSAL_TURN,
+        })
+      );
+      const resumeTurn = vi.fn(
+        async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+          await untilAborted(signal);
+        }
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        approve: { execute: approveExecute },
+        handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const approving = gateway.handleApprove(
+        client as never,
+        approvePayload()
+      );
+      await vi.waitFor(() => expect(resumeTurn).toHaveBeenCalled());
+      await drain.beforeApplicationShutdown();
+      await approving;
+
+      expect(turnErrors(client)).toEqual([
+        [
+          'agent:error',
+          expect.objectContaining({
+            code: 'TURN_CLAIM_UNAVAILABLE',
+            turnId: PROPOSAL_TURN,
+          }),
+        ],
+      ]);
+    });
+
+    it('keeps a turn the user cancelled silent', async () => {
+      const execute = vi.fn(
+        async (_input: unknown, _cb: unknown, signal: AbortSignal) => {
+          await untilAborted(signal);
+        }
+      );
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+      });
+      const client = makeClient('u1');
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: DRAINED_TURN,
+        message: { content: 'hi' },
+      });
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+      gateway.handleCancel(client as never);
+      await running;
+
+      expect(turnErrors(client)).toEqual([]);
+    });
+
+    it('never follows a proposal it already sent with the notice', async () => {
+      const proposal = ProposedMutation.create({
+        id: PROPOSAL_ID,
+        kind: 'create',
+        payload: { title: 'GTD', contentHtml: '<p>GTD</p>' },
+        summary: 'Create "GTD"',
+      })._unsafeUnwrap();
+      const execute = vi.fn(
+        async (
+          _input: unknown,
+          cb: RunAgentTurnCallbacks,
+          signal: AbortSignal
+        ) => {
+          cb.onProposal(proposal);
+          await untilAborted(signal);
+        }
+      );
+      const drain = new ShutdownDrain();
+      const gateway = makeGateway({
+        handler: { execute } as Partial<RunAgentTurnHandler>,
+        drain,
+      });
+      const client = makeClient('u1');
+
+      const running = gateway.handleMessage(client as never, {
+        turnId: DRAINED_TURN,
+        message: { content: 'create a note' },
+      });
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+      await drain.beforeApplicationShutdown();
+      await running;
+
+      expect(turnErrors(client)).toEqual([]);
+    });
 
     function pendingProposals() {
       const mutation = ProposedMutation.create({

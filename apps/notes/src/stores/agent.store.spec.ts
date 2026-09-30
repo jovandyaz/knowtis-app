@@ -840,6 +840,28 @@ describe('agent.store server-authoritative wire', () => {
       });
     });
 
+    it('ends a resume the drain cut mid-reply as done, keeping its text and commit marker', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+      get().onChunk({ text: 'Done, your note' });
+
+      get().onError(resumeRefused);
+
+      const { status, error, messages } = useAgentStore.getState();
+      expect(status).toBe('done');
+      expect(error).toBeNull();
+      expect(messages.at(-1)).toMatchObject({
+        content: 'Done, your note',
+        committed: { kind: 'create', title: 'My Note' },
+      });
+    });
+
     it('ends a rejected turn without an error or an empty reply', () => {
       const { get } = capture();
       useAgentStore.getState().sendMessage('create a note');

@@ -30,7 +30,10 @@ import { reasonOf } from '../../core/errors/reason-of';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
-import { ShutdownDrain } from '../websocket/shutdown-drain';
+import {
+  SHUTDOWN_ABORT_REASON,
+  ShutdownDrain,
+} from '../websocket/shutdown-drain';
 import {
   authenticateSocket,
   socketAuthFailureMessage,
@@ -140,6 +143,8 @@ export class AgentGateway
   private readonly turns: ConcurrencySlotTracker;
   private readonly tokenExpiry: SocketTokenExpiry;
   private readonly maxConcurrentTurns: number;
+  /** Legs whose client already heard how they ended: a done, a proposal or an error. */
+  private readonly endedLegs = new WeakSet<AbortController>();
 
   @WebSocketServer()
   server!: Server;
@@ -325,11 +330,15 @@ export class AgentGateway
       (controller) =>
         this.withTurnClaim(
           client,
+          controller,
           turnClaimOf(userId, turnId, data),
           (onModelStart) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
-              onProposal,
+              onProposal: (proposal) => {
+                this.endedLegs.add(controller);
+                onProposal(proposal);
+              },
               onModelStart,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
             };
@@ -489,6 +498,7 @@ export class AgentGateway
   // claim is released and a resend of it runs.
   private async withTurnClaim(
     client: AuthenticatedSocket,
+    controller: AbortController,
     claim: TurnClaimRequest | undefined,
     turn: (onModelStart: () => void) => Promise<void>
   ): Promise<void> {
@@ -497,6 +507,7 @@ export class AgentGateway
     }
     const outcome = await this.turnClaims.claim(claim);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
+      this.endedLegs.add(controller);
       this.refuseClaimedTurn(client, claim, outcome);
       return;
     }
@@ -585,6 +596,17 @@ export class AgentGateway
     try {
       await body(controller);
     } finally {
+      // The handler ends a turn the drain aborted without a word, so the client
+      // is told it is unavailable: it resends a message and ends a resume.
+      if (
+        controller.signal.reason === SHUTDOWN_ABORT_REASON &&
+        !this.endedLegs.has(controller)
+      ) {
+        client.emit('agent:error', {
+          ...AgentErrors.turnClaimUnavailable(),
+          turnId,
+        });
+      }
       this.turns.release(userId, client.id, slotId);
       this.tokenExpiry.afterSlotRelease(client);
     }
@@ -622,7 +644,8 @@ export class AgentGateway
       onThinking: (text) => client.emit('agent:thinking', { turnId, text }),
       onConversation: (conversationId) =>
         client.emit('agent:conversation', { turnId, conversationId }),
-      onDone: (usage) =>
+      onDone: (usage) => {
+        this.endedLegs.add(controller);
         client.emit('agent:done', {
           turnId,
           usage: {
@@ -642,9 +665,11 @@ export class AgentGateway
           ...(usage.modelResolution
             ? { modelResolution: usage.modelResolution }
             : {}),
-        }),
+        });
+      },
       onError: (error) => {
         if (!controller.signal.aborted) {
+          this.endedLegs.add(controller);
           client.emit('agent:error', { ...error, turnId });
         }
       },
