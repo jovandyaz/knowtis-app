@@ -7,7 +7,6 @@ import {
   advancedModelOptions,
   effortOptions,
   moreModelGroups,
-  primaryRows,
 } from './intent-picker-options';
 
 const t = ((key: string) => key) as unknown as TFunction<'common'>;
@@ -22,7 +21,6 @@ const model = {
   isDefault: true,
   billedToUser: true,
   routableByServer: true,
-  access: 'granted',
 } satisfies SelectableModel;
 
 describe('effortOptions', () => {
@@ -46,29 +44,16 @@ describe('effortOptions', () => {
   });
 });
 
-describe('models listed without access', () => {
-  const { access: _omitted, ...listed } = {
-    ...model,
-    id: 'anthropic:claude-opus-5',
-  };
+describe('models outside an intent', () => {
+  const listed = { ...model, id: 'anthropic:claude-opus-5' };
 
-  it('offers a key-billed model the server lists without access in Advanced', () => {
+  it('offers a key-billed model in Advanced', () => {
     expect(advancedModelOptions([listed])).toEqual([listed]);
   });
 
-  it('keeps an unbilled model the server lists without access in more models', () => {
+  it('keeps a key-billed model in more models', () => {
     expect(
-      moreModelGroups([{ ...listed, billedToUser: false }], t).flatMap(
-        (group) => group.options
-      )
+      moreModelGroups([listed], t).flatMap((group) => group.options)
     ).toEqual([expect.objectContaining({ id: 'anthropic:claude-opus-5' })]);
-  });
-
-  it('does not lock an intent row for a model the server lists without access', () => {
-    expect(
-      primaryRows([{ ...listed, servesIntent: 'balanced' }], t).map(
-        (row) => row.locked
-      )
-    ).toEqual([false]);
   });
 });

@@ -98,7 +98,6 @@ const fastModel = {
   isDefault: false,
   billedToUser: false,
   routableByServer: true,
-  access: 'granted',
   servesIntent: 'fast',
 } satisfies SelectableModel;
 
@@ -112,7 +111,6 @@ const balancedModel = {
   isDefault: true,
   billedToUser: false,
   routableByServer: true,
-  access: 'granted',
   servesIntent: 'balanced',
   reasoning: { levels: ['low', 'medium', 'high'], mandatory: false },
 } satisfies SelectableModel;
@@ -127,7 +125,6 @@ const powerfulModel = {
   isDefault: false,
   billedToUser: false,
   routableByServer: true,
-  access: 'granted',
   servesIntent: 'powerful',
 } satisfies SelectableModel;
 
@@ -142,7 +139,6 @@ const openModel = {
   isDefault: false,
   billedToUser: false,
   routableByServer: true,
-  access: 'granted',
 } satisfies SelectableModel;
 
 const byokModel = {
@@ -156,7 +152,6 @@ const byokModel = {
   isDefault: false,
   billedToUser: true,
   routableByServer: true,
-  access: 'granted',
 } satisfies SelectableModel;
 
 const registeredModels = [
@@ -178,16 +173,12 @@ const byokListing = [
 const anthropicKey = [{ provider: 'anthropic', keyPrefix: 'sk-a***' }];
 
 const anonymousModels = [
-  { ...fastModel, access: 'requires_account' },
-  { ...balancedModel, access: 'granted', isDefault: true },
-  { ...powerfulModel, access: 'requires_account' },
+  { ...balancedModel, isDefault: true },
 ] satisfies SelectableModel[];
 
 const { reasoning: _unused, ...balancedWithoutReasoning } = balancedModel;
 const anonymousModelsWithoutReasoning = [
-  { ...fastModel, access: 'requires_account' },
-  { ...balancedWithoutReasoning, access: 'granted', isDefault: true },
-  { ...powerfulModel, access: 'requires_account' },
+  { ...balancedWithoutReasoning, isDefault: true },
 ] satisfies SelectableModel[];
 
 describe('CopilotModelPicker', () => {
@@ -278,7 +269,7 @@ describe('CopilotModelPicker', () => {
     });
   });
 
-  it('anonymous: default row is checked and inert, others lock and route to the CTA', async () => {
+  it('anonymous: the only row is checked and inert, and the footer routes to register', async () => {
     const user = userEvent.setup();
     authUser.mockReturnValue({ isAnonymous: true });
     modelsData.mockReturnValue(anonymousModels);
@@ -289,29 +280,18 @@ describe('CopilotModelPicker', () => {
     const defaultRow = screen.getByRole('menuitemradio', { name: /Sonnet 5/ });
     expect(defaultRow).toHaveAttribute('aria-checked', 'true');
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(1);
-    for (const name of [/Haiku 4\.5/, /Opus 5/]) {
-      const row = screen.getByRole('menuitem', { name });
-      expect(row).toHaveAccessibleName(/aiAssistant\.menu\.lockedHint/);
-      expect(row).not.toHaveAttribute('aria-disabled');
-    }
     expect(
       screen.getByRole('menuitem', { name: 'aiAssistant.menu.effort' })
     ).toHaveAttribute('aria-disabled', 'true');
 
     await user.click(defaultRow);
     expect(updatePreferences).not.toHaveBeenCalled();
-    expect(navigate).not.toHaveBeenCalled();
-
-    await openMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /Opus 5/ }));
-    expect(updatePreferences).not.toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith({ to: ROUTES.REGISTER });
 
     await openMenu(user);
     await user.click(
       screen.getByRole('menuitem', { name: 'aiAssistant.menu.registerCta' })
     );
-    expect(navigate).toHaveBeenCalledTimes(2);
+    expect(navigate).toHaveBeenCalledWith({ to: ROUTES.REGISTER });
     expect(keysEnabled).toHaveBeenCalledWith(false);
   });
 

@@ -120,13 +120,9 @@ function ControlledWithEffort({
 export const Anonymous: Story = {
   render: () => (
     <ModelMenu
-      primary={PRIMARY.map((row) => ({
-        ...row,
-        ...(row.id === 'balanced' ? {} : { locked: true }),
-      }))}
+      primary={PRIMARY.filter((row) => row.id === 'balanced')}
       value="balanced"
       onSelect={() => undefined}
-      lockedHint="requiere cuenta"
       effort={{
         label: 'Esfuerzo',
         value: 'auto',

@@ -20,14 +20,9 @@ export interface ModelPreference {
   preferredIntent?: ModelIntent | null;
 }
 
-/** A model the server lists without `access` is one it already scoped to the caller. */
-function isGranted(model: SelectableModel): boolean {
-  return (model.access ?? 'granted') === 'granted';
-}
-
-/** A catalogue model the caller may pick from "more models": unassigned to an intent and runnable for them. */
+/** A catalogue model the caller may pick from "more models": one no intent is assigned to. */
 function isMoreModel(model: SelectableModel): boolean {
-  return !model.servesIntent && (model.billedToUser || isGranted(model));
+  return !model.servesIntent;
 }
 
 /**
@@ -73,7 +68,7 @@ function modelDescription(
 export function advancedModelOptions(
   models: readonly SelectableModel[] | undefined
 ): SelectableModel[] {
-  return (models ?? []).filter((m) => isGranted(m) && m.billedToUser);
+  return (models ?? []).filter((m) => m.billedToUser);
 }
 
 /**
@@ -115,7 +110,6 @@ export function primaryRows(
         id: intent,
         label: model.label,
         description: t(`aiAssistant.intent.${intent}Hint` as never),
-        locked: model.access === 'requires_account',
       },
     ];
   });

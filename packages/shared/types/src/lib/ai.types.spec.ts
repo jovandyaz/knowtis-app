@@ -11,7 +11,6 @@ import {
   isGlobalReasoningEffort,
   isReasoningEffort,
   MESSAGE_STOP_REASON,
-  MODEL_ACCESS,
   REASONING_EFFORTS,
 } from './ai.types';
 
@@ -58,12 +57,6 @@ describe('completion actions', () => {
       'tone',
       'translate',
     ]);
-  });
-});
-
-describe('model access', () => {
-  it('distinguishes account-gated models from BYOK-gated ones', () => {
-    expect(MODEL_ACCESS).toContain('requires_account');
   });
 });
 

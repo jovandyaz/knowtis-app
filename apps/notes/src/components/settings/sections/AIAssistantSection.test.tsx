@@ -41,7 +41,6 @@ const grantedModels = [
     costClass: 2,
     isDefault: true,
     billedToUser: false,
-    access: 'granted',
     servesIntent: 'balanced',
   },
   {
@@ -53,12 +52,11 @@ const grantedModels = [
     costClass: 1,
     isDefault: false,
     billedToUser: false,
-    access: 'granted',
     servesIntent: 'fast',
   },
 ];
 
-const lockedModel = {
+const powerfulModel = {
   id: 'x:premium',
   label: 'Premium One',
   descriptionKey: 'aiModels.gpt56Sol',
@@ -67,7 +65,6 @@ const lockedModel = {
   costClass: 3,
   isDefault: false,
   billedToUser: false,
-  access: 'requires_byok',
   servesIntent: 'powerful',
 };
 
@@ -80,11 +77,10 @@ const byokModel = {
   costClass: 3,
   isDefault: false,
   billedToUser: true,
-  access: 'granted',
 };
 
-const withLockedModel = [...grantedModels, lockedModel];
-const withByokModel = [...grantedModels, lockedModel, byokModel];
+const withPowerfulModel = [...grantedModels, powerfulModel];
+const withByokModel = [...grantedModels, powerfulModel, byokModel];
 
 describe('AIAssistantSection', () => {
   beforeEach(() => {
@@ -100,7 +96,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('offers only the three intent chips to a user without BYOK models', () => {
-    modelsData.mockReturnValue(withLockedModel);
+    modelsData.mockReturnValue(withPowerfulModel);
     render(<AIAssistantSection />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(3);
@@ -122,7 +118,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('keeps the keys manager reachable so a free user can add a BYOK key', () => {
-    modelsData.mockReturnValue(withLockedModel);
+    modelsData.mockReturnValue(withPowerfulModel);
     render(<AIAssistantSection />);
 
     expect(screen.getByText('byok-keys-manager')).toBeInTheDocument();
@@ -212,7 +208,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('drops any model override when an intent chip is picked', async () => {
-    modelsData.mockReturnValue(withLockedModel);
+    modelsData.mockReturnValue(withPowerfulModel);
     prefsData.mockReturnValue({
       preferredModel: 'a:fast',
       preferredIntent: null,

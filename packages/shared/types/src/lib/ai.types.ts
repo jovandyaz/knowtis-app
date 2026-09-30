@@ -109,13 +109,6 @@ export function isModelIntent(value: string): value is ModelIntent {
   return (MODEL_INTENTS as readonly string[]).includes(value);
 }
 
-export const MODEL_ACCESS = [
-  'granted',
-  'requires_byok',
-  'requires_account',
-] as const;
-export type ModelAccess = (typeof MODEL_ACCESS)[number];
-
 /** How much hidden reasoning budget a reasoning model may spend before emitting visible tokens. */
 export const REASONING_EFFORTS = [
   'low',
@@ -212,8 +205,6 @@ export interface SelectableModel {
    * caller's BYOK key reaches it, so it is inert in any server-global config.
    */
   routableByServer: boolean;
-  /** Absent from servers that list only the caller tier's models. */
-  access?: ModelAccess;
   reasoning?: ModelReasoning;
   servesIntent?: ModelIntent;
 }

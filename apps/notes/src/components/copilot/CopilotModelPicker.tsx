@@ -120,7 +120,7 @@ export function CopilotModelPicker() {
 
   // Anonymous: the row serving the running default renders checked and inert;
   // the settings endpoints reject a guest, so no selection may ever mutate.
-  const anonymousValue = primary.find((row) => !row.locked)?.id ?? null;
+  const anonymousValue = primary[0]?.id ?? null;
   const menuValue = isAnonymous ? anonymousValue : (override ?? intent);
 
   const select = (id: string) => {
@@ -156,7 +156,6 @@ export function CopilotModelPicker() {
           moreModels: { label: t('aiAssistant.menu.moreModels'), groups },
         })}
         {...(footerCta && { footerCta })}
-        lockedHint={t('aiAssistant.menu.lockedHint')}
         inlineSections={!canFlyOut}
         triggerLabel={triggerLabel}
         {...(triggerDetail !== undefined && { triggerDetail })}

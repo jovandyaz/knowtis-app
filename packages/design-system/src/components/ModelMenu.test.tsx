@@ -91,38 +91,6 @@ describe('ModelMenu', () => {
     expect(onSelect).toHaveBeenCalledWith('fast');
   });
 
-  it('locked rows stay actionable and route to the footer CTA', async () => {
-    const user = userEvent.setup();
-    const onSelect = vi.fn();
-    const onCta = vi.fn();
-    render(
-      <ModelMenu
-        {...baseProps({
-          primary: PRIMARY.map((row) => ({ ...row, locked: true })),
-          value: null,
-          onSelect,
-          footerCta: { label: 'Crear cuenta gratis', onClick: onCta },
-          lockedHint: 'requiere cuenta',
-        })}
-      />
-    );
-    await user.click(screen.getByRole('button'));
-
-    const locked = screen.getByRole('menuitem', {
-      name: 'Sonnet 5, requiere cuenta',
-    });
-    expect(locked).not.toHaveAttribute('aria-disabled');
-    expect(
-      screen.queryByRole('menuitemradio', { name: /Sonnet 5/ })
-    ).not.toBeInTheDocument();
-    // The lock glyph replaces the check slot; it is decorative, so structural.
-    expect(locked.querySelector('svg')).toBeInTheDocument();
-
-    await user.click(locked);
-    expect(onSelect).not.toHaveBeenCalled();
-    expect(onCta).toHaveBeenCalledTimes(1);
-  });
-
   it('renders effort and more-models inline when flyouts cannot fit', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -151,32 +119,6 @@ describe('ModelMenu', () => {
 
     await user.click(screen.getByRole('menuitemradio', { name: /Alto/ }));
     expect(onChange).toHaveBeenCalledWith('high');
-  });
-
-  it('renders a locked row as inert when no account CTA stands behind it', async () => {
-    const user = userEvent.setup();
-    const onSelect = vi.fn();
-    render(
-      <ModelMenu
-        {...baseProps({
-          primary: PRIMARY.map((row) => ({ ...row, locked: true })),
-          value: null,
-          onSelect,
-          lockedHint: 'requiere cuenta',
-        })}
-      />
-    );
-    await user.click(screen.getByRole('button'));
-
-    const locked = screen.getByRole('menuitem', {
-      name: 'Sonnet 5, requiere cuenta',
-    });
-    expect(locked).toHaveAttribute('aria-disabled', 'true');
-
-    await user.click(locked);
-    expect(onSelect).not.toHaveBeenCalled();
-    // An inert row must not dismiss the menu either.
-    expect(locked).toBeInTheDocument();
   });
 
   it('effort submenu lists only provided options and reports changes', async () => {
