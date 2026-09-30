@@ -86,6 +86,8 @@ import {
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
 import {
+  AGENT_FIRST_CALL_COSTS,
+  AGENT_PROMPT_OVERHEAD_TOKENS,
   firstCallHistoryBudget,
   firstCallRoom,
 } from '../domain/first-call-budget';
@@ -249,7 +251,6 @@ type PreparedTurn =
       readonly reservation: Reservation;
     };
 
-const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 export const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = MAX_GUARD_INPUT_CHARS;
@@ -1302,13 +1303,11 @@ export class RunAgentTurnHandler {
       dailyTokenAllowance: this.rateLimit.dailyAllowance(execution).tokenLimit,
     });
     const firstCall = {
+      ...AGENT_FIRST_CALL_COSTS,
       maxTurnTokens: limits.maxTurnTokens,
       maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
-      synthesisReserveTokens: this.configService.get(
-        'AI_AGENT_SYNTHESIS_RESERVE_TOKENS'
-      ),
-      promptOverheadTokens: AGENT_PROMPT_OVERHEAD_TOKENS,
     };
+    const room = firstCallRoom(firstCall);
     const historyBudget = firstCallHistoryBudget({
       ...firstCall,
       historyCap: AGENT_HISTORY_TOKEN_BUDGET,
@@ -1348,10 +1347,7 @@ export class RunAgentTurnHandler {
     const estimatedTokens = this.estimateTokens(messages);
     // The newest turn is kept past the history cap, so only a turn that
     // overruns the first call's whole room is refused.
-    if (
-      estimatedTokens - AGENT_PROMPT_OVERHEAD_TOKENS >
-      firstCallRoom(firstCall)
-    ) {
+    if (estimatedTokens - AGENT_PROMPT_OVERHEAD_TOKENS > room) {
       return {
         kind: 'budget_denied',
         reason: 'This message does not fit in the tokens left for this turn.',

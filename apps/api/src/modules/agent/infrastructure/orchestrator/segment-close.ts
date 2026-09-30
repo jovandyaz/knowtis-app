@@ -2,13 +2,12 @@ import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 
 import type { AgentMessage } from '../../domain/agent-message';
 import { estimateMessageTokens } from '../../domain/message-tokens';
+import { MIN_SYNTHESIS_OUTPUT_TOKENS } from '../../domain/synthesis-request';
 
 export type SegmentEnd =
   | typeof AGENT_STOP_REASON.MAX_STEPS
   | typeof AGENT_STOP_REASON.TOKEN_BUDGET
   | typeof AGENT_STOP_REASON.TIME_LIMIT;
-
-export const MIN_SYNTHESIS_OUTPUT_TOKENS = 1024;
 
 export interface SegmentState {
   readonly completedSteps: number;

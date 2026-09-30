@@ -12,12 +12,12 @@ import { createExecutionContext } from '../../../ai/testing/create-execution-con
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { estimateMessageTokens } from '../../domain/message-tokens';
 import { ProposedMutation } from '../../domain/proposed-mutation';
+import { SYNTHESIS_REQUEST } from '../../domain/synthesis-request';
 import type { AgentToolContext } from '../tools/agent-tool';
 import {
   TOOL_ERROR_CODES,
   ToolExecutionError,
 } from '../tools/tool-execution.error';
-import { SYNTHESIS_REQUEST } from './agent-step-loop';
 import type { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
 import { fromResponseMessages, type ResponseMessage } from './message-mapper';

@@ -54,6 +54,10 @@ import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
 import { CONTINUABLE_STOP_REASONS } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
+import {
+  AGENT_FIRST_CALL_COSTS,
+  firstCallRoom,
+} from '../domain/first-call-budget';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type {
@@ -121,6 +125,9 @@ function orchestratorYielding(events: AgentEvent[]): AgentOrchestrator {
   };
 }
 
+const ANONYMOUS_TURN_TOKENS = 33_000;
+const AGENT_MAX_OUTPUT_TOKENS = 8192;
+
 function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
   const rateLimit = {
     checkLimit: vi.fn(
@@ -134,7 +141,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordSideCost: vi.fn().mockResolvedValue(undefined),
     dailyAllowance: vi
       .fn()
-      .mockReturnValue({ tokenLimit: 33000, costLimit: 0.33 }),
+      .mockReturnValue({ tokenLimit: ANONYMOUS_TURN_TOKENS, costLimit: 0.33 }),
   } as unknown as AIRateLimitService;
   const settings: Record<string, number> = {
     AI_AGENT_MAX_MS: 120000,
@@ -144,7 +151,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     AI_AGENT_MAX_STEPS: 8,
     AI_AGENT_BYOK_MAX_STEPS: 20,
     AI_AGENT_TURN_TOKEN_BUDGET: 150000,
-    AI_AGENT_MAX_OUTPUT_TOKENS: 8192,
+    AI_AGENT_MAX_OUTPUT_TOKENS: AGENT_MAX_OUTPUT_TOKENS,
     AI_AGENT_SYNTHESIS_RESERVE_TOKENS: 12000,
   };
   const config = {
@@ -7265,12 +7272,27 @@ describe('RunAgentTurnHandler daily message quota', () => {
   });
 
   describe('first call budget', () => {
+    const ANONYMOUS_ROOM = firstCallRoom({
+      ...AGENT_FIRST_CALL_COSTS,
+      maxTurnTokens: ANONYMOUS_TURN_TOKENS,
+      maxOutputTokens: AGENT_MAX_OUTPUT_TOKENS,
+    });
+    const QUESTION_TOKENS = 50;
+    const REPLY_TOKENS = Math.floor(ANONYMOUS_ROOM * 0.9);
     const HISTORY = [
-      rowOfTokens('user', 50),
-      rowOfTokens('assistant', 5750),
-      rowOfTokens('user', 50),
-      rowOfTokens('assistant', 5750),
+      rowOfTokens('user', QUESTION_TOKENS),
+      rowOfTokens('assistant', REPLY_TOKENS),
+      rowOfTokens('user', QUESTION_TOKENS),
+      rowOfTokens('assistant', REPLY_TOKENS),
     ];
+
+    it('sizes the history so one turn fits an anonymous room and both fit the history cap', () => {
+      const turnTokens = QUESTION_TOKENS + REPLY_TOKENS;
+      expect(ANONYMOUS_ROOM).toBeGreaterThan(0);
+      expect(turnTokens).toBeLessThan(ANONYMOUS_ROOM);
+      expect(2 * turnTokens).toBeGreaterThan(ANONYMOUS_ROOM);
+      expect(2 * turnTokens).toBeLessThan(AGENT_HISTORY_TOKEN_BUDGET);
+    });
 
     it('drops the older turn an anonymous first call cannot afford with its synthesis', async () => {
       const { handler, orchestrator } = build({
