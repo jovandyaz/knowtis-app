@@ -180,7 +180,6 @@ export interface AgentStepLoopParams {
   readonly onModelSettled?: ((model: string) => void) | undefined;
   readonly cooldown: ProviderCooldown;
   readonly instructions: string;
-  readonly cache: boolean;
   readonly tools: ToolSet;
   readonly telemetry: TelemetryOptions;
   readonly traceIdentity: TraceIdentityAttrs;
@@ -298,7 +297,7 @@ export async function* runAgentStepLoop(
         abortSignal: params.abortSignal,
         timeoutSignal: params.timeoutSignal,
         instructions: params.instructions,
-        cache: params.cache && !withoutTools,
+        cache: !withoutTools,
         tools: withoutTools ? {} : params.tools,
         ...(toolFree ? { toolChoice: 'none' as const } : {}),
         failOnToolMarkup: toolFree,

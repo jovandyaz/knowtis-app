@@ -1996,7 +1996,7 @@ describe('AiSdkAgentOrchestrator', () => {
     }
   });
 
-  it('does not cache on BYOK turns', async () => {
+  it('caches the system prompt and the last message on BYOK Anthropic turns too', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(happyStream);
     const orchestrator = makeOrchestrator();
@@ -2004,11 +2004,14 @@ describe('AiSdkAgentOrchestrator', () => {
     await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
 
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
-    expect(typeof opts?.instructions).toBe('string');
+    expect(opts?.instructions).toMatchObject({
+      role: 'system',
+      providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
+    });
     const messages = opts?.messages as Record<string, unknown>[];
-    for (const message of messages) {
-      expect(message).not.toHaveProperty('providerOptions');
-    }
+    expect(messages.at(-1)).toMatchObject({
+      providerOptions: ANTHROPIC_CACHE_BREAKPOINT,
+    });
   });
 
   // The no-op handler keeps the SDK's usage rejection from surfacing as an

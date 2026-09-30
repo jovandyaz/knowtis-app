@@ -121,12 +121,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     };
 
     let tools: ToolSet;
-    let cache: boolean;
     let instructions: string;
     let initialMessages: ModelMessage[];
     try {
       tools = this.toolRegistry.resolve(toolContext);
-      cache = !input.byokApiKey;
       instructions = this.buildSystemPrompt(
         input.noteId,
         input.knownNotes,
@@ -170,7 +168,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       onModelSettled: options.onModelSettled,
       cooldown: this.fallbackChain.cooldown,
       instructions,
-      cache,
       tools,
       telemetry: buildRedactedTelemetry(
         'agent-turn',
