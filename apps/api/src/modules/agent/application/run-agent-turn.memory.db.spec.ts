@@ -60,10 +60,12 @@ const embedStub = {
     .mockResolvedValue({ vector: new Array(1024).fill(0), costUsd: 0 }),
 } as unknown as EmbeddingPort;
 const modelPreferenceStub = {
-  getEffectiveDefault: vi.fn().mockResolvedValue(MODEL),
-  assertSelectable: vi.fn(),
-  isSelectable: vi.fn().mockReturnValue(true),
-  isSelectableWith: vi.fn().mockReturnValue(true),
+  chooseTurnModel: vi.fn().mockResolvedValue({
+    kind: 'resolved',
+    model: MODEL,
+    resolution: { requested: null, resolved: MODEL },
+  }),
+  reasoningFor: vi.fn().mockResolvedValue(null),
 } as unknown as ModelPreferenceService;
 const byokStub = {
   getApiKey: vi.fn().mockResolvedValue(null),

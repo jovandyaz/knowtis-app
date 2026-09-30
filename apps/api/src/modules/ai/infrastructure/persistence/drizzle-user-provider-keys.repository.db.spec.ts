@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { validateEnv } from '../../../../config/env.config';
@@ -77,6 +77,30 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderKeysRepository', () => {
       iv: 'iv',
       authTag: 'tag',
     });
+  });
+
+  it('lists providers oldest key first', async () => {
+    await seedAnthropic();
+    await repo.upsert(
+      USER_ID,
+      'openrouter',
+      { ciphertext: 'ct', iv: 'iv', authTag: 'tag' },
+      'sk-or-v1'
+    );
+    await db
+      .update(userProviderKeys)
+      .set({ createdAt: sql`now() - interval '1 day'` })
+      .where(
+        and(
+          eq(userProviderKeys.userId, USER_ID),
+          eq(userProviderKeys.provider, 'openrouter')
+        )
+      );
+
+    expect(await repo.getEnabledProviders(USER_ID)).toEqual([
+      'openrouter',
+      'anthropic',
+    ]);
   });
 
   it('upsert replaces the same provider row', async () => {

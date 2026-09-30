@@ -426,7 +426,8 @@
       "permissionDenied": "No tienes permiso para hacer eso.",
       "noteNotFound": "La nota ya no existe.",
       "invalidProposal": "No se pudo procesar esa solicitud. Inténtalo de nuevo.",
-      "emailNotVerified": "Verifica tu correo electrónico antes de compartir esta nota."
+      "emailNotVerified": "Verifica tu correo electrónico antes de compartir esta nota.",
+      "modelUnavailable": "Este modelo no está disponible en tu plan. Elige otro en el menú de modelos."
     },
     "copilot": {
       "tab": "Copilot",

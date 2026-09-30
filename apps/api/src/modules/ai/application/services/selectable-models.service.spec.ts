@@ -10,6 +10,7 @@ import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-model
 import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
@@ -780,6 +781,77 @@ describe('SelectableModelsService', () => {
           new Set(['anthropic'])
         )
       ).toBe(SYSTEM_DEFAULT);
+    });
+  });
+
+  describe('catalogFor', () => {
+    const INTENTS = {
+      fast: 'openrouter:minimax/minimax-m2.5',
+      balanced: 'openrouter:deepseek/deepseek-v3.2',
+      powerful: 'openrouter:moonshotai/kimi-k2.5',
+    } as const;
+
+    it('scopes a free caller to the platform intent models', () => {
+      const catalog = makeOpenService().catalogFor(
+        createExecutionContext({ tier: 'free' }),
+        INTENTS
+      );
+      expect(catalog.models.map((m) => m.model.id)).toEqual(
+        Object.values(INTENTS)
+      );
+    });
+
+    it('scopes a byok caller to their own key and routes the intents over it', () => {
+      const catalog = makeOpenService([
+        createCatalogModel({ id: PROMOTED_ID, tier: 'balanced' }),
+      ]).catalogFor(
+        createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
+        INTENTS
+      );
+      expect(
+        catalog.models.every((m) => m.model.id.startsWith('anthropic:'))
+      ).toBe(true);
+      expect(catalog.intents).toContainEqual({
+        intent: 'balanced',
+        available: true,
+        modelId: 'anthropic:claude-sonnet-5',
+        substituted: false,
+      });
+    });
+
+    it('lets a curated id win over a promoted row with the same id', () => {
+      const offered = makeOpenService([
+        createCatalogModel({
+          id: 'anthropic:claude-sonnet-5',
+          label: 'Shadow',
+        }),
+      ]).offered();
+      expect(
+        offered.filter((m) => m.id === 'anthropic:claude-sonnet-5')
+      ).toEqual([expect.objectContaining({ label: 'Sonnet 5' })]);
+    });
+
+    it('reads the effort ladder of a chain model outside the tier', () => {
+      expect(
+        makeOpenService().reasoningOf('openai:gpt-5.6-sol', new Set(['openai']))
+          ?.levels
+      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    });
+
+    it('trims the ladder of a platform-billed model to the free slice', () => {
+      expect(
+        makeOpenService().reasoningOf('anthropic:claude-sonnet-5', NO_BYOK)
+          ?.levels
+      ).toEqual(['low', 'medium', 'high']);
+    });
+
+    it('gives a model reached only over an OpenRouter key the curated ladder of the same model', () => {
+      expect(
+        makeOpenService().reasoningOf(
+          'openrouter:anthropic/claude-opus-5',
+          new Set(['openrouter'])
+        )?.levels
+      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     });
   });
 });

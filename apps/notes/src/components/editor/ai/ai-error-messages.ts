@@ -1,6 +1,7 @@
 import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AGENT_TURN_ERROR_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
 } from '@knowtis/shared-types';
 
@@ -27,7 +28,8 @@ type AIErrorMessageKey =
   | 'ai.errors.permissionDenied'
   | 'ai.errors.noteNotFound'
   | 'ai.errors.invalidProposal'
-  | 'ai.errors.emailNotVerified';
+  | 'ai.errors.emailNotVerified'
+  | 'ai.errors.modelUnavailable';
 
 export const GENERIC_AI_ERROR_KEY: AIErrorMessageKey = 'ai.errors.generic';
 
@@ -58,6 +60,7 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AGENT_INVALID_PROPOSAL: 'ai.errors.invalidProposal',
   [AGENT_EMAIL_NOT_VERIFIED_CODE]: 'ai.errors.emailNotVerified',
   [AI_QUOTA_EXHAUSTED_CODE]: 'ai.errors.rateLimited',
+  [AI_MODEL_UNAVAILABLE_CODE]: 'ai.errors.modelUnavailable',
 };
 
 /** Maps a server/client AI error code to an i18n key, falling back to the generic message. */

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createExecutionContext } from '../../testing/create-execution-context';
-import { billingFor, PLATFORM_BILLING } from './ai-execution-context';
+import {
+  billingFor,
+  billingMatchesTier,
+  PLATFORM_BILLING,
+} from './ai-execution-context';
 
 function keyedOn(provider: 'anthropic') {
   return createExecutionContext({ tier: 'byok', byokProviders: [provider] });
@@ -26,4 +30,32 @@ describe('billingFor', () => {
     const platform = keyedOn('anthropic');
     expect(billingFor(platform, 'mistral')).toBe(platform);
   });
+});
+
+describe('billingMatchesTier', () => {
+  it('holds for a byok-tier turn on the caller key', () => {
+    expect(
+      billingMatchesTier(
+        createExecutionContext({
+          tier: 'byok',
+          billing: { kind: 'byok', provider: 'anthropic' },
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('fails for a byok-tier turn the platform would pay for', () => {
+    expect(
+      billingMatchesTier(
+        createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] })
+      )
+    ).toBe(false);
+  });
+
+  it.each(['anonymous', 'free'] as const)(
+    'holds for a platform-billed %s turn',
+    (tier) => {
+      expect(billingMatchesTier(createExecutionContext({ tier }))).toBe(true);
+    }
+  );
 });

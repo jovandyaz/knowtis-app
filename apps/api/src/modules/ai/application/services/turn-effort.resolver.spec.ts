@@ -10,6 +10,7 @@ import type {
 import { createExecutionContext } from '../../testing/create-execution-context';
 import type { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
+import { SelectableModelsService } from './selectable-models.service';
 import { TurnEffortResolver } from './turn-effort.resolver';
 
 const USER = 'user-1';
@@ -323,32 +324,21 @@ describe('TurnEffortResolver', () => {
   describe('with the real model preference service', () => {
     function makeReal() {
       const byok = { enabledProviders: vi.fn() };
-      const list = (
-        _systemDefault: string,
-        _configured: ReadonlySet<string>,
-        byokProviders: ReadonlySet<string>
-      ) =>
-        byokProviders.has(providerOf(DIRECT_MODEL))
-          ? [
-              {
-                id: DIRECT_MODEL,
-                reasoning: {
-                  levels: ['low', 'medium', 'high'],
-                  mandatory: false,
-                },
-              },
-            ]
-          : [];
+      const selectable = new SelectableModelsService(
+        {
+          isSupported: () => true,
+          getPricing: () => undefined,
+          getContextWindow: () => undefined,
+        },
+        { isModelAvailable: () => false } as never,
+        { snapshot: () => [] } as never
+      );
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),
-        getDefaultModel: vi.fn().mockResolvedValue(MODEL),
-        getConfiguredModelIds: vi.fn().mockResolvedValue(new Set([MODEL])),
-        getFreeTierMaxOutputCostPerToken: vi.fn().mockResolvedValue(0.001),
-        getIntentModels: vi.fn().mockResolvedValue({}),
       };
       const modelPreference = new ModelPreferenceService(
         {} as never,
-        { list } as never,
+        selectable,
         aiConfig as never,
         byok as never
       );

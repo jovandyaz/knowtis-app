@@ -291,6 +291,40 @@ describe('AgentGateway', () => {
     );
   });
 
+  it('emits the model resolution on agent:done', async () => {
+    const modelResolution = {
+      requested: null,
+      resolved: 'anthropic:claude-sonnet-5',
+    };
+    const execute = vi.fn(
+      async (_input: unknown, cb: { onDone: (usage: unknown) => void }) => {
+        cb.onDone({
+          inputTokens: 1,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-5',
+          costUsd: 0,
+          sources: [],
+          knownNotes: [],
+          stopReason: 'completed',
+          modelResolution,
+        });
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:done',
+      expect.objectContaining({ modelResolution })
+    );
+  });
+
   it('emits agent:conversation when the handler announces a created conversation', async () => {
     const execute = vi.fn(
       async (

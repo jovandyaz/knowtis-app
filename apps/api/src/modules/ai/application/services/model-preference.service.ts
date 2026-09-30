@@ -5,15 +5,18 @@ import {
   Injectable,
 } from '@nestjs/common';
 
-import { providerOf } from '@knowtis/ai-gateway';
-import {
-  DEFAULT_MODEL_INTENT,
-  type AIPreferences,
-  type ModelReasoning,
-  type SelectableModel,
-  type UpdateAiPreferencesInput,
+import type {
+  AIPreferences,
+  ModelReasoning,
+  SelectableModel,
+  UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import {
+  chooseModel,
+  type ModelChoice,
+} from '../../domain/model-catalog/model-choice';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -68,34 +71,29 @@ export class ModelPreferenceService {
     );
   }
 
-  /**
-   * Declared reasoning of a model offered to a caller holding keys for
-   * `byokProviders`, trimmed to what their tier may spend. A ladder is a
-   * capability statement, so it reads the offered union itself, never the
-   * anonymous menu view: a chain candidate the upsell menu hides still declares
-   * what it can do. Null when unoffered or undeclared.
-   */
   async reasoningFor(
     modelId: string,
     byokProviders: ReadonlySet<string>
   ): Promise<ModelReasoning | null> {
-    const models = await this.offeredModels(byokProviders);
-    return models.find((model) => model.id === modelId)?.reasoning ?? null;
+    return this.selectable.reasoningOf(modelId, byokProviders);
   }
 
-  async isSelectableWith(
-    modelId: string,
-    byokProviders: ReadonlySet<string>
-  ): Promise<boolean> {
-    const [configured, ceiling] = await Promise.all([
-      this.aiConfig.getConfiguredModelIds(),
-      this.aiConfig.getFreeTierMaxOutputCostPerToken(),
+  async chooseTurnModel(
+    execution: AiExecutionContext,
+    request: { explicit?: string; pinned?: string | null }
+  ): Promise<ModelChoice> {
+    const [platformIntents, settings] = await Promise.all([
+      this.aiConfig.getIntentModels(),
+      this.settings.getSettings(execution.subject.userId),
     ]);
-    return this.selectable.isSelectable(
-      modelId,
-      configured,
-      byokProviders,
-      ceiling
+    return chooseModel(
+      this.selectable.catalogFor(execution, platformIntents),
+      {
+        ...request,
+        preferredModel: settings.preferredModel,
+        preferredIntent: settings.preferredIntent,
+      },
+      this.selectable.factsFor(execution.byokProviders, platformIntents)
     );
   }
 
@@ -103,46 +101,6 @@ export class ModelPreferenceService {
     const { preferredModel, preferredIntent, ghostTextEnabled } =
       await this.settings.getSettings(userId);
     return { preferredModel, preferredIntent, ghostTextEnabled };
-  }
-
-  async getEffectiveDefault(
-    userId: string,
-    byokProviders?: ReadonlySet<string>
-  ): Promise<string> {
-    const providers =
-      byokProviders ?? (await this.byok.enabledProviders(userId));
-    const [offered, ceiling] = await Promise.all([
-      this.aiConfig.getConfiguredModelIds(),
-      this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-    ]);
-    const { preferredModel, preferredIntent } =
-      await this.settings.getSettings(userId);
-    // Only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
-    if (
-      preferredModel &&
-      providers.has(providerOf(preferredModel)) &&
-      this.selectable.isSelectable(preferredModel, offered, providers, ceiling)
-    ) {
-      return preferredModel;
-    }
-    const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
-    // Only an intent the user stored may steer their default onto their own
-    // key; the implicit fallback must never move billing without an opt-in.
-    const byokPick = preferredIntent
-      ? this.selectable.firstOfTier(preferredIntent, offered, providers)
-      : null;
-    // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
-    if (
-      byokPick &&
-      this.selectable.isSelectable(byokPick, offered, providers, ceiling)
-    ) {
-      return byokPick;
-    }
-    const configured = await this.aiConfig.getIntentModel(intent);
-    if (this.selectable.isSelectable(configured, offered, providers, ceiling)) {
-      return configured;
-    }
-    return await this.aiConfig.getDefaultModel();
   }
 
   async setUserPreferences(

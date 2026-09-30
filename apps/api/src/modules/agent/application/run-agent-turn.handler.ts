@@ -18,6 +18,7 @@ import {
   type AiQuota,
   type MessageKind,
   type MessageStopReason,
+  type ModelResolution,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 
@@ -45,12 +46,14 @@ import {
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
   billingFor,
+  billingMatchesTier,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
 import {
   segmentLimits,
   type SegmentLimits,
 } from '../../ai/domain/execution-context/segment-policy';
+import { MODEL_CHOICE } from '../../ai/domain/model-catalog/model-choice';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -168,6 +171,8 @@ export interface RunAgentTurnCallbacks {
     /** The turn stopped at a checkpoint and the caller has a message left to continue it. */
     continuable: boolean;
     conversationId?: string;
+    /** Which model the turn asked for and which served it. */
+    modelResolution?: ModelResolution;
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
@@ -180,6 +185,11 @@ export interface RunAgentTurnCallbacks {
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
+
+interface ResolvedModel {
+  readonly model: string;
+  readonly resolution: ModelResolution;
+}
 
 interface TurnLoopContext {
   readonly execution: AiExecutionContext;
@@ -752,9 +762,9 @@ export class RunAgentTurnHandler {
     // The guards, the memory embedding and the budget gate all charge the
     // turn's payer, so the model and its billing must be resolved before any
     // of them; a BYOK turn also skips the daily token/cost ceiling.
-    let model: string | null;
+    let resolved: ResolvedModel | null;
     try {
-      model = await this.resolveModel(
+      resolved = await this.resolveModel(
         input,
         persistence?.conversationId,
         callbacks,
@@ -769,9 +779,10 @@ export class RunAgentTurnHandler {
       callbacks.onError(AIErrors.providerError('Model resolution failed'));
       return;
     }
-    if (model === null) {
+    if (resolved === null) {
       return;
     }
+    const { model } = resolved;
     const modelResult = AIModel.create(model, this.modelCatalog);
     if (modelResult.isErr()) {
       callbacks.onError(modelResult.error);
@@ -779,6 +790,16 @@ export class RunAgentTurnHandler {
     }
 
     const execution = billingFor(input.execution, providerOf(model));
+    if (!billingMatchesTier(execution)) {
+      this.logger.error({
+        event: 'agent.billing.tier_mismatch',
+        userId,
+        tier: execution.tier,
+        model,
+      });
+      callbacks.onError(AIErrors.modelUnavailable('not_in_tier', null));
+      return;
+    }
     let byokApiKey: string | null = null;
     if (execution.billing.kind === 'byok') {
       byokApiKey = await this.byok.getApiKey(
@@ -983,6 +1004,7 @@ export class RunAgentTurnHandler {
               ...(persistence
                 ? { conversationId: persistence.conversationId }
                 : {}),
+              modelResolution: resolved.resolution,
             });
             return;
           }
@@ -1260,40 +1282,37 @@ export class RunAgentTurnHandler {
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
     resuming: boolean
-  ): Promise<string | null> {
-    const { byokProviders } = input.execution;
+  ): Promise<ResolvedModel | null> {
     const { userId } = input.execution.subject;
-    if (input.model) {
-      if (
-        !(await this.modelPreference.isSelectableWith(
-          input.model,
-          byokProviders
-        ))
-      ) {
-        this.logger.warn({
-          event: 'ai.model.access_denied',
-          model: input.model,
-          userId,
-        });
-        callbacks.onError(AIErrors.invalidModel(input.model));
-        return null;
-      }
-      if (conversationId) {
-        await this.conversations.setModel(conversationId, userId, input.model);
-      }
-      return input.model;
+    const choice = await this.modelPreference.chooseTurnModel(input.execution, {
+      ...(input.model ? { explicit: input.model } : {}),
+      pinned: resuming ? (input.conversationModel ?? null) : null,
+    });
+    if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
+      this.logger.warn({
+        event: 'ai.model.unavailable',
+        userId,
+        tier: input.execution.tier,
+        reason: choice.reason,
+        ...(input.model ? { model: input.model } : {}),
+      });
+      callbacks.onError(
+        AIErrors.modelUnavailable(choice.reason, choice.suggestedModel)
+      );
+      return null;
     }
-    const stored = input.conversationModel ?? null;
-    // On a HITL resume the stored model is the only record of which model served
-    // the first half of the turn, so it wins over the default while selectable.
-    if (
-      stored &&
-      resuming &&
-      (await this.modelPreference.isSelectableWith(stored, byokProviders))
-    ) {
-      return stored;
+    if (choice.resolution.fallback) {
+      this.logger.warn({
+        event: 'ai.model.fallback',
+        userId,
+        tier: input.execution.tier,
+        ...choice.resolution.fallback,
+      });
     }
-    return this.modelPreference.getEffectiveDefault(userId, byokProviders);
+    if (input.model && conversationId) {
+      await this.conversations.setModel(conversationId, userId, input.model);
+    }
+    return { model: choice.model, resolution: choice.resolution };
   }
 
   private async recordUsageSafe(

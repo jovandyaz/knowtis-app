@@ -25,6 +25,12 @@ describe('aiErrorMessageKey', () => {
     );
   });
 
+  it('maps an unavailable model to its own copy', () => {
+    expect(aiErrorMessageKey('AI_MODEL_UNAVAILABLE')).toBe(
+      'ai.errors.modelUnavailable'
+    );
+  });
+
   it('falls back to the generic message for an unknown code', () => {
     expect(aiErrorMessageKey('SOMETHING_ELSE')).toBe('ai.errors.generic');
   });

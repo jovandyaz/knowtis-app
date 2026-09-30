@@ -7,10 +7,11 @@ import {
   type SelectableModel,
 } from '@knowtis/shared-types';
 
+import { createExecutionContext } from '../../testing/create-execution-context';
 import { ModelPreferenceService } from './model-preference.service';
+import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-4-20250514';
-const OPEN_FALLBACK = 'openrouter:deepseek-mock';
 const INTENT_MODELS: Record<ModelIntent, string> = {
   fast: 'openrouter:fast-mock',
   balanced: SYSTEM_DEFAULT,
@@ -22,8 +23,7 @@ function make(
   selectable: string[],
   byokProviders: string[] = [],
   preferredIntent: ModelIntent | null = null,
-  intentModels: Record<ModelIntent, string> = INTENT_MODELS,
-  firstOfTier: (tier: ModelIntent) => string | null = () => null
+  intentModels: Record<ModelIntent, string> = INTENT_MODELS
 ) {
   const repo = {
     getSettings: vi.fn().mockResolvedValue({
@@ -45,7 +45,6 @@ function make(
       const hasKey = Boolean(providers?.has(id.split(':')[0]));
       return selectable.includes(id) || hasKey;
     },
-    firstOfTier: (tier: ModelIntent) => firstOfTier(tier),
     list: (
       _systemDefault: string,
       _configured: ReadonlySet<string>,
@@ -64,11 +63,6 @@ function make(
     getFreeTierMaxOutputCostPerToken: vi
       .fn()
       .mockResolvedValue(FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN),
-    getIntentModel: vi
-      .fn()
-      .mockImplementation((intent: ModelIntent) =>
-        Promise.resolve(intentModels[intent])
-      ),
     getIntentModels: vi.fn().mockResolvedValue(intentModels),
     getConfiguredModelIds: vi
       .fn()
@@ -88,6 +82,50 @@ function make(
     byok as never
   );
   return { svc, repo, aiConfig, byok, ceilingsSeen, selectableSvc };
+}
+
+function makeChooser(
+  settings: {
+    preferredModel?: string | null;
+    preferredIntent?: ModelIntent | null;
+  } = {}
+) {
+  const selectable = new SelectableModelsService(
+    {
+      isSupported: () => true,
+      getPricing: () => ({
+        inputCostPerToken: 0.000001,
+        outputCostPerToken: 0.000001,
+      }),
+      getContextWindow: () => ({ maxInputTokens: 1000 }),
+    },
+    {
+      isModelAvailable: (id: string) => id.startsWith('openrouter:'),
+    } as never,
+    { snapshot: () => [] } as never
+  );
+  const repo = {
+    getSettings: vi.fn().mockResolvedValue({
+      preferredModel: settings.preferredModel ?? null,
+      preferredIntent: settings.preferredIntent ?? null,
+      ghostTextEnabled: true,
+    }),
+    patchSettings: vi.fn().mockResolvedValue(undefined),
+  };
+  const aiConfig = {
+    getIntentModels: vi.fn().mockResolvedValue({
+      fast: 'openrouter:minimax/minimax-m2.5',
+      balanced: 'openrouter:deepseek/deepseek-v3.2',
+      powerful: 'openrouter:moonshotai/kimi-k2.5',
+    }),
+  };
+  const svc = new ModelPreferenceService(
+    repo as never,
+    selectable,
+    aiConfig as never,
+    { enabledProviders: vi.fn() } as never
+  );
+  return { svc, repo };
 }
 
 const USER = { id: 'u1' };
@@ -139,16 +177,6 @@ const FULL_LISTING: SelectableModel[] = [
 ];
 
 describe('ModelPreferenceService', () => {
-  it('effective default = system default when no preference', async () => {
-    const { svc } = make(null, [SYSTEM_DEFAULT]);
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-  });
-
-  it('effective default falls back to system when stored model is no longer selectable', async () => {
-    const { svc } = make('openai:retired-model', [SYSTEM_DEFAULT]);
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-  });
-
   it('setUserPreferences rejects an unselectable model', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
     await expect(
@@ -182,15 +210,6 @@ describe('ModelPreferenceService', () => {
     const ids = (await svc.listModels(USER)).map((m) => m.id);
     expect(ids.some((id) => id.startsWith('google:'))).toBe(true);
     expect(byok.enabledProviders).toHaveBeenCalledWith('u1', false);
-  });
-
-  it('effective default accepts a stored model unlocked by a BYOK key', async () => {
-    const { svc } = make(
-      'google:gemini-3.7-flash',
-      [SYSTEM_DEFAULT],
-      ['google']
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe('google:gemini-3.7-flash');
   });
 
   it('setUserPreferences accepts a model unlocked by a BYOK key', async () => {
@@ -245,90 +264,6 @@ describe('ModelPreferenceService', () => {
     expect(isSelectable).not.toHaveBeenCalled();
   });
 
-  it('effective default never validates the system default', async () => {
-    const { svc } = make(null, [], []);
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-  });
-
-  it('isSelectableWith reflects the underlying selectability check', async () => {
-    const { svc } = make(null, ['anthropic:claude-opus-5']);
-    await expect(
-      svc.isSelectableWith('anthropic:claude-opus-5', new Set())
-    ).resolves.toBe(true);
-  });
-
-  it('effective default resolves the intent through its ai_config key for a keyless caller', async () => {
-    const { svc, aiConfig } = make(
-      null,
-      [SYSTEM_DEFAULT, 'openrouter:deep-mock'],
-      [],
-      'powerful'
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
-    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('powerful');
-  });
-
-  it('effective default treats a null intent as the balanced default', async () => {
-    const { svc, aiConfig } = make(null, [SYSTEM_DEFAULT], [], null);
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('balanced');
-  });
-
-  it('effective default prefers a BYOK model of the intent tier over its ai_config key', async () => {
-    const { svc } = make(
-      null,
-      ['anthropic:claude-opus-5', 'openrouter:deep-mock'],
-      ['anthropic'],
-      'powerful',
-      INTENT_MODELS,
-      () => 'anthropic:claude-opus-5'
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe('anthropic:claude-opus-5');
-  });
-
-  it('effective default ignores the BYOK tier pick when the user never stored an intent', async () => {
-    const { svc } = make(
-      null,
-      [SYSTEM_DEFAULT],
-      ['anthropic'],
-      null,
-      INTENT_MODELS,
-      (tier) => (tier === 'balanced' ? 'anthropic:claude-haiku-4-5' : null)
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-  });
-
-  it('effective default keeps an explicit BYOK stored model above the intent', async () => {
-    const { svc, aiConfig } = make(
-      'openai:gpt-5.6',
-      ['openai:gpt-5.6', SYSTEM_DEFAULT],
-      ['openai'],
-      'fast'
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe('openai:gpt-5.6');
-    expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
-  });
-
-  it('effective default ignores a legacy non-BYOK stored model', async () => {
-    const { svc, aiConfig } = make(
-      OPEN_FALLBACK,
-      [OPEN_FALLBACK, SYSTEM_DEFAULT],
-      [],
-      null
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('balanced');
-  });
-
-  it('effective default falls through to the legacy cascade when the intent target is unselectable', async () => {
-    const { svc } = make(null, [SYSTEM_DEFAULT], [], 'powerful', {
-      fast: 'openrouter:not-selectable',
-      balanced: 'openrouter:not-selectable',
-      powerful: 'openrouter:not-selectable',
-    });
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-  });
-
   describe('anonymous sessions', () => {
     function makeWithListing() {
       const made = make(null, [SYSTEM_DEFAULT]);
@@ -378,56 +313,107 @@ describe('ModelPreferenceService', () => {
   });
 
   describe('reasoningFor', () => {
-    function makeWithListing() {
-      const made = make(null, [SYSTEM_DEFAULT]);
-      made.selectableSvc.list = () => FULL_LISTING;
-      return made;
-    }
-
-    it('reads the declaration from the same union listModels serves', async () => {
-      const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(INTENT_MODELS.fast, NO_KEYS)).toEqual({
-        levels: ['low', 'medium', 'high'],
+    it('reads the full ladder of a model on the caller key', async () => {
+      expect(
+        await makeChooser().svc.reasoningFor(
+          'anthropic:claude-sonnet-5',
+          new Set(['anthropic'])
+        )
+      ).toEqual({
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
         mandatory: false,
       });
     });
 
     it('returns null for an offered model with no declaration', async () => {
-      const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(SYSTEM_DEFAULT, NO_KEYS)).toBe(null);
+      expect(
+        await makeChooser().svc.reasoningFor(
+          'openrouter:deepseek/deepseek-v3.2',
+          NO_KEYS
+        )
+      ).toBe(null);
     });
 
     it('returns null for a model outside the offered union', async () => {
-      const { svc } = makeWithListing();
-      expect(await svc.reasoningFor('openai:not-offered', NO_KEYS)).toBe(null);
+      expect(
+        await makeChooser().svc.reasoningFor(
+          'openai:not-offered',
+          new Set(['openai'])
+        )
+      ).toBe(null);
     });
+  });
 
-    it('lists the offered union for the given key providers without reading the key store', async () => {
-      const { svc, byok, selectableSvc } = makeWithListing();
-      const list = vi.fn(() => FULL_LISTING);
-      selectableSvc.list = list;
-      const keyed = new Set(['google']);
-
-      await svc.reasoningFor(INTENT_MODELS.fast, keyed);
-
-      expect(byok.enabledProviders).not.toHaveBeenCalled();
-      expect(list).toHaveBeenCalledWith(
-        SYSTEM_DEFAULT,
-        expect.any(Set),
-        keyed,
-        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-        INTENT_MODELS
-      );
-    });
-
-    it('serves the declared ladder of an offered model the anonymous menu hides', async () => {
-      const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(CURATED_DIRECT_MODEL, NO_KEYS)).toEqual({
-        levels: ['low', 'medium', 'high'],
-        mandatory: false,
+  describe('chooseTurnModel', () => {
+    it('serves a byok caller their key intent, never the platform one', async () => {
+      await expect(
+        makeChooser().svc.chooseTurnModel(
+          createExecutionContext({
+            tier: 'byok',
+            byokProviders: ['anthropic'],
+          }),
+          {}
+        )
+      ).resolves.toMatchObject({
+        kind: 'resolved',
+        model: 'anthropic:claude-sonnet-5',
       });
-      const listed = (await svc.listModels(ANON)).map((m) => m.id);
-      expect(listed).not.toContain(CURATED_DIRECT_MODEL);
+    });
+
+    it('serves a free caller their stored intent', async () => {
+      await expect(
+        makeChooser({ preferredIntent: 'fast' }).svc.chooseTurnModel(
+          createExecutionContext({ tier: 'free' }),
+          {}
+        )
+      ).resolves.toMatchObject({ model: 'openrouter:minimax/minimax-m2.5' });
+    });
+
+    it('refuses an explicit model outside the tier', async () => {
+      await expect(
+        makeChooser().svc.chooseTurnModel(
+          createExecutionContext({ tier: 'free' }),
+          { explicit: 'anthropic:claude-opus-5' }
+        )
+      ).resolves.toEqual({
+        kind: 'unavailable',
+        reason: 'not_in_tier',
+        suggestedModel: 'openrouter:deepseek/deepseek-v3.2',
+      });
+    });
+
+    it("falls back a free caller's pinned open model to the platform intent and reports it", async () => {
+      await expect(
+        makeChooser().svc.chooseTurnModel(
+          createExecutionContext({ tier: 'free' }),
+          { pinned: 'openrouter:z-ai/glm-5.2' }
+        )
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: 'openrouter:deepseek/deepseek-v3.2',
+        resolution: {
+          requested: 'openrouter:z-ai/glm-5.2',
+          resolved: 'openrouter:deepseek/deepseek-v3.2',
+          fallback: {
+            reason: 'not_in_tier',
+            from: 'openrouter:z-ai/glm-5.2',
+            to: 'openrouter:deepseek/deepseek-v3.2',
+          },
+        },
+      });
+    });
+
+    it("refuses a free caller's pinned key-billed model rather than moving it onto the platform", async () => {
+      await expect(
+        makeChooser().svc.chooseTurnModel(
+          createExecutionContext({ tier: 'free' }),
+          { pinned: 'anthropic:claude-opus-5' }
+        )
+      ).resolves.toEqual({
+        kind: 'unavailable',
+        reason: 'key_removed',
+        suggestedModel: 'openrouter:deepseek/deepseek-v3.2',
+      });
     });
   });
 
@@ -443,23 +429,6 @@ describe('ModelPreferenceService', () => {
       );
       return made;
     }
-
-    it('passes the resolved ceiling when picking the effective default', async () => {
-      const { svc, ceilingsSeen } = withCeiling();
-
-      await svc.getEffectiveDefault('u1');
-
-      expect(ceilingsSeen.length).toBeGreaterThan(0);
-      expect(ceilingsSeen.every((c) => c === CONFIGURED_CEILING)).toBe(true);
-    });
-
-    it('passes the resolved ceiling when validating a turn', async () => {
-      const { svc, ceilingsSeen } = withCeiling();
-
-      await svc.isSelectableWith(SYSTEM_DEFAULT, new Set());
-
-      expect(ceilingsSeen).toContain(CONFIGURED_CEILING);
-    });
 
     it('passes the resolved ceiling when storing a preference', async () => {
       const { svc, ceilingsSeen } = withCeiling();

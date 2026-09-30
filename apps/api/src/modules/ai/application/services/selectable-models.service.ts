@@ -13,39 +13,40 @@ import {
   type SelectableModel,
 } from '@knowtis/shared-types';
 
+import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
 import {
   accessFor,
   type AccessCandidate,
 } from '../../domain/model-catalog/model-access.policy';
+import type { ModelFacts } from '../../domain/model-catalog/model-choice';
 import {
   CURATED_MODEL_IDS,
   CURATED_MODELS,
-  type CuratedModel,
 } from '../../domain/model-catalog/selectable-models.catalog';
+import {
+  routeReasoning,
+  tierCatalog,
+  type OfferedModel,
+  type TierCatalog,
+} from '../../domain/model-catalog/tier-catalog';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const NO_BYOK: ReadonlySet<string> = new Set();
 
-interface OfferedModel extends CuratedModel {
-  description?: string;
-}
-
 /** The ladder this caller may pick from — the model's own when the turn bills their key, else the server-billed slice — or undefined when none survives. */
 function offeredReasoning(
-  model: OfferedModel,
+  reasoning: ModelReasoning | undefined,
   billedToUser: boolean
 ): ModelReasoning | undefined {
-  if (!model.reasoning) {
+  if (!reasoning) {
     return undefined;
   }
-  const levels = billedToUser
-    ? model.reasoning.levels
-    : freeLevels(model.reasoning.levels);
+  const levels = billedToUser ? reasoning.levels : freeLevels(reasoning.levels);
   return levels.length === 0
     ? undefined
-    : { levels, mandatory: model.reasoning.mandatory };
+    : { levels, mandatory: reasoning.mandatory };
 }
 
 @Injectable()
@@ -56,20 +57,9 @@ export class SelectableModelsService {
     private readonly promotedModels: PromotedModelsCache
   ) {}
 
-  /**
-   * What the product offers: every promoted model, the curated ones the running
-   * config points at, and the curated models of each provider the caller brings
-   * a BYOK key for. The rest stay seeds for defaults and validation.
-   */
-  private catalogUnion(
-    configured: ReadonlySet<string>,
-    byokProviders: ReadonlySet<string>
-  ): readonly OfferedModel[] {
+  offered(): readonly OfferedModel[] {
     return [
-      ...CURATED_MODELS.filter(
-        (model) =>
-          configured.has(model.id) || byokProviders.has(providerOf(model.id))
-      ),
+      ...CURATED_MODELS,
       // Code wins entirely for a duplicate id: a promoted model can never
       // rename, re-tier, re-describe, re-price or resize a curated one —
       // CompositeModelCatalog.find() applies the same exclusion.
@@ -85,6 +75,82 @@ export class SelectableModelsService {
           ...(promoted.reasoning ? { reasoning: promoted.reasoning } : {}),
         })),
     ];
+  }
+
+  catalogFor(
+    execution: Pick<AiExecutionContext, 'tier' | 'policy' | 'byokProviders'>,
+    platformIntents: Readonly<Record<ModelIntent, string>>
+  ): TierCatalog {
+    return tierCatalog({
+      tier: execution.tier,
+      scope: execution.policy.catalog,
+      heldProviders: [...execution.byokProviders],
+      platformIntents,
+      offered: this.offered(),
+      isSupported: (id) => this.catalog.isSupported(id),
+      isPlatformRoutable: (id) => this.registry.isModelAvailable(id),
+    });
+  }
+
+  factsFor(
+    byokProviders: ReadonlySet<string>,
+    platformIntents: Readonly<Record<ModelIntent, string>>
+  ): ModelFacts {
+    const platformIntentIds = new Set(Object.values(platformIntents));
+    const openTier = new Set(
+      this.offered()
+        .filter((model) => model.tier === 'open')
+        .map((model) => model.id)
+    );
+    return {
+      heldProviders: byokProviders,
+      isSupported: (id) => this.catalog.isSupported(id),
+      isPlatformBilled: (id) =>
+        platformIntentIds.has(id) ||
+        (openTier.has(id) && this.registry.isModelAvailable(id)),
+    };
+  }
+
+  /**
+   * A capability statement, so it reads every offered model, not the caller's
+   * tier view: a failover candidate outside the tier still declares its ladder,
+   * and a model reached only through a BYOK route reads the curated ladder of
+   * the same canonical model.
+   */
+  reasoningOf(
+    modelId: string,
+    byokProviders: ReadonlySet<string>
+  ): ModelReasoning | null {
+    const offered = this.offered();
+    const billedToUser = byokProviders.has(providerOf(modelId));
+    if (
+      !this.catalog.isSupported(modelId) ||
+      !(this.registry.isModelAvailable(modelId) || billedToUser)
+    ) {
+      return null;
+    }
+    const listed = offered.find((m) => m.id === modelId);
+    const reasoning = listed
+      ? listed.reasoning
+      : routeReasoning(modelId, offered);
+    return offeredReasoning(reasoning, billedToUser) ?? null;
+  }
+
+  /**
+   * What the product offers: every promoted model, the curated ones the running
+   * config points at, and the curated models of each provider the caller brings
+   * a BYOK key for. The rest stay seeds for defaults and validation.
+   */
+  private catalogUnion(
+    configured: ReadonlySet<string>,
+    byokProviders: ReadonlySet<string>
+  ): readonly OfferedModel[] {
+    return this.offered().filter(
+      (model) =>
+        !CURATED_MODEL_IDS.has(model.id) ||
+        configured.has(model.id) ||
+        byokProviders.has(providerOf(model.id))
+    );
   }
 
   private invocable(
@@ -148,7 +214,7 @@ export class SelectableModelsService {
       .filter((m) => this.invocable(m, byokProviders))
       .map((m) => {
         const billedToUser = byokProviders.has(providerOf(m.id));
-        const reasoning = offeredReasoning(m, billedToUser);
+        const reasoning = offeredReasoning(m.reasoning, billedToUser);
         const servesIntent = intentModels
           ? MODEL_INTENTS.find((intent) => intentModels[intent] === m.id)
           : undefined;
