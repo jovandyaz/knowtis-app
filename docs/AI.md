@@ -735,14 +735,12 @@ All four AI paths emit OpenTelemetry spans consumed by Langfuse (see `modules/ob
 
 Anthropic caching is a **prefix match**: the request renders as `tools → system → messages`, and a `cacheControl: { type: 'ephemeral' }` breakpoint (sent via AI SDK `providerOptions`, 5-minute TTL) caches everything up to that point. Cache reads bill at ~0.1× the input price; cache writes at 1.25×. Non-Anthropic models always receive plain strings — the helpers in `anthropic-cache.ts` are no-ops for them.
 
-**Agent path (always on, except during a BYOK turn).** `AiSdkAgentOrchestrator` places two breakpoints per turn:
+**Agent path (always on).** `AiSdkAgentOrchestrator` places two breakpoints per turn:
 
 - on the **system message** (`cacheableInstructions`, `anthropic-cache.ts`) — caches the tool definitions + system prompt prefix
 - on the **last conversation message** (`withLastMessageCache`) — caches the entire prefix including history, so each loop step and each follow-up turn re-reads instead of re-billing the whole conversation
 
 Cache read/write tokens from `usage.inputTokenDetails` are carried on `AgentTurnUsage` and priced by `TokenUsage.create` (Anthropic cache rates from the model catalog, with 0.1×/1.25× fallbacks), so `costUsd` no longer over-bills cache reads at the full input price.
-
-**BYOK turns never cache**: cache writes bill the 1.25× premium to the key owner's Anthropic account, and we don't silently charge users a premium. BYOK caching would need a separate per-user opt-in.
 
 **Minimum cacheable prefix.** Anthropic ignores breakpoints below a per-model minimum (≈1024–4096 tokens depending on the model). Breakpoints are free, so an under-minimum turn 1 is harmless — multi-turn conversations clear the minimum quickly. This is also why **single-shot completions** (`AISDKProvider`, ~60–150-token rendered prompts) still carry the breakpoint but typically don't cache.
 
@@ -851,7 +849,7 @@ Names and defaults from `apps/api/src/config/env.config.ts` (Zod schema, validat
 | BYOK ([BYOK](#bring-your-own-key-byok))                                                                      | `BYOK_ENCRYPTION_KEY`, a non-anonymous account, and (to store a new key) a verified email                                                                                                      |
 | Gray-zone injection classifier, retrieved-note body scanning                                                 | Always on ([Prompt Injection Defense](#prompt-injection-defense))                                                                                                                              |
 | Replayed-history injection enforcement                                                                       | Always on ([Replayed history input guard](#replayed-history-input-guard))                                                                                                                      |
-| Anthropic prompt caching on the agent path                                                                   | Always on except for a BYOK turn ([Anthropic Prompt Caching](#anthropic-prompt-caching))                                                                                                       |
+| Anthropic prompt caching on the agent path                                                                   | Always on ([Anthropic Prompt Caching](#anthropic-prompt-caching))                                                                                                                              |
 | Agent health report + webhook alert                                                                          | Daily cron always runs; the webhook needs `AI_ALERT_WEBHOOK_URL` ([Agent health alerts](#agent-health-alerts))                                                                                 |
 | Daily-budget guardrails (cost reservation, BYOK cost ceiling, global spend breaker, per-IP anonymous budget) | Always enforced ([Rate Limiting](#rate-limiting), [Billing & rate limiting](#billing--rate-limiting))                                                                                          |
 | Daily OpenRouter catalog sync                                                                                | Always runs ([Open-Tier Model Catalog](#open-tier-model-catalog))                                                                                                                              |
