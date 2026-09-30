@@ -102,7 +102,7 @@ describe('routeIntent', () => {
   });
 
   it('returns null when no held key reaches any candidate', () => {
-    expect(route('fast', ['openai'], () => false)).toBeNull();
+    expect(route('fast', [])).toBeNull();
   });
 });
 

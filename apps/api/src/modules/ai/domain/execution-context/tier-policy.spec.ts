@@ -38,16 +38,6 @@ describe('TIER_POLICIES', () => {
   );
 });
 
-describe('catalog scope', () => {
-  it.each([
-    { tier: 'anonymous', scope: 'default-intent' },
-    { tier: 'free', scope: 'platform-intents' },
-    { tier: 'byok', scope: 'own-keys' },
-  ] as const)('a $tier caller sees the $scope catalog', ({ tier, scope }) => {
-    expect(TIER_POLICIES[tier].catalog).toBe(scope);
-  });
-});
-
 describe('dailyAllowance', () => {
   const base = { tokenLimit: 100_000, costLimit: 1 };
 

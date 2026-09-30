@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ByokProvider, ModelIntent } from '@knowtis/shared-types';
+import {
+  MODEL_INTENTS,
+  type ByokProvider,
+  type ModelIntent,
+} from '@knowtis/shared-types';
 
 import { pricedAtSnapshot } from '../../testing/priced-at-snapshot';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
@@ -16,6 +20,11 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
   balanced: 'openrouter:deepseek/deepseek-v3.2',
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 };
+const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
+const SONNET_LADDER = {
+  levels: ['low', 'medium', 'high'],
+  mandatory: false,
+} as const;
 const OPUS_LADDER = {
   levels: ['low', 'medium', 'high', 'xhigh', 'max'],
   mandatory: false,
@@ -29,7 +38,9 @@ const offered = (
 
 const OFFERED: OfferedModel[] = [
   offered('anthropic:claude-haiku-4-5', 'fast'),
-  offered('anthropic:claude-sonnet-5', 'balanced'),
+  offered('anthropic:claude-sonnet-5', 'balanced', {
+    reasoning: SONNET_LADDER,
+  }),
   offered('anthropic:claude-opus-5', 'powerful', { reasoning: OPUS_LADDER }),
   offered('openrouter:minimax/minimax-m2.5', 'open'),
   offered('openrouter:deepseek/deepseek-v3.2', 'open'),
@@ -43,6 +54,7 @@ function catalogFor(
     heldProviders?: readonly ByokProvider[];
     platformIntents?: Record<ModelIntent, string>;
     offered?: readonly OfferedModel[];
+    isSupported?: (id: string) => boolean;
     isPlatformRoutable?: (id: string) => boolean;
   } = {}
 ) {
@@ -52,7 +64,7 @@ function catalogFor(
     heldProviders: options.heldProviders ?? [],
     platformIntents: options.platformIntents ?? PLATFORM_INTENTS,
     offered: options.offered ?? OFFERED,
-    isSupported: pricedAtSnapshot,
+    isSupported: options.isSupported ?? pricedAtSnapshot,
     isPlatformRoutable:
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
   });
@@ -124,7 +136,20 @@ describe('tierCatalog', () => {
     });
   });
 
-  it('never lists a platform intent model to a key holder', () => {
+  it('marks a platform intent unavailable when the catalog stops pricing its model', () => {
+    const catalog = catalogFor('free', {
+      isSupported: (id) => pricedAtSnapshot(id) && id !== PLATFORM_INTENTS.fast,
+    });
+    expect(intentModelOf(catalog, 'fast')).toBeNull();
+    expect(ids(catalog)).not.toContain(PLATFORM_INTENTS.fast);
+    expect(catalog.intents).toContainEqual({
+      intent: 'fast',
+      available: false,
+      reason: 'no_route',
+    });
+  });
+
+  it('lists a key holder only the models its keys serve, billed to the key', () => {
     const catalog = catalogFor('byok', { heldProviders: ['anthropic'] });
     expect(ids(catalog)).toEqual([
       'anthropic:claude-haiku-4-5',
@@ -159,6 +184,33 @@ describe('tierCatalog', () => {
       },
       servesIntent: 'balanced',
     });
+  });
+
+  it('lists the platform intent models an OpenRouter key serves as plain models, never as intent picks', () => {
+    const catalog = catalogFor('byok', { heldProviders: ['openrouter'] });
+    expect(
+      catalog.models
+        .filter((scoped) => PLATFORM_INTENT_IDS.includes(scoped.model.id))
+        .map((scoped) => [scoped.model.id, scoped.servesIntent])
+    ).toEqual(PLATFORM_INTENT_IDS.map((id) => [id, undefined]));
+  });
+
+  it('never falls back to a platform model when no held key serves an intent', () => {
+    const catalog = catalogFor('byok', {
+      heldProviders: ['openai'],
+      isSupported: (id) => pricedAtSnapshot(id) && !id.startsWith('openai:'),
+    });
+    expect(catalog.intents).toEqual(
+      MODEL_INTENTS.map((intent) => ({
+        intent,
+        available: false,
+        reason: 'no_route',
+      }))
+    );
+    expect(
+      ids(catalog).filter((id) => PLATFORM_INTENT_IDS.includes(id))
+    ).toEqual([]);
+    expect(catalog.billing).toBe('key');
   });
 
   it('gives an OpenRouter route of a curated model that model’s effort ladder', () => {

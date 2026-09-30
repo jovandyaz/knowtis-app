@@ -120,7 +120,6 @@ export function effectivePrimary(
   return held[0] ?? null;
 }
 
-/** The primary provider first, then the other held keys, a vendor's own key before OpenRouter. */
 function routeOrder(
   held: readonly ByokProvider[],
   primary: ByokProvider | null
