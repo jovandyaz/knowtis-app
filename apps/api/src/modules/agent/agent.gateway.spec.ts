@@ -3027,6 +3027,85 @@ describe('AgentGateway', () => {
         ]);
       });
 
+      it.each([
+        [
+          'settling',
+          'settle',
+          (async (_input, cb) => {
+            cb.onModelStart?.();
+            throw new Error(FAILURE);
+          }) as Execute,
+        ],
+        [
+          'releasing',
+          'release',
+          (async () => {
+            throw new Error(FAILURE);
+          }) as Execute,
+        ],
+      ] as const)(
+        'answers the failure itself and frees the conversation when %s the turn claim throws',
+        async (_step, method, failing) => {
+          const log = failureLog();
+          const warn = vi
+            .spyOn(Logger.prototype, 'warn')
+            .mockImplementation(() => undefined);
+          vi.spyOn(TurnClaimService.prototype, method).mockRejectedValue(
+            new Error('redis gone')
+          );
+          const redis = createInMemoryClaimRedis();
+          const gateway = makeGateway({
+            handler: { execute: vi.fn<Execute>(failing) },
+            redis,
+          });
+          const client = makeClient('u1');
+
+          await gateway.handleMessage(client as never, turn());
+
+          expect(client.emit.mock.calls).toEqual([internalError(TURN)]);
+          expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              event: 'agent.turn.unexpected_failure',
+              error: FAILURE,
+            })
+          );
+          expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+              event: 'agent.turn.claim_release_failed',
+              turnId: TURN,
+              error: 'redis gone',
+            })
+          );
+          expect(
+            redis.entries.has(`agent:conversation:u1:${CONVERSATION}`)
+          ).toBe(false);
+        }
+      );
+
+      it('frees the conversation of a finished turn whose claim cannot be settled', async () => {
+        failureLog();
+        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+        vi.spyOn(TurnClaimService.prototype, 'settle').mockRejectedValue(
+          new Error('redis gone')
+        );
+        const redis = createInMemoryClaimRedis();
+        const gateway = makeGateway({
+          handler: { execute: vi.fn<Execute>(completes) },
+          redis,
+        });
+        const client = makeClient('u1');
+
+        await gateway.handleMessage(client as never, turn());
+
+        expect(client.emit.mock.calls.map(([event]) => event)).toEqual([
+          'agent:chunk',
+          'agent:done',
+        ]);
+        expect(redis.entries.has(`agent:conversation:u1:${CONVERSATION}`)).toBe(
+          false
+        );
+      });
+
       const unansweredFailure = [
         'agent:error',
         {

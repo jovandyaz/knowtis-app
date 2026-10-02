@@ -546,14 +546,37 @@ export class AgentGateway
         }
       );
     } finally {
-      await (settled
-        ? this.turnClaims.settle(claim, owner)
-        : this.turnClaims.release(claim, owner));
-      await this.turnClaims.releaseConversation(
-        claim.userId,
-        claim.conversationId,
-        owner
+      await this.releaseStep(claim, () =>
+        settled
+          ? this.turnClaims.settle(claim, owner)
+          : this.turnClaims.release(claim, owner)
       );
+      await this.releaseStep(claim, () =>
+        this.turnClaims.releaseConversation(
+          claim.userId,
+          claim.conversationId,
+          owner
+        )
+      );
+    }
+  }
+
+  // Runs in the finally of a turn, so a throw here would mask the turn's own
+  // failure and skip the steps after it.
+  private async releaseStep(
+    { userId, conversationId, turnId }: TurnClaimRequest,
+    step: () => Promise<void>
+  ): Promise<void> {
+    try {
+      await step();
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.turn.claim_release_failed',
+        userId,
+        conversationId,
+        turnId,
+        error: reasonOf(error),
+      });
     }
   }
 
