@@ -3,6 +3,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { SUBJECTS } from '@knowtis/authorization';
 
+import { reasonOf } from '../../../core/errors/reason-of';
 import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { CreateNoteHandler } from '../../notes/application/commands/create-note.handler';
 import { ShareNoteHandler } from '../../notes/application/commands/share-note.handler';
@@ -37,6 +38,11 @@ export interface ApproveMutationOutput extends CommitOutcome {
   readonly conversationId: string;
 }
 
+const UNEXPECTED_COMMIT_FAILURE = AgentErrors.commitFailed(
+  'INTERNAL_ERROR',
+  'unexpected failure'
+);
+
 /** Carries the proposing turn once the proposal was taken, so the client can tie the failure to it. */
 export type ApproveMutationError = AgentDomainError & {
   readonly turnId?: string;
@@ -63,7 +69,19 @@ export class ApproveMutationHandler {
     if (!record) {
       return err(AgentErrors.proposalExpired());
     }
-    const committed = await this.commit(input.userId, record.mutation);
+    let committed: Result<CommitOutcome, AgentDomainError>;
+    try {
+      committed = await this.commit(input.userId, record.mutation);
+    } catch (error) {
+      this.logger.error({
+        event: 'agent.commit.threw',
+        proposalId: input.proposalId,
+        turnId: record.turnId,
+        kind: record.mutation.kind,
+        error: reasonOf(error),
+      });
+      committed = err(UNEXPECTED_COMMIT_FAILURE);
+    }
     return committed
       .map((out) => ({
         ...out,

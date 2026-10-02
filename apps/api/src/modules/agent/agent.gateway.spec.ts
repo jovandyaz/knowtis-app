@@ -3101,7 +3101,7 @@ describe('AgentGateway', () => {
             gateway.handleReject(client as never, approvePayload()),
         ],
       ])(
-        'answers %s whose commit throws with one AI_INTERNAL_ERROR naming no turn, and never resumes',
+        'answers %s whose proposal cannot be taken with one AI_INTERNAL_ERROR naming no turn, and never resumes',
         async (_decision, decide) => {
           const log = failureLog();
           const commit = vi.fn().mockRejectedValue(new Error(FAILURE));

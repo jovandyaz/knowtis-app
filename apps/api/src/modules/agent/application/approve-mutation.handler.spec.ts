@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -129,6 +130,77 @@ describe('ApproveMutationHandler', () => {
       expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
       expect(r.error).not.toHaveProperty('turnId');
     }
+  });
+
+  it.each([
+    [
+      'the note handler',
+      () =>
+        deps({
+          createHandler: {
+            execute: vi.fn().mockRejectedValue(new Error('database down')),
+          },
+        }),
+    ],
+    [
+      'the note lookup',
+      () =>
+        deps({
+          store: {
+            take: vi.fn().mockResolvedValue({
+              userId: 'u1',
+              turnId: TURN,
+              conversationId: CONVERSATION,
+              mutation: updateProposal(),
+            }),
+            save: vi.fn(),
+          },
+          noteRepo: {
+            findById: vi.fn().mockRejectedValue(new Error('database down')),
+          },
+        }),
+    ],
+  ])(
+    'answers a commit that throws in %s after the proposal was taken with AGENT_COMMIT_FAILED naming its turn',
+    async (_failing, failingDeps) => {
+      const log = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      const r = await make(failingDeps()).execute({
+        proposalId: 'p1',
+        userId: 'u1',
+      });
+
+      expect(r.isErr() && r.error).toEqual({
+        code: 'AGENT_COMMIT_FAILED',
+        message:
+          'Could not apply the change (INTERNAL_ERROR): unexpected failure',
+        turnId: TURN,
+      });
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.commit.threw',
+          turnId: TURN,
+          error: 'database down',
+        })
+      );
+      log.mockRestore();
+    }
+  );
+
+  it('lets a failure to take the proposal escape, since nothing tells whether it was taken', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockRejectedValue(new Error('redis down')),
+        save: vi.fn(),
+      },
+    });
+
+    await expect(
+      make(d).execute({ proposalId: 'p1', userId: 'u1' })
+    ).rejects.toThrow('redis down');
+    expect(d.createHandler.execute).not.toHaveBeenCalled();
   });
 
   it('fails when the user lacks permission', async () => {
