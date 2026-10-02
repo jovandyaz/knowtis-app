@@ -171,6 +171,7 @@ export const CONTINUABLE_STOP_REASONS = [
 ] as const satisfies readonly AgentStopReason[];
 export type ContinuableStopReason = (typeof CONTINUABLE_STOP_REASONS)[number];
 
+/** Narrows a stop reason to a checkpoint stop, one a continuation can pick up. */
 export function isContinuableStop(
   reason: string | null | undefined
 ): reason is ContinuableStopReason {
