@@ -2842,12 +2842,27 @@ describe('AgentGateway', () => {
         });
 
         it.each([
-          ['a message without a turn id', unclaimed(), unclaimed('again')],
-          ['a claimed turn', turn(), unclaimed('again')],
-          ['a message without a turn id', unclaimed(), turn()],
+          [
+            'a message without a turn id',
+            'another such message',
+            unclaimed(),
+            unclaimed('again'),
+          ],
+          [
+            'a message without a turn id',
+            'a claimed turn',
+            turn(),
+            unclaimed('again'),
+          ],
+          [
+            'a claimed turn',
+            'a message without a turn id',
+            unclaimed(),
+            turn(),
+          ],
         ])(
-          'is refused with TURN_IN_PROGRESS, or refuses a claimed turn, while %s runs in its conversation',
-          async (_running, first, second) => {
+          'refuses %s with TURN_IN_PROGRESS while %s holds its conversation',
+          async (_refused, _running, first, second) => {
             const held = heldTurns();
             const execute = vi
               .fn<Execute>(completes)
@@ -2893,6 +2908,70 @@ describe('AgentGateway', () => {
           expect(leases(redis)).toEqual([]);
           expect(execute).toHaveBeenCalledTimes(2);
         });
+
+        it.each([
+          [
+            'its handler throws',
+            (async (_input, cb) => {
+              cb.onModelStart?.();
+              throw new Error('persistence exploded');
+            }) as Execute,
+            async (_drain: ShutdownDrain) => undefined,
+          ],
+          [
+            'the drain aborts it',
+            (async (_input, cb, signal) => {
+              cb.onModelStart?.();
+              await new Promise<void>((resolve) =>
+                signal.addEventListener('abort', () => resolve(), {
+                  once: true,
+                })
+              );
+            }) as Execute,
+            (drain: ShutdownDrain) => drain.beforeApplicationShutdown(),
+          ],
+        ])(
+          'frees its conversation once %s, so the next message on it runs',
+          async (_exit, ending, interrupt) => {
+            vi.spyOn(Logger.prototype, 'error').mockImplementation(
+              () => undefined
+            );
+            const redis = createInMemoryClaimRedis();
+            const drain = new ShutdownDrain();
+            let heldWhileRunning: string[] = [];
+            const failing = makeGateway({
+              handler: {
+                execute: vi.fn<Execute>((input, cb, signal) => {
+                  heldWhileRunning = leases(redis);
+                  return ending(input, cb, signal);
+                }),
+              },
+              redis,
+              drain,
+            });
+            const execute = vi.fn<Execute>(completes);
+            const otherInstance = makeGateway({ handler: { execute }, redis });
+
+            const running = failing.handleMessage(
+              makeClient('u1') as never,
+              unclaimed()
+            );
+            await flushAsync();
+            await interrupt(drain);
+            await running;
+            const heldAfterExit = leases(redis);
+            const next = makeClient('u1', 'c2');
+            await otherInstance.handleMessage(
+              next as never,
+              unclaimed('again')
+            );
+
+            expect(heldWhileRunning).toEqual([LEASE_KEY]);
+            expect(heldAfterExit).toEqual([]);
+            expect(turnErrors(next)).toEqual([]);
+            expect(execute).toHaveBeenCalledOnce();
+          }
+        );
 
         it('fails closed with TURN_CLAIM_UNAVAILABLE when the lease times out after it landed, and frees it', async () => {
           vi.spyOn(Logger.prototype, 'warn').mockImplementation(
