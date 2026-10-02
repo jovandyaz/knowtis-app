@@ -855,6 +855,7 @@ describe('final-step turn through the real orchestrator and AI SDK', () => {
       stopReason: row.stopReason ?? null,
       turnId: 'fixture-turn',
       kind: row.kind ?? null,
+      model: row.model ?? null,
     }));
     const nextEvents = await collect(
       orchestrator.run({

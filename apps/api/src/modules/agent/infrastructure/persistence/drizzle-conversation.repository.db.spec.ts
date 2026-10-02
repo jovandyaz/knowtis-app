@@ -318,6 +318,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           content: 'Your notes describe GTD as…',
           sources: [{ id: noteId, title: 'GTD' }],
           stopReason: 'completed',
+          model: 'anthropic:claude-haiku-4-5',
         },
       ],
     });
@@ -348,6 +349,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       null,
       null,
       'completed',
+    ]);
+    expect(rows.map((r) => r.model)).toEqual([
+      null,
+      null,
+      null,
+      'anthropic:claude-haiku-4-5',
     ]);
     expect(rows[3].sources).toEqual([{ id: noteId, title: 'GTD' }]);
   });

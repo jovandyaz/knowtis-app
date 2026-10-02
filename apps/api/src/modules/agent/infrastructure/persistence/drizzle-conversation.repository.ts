@@ -192,6 +192,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         stopReason: conversationMessages.stopReason,
         turnId: conversationMessages.turnId,
         kind: conversationMessages.kind,
+        model: conversationMessages.model,
       })
       .from(conversationMessages)
       .where(
@@ -213,6 +214,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
       stopReason: r.stopReason ?? null,
       turnId: r.turnId ?? null,
       kind: r.kind ?? null,
+      model: r.model ?? null,
     }));
     const readable = await this.readableNoteIds(
       noteIdsInToolParts(rows),

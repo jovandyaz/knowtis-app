@@ -101,6 +101,7 @@ import {
 } from '../domain/ports/agent-orchestrator.port';
 import {
   CONVERSATION_REPOSITORY,
+  type ConversationMessageRow,
   type ConversationRepository,
 } from '../domain/ports/conversation.repository';
 import {
@@ -169,7 +170,7 @@ type TurnInput = Omit<
   readonly continuation?: boolean;
   /** Which part of the answer to a user message this turn is: 0 for the message's own turn, n for its nth continuation. */
   readonly segmentIndex: number;
-  readonly cappedSegmentModel?: string;
+  readonly priorModel?: string;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -592,6 +593,7 @@ export class RunAgentTurnHandler {
     conversationId: string,
     userId: string
   ): Promise<{
+    rows: ConversationMessageRow[];
     history: AgentMessage[];
     knownNotes: AgentSource[];
     segmentIndex: number;
@@ -617,6 +619,7 @@ export class RunAgentTurnHandler {
       }
     }
     return {
+      rows,
       history,
       knownNotes: [...seen.values()],
       segmentIndex: segmentIndexOf(rows),
@@ -728,11 +731,14 @@ export class RunAgentTurnHandler {
       callbacks.onError(AgentErrors.conversationNotFound());
       return;
     }
-    const { history, knownNotes, segmentIndex } =
+    const { rows, history, knownNotes, segmentIndex } =
       await this.loadConversationContext(input.conversationId, input.userId);
     // A resume carries a tool-confirmation outcome, not the user's words, so
     // memory retrieval embeds the last real user message instead.
     const memoryQuery = lastWrittenUserMessage(history);
+    const proposingModel = rows.findLast(
+      (row) => row.turnId === input.turnId
+    )?.model;
     const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
@@ -744,6 +750,7 @@ export class RunAgentTurnHandler {
       ...(memoryQuery ? { memoryQuery } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
       conversationModel: found.model,
+      ...(proposingModel ? { priorModel: proposingModel } : {}),
       resume: input.resume,
     };
     return this.runLoop(
@@ -828,7 +835,7 @@ export class RunAgentTurnHandler {
         knownNotes: context.knownNotes,
         segmentIndex,
         conversationModel: found.model,
-        ...(last.model ? { cappedSegmentModel: last.model } : {}),
+        ...(last.model ? { priorModel: last.model } : {}),
         ...(memoryQuery ? { memoryQuery } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.model ? { model: input.model } : {}),
@@ -1510,7 +1517,12 @@ export class RunAgentTurnHandler {
     const { userId } = input.execution.subject;
     const pinned = resuming ? (input.conversationModel ?? null) : null;
     const choice =
-      (await this.keptSegmentModel(input)) ??
+      (await this.keptPriorModel(
+        input,
+        resuming
+          ? 'agent.resume.model_dropped'
+          : 'agent.continuation.model_dropped'
+      )) ??
       (await this.modelPreference.chooseTurnModel(input.execution, {
         ...(input.model ? { explicit: input.model } : {}),
         pinned,
@@ -1539,14 +1551,15 @@ export class RunAgentTurnHandler {
     return { model: choice.model, resolution: choice.resolution };
   }
 
-  private async keptSegmentModel(
-    input: TurnInput
+  private async keptPriorModel(
+    input: TurnInput,
+    droppedEvent: string
   ): Promise<ModelChoice | null> {
-    if (input.model || !input.cappedSegmentModel) {
+    if (input.model || !input.priorModel) {
       return null;
     }
     const choice = await this.modelPreference.chooseTurnModel(input.execution, {
-      pinned: input.cappedSegmentModel,
+      pinned: input.priorModel,
     });
     const dropped =
       choice.kind === MODEL_CHOICE.UNAVAILABLE
@@ -1556,10 +1569,10 @@ export class RunAgentTurnHandler {
       return choice;
     }
     this.logger.warn({
-      event: 'agent.continuation.model_dropped',
+      event: droppedEvent,
       userId: input.execution.subject.userId,
       tier: input.execution.tier,
-      model: input.cappedSegmentModel,
+      model: input.priorModel,
       reason: dropped,
     });
     return null;

@@ -19,6 +19,7 @@ const row = (
   stopReason: null,
   turnId: null,
   kind: null,
+  model: null,
   ...r,
 });
 const call = (id: string) => ({

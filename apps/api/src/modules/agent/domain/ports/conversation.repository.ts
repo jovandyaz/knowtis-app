@@ -16,6 +16,7 @@ export interface ConversationMessageRow {
   readonly stopReason: MessageStopReason | null;
   readonly turnId: string | null;
   readonly kind: MessageKind | null;
+  readonly model: string | null;
 }
 
 export interface CreateConversationInput {

@@ -117,6 +117,29 @@ function executionFor(userId: string) {
   });
 }
 
+const SUBSTITUTE_MODEL = 'anthropic:claude-haiku-4-5';
+const LEFT_THE_TIER: ModelChoice = {
+  kind: 'unavailable',
+  reason: 'key_removed',
+  suggestedModel: null,
+};
+
+function onlySubstituted(requested: string): ModelChoice {
+  return {
+    kind: 'resolved',
+    model: SUBSTITUTE_MODEL,
+    resolution: {
+      requested,
+      resolved: SUBSTITUTE_MODEL,
+      fallback: {
+        reason: 'not_in_tier',
+        from: requested,
+        to: SUBSTITUTE_MODEL,
+      },
+    },
+  };
+}
+
 const TOOL_OUTPUT_FILLER = 'lorem ipsum dolor sit amet ';
 const OVERSIZED_TOOL_OUTPUT_REPEATS = 4_000;
 const BUDGETED_TOOL_OUTPUT_REPEATS = 1_500;
@@ -197,6 +220,7 @@ function historyRow(
     stopReason: null,
     turnId: null,
     kind: null,
+    model: null,
     ...row,
   };
 }
@@ -8270,25 +8294,6 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
   describe('the model it runs on', () => {
     const PREFERRED_MODEL = 'anthropic:claude-sonnet-4-20250514';
     const REQUESTED_MODEL = 'google:gemini-2.0-flash';
-    const SUBSTITUTE_MODEL = 'anthropic:claude-haiku-4-5';
-    const LEFT_THE_TIER: ModelChoice = {
-      kind: 'unavailable',
-      reason: 'key_removed',
-      suggestedModel: null,
-    };
-    const ONLY_SUBSTITUTED: ModelChoice = {
-      kind: 'resolved',
-      model: SUBSTITUTE_MODEL,
-      resolution: {
-        requested: CAPPED_MODEL,
-        resolved: SUBSTITUTE_MODEL,
-        fallback: {
-          reason: 'not_in_tier',
-          from: CAPPED_MODEL,
-          to: SUBSTITUTE_MODEL,
-        },
-      },
-    };
 
     function runModel(ctx: ReturnType<typeof setup>): string {
       const [{ model }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
@@ -8336,7 +8341,11 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
 
     it.each([
       ['has left the tier', LEFT_THE_TIER, 'key_removed'],
-      ['is offered only through a substitute', ONLY_SUBSTITUTED, 'not_in_tier'],
+      [
+        'is offered only through a substitute',
+        onlySubstituted(CAPPED_MODEL),
+        'not_in_tier',
+      ],
     ])(
       'resolves like any turn when the capped model %s',
       async (_label, cappedChoice, reason) => {
@@ -9013,4 +9022,167 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       );
     });
   });
+});
+
+describe('RunAgentTurnHandler resuming a proposal', () => {
+  const PROPOSING = TURN_ID;
+  const PROPOSING_MODEL = 'openai:gpt-4o-mini';
+  const CONVERSATION_MODEL = 'google:gemini-2.0-flash';
+  const request = {
+    userId: USER,
+    turnId: PROPOSING,
+    conversationId: 'conv-1',
+    resume: { outcome: 'created' },
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function proposingTurn(model: string | null): ConversationMessageRow[] {
+    return [
+      historyRow({ role: 'user', content: 'rename it', turnId: PROPOSING }),
+      historyRow({
+        role: 'assistant',
+        content: "I'll rename it, confirm?",
+        turnId: PROPOSING,
+        stopReason: 'completed',
+        model,
+      }),
+    ];
+  }
+
+  function setup(
+    history: ConversationMessageRow[],
+    modelPreference: ModelPreferenceService = makeModelPreference()
+  ) {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations(history);
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: CONVERSATION_MODEL,
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    return { handler, callbacks, orchestrator, modelPreference };
+  }
+
+  function runModel(ctx: ReturnType<typeof setup>): string {
+    const [{ model }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
+    return model;
+  }
+
+  it('resumes on the model that raised the proposal while the tier still offers it', async () => {
+    const ctx = setup(proposingTurn(PROPOSING_MODEL));
+
+    await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+    expect(ctx.modelPreference.chooseTurnModel).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      {
+        pinned: PROPOSING_MODEL,
+      }
+    );
+    expect(runModel(ctx)).toBe(PROPOSING_MODEL);
+    expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelResolution: {
+          requested: PROPOSING_MODEL,
+          resolved: PROPOSING_MODEL,
+        },
+      })
+    );
+  });
+
+  it('reads the model of the proposing turn, not of a turn stored after it', async () => {
+    const ctx = setup([
+      ...proposingTurn(PROPOSING_MODEL),
+      historyRow({ role: 'user', content: 'and now?', turnId: SECOND_TURN_ID }),
+      historyRow({
+        role: 'assistant',
+        content: 'Nothing else.',
+        turnId: SECOND_TURN_ID,
+        stopReason: 'completed',
+        model: SUBSTITUTE_MODEL,
+      }),
+    ]);
+
+    await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+    expect(runModel(ctx)).toBe(PROPOSING_MODEL);
+  });
+
+  it('resumes on the conversation model when the proposing turn stored none', async () => {
+    const ctx = setup(proposingTurn(null));
+
+    await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+    expect(ctx.modelPreference.chooseTurnModel).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      {
+        pinned: CONVERSATION_MODEL,
+      }
+    );
+    expect(runModel(ctx)).toBe(CONVERSATION_MODEL);
+  });
+
+  it.each([
+    ['has left the tier', LEFT_THE_TIER, 'key_removed'],
+    [
+      'is offered only through a substitute',
+      onlySubstituted(PROPOSING_MODEL),
+      'not_in_tier',
+    ],
+  ])(
+    'resolves like any resume when the proposing model %s',
+    async (_label, proposingChoice, reason) => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const modelPreference = makeModelPreference();
+      vi.mocked(modelPreference.chooseTurnModel).mockResolvedValueOnce(
+        proposingChoice
+      );
+      const ctx = setup(proposingTurn(PROPOSING_MODEL), modelPreference);
+
+      await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+      expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+        1,
+        executionFor(USER),
+        { pinned: PROPOSING_MODEL }
+      );
+      expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+        2,
+        executionFor(USER),
+        { pinned: CONVERSATION_MODEL }
+      );
+      expect(ctx.callbacks.onError).not.toHaveBeenCalled();
+      expect(runModel(ctx)).toBe(CONVERSATION_MODEL);
+      expect(warn).toHaveBeenCalledWith({
+        event: 'agent.resume.model_dropped',
+        userId: USER,
+        tier: 'free',
+        model: PROPOSING_MODEL,
+        reason,
+      });
+    }
+  );
 });
