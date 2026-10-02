@@ -2189,7 +2189,7 @@ describe('agent.store continuing a capped turn', () => {
     ]);
   });
 
-  it('sends one continue however fast the user clicks twice', () => {
+  it('sends and counts one continue however fast the user clicks twice', () => {
     capTurn();
     captureContinue();
 
@@ -2197,6 +2197,11 @@ describe('agent.store continuing a capped turn', () => {
     useAgentStore.getState().continueTurn();
 
     expect(vi.mocked(agentClient.continueTurn)).toHaveBeenCalledOnce();
+    expect(
+      vi
+        .mocked(captureProductEvent)
+        .mock.calls.filter(([event]) => event === 'ai continue clicked')
+    ).toHaveLength(1);
   });
 
   it('moves the offer to the continuation when it is capped again', () => {
@@ -2359,6 +2364,24 @@ describe('agent.store continuing a capped turn', () => {
       expect(continuation.cancel).toHaveBeenCalledOnce();
       expect(turnIds()).toEqual(['turn-1', 'turn-1']);
       expect(useAgentStore.getState().continuableTurnId).toBe('turn-1');
+    });
+
+    it('resends a continuation the user stopped under the same turn id', () => {
+      capTurn();
+      captureContinue('turn-2');
+      useAgentStore.getState().continueTurn();
+      useAgentStore.getState().cancel();
+      vi.mocked(agentClient.canResendTurn).mockReturnValueOnce(true);
+      captureContinue('turn-2');
+
+      useAgentStore.getState().continueTurn();
+
+      expect(vi.mocked(agentClient.canResendTurn)).toHaveBeenCalledWith(
+        'turn-2'
+      );
+      expect(
+        vi.mocked(agentClient.continueTurn).mock.calls.at(-1)?.[3]
+      ).toEqual({ turnId: 'turn-2' });
     });
 
     it('drops the marker of a continue the client refuses before sending it', () => {
