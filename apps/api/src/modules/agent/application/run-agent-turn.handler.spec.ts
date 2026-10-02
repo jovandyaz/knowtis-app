@@ -44,6 +44,7 @@ import {
   type AiCaller,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
+import type { ModelChoice } from '../../ai/domain/model-catalog/model-choice';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { utcDayOf } from '../../ai/domain/value-objects/utc-day';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
@@ -358,6 +359,64 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
   });
 
+  it('stores the model that served the turn on its assistant row, not the one it asked for', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'answer' },
+      {
+        type: 'done',
+        usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+        stopReason: 'completed',
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeModelPreference('anthropic:claude-sonnet-4-20250514'),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const onDone = vi.fn();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone, onError: vi.fn(), onProposal: vi.fn() }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
+    );
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ model: SERVED_MODEL })
+    );
+    const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+    expect(appended.messages).toEqual([
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: 'answer',
+        sources: [],
+        stopReason: 'completed',
+        model: SERVED_MODEL,
+      },
+    ]);
+  });
+
   it('forwards thinking events to onThinking and keeps them out of the transcript', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
@@ -419,6 +478,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'answer',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
   });
@@ -1449,6 +1509,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'Hi',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
   });
@@ -3879,6 +3940,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'Hi',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
     expect(done).toHaveBeenCalledWith(
@@ -4071,6 +4133,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'I will create it.',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
     expect(pendingStore.save).toHaveBeenCalledWith(
@@ -5572,6 +5635,7 @@ describe('RunAgentTurnHandler', () => {
           content: 'N1 says hi',
           sources: [{ id: 'n1', title: 'N1' }],
           stopReason: 'completed',
+          model: doneEvent.usage.model,
         },
       ]);
     });
@@ -5655,6 +5719,7 @@ describe('RunAgentTurnHandler', () => {
           content: '',
           sources: doneEvent.sources,
           stopReason: 'completed',
+          model: doneEvent.usage.model,
         },
       ]);
     });
@@ -7894,10 +7959,12 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       stopReason: 'max_steps',
     }),
   ];
+  const CAPPED_MODEL = 'openai:gpt-4o-mini';
   const CAPPED_LAST: LastConversationMessage = {
     turnId: CONTINUED,
     role: 'assistant',
     stopReason: 'max_steps',
+    model: CAPPED_MODEL,
   };
   const request = {
     userId: USER,
@@ -7938,6 +8005,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       quota?: MessageQuotaService;
       events?: AgentEvent[];
       allowed?: boolean;
+      modelPreference?: ModelPreferenceService;
     } = {}
   ) {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
@@ -7955,6 +8023,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     const guard = makeGuard();
     const quota = over.quota ?? consumedQuota();
     const emitter = makeEvents();
+    const modelPreference = over.modelPreference ?? makeModelPreference();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -7964,7 +8033,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       conversations,
       memory,
       embed,
-      makeModelPreference(),
+      modelPreference,
       makeByok(),
       guard,
       makeAIConfig(),
@@ -7990,6 +8059,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       guard,
       embed,
       emitter,
+      modelPreference,
     };
   }
 
@@ -8023,7 +8093,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     ['with no stop reason', { ...CAPPED_LAST, stopReason: null }],
     [
       'that ends on its user message',
-      { turnId: CONTINUED, role: 'user', stopReason: null },
+      { turnId: CONTINUED, role: 'user', stopReason: null, model: null },
     ],
     ['in an empty conversation', null],
   ] as const)(
@@ -8130,8 +8200,135 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
           content: 'Found B.',
           sources: [],
           stopReason: 'completed',
+          model: SERVED_MODEL,
         },
       ],
+    });
+  });
+
+  describe('the model it runs on', () => {
+    const PREFERRED_MODEL = 'anthropic:claude-sonnet-4-20250514';
+    const REQUESTED_MODEL = 'google:gemini-2.0-flash';
+    const SUBSTITUTE_MODEL = 'anthropic:claude-haiku-4-5';
+    const LEFT_THE_TIER: ModelChoice = {
+      kind: 'unavailable',
+      reason: 'key_removed',
+      suggestedModel: null,
+    };
+    const ONLY_SUBSTITUTED: ModelChoice = {
+      kind: 'resolved',
+      model: SUBSTITUTE_MODEL,
+      resolution: {
+        requested: CAPPED_MODEL,
+        resolved: SUBSTITUTE_MODEL,
+        fallback: {
+          reason: 'not_in_tier',
+          from: CAPPED_MODEL,
+          to: SUBSTITUTE_MODEL,
+        },
+      },
+    };
+
+    function runModel(ctx: ReturnType<typeof setup>): string {
+      const [{ model }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
+      return model;
+    }
+
+    it('keeps the model that served the capped segment while the tier still offers it', async () => {
+      const ctx = setup({
+        modelPreference: makeModelPreference(PREFERRED_MODEL),
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(
+        ctx.modelPreference.chooseTurnModel
+      ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), {
+        pinned: CAPPED_MODEL,
+      });
+      expect(runModel(ctx)).toBe(CAPPED_MODEL);
+      expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelResolution: { requested: CAPPED_MODEL, resolved: CAPPED_MODEL },
+        })
+      );
+    });
+
+    it('runs on the model the request names over the capped one', async () => {
+      const ctx = setup({
+        modelPreference: makeModelPreference(PREFERRED_MODEL),
+      });
+
+      await ctx.handler.continueTurn(
+        { ...request, model: REQUESTED_MODEL },
+        ctx.callbacks
+      );
+
+      expect(
+        ctx.modelPreference.chooseTurnModel
+      ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), {
+        explicit: REQUESTED_MODEL,
+        pinned: null,
+      });
+      expect(runModel(ctx)).toBe(REQUESTED_MODEL);
+    });
+
+    it.each([
+      ['has left the tier', LEFT_THE_TIER, 'key_removed'],
+      ['is offered only through a substitute', ONLY_SUBSTITUTED, 'not_in_tier'],
+    ])(
+      'resolves like any turn when the capped model %s',
+      async (_label, cappedChoice, reason) => {
+        const warn = vi
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+        const modelPreference = makeModelPreference(PREFERRED_MODEL);
+        vi.mocked(modelPreference.chooseTurnModel).mockResolvedValueOnce(
+          cappedChoice
+        );
+        const ctx = setup({ modelPreference });
+
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+          1,
+          executionFor(USER),
+          { pinned: CAPPED_MODEL }
+        );
+        expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+          2,
+          executionFor(USER),
+          { pinned: null }
+        );
+        expect(ctx.callbacks.onError).not.toHaveBeenCalled();
+        expect(runModel(ctx)).toBe(PREFERRED_MODEL);
+        expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modelResolution: { requested: null, resolved: PREFERRED_MODEL },
+          })
+        );
+        expect(warn).toHaveBeenCalledWith({
+          event: 'agent.continuation.model_dropped',
+          userId: USER,
+          tier: 'free',
+          model: CAPPED_MODEL,
+          reason,
+        });
+      }
+    );
+
+    it('resolves like any turn when the capped segment was stored without its model', async () => {
+      const ctx = setup({
+        last: { ...CAPPED_LAST, model: null },
+        modelPreference: makeModelPreference(PREFERRED_MODEL),
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(
+        ctx.modelPreference.chooseTurnModel
+      ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), { pinned: null });
+      expect(runModel(ctx)).toBe(PREFERRED_MODEL);
     });
   });
 

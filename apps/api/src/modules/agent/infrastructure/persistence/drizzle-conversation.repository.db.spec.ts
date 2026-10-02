@@ -768,7 +768,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   describe('findLastMessage', () => {
-    it('returns the newest row of the conversation', async () => {
+    const SERVED_MODEL = 'anthropic:claude-haiku-4-5';
+
+    it('returns the newest row of the conversation with the model that served it', async () => {
       const { id } = await repo.create({
         id: randomUUID(),
         userId: USER,
@@ -788,6 +790,35 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         turnId: capped,
         messages: [
           { role: 'user', content: 'q2' },
+          {
+            role: 'assistant',
+            content: '',
+            stopReason: 'max_steps',
+            model: SERVED_MODEL,
+          },
+        ],
+      });
+
+      expect(await repo.findLastMessage(id, USER)).toEqual({
+        turnId: capped,
+        role: 'assistant',
+        stopReason: 'max_steps',
+        model: SERVED_MODEL,
+      });
+    });
+
+    it('reads a row stored without a model as served by none', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      const capped = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: capped,
+        messages: [
+          { role: 'user', content: 'q' },
           { role: 'assistant', content: '', stopReason: 'max_steps' },
         ],
       });
@@ -796,6 +827,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         turnId: capped,
         role: 'assistant',
         stopReason: 'max_steps',
+        model: null,
       });
     });
 

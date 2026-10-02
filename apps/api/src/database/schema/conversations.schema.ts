@@ -77,6 +77,7 @@ export const conversationMessages = pgTable(
     stopReason: text('stop_reason').$type<MessageStopReason>(),
     turnId: uuid('turn_id'),
     kind: text('kind').$type<MessageKind>(),
+    model: varchar('model', { length: MODEL_ID_MAX_LENGTH }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

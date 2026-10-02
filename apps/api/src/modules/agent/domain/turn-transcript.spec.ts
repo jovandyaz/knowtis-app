@@ -6,6 +6,7 @@ import { buildTurnRows, type TurnRowsInput } from './turn-transcript';
 
 const USER_CONTENT = 'what is in N1?';
 const SOURCES: readonly AgentSource[] = [{ id: 'n1', title: 'N1' }];
+const SERVED_MODEL = 'anthropic:claude-haiku-4-5';
 
 const call = {
   type: 'tool-call' as const,
@@ -166,6 +167,42 @@ describe('buildTurnRows', () => {
       ]);
     }
   );
+
+  it.each([
+    [
+      'streamed after the last step',
+      { turnMessages: toolStep, assistantText: 'N1 says hi' },
+    ],
+    [
+      'carried by the last step',
+      {
+        turnMessages: [
+          ...toolStep,
+          { role: 'assistant' as const, content: 'N1 says hi' },
+        ],
+        assistantText: 'N1 says hi',
+      },
+    ],
+    ['absent', { turnMessages: toolStep }],
+  ])(
+    'stamps the model that served the turn on its terminal row only when the answer was %s',
+    (_label, over) => {
+      const rows = buildTurnRows(input({ ...over, model: SERVED_MODEL }));
+
+      expect(rows.at(-1)).toEqual(
+        expect.objectContaining({ role: 'assistant', model: SERVED_MODEL })
+      );
+      expect(rows.slice(0, -1).map((row) => row.model)).toEqual(
+        rows.slice(0, -1).map(() => undefined)
+      );
+    }
+  );
+
+  it('stamps no model when the turn names none', () => {
+    const rows = buildTurnRows(input({ assistantText: 'N1 says hi' }));
+
+    expect(rows.every((row) => !('model' in row))).toBe(true);
+  });
 
   it('adds no row to a resume leg that stored nothing', () => {
     expect(

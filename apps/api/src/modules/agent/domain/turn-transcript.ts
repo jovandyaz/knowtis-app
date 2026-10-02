@@ -13,9 +13,10 @@ export interface TurnRowsInput {
   readonly assistantText: string;
   readonly sources: readonly AgentSource[];
   readonly stopReason: MessageStopReason;
+  readonly model?: string;
 }
 
-/** Rows to persist for one turn: the user row, the rows of every completed step, and a terminal assistant row carrying the stop reason, added empty when the turn produced none. */
+/** Rows to persist for one turn: the user row, the rows of every completed step, and a terminal assistant row carrying the stop reason and the model that served the turn, added empty when the turn produced none. */
 export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
   const {
     userContent,
@@ -24,7 +25,9 @@ export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
     assistantText,
     sources,
     stopReason,
+    model,
   } = input;
+  const terminal = { sources, stopReason, ...(model ? { model } : {}) };
   const rows: PersistedTurnMessage[] = [];
   if (userContent !== undefined) {
     rows.push({
@@ -45,19 +48,14 @@ export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
     : '';
   rows.push(...turnMessages);
   if (partialText.length > 0) {
-    rows.push({
-      role: ASSISTANT_ROLE,
-      content: partialText,
-      sources,
-      stopReason,
-    });
+    rows.push({ role: ASSISTANT_ROLE, content: partialText, ...terminal });
     return rows;
   }
   const last = rows.at(-1);
   if (last && last.role === ASSISTANT_ROLE) {
-    rows[rows.length - 1] = { ...last, sources, stopReason };
+    rows[rows.length - 1] = { ...last, ...terminal };
   } else if (last) {
-    rows.push({ role: ASSISTANT_ROLE, content: '', sources, stopReason });
+    rows.push({ role: ASSISTANT_ROLE, content: '', ...terminal });
   }
   return rows;
 }

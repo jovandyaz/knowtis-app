@@ -271,6 +271,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         : null,
       stopReason: m.stopReason ?? null,
       kind: m.kind ?? null,
+      model: m.model ?? null,
     }));
     const [first, ...rest] = values;
     const claimsTurn = first.role === 'user';
@@ -397,6 +398,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         turnId: conversationMessages.turnId,
         role: conversationMessages.role,
         stopReason: conversationMessages.stopReason,
+        model: conversationMessages.model,
       })
       .from(conversationMessages)
       .innerJoin(
@@ -416,6 +418,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
           turnId: last.turnId ?? null,
           role: last.role,
           stopReason: last.stopReason ?? null,
+          model: last.model ?? null,
         }
       : null;
   }

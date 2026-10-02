@@ -59,7 +59,10 @@ import {
   segmentLimits,
   type SegmentLimits,
 } from '../../ai/domain/execution-context/segment-policy';
-import { MODEL_CHOICE } from '../../ai/domain/model-catalog/model-choice';
+import {
+  MODEL_CHOICE,
+  type ModelChoice,
+} from '../../ai/domain/model-catalog/model-choice';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -166,6 +169,7 @@ type TurnInput = Omit<
   readonly continuation?: boolean;
   /** Which part of the answer to a user message this turn is: 0 for the message's own turn, n for its nth continuation. */
   readonly segmentIndex: number;
+  readonly cappedSegmentModel?: string;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -622,7 +626,8 @@ export class RunAgentTurnHandler {
     turnMessages: readonly AgentMessage[],
     assistantText: string,
     sources: readonly AgentSource[],
-    stopReason: MessageStopReason
+    stopReason: MessageStopReason,
+    servedModel?: string
   ): Promise<void> {
     const messages = buildTurnRows({
       userContent: persistence.userContent,
@@ -631,6 +636,7 @@ export class RunAgentTurnHandler {
       assistantText,
       sources,
       stopReason,
+      ...(servedModel ? { model: servedModel } : {}),
     });
     if (messages.length === 0) {
       return;
@@ -818,6 +824,7 @@ export class RunAgentTurnHandler {
         knownNotes: context.knownNotes,
         segmentIndex,
         conversationModel: found.model,
+        ...(last.model ? { cappedSegmentModel: last.model } : {}),
         ...(memoryQuery ? { memoryQuery } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.model ? { model: input.model } : {}),
@@ -995,7 +1002,8 @@ export class RunAgentTurnHandler {
     let persisted = false;
     const persistTurnOnce = async (
       sources: readonly AgentSource[],
-      stopReason: MessageStopReason
+      stopReason: MessageStopReason,
+      servedModel?: string
     ): Promise<void> => {
       if (!persistence || persisted) {
         return;
@@ -1006,7 +1014,8 @@ export class RunAgentTurnHandler {
         turnMessages,
         assistantText,
         sources,
-        stopReason
+        stopReason,
+        servedModel
       );
     };
     if (signal?.aborted) {
@@ -1111,7 +1120,11 @@ export class RunAgentTurnHandler {
             if (execution.billing.kind === 'byok') {
               void this.byok.markUsed(userId, execution.billing.provider);
             }
-            await persistTurnOnce(event.sources, event.stopReason);
+            await persistTurnOnce(
+              event.sources,
+              event.stopReason,
+              event.usage.model
+            );
             if (isContinuableStop(event.stopReason)) {
               this.announce(
                 new TurnCheckpointReachedEvent(
@@ -1148,7 +1161,11 @@ export class RunAgentTurnHandler {
           case 'proposal':
             // Empty because proposal events carry no sources; the post-approval
             // turn re-derives them.
-            await persistTurnOnce([], AGENT_STOP_REASON.COMPLETED);
+            await persistTurnOnce(
+              [],
+              AGENT_STOP_REASON.COMPLETED,
+              event.usage.model
+            );
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
             }
@@ -1473,10 +1490,12 @@ export class RunAgentTurnHandler {
   ): Promise<ResolvedModel | null> {
     const { userId } = input.execution.subject;
     const pinned = resuming ? (input.conversationModel ?? null) : null;
-    const choice = await this.modelPreference.chooseTurnModel(input.execution, {
-      ...(input.model ? { explicit: input.model } : {}),
-      pinned,
-    });
+    const choice =
+      (await this.keptSegmentModel(input)) ??
+      (await this.modelPreference.chooseTurnModel(input.execution, {
+        ...(input.model ? { explicit: input.model } : {}),
+        pinned,
+      }));
     if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
       this.logger.warn({
         event: 'ai.model.unavailable',
@@ -1499,6 +1518,32 @@ export class RunAgentTurnHandler {
       });
     }
     return { model: choice.model, resolution: choice.resolution };
+  }
+
+  private async keptSegmentModel(
+    input: TurnInput
+  ): Promise<ModelChoice | null> {
+    if (input.model || !input.cappedSegmentModel) {
+      return null;
+    }
+    const choice = await this.modelPreference.chooseTurnModel(input.execution, {
+      pinned: input.cappedSegmentModel,
+    });
+    const dropped =
+      choice.kind === MODEL_CHOICE.UNAVAILABLE
+        ? choice.reason
+        : choice.resolution.fallback?.reason;
+    if (dropped === undefined) {
+      return choice;
+    }
+    this.logger.warn({
+      event: 'agent.continuation.model_dropped',
+      userId: input.execution.subject.userId,
+      tier: input.execution.tier,
+      model: input.cappedSegmentModel,
+      reason: dropped,
+    });
+    return null;
   }
 
   private async persistRequestedModel(

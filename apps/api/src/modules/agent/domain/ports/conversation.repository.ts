@@ -32,12 +32,14 @@ export interface PersistedTurnMessage {
   readonly sources?: readonly AgentSource[];
   readonly stopReason?: MessageStopReason;
   readonly kind?: MessageKind;
+  readonly model?: string;
 }
 
 export interface LastConversationMessage {
   readonly turnId: string | null;
   readonly role: AgentRole;
   readonly stopReason: MessageStopReason | null;
+  readonly model: string | null;
 }
 
 export interface AppendTurnInput {
