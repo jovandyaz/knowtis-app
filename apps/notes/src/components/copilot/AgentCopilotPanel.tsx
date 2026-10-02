@@ -161,14 +161,8 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
-  const continuation =
-    continuableAnswer && !quotaLock ? (
-      <AgentContinueAction
-        partial={isContinuableStop(continuableAnswer.stopReason)}
-        onContinue={() => continueTurn(noteId)}
-      />
-    ) : undefined;
   const conversationRef = useRef<StickToBottomContext>(null);
+  const focusThread = () => conversationRef.current?.scrollRef.current?.focus();
   const historyRetryRef = useRef<HTMLButtonElement>(null);
   const [retryingHistory, setRetryingHistory] = useState(false);
   const showHistoryRetry = hydration === 'failed' || retryingHistory;
@@ -180,9 +174,25 @@ export function AgentCopilotPanel() {
     const focusWasOnRetry = document.activeElement === historyRetryRef.current;
     setRetryingHistory(false);
     if (focusWasOnRetry && useAgentStore.getState().hydration !== 'failed') {
-      conversationRef.current?.scrollRef.current?.focus();
+      focusThread();
     }
   };
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const continueAnswer = () => {
+    const focusWasOnContinue = document.activeElement === continueRef.current;
+    continueTurn(noteId);
+    if (focusWasOnContinue) {
+      focusThread();
+    }
+  };
+  const continuation =
+    continuableAnswer && !quotaLock ? (
+      <AgentContinueAction
+        ref={continueRef}
+        partial={isContinuableStop(continuableAnswer.stopReason)}
+        onContinue={continueAnswer}
+      />
+    ) : undefined;
   const retryTurn = retryMode === 'none' ? {} : { onRetry: retryLast };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;

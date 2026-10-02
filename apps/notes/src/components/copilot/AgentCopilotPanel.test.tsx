@@ -1284,6 +1284,20 @@ describe('AgentCopilotPanel continue offer', () => {
     expect(continueButton()).toBeNull();
   });
 
+  it('hands the focus to the thread once a keyboard Continuar takes the button away', async () => {
+    const user = userEvent.setup();
+    offer();
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    screen.getByRole('button', { name: 'ai.copilot.continue.action' }).focus();
+    await user.keyboard('{Enter}');
+
+    expect(continueButton()).toBeNull();
+    expect(
+      screen.getByRole('log', { name: 'ai.copilot.history.thread' })
+    ).toHaveFocus();
+  });
+
   it('shows the button without the partial label when the stop reason is not a checkpoint', () => {
     offer({
       messages: [

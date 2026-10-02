@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CornerDownRight } from 'lucide-react';
@@ -9,11 +9,13 @@ interface AgentContinueActionProps {
   /** The answer stopped at a checkpoint, so it is labelled partial. */
   partial: boolean;
   onContinue: () => void;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function AgentContinueAction({
   partial,
   onContinue,
+  ref,
 }: AgentContinueActionProps) {
   const { t } = useTranslation('notes');
   const partialId = useId();
@@ -38,6 +40,7 @@ export function AgentContinueAction({
         </span>
       )}
       <Button
+        ref={ref}
         type="button"
         variant="outline"
         size="sm"
