@@ -74,21 +74,22 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
 ## Frontend Provider (`useHocuspocusCollaboration`)
 
 - `apps/notes/src/collaboration/useHocuspocusCollaboration.ts` — React hook wrapping `HocuspocusProvider`.
-- `useCollaborativeEditor` calls parameterless `useYjs()`, then `getYDoc(noteId)` and `getAwareness(noteId)`. Hocuspocus receives those same instances so editor and provider share one source of truth.
+- `useCollaborativeEditor` calls parameterless `useYjs()`, then `getYDoc(noteId)`. Hocuspocus receives that same `Y.Doc`, so editor and provider share one source of truth; the doc outlives every connection.
 - Handles `onStatus`, `onAuthenticated` (sets `readOnly`), `onAuthenticationFailed`, and `onSynced` callbacks.
-- Returns `{ status, isConnected, isSynced, readOnly }`; the shared-note UI currently exits editing through `onEditDenied` when the server reports read-only scope.
+- Returns `{ status, isConnected, isSynced, readOnly, awareness }`; the shared-note UI currently exits editing through `onEditDenied` when the server reports read-only scope.
 - Reconnection backoff is built into the provider; credential failures get one judged refresh attempt, terminal denials stop immediately, and `INTERNAL_ERROR` does not spend the refresh attempt.
 
 ## Awareness (Presence)
 
-- The provider operates on the same `Awareness` instance produced by `@knowtis/crdt`'s `YjsProvider`. Local presence updates (`Awareness.setLocalState`) are broadcast automatically; remote ones land via the same instance.
-- `useActiveCollaborators(noteId)` reads the awareness states map for remote cursors and user count.
-- `usePresenceBroadcast(noteId)` keeps the local user's awareness entry up to date (display name, color, etc.).
+- Each connection owns its `Awareness`: `useHocuspocusCollaboration` creates one per `HocuspocusProvider`, sets the local `user` field from `currentUser`, and returns it (`null` without a connection). `provider.destroy()` destroys the awareness it holds, so never share one across connections — revisiting a note, switching accounts and StrictMode's double effect each open a new connection.
+- `useActiveCollaborators(awareness)` lists the remote users of the hook's awareness and re-subscribes when it changes.
+- `CollaborativeCursors` writes the local `cursor` field and renders remote carets; the editor follows a new awareness with `editor.commands.setCursorsAwareness(awareness)` instead of being recreated.
+- `usePresenceBroadcast(noteId)` posts cross-tab `presence`/`leave` messages over the `BroadcastChannel`; it does not touch awareness.
 - No manual encode/decode of awareness updates — Hocuspocus' protocol handles it.
 
 ## Resource Cleanup
 
-- On client unmount: `useHocuspocusCollaboration` calls `provider.destroy()` in the effect cleanup. The provider closes the WebSocket and tears down its event listeners.
+- On client unmount: `useHocuspocusCollaboration` calls `provider.destroy()` in the effect cleanup. The provider closes the WebSocket, tears down its event listeners and destroys the connection's awareness.
 - On server module destroy (`OnModuleDestroy`): detach the upgrade handler, call `flushPendingStores()` (forces debounced `onStoreDocument` to run before shutdown), then `await server.destroy()`.
 - Empty rooms: Hocuspocus unloads the `Y.Doc` automatically (respects `unloadImmediately: false` debounce). Persistence extension's final `onStoreDocument` runs as part of unload.
 

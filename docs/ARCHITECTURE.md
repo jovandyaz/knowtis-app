@@ -479,7 +479,9 @@ With `REDIS_URL` set, Hocuspocus adds `@hocuspocus/extension-redis` so several A
 
 ### Presence (Awareness)
 
-Awareness carries two separate fields: `user` (set in `YjsProvider.tsx`) and `cursor` (set by `packages/editor/src/components/CollaborativeCursors.tsx` from the ProseMirror selection).
+Each connection owns its `Awareness`. `HocuspocusProvider.destroy()` destroys the awareness it was given, and a note gets a new connection on every visit, on a change of signed-in user and twice on a StrictMode mount, so `useHocuspocusCollaboration` creates a fresh `Awareness` on the note's `Y.Doc` for every provider and returns it. The `Y.Doc` outlives the connections; the awareness does not. `useActiveCollaborators(awareness)` lists the remote users of the current one, and the editor follows it through the `setCursorsAwareness` command of `CollaborativeCursors` without being recreated, so the document and the selection carry over.
+
+Awareness carries two separate fields: `user` (set by `useHocuspocusCollaboration` from `YjsProvider`'s `currentUser`) and `cursor` (set by `packages/editor/src/components/CollaborativeCursors.tsx` from the ProseMirror selection).
 
 ```typescript
 awareness.setLocalStateField('user', { name, color });
