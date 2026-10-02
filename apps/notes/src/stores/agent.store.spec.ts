@@ -769,6 +769,41 @@ describe('useAgentStore', () => {
         queryKey: aiQuotaQueryKeys.all,
       });
     });
+
+    it.each([
+      ['the user stops', () => useAgentStore.getState().cancel()],
+      [
+        'a new conversation abandons',
+        () => useAgentStore.getState().newConversation(),
+      ],
+      [
+        'the client times out',
+        () => vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS),
+      ],
+    ])(
+      'is refetched when %s a running turn, whose push the dropped socket loses',
+      (_why, leave) => {
+        capture();
+        useAgentStore.getState().sendMessage('hello');
+        const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+        invalidate.mockClear();
+
+        leave();
+
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: aiQuotaQueryKeys.all,
+        });
+      }
+    );
+
+    it('is not refetched by a stop with no turn running', () => {
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      invalidate.mockClear();
+
+      useAgentStore.getState().cancel();
+
+      expect(invalidate).not.toHaveBeenCalled();
+    });
   });
 
   describe('a queue behind the last message of the day', () => {
@@ -2555,6 +2590,20 @@ describe('agent.store continuing a capped turn', () => {
       expect(continuation.cancel).toHaveBeenCalledOnce();
       expect(turnIds()).toEqual(['turn-1', 'turn-1']);
       expect(useAgentStore.getState().continuableTurnId).toBe('turn-1');
+    });
+
+    it('refetches the quota the stopped continuation was still charged', () => {
+      capTurn();
+      captureContinue();
+      useAgentStore.getState().continueTurn();
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      invalidate.mockClear();
+
+      useAgentStore.getState().cancel();
+
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
     });
 
     it('resends a continuation the user stopped under the same turn id', () => {

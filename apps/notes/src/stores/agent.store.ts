@@ -408,7 +408,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         storedAnswerWait.abort.abort();
         return;
       }
-      get()._streamHandle?.cancel();
+      cancelStream();
       thinkingBuffer.discard();
       set((s) => ({
         status: 'timeout',
@@ -491,8 +491,17 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     });
   };
 
-  const abandonTurn = () => {
+  // Cancelling drops the socket, and with it any `agent:quota` push still on
+  // its way for a turn the server goes on charging.
+  const cancelStream = () => {
     get()._streamHandle?.cancel();
+    if (isTurnAlive(get().status)) {
+      invalidateQuota();
+    }
+  };
+
+  const abandonTurn = () => {
+    cancelStream();
     streamVersion++;
     buffer.clearInactivityTimer();
     buffer.discard();
@@ -1218,7 +1227,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
     cancel: () => {
       const { status } = get();
-      get()._streamHandle?.cancel();
+      cancelStream();
       streamVersion++;
       buffer.clearInactivityTimer();
       buffer.flush();
