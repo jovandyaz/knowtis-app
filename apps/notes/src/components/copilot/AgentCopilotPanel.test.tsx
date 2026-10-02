@@ -1284,6 +1284,18 @@ describe('AgentCopilotPanel continue offer', () => {
     expect(continueButton()).toBeNull();
   });
 
+  it('continues once however many times Continuar is clicked', async () => {
+    const user = userEvent.setup();
+    offer();
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    await user.dblClick(
+      screen.getByRole('button', { name: 'ai.copilot.continue.action' })
+    );
+
+    expect(agentClient.continueTurn).toHaveBeenCalledOnce();
+  });
+
   it('hands the focus to the thread once a keyboard Continuar takes the button away', async () => {
     const user = userEvent.setup();
     offer();

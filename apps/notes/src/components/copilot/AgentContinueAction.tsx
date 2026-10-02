@@ -1,4 +1,4 @@
-import { useId, useState, type Ref } from 'react';
+import { useId, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CornerDownRight } from 'lucide-react';
@@ -19,15 +19,6 @@ export function AgentContinueAction({
 }: AgentContinueActionProps) {
   const { t } = useTranslation('notes');
   const partialId = useId();
-  const [requested, setRequested] = useState(false);
-
-  const request = () => {
-    if (requested) {
-      return;
-    }
-    setRequested(true);
-    onContinue();
-  };
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -44,8 +35,7 @@ export function AgentContinueAction({
         type="button"
         variant="outline"
         size="sm"
-        disabled={requested}
-        onClick={request}
+        onClick={onContinue}
         {...(partial ? { 'aria-describedby': partialId } : {})}
       >
         <CornerDownRight aria-hidden="true" className="h-3.5 w-3.5" />
