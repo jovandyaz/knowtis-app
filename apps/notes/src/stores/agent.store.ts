@@ -323,6 +323,15 @@ function continuedTurnOf(
     .findLast((m) => m.role === 'assistant' && m.turnId !== undefined)?.turnId;
 }
 
+function withInterruptedReply(
+  messages: readonly AgentChatMessage[],
+  id: string | null
+): AgentChatMessage[] {
+  return messages.map((m) =>
+    m.id === id && m.content.length > 0 ? { ...m, interrupted: true } : m
+  );
+}
+
 function offersNoResend(error: AgentErrorPayload): boolean {
   return (
     refusedBeforeRun(error) ||
@@ -455,8 +464,12 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       _streamHandle: null,
       thinkingText: '',
       decisionInFlight: null,
-      messages: s.messages.filter(
-        (m) => m.id !== id || m.content.length > 0 || m.committed !== undefined
+      messages: withInterruptedReply(
+        s.messages.filter(
+          (m) =>
+            m.id !== id || m.content.length > 0 || m.committed !== undefined
+        ),
+        id
       ),
     }));
     drainQueue();
@@ -1193,16 +1206,17 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     },
 
     cancel: () => {
-      const wasAlive = isTurnAlive(get().status);
+      const { status } = get();
       get()._streamHandle?.cancel();
       streamVersion++;
       buffer.clearInactivityTimer();
       buffer.flush();
       thinkingBuffer.discard();
       const restored =
-        wasAlive && !resumingDecision && !activeAnswered()
+        isTurnAlive(status) && !resumingDecision && !activeAnswered()
           ? liveContinuation?.continuesTurnId
           : undefined;
+      const cutReply = status === 'streaming' ? activeAssistantId : null;
       set((s) => ({
         status: 'idle',
         pendingProposal: null,
@@ -1210,7 +1224,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         thinkingText: '',
         _streamHandle: null,
         ...(restored === undefined
-          ? {}
+          ? { messages: withInterruptedReply(s.messages, cutReply) }
           : {
               messages: withoutActiveTurn(s.messages),
               continuableTurnId: restored,

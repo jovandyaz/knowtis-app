@@ -413,6 +413,51 @@ describe('useAgentStore', () => {
     expect(messages.at(-1)?.content).toBe('partial');
   });
 
+  describe('a reply cut off before it finished', () => {
+    it('is marked interrupted when the user stops it mid-text', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hola');
+      get().onChunk({ text: 'partial' });
+
+      useAgentStore.getState().cancel();
+
+      expect(useAgentStore.getState().messages.at(-1)).toMatchObject({
+        content: 'partial',
+        interrupted: true,
+      });
+    });
+
+    it('is not marked when the user stops it before any text', () => {
+      capture();
+      useAgentStore.getState().sendMessage('hola');
+
+      useAgentStore.getState().cancel();
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+
+    it('is not marked when the user stops a turn waiting on its proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onChunk({ text: 'Here is a draft.' });
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 'Create "My Note"',
+        payload: {},
+      });
+
+      useAgentStore.getState().cancel();
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+  });
+
   it('retryLast replays the last user message after an error', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('hello');
@@ -1265,6 +1310,38 @@ describe('agent.store server-authoritative wire', () => {
         content: 'Done, your note',
         committed: { kind: 'create', title: 'My Note' },
       });
+    });
+
+    it('marks a resume the drain cut mid-reply as interrupted', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onChunk({ text: 'Done, your note' });
+
+      get().onError(resumeRefused);
+
+      expect(useAgentStore.getState().messages.at(-1)).toMatchObject({
+        content: 'Done, your note',
+        interrupted: true,
+      });
+    });
+
+    it('does not mark a resume the drain cut before it wrote anything', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+
+      get().onError(resumeRefused);
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
     });
 
     it('ends a rejected turn without an error or an empty reply', () => {
