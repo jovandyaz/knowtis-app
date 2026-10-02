@@ -1422,20 +1422,30 @@ describe('agent.store continue offer across a reload', () => {
     ]);
   });
 
-  it('keeps the offer of a turn that ended while an older transcript was in flight', async () => {
-    const pending = deferred<ConversationTranscript>();
-    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
-    const opening = useAgentStore.getState().openConversation('c1', 'reload');
-    const { callbacks } = capture();
-    useAgentStore.getState().sendMessage('new question');
-    callbacks().onChunk({ text: 'Partial answer.' });
-    callbacks().onDone({ ...DONE, stopReason: 'max_steps', continuable: true });
+  it.each([
+    ['moves to an older turn', 't1'],
+    ['hides', null],
+  ])(
+    'keeps the offer of a turn that ended while an older transcript in flight %s it',
+    async (_why, staleOffer) => {
+      const pending = deferred<ConversationTranscript>();
+      vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+      const opening = useAgentStore.getState().openConversation('c1', 'reload');
+      const { callbacks } = capture();
+      useAgentStore.getState().sendMessage('new question');
+      callbacks().onChunk({ text: 'Partial answer.' });
+      callbacks().onDone({
+        ...DONE,
+        stopReason: 'max_steps',
+        continuable: true,
+      });
 
-    pending.resolve({ ...TRANSCRIPT, continuableTurnId: 't1' });
-    await opening;
+      pending.resolve({ ...TRANSCRIPT, continuableTurnId: staleOffer });
+      await opening;
 
-    expect(useAgentStore.getState().continuableTurnId).toBe(LIVE_TURN_ID);
-  });
+      expect(useAgentStore.getState().continuableTurnId).toBe(LIVE_TURN_ID);
+    }
+  );
 
   it('offers nothing when an older server sends no continuableTurnId', async () => {
     const olderServer: Omit<ConversationTranscript, 'continuableTurnId'> = {

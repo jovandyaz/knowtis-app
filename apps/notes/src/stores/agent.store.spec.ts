@@ -2262,9 +2262,18 @@ describe('agent.store the continue offer', () => {
   });
 
   it.each([[false], [undefined]])(
-    'is not made when the server reports continuable as %s',
+    'withdraws an offer still standing when the server reports continuable as %s',
     (continuable) => {
-      answerCapped(continuable);
+      const { get } = capture('turn-1');
+      useAgentStore.getState().sendMessage('Compara mis notas');
+      useAgentStore.setState({ continuableTurnId: 'turn-1' });
+      get().onChunk({ text: 'Revisé tres notas.' });
+
+      get().onDone({
+        ...DONE,
+        stopReason: 'max_steps',
+        ...(continuable === undefined ? {} : { continuable }),
+      });
 
       expect(useAgentStore.getState().continuableTurnId).toBeNull();
     }
@@ -2285,6 +2294,31 @@ describe('agent.store the continue offer', () => {
     answerCapped(true);
 
     useAgentStore.getState().newConversation();
+
+    expect(useAgentStore.getState().continuableTurnId).toBeNull();
+  });
+
+  it('is withdrawn when another conversation opens', () => {
+    answerCapped(true);
+    vi.mocked(conversationsApi.transcript).mockReturnValueOnce(
+      new Promise(() => undefined)
+    );
+
+    void useAgentStore.getState().openConversation('conv-2', 'switcher');
+
+    expect(useAgentStore.getState().continuableTurnId).toBeNull();
+  });
+
+  it('is withdrawn with a conversation the server no longer has', () => {
+    const { get } = capture('turn-1');
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    useAgentStore.setState({ continuableTurnId: 'turn-0' });
+
+    get().onError({
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'gone',
+      turnId: 'turn-1',
+    });
 
     expect(useAgentStore.getState().continuableTurnId).toBeNull();
   });
