@@ -343,6 +343,38 @@ describe('AIGateway', () => {
       );
       expect(client.disconnect).toHaveBeenCalled();
     });
+
+    it('disconnects with AI_INTERNAL_ERROR and logs why when the ai_enabled check throws', async () => {
+      const log = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      vi.mocked(mockFeatureFlags.isEnabled).mockRejectedValue(
+        new Error('database down')
+      );
+      const client = createMockAISocket({
+        handshake: { auth: { token: 'valid-jwt' }, headers: {} },
+      });
+
+      await gateway.handleConnection(client);
+
+      expect(vi.mocked(client.emit).mock.calls).toEqual([
+        [
+          'ai:error',
+          {
+            code: 'AI_INTERNAL_ERROR',
+            message: 'AI internal error: AI connection failed',
+          },
+        ],
+      ]);
+      expect(client.disconnect).toHaveBeenCalledOnce();
+      expect(log).toHaveBeenCalledWith({
+        event: 'ai.client.connect_failed',
+        clientId: 'socket-1',
+        userId: 'user-123',
+        error: 'database down',
+      });
+      log.mockRestore();
+    });
   });
 
   describe('handleComplete', () => {
@@ -515,6 +547,40 @@ describe('AIGateway', () => {
         expect.objectContaining({ code: 'AI_FEATURE_DISABLED' })
       );
       expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+    });
+
+    it('answers once with AI_INTERNAL_ERROR, logs why and never streams when the ai_enabled check throws', async () => {
+      const log = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      vi.mocked(mockFeatureFlags.isEnabled).mockRejectedValue(
+        new Error('database down')
+      );
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      await gateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some note content to summarize',
+      });
+
+      expect(vi.mocked(client.emit).mock.calls).toEqual([
+        [
+          'ai:error',
+          {
+            code: 'AI_INTERNAL_ERROR',
+            message: 'AI internal error: AI completion failed',
+          },
+        ],
+      ]);
+      expect(log).toHaveBeenCalledWith({
+        event: 'ai.complete.flag_check_failed',
+        clientId: 'socket-1',
+        userId: 'user-123',
+        error: 'database down',
+      });
+      expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+      log.mockRestore();
     });
 
     it('should emit AUTH_REQUIRED when no userId', async () => {
