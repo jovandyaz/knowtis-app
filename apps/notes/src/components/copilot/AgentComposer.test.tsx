@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { AgentStatus } from '@/stores/agent.store';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as SharedUtil from '@knowtis/shared-util';
 
@@ -348,7 +348,24 @@ describe('AgentComposer focus under a lock', () => {
   });
 });
 
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+function stubPointer(pointer: 'fine' | 'coarse') {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: pointer === 'coarse' && query === COARSE_POINTER_QUERY,
+    media: query,
+  }));
+}
+
 describe('AgentComposer focus when the lock lifts', () => {
+  beforeEach(() => {
+    stubPointer('fine');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('gives the focus to the input when the call to action held it', () => {
     const { rerender } = render(
       <Composer draft="hola" locked={<button type="button">upgrade</button>} />
@@ -390,6 +407,30 @@ describe('AgentComposer focus when the lock lifts', () => {
     );
 
     expect(screen.getByRole('button', { name: 'elsewhere' })).toHaveFocus();
+  });
+
+  it('keeps the keyboard closed on a touch screen when the focus had fallen to the page', () => {
+    stubPointer('coarse');
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('gives the focus back on a touch screen when the call to action held it', () => {
+    stubPointer('coarse');
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+    act(() => screen.getByRole('button', { name: 'upgrade' }).focus());
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
   });
 
   it('does not take the focus when the composer first appears unlocked', () => {

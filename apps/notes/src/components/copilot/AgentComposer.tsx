@@ -34,6 +34,18 @@ interface AgentComposerProps extends ComposerInputProps {
 
 const ICON_BUTTON_CLASS = 'h-8 w-8 shrink-0 p-0';
 const FOCUSABLE_SELECTOR = 'button, a[href], [tabindex]:not([tabindex="-1"])';
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+function LockSlot({
+  children,
+  onUnmount,
+}: {
+  children: ReactNode;
+  onUnmount: () => void;
+}) {
+  useLayoutEffect(() => onUnmount, [onUnmount]);
+  return children;
+}
 
 function ComposerInput({
   onUnmount,
@@ -140,36 +152,38 @@ export function AgentComposer({
   const { t } = useTranslation('notes');
   const { status, queueLength } = inputProps;
   const shellRef = useRef<HTMLDivElement>(null);
-  const inputHeldFocusWhenRemoved = useRef(false);
+  const shellHeldFocusWhenSwapped = useRef(false);
   const isLocked = Boolean(locked);
   const wasLocked = useRef(isLocked);
 
-  const noteFocusOnInputRemoval = useCallback(() => {
-    inputHeldFocusWhenRemoved.current =
+  const noteFocusOnSwap = useCallback(() => {
+    shellHeldFocusWhenSwapped.current =
       shellRef.current?.contains(document.activeElement) === true;
   }, []);
 
   useLayoutEffect(() => {
-    if (!isLocked || !inputHeldFocusWhenRemoved.current) {
-      return;
-    }
-    inputHeldFocusWhenRemoved.current = false;
-    shellRef.current
-      ?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
-      ?.focus({ preventScroll: true });
-  }, [isLocked]);
-
-  useLayoutEffect(() => {
-    const lifted = wasLocked.current && !isLocked;
+    const swapped = wasLocked.current !== isLocked;
     wasLocked.current = isLocked;
+    const shellHeldFocus = shellHeldFocusWhenSwapped.current;
+    shellHeldFocusWhenSwapped.current = false;
     const shell = shellRef.current;
-    const active = document.activeElement;
-    const focusIsAdrift =
-      active === null || active === document.body || shell?.contains(active);
-    if (!lifted || !focusIsAdrift) {
+    if (!swapped || !shell) {
       return;
     }
-    shell?.querySelector('textarea')?.focus({ preventScroll: true });
+    if (isLocked) {
+      if (shellHeldFocus) {
+        shell
+          .querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+          ?.focus({ preventScroll: true });
+      }
+      return;
+    }
+    const active = document.activeElement;
+    const focusOnPage = active === null || active === document.body;
+    const touchScreen = window.matchMedia(COARSE_POINTER_QUERY).matches;
+    if (shellHeldFocus || (focusOnPage && !touchScreen)) {
+      shell.querySelector('textarea')?.focus({ preventScroll: true });
+    }
   }, [isLocked]);
 
   const hint = isTurnAlive(status)
@@ -190,8 +204,10 @@ export function AgentComposer({
             'focus-within:ring-2 focus-within:ring-(--ring) focus-within:ring-offset-1'
         )}
       >
-        {locked || (
-          <ComposerInput {...inputProps} onUnmount={noteFocusOnInputRemoval} />
+        {locked ? (
+          <LockSlot onUnmount={noteFocusOnSwap}>{locked}</LockSlot>
+        ) : (
+          <ComposerInput {...inputProps} onUnmount={noteFocusOnSwap} />
         )}
       </div>
       {!isLocked && (
