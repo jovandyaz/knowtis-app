@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { formatTime } from '@/lib/format-date';
+import { clockTimeOf } from '@/lib/format-date';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,14 +37,16 @@ vi.mock('@knowtis/api-client', () => ({
   aiKeysApi: { list: vi.fn() },
 }));
 
-const RESETS_AT = '2026-10-03T00:00:00.000Z';
+const RESETS_AT = new Date(2026, 9, 3).toISOString();
+const RESETS_AT_ONE = new Date(2026, 9, 3, 1).toISOString();
 
 function metered(
   tier: 'anonymous' | 'free',
   used: number,
-  limit: number
+  limit: number,
+  resetsAt = RESETS_AT
 ): AiQuota {
-  return { tier, messages: { used, limit, resetsAt: RESETS_AT } };
+  return { tier, messages: { used, limit, resetsAt } };
 }
 
 const BYOK: AiQuota = { tier: 'byok', messages: null };
@@ -123,7 +125,23 @@ describe('TierBadge', () => {
     act(() => badge.focus());
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent(
-      `ai.copilot.quota.resetsAt(time=${formatTime(RESETS_AT, 'en')})`
+      `ai.copilot.quota.resetsAt(time=${clockTimeOf(RESETS_AT, 'en').time})`
+    );
+  });
+
+  it('names a reset at one o’clock in its own form', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(
+      metered('free', 12, 30, RESETS_AT_ONE)
+    );
+    renderBadge();
+    const badge = await screen.findByLabelText(
+      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.free,used=12,count=30)'
+    );
+
+    act(() => badge.focus());
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      `ai.copilot.quota.resetsAt(time=${clockTimeOf(RESETS_AT_ONE, 'en').time},context=atOne)`
     );
   });
 

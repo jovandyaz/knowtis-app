@@ -11,7 +11,7 @@ import {
 } from '@/hooks/useAiQuota';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { captureProductEvent } from '@/lib/analytics/product-events';
-import { formatTime } from '@/lib/format-date';
+import { clockTimeOf } from '@/lib/format-date';
 import {
   isTurnAlive,
   isUpdateProposal,
@@ -208,7 +208,7 @@ export function AgentCopilotPanel() {
 
   const errorMessage = liveQuotaRefusal?.resetsAt
     ? t('ai.copilot.quota.exhaustedToday', {
-        time: formatTime(liveQuotaRefusal.resetsAt, i18n.language),
+        ...clockTimeOf(liveQuotaRefusal.resetsAt, i18n.language),
       })
     : t(errorMessageKey);
   const reviewKey =

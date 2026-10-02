@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
-import { formatTime } from '@/lib/format-date';
+import { clockTimeOf } from '@/lib/format-date';
 import { useSettingsStore } from '@/stores/settings.store';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -32,7 +32,9 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
 
-const RESETS_AT = '2026-10-03T00:00:00.000Z';
+const RESETS_AT = new Date(2026, 9, 3).toISOString();
+const MINUTE_BEFORE_RESET = new Date(Date.parse(RESETS_AT) - 60_000);
+const RESETS_AT_ONE = new Date(2026, 9, 3, 1).toISOString();
 
 function renderNotice(node: ReactNode) {
   const client = new QueryClient();
@@ -58,7 +60,7 @@ describe('QuotaLockedNotice', () => {
       <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
     );
 
-    const time = formatTime(RESETS_AT, 'en');
+    const { time } = clockTimeOf(RESETS_AT, 'en');
     expect(time).toMatch(/\d{1,2}:\d{2}/);
     expect(screen.getByRole('status')).toHaveTextContent(
       `ai.copilot.quota.exhausted(count=30,time=${time})`
@@ -71,8 +73,25 @@ describe('QuotaLockedNotice', () => {
     );
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      `ai.copilot.quota.exhaustedToday(time=${formatTime(RESETS_AT, 'en')})`
+      `ai.copilot.quota.exhaustedToday(time=${clockTimeOf(RESETS_AT, 'en').time})`
     );
+  });
+
+  it('names a reset at one o’clock in its own form', () => {
+    const { time } = clockTimeOf(RESETS_AT_ONE, 'en');
+    const { rerender } = renderNotice(
+      <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT_ONE} />
+    );
+    const spent = screen.getByRole('status').textContent;
+
+    rerender(
+      <QuotaLockedNotice tier="free" limit={null} resetsAt={RESETS_AT_ONE} />
+    );
+
+    expect([spent, screen.getByRole('status').textContent]).toEqual([
+      `ai.copilot.quota.exhausted(count=30,time=${time},context=atOne)`,
+      `ai.copilot.quota.exhaustedToday(time=${time},context=atOne)`,
+    ]);
   });
 
   it('reads the notice out with its call to action', () => {
@@ -83,7 +102,7 @@ describe('QuotaLockedNotice', () => {
     expect(
       screen.getByRole('button', { name: 'ai.copilot.quota.byokCta' })
     ).toHaveAccessibleDescription(
-      `ai.copilot.quota.exhausted(count=30,time=${formatTime(RESETS_AT, 'en')})`
+      `ai.copilot.quota.exhausted(count=30,time=${clockTimeOf(RESETS_AT, 'en').time})`
     );
   });
 
@@ -134,7 +153,7 @@ describe('QuotaLockedNotice', () => {
 
     it('reads the quota again once the messages reset', () => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
+      vi.setSystemTime(MINUTE_BEFORE_RESET);
       const { invalidate } = renderNotice(
         <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
       );
@@ -154,7 +173,7 @@ describe('QuotaLockedNotice', () => {
 
     it('keeps reading the quota past the reset while the server still reports the old day', () => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
+      vi.setSystemTime(MINUTE_BEFORE_RESET);
       const { invalidate } = renderNotice(
         <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
       );
@@ -193,7 +212,7 @@ describe('QuotaLockedNotice', () => {
 
     it('stops waiting once the lock lifts', () => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
+      vi.setSystemTime(MINUTE_BEFORE_RESET);
       const { invalidate, unmount } = renderNotice(
         <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
       );

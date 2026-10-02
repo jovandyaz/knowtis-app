@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDate, formatTime } from './format-date';
+import { clockTimeOf, formatDate } from './format-date';
 
 describe('formatDate', () => {
   it('formats a valid ISO timestamp for the given locale in any time zone', () => {
@@ -14,14 +14,26 @@ describe('formatDate', () => {
   });
 });
 
-describe('formatTime', () => {
+describe('clockTimeOf', () => {
   it('formats the hour and minutes for the given locale in any time zone', () => {
-    expect(formatTime('2026-10-03T00:00:00.000Z', 'en-US')).toMatch(
+    expect(clockTimeOf('2026-10-03T00:00:00.000Z', 'en-US').time).toMatch(
       /^\d{1,2}:\d{2}\s[AP]M$/
     );
   });
 
+  it('marks an hour that reads one with the atOne context', () => {
+    expect([
+      clockTimeOf(new Date(2026, 9, 3, 1, 0).toISOString(), 'es'),
+      clockTimeOf(new Date(2026, 9, 3, 13, 0).toISOString(), 'es'),
+      clockTimeOf(new Date(2026, 9, 3, 13, 0).toISOString(), 'en-US').context,
+    ]).toEqual([
+      { time: '1:00', context: 'atOne' },
+      { time: '13:00' },
+      'atOne',
+    ]);
+  });
+
   it('returns a dash placeholder for an invalid timestamp', () => {
-    expect(formatTime('not-a-date', 'en-US')).toBe('—');
+    expect(clockTimeOf('not-a-date', 'en-US')).toEqual({ time: '—' });
   });
 });

@@ -7,7 +7,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { ROUTES } from '@/config/routes.config';
 import { aiQuotaQueryKeys, type QuotaState } from '@/hooks/useAiQuota';
 import { captureProductEvent } from '@/lib/analytics/product-events';
-import { formatTime } from '@/lib/format-date';
+import { clockTimeOf } from '@/lib/format-date';
 import { useSettingsStore } from '@/stores/settings.store';
 
 import { Button } from '@knowtis/design-system';
@@ -46,7 +46,7 @@ export function QuotaLockedNotice({ tier, limit, resetsAt }: QuotaLock) {
     return () => clearTimeout(timer);
   }, [queryClient, resetsAt]);
 
-  const time = formatTime(resetsAt, i18n.language);
+  const resetTime = clockTimeOf(resetsAt, i18n.language);
   const guest = tier === 'anonymous';
 
   const upgrade = () => {
@@ -65,8 +65,8 @@ export function QuotaLockedNotice({ tier, limit, resetsAt }: QuotaLock) {
     <div className="flex flex-col items-stretch gap-2 px-1 py-0.5 sm:items-start">
       <p id={messageId} role="status" className="text-sm text-foreground">
         {limit === null
-          ? t('ai.copilot.quota.exhaustedToday', { time })
-          : t('ai.copilot.quota.exhausted', { count: limit, time })}
+          ? t('ai.copilot.quota.exhaustedToday', { ...resetTime })
+          : t('ai.copilot.quota.exhausted', { count: limit, ...resetTime })}
       </p>
       <Button
         type="button"

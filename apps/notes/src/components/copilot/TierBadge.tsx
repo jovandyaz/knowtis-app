@@ -4,7 +4,7 @@ import { quotaStateOf, useAiQuota } from '@/hooks/useAiQuota';
 import { useAISettings } from '@/hooks/useAISettings';
 import { useProviderKeys } from '@/hooks/useProviderKeys';
 import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
-import { formatTime } from '@/lib/format-date';
+import { clockTimeOf } from '@/lib/format-date';
 
 import {
   Badge,
@@ -56,7 +56,7 @@ export function TierBadge() {
       text: t('ai.copilot.quota.badge.metered', { tier, used, limit }),
       label: t('ai.copilot.quota.usedLabel', { tier, used, count: limit }),
       tooltip: t('ai.copilot.quota.resetsAt', {
-        time: formatTime(quota.resetsAt, i18n.language),
+        ...clockTimeOf(quota.resetsAt, i18n.language),
       }),
       warning: quota.low,
     };

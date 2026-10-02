@@ -37,7 +37,8 @@ import { AgentCopilotPanel } from './AgentCopilotPanel';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, opts?: { context?: string }) =>
+      opts?.context ? `${key}_${opts.context}` : key,
     i18n: { language: 'en' },
   }),
 }));
@@ -1103,6 +1104,25 @@ describe('AgentCopilotPanel daily quota', () => {
     expect(screen.getByTestId('composer')).toHaveAttribute(
       'data-draft',
       'hola'
+    );
+  });
+
+  it('names a reset at one o’clock in its own form', async () => {
+    const resetsAtOne = new Date();
+    resetsAtOne.setHours(25, 0, 0, 0);
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'anonymous',
+      messages: { used: 3, limit: 5, resetsAt: resetsAtOne.toISOString() },
+    });
+    refuseWith({ resetsAt: resetsAtOne.toISOString(), upgrade: 'register' });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByText('ai.copilot.quota.remaining')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.copilot.quota.exhaustedToday_atOne'
     );
   });
 

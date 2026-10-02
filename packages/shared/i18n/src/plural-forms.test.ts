@@ -9,6 +9,8 @@ const IMAGE_IMPORT_FAILED_KEY = 'ai.image.importFailed';
 const QUOTA_REMAINING_KEY = 'ai.copilot.quota.remaining';
 const QUOTA_EXHAUSTED_KEY = 'ai.copilot.quota.exhausted';
 const QUOTA_USED_LABEL_KEY = 'ai.copilot.quota.usedLabel';
+const QUOTA_RESETS_AT_KEY = 'ai.copilot.quota.resetsAt';
+const QUOTA_EXHAUSTED_TODAY_KEY = 'ai.copilot.quota.exhaustedToday';
 
 const BUNDLES = { en: enNotes, es: esNotes };
 
@@ -63,6 +65,27 @@ const QUOTA_EXHAUSTED_CASES = [
     none: 'Los mensajes de IA no están disponibles hoy. Se renuevan a las 6:00 PM.',
     singular: 'Usaste tu único mensaje de hoy. Se renueva a las 6:00 PM.',
     plural: 'Usaste tus 2 mensajes de hoy. Se renuevan a las 6:00 PM.',
+  },
+] as const;
+
+const QUOTA_RESET_AT_ONE_CASES = [
+  {
+    locale: 'en',
+    time: '1:00 AM',
+    resetsAt: 'Resets at 1:00 AM',
+    none: "AI messages aren't available today. They reset at 1:00 AM.",
+    singular: 'You used your only message for today. It resets at 1:00 AM.',
+    plural: 'You used your 2 messages for today. They reset at 1:00 AM.',
+    today: 'You used your messages for today. They reset at 1:00 AM.',
+  },
+  {
+    locale: 'es',
+    time: '1:00',
+    resetsAt: 'Se renuevan a la 1:00',
+    none: 'Los mensajes de IA no están disponibles hoy. Se renuevan a la 1:00.',
+    singular: 'Usaste tu único mensaje de hoy. Se renueva a la 1:00.',
+    plural: 'Usaste tus 2 mensajes de hoy. Se renuevan a la 1:00.',
+    today: 'Usaste tus mensajes de hoy. Se renuevan a la 1:00.',
   },
 ] as const;
 
@@ -183,6 +206,22 @@ describe('plural forms', () => {
       expect(i18n.t(QUOTA_EXHAUSTED_KEY, { count: 0, time: '6:00 PM' })).toBe(
         none
       );
+    }
+  );
+
+  it.each(QUOTA_RESET_AT_ONE_CASES)(
+    'names a reset at one o’clock with the right article in $locale',
+    async ({ locale, time, resetsAt, none, singular, plural, today }) => {
+      const i18n = await translatorFor(locale);
+      const atOne = { time, context: 'atOne' };
+
+      expect([
+        i18n.t(QUOTA_RESETS_AT_KEY, atOne),
+        i18n.t(QUOTA_EXHAUSTED_KEY, { ...atOne, count: 0 }),
+        i18n.t(QUOTA_EXHAUSTED_KEY, { ...atOne, count: 1 }),
+        i18n.t(QUOTA_EXHAUSTED_KEY, { ...atOne, count: 2 }),
+        i18n.t(QUOTA_EXHAUSTED_TODAY_KEY, atOne),
+      ]).toEqual([resetsAt, none, singular, plural, today]);
     }
   );
 
