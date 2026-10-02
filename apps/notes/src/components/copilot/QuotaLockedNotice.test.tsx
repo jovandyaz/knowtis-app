@@ -193,6 +193,30 @@ describe('QuotaLockedNotice', () => {
       expect(invalidate).toHaveBeenCalledTimes(2);
     });
 
+    it('backs off between reads while the lock outlives its reset, up to five minutes', () => {
+      vi.useFakeTimers();
+      const start = Date.parse(RESETS_AT) + 60_000;
+      vi.setSystemTime(start);
+      const { invalidate } = renderNotice(
+        <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+      );
+      const readAt: number[] = [];
+      invalidate.mockImplementation(async () => {
+        readAt.push(Date.now());
+      });
+      const expectedGaps = [
+        5_000, 10_000, 20_000, 40_000, 80_000, 160_000, 300_000, 300_000,
+      ];
+
+      act(() => {
+        vi.advanceTimersByTime(expectedGaps.reduce((sum, gap) => sum + gap));
+      });
+
+      expect(
+        readAt.map((at, i) => at - (i === 0 ? start : readAt[i - 1]))
+      ).toEqual(expectedGaps);
+    });
+
     it('waits the floor between reads when the reset time cannot be read', () => {
       vi.useFakeTimers();
       const { invalidate } = renderNotice(

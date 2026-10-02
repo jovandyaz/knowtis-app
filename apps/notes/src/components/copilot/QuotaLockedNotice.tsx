@@ -13,13 +13,8 @@ import { useSettingsStore } from '@/stores/settings.store';
 import { Button } from '@knowtis/design-system';
 
 const RESET_RECHECK_FLOOR_MS = 5_000;
-
-function msUntilRecheck(resetsAt: string): number {
-  const untilReset = Date.parse(resetsAt) - Date.now();
-  return untilReset > RESET_RECHECK_FLOOR_MS
-    ? untilReset
-    : RESET_RECHECK_FLOOR_MS;
-}
+const RESET_RECHECK_CEILING_MS = 5 * 60_000;
+const RESET_RECHECK_BACKOFF_FACTOR = 2;
 
 export interface QuotaLock {
   tier: Extract<QuotaState, { kind: 'metered' }>['tier'];
@@ -36,11 +31,21 @@ export function QuotaLockedNotice({ tier, limit, resetsAt }: QuotaLock) {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let retryMs = RESET_RECHECK_FLOOR_MS;
     const recheckAfterReset = () => {
+      const untilReset = Date.parse(resetsAt) - Date.now();
+      const waitsForReset = untilReset > retryMs;
+      const delay = waitsForReset ? untilReset : retryMs;
+      if (!waitsForReset) {
+        retryMs = Math.min(
+          retryMs * RESET_RECHECK_BACKOFF_FACTOR,
+          RESET_RECHECK_CEILING_MS
+        );
+      }
       timer = setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
         recheckAfterReset();
-      }, msUntilRecheck(resetsAt));
+      }, delay);
     };
     recheckAfterReset();
     return () => clearTimeout(timer);
