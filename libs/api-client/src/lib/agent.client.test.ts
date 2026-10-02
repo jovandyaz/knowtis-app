@@ -2443,3 +2443,81 @@ describe('AgentClient – resending a turn after the transport drops', () => {
     expect(sentMessages()).toHaveLength(1);
   });
 });
+
+describe('AgentClient – onQuota', () => {
+  const QUOTA = {
+    tier: 'free',
+    messages: { used: 3, limit: 10, resetsAt: '2026-10-03T00:00:00.000Z' },
+  } as never;
+  const callbacks = () => ({
+    onChunk: vi.fn(),
+    onDone: vi.fn(),
+    onError: vi.fn(),
+    onTurnSettled: vi.fn(),
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    handlers.clear();
+    socket.connected = true;
+    vi.mocked(io).mockReturnValue(socket as never);
+  });
+
+  it('delivers {tier, messages} without the turnId', () => {
+    const client = makeClient();
+    const listener = vi.fn();
+    client.onQuota(listener);
+    client.sendMessage('hi', callbacks());
+
+    handlers.get('agent:quota')?.({ turnId: 'any', ...(QUOTA as object) });
+
+    expect(listener).toHaveBeenCalledWith(QUOTA);
+    expect(listener.mock.calls[0][0]).not.toHaveProperty('turnId');
+  });
+
+  it('delivers an event for a foreign turn and one after the turn finished', () => {
+    const client = makeClient();
+    const listener = vi.fn();
+    client.onQuota(listener);
+    client.sendMessage('hi', callbacks());
+
+    handlers.get('agent:quota')?.({ turnId: 'foreign', ...(QUOTA as object) });
+    handlers.get('agent:done')?.({
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    });
+    handlers.get('agent:quota')?.({ turnId: 'late', ...(QUOTA as object) });
+
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps delivering from a socket created after a cancel', () => {
+    const client = makeClient();
+    const listener = vi.fn();
+    client.onQuota(listener);
+    const handle = client.sendMessage('hi', callbacks());
+    handle.cancel();
+    client.disconnect();
+
+    const next = createFakeSocket();
+    vi.mocked(io).mockReturnValue(next.socket as never);
+    client.sendMessage('again', callbacks());
+    next.trigger('agent:quota', { turnId: 't2', ...(QUOTA as object) });
+
+    expect(listener).toHaveBeenCalledWith(QUOTA);
+  });
+
+  it('stops delivering after unsubscribe', () => {
+    const client = makeClient();
+    const listener = vi.fn();
+    const unsubscribe = client.onQuota(listener);
+    client.sendMessage('hi', callbacks());
+    unsubscribe();
+
+    handlers.get('agent:quota')?.({ turnId: 'x', ...(QUOTA as object) });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
