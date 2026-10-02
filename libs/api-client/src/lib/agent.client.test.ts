@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AGENT_TURN_ERROR_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+} from '@knowtis/shared-types';
 
 import { AgentClient } from './agent.client';
 import type { RefreshOutcome } from './token-refresh-policy';
@@ -2535,5 +2538,169 @@ describe('AgentClient – onQuota', () => {
     handlers.get('agent:quota')?.({ turnId: 'x', ...(QUOTA as object) });
 
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentClient – continuing a capped turn', () => {
+  let fake: ReturnType<typeof createFakeSocket>;
+  let client: AgentClient;
+
+  const RESEND_DELAYS_MS = [1_000, 2_000, 4_000];
+  const DONE = {
+    usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'max_steps',
+  };
+  const callbacksOf = () => ({
+    onChunk: vi.fn(),
+    onDone: vi.fn(),
+    onConversation: vi.fn(),
+    onError: vi.fn(),
+    onTurnSettled: vi.fn(),
+  });
+  const sentMessages = () =>
+    (fake.socket.emit.mock.calls as unknown[][])
+      .filter((call) => call[0] === 'agent:message')
+      .map((call) => call[1]);
+  const receiptOf = (call: unknown[] | undefined) =>
+    call?.at(-1) as (err: Error | null) => void;
+  const lastEmit = () => fake.socket.emit.mock.calls.at(-1) as unknown[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeSocket();
+    vi.mocked(io).mockReturnValue(fake.socket as never);
+    client = new AgentClient('http://test.local/agent');
+    client.setTokenProvider({
+      getAccessToken: () => 'token',
+      clearTokens: vi.fn(),
+    });
+    client.resumeConversation('conv-1');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends the continuation as a message with no text of its own', () => {
+    const handle = client.continueTurn('capped-1', callbacksOf(), 'note-1', {
+      effort: 'high',
+    });
+
+    expect(sentMessages()).toEqual([
+      {
+        turnId: handle.turnId,
+        conversationId: 'conv-1',
+        continuesTurnId: 'capped-1',
+        noteId: 'note-1',
+        effort: 'high',
+      },
+    ]);
+  });
+
+  it('streams the continuation to its callbacks and ends it on done', () => {
+    const callbacks = callbacksOf();
+    const handle = client.continueTurn('capped-1', callbacks);
+
+    fake.trigger('agent:chunk', { turnId: handle.turnId, text: 'Sigo.' });
+    fake.trigger('agent:done', {
+      ...DONE,
+      turnId: handle.turnId,
+      continuable: true,
+    });
+
+    expect(callbacks.onChunk).toHaveBeenCalledWith({
+      turnId: handle.turnId,
+      text: 'Sigo.',
+    });
+    expect(callbacks.onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ continuable: true })
+    );
+    expect(client.canResendTurn(handle.turnId)).toBe(false);
+  });
+
+  it.each([
+    AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS,
+    AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+  ])(
+    'resends a continuation refused as %s with the same body after 1 s, 2 s and 4 s',
+    (code) => {
+      vi.useFakeTimers();
+      const callbacks = callbacksOf();
+      const handle = client.continueTurn('capped-1', callbacks);
+      const refused = { code, message: code, turnId: handle.turnId };
+
+      for (const delay of RESEND_DELAYS_MS) {
+        fake.trigger('agent:error', refused);
+        vi.advanceTimersByTime(delay);
+      }
+
+      expect(sentMessages()).toHaveLength(4);
+      expect(new Set(sentMessages().map((m) => JSON.stringify(m))).size).toBe(
+        1
+      );
+      expect(callbacks.onError).not.toHaveBeenCalled();
+
+      fake.trigger('agent:error', refused);
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(refused);
+    }
+  );
+
+  it('keeps a continuation the server never acknowledged open for a resend', () => {
+    const callbacks = callbacksOf();
+    const handle = client.continueTurn('capped-1', callbacks);
+
+    receiptOf(lastEmit())(new Error('ack timeout'));
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(client.canResendTurn(handle.turnId)).toBe(true);
+  });
+
+  it('sends the turn id a resent continuation names', () => {
+    client.continueTurn('capped-1', callbacksOf(), undefined, {
+      turnId: 'resent-1',
+    });
+
+    expect(sentMessages()).toEqual([
+      {
+        turnId: 'resent-1',
+        conversationId: 'conv-1',
+        continuesTurnId: 'capped-1',
+      },
+    ]);
+  });
+
+  it('resends an acknowledged continuation once when the socket reconnects', () => {
+    client.continueTurn('capped-1', callbacksOf());
+    receiptOf(lastEmit())(null);
+
+    fake.socket.connected = false;
+    fake.trigger('disconnect', 'transport close');
+    fake.socket.connected = true;
+    fake.trigger('connect');
+
+    const [first, resent] = sentMessages();
+    expect(sentMessages()).toHaveLength(2);
+    expect(resent).toEqual(first);
+  });
+
+  it('refuses to continue without an open conversation, before sending anything', () => {
+    client.resetConversation();
+    const callbacks = callbacksOf();
+
+    const handle = client.continueTurn('capped-1', callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        code: AGENT_TURN_NOT_CONTINUABLE_CODE,
+        turnId: handle.turnId,
+      })
+    );
+    expect(fake.socket.emit).not.toHaveBeenCalled();
   });
 });
