@@ -1,4 +1,5 @@
 import { MessageType } from '@hocuspocus/provider';
+import { createTokenStorage, type TokenStorage } from '@jovandyaz/auth-react';
 import { act, renderHook } from '@testing-library/react';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
@@ -12,6 +13,7 @@ import {
   HANDSHAKE_FAILURE,
 } from '@knowtis/shared-types';
 
+import { setTokenStorage } from '../token-provider';
 import { useHocuspocusCollaboration } from '../useHocuspocusCollaboration';
 
 const NOTE_ID = 'transport-recovery';
@@ -65,15 +67,23 @@ class ControlledWebSocket extends EventTarget {
     this.dispatchEvent(new MessageEvent('message', { data }));
   }
 
-  get authenticationAttempts() {
-    return this.sent.filter((data) => {
+  get authenticationTokens() {
+    return this.sent.flatMap((data) => {
       if (data.length === 1) {
-        return false;
+        return [];
       }
       const decoder = decoding.createDecoder(data);
       decoding.readVarString(decoder);
-      return decoding.readVarUint(decoder) === MessageType.Auth;
-    }).length;
+      if (decoding.readVarUint(decoder) !== MessageType.Auth) {
+        return [];
+      }
+      decoding.readVarUint(decoder);
+      return [decoding.readVarString(decoder)];
+    });
+  }
+
+  get authenticationAttempts() {
+    return this.authenticationTokens.length;
   }
 }
 
@@ -108,10 +118,13 @@ function authenticateAndSync(
 describe('useHocuspocusCollaboration — actual transport recovery', () => {
   let yDoc: Y.Doc;
   let awareness: Awareness;
+  let tokens: TokenStorage;
   let unmount: (() => void) | undefined;
 
   beforeEach(() => {
     vi.useFakeTimers();
+    tokens = createTokenStorage();
+    setTokenStorage(tokens);
     vi.stubGlobal('WebSocket', ControlledWebSocket);
     ControlledWebSocket.instances = [];
     ControlledWebSocket.onOpen = () => undefined;
@@ -138,6 +151,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://controlled',
+        userId: 'user-1',
         onSessionExpired,
         onAuthRefresh,
       })
@@ -231,6 +245,43 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
     expect(result.current.status).toBe('accessDenied');
     expect(onSessionExpired).not.toHaveBeenCalled();
     expect(onAuthRefresh).not.toHaveBeenCalled();
+  });
+
+  it('closes the connection and authenticates a new one on the same document when another user signs in', async () => {
+    tokens.setAccessToken('token-a');
+    ControlledWebSocket.onOpen = (socket) => {
+      setTimeout(() => authenticateAndSync(socket), 1);
+    };
+    const hook = renderHook(
+      ({ userId }: { userId: string }) =>
+        useHocuspocusCollaboration({
+          noteId: NOTE_ID,
+          userId,
+          yDoc,
+          awareness,
+          serverUrl: 'ws://controlled',
+        }),
+      { initialProps: { userId: 'user-a' } }
+    );
+    unmount = hook.unmount;
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+    const [first] = ControlledWebSocket.instances;
+
+    tokens.setAccessToken('token-b');
+    hook.rerender({ userId: 'user-b' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+
+    expect(first.readyState).toBe(3);
+    expect(first.authenticationTokens).toEqual(['token-a']);
+    expect(ControlledWebSocket.instances).toHaveLength(2);
+    expect(ControlledWebSocket.instances[1].authenticationTokens).toEqual([
+      'token-b',
+    ]);
+    expect(hook.result.current).toMatchObject({
+      status: 'connected',
+      isSynced: true,
+    });
+    expect(yDoc.getMap('draft').get('text')).toBe('keep');
   });
 
   it('reauthenticates a document close over the healthy socket and retains awareness', async () => {

@@ -88,6 +88,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
           yDoc,
           awareness,
           serverUrl: 'ws://test',
+          userId: 'user-1',
           onAccessChanged,
           onSessionExpired,
         })
@@ -131,6 +132,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://test',
+        userId: 'user-1',
         onSessionExpired,
       })
     );
@@ -164,6 +166,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://test',
+        userId: 'user-1',
         onSessionExpired,
       })
     );
@@ -208,6 +211,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://test',
+        userId: 'user-1',
       })
     );
     const provider = mockProviderInstances[0];
@@ -248,6 +252,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://test',
+        userId: 'user-1',
         onSessionExpired,
       })
     );
@@ -275,6 +280,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
       })
     );
@@ -308,6 +314,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -337,6 +344,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
       })
     );
 
@@ -357,6 +365,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onSessionExpired,
       })
     );
@@ -386,6 +395,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -417,6 +427,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -461,6 +472,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -503,6 +515,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -536,6 +549,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -567,6 +581,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
       })
     );
@@ -602,6 +617,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         yDoc,
         awareness,
         serverUrl: 'ws://localhost:3333/collaboration',
+        userId: 'user-1',
         onAuthRefresh,
         onSessionExpired,
       })
@@ -628,5 +644,61 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
 
     expect(provider.destroy).toHaveBeenCalledTimes(1);
     expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+});
+
+describe('useHocuspocusCollaboration — identity', () => {
+  let yDoc: Y.Doc;
+  let awareness: Awareness;
+
+  beforeEach(() => {
+    mockProviderInstances.length = 0;
+    yDoc = new Y.Doc();
+    awareness = new Awareness(yDoc);
+  });
+
+  afterEach(() => {
+    awareness.destroy();
+    yDoc.destroy();
+  });
+
+  function renderFor(userId: string | undefined) {
+    return renderHook(
+      ({ user }: { user: string | undefined }) =>
+        useHocuspocusCollaboration({
+          noteId: 'note-1',
+          userId: user,
+          yDoc,
+          awareness,
+          serverUrl: 'ws://test',
+        }),
+      { initialProps: { user: userId } }
+    );
+  }
+
+  it.each([
+    ['another user', 'user-b'],
+    ['no user', undefined],
+  ])(
+    'closes the connection and opens a new one when %s signs in',
+    (_who, next) => {
+      const { rerender } = renderFor('user-a');
+      const first = mockProviderInstances[0];
+
+      rerender({ user: next });
+
+      expect(first.destroy).toHaveBeenCalledOnce();
+      expect(first.websocketProvider.destroy).toHaveBeenCalledOnce();
+      expect(mockProviderInstances).toHaveLength(2);
+    }
+  );
+
+  it('keeps the connection across a re-render for the same user', () => {
+    const { rerender } = renderFor('user-a');
+
+    rerender({ user: 'user-a' });
+
+    expect(mockProviderInstances).toHaveLength(1);
+    expect(mockProviderInstances[0].destroy).not.toHaveBeenCalled();
   });
 });

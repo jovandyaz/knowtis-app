@@ -41,6 +41,8 @@ const TERMINAL_HANDSHAKE_DENIALS: ReadonlySet<string> = new Set([
 
 interface UseHocuspocusCollaborationOptions {
   noteId: string;
+  /** The signed-in user the connection authenticates as; another user gets a new connection. */
+  userId: string | undefined;
   yDoc: Y.Doc;
   awareness: Awareness | null;
   serverUrl: string;
@@ -92,6 +94,7 @@ function buildUrl(serverUrl: string, shareToken: string | undefined): string {
  *  (re)connect via `getCollaborationToken`. */
 export function useHocuspocusCollaboration({
   noteId,
+  userId,
   yDoc,
   awareness,
   serverUrl,
@@ -321,7 +324,10 @@ export function useHocuspocusCollaboration({
       setIsSynced(false);
       setReadOnly(false);
     };
-  }, [enabled, noteId, yDoc, awareness, serverUrl, shareToken]);
+    // userId is never read here, the token is: keying on it gives each
+    // signed-in user a connection of their own, since a live connection keeps
+    // the identity it authenticated with.
+  }, [enabled, noteId, userId, yDoc, awareness, serverUrl, shareToken]);
 
   return {
     status,
