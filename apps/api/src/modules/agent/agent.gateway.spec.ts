@@ -1978,6 +1978,34 @@ describe('AgentGateway', () => {
       }
     );
 
+    it('never settles the claim of a resend that took the turn over once its own claim expired', async () => {
+      const redis = createInMemoryClaimRedis();
+      const outlived = heldTurns();
+      const takeover = heldTurns();
+      const execute = vi
+        .fn<Execute>()
+        .mockImplementationOnce(outlived.execute)
+        .mockImplementationOnce(takeover.execute);
+      const instanceA = makeGateway({ handler: { execute } as never, redis });
+      const instanceB = makeGateway({ handler: { execute } as never, redis });
+
+      const first = instanceA.handleMessage(makeClient('u1') as never, turn());
+      await flushAsync();
+      redis.entries.clear();
+      const resent = instanceB.handleMessage(
+        makeClient('u1', 'c2') as never,
+        turn()
+      );
+      await flushAsync();
+      outlived.release();
+      await first;
+
+      expect(claimOf(redis)).toMatchObject({ status: 'running' });
+      takeover.release();
+      await resent;
+      expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+    });
+
     it('settles the claim of a turn the client cancels after the model started', async () => {
       const redis = createInMemoryClaimRedis();
       const execute = vi.fn<Execute>(async (_input, cb, signal) => {

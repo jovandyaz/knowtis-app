@@ -37,7 +37,20 @@ const CLAIM_STATUSES = [
   TURN_CLAIM_OUTCOME.SETTLED,
 ] as const;
 
-type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+const RELEASE_IF_OWNED_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
+
+const REPLACE_IF_OWNED_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+  return 1
+end
+return 0
+`;
 
 /** One delivery of a turn: the claim is keyed by user and turn, and the rest is its fingerprint. */
 export interface TurnClaimRequest {
@@ -63,6 +76,8 @@ const storedClaimSchema = z.object({
  * so one orphaned by a lost settle or a shutdown frees itself: `AI_AGENT_MAX_MS`
  * caps the model, and a minute covers the history, memory, guard and persistence
  * work around it. A settled claim is kept for a day, like Stripe's stored outcomes.
+ * A running claim carries its delivery's owner, so a delivery that outlived its
+ * lease never settles or releases the claim of the one that took the turn over.
  */
 @Injectable()
 export class TurnClaimService {
@@ -78,12 +93,15 @@ export class TurnClaimService {
       RUNNING_LEASE_MARGIN_SECONDS;
   }
 
-  async claim(request: TurnClaimRequest): Promise<TurnClaimOutcome> {
+  async claim(
+    request: TurnClaimRequest,
+    owner: string
+  ): Promise<TurnClaimOutcome> {
     const fingerprint = fingerprintOf(request);
     try {
       const set = await this.redis.client.set(
         keyOf(request),
-        serialize(TURN_CLAIM_OUTCOME.RUNNING, fingerprint),
+        runningClaimOf(fingerprint, owner),
         'EX',
         this.runningLeaseSeconds,
         'NX'
@@ -105,12 +123,15 @@ export class TurnClaimService {
     }
   }
 
-  async settle(request: TurnClaimRequest): Promise<void> {
+  async settle(request: TurnClaimRequest, owner: string): Promise<void> {
+    const fingerprint = fingerprintOf(request);
     try {
-      await this.redis.client.set(
+      await this.redis.client.eval(
+        REPLACE_IF_OWNED_SCRIPT,
+        1,
         keyOf(request),
-        serialize(TURN_CLAIM_OUTCOME.SETTLED, fingerprintOf(request)),
-        'EX',
+        runningClaimOf(fingerprint, owner),
+        settledClaimOf(fingerprint),
         TURN_CLAIM_TTL_SECONDS
       );
     } catch (error) {
@@ -118,9 +139,14 @@ export class TurnClaimService {
     }
   }
 
-  async release(request: TurnClaimRequest): Promise<void> {
+  async release(request: TurnClaimRequest, owner: string): Promise<void> {
     try {
-      await this.redis.client.del(keyOf(request));
+      await this.redis.client.eval(
+        RELEASE_IF_OWNED_SCRIPT,
+        1,
+        keyOf(request),
+        runningClaimOf(fingerprintOf(request), owner)
+      );
     } catch (error) {
       this.warn('agent.turn.release_failed', request, error);
     }
@@ -154,6 +180,14 @@ function fingerprintOf(request: TurnClaimRequest): string {
     .digest('hex');
 }
 
-function serialize(status: ClaimStatus, fingerprint: string): string {
-  return JSON.stringify({ status, fingerprint });
+function runningClaimOf(fingerprint: string, owner: string): string {
+  return JSON.stringify({
+    status: TURN_CLAIM_OUTCOME.RUNNING,
+    fingerprint,
+    owner,
+  });
+}
+
+function settledClaimOf(fingerprint: string): string {
+  return JSON.stringify({ status: TURN_CLAIM_OUTCOME.SETTLED, fingerprint });
 }

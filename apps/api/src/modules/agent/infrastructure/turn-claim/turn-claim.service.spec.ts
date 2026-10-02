@@ -20,6 +20,8 @@ const CONTINUED_TURN = '55555555-5555-4555-8555-555555555555';
 const OTHER_CONTINUED_TURN = '66666666-6666-4666-8666-666666666666';
 const REQUEST_FINGERPRINT =
   '4319723b66719cd60cefe583fc9e98a4196784c898fc196afd823e87c9a244c8';
+const OWNER = 'delivery-1';
+const LATER_OWNER = 'delivery-2';
 
 const REQUEST: TurnClaimRequest = {
   userId: USER,
@@ -54,13 +56,14 @@ describe('TurnClaimService', () => {
   it('claims a new turn with a running lease that outlives the turn by a minute', async () => {
     const { redis, claims } = setup();
 
-    expect(await claims.claim(REQUEST)).toBe('claimed');
+    expect(await claims.claim(REQUEST, OWNER)).toBe('claimed');
 
     expect(stored(redis)).toEqual({
       ttlSeconds: RUNNING_LEASE_SECONDS,
       value: {
         status: 'running',
         fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        owner: OWNER,
       },
     });
   });
@@ -68,30 +71,30 @@ describe('TurnClaimService', () => {
   it('derives the running lease from the agent turn timeout', async () => {
     const { redis, claims } = setup(120_000);
 
-    await claims.claim(REQUEST);
+    await claims.claim(REQUEST, OWNER);
 
     expect(stored(redis).ttlSeconds).toBe(180);
   });
 
   it('reports a second delivery of a running turn as running', async () => {
     const { claims } = setup();
-    await claims.claim(REQUEST);
+    await claims.claim(REQUEST, OWNER);
 
-    expect(await claims.claim(REQUEST)).toBe('running');
+    expect(await claims.claim(REQUEST, LATER_OWNER)).toBe('running');
   });
 
   it('reports a delivery of a settled turn as settled, keeping the fingerprint for another day', async () => {
     const { redis, claims } = setup();
-    await claims.claim(REQUEST);
+    await claims.claim(REQUEST, OWNER);
     const running = stored(redis).value as { fingerprint: string };
 
-    await claims.settle(REQUEST);
+    await claims.settle(REQUEST, OWNER);
 
     expect(stored(redis)).toEqual({
       ttlSeconds: ONE_DAY_SECONDS,
       value: { status: 'settled', fingerprint: running.fingerprint },
     });
-    expect(await claims.claim(REQUEST)).toBe('settled');
+    expect(await claims.claim(REQUEST, LATER_OWNER)).toBe('settled');
   });
 
   it.each([
@@ -105,12 +108,12 @@ describe('TurnClaimService', () => {
     'reports a turn id reused for another %s as reused, running or settled',
     async (_field, change) => {
       const { claims } = setup();
-      await claims.claim(REQUEST);
+      await claims.claim(REQUEST, OWNER);
       const reused = { ...REQUEST, ...change };
 
-      expect(await claims.claim(reused)).toBe('reused');
-      await claims.settle(REQUEST);
-      expect(await claims.claim(reused)).toBe('reused');
+      expect(await claims.claim(reused, LATER_OWNER)).toBe('reused');
+      await claims.settle(REQUEST, OWNER);
+      expect(await claims.claim(reused, LATER_OWNER)).toBe('reused');
     }
   );
 
@@ -130,19 +133,20 @@ describe('TurnClaimService', () => {
       content: 'hi',
     };
 
-    await claims.claim(noteInText);
+    await claims.claim(noteInText, OWNER);
 
-    expect(await claims.claim(noteAsField)).toBe('reused');
+    expect(await claims.claim(noteAsField, LATER_OWNER)).toBe('reused');
   });
 
   it('keeps the fingerprint of a message turn, so its resend across a deploy is the same turn', async () => {
     const { redis, claims } = setup();
 
-    await claims.claim(REQUEST);
+    await claims.claim(REQUEST, OWNER);
 
     expect(stored(redis).value).toEqual({
       status: 'running',
       fingerprint: REQUEST_FINGERPRINT,
+      owner: OWNER,
     });
   });
 
@@ -157,47 +161,76 @@ describe('TurnClaimService', () => {
 
     it('is the same turn when resent', async () => {
       const { claims } = setup();
-      await claims.claim(CONTINUE);
-      await claims.settle(CONTINUE);
+      await claims.claim(CONTINUE, OWNER);
+      await claims.settle(CONTINUE, OWNER);
 
-      expect(await claims.claim(CONTINUE)).toBe('settled');
+      expect(await claims.claim(CONTINUE, LATER_OWNER)).toBe('settled');
     });
 
     it('is another request when it continues another turn', async () => {
       const { claims } = setup();
-      await claims.claim(CONTINUE);
+      await claims.claim(CONTINUE, OWNER);
 
       expect(
-        await claims.claim({
-          ...CONTINUE,
-          continuesTurnId: OTHER_CONTINUED_TURN,
-        })
+        await claims.claim(
+          {
+            ...CONTINUE,
+            continuesTurnId: OTHER_CONTINUED_TURN,
+          },
+          LATER_OWNER
+        )
       ).toBe('reused');
     });
 
     it('is another request than a message under the same turn id', async () => {
       const { claims } = setup();
-      await claims.claim({ ...CONTINUE, continuesTurnId: undefined });
+      await claims.claim({ ...CONTINUE, continuesTurnId: undefined }, OWNER);
 
-      expect(await claims.claim(CONTINUE)).toBe('reused');
+      expect(await claims.claim(CONTINUE, LATER_OWNER)).toBe('reused');
     });
   });
 
   it('frees a released turn for its next delivery', async () => {
     const { redis, claims } = setup();
-    await claims.claim(REQUEST);
+    await claims.claim(REQUEST, OWNER);
 
-    await claims.release(REQUEST);
+    await claims.release(REQUEST, OWNER);
 
     expect(redis.entries.has(KEY)).toBe(false);
-    expect(await claims.claim(REQUEST)).toBe('claimed');
+    expect(await claims.claim(REQUEST, LATER_OWNER)).toBe('claimed');
+  });
+
+  describe('a delivery that outlived its running lease, once another delivery took the turn over', () => {
+    async function takenOver() {
+      const { redis, claims } = setup();
+      await claims.claim(REQUEST, OWNER);
+      redis.entries.delete(KEY);
+      await claims.claim(REQUEST, LATER_OWNER);
+      return claims;
+    }
+
+    it('leaves the claim in place when it releases', async () => {
+      const claims = await takenOver();
+
+      await claims.release(REQUEST, OWNER);
+
+      expect(await claims.claim(REQUEST, OWNER)).toBe('running');
+    });
+
+    it('leaves the claim running when it settles', async () => {
+      const claims = await takenOver();
+
+      await claims.settle(REQUEST, OWNER);
+
+      expect(await claims.claim(REQUEST, OWNER)).toBe('running');
+    });
   });
 
   it('reports a claim released before it could be read as running, so a retry claims it', async () => {
     const { redis, claims } = setup();
     redis.client.set = async () => null;
 
-    expect(await claims.claim(REQUEST)).toBe('running');
+    expect(await claims.claim(REQUEST, OWNER)).toBe('running');
   });
 
   it('fails closed when Redis errors', async () => {
@@ -207,7 +240,7 @@ describe('TurnClaimService', () => {
     const { redis, claims } = setup();
     redis.client.set = () => Promise.reject(new Error('connection lost'));
 
-    expect(await claims.claim(REQUEST)).toBe('unavailable');
+    expect(await claims.claim(REQUEST, OWNER)).toBe('unavailable');
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'agent.turn.claim_failed',
@@ -227,7 +260,10 @@ describe('TurnClaimService', () => {
     const started = performance.now();
     try {
       expect(
-        await new TurnClaimService(stalled.provider, config).claim(REQUEST)
+        await new TurnClaimService(stalled.provider, config).claim(
+          REQUEST,
+          OWNER
+        )
       ).toBe('unavailable');
       expect(performance.now() - started).toBeLessThan(STALLED_CLAIM_BOUND_MS);
     } finally {
@@ -240,14 +276,14 @@ describe('TurnClaimService', () => {
     const { redis, claims } = setup();
     redis.entries.set(KEY, { value: 'not json', ttlSeconds: ONE_DAY_SECONDS });
 
-    expect(await claims.claim(REQUEST)).toBe('unavailable');
+    expect(await claims.claim(REQUEST, OWNER)).toBe('unavailable');
 
     redis.entries.set(KEY, {
       value: JSON.stringify({ status: 'paused', fingerprint: 'x' }),
       ttlSeconds: ONE_DAY_SECONDS,
     });
 
-    expect(await claims.claim(REQUEST)).toBe('unavailable');
+    expect(await claims.claim(REQUEST, OWNER)).toBe('unavailable');
   });
 
   it('logs a failed settle or release instead of throwing into the turn', async () => {
@@ -255,11 +291,10 @@ describe('TurnClaimService', () => {
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
     const { redis, claims } = setup();
-    redis.client.set = () => Promise.reject(new Error('connection lost'));
-    redis.client.del = () => Promise.reject(new Error('connection lost'));
+    redis.client.eval = () => Promise.reject(new Error('connection lost'));
 
-    await expect(claims.settle(REQUEST)).resolves.toBeUndefined();
-    await expect(claims.release(REQUEST)).resolves.toBeUndefined();
+    await expect(claims.settle(REQUEST, OWNER)).resolves.toBeUndefined();
+    await expect(claims.release(REQUEST, OWNER)).resolves.toBeUndefined();
 
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -515,7 +515,8 @@ export class AgentGateway
         () => undefined
       );
     }
-    const outcome = await this.turnClaims.claim(claim);
+    const owner = randomUUID();
+    const outcome = await this.turnClaims.claim(claim, owner);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
       this.endedLegs.add(controller);
       this.refuseClaimedTurn(client, claim, outcome);
@@ -533,8 +534,8 @@ export class AgentGateway
       );
     } finally {
       await (settled
-        ? this.turnClaims.settle(claim)
-        : this.turnClaims.release(claim));
+        ? this.turnClaims.settle(claim, owner)
+        : this.turnClaims.release(claim, owner));
     }
   }
 
