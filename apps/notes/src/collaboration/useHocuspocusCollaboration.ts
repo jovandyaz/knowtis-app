@@ -41,7 +41,7 @@ const TERMINAL_HANDSHAKE_DENIALS: ReadonlySet<string> = new Set([
 
 interface UseHocuspocusCollaborationOptions {
   noteId: string;
-  /** The signed-in user the connection authenticates as; another user gets a new connection. */
+  /** The signed-in user the connection authenticates as: another user gets a new connection, no user gets none. */
   userId: string | undefined;
   yDoc: Y.Doc;
   awareness: Awareness | null;
@@ -129,7 +129,7 @@ export function useHocuspocusCollaboration({
   }, [onSessionExpired]);
 
   useEffect(() => {
-    if (!enabled || !noteId) {
+    if (!enabled || !noteId || userId === undefined) {
       return;
     }
 
@@ -324,10 +324,20 @@ export function useHocuspocusCollaboration({
       setIsSynced(false);
       setReadOnly(false);
     };
-    // userId is never read here, the token is: keying on it gives each
-    // signed-in user a connection of their own, since a live connection keeps
-    // the identity it authenticated with.
+    // Keyed on the id, not just its presence: a live connection keeps the
+    // identity it authenticated with, so each user needs a connection of their own.
   }, [enabled, noteId, userId, yDoc, awareness, serverUrl, shareToken]);
+
+  // Every handshake needs a JWT, share token or not, so without a user there
+  // is nothing to connect as.
+  if (userId === undefined) {
+    return {
+      status: 'disconnected',
+      isConnected: false,
+      isSynced: false,
+      readOnly: true,
+    };
+  }
 
   return {
     status,

@@ -676,22 +676,55 @@ describe('useHocuspocusCollaboration — identity', () => {
     );
   }
 
-  it.each([
-    ['another user', 'user-b'],
-    ['no user', undefined],
-  ])(
-    'closes the connection and opens a new one when %s signs in',
-    (_who, next) => {
-      const { rerender } = renderFor('user-a');
-      const first = mockProviderInstances[0];
+  it('closes the connection and opens a new one when another user signs in', () => {
+    const { rerender } = renderFor('user-a');
+    const first = mockProviderInstances[0];
 
-      rerender({ user: next });
+    rerender({ user: 'user-b' });
 
-      expect(first.destroy).toHaveBeenCalledOnce();
-      expect(first.websocketProvider.destroy).toHaveBeenCalledOnce();
-      expect(mockProviderInstances).toHaveLength(2);
-    }
-  );
+    expect(first.destroy).toHaveBeenCalledOnce();
+    expect(first.websocketProvider.destroy).toHaveBeenCalledOnce();
+    expect(mockProviderInstances).toHaveLength(2);
+  });
+
+  it('closes the connection and opens none when the user signs out', () => {
+    const { result, rerender } = renderFor('user-a');
+    const first = mockProviderInstances[0];
+
+    rerender({ user: undefined });
+
+    expect(first.destroy).toHaveBeenCalledOnce();
+    expect(first.websocketProvider.destroy).toHaveBeenCalledOnce();
+    expect(mockProviderInstances).toHaveLength(1);
+    expect(result.current).toEqual({
+      status: 'disconnected',
+      isConnected: false,
+      isSynced: false,
+      readOnly: true,
+    });
+  });
+
+  it('opens a single connection once a user signs in', () => {
+    const { result, rerender } = renderFor(undefined);
+
+    expect(mockProviderInstances).toHaveLength(0);
+    expect(result.current).toEqual({
+      status: 'disconnected',
+      isConnected: false,
+      isSynced: false,
+      readOnly: true,
+    });
+
+    rerender({ user: 'user-a' });
+
+    expect(mockProviderInstances).toHaveLength(1);
+    expect(result.current).toEqual({
+      status: 'connecting',
+      isConnected: false,
+      isSynced: false,
+      readOnly: false,
+    });
+  });
 
   it('keeps the connection across a re-render for the same user', () => {
     const { rerender } = renderFor('user-a');

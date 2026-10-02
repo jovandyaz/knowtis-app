@@ -115,6 +115,15 @@ function authenticateAndSync(
   serverDoc.destroy();
 }
 
+function deny(socket: ControlledWebSocket, reason: string) {
+  socket.receive(
+    message(MessageType.Auth, (encoder) => {
+      encoding.writeVarUint(encoder, 1); // Hocuspocus permission-denied response.
+      encoding.writeVarString(encoder, reason);
+    })
+  );
+}
+
 describe('useHocuspocusCollaboration — actual transport recovery', () => {
   let yDoc: Y.Doc;
   let awareness: Awareness;
@@ -140,6 +149,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
     yDoc.destroy();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+    setTokenStorage(null);
   });
 
   function mount() {
@@ -232,12 +242,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
 
   it('stops terminal document denial without expiring the user session', async () => {
     ControlledWebSocket.onOpen = (socket) => {
-      socket.receive(
-        message(MessageType.Auth, (encoder) => {
-          encoding.writeVarUint(encoder, 1); // Hocuspocus permission-denied response.
-          encoding.writeVarString(encoder, HANDSHAKE_FAILURE.FORBIDDEN);
-        })
-      );
+      deny(socket, HANDSHAKE_FAILURE.FORBIDDEN);
     };
     const { result, onSessionExpired, onAuthRefresh } = mount();
     await act(async () => vi.advanceTimersByTimeAsync(30000));
@@ -282,6 +287,54 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
       isSynced: true,
     });
     expect(yDoc.getMap('draft').get('text')).toBe('keep');
+  });
+
+  it('expires the session once and opens no connection once the user is signed out', async () => {
+    tokens.setAccessToken('token-a');
+    ControlledWebSocket.onOpen = (socket) => {
+      setTimeout(() => {
+        const [token] = socket.authenticationTokens;
+        deny(
+          socket,
+          token
+            ? HANDSHAKE_FAILURE.INVALID_TOKEN
+            : HANDSHAKE_FAILURE.AUTH_REQUIRED
+        );
+      }, 1);
+    };
+    const onSessionExpired = vi.fn();
+    const onAuthRefresh = vi.fn().mockResolvedValue('rejected');
+    const initialProps: { userId: string | undefined } = { userId: 'user-a' };
+    const hook = renderHook(
+      ({ userId }) =>
+        useHocuspocusCollaboration({
+          noteId: NOTE_ID,
+          userId,
+          yDoc,
+          awareness,
+          serverUrl: 'ws://controlled',
+          onSessionExpired,
+          onAuthRefresh,
+        }),
+      { initialProps }
+    );
+    unmount = hook.unmount;
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+    expect(onSessionExpired).toHaveBeenCalledOnce();
+
+    tokens.clearTokens();
+    hook.rerender({ userId: undefined });
+    await act(async () => vi.advanceTimersByTimeAsync(30000));
+
+    expect(onSessionExpired).toHaveBeenCalledOnce();
+    expect(onAuthRefresh).toHaveBeenCalledOnce();
+    expect(ControlledWebSocket.instances).toHaveLength(1);
+    expect(hook.result.current).toEqual({
+      status: 'disconnected',
+      isConnected: false,
+      isSynced: false,
+      readOnly: true,
+    });
   });
 
   it('reauthenticates a document close over the healthy socket and retains awareness', async () => {

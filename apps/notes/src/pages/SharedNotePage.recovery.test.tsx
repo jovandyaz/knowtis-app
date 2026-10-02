@@ -79,7 +79,7 @@ vi.mock('@/auth/setup', () => ({
   ensureGuestSession: () => Promise.resolve(true),
 }));
 vi.mock('@jovandyaz/auth-react', () => ({
-  useAuthUser: () => ({ isAnonymous: true }),
+  useAuthUser: () => ({ id: 'guest-1', isAnonymous: true }),
   useAuthLoading: () => false,
 }));
 vi.mock('@tanstack/react-router', () => ({
