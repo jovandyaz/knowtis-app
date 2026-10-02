@@ -3,16 +3,28 @@ import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
 
+import {
+  quotaStateOf,
+  useAiQuota,
+  useAiQuotaSync,
+  type QuotaState,
+} from '@/hooks/useAiQuota';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
-import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
+import {
+  isTurnAlive,
+  isUpdateProposal,
+  useAgentStore,
+} from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
 
+import type { AgentErrorPayload } from '@knowtis/api-client';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
 } from '@knowtis/shared-types';
 
 import {
@@ -28,7 +40,33 @@ import { CopilotModelPicker } from './CopilotModelPicker';
 import { HistoryRetryRow } from './HistoryRetryRow';
 import { ProposalPendingRow } from './ProposalPendingRow';
 import { ProposalReview } from './ProposalReview';
+import { QuotaCounter } from './QuotaCounter';
+import { QuotaLockedNotice, type QuotaLock } from './QuotaLockedNotice';
 import { RetryBanner } from './RetryBanner';
+
+/** Today's quota decides; a refusal stands in only while that quota is unknown. */
+function quotaLockOf(
+  quota: QuotaState,
+  error: AgentErrorPayload | null
+): QuotaLock | null {
+  if (quota.kind === 'metered') {
+    const { tier, limit, resetsAt } = quota;
+    return quota.exhausted ? { tier, limit, resetsAt } : null;
+  }
+  if (
+    quota.kind === 'unknown' &&
+    error?.code === AI_QUOTA_EXHAUSTED_CODE &&
+    error.resetsAt &&
+    error.upgrade
+  ) {
+    return {
+      tier: error.upgrade === 'register' ? 'anonymous' : 'free',
+      limit: null,
+      resetsAt: error.resetsAt,
+    };
+  }
+  return null;
+}
 
 export function AgentCopilotPanel() {
   const { t } = useTranslation('notes');
@@ -53,6 +91,10 @@ export function AgentCopilotPanel() {
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
   const retryHydration = useAgentStore((s) => s.retryHydration);
   const userId = useAuthUser()?.id ?? null;
+  useAiQuotaSync();
+  const quota = quotaStateOf(useAiQuota().data);
+  // The turn that spends the last message still streams, and Stop must stay.
+  const quotaLock = isTurnAlive(status) ? null : quotaLockOf(quota, error);
   // Not the editor's activeNoteId: that stays null until the lazy editor chunk
   // mounts, and a message sent in that window would lose its note.
   const { noteId } = useParams({ strict: false }) as { noteId?: string };
@@ -145,9 +187,10 @@ export function AgentCopilotPanel() {
   }, [error, conversationWasGone, answeredError, markErrorAnswered, t]);
 
   const errorBanner = (status === 'error' ||
-    (status === 'pendingProposal' && error)) && (
-    <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
-  );
+    (status === 'pendingProposal' && error)) &&
+    error?.code !== AI_QUOTA_EXHAUSTED_CODE && (
+      <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
+    );
 
   if (updateProposal && reviewOpen) {
     return (
@@ -223,6 +266,8 @@ export function AgentCopilotPanel() {
         queueLength={queueLength}
         status={status}
         modelPicker={<CopilotModelPicker />}
+        counter={<QuotaCounter quota={quota} />}
+        locked={quotaLock && <QuotaLockedNotice {...quotaLock} />}
       />
     </div>
   );

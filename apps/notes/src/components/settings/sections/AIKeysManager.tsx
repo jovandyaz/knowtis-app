@@ -7,19 +7,13 @@ import {
   useSetProviderKey,
 } from '@/hooks';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
 
 import { Button, PasswordInput } from '@knowtis/design-system';
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { SectionHeader } from '../SectionHeader';
-
-const PROVIDER_LABEL: Record<ByokProvider, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
-  openrouter: 'OpenRouter',
-};
 
 interface AIKeysManagerProps {
   focusFirstField?: boolean;

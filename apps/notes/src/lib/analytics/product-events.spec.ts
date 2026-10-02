@@ -114,6 +114,23 @@ describe('browser product events', () => {
     });
   });
 
+  it('captures an upgrade CTA click with only its tier and CTA', () => {
+    captureProductEvent('ai upgrade cta clicked', {
+      from_tier: 'free',
+      cta: 'byok',
+    });
+
+    expect(posthog.capture).toHaveBeenCalledWith('ai upgrade cta clicked', {
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'en',
+      from_tier: 'free',
+      cta: 'byok',
+    });
+  });
+
   it('contains capture failures so analytics cannot interrupt product behavior', () => {
     posthog.capture.mockImplementationOnce(() => {
       throw new Error('capture unavailable');

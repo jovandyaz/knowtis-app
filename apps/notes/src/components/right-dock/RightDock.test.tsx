@@ -73,6 +73,9 @@ vi.mock('../copilot/AgentCopilotPanel', () => ({
 vi.mock('../copilot/ConversationSwitcher', () => ({
   ConversationSwitcher: () => <div data-testid="conversation-switcher" />,
 }));
+vi.mock('../copilot/TierBadge', () => ({
+  TierBadge: () => <span data-testid="tier-badge" />,
+}));
 vi.mock('@/stores/agent.store', () => ({
   useAgentStore: (selector: (state: typeof agentState) => unknown) =>
     selector(agentState),
@@ -161,6 +164,15 @@ describe('RightDock', () => {
       screen.getByTestId('conversation-switcher')
     );
     expect(dockHeader().lastElementChild).toBe(resetAction());
+  });
+
+  it('puts the tier badge between the switcher and the reset action', () => {
+    render(<RightDock />);
+
+    const badge = screen.getByTestId('tier-badge');
+    expect(badge.parentElement).toBe(dockHeader());
+    expect(badge.previousElementSibling).toBe(dockHeader().firstElementChild);
+    expect(badge.nextElementSibling).toBe(resetAction());
   });
 
   it('keeps the switcher while the conversation is empty', () => {

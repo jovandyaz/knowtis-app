@@ -6,6 +6,7 @@ import esNotes from '../locales/es/notes.json';
 const NOTES_NAMESPACE = 'notes';
 const REVIEWED_OF_KEY = 'ai.artifacts.flashcards.reviewedOf';
 const IMAGE_IMPORT_FAILED_KEY = 'ai.image.importFailed';
+const QUOTA_REMAINING_KEY = 'ai.copilot.quota.remaining';
 
 const BUNDLES = { en: enNotes, es: esNotes };
 
@@ -32,6 +33,19 @@ const IMAGE_IMPORT_FAILED_CASES = [
     locale: 'es',
     singular: 'No se pudo copiar 1 imagen a la nota',
     plural: 'No se pudieron copiar 2 imágenes a la nota',
+  },
+] as const;
+
+const QUOTA_REMAINING_CASES = [
+  {
+    locale: 'en',
+    singular: '1 message left today',
+    plural: '2 messages left today',
+  },
+  {
+    locale: 'es',
+    singular: 'Te queda 1 mensaje hoy',
+    plural: 'Te quedan 2 mensajes hoy',
   },
 ] as const;
 
@@ -104,6 +118,16 @@ describe('plural forms', () => {
 
       expect(i18n.t(IMAGE_IMPORT_FAILED_KEY, { count: 1 })).toBe(singular);
       expect(i18n.t(IMAGE_IMPORT_FAILED_KEY, { count: 2 })).toBe(plural);
+    }
+  );
+
+  it.each(QUOTA_REMAINING_CASES)(
+    'counts the copilot messages left today with the right plural in $locale',
+    async ({ locale, singular, plural }) => {
+      const i18n = await translatorFor(locale);
+
+      expect(i18n.t(QUOTA_REMAINING_KEY, { count: 1 })).toBe(singular);
+      expect(i18n.t(QUOTA_REMAINING_KEY, { count: 2 })).toBe(plural);
     }
   );
 });

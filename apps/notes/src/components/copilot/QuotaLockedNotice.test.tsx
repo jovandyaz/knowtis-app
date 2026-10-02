@@ -1,0 +1,170 @@
+import type { ReactNode } from 'react';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
+import { formatTime } from '@/lib/format-date';
+import { useSettingsStore } from '@/stores/settings.store';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { QuotaLockedNotice } from './QuotaLockedNotice';
+
+const { navigate, captureProductEvent } = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  captureProductEvent: vi.fn(),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts
+        ? `${key}(${Object.entries(opts)
+            .map(([name, value]) => `${name}=${String(value)}`)
+            .join(',')})`
+        : key,
+    i18n: { language: 'en' },
+  }),
+}));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+}));
+vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
+
+const RESETS_AT = '2026-10-03T00:00:00.000Z';
+
+function renderNotice(node: ReactNode) {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { invalidate, ...render(node, { wrapper }) };
+}
+
+describe('QuotaLockedNotice', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useSettingsStore.setState({
+      isOpen: false,
+      activeSection: 'profile',
+      focusTarget: null,
+    });
+  });
+
+  it('says how many messages were used and when they reset, in local time', () => {
+    renderNotice(
+      <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+    );
+
+    const time = formatTime(RESETS_AT, 'en');
+    expect(time).toMatch(/\d{1,2}:\d{2}/);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `ai.copilot.quota.exhausted(limit=30,time=${time})`
+    );
+  });
+
+  it('still says when the messages reset when only the refusal is known', () => {
+    renderNotice(
+      <QuotaLockedNotice tier="free" limit={null} resetsAt={RESETS_AT} />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `ai.copilot.quota.exhaustedToday(time=${formatTime(RESETS_AT, 'en')})`
+    );
+  });
+
+  it('reads the notice out with its call to action', () => {
+    renderNotice(
+      <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.quota.byokCta' })
+    ).toHaveAccessibleDescription(
+      `ai.copilot.quota.exhausted(limit=30,time=${formatTime(RESETS_AT, 'en')})`
+    );
+  });
+
+  it('sends a guest to create a free account', async () => {
+    const user = userEvent.setup();
+    renderNotice(
+      <QuotaLockedNotice tier="anonymous" limit={5} resetsAt={RESETS_AT} />
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.quota.registerCta' })
+    );
+
+    expect(navigate).toHaveBeenCalledWith({ to: '/register' });
+    expect(captureProductEvent).toHaveBeenCalledWith('ai upgrade cta clicked', {
+      from_tier: 'anonymous',
+      cta: 'register',
+    });
+    expect(useSettingsStore.getState().isOpen).toBe(false);
+  });
+
+  it('opens the API keys settings for a free account', async () => {
+    const user = userEvent.setup();
+    renderNotice(
+      <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.quota.byokCta' })
+    );
+
+    expect(useSettingsStore.getState()).toMatchObject({
+      isOpen: true,
+      activeSection: 'aiAssistant',
+      focusTarget: 'aiKeys',
+    });
+    expect(captureProductEvent).toHaveBeenCalledWith('ai upgrade cta clicked', {
+      from_tier: 'free',
+      cta: 'byok',
+    });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  describe('at the reset', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reads the quota again once the messages reset', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
+      const { invalidate } = renderNotice(
+        <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(59_999);
+      });
+      expect(invalidate).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
+    });
+
+    it('stops waiting once the lock lifts', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
+      const { invalidate, unmount } = renderNotice(
+        <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+      );
+
+      unmount();
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+
+      expect(invalidate).not.toHaveBeenCalled();
+    });
+  });
+});

@@ -1,4 +1,5 @@
 import type {
+  AccessTier,
   AIAction,
   StudyDurationBucket,
   StudySessionSource,
@@ -41,6 +42,10 @@ export interface BrowserProductEventMap {
   'ai conversation deleted': {
     source: 'switcher';
   };
+  'ai upgrade cta clicked': {
+    from_tier: AccessTier;
+    cta: 'register' | 'byok' | 'review_key';
+  };
   'study session started': {
     source: StudySessionSource;
     due_count: number;
@@ -64,6 +69,7 @@ const PRODUCT_EVENT_PROPERTY_KEYS = {
   'ai message queued': ['source', 'queue_length'],
   'ai conversation opened': ['source'],
   'ai conversation deleted': ['source'],
+  'ai upgrade cta clicked': ['from_tier', 'cta'],
   'study session started': ['source', 'due_count', 'new_count'],
   'study session completed': [
     'source',

@@ -447,6 +447,23 @@
       "queueSendNow": "Enviar ahora",
       "queueRemove": "Quitar de la cola",
       "newConversation": "Nueva conversación",
+      "quota": {
+        "badge": {
+          "anonymous": "Invitado · {{used}}/{{limit}}",
+          "free": "Gratis · {{used}}/{{limit}}",
+          "byok": "Tu key · {{provider}}"
+        },
+        "usedLabel": "{{used}} de {{limit}} mensajes usados hoy",
+        "byokLabel": "Usas tu key de {{provider}}",
+        "resetsAt": "Se renuevan a las {{time}}",
+        "paysWithKey": "Pagas con tu key de {{provider}}",
+        "remaining_one": "Te queda {{count}} mensaje hoy",
+        "remaining_other": "Te quedan {{count}} mensajes hoy",
+        "exhausted": "Usaste tus {{limit}} mensajes de hoy. Se renuevan a las {{time}}.",
+        "exhaustedToday": "Usaste tus mensajes de hoy. Se renuevan a las {{time}}.",
+        "registerCta": "Crear cuenta gratis",
+        "byokCta": "Usar tu propia API key"
+      },
       "history": {
         "recent": "Conversaciones recientes",
         "untitled": "Conversación sin título",
