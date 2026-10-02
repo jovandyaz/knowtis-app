@@ -348,6 +348,57 @@ describe('AgentComposer focus under a lock', () => {
   });
 });
 
+describe('AgentComposer focus when the lock lifts', () => {
+  it('gives the focus to the input when the call to action held it', () => {
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+    act(() => screen.getByRole('button', { name: 'upgrade' }).focus());
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  });
+
+  it('gives the focus to the input when it had fallen to the page', () => {
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  });
+
+  it('leaves the focus where the user moved it', () => {
+    const { rerender } = render(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer
+          draft="hola"
+          locked={<button type="button">upgrade</button>}
+        />
+      </>
+    );
+    act(() => screen.getByRole('button', { name: 'elsewhere' }).focus());
+
+    rerender(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer draft="hola" />
+      </>
+    );
+
+    expect(screen.getByRole('button', { name: 'elsewhere' })).toHaveFocus();
+  });
+
+  it('does not take the focus when the composer first appears unlocked', () => {
+    render(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).not.toHaveFocus();
+  });
+});
+
 describe('AgentComposer sizing', () => {
   afterEach(() => {
     vi.restoreAllMocks();

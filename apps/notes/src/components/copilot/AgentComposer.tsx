@@ -142,6 +142,7 @@ export function AgentComposer({
   const shellRef = useRef<HTMLDivElement>(null);
   const inputHeldFocusWhenRemoved = useRef(false);
   const isLocked = Boolean(locked);
+  const wasLocked = useRef(isLocked);
 
   const noteFocusOnInputRemoval = useCallback(() => {
     inputHeldFocusWhenRemoved.current =
@@ -156,6 +157,19 @@ export function AgentComposer({
     shellRef.current
       ?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
       ?.focus({ preventScroll: true });
+  }, [isLocked]);
+
+  useLayoutEffect(() => {
+    const lifted = wasLocked.current && !isLocked;
+    wasLocked.current = isLocked;
+    const shell = shellRef.current;
+    const active = document.activeElement;
+    const focusIsAdrift =
+      active === null || active === document.body || shell?.contains(active);
+    if (!lifted || !focusIsAdrift) {
+      return;
+    }
+    shell?.querySelector('textarea')?.focus({ preventScroll: true });
   }, [isLocked]);
 
   const hint = isTurnAlive(status)
