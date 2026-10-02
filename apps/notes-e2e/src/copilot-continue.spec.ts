@@ -63,7 +63,10 @@ async function topsOf(...locators: Locator[]): Promise<number[]> {
   const boxes = await Promise.all(
     locators.map((locator) => locator.boundingBox())
   );
-  return boxes.map((box) => box?.y ?? Number.NaN);
+  return boxes.map((box) => {
+    expect(box).not.toBeNull();
+    return box?.y ?? Number.NaN;
+  });
 }
 
 test('a capped answer continues on Continuar and keeps the offer on its last turn across a reload', async ({

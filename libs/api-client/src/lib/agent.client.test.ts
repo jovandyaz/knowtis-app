@@ -2668,7 +2668,7 @@ describe('AgentClient – continuing a capped turn', () => {
       effort: 'high',
     });
 
-    expect(sentMessages()).toEqual([
+    expect(sentMessages()).toStrictEqual([
       {
         turnId: handle.turnId,
         conversationId: 'conv-1',
@@ -2745,7 +2745,7 @@ describe('AgentClient – continuing a capped turn', () => {
       turnId: 'resent-1',
     });
 
-    expect(sentMessages()).toEqual([
+    expect(sentMessages()).toStrictEqual([
       {
         turnId: 'resent-1',
         conversationId: 'conv-1',
