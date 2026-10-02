@@ -2,6 +2,8 @@ import { authStore } from '@/auth';
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { agentClient, aiClient } from '@knowtis/api-client';
+
 import { AuthCacheSync } from './AuthCacheSync';
 
 const { newConversation, cancelQueries, clear } = vi.hoisted(() => ({
@@ -12,8 +14,17 @@ const { newConversation, cancelQueries, clear } = vi.hoisted(() => ({
 
 vi.mock('@/auth', async () => {
   const { createStore } = await import('zustand/vanilla');
-  return { authStore: createStore(() => ({ isAuthenticated: true })) };
+  return {
+    authStore: createStore(() => ({
+      isAuthenticated: true,
+      user: null as { id: string } | null,
+    })),
+  };
 });
+vi.mock('@knowtis/api-client', () => ({
+  agentClient: { disconnect: vi.fn() },
+  aiClient: { disconnect: vi.fn() },
+}));
 vi.mock('@/lib/query-client', () => ({
   queryClient: { cancelQueries, clear },
 }));
@@ -21,9 +32,16 @@ vi.mock('@/stores/agent.store', () => ({
   useAgentStore: { getState: () => ({ newConversation }) },
 }));
 
+const profile = (id: string) => ({
+  id,
+  email: `${id}@example.com`,
+  name: id,
+  avatarUrl: null,
+});
+
 describe('AuthCacheSync', () => {
   beforeEach(() => {
-    authStore.setState({ isAuthenticated: true });
+    authStore.setState({ isAuthenticated: true, user: profile('a') });
     vi.clearAllMocks();
   });
 
@@ -46,5 +64,49 @@ describe('AuthCacheSync', () => {
 
     expect(newConversation).not.toHaveBeenCalled();
     expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('drops both sockets when the session ends', () => {
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ isAuthenticated: false, user: null }));
+
+    expect([
+      vi.mocked(agentClient.disconnect).mock.calls.length,
+      vi.mocked(aiClient.disconnect).mock.calls.length,
+    ]).toEqual([1, 1]);
+  });
+
+  it('drops both sockets and the thread when another user signs in', () => {
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ user: profile('b') }));
+
+    expect([
+      vi.mocked(agentClient.disconnect).mock.calls.length,
+      vi.mocked(aiClient.disconnect).mock.calls.length,
+      newConversation.mock.calls.length,
+    ]).toEqual([1, 1, 1]);
+  });
+
+  it('keeps the sockets when a refresh keeps the same user', () => {
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ user: profile('a') }));
+
+    expect(agentClient.disconnect).not.toHaveBeenCalled();
+    expect(aiClient.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the sockets on the first sign-in', () => {
+    authStore.setState({ isAuthenticated: false, user: null });
+    render(<AuthCacheSync />);
+
+    act(() =>
+      authStore.setState({ isAuthenticated: true, user: profile('a') })
+    );
+
+    expect(agentClient.disconnect).not.toHaveBeenCalled();
+    expect(aiClient.disconnect).not.toHaveBeenCalled();
   });
 });
