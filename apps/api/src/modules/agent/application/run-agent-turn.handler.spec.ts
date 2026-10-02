@@ -9129,6 +9129,37 @@ describe('RunAgentTurnHandler resuming a proposal', () => {
     expect(runModel(ctx)).toBe(PROPOSING_MODEL);
   });
 
+  it.each([
+    [
+      'an assistant row that stored no model',
+      historyRow({
+        role: 'assistant',
+        content: 'Renamed.',
+        turnId: PROPOSING,
+        stopReason: 'completed',
+        model: null,
+      }),
+    ],
+    [
+      'a row the assistant did not write',
+      historyRow({
+        role: 'user',
+        content: 'thanks',
+        turnId: PROPOSING,
+        model: SUBSTITUTE_MODEL,
+      }),
+    ],
+  ])(
+    'reads the model of the proposing assistant row when %s follows it in its turn',
+    async (_later, laterRow) => {
+      const ctx = setup([...proposingTurn(PROPOSING_MODEL), laterRow]);
+
+      await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+      expect(runModel(ctx)).toBe(PROPOSING_MODEL);
+    }
+  );
+
   it('resumes on the conversation model when the proposing turn stored none', async () => {
     const ctx = setup(proposingTurn(null));
 

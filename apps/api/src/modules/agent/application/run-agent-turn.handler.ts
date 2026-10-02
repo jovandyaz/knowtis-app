@@ -737,7 +737,10 @@ export class RunAgentTurnHandler {
     // memory retrieval embeds the last real user message instead.
     const memoryQuery = lastWrittenUserMessage(history);
     const proposingModel = rows.findLast(
-      (row) => row.turnId === input.turnId
+      (row) =>
+        row.turnId === input.turnId &&
+        row.role === 'assistant' &&
+        row.model !== null
     )?.model;
     const synthInput: TurnInput & {
       resume: { outcome: string };
