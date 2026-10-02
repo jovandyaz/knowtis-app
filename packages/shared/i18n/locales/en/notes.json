@@ -448,12 +448,15 @@
       "queueRemove": "Remove from queue",
       "newConversation": "New conversation",
       "quota": {
+        "tier": {
+          "anonymous": "Guest",
+          "free": "Free"
+        },
         "badge": {
-          "anonymous": "Guest · {{used}}/{{limit}}",
-          "free": "Free · {{used}}/{{limit}}",
+          "metered": "{{tier}} · {{used}}/{{limit}}",
           "byok": "Your key · {{provider}}"
         },
-        "usedLabel": "{{used}} of {{limit}} messages used today",
+        "usedLabel": "{{tier}}: {{used}} of {{limit}} messages used today",
         "byokLabel": "You use your {{provider}} key",
         "resetsAt": "Resets at {{time}}",
         "paysWithKey": "You pay with your {{provider}} key",

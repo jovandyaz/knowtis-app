@@ -25,7 +25,6 @@ interface BadgeContent {
   warning: boolean;
 }
 
-/** The server's order: the primary provider while a key backs it, else the first key added. */
 function primaryProviderOf(
   preferences: AIPreferences | undefined,
   keys: readonly ProviderKeyInfo[]
@@ -51,10 +50,11 @@ export function TierBadge() {
 
   let content: BadgeContent | null = null;
   if (quota.kind === 'metered') {
-    const { tier, used, limit } = quota;
+    const { used, limit } = quota;
+    const tier = t(`ai.copilot.quota.tier.${quota.tier}`);
     content = {
-      text: t(`ai.copilot.quota.badge.${tier}`, { used, limit }),
-      label: t('ai.copilot.quota.usedLabel', { used, limit }),
+      text: t('ai.copilot.quota.badge.metered', { tier, used, limit }),
+      label: t('ai.copilot.quota.usedLabel', { tier, used, limit }),
       tooltip: t('ai.copilot.quota.resetsAt', {
         time: formatTime(quota.resetsAt, i18n.language),
       }),

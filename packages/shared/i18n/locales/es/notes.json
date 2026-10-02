@@ -448,12 +448,15 @@
       "queueRemove": "Quitar de la cola",
       "newConversation": "Nueva conversación",
       "quota": {
+        "tier": {
+          "anonymous": "Invitado",
+          "free": "Gratis"
+        },
         "badge": {
-          "anonymous": "Invitado · {{used}}/{{limit}}",
-          "free": "Gratis · {{used}}/{{limit}}",
+          "metered": "{{tier}} · {{used}}/{{limit}}",
           "byok": "Tu key · {{provider}}"
         },
-        "usedLabel": "{{used}} de {{limit}} mensajes usados hoy",
+        "usedLabel": "{{tier}}: {{used}} de {{limit}} mensajes usados hoy",
         "byokLabel": "Usas tu key de {{provider}}",
         "resetsAt": "Se renuevan a las {{time}}",
         "paysWithKey": "Pagas con tu key de {{provider}}",
