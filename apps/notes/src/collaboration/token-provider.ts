@@ -10,7 +10,7 @@ import type { TokenStorage } from '@jovandyaz/auth-react';
  */
 let tokenStorageRef: TokenStorage | null = null;
 
-export function setTokenStorage(storage: TokenStorage | null): void {
+export function setTokenStorage(storage: TokenStorage): void {
   tokenStorageRef = storage;
 }
 

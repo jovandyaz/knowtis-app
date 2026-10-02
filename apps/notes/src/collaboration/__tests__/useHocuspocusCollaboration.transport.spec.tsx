@@ -149,7 +149,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
     yDoc.destroy();
     vi.unstubAllGlobals();
     vi.useRealTimers();
-    setTokenStorage(null);
+    setTokenStorage(createTokenStorage());
   });
 
   function mount() {
