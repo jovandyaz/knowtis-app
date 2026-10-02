@@ -199,9 +199,26 @@ export class AgentGateway
       return;
     }
 
-    if (
-      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
-    ) {
+    let enabled: boolean;
+    try {
+      enabled = await this.featureFlagsService.isEnabled(
+        FEATURE_FLAG_KEYS.AI_ENABLED
+      );
+    } catch (error) {
+      this.logger.error({
+        event: 'agent.client.connect_failed',
+        clientId: client.id,
+        userId: client.data?.userId,
+        error: reasonOf(error),
+      });
+      client.emit(
+        'agent:error',
+        AIErrors.internalError('Agent connection failed')
+      );
+      client.disconnect();
+      return;
+    }
+    if (!enabled) {
       client.emit('agent:error', AIErrors.featureDisabled());
       client.disconnect();
       return;

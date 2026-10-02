@@ -594,6 +594,38 @@ describe('AgentGateway', () => {
     expect(client.disconnect).toHaveBeenCalled();
   });
 
+  it('disconnects with AI_INTERNAL_ERROR and logs why when the ai_enabled check throws on connect', async () => {
+    const log = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    const jwt = { verify: vi.fn().mockReturnValue({ sub: 'u1' }) };
+    const featureFlags = {
+      isEnabled: vi.fn().mockRejectedValue(new Error('database down')),
+    };
+    const gateway = makeGateway({ jwt, featureFlags });
+    const client = makeClient(undefined, 'c1', 'valid-token');
+
+    await gateway.handleConnection(client as never);
+
+    expect(client.emit.mock.calls).toEqual([
+      [
+        'agent:error',
+        {
+          code: 'AI_INTERNAL_ERROR',
+          message: 'AI internal error: Agent connection failed',
+        },
+      ],
+    ]);
+    expect(client.disconnect).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith({
+      event: 'agent.client.connect_failed',
+      clientId: 'c1',
+      userId: 'u1',
+      error: 'database down',
+    });
+    log.mockRestore();
+  });
+
   it('emits featureDisabled and does not start a turn when the flag turns off after connect', async () => {
     const execute = vi.fn().mockResolvedValue(undefined);
     const featureFlags = { isEnabled: vi.fn().mockResolvedValue(false) };
