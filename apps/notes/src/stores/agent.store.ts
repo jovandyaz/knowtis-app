@@ -645,6 +645,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           const id = activeAssistantId;
           set((s) => ({
             pendingProposal: null,
+            decisionInFlight: null,
             messages: s.messages.map((m) =>
               m.id === id
                 ? {

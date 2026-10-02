@@ -2149,6 +2149,26 @@ describe('AgentClient – turn identity', () => {
       expect(client.canResume()).toBe(true);
     });
 
+    it('ends the turn when the resume fails after the decision was committed', () => {
+      vi.useFakeTimers();
+      const { callbacks } = approveSuspendedTurn();
+      const internal = {
+        code: 'AI_INTERNAL_ERROR',
+        message: 'Agent turn failed',
+      };
+
+      fake.trigger('agent:committed', {
+        proposalId: PROPOSAL.id,
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+      fake.trigger('agent:error', internal);
+      vi.runAllTimers();
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(internal);
+      expect(sentApproves()).toHaveLength(1);
+      expect(client.canResume()).toBe(false);
+    });
+
     it('ends the turn when the proposal had expired', () => {
       const { callbacks } = approveSuspendedTurn();
       const expired = {

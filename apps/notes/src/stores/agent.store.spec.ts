@@ -1373,6 +1373,32 @@ describe('agent.store server-authoritative wire', () => {
       expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     });
 
+    it('keeps the committed message when the resume then fails without a turn id', () => {
+      const { get } = approve();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+      const failure = {
+        code: 'AI_INTERNAL_ERROR',
+        message: 'Agent turn failed',
+      };
+
+      get().onError(failure);
+
+      const { status, error, pendingProposal, messages } =
+        useAgentStore.getState();
+      expect({ status, error, pendingProposal }).toEqual({
+        status: 'error',
+        error: failure,
+        pendingProposal: null,
+      });
+      expect(messages.find((m) => m.committed)?.committed).toEqual({
+        kind: 'create',
+        title: 'My Note',
+      });
+    });
+
     it('takes the discard mark off a reject refused before the take', () => {
       const { get } = capture();
       useAgentStore.getState().sendMessage('create a note');

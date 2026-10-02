@@ -754,6 +754,11 @@ export class AgentClient {
     });
 
     onCurrentSocket('agent:committed', (payload: AgentCommittedPayload) => {
+      // The decision was applied, so nothing after it can be "not taken".
+      if (this.pending && !isTurnRequest(this.pending)) {
+        this.pending = null;
+        this.awaitingReceipt = null;
+      }
       this.activeCallbacks?.onCommitted?.(payload);
     });
 
