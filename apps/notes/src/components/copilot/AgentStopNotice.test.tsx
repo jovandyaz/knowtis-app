@@ -23,6 +23,16 @@ describe('AgentStopNotice', () => {
     expect(screen.getByRole('status')).toHaveTextContent(message);
   });
 
+  it('names the interruption instead of the stop reason of a cut-off reply', () => {
+    render(
+      <AgentStopNotice interrupted reason={AGENT_STOP_REASON.MAX_STEPS} />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /^This reply was interrupted\.$/
+    );
+  });
+
   it('renders nothing when the turn completed normally', () => {
     render(<AgentStopNotice reason={AGENT_STOP_REASON.COMPLETED} />);
 

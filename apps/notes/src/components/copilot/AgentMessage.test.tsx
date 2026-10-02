@@ -2,7 +2,7 @@ import i18n from '@/lib/i18n';
 import { render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { MESSAGE_KIND } from '@knowtis/shared-types';
+import { AGENT_STOP_REASON, MESSAGE_KIND } from '@knowtis/shared-types';
 
 import { AgentMessage } from './AgentMessage';
 
@@ -54,7 +54,7 @@ describe('AgentMessage', () => {
           id: 'm3',
           role: 'assistant',
           content: 'Revisé tres notas.',
-          stopReason: 'max_steps',
+          stopReason: AGENT_STOP_REASON.MAX_STEPS,
         }}
         isStreaming={false}
         footer={<button type="button">next</button>}

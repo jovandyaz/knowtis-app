@@ -20,9 +20,11 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_STOP_REASON,
   AGENT_TURN_ERROR_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  MESSAGE_KIND,
   type AgentByokKeyFailedError,
   type ConversationTranscript,
   type QuotaUpgrade,
@@ -1231,7 +1233,7 @@ describe('AgentCopilotPanel continue offer', () => {
       turnId: 't1',
       role: 'assistant' as const,
       content: 'Revisé tres notas.',
-      stopReason: 'max_steps' as const,
+      stopReason: AGENT_STOP_REASON.MAX_STEPS,
     },
   ];
   const freshWrapper = () =>
@@ -1269,11 +1271,9 @@ describe('AgentCopilotPanel continue offer', () => {
     render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
 
     expect(screen.getByText('ai.copilot.continue.partial')).toBeInTheDocument();
-    const button = continueButton();
-    expect(button).not.toBeNull();
-    if (button) {
-      await user.click(button);
-    }
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.continue.action' })
+    );
 
     expect(agentClient.continueTurn).toHaveBeenCalledExactlyOnceWith(
       't1',
@@ -1386,7 +1386,7 @@ describe('AgentCopilotPanel continue offer', () => {
           turnId: 't2',
           role: 'user' as const,
           content: '',
-          kind: 'continue' as const,
+          kind: MESSAGE_KIND.CONTINUE,
         },
         {
           id: 'a2',
