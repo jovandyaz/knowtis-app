@@ -1,7 +1,7 @@
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Awareness } from 'y-protocols/awareness';
+import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import type { RefreshOutcome } from '@knowtis/api-client';
@@ -11,6 +11,8 @@ import {
 } from '@knowtis/shared-types';
 
 import { useHocuspocusCollaboration } from '../useHocuspocusCollaboration';
+
+const USER = { name: 'Brave Otter', color: '#4ade80' };
 
 const mockProviderInstances: Array<{
   options: Record<string, unknown>;
@@ -50,7 +52,7 @@ vi.mock('@hocuspocus/provider', () => ({
       options,
       configuration: { websocketProvider },
       attach: vi.fn(),
-      destroy: vi.fn(),
+      destroy: vi.fn(() => (options['awareness'] as Awareness).destroy()),
       sendToken: vi.fn().mockResolvedValue(undefined),
       startSync: vi.fn(),
       websocketProvider,
@@ -62,17 +64,14 @@ vi.mock('@hocuspocus/provider', () => ({
 
 describe('useHocuspocusCollaboration — auth failure recovery', () => {
   let yDoc: Y.Doc;
-  let awareness: Awareness;
 
   beforeEach(() => {
     mockProviderInstances.length = 0;
     yDoc = new Y.Doc();
-    awareness = new Awareness(yDoc);
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    awareness.destroy();
     yDoc.destroy();
   });
 
@@ -86,7 +85,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
         useHocuspocusCollaboration({
           noteId: 'note-1',
           yDoc,
-          awareness,
+          user: USER,
           serverUrl: 'ws://test',
           userId: 'user-1',
           onAccessChanged,
@@ -116,7 +115,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       expect(result.current.readOnly).toBe(true);
       expect(provider.startSync).toHaveBeenCalledTimes(1);
       expect(yDoc.getMap('local').get('unsent')).toBe('keep');
-      expect(awareness.doc).toBe(yDoc);
+      expect(result.current.awareness?.doc).toBe(yDoc);
       expect(provider.destroy).not.toHaveBeenCalled();
       expect(onAccessChanged).toHaveBeenCalled();
       expect(onSessionExpired).not.toHaveBeenCalled();
@@ -130,7 +129,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://test',
         userId: 'user-1',
         onSessionExpired,
@@ -164,7 +163,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://test',
         userId: 'user-1',
         onSessionExpired,
@@ -181,6 +180,10 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       authenticated({ scope: 'read-write' })
     );
     yDoc.getMap('local').set('draft', 'keep');
+    const awareness = result.current.awareness;
+    if (!awareness) {
+      throw new Error('The connection opened without presence');
+    }
     const destroyAwareness = vi.spyOn(awareness, 'destroy');
     await act(async () => {
       close({
@@ -209,7 +212,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://test',
         userId: 'user-1',
       })
@@ -250,7 +253,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://test',
         userId: 'user-1',
         onSessionExpired,
@@ -278,7 +281,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -312,7 +315,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -342,7 +345,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
       })
@@ -363,7 +366,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onSessionExpired,
@@ -393,7 +396,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -425,7 +428,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -470,7 +473,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -513,7 +516,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -547,7 +550,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -579,7 +582,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -615,7 +618,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       useHocuspocusCollaboration({
         noteId: 'note-1',
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://localhost:3333/collaboration',
         userId: 'user-1',
         onAuthRefresh,
@@ -649,16 +652,13 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
 
 describe('useHocuspocusCollaboration — identity', () => {
   let yDoc: Y.Doc;
-  let awareness: Awareness;
 
   beforeEach(() => {
     mockProviderInstances.length = 0;
     yDoc = new Y.Doc();
-    awareness = new Awareness(yDoc);
   });
 
   afterEach(() => {
-    awareness.destroy();
     yDoc.destroy();
   });
 
@@ -669,7 +669,7 @@ describe('useHocuspocusCollaboration — identity', () => {
           noteId: 'note-1',
           userId: user,
           yDoc,
-          awareness,
+          user: USER,
           serverUrl: 'ws://test',
         }),
       { initialProps: { user: userId } }
@@ -687,6 +687,20 @@ describe('useHocuspocusCollaboration — identity', () => {
     expect(mockProviderInstances).toHaveLength(2);
   });
 
+  it('gives the new connection presence of its own, since closing one destroys its awareness', () => {
+    const { result, rerender } = renderFor('user-a');
+    const firstAwareness = result.current.awareness;
+
+    rerender({ user: 'user-b' });
+
+    expect(firstAwareness?.getLocalState()).toBeNull();
+    expect(result.current.awareness).not.toBe(firstAwareness);
+    expect(result.current.awareness).toBe(
+      mockProviderInstances[1].options['awareness']
+    );
+    expect(result.current.awareness?.getLocalState()).toEqual({ user: USER });
+  });
+
   it('closes the connection and opens none when the user signs out', () => {
     const { result, rerender } = renderFor('user-a');
     const first = mockProviderInstances[0];
@@ -701,6 +715,7 @@ describe('useHocuspocusCollaboration — identity', () => {
       isConnected: false,
       isSynced: false,
       readOnly: true,
+      awareness: null,
     });
   });
 
@@ -713,6 +728,7 @@ describe('useHocuspocusCollaboration — identity', () => {
       isConnected: false,
       isSynced: false,
       readOnly: true,
+      awareness: null,
     });
 
     rerender({ user: 'user-a' });
@@ -723,13 +739,35 @@ describe('useHocuspocusCollaboration — identity', () => {
       isConnected: false,
       isSynced: false,
       readOnly: false,
+      awareness: mockProviderInstances[0].options['awareness'],
     });
   });
 
   it('keeps the connection across a re-render for the same user', () => {
-    const { rerender } = renderFor('user-a');
+    const { result, rerender } = renderFor('user-a');
+    const awareness = result.current.awareness;
 
     rerender({ user: 'user-a' });
+
+    expect(mockProviderInstances).toHaveLength(1);
+    expect(mockProviderInstances[0].destroy).not.toHaveBeenCalled();
+    expect(result.current.awareness).toBe(awareness);
+  });
+
+  it('keeps the connection when the same name and color arrive as a new object', () => {
+    const { rerender } = renderHook(
+      ({ user }: { user: typeof USER }) =>
+        useHocuspocusCollaboration({
+          noteId: 'note-1',
+          userId: 'user-a',
+          yDoc,
+          user,
+          serverUrl: 'ws://test',
+        }),
+      { initialProps: { user: USER } }
+    );
+
+    rerender({ user: { ...USER } });
 
     expect(mockProviderInstances).toHaveLength(1);
     expect(mockProviderInstances[0].destroy).not.toHaveBeenCalled();

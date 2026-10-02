@@ -124,7 +124,6 @@ function InternalEditor({
   yDoc,
   yXmlFragment,
   awareness,
-  currentUser,
   initialContent,
   onUpdate,
   placeholder,
@@ -168,8 +167,6 @@ function InternalEditor({
     noteId,
     yDoc,
     yXmlFragment,
-    awareness,
-    currentUser,
     canTag,
     canImportImages
   );
@@ -268,6 +265,12 @@ function InternalEditor({
 
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
+      editor.commands.setCursorsAwareness(awareness);
+    }
+  }, [editor, awareness]);
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
       onEditorReady?.(editor);
     }
   }, [editor, onEditorReady]);
@@ -335,9 +338,6 @@ export function CollaborativeEditor({
   const editorState = useCollaborativeEditor(noteId, {
     skipProviderDelay: localFirst,
   });
-  const otherUsers = useActiveCollaborators(noteId, {
-    enabled: collaborationEnabled,
-  });
   usePresenceBroadcast(noteId, { enabled: collaborationEnabled });
 
   const resolvedPlaceholder: string[] = placeholder
@@ -381,12 +381,12 @@ export function CollaborativeEditor({
     void queryClient.invalidateQueries({ queryKey: notesQueryKeys.all });
   }, []);
 
-  const { status, isConnected, isSynced, readOnly } =
+  const { status, isConnected, isSynced, readOnly, awareness } =
     useHocuspocusCollaboration({
       noteId,
       userId,
       yDoc: editorState.yDoc,
-      awareness: editorState.awareness,
+      user: editorState.currentUser,
       serverUrl: getCollaborationServerUrl(),
       enabled: wsEnabled,
       shareToken,
@@ -395,6 +395,7 @@ export function CollaborativeEditor({
       onAuthRefresh: refreshAccessToken,
       onSessionExpired: handleSessionExpired,
     });
+  const otherUsers = useActiveCollaborators(awareness);
   const accessDenied = status === 'accessDenied';
 
   const connectionState = wsEnabled
@@ -437,8 +438,7 @@ export function CollaborativeEditor({
           noteId={noteId}
           yDoc={editorState.yDoc}
           yXmlFragment={editorState.yXmlFragment}
-          awareness={editorState.awareness}
-          currentUser={editorState.currentUser}
+          awareness={awareness}
           // With a live provider the server hydrates; a client seed forks a duplicate CRDT copy
           initialContent={wsEnabled ? '' : initialContent}
           onUpdate={onUpdate}

@@ -5,10 +5,8 @@ import Collaboration from '@tiptap/extension-collaboration';
 import type { AnyExtension } from '@tiptap/react';
 import i18next from 'i18next';
 import { toast } from 'sonner';
-import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
-import type { CollaborativeUser } from '@knowtis/crdt';
 import {
   CollaborativeCursors,
   createBaseExtensions,
@@ -32,8 +30,6 @@ export function useEditorExtensions(
   noteId: string,
   yDoc: Y.Doc,
   yXmlFragment: Y.XmlFragment,
-  awareness: Awareness | null,
-  currentUser: CollaborativeUser,
   canTag: boolean,
   canImportImages: boolean
 ): AnyExtension[] {
@@ -67,6 +63,7 @@ export function useEditorExtensions(
         document: yDoc,
         fragment: yXmlFragment,
       }),
+      CollaborativeCursors,
       SuggestionMenu.extend({ name: 'slashCommands' }).configure({
         suggestion: slashCommandsSuggestion,
       }),
@@ -95,27 +92,6 @@ export function useEditorExtensions(
       );
     }
 
-    if (awareness) {
-      extensions.push(
-        CollaborativeCursors.configure({
-          awareness,
-          user: {
-            name: currentUser.name,
-            color: currentUser.color,
-          },
-        })
-      );
-    }
-
     return extensions;
-  }, [
-    noteId,
-    yDoc,
-    yXmlFragment,
-    awareness,
-    currentUser.name,
-    currentUser.color,
-    canTag,
-    canImportImages,
-  ]);
+  }, [noteId, yDoc, yXmlFragment, canTag, canImportImages]);
 }

@@ -8,7 +8,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Awareness } from 'y-protocols/awareness';
+import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import { ApiClientError, notesApi } from '@knowtis/api-client';
@@ -37,7 +37,6 @@ const providers: Array<{
   startSync: ReturnType<typeof vi.fn>;
 }> = [];
 let doc: Y.Doc;
-let awareness: Awareness;
 
 vi.mock('@hocuspocus/provider', () => ({
   WebSocketStatus: {
@@ -94,7 +93,6 @@ vi.mock('@/hooks', () => ({
   useCollaborativeEditor: () => ({
     yDoc: doc,
     yXmlFragment: doc.getXmlFragment(YJS_XML_FRAGMENT_NAME),
-    awareness,
     currentUser: { name: 'Guest', color: '#000' },
     isReady: true,
   }),
@@ -179,14 +177,12 @@ beforeEach(() => {
   queryClient.clear();
   providers.length = 0;
   doc = new Y.Doc();
-  awareness = new Awareness(doc);
   vi.spyOn(notesApi, 'getNoteByToken').mockResolvedValue(note);
 });
 
 afterEach(() => {
   cleanup();
   queryClient.clear();
-  awareness.destroy();
   doc.destroy();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -200,7 +196,7 @@ describe('SharedNotePage access reconciliation lifecycle', () => {
     'preserves the editor, provider and local state through a recoverable background error: %s',
     async (error) => {
       const { provider, editor } = await mountEditingSession();
-      const destroyAwareness = vi.spyOn(awareness, 'destroy');
+      const destroyAwareness = vi.spyOn(provider.options.awareness, 'destroy');
       const selection = editor.state.selection.from;
       vi.mocked(notesApi.getNoteByToken).mockRejectedValue(error);
 
@@ -245,7 +241,7 @@ describe('SharedNotePage access reconciliation lifecycle', () => {
       expect(editor.isEditable).toBe(true);
       expect(editor.getText()).toContain('Unsent local draft');
       expect(provider.options.document).toBe(doc);
-      expect(provider.options.awareness).toBe(awareness);
+      expect(provider.options.awareness.getLocalState()).not.toBeNull();
       expect(providers).toHaveLength(1);
       expect(provider.destroy).not.toHaveBeenCalled();
     }
@@ -253,7 +249,7 @@ describe('SharedNotePage access reconciliation lifecycle', () => {
 
   it('preserves the collaboration session when a fresh query and authentication downgrade it to viewer', async () => {
     const { provider, editor } = await mountEditingSession();
-    const destroyAwareness = vi.spyOn(awareness, 'destroy');
+    const destroyAwareness = vi.spyOn(provider.options.awareness, 'destroy');
     vi.mocked(notesApi.getNoteByToken).mockResolvedValue({
       ...note,
       accessLevel: 'viewer',
@@ -283,14 +279,14 @@ describe('SharedNotePage access reconciliation lifecycle', () => {
     expect(editor.getText()).toContain('Unsent local draft');
     expect(providers).toHaveLength(1);
     expect(provider.options.document).toBe(doc);
-    expect(provider.options.awareness).toBe(awareness);
+    expect(provider.options.awareness.getLocalState()).not.toBeNull();
   });
 
   it.each([401, 403, 404])(
     'unmounts the editing session for terminal HTTP %s even with retained data',
     async (status) => {
       const { provider, editor } = await mountEditingSession();
-      const destroyAwareness = vi.spyOn(awareness, 'destroy');
+      const destroyAwareness = vi.spyOn(provider.options.awareness, 'destroy');
       vi.mocked(notesApi.getNoteByToken).mockRejectedValue(
         new ApiClientError('Denied', status)
       );

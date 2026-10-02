@@ -1,19 +1,9 @@
-import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
 import type {
   BROADCAST_MESSAGE_TYPES,
   BroadcastMessageType,
 } from './collaboration.constants';
-
-/**
- * Generic collaboration provider interface
- * Satisfied by any Yjs provider exposing awareness (e.g. HocuspocusProvider)
- */
-export interface CollaborationProvider {
-  awareness: Awareness;
-  destroy: () => void;
-}
 
 /**
  * Represents a user participating in collaborative editing
@@ -50,35 +40,21 @@ export interface AwarenessState {
 }
 
 /**
- * Options for the CollaborativeCursors extension
- * @param awareness - The awareness protocol instance
- * @param user - The user participating in collaborative editing
- */
-export interface CollaborativeCursorsOptions {
-  awareness: Awareness;
-  user: Pick<CollaborativeUser, 'name' | 'color'>;
-}
-
-/**
  * Context value provided by YjsProvider
  * @param getYDoc - Function to get or create a Y.Doc for a specific note
  * @param getYText - Function to get or create a Y.XmlFragment for note content
- * @param getAwareness - Function to get awareness for a note
  * @param currentUser - The current user information
  * @param activeUsers - The map of active users per note
  * @param broadcastPresence - Function to broadcast user presence to other tabs
  * @param broadcastLeave - Function to broadcast user leaving a note
- * @param clearAwarenessForNote - Function to clear awareness state for a specific note
  */
 export interface YjsContextValue {
   getYDoc: (noteId: string) => Y.Doc;
   getYText: (noteId: string) => Y.XmlFragment;
-  getAwareness: (noteId: string) => Awareness | null;
   currentUser: CollaborativeUser;
   activeUsers: Map<string, CollaborativeUser[]>;
   broadcastPresence: (noteId: string) => void;
   broadcastLeave: (noteId: string) => void;
-  clearAwarenessForNote: (noteId: string) => void;
 }
 
 /**

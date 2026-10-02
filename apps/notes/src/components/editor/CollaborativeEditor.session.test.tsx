@@ -50,6 +50,7 @@ vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
       isConnected: true,
       isSynced: true,
       readOnly: false,
+      awareness: null,
     };
   },
 }));
@@ -57,7 +58,6 @@ vi.mock('@/hooks', () => ({
   useCollaborativeEditor: () => ({
     yDoc: {},
     yXmlFragment: null,
-    awareness: null,
     currentUser: { name: 'Tester', color: '#000' },
     isReady: false,
   }),

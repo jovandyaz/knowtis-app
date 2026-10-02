@@ -5,7 +5,6 @@ export type { DocumentResources, YjsProviderProps } from './YjsProvider.types';
 export { COLLAB_CONFIG } from './collaboration.constants';
 export type {
   AwarenessState,
-  CollaborativeCursorsOptions,
   CollaborativeUser,
   YjsContextValue,
 } from './collaboration.types';

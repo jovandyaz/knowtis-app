@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
@@ -29,7 +28,6 @@ export function YjsProvider({ children }: YjsProviderProps) {
   const resourcesRef = useRef<DocumentResources>({
     docs: new Map(),
     persistence: new Map(),
-    awareness: new Map(),
   });
   const channelRef = useRef<BroadcastChannel | null>(null);
 
@@ -118,30 +116,6 @@ export function YjsProvider({ children }: YjsProviderProps) {
     [getYDoc]
   );
 
-  const getAwareness = useCallback(
-    (noteId: string): Awareness | null => {
-      const resources = resourcesRef.current;
-      let awareness = resources.awareness.get(noteId);
-
-      if (!awareness) {
-        const doc = resources.docs.get(noteId);
-        if (!doc) {
-          return null;
-        }
-
-        awareness = new Awareness(doc);
-        awareness.setLocalStateField('user', {
-          name: currentUser.name,
-          color: currentUser.color,
-        });
-        resources.awareness.set(noteId, awareness);
-      }
-
-      return awareness;
-    },
-    [currentUser.name, currentUser.color]
-  );
-
   const broadcastPresence = useCallback(
     (noteId: string) => {
       try {
@@ -182,13 +156,6 @@ export function YjsProvider({ children }: YjsProviderProps) {
     [currentUser]
   );
 
-  const clearAwarenessForNote = useCallback((noteId: string) => {
-    const awareness = resourcesRef.current.awareness.get(noteId);
-    if (awareness) {
-      awareness.setLocalStateField('cursor', null);
-    }
-  }, []);
-
   useEffect(() => {
     const resources = resourcesRef.current;
 
@@ -216,22 +183,18 @@ export function YjsProvider({ children }: YjsProviderProps) {
     () => ({
       getYDoc,
       getYText,
-      getAwareness,
       currentUser,
       activeUsers,
       broadcastPresence,
       broadcastLeave,
-      clearAwarenessForNote,
     }),
     [
       getYDoc,
       getYText,
-      getAwareness,
       currentUser,
       activeUsers,
       broadcastPresence,
       broadcastLeave,
-      clearAwarenessForNote,
     ]
   );
 

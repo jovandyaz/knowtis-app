@@ -106,7 +106,6 @@ export function createMessageHandler(
 }
 
 export function cleanupResources(resources: DocumentResources): void {
-  resources.awareness.forEach((awareness) => awareness.destroy());
   resources.docs.forEach((doc) => doc.destroy());
   resources.persistence.forEach((persistence) => persistence.destroy());
 }
