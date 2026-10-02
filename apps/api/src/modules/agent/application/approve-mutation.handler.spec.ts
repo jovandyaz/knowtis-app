@@ -1,5 +1,6 @@
+import { Logger } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { NoteErrors } from '../../notes/domain/errors/note.errors';
@@ -92,6 +93,10 @@ function make(d: ReturnType<typeof deps>) {
 }
 
 describe('ApproveMutationHandler', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('commits a create proposal and returns the result', async () => {
     const d = deps();
     const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
@@ -129,6 +134,76 @@ describe('ApproveMutationHandler', () => {
       expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
       expect(r.error).not.toHaveProperty('turnId');
     }
+  });
+
+  it.each([
+    [
+      'the note handler',
+      () =>
+        deps({
+          createHandler: {
+            execute: vi.fn().mockRejectedValue(new Error('database down')),
+          },
+        }),
+    ],
+    [
+      'the note lookup',
+      () =>
+        deps({
+          store: {
+            take: vi.fn().mockResolvedValue({
+              userId: 'u1',
+              turnId: TURN,
+              conversationId: CONVERSATION,
+              mutation: updateProposal(),
+            }),
+            save: vi.fn(),
+          },
+          noteRepo: {
+            findById: vi.fn().mockRejectedValue(new Error('database down')),
+          },
+        }),
+    ],
+  ])(
+    'answers a commit that throws in %s after the proposal was taken with AGENT_COMMIT_FAILED naming its turn',
+    async (_failing, failingDeps) => {
+      const log = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      const r = await make(failingDeps()).execute({
+        proposalId: 'p1',
+        userId: 'u1',
+      });
+
+      expect(r.isErr() && r.error).toEqual({
+        code: 'AGENT_COMMIT_FAILED',
+        message:
+          'Could not apply the change (INTERNAL_ERROR): unexpected failure',
+        turnId: TURN,
+      });
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.commit.threw',
+          turnId: TURN,
+          error: 'database down',
+        })
+      );
+    }
+  );
+
+  it('lets a failure to take the proposal escape, since nothing tells whether it was taken', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockRejectedValue(new Error('redis down')),
+        save: vi.fn(),
+      },
+    });
+
+    await expect(
+      make(d).execute({ proposalId: 'p1', userId: 'u1' })
+    ).rejects.toThrow('redis down');
+    expect(d.createHandler.execute).not.toHaveBeenCalled();
   });
 
   it('fails when the user lacks permission', async () => {
@@ -460,6 +535,45 @@ describe('ApproveMutationHandler', () => {
         userId: 'u1',
         email: 'bob@example.com',
         permission: 'viewer',
+      })
+    );
+  });
+
+  it('reports a share that took effect as committed when the note title lookup after it fails', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockRejectedValue(new Error('database down')),
+      },
+      shareHandler: {
+        execute: vi.fn().mockResolvedValue(ok({ id: 'perm-1' })),
+      },
+    });
+
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+
+    expect(r._unsafeUnwrap()).toEqual({
+      result: { noteId: 'note-1', title: 'Note', kind: 'share' },
+      outcome: 'shared "Note" with bob@example.com as viewer',
+      turnId: TURN,
+      conversationId: CONVERSATION,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.commit.title_lookup_failed',
+        proposalId: 'p3',
+        error: 'database down',
       })
     );
   });

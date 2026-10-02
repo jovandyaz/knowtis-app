@@ -12,6 +12,7 @@ const row = (
   stopReason: null,
   turnId: null,
   kind: null,
+  model: null,
   ...r,
 });
 const user = row({ role: 'user', content: 'research X' });

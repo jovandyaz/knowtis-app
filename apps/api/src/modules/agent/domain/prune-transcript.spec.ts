@@ -19,6 +19,7 @@ const row = (
   stopReason: null,
   turnId: null,
   kind: null,
+  model: null,
   ...r,
 });
 const call = (id: string) => ({
@@ -289,6 +290,126 @@ describe('pruneTranscript', () => {
       ['assistant', 'Found A. Pending: B.'],
       ['user', CONTINUE_REQUEST],
       ['assistant', 'Found B.'],
+    ]);
+  });
+
+  it.each([
+    ['on a continue marker', []],
+    [
+      'on the tail of the capped turn the marker continues',
+      [
+        row({
+          role: 'assistant',
+          content: 'Found A. Pending: B.',
+          stopReason: 'max_steps',
+          turnId: 't1',
+        }),
+      ],
+    ],
+  ])(
+    'opens a history window cut %s on the next question, dropping the orphaned continuation',
+    (_cut, tail) => {
+      const rows = [
+        ...tail,
+        row({ role: 'user', content: '', kind: 'continue', turnId: 't2' }),
+        row({
+          role: 'assistant',
+          content: '',
+          parts: [call('n2')],
+          turnId: 't2',
+        }),
+        row({ role: 'tool', content: '', parts: [result('n2')], turnId: 't2' }),
+        row({
+          role: 'assistant',
+          content: 'Found B.',
+          stopReason: 'completed',
+          turnId: 't2',
+        }),
+        row({ role: 'user', content: 'Next question', turnId: 't3' }),
+        row({
+          role: 'assistant',
+          content: 'Answer',
+          stopReason: 'completed',
+          turnId: 't3',
+        }),
+      ];
+
+      expect(
+        pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => [
+          m.role,
+          m.content,
+        ])
+      ).toEqual([
+        ['user', 'Next question'],
+        ['assistant', 'Answer'],
+      ]);
+    }
+  );
+
+  it('keeps whole a history window whose only questions are continue markers, so a long chain keeps its newest segments', () => {
+    const rows = [
+      row({
+        role: 'assistant',
+        content: 'Found A. Pending: B.',
+        stopReason: 'max_steps',
+        turnId: 't1',
+      }),
+      row({ role: 'user', content: '', kind: 'continue', turnId: 't2' }),
+      row({
+        role: 'assistant',
+        content: 'Found B. Pending: C.',
+        stopReason: 'max_steps',
+        turnId: 't2',
+      }),
+      row({ role: 'user', content: '', kind: 'continue', turnId: 't3' }),
+      row({
+        role: 'assistant',
+        content: 'Found C.',
+        stopReason: 'completed',
+        turnId: 't3',
+      }),
+    ];
+
+    expect(
+      pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => [
+        m.role,
+        m.content,
+      ])
+    ).toEqual([
+      ['assistant', 'Found A. Pending: B.'],
+      ['user', CONTINUE_REQUEST],
+      ['assistant', 'Found B. Pending: C.'],
+      ['user', CONTINUE_REQUEST],
+      ['assistant', 'Found C.'],
+    ]);
+  });
+
+  it('opens a history window on its first question when a concurrent turn left a continue marker before it', () => {
+    const rows = [
+      row({ role: 'user', content: '', kind: 'continue', turnId: 't2' }),
+      row({ role: 'user', content: 'Next question', turnId: 't3' }),
+      row({
+        role: 'assistant',
+        content: 'Found B.',
+        stopReason: 'completed',
+        turnId: 't2',
+      }),
+      row({
+        role: 'assistant',
+        content: 'Answer',
+        stopReason: 'completed',
+        turnId: 't3',
+      }),
+    ];
+
+    expect(
+      pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => [
+        m.role,
+        m.content,
+      ])
+    ).toEqual([
+      ['user', 'Next question'],
+      ['assistant', 'Answer'],
     ]);
   });
 

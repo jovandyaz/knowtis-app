@@ -103,9 +103,12 @@ export class AIGateway
     }
 
     if (
-      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
+      !(await this.ensureAiEnabled(
+        client,
+        'ai.client.connect_failed',
+        'AI connection failed'
+      ))
     ) {
-      client.emit('ai:error', AIErrors.featureDisabled());
       client.disconnect();
       return;
     }
@@ -159,9 +162,12 @@ export class AIGateway
     payload: unknown
   ): Promise<void> {
     if (
-      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
+      !(await this.ensureAiEnabled(
+        client,
+        'ai.complete.flag_check_failed',
+        'AI completion failed'
+      ))
     ) {
-      client.emit('ai:error', AIErrors.featureDisabled());
       return;
     }
 
@@ -253,6 +259,32 @@ export class AIGateway
       this.streams.release(userId, client.id, streamId);
       this.tokenExpiry.afterSlotRelease(client);
     }
+  }
+
+  private async ensureAiEnabled(
+    client: AuthenticatedSocket,
+    failedEvent: string,
+    failure: string
+  ): Promise<boolean> {
+    let enabled: boolean;
+    try {
+      enabled = await this.featureFlagsService.isEnabled(
+        FEATURE_FLAG_KEYS.AI_ENABLED
+      );
+    } catch (error) {
+      this.logger.error({
+        event: failedEvent,
+        clientId: client.id,
+        userId: client.data?.userId,
+        error: reasonOf(error),
+      });
+      client.emit('ai:error', AIErrors.internalError(failure));
+      return false;
+    }
+    if (!enabled) {
+      client.emit('ai:error', AIErrors.featureDisabled());
+    }
+    return enabled;
   }
 
   private async resolveExecution(

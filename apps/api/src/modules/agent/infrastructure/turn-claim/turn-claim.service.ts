@@ -31,13 +31,33 @@ export const TURN_CLAIM_OUTCOME = {
 export type TurnClaimOutcome =
   (typeof TURN_CLAIM_OUTCOME)[keyof typeof TURN_CLAIM_OUTCOME];
 
-const KEY_PREFIX = 'agent:turn:';
+/** `RUNNING`: another turn of the conversation holds its lease. */
+export type ConversationLeaseOutcome =
+  | typeof TURN_CLAIM_OUTCOME.CLAIMED
+  | typeof TURN_CLAIM_OUTCOME.RUNNING
+  | typeof TURN_CLAIM_OUTCOME.UNAVAILABLE;
+
+const TURN_KEY_PREFIX = 'agent:turn:';
+const CONVERSATION_KEY_PREFIX = 'agent:conversation:';
 const CLAIM_STATUSES = [
   TURN_CLAIM_OUTCOME.RUNNING,
   TURN_CLAIM_OUTCOME.SETTLED,
 ] as const;
 
-type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+const RELEASE_IF_OWNED_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
+
+const REPLACE_IF_OWNED_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+  return 1
+end
+return 0
+`;
 
 /** One delivery of a turn: the claim is keyed by user and turn, and the rest is its fingerprint. */
 export interface TurnClaimRequest {
@@ -49,6 +69,12 @@ export interface TurnClaimRequest {
   readonly content: string;
   /** The turn a continue request continues; absent on a message. */
   readonly continuesTurnId?: string | undefined;
+}
+
+interface ClaimLogSubject {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly turnId?: string;
 }
 
 const storedClaimSchema = z.object({
@@ -63,6 +89,9 @@ const storedClaimSchema = z.object({
  * so one orphaned by a lost settle or a shutdown frees itself: `AI_AGENT_MAX_MS`
  * caps the model, and a minute covers the history, memory, guard and persistence
  * work around it. A settled claim is kept for a day, like Stripe's stored outcomes.
+ * A running claim carries its delivery's owner, so a delivery that outlived its
+ * lease never settles or releases the claim of the one that took the turn over.
+ * A conversation is leased the same way, so one turn of it runs at a time.
  */
 @Injectable()
 export class TurnClaimService {
@@ -78,12 +107,15 @@ export class TurnClaimService {
       RUNNING_LEASE_MARGIN_SECONDS;
   }
 
-  async claim(request: TurnClaimRequest): Promise<TurnClaimOutcome> {
+  async claim(
+    request: TurnClaimRequest,
+    owner: string
+  ): Promise<TurnClaimOutcome> {
     const fingerprint = fingerprintOf(request);
     try {
       const set = await this.redis.client.set(
-        keyOf(request),
-        serialize(TURN_CLAIM_OUTCOME.RUNNING, fingerprint),
+        turnKeyOf(request),
+        runningClaimOf(fingerprint, owner),
         'EX',
         this.runningLeaseSeconds,
         'NX'
@@ -91,7 +123,7 @@ export class TurnClaimService {
       if (set === 'OK') {
         return TURN_CLAIM_OUTCOME.CLAIMED;
       }
-      const stored = await this.redis.client.get(keyOf(request));
+      const stored = await this.redis.client.get(turnKeyOf(request));
       if (stored === null) {
         return TURN_CLAIM_OUTCOME.RUNNING;
       }
@@ -105,12 +137,15 @@ export class TurnClaimService {
     }
   }
 
-  async settle(request: TurnClaimRequest): Promise<void> {
+  async settle(request: TurnClaimRequest, owner: string): Promise<void> {
+    const fingerprint = fingerprintOf(request);
     try {
-      await this.redis.client.set(
-        keyOf(request),
-        serialize(TURN_CLAIM_OUTCOME.SETTLED, fingerprintOf(request)),
-        'EX',
+      await this.redis.client.eval(
+        REPLACE_IF_OWNED_SCRIPT,
+        1,
+        turnKeyOf(request),
+        runningClaimOf(fingerprint, owner),
+        settledClaimOf(fingerprint),
         TURN_CLAIM_TTL_SECONDS
       );
     } catch (error) {
@@ -118,26 +153,87 @@ export class TurnClaimService {
     }
   }
 
-  async release(request: TurnClaimRequest): Promise<void> {
+  async release(request: TurnClaimRequest, owner: string): Promise<void> {
     try {
-      await this.redis.client.del(keyOf(request));
+      await this.redis.client.eval(
+        RELEASE_IF_OWNED_SCRIPT,
+        1,
+        turnKeyOf(request),
+        runningClaimOf(fingerprintOf(request), owner)
+      );
     } catch (error) {
       this.warn('agent.turn.release_failed', request, error);
     }
   }
 
-  private warn(event: string, request: TurnClaimRequest, error: unknown) {
+  async claimConversation(
+    userId: string,
+    conversationId: string,
+    owner: string
+  ): Promise<ConversationLeaseOutcome> {
+    try {
+      const set = await this.redis.client.set(
+        conversationKeyOf(userId, conversationId),
+        owner,
+        'EX',
+        this.runningLeaseSeconds,
+        'NX'
+      );
+      return set === 'OK'
+        ? TURN_CLAIM_OUTCOME.CLAIMED
+        : TURN_CLAIM_OUTCOME.RUNNING;
+    } catch (error) {
+      this.warn(
+        'agent.conversation.claim_failed',
+        { userId, conversationId },
+        error
+      );
+      return TURN_CLAIM_OUTCOME.UNAVAILABLE;
+    }
+  }
+
+  async releaseConversation(
+    userId: string,
+    conversationId: string,
+    owner: string
+  ): Promise<void> {
+    try {
+      await this.redis.client.eval(
+        RELEASE_IF_OWNED_SCRIPT,
+        1,
+        conversationKeyOf(userId, conversationId),
+        owner
+      );
+    } catch (error) {
+      this.warn(
+        'agent.conversation.release_failed',
+        { userId, conversationId },
+        error
+      );
+    }
+  }
+
+  private warn(
+    event: string,
+    { userId, conversationId, turnId }: ClaimLogSubject,
+    error: unknown
+  ) {
     this.logger.warn({
       event,
-      userId: request.userId,
-      turnId: request.turnId,
+      userId,
+      conversationId,
+      ...(turnId && { turnId }),
       error: reasonOf(error),
     });
   }
 }
 
-function keyOf(request: TurnClaimRequest): string {
-  return `${KEY_PREFIX}${request.userId}:${request.turnId}`;
+function turnKeyOf(request: TurnClaimRequest): string {
+  return `${TURN_KEY_PREFIX}${request.userId}:${request.turnId}`;
+}
+
+function conversationKeyOf(userId: string, conversationId: string): string {
+  return `${CONVERSATION_KEY_PREFIX}${userId}:${conversationId}`;
 }
 
 // Changing a message request's fingerprint would turn its in-flight resend into REUSED, so continuesTurnId is hashed only when set.
@@ -154,6 +250,14 @@ function fingerprintOf(request: TurnClaimRequest): string {
     .digest('hex');
 }
 
-function serialize(status: ClaimStatus, fingerprint: string): string {
-  return JSON.stringify({ status, fingerprint });
+function runningClaimOf(fingerprint: string, owner: string): string {
+  return JSON.stringify({
+    status: TURN_CLAIM_OUTCOME.RUNNING,
+    fingerprint,
+    owner,
+  });
+}
+
+function settledClaimOf(fingerprint: string): string {
+  return JSON.stringify({ status: TURN_CLAIM_OUTCOME.SETTLED, fingerprint });
 }

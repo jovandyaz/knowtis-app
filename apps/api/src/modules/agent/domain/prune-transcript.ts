@@ -1,4 +1,4 @@
-import { MESSAGE_KIND, type MessageStopReason } from '@knowtis/shared-types';
+import type { MessageStopReason } from '@knowtis/shared-types';
 
 import {
   textOfParts,
@@ -6,8 +6,10 @@ import {
   type AgentMessagePart,
   type AgentRole,
 } from './agent-message';
+import { isContinueMarker } from './continue-marker';
 import { estimateMessageTokens } from './message-tokens';
 import type { ConversationMessageRow } from './ports/conversation.repository';
+import { alignToFirstQuestion } from './transcript-window';
 
 export const PARTIAL_STOP_REASONS = ['aborted', 'error', 'length'] as const;
 type PartialStopReason = (typeof PARTIAL_STOP_REASONS)[number];
@@ -54,9 +56,9 @@ function markPartial(
     : { ...message, content };
 }
 
-// Nothing serializes turns per conversation, so a concurrent turn's row can
-// land between an assistant tool-call and its result; a provider rejects that
-// ordering, and the rows replay on every load until the window slides past.
+// A resume leg runs outside the conversation lease, and older rows predate it,
+// so another turn's row can still land between a tool call and its result; a
+// provider rejects that ordering.
 function groupTurns(
   rows: readonly ConversationMessageRow[]
 ): readonly ConversationMessageRow[] {
@@ -169,16 +171,16 @@ export function repairTranscriptOrphans(
   return out;
 }
 
-/** Turns stored rows into the history the model should see: recent tool turns verbatim, older turns as text, orphans stripped, partial replies marked as data. */
+/** Turns stored rows into the history the model should see: opened on its first question, recent tool turns verbatim, older turns as text, orphans stripped, partial replies marked as data. */
 export function pruneTranscript(
   rows: readonly ConversationMessageRow[],
   options: PruneOptions
 ): AgentMessage[] {
-  const ordered = groupTurns(rows);
+  const ordered = alignToFirstQuestion(groupTurns(rows));
   const keep = recentToolTurns(ordered, options.keepToolTurns);
   const messages: AgentMessage[] = [];
   for (const row of ordered) {
-    if (row.role === 'user' && row.kind === MESSAGE_KIND.CONTINUE) {
+    if (isContinueMarker(row)) {
       messages.push({ role: 'user', content: CONTINUE_REQUEST });
       continue;
     }

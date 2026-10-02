@@ -44,7 +44,12 @@ import {
   type AiCaller,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
+import type { ModelChoice } from '../../ai/domain/model-catalog/model-choice';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
+import type {
+  QuotaConsumeResult,
+  QuotaTurn,
+} from '../../ai/domain/ports/message-quota.port';
 import { utcDayOf } from '../../ai/domain/value-objects/utc-day';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { createMessageQuotaStub } from '../../ai/testing/create-message-quota-stub';
@@ -74,7 +79,7 @@ import {
   projectReplayText,
   REPLAY_REDACTION_MARKER,
 } from '../domain/replay-input-sanitizer';
-import { TURN_ABORT_REASON } from '../domain/turn-abort';
+import { TURN_ABORT_REASON, type TurnAbortReason } from '../domain/turn-abort';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import type { InjectionGuardService } from './injection-guard.service';
 import {
@@ -110,6 +115,29 @@ function executionFor(userId: string) {
   return expect.objectContaining({
     subject: expect.objectContaining({ userId }),
   });
+}
+
+const SUBSTITUTE_MODEL = 'anthropic:claude-haiku-4-5';
+const LEFT_THE_TIER: ModelChoice = {
+  kind: 'unavailable',
+  reason: 'key_removed',
+  suggestedModel: null,
+};
+
+function onlySubstituted(requested: string): ModelChoice {
+  return {
+    kind: 'resolved',
+    model: SUBSTITUTE_MODEL,
+    resolution: {
+      requested,
+      resolved: SUBSTITUTE_MODEL,
+      fallback: {
+        reason: 'not_in_tier',
+        from: requested,
+        to: SUBSTITUTE_MODEL,
+      },
+    },
+  };
 }
 
 const TOOL_OUTPUT_FILLER = 'lorem ipsum dolor sit amet ';
@@ -192,6 +220,7 @@ function historyRow(
     stopReason: null,
     turnId: null,
     kind: null,
+    model: null,
     ...row,
   };
 }
@@ -358,6 +387,64 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
   });
 
+  it('stores the model that served the turn on its assistant row, not the one it asked for', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'answer' },
+      {
+        type: 'done',
+        usage: { inputTokens: 10, outputTokens: 5, model: SERVED_MODEL },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+        stopReason: 'completed',
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeModelPreference('anthropic:claude-sonnet-4-20250514'),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const onDone = vi.fn();
+
+    await handler.execute(
+      { userId: USER, turnId: TURN_ID, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone, onError: vi.fn(), onProposal: vi.fn() }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
+    );
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ model: SERVED_MODEL })
+    );
+    const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+    expect(appended.messages).toEqual([
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: 'answer',
+        sources: [],
+        stopReason: 'completed',
+        model: SERVED_MODEL,
+      },
+    ]);
+  });
+
   it('forwards thinking events to onThinking and keeps them out of the transcript', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
@@ -419,6 +506,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'answer',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
   });
@@ -1449,6 +1537,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'Hi',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
   });
@@ -3879,6 +3968,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'Hi',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
     expect(done).toHaveBeenCalledWith(
@@ -4071,6 +4161,7 @@ describe('RunAgentTurnHandler', () => {
         content: 'I will create it.',
         sources: [],
         stopReason: 'completed',
+        model: 'anthropic:claude-sonnet-4-20250514',
       },
     ]);
     expect(pendingStore.save).toHaveBeenCalledWith(
@@ -5572,6 +5663,7 @@ describe('RunAgentTurnHandler', () => {
           content: 'N1 says hi',
           sources: [{ id: 'n1', title: 'N1' }],
           stopReason: 'completed',
+          model: doneEvent.usage.model,
         },
       ]);
     });
@@ -5655,6 +5747,7 @@ describe('RunAgentTurnHandler', () => {
           content: '',
           sources: doneEvent.sources,
           stopReason: 'completed',
+          model: doneEvent.usage.model,
         },
       ]);
     });
@@ -7513,6 +7606,34 @@ describe('RunAgentTurnHandler daily message quota', () => {
       );
     });
 
+    it.each([
+      ['another run already stored it', () => Promise.resolve(false)],
+      ['storing it failed', () => Promise.reject(new Error('db down'))],
+    ])(
+      'is not continuable when a capped turn is not stored because %s',
+      async (_label, appendTurn) => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const conversations = makeConversations();
+        vi.mocked(conversations.appendTurn).mockImplementation(appendTurn);
+        const { handler } = build({
+          quota: consumedQuota(),
+          events: doneWith('max_steps'),
+          conversations,
+        });
+        const cb = callbacks();
+
+        await handler.execute(turn, cb);
+
+        expect(conversations.appendTurn).toHaveBeenCalledOnce();
+        expect(cb.onDone).toHaveBeenCalledWith(
+          expect.objectContaining({
+            stopReason: 'max_steps',
+            continuable: false,
+          })
+        );
+      }
+    );
+
     it('is not continuable when the capped turn drew the last message', async () => {
       const quota = createMessageQuotaStub({
         kind: 'consumed',
@@ -7603,6 +7724,33 @@ describe('RunAgentTurnHandler daily message quota', () => {
           error: 'redis down',
         })
       );
+    });
+
+    it('is not continuable, and reads no quota, when a capped resume leg is not stored', async () => {
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const quota = consumedQuota();
+      vi.mocked(quota.snapshot).mockResolvedValue(AFTER_CONSUME);
+      const conversations = makeConversations();
+      vi.mocked(conversations.appendTurn).mockRejectedValue(
+        new Error('db down')
+      );
+      const { handler } = build({
+        quota,
+        events: doneWith('max_steps'),
+        conversations,
+      });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'max_steps', continuable: false })
+      );
+      expect(quota.snapshot).not.toHaveBeenCalled();
     });
 
     it('never reads the quota for a resume leg that completed', async () => {
@@ -7894,10 +8042,12 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       stopReason: 'max_steps',
     }),
   ];
+  const CAPPED_MODEL = 'openai:gpt-4o-mini';
   const CAPPED_LAST: LastConversationMessage = {
     turnId: CONTINUED,
     role: 'assistant',
     stopReason: 'max_steps',
+    model: CAPPED_MODEL,
   };
   const request = {
     userId: USER,
@@ -7938,6 +8088,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       quota?: MessageQuotaService;
       events?: AgentEvent[];
       allowed?: boolean;
+      modelPreference?: ModelPreferenceService;
     } = {}
   ) {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
@@ -7955,6 +8106,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     const guard = makeGuard();
     const quota = over.quota ?? consumedQuota();
     const emitter = makeEvents();
+    const modelPreference = over.modelPreference ?? makeModelPreference();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -7964,7 +8116,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       conversations,
       memory,
       embed,
-      makeModelPreference(),
+      modelPreference,
       makeByok(),
       guard,
       makeAIConfig(),
@@ -7980,16 +8132,19 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       onProposal: vi.fn(),
       onModelStart: vi.fn(),
       onQuota: vi.fn(),
+      onTurnDiscarded: vi.fn(),
     };
     return {
       handler,
       callbacks,
       conversations,
       orchestrator,
+      pendingStore,
       quota,
       guard,
       embed,
       emitter,
+      modelPreference,
     };
   }
 
@@ -8023,7 +8178,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     ['with no stop reason', { ...CAPPED_LAST, stopReason: null }],
     [
       'that ends on its user message',
-      { turnId: CONTINUED, role: 'user', stopReason: null },
+      { turnId: CONTINUED, role: 'user', stopReason: null, model: null },
     ],
     ['in an empty conversation', null],
   ] as const)(
@@ -8130,8 +8285,120 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
           content: 'Found B.',
           sources: [],
           stopReason: 'completed',
+          model: SERVED_MODEL,
         },
       ],
+    });
+  });
+
+  describe('the model it runs on', () => {
+    const PREFERRED_MODEL = 'anthropic:claude-sonnet-4-20250514';
+    const REQUESTED_MODEL = 'google:gemini-2.0-flash';
+
+    function runModel(ctx: ReturnType<typeof setup>): string {
+      const [{ model }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
+      return model;
+    }
+
+    it('keeps the model that served the capped segment while the tier still offers it', async () => {
+      const ctx = setup({
+        modelPreference: makeModelPreference(PREFERRED_MODEL),
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(
+        ctx.modelPreference.chooseTurnModel
+      ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), {
+        pinned: CAPPED_MODEL,
+      });
+      expect(runModel(ctx)).toBe(CAPPED_MODEL);
+      expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelResolution: { requested: CAPPED_MODEL, resolved: CAPPED_MODEL },
+        })
+      );
+    });
+
+    it('runs on the model the request names over the capped one', async () => {
+      const ctx = setup({
+        modelPreference: makeModelPreference(PREFERRED_MODEL),
+      });
+
+      await ctx.handler.continueTurn(
+        { ...request, model: REQUESTED_MODEL },
+        ctx.callbacks
+      );
+
+      expect(
+        ctx.modelPreference.chooseTurnModel
+      ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), {
+        explicit: REQUESTED_MODEL,
+        pinned: null,
+      });
+      expect(runModel(ctx)).toBe(REQUESTED_MODEL);
+    });
+
+    it.each([
+      ['has left the tier', LEFT_THE_TIER, 'key_removed'],
+      [
+        'is offered only through a substitute',
+        onlySubstituted(CAPPED_MODEL),
+        'not_in_tier',
+      ],
+    ])(
+      'resolves like any turn when the capped model %s',
+      async (_label, cappedChoice, reason) => {
+        const warn = vi
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+        const modelPreference = makeModelPreference(PREFERRED_MODEL);
+        vi.mocked(modelPreference.chooseTurnModel).mockResolvedValueOnce(
+          cappedChoice
+        );
+        const ctx = setup({ modelPreference });
+
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+          1,
+          executionFor(USER),
+          { pinned: CAPPED_MODEL }
+        );
+        expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+          2,
+          executionFor(USER),
+          { pinned: null }
+        );
+        expect(ctx.callbacks.onError).not.toHaveBeenCalled();
+        expect(runModel(ctx)).toBe(PREFERRED_MODEL);
+        expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modelResolution: { requested: null, resolved: PREFERRED_MODEL },
+          })
+        );
+        expect(warn).toHaveBeenCalledWith({
+          event: 'agent.continuation.model_dropped',
+          userId: USER,
+          tier: 'free',
+          model: CAPPED_MODEL,
+          reason,
+        });
+      }
+    );
+
+    it('resolves like any turn when the capped segment was stored without its model', async () => {
+      const ctx = setup({
+        last: { ...CAPPED_LAST, model: null },
+        modelPreference: makeModelPreference(PREFERRED_MODEL),
+      });
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(
+        ctx.modelPreference.chooseTurnModel
+      ).toHaveBeenCalledExactlyOnceWith(executionFor(USER), { pinned: null });
+      expect(runModel(ctx)).toBe(PREFERRED_MODEL);
     });
   });
 
@@ -8262,25 +8529,250 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     expect(ctx.emitter.emit).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
-    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
-  ] as const)(
-    'a %s abort before any text %s the message and stores the marker with an aborted reply',
-    async (reason, _verb, refunds) => {
-      const controller = new AbortController();
-      const ctx = setup();
-      vi.mocked(ctx.orchestrator.run).mockImplementation(async function* () {
+  describe('failing before any text', () => {
+    const RETRY = '77777777-7777-4777-8777-777777777777';
+    const MODEL_ERROR = AIErrors.providerError('upstream 500');
+
+    async function* failsWithModelError(): AsyncGenerator<AgentEvent> {
+      yield { type: 'thinking', text: 'let me see' };
+      yield { type: 'error', error: MODEL_ERROR };
+    }
+
+    async function* endsWithoutTerminalEvent(): AsyncGenerator<AgentEvent> {
+      yield { type: 'chunk', text: '' };
+    }
+
+    async function* throwsMidRun(): AsyncGenerator<AgentEvent> {
+      yield { type: 'thinking', text: 'let me see' };
+      throw new Error('orchestrator failed');
+    }
+
+    async function* failsAfterToolSteps(): AsyncGenerator<AgentEvent> {
+      yield {
+        type: 'step',
+        messages: [
+          {
+            role: 'assistant',
+            content: '',
+            parts: [
+              {
+                type: 'tool-call',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                input: { id: 'n1' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                output: { title: 'N1' },
+                outputType: 'json',
+              },
+            ],
+          },
+        ],
+      };
+      yield { type: 'error', error: MODEL_ERROR };
+    }
+
+    function abortsBeforeText(
+      controller: AbortController,
+      reason: TurnAbortReason
+    ) {
+      return async function* (): AsyncGenerator<AgentEvent> {
         controller.abort(reason);
         yield {
           type: 'aborted',
           usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
         };
+      };
+    }
+
+    function markerCounters() {
+      const markers = new Set<string>();
+      let used = 0;
+      return {
+        consume: vi.fn(
+          async ({ turnId }: QuotaTurn): Promise<QuotaConsumeResult> => {
+            if (markers.has(turnId)) {
+              return { allowed: true, used, replayed: true };
+            }
+            markers.add(turnId);
+            used += 1;
+            return { allowed: true, used, replayed: false };
+          }
+        ),
+        refund: vi.fn(async ({ turnId }: QuotaTurn) => {
+          if (!markers.delete(turnId)) {
+            return false;
+          }
+          used -= 1;
+          return true;
+        }),
+        usage: vi.fn(async () => used),
+        used: () => used,
+      };
+    }
+
+    function meteredBy(counters: ReturnType<typeof markerCounters>) {
+      return new MessageQuotaService(
+        counters,
+        { countUserMessages: vi.fn() },
+        {
+          getDailyMessageLimits: vi
+            .fn()
+            .mockResolvedValue({ anonymous: 5, free: 30 }),
+        } as unknown as AIConfigService,
+        { emit: vi.fn() } as unknown as EventEmitter2
+      );
+    }
+
+    function readsBackStoredRows(ctx: ReturnType<typeof setup>) {
+      vi.mocked(ctx.conversations.findLastMessage).mockImplementation(
+        async () => {
+          const stored = vi
+            .mocked(ctx.conversations.appendTurn)
+            .mock.calls.at(-1)?.[0];
+          const row = stored?.messages.at(-1);
+          return stored && row
+            ? {
+                turnId: stored.turnId,
+                role: row.role,
+                stopReason: row.stopReason ?? null,
+                model: row.model ?? null,
+              }
+            : CAPPED_LAST;
+        }
+      );
+    }
+
+    it.each([
+      ['a model error', failsWithModelError, MODEL_ERROR],
+      [
+        'a run with no terminal event',
+        endsWithoutTerminalEvent,
+        AIErrors.providerError('Agent turn ended without a terminal event'),
+      ],
+      [
+        'an unexpected throw',
+        throwsMidRun,
+        AIErrors.providerError('Agent turn failed'),
+      ],
+      ['a model error after its tool steps', failsAfterToolSteps, MODEL_ERROR],
+    ])(
+      'stores nothing for a continuation ended by %s, gives its message back and reports the failure',
+      async (_label, run, error) => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const ctx = setup();
+        vi.mocked(ctx.orchestrator.run).mockImplementation(run);
+
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+        expect(ctx.quota.refund).toHaveBeenCalledOnce();
+        expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(error);
+        expect(ctx.callbacks.onDone).not.toHaveBeenCalled();
+        expect(ctx.callbacks.onTurnDiscarded).toHaveBeenCalledOnce();
+      }
+    );
+
+    it.each([
+      [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+      [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+    ] as const)(
+      'a %s abort before any text %s the message and stores nothing',
+      async (reason, _verb, refunds) => {
+        const controller = new AbortController();
+        const ctx = setup();
+        vi.mocked(ctx.orchestrator.run).mockImplementation(
+          abortsBeforeText(controller, reason)
+        );
+
+        await ctx.handler.continueTurn(
+          request,
+          ctx.callbacks,
+          controller.signal
+        );
+
+        expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+        expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+        expect(ctx.callbacks.onTurnDiscarded).toHaveBeenCalledOnce();
+      }
+    );
+
+    it.each([
+      ['a model error', null],
+      ['a disconnect', TURN_ABORT_REASON.DISCONNECTED],
+      ['a cancel', TURN_ABORT_REASON.CANCELLED],
+    ] as const)(
+      'draws one message in all when a continuation ended by %s before any text is resent under its turn id',
+      async (_label, abortReason) => {
+        const counters = markerCounters();
+        const ctx = setup({ quota: meteredBy(counters) });
+        const controller = new AbortController();
+        vi.mocked(ctx.orchestrator.run).mockImplementationOnce(
+          abortReason === null
+            ? failsWithModelError
+            : abortsBeforeText(controller, abortReason)
+        );
+
+        await ctx.handler.continueTurn(
+          request,
+          ctx.callbacks,
+          controller.signal
+        );
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(ctx.orchestrator.run).toHaveBeenCalledTimes(2);
+        expect(counters.consume).toHaveBeenCalledTimes(2);
+        expect(counters.used()).toBe(1);
+        expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ turnId: CONTINUATION })
+        );
+        expect(ctx.callbacks.onTurnDiscarded).toHaveBeenCalledOnce();
+      }
+    );
+
+    it('leaves the capped turn continuable, so continuing it again is accepted', async () => {
+      const ctx = setup();
+      readsBackStoredRows(ctx);
+      vi.mocked(ctx.orchestrator.run).mockImplementationOnce(
+        failsWithModelError
+      );
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+      await ctx.handler.continueTurn(
+        { ...request, turnId: RETRY },
+        ctx.callbacks
+      );
+
+      expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        MODEL_ERROR
+      );
+      expect(ctx.orchestrator.run).toHaveBeenCalledTimes(2);
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ turnId: RETRY })
+      );
+      expect(ctx.callbacks.onDone).toHaveBeenCalledOnce();
+    });
+
+    it('stores a continuation that streamed text before it failed', async () => {
+      const ctx = setup({
+        events: [
+          { type: 'chunk', text: 'Found B.' },
+          { type: 'error', error: MODEL_ERROR },
+        ],
       });
 
-      await ctx.handler.continueTurn(request, ctx.callbacks, controller.signal);
+      await ctx.handler.continueTurn(request, ctx.callbacks);
 
-      expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+      expect(ctx.quota.refund).not.toHaveBeenCalled();
       expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
         conversationId: 'conv-1',
         turnId: CONTINUATION,
@@ -8288,14 +8780,61 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
           { role: 'user', content: '', kind: 'continue' },
           {
             role: 'assistant',
-            content: '',
+            content: 'Found B.',
             sources: [],
-            stopReason: 'aborted',
+            stopReason: 'error',
           },
         ],
       });
-    }
-  );
+      expect(ctx.callbacks.onTurnDiscarded).not.toHaveBeenCalled();
+    });
+
+    it('keeps a continuation whose proposal it stored when saving the proposal fails', async () => {
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const ctx = setup({
+        events: [
+          {
+            type: 'proposal',
+            proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+            usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+          },
+        ],
+      });
+      vi.mocked(ctx.pendingStore.save).mockRejectedValue(
+        new Error('redis down')
+      );
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledOnce();
+      expect(ctx.callbacks.onTurnDiscarded).not.toHaveBeenCalled();
+    });
+
+    it('still stores a fresh message whose turn fails before any text', async () => {
+      const ctx = setup({ events: [{ type: 'error', error: MODEL_ERROR }] });
+
+      await ctx.handler.execute(
+        {
+          userId: USER,
+          turnId: CONTINUATION,
+          conversationId: 'conv-1',
+          message: { content: 'now research Y' },
+        },
+        ctx.callbacks
+      );
+
+      expect(ctx.quota.refund).toHaveBeenCalledOnce();
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
+        conversationId: 'conv-1',
+        turnId: CONTINUATION,
+        messages: [
+          { role: 'user', content: 'now research Y' },
+          { role: 'assistant', content: '', sources: [], stopReason: 'error' },
+        ],
+      });
+      expect(ctx.callbacks.onTurnDiscarded).not.toHaveBeenCalled();
+    });
+  });
 
   describe('announcing segments', () => {
     const EARLIER_CONTINUATION = 'earlier-continuation';
@@ -8483,4 +9022,198 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       );
     });
   });
+});
+
+describe('RunAgentTurnHandler resuming a proposal', () => {
+  const PROPOSING = TURN_ID;
+  const PROPOSING_MODEL = 'openai:gpt-4o-mini';
+  const CONVERSATION_MODEL = 'google:gemini-2.0-flash';
+  const request = {
+    userId: USER,
+    turnId: PROPOSING,
+    conversationId: 'conv-1',
+    resume: { outcome: 'created' },
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function proposingTurn(model: string | null): ConversationMessageRow[] {
+    return [
+      historyRow({ role: 'user', content: 'rename it', turnId: PROPOSING }),
+      historyRow({
+        role: 'assistant',
+        content: "I'll rename it, confirm?",
+        turnId: PROPOSING,
+        stopReason: 'completed',
+        model,
+      }),
+    ];
+  }
+
+  function setup(
+    history: ConversationMessageRow[],
+    modelPreference: ModelPreferenceService = makeModelPreference()
+  ) {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations(history);
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: CONVERSATION_MODEL,
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    return { handler, callbacks, orchestrator, modelPreference };
+  }
+
+  function runModel(ctx: ReturnType<typeof setup>): string {
+    const [{ model }] = vi.mocked(ctx.orchestrator.run).mock.calls[0];
+    return model;
+  }
+
+  it('resumes on the model that raised the proposal while the tier still offers it', async () => {
+    const ctx = setup(proposingTurn(PROPOSING_MODEL));
+
+    await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+    expect(ctx.modelPreference.chooseTurnModel).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      {
+        pinned: PROPOSING_MODEL,
+      }
+    );
+    expect(runModel(ctx)).toBe(PROPOSING_MODEL);
+    expect(ctx.callbacks.onDone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelResolution: {
+          requested: PROPOSING_MODEL,
+          resolved: PROPOSING_MODEL,
+        },
+      })
+    );
+  });
+
+  it('reads the model of the proposing turn, not of a turn stored after it', async () => {
+    const ctx = setup([
+      ...proposingTurn(PROPOSING_MODEL),
+      historyRow({ role: 'user', content: 'and now?', turnId: SECOND_TURN_ID }),
+      historyRow({
+        role: 'assistant',
+        content: 'Nothing else.',
+        turnId: SECOND_TURN_ID,
+        stopReason: 'completed',
+        model: SUBSTITUTE_MODEL,
+      }),
+    ]);
+
+    await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+    expect(runModel(ctx)).toBe(PROPOSING_MODEL);
+  });
+
+  it.each([
+    [
+      'an assistant row that stored no model',
+      historyRow({
+        role: 'assistant',
+        content: 'Renamed.',
+        turnId: PROPOSING,
+        stopReason: 'completed',
+        model: null,
+      }),
+    ],
+    [
+      'a row the assistant did not write',
+      historyRow({
+        role: 'user',
+        content: 'thanks',
+        turnId: PROPOSING,
+        model: SUBSTITUTE_MODEL,
+      }),
+    ],
+  ])(
+    'reads the model of the proposing assistant row when %s follows it in its turn',
+    async (_later, laterRow) => {
+      const ctx = setup([...proposingTurn(PROPOSING_MODEL), laterRow]);
+
+      await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+      expect(runModel(ctx)).toBe(PROPOSING_MODEL);
+    }
+  );
+
+  it('resumes on the conversation model when the proposing turn stored none', async () => {
+    const ctx = setup(proposingTurn(null));
+
+    await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+    expect(ctx.modelPreference.chooseTurnModel).toHaveBeenCalledExactlyOnceWith(
+      executionFor(USER),
+      {
+        pinned: CONVERSATION_MODEL,
+      }
+    );
+    expect(runModel(ctx)).toBe(CONVERSATION_MODEL);
+  });
+
+  it.each([
+    ['has left the tier', LEFT_THE_TIER, 'key_removed'],
+    [
+      'is offered only through a substitute',
+      onlySubstituted(PROPOSING_MODEL),
+      'not_in_tier',
+    ],
+  ])(
+    'resolves like any resume when the proposing model %s',
+    async (_label, proposingChoice, reason) => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const modelPreference = makeModelPreference();
+      vi.mocked(modelPreference.chooseTurnModel).mockResolvedValueOnce(
+        proposingChoice
+      );
+      const ctx = setup(proposingTurn(PROPOSING_MODEL), modelPreference);
+
+      await ctx.handler.resumeTurn(request, ctx.callbacks);
+
+      expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+        1,
+        executionFor(USER),
+        { pinned: PROPOSING_MODEL }
+      );
+      expect(ctx.modelPreference.chooseTurnModel).toHaveBeenNthCalledWith(
+        2,
+        executionFor(USER),
+        { pinned: CONVERSATION_MODEL }
+      );
+      expect(ctx.callbacks.onError).not.toHaveBeenCalled();
+      expect(runModel(ctx)).toBe(CONVERSATION_MODEL);
+      expect(warn).toHaveBeenCalledWith({
+        event: 'agent.resume.model_dropped',
+        userId: USER,
+        tier: 'free',
+        model: PROPOSING_MODEL,
+        reason,
+      });
+    }
+  );
 });

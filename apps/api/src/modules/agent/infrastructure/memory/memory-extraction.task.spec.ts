@@ -24,6 +24,7 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
     stopReason: null,
     turnId: 't1',
     kind: null,
+    model: null,
   },
   {
     role: 'assistant',
@@ -41,6 +42,7 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
     stopReason: null,
     turnId: 't1',
     kind: null,
+    model: null,
   },
   {
     role: 'assistant',
@@ -50,6 +52,7 @@ const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
     stopReason: 'completed',
     turnId: 't1',
     kind: null,
+    model: null,
   },
 ];
 

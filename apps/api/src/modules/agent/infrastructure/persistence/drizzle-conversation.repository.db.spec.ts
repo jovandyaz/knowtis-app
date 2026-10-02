@@ -318,6 +318,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           content: 'Your notes describe GTD as…',
           sources: [{ id: noteId, title: 'GTD' }],
           stopReason: 'completed',
+          model: 'anthropic:claude-haiku-4-5',
         },
       ],
     });
@@ -348,6 +349,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       null,
       null,
       'completed',
+    ]);
+    expect(rows.map((r) => r.model)).toEqual([
+      null,
+      null,
+      null,
+      'anthropic:claude-haiku-4-5',
     ]);
     expect(rows[3].sources).toEqual([{ id: noteId, title: 'GTD' }]);
   });
@@ -768,7 +775,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   });
 
   describe('findLastMessage', () => {
-    it('returns the newest row of the conversation', async () => {
+    const SERVED_MODEL = 'anthropic:claude-haiku-4-5';
+
+    it('returns the newest row of the conversation with the model that served it', async () => {
       const { id } = await repo.create({
         id: randomUUID(),
         userId: USER,
@@ -788,6 +797,35 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         turnId: capped,
         messages: [
           { role: 'user', content: 'q2' },
+          {
+            role: 'assistant',
+            content: '',
+            stopReason: 'max_steps',
+            model: SERVED_MODEL,
+          },
+        ],
+      });
+
+      expect(await repo.findLastMessage(id, USER)).toEqual({
+        turnId: capped,
+        role: 'assistant',
+        stopReason: 'max_steps',
+        model: SERVED_MODEL,
+      });
+    });
+
+    it('reads a row stored without a model as served by none', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: USER,
+        title: 't',
+      });
+      const capped = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: capped,
+        messages: [
+          { role: 'user', content: 'q' },
           { role: 'assistant', content: '', stopReason: 'max_steps' },
         ],
       });
@@ -796,6 +834,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         turnId: capped,
         role: 'assistant',
         stopReason: 'max_steps',
+        model: null,
       });
     });
 
@@ -1282,6 +1321,64 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         'a2',
       ]);
       expect(transcript?.hasEarlier).toBe(true);
+    });
+
+    describe('a cut window of a continuation chain', () => {
+      async function chain(turns: readonly { question?: string }[]) {
+        const { id } = await repo.create({
+          id: randomUUID(),
+          userId: LISTER,
+          title: 't',
+        });
+        for (const [index, turn] of turns.entries()) {
+          await repo.appendTurn({
+            conversationId: id,
+            turnId: randomUUID(),
+            messages: [
+              turn.question === undefined
+                ? { role: 'user', content: '', kind: MESSAGE_KIND.CONTINUE }
+                : { role: 'user', content: turn.question },
+              {
+                role: 'assistant',
+                content: `a${index}`,
+                stopReason: 'max_steps',
+              },
+            ],
+          });
+        }
+        return id;
+      }
+
+      it('opens on the next question, past a continue marker whose capped turn the cut dropped', async () => {
+        const id = await chain([{ question: 'u0' }, {}, { question: 'u2' }]);
+
+        const transcript = await repo.loadTranscriptForUser(id, LISTER, 4);
+
+        expect(transcript?.messages.map((message) => message.content)).toEqual([
+          'u2',
+          'a2',
+        ]);
+        expect(transcript?.hasEarlier).toBe(true);
+      });
+
+      it('is kept whole when its only questions are continue markers', async () => {
+        const id = await chain([{ question: 'u0' }, {}, {}]);
+
+        const transcript = await repo.loadTranscriptForUser(id, LISTER, 4);
+
+        expect(
+          transcript?.messages.map((message) => [
+            message.content,
+            message.kind ?? null,
+          ])
+        ).toEqual([
+          ['', MESSAGE_KIND.CONTINUE],
+          ['a1', null],
+          ['', MESSAGE_KIND.CONTINUE],
+          ['a2', null],
+        ]);
+        expect(transcript?.hasEarlier).toBe(true);
+      });
     });
 
     it('renames only the owner conversation', async () => {

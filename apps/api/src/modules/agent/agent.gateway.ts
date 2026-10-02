@@ -52,6 +52,7 @@ import { conversationIdForTurn } from './domain/turn-identity';
 import {
   TURN_CLAIM_OUTCOME,
   TurnClaimService,
+  type ConversationLeaseOutcome,
   type TurnClaimOutcome,
   type TurnClaimRequest,
 } from './infrastructure/turn-claim/turn-claim.service';
@@ -106,6 +107,39 @@ const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
 const TURN_LEG = { MESSAGE: 'message', RESUME: 'resume' } as const;
 
 type TurnLeg = (typeof TURN_LEG)[keyof typeof TURN_LEG];
+
+interface UnexpectedFailure {
+  readonly userId: string;
+  readonly turnId?: string;
+  readonly leg?: TurnLeg;
+  readonly error: unknown;
+}
+
+type ConversationLease = Pick<
+  TurnClaimRequest,
+  'userId' | 'turnId' | 'conversationId'
+>;
+
+interface TurnHold {
+  readonly lease: ConversationLease;
+  readonly claim?: TurnClaimRequest;
+}
+
+// A message without a turn id that names no conversation opens a new one, so
+// no other turn can hold it.
+function turnHoldOf(
+  userId: string,
+  turnId: string,
+  data: AgentTurnPayload
+): TurnHold | undefined {
+  const claim = turnClaimOf(userId, turnId, data);
+  if (claim) {
+    return { lease: claim, claim };
+  }
+  return data.conversationId
+    ? { lease: { userId, turnId, conversationId: data.conversationId } }
+    : undefined;
+}
 
 function turnClaimOf(
   userId: string,
@@ -192,9 +226,26 @@ export class AgentGateway
       return;
     }
 
-    if (
-      !(await this.featureFlagsService.isEnabled(FEATURE_FLAG_KEYS.AI_ENABLED))
-    ) {
+    let enabled: boolean;
+    try {
+      enabled = await this.featureFlagsService.isEnabled(
+        FEATURE_FLAG_KEYS.AI_ENABLED
+      );
+    } catch (error) {
+      this.logger.error({
+        event: 'agent.client.connect_failed',
+        clientId: client.id,
+        userId: client.data?.userId,
+        error: reasonOf(error),
+      });
+      client.emit(
+        'agent:error',
+        AIErrors.internalError('Agent connection failed')
+      );
+      client.disconnect();
+      return;
+    }
+    if (!enabled) {
       client.emit('agent:error', AIErrors.featureDisabled());
       client.disconnect();
       return;
@@ -276,7 +327,13 @@ export class AgentGateway
       client.emit('agent:error', AIErrors.tokenExpired());
       return;
     }
-    await this.tokenExpiry.track(client, () => request(userId));
+    await this.tokenExpiry.track(client, async () => {
+      try {
+        await request(userId);
+      } catch (error) {
+        this.answerUnexpectedFailure(client, { userId, error });
+      }
+    });
   }
 
   private async startTurn(
@@ -327,11 +384,11 @@ export class AgentGateway
       turnId,
       TURN_LEG.MESSAGE,
       (controller) =>
-        this.withTurnClaim(
+        this.withTurnHold(
           client,
           controller,
-          turnClaimOf(userId, turnId, data),
-          (markSettled) => {
+          turnHoldOf(userId, turnId, data),
+          (markSettled, markDiscarded) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
               onProposal: (proposal) => {
@@ -339,6 +396,7 @@ export class AgentGateway
                 onProposal(proposal);
               },
               onModelStart: markSettled,
+              onTurnDiscarded: markDiscarded,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
               onTurnSettled: (conversationId) => {
                 markSettled();
@@ -498,39 +556,123 @@ export class AgentGateway
     );
   }
 
-  // Stripe's rule: a turn refused before the model ran saves nothing, so its
-  // claim is released and a resend of it runs. A turn the conversation
-  // already stores outlived its claim, so it is settled like one that ran.
-  private async withTurnClaim(
+  // Stripe's rule: a turn that saves nothing (refused before the model ran,
+  // or discarded after it) releases its claim, so a resend of it runs. A turn
+  // the conversation already stores outlived its claim, so it is settled like
+  // one that ran.
+  private async withTurnHold(
     client: AuthenticatedSocket,
     controller: AbortController,
-    claim: TurnClaimRequest | undefined,
-    turn: (markSettled: () => void) => Promise<void>
+    hold: TurnHold | undefined,
+    turn: (markSettled: () => void, markDiscarded: () => void) => Promise<void>
   ): Promise<void> {
-    if (!claim) {
-      return turn(() => undefined);
+    if (!hold) {
+      return turn(
+        () => undefined,
+        () => undefined
+      );
     }
-    const outcome = await this.turnClaims.claim(claim);
+    const { lease, claim } = hold;
+    const owner = randomUUID();
+    const outcome = claim
+      ? await this.claimTurn(claim, owner)
+      : await this.leaseConversation(lease, owner);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
       this.endedLegs.add(controller);
-      this.refuseClaimedTurn(client, claim, outcome);
+      this.refuseTurn(client, lease, outcome);
       return;
     }
     let settled = false;
     try {
-      await turn(() => {
-        settled = true;
-      });
+      await turn(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = false;
+        }
+      );
     } finally {
-      await (settled
-        ? this.turnClaims.settle(claim)
-        : this.turnClaims.release(claim));
+      if (claim) {
+        await this.releaseStep(claim, () =>
+          settled
+            ? this.turnClaims.settle(claim, owner)
+            : this.turnClaims.release(claim, owner)
+        );
+      }
+      await this.releaseLease(lease, owner);
     }
   }
 
-  private refuseClaimedTurn(
+  // A throw here would replace what the client is owed (the turn's own failure,
+  // or the refusal of a turn it could not claim) and skip the steps after it.
+  private async releaseStep(
+    { userId, conversationId, turnId }: ConversationLease,
+    step: () => Promise<void>
+  ): Promise<void> {
+    try {
+      await step();
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.turn.claim_release_failed',
+        userId,
+        conversationId,
+        turnId,
+        error: reasonOf(error),
+      });
+    }
+  }
+
+  // A Redis command that timed out can still land, so a claim or lease that came
+  // back UNAVAILABLE is released too; a release only frees what this owner holds.
+  private async claimTurn(
+    claim: TurnClaimRequest,
+    owner: string
+  ): Promise<TurnClaimOutcome> {
+    const releaseClaim = () =>
+      this.releaseStep(claim, () => this.turnClaims.release(claim, owner));
+    const outcome = await this.turnClaims.claim(claim, owner);
+    if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
+      if (outcome === TURN_CLAIM_OUTCOME.UNAVAILABLE) {
+        await releaseClaim();
+      }
+      return outcome;
+    }
+    const lease = await this.leaseConversation(claim, owner);
+    if (lease !== TURN_CLAIM_OUTCOME.CLAIMED) {
+      await releaseClaim();
+    }
+    return lease;
+  }
+
+  private async leaseConversation(
+    lease: ConversationLease,
+    owner: string
+  ): Promise<ConversationLeaseOutcome> {
+    const outcome = await this.turnClaims.claimConversation(
+      lease.userId,
+      lease.conversationId,
+      owner
+    );
+    if (outcome === TURN_CLAIM_OUTCOME.UNAVAILABLE) {
+      await this.releaseLease(lease, owner);
+    }
+    return outcome;
+  }
+
+  private releaseLease(lease: ConversationLease, owner: string): Promise<void> {
+    return this.releaseStep(lease, () =>
+      this.turnClaims.releaseConversation(
+        lease.userId,
+        lease.conversationId,
+        owner
+      )
+    );
+  }
+
+  private refuseTurn(
     client: AuthenticatedSocket,
-    { turnId, conversationId }: TurnClaimRequest,
+    { turnId, conversationId }: ConversationLease,
     outcome: Exclude<TurnClaimOutcome, typeof TURN_CLAIM_OUTCOME.CLAIMED>
   ): void {
     switch (outcome) {
@@ -600,6 +742,13 @@ export class AgentGateway
     }
     try {
       await body(controller);
+    } catch (error) {
+      const failure = { userId, turnId, leg, error };
+      if (this.endedLegs.has(controller) || controller.signal.aborted) {
+        this.logUnexpectedFailure(failure);
+      } else {
+        this.answerUnexpectedFailure(client, failure);
+      }
     } finally {
       // The handler ends a turn the drain aborted without a word, so the client
       // is told it is unavailable: it resends a message and ends a resume.
@@ -615,6 +764,25 @@ export class AgentGateway
       this.turns.release(userId, client.id, slotId);
       this.tokenExpiry.afterSlotRelease(client);
     }
+  }
+
+  private logUnexpectedFailure({ error, ...turn }: UnexpectedFailure): void {
+    this.logger.error({
+      event: 'agent.turn.unexpected_failure',
+      ...turn,
+      error: reasonOf(error),
+    });
+  }
+
+  private answerUnexpectedFailure(
+    client: AuthenticatedSocket,
+    failure: UnexpectedFailure
+  ): void {
+    this.logUnexpectedFailure(failure);
+    client.emit('agent:error', {
+      ...AIErrors.internalError('Agent turn failed'),
+      ...(failure.turnId ? { turnId: failure.turnId } : {}),
+    });
   }
 
   private emitQuota(

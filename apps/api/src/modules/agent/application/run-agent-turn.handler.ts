@@ -59,7 +59,10 @@ import {
   segmentLimits,
   type SegmentLimits,
 } from '../../ai/domain/execution-context/segment-policy';
-import { MODEL_CHOICE } from '../../ai/domain/model-catalog/model-choice';
+import {
+  MODEL_CHOICE,
+  type ModelChoice,
+} from '../../ai/domain/model-catalog/model-choice';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -98,6 +101,7 @@ import {
 } from '../domain/ports/agent-orchestrator.port';
 import {
   CONVERSATION_REPOSITORY,
+  type ConversationMessageRow,
   type ConversationRepository,
 } from '../domain/ports/conversation.repository';
 import {
@@ -166,6 +170,7 @@ type TurnInput = Omit<
   readonly continuation?: boolean;
   /** Which part of the answer to a user message this turn is: 0 for the message's own turn, n for its nth continuation. */
   readonly segmentIndex: number;
+  readonly priorModel?: string;
 };
 
 export interface RunAgentTurnCallbacks {
@@ -196,6 +201,8 @@ export interface RunAgentTurnCallbacks {
   readonly onQuota?: (quota: AiQuota) => void;
   /** Fires instead of running when the turn id is already stored in the conversation. */
   readonly onTurnSettled?: (conversationId: string) => void;
+  /** Fires when a continuation ends before any text and so stores nothing; a resend of its turn id may run it again. */
+  readonly onTurnDiscarded?: () => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -586,6 +593,7 @@ export class RunAgentTurnHandler {
     conversationId: string,
     userId: string
   ): Promise<{
+    rows: ConversationMessageRow[];
     history: AgentMessage[];
     knownNotes: AgentSource[];
     segmentIndex: number;
@@ -611,6 +619,7 @@ export class RunAgentTurnHandler {
       }
     }
     return {
+      rows,
       history,
       knownNotes: [...seen.values()],
       segmentIndex: segmentIndexOf(rows),
@@ -622,8 +631,9 @@ export class RunAgentTurnHandler {
     turnMessages: readonly AgentMessage[],
     assistantText: string,
     sources: readonly AgentSource[],
-    stopReason: MessageStopReason
-  ): Promise<void> {
+    stopReason: MessageStopReason,
+    servedModel?: string
+  ): Promise<boolean> {
     const messages = buildTurnRows({
       userContent: persistence.userContent,
       ...(persistence.userKind ? { userKind: persistence.userKind } : {}),
@@ -631,9 +641,10 @@ export class RunAgentTurnHandler {
       assistantText,
       sources,
       stopReason,
+      ...(servedModel ? { model: servedModel } : {}),
     });
     if (messages.length === 0) {
-      return;
+      return false;
     }
     try {
       const persisted = await this.conversations.appendTurn({
@@ -642,7 +653,7 @@ export class RunAgentTurnHandler {
         messages,
       });
       if (!persisted) {
-        return;
+        return false;
       }
       this.logger.log({
         event: 'agent.conversation.persisted',
@@ -652,12 +663,14 @@ export class RunAgentTurnHandler {
         toolRows: messages.filter((m) => m.role === 'tool').length,
         stopReason,
       });
+      return true;
     } catch (error) {
       this.logger.error({
         event: 'agent.conversation.persist_failed',
         conversationId: persistence.conversationId,
         error: reasonOf(error),
       });
+      return false;
     }
   }
 
@@ -718,11 +731,17 @@ export class RunAgentTurnHandler {
       callbacks.onError(AgentErrors.conversationNotFound());
       return;
     }
-    const { history, knownNotes, segmentIndex } =
+    const { rows, history, knownNotes, segmentIndex } =
       await this.loadConversationContext(input.conversationId, input.userId);
     // A resume carries a tool-confirmation outcome, not the user's words, so
     // memory retrieval embeds the last real user message instead.
     const memoryQuery = lastWrittenUserMessage(history);
+    const proposingModel = rows.findLast(
+      (row) =>
+        row.turnId === input.turnId &&
+        row.role === 'assistant' &&
+        row.model !== null
+    )?.model;
     const synthInput: TurnInput & {
       resume: { outcome: string };
     } = {
@@ -734,6 +753,7 @@ export class RunAgentTurnHandler {
       ...(memoryQuery ? { memoryQuery } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
       conversationModel: found.model,
+      ...(proposingModel ? { priorModel: proposingModel } : {}),
       resume: input.resume,
     };
     return this.runLoop(
@@ -818,6 +838,7 @@ export class RunAgentTurnHandler {
         knownNotes: context.knownNotes,
         segmentIndex,
         conversationModel: found.model,
+        ...(last.model ? { priorModel: last.model } : {}),
         ...(memoryQuery ? { memoryQuery } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.model ? { model: input.model } : {}),
@@ -842,6 +863,7 @@ export class RunAgentTurnHandler {
       | 'onThinking'
       | 'onModelStart'
       | 'onQuota'
+      | 'onTurnDiscarded'
     >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
@@ -993,21 +1015,35 @@ export class RunAgentTurnHandler {
     let assistantText = '';
     let answered = false;
     let persisted = false;
+    let stored = false;
     const persistTurnOnce = async (
       sources: readonly AgentSource[],
-      stopReason: MessageStopReason
-    ): Promise<void> => {
+      stopReason: MessageStopReason,
+      servedModel?: string
+    ): Promise<boolean> => {
       if (!persistence || persisted) {
-        return;
+        return stored;
       }
       persisted = true;
-      await this.persistTurn(
+      stored = await this.persistTurn(
         persistence,
         turnMessages,
         assistantText,
         sources,
-        stopReason
+        stopReason,
+        servedModel
       );
+      return stored;
+    };
+    const persistFailedTurn = async (
+      stopReason: 'error' | 'aborted'
+    ): Promise<void> => {
+      if (!persisted && input.continuation && !answered) {
+        persisted = true;
+        callbacks.onTurnDiscarded?.();
+        return;
+      }
+      await persistTurnOnce([], stopReason);
     };
     if (signal?.aborted) {
       await this.recordUsageSafe(ctx, {
@@ -1060,7 +1096,7 @@ export class RunAgentTurnHandler {
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
-            await persistTurnOnce([], 'error');
+            await persistFailedTurn('error');
             if (!answered) {
               await hold.refund();
             }
@@ -1081,7 +1117,7 @@ export class RunAgentTurnHandler {
           case 'aborted':
             await this.recordUsageSafe(ctx, event.usage);
             ctx.reconciled = true;
-            await persistTurnOnce([], 'aborted');
+            await persistFailedTurn('aborted');
             if (!answered && !isUserCancel(signal)) {
               await hold.refund();
             }
@@ -1111,7 +1147,11 @@ export class RunAgentTurnHandler {
             if (execution.billing.kind === 'byok') {
               void this.byok.markUsed(userId, execution.billing.provider);
             }
-            await persistTurnOnce(event.sources, event.stopReason);
+            const turnStored = await persistTurnOnce(
+              event.sources,
+              event.stopReason,
+              event.usage.model
+            );
             if (isContinuableStop(event.stopReason)) {
               this.announce(
                 new TurnCheckpointReachedEvent(
@@ -1122,12 +1162,14 @@ export class RunAgentTurnHandler {
                 )
               );
             }
-            const continuable = policy.consumesQuota
-              ? isContinuable(event.stopReason, hold.quota())
-              : await this.continuableFromSnapshot(
-                  event.stopReason,
-                  input.execution
-                );
+            const continuable =
+              turnStored &&
+              (policy.consumesQuota
+                ? isContinuable(event.stopReason, hold.quota())
+                : await this.continuableFromSnapshot(
+                    event.stopReason,
+                    input.execution
+                  ));
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -1148,7 +1190,11 @@ export class RunAgentTurnHandler {
           case 'proposal':
             // Empty because proposal events carry no sources; the post-approval
             // turn re-derives them.
-            await persistTurnOnce([], AGENT_STOP_REASON.COMPLETED);
+            await persistTurnOnce(
+              [],
+              AGENT_STOP_REASON.COMPLETED,
+              event.usage.model
+            );
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
             }
@@ -1173,7 +1219,7 @@ export class RunAgentTurnHandler {
           model: ctx.model,
         });
       }
-      await persistTurnOnce([], 'error');
+      await persistFailedTurn('error');
       if (!answered) {
         await hold.refund();
       }
@@ -1181,7 +1227,7 @@ export class RunAgentTurnHandler {
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
     } catch (error) {
-      await persistTurnOnce([], signal?.aborted ? 'aborted' : 'error');
+      await persistFailedTurn(signal?.aborted ? 'aborted' : 'error');
       if (signal?.aborted) {
         if (!ctx.reconciled) {
           await this.recordUsageSafe(ctx, {
@@ -1473,10 +1519,17 @@ export class RunAgentTurnHandler {
   ): Promise<ResolvedModel | null> {
     const { userId } = input.execution.subject;
     const pinned = resuming ? (input.conversationModel ?? null) : null;
-    const choice = await this.modelPreference.chooseTurnModel(input.execution, {
-      ...(input.model ? { explicit: input.model } : {}),
-      pinned,
-    });
+    const choice =
+      (await this.keptPriorModel(
+        input,
+        resuming
+          ? 'agent.resume.model_dropped'
+          : 'agent.continuation.model_dropped'
+      )) ??
+      (await this.modelPreference.chooseTurnModel(input.execution, {
+        ...(input.model ? { explicit: input.model } : {}),
+        pinned,
+      }));
     if (choice.kind === MODEL_CHOICE.UNAVAILABLE) {
       this.logger.warn({
         event: 'ai.model.unavailable',
@@ -1499,6 +1552,35 @@ export class RunAgentTurnHandler {
       });
     }
     return { model: choice.model, resolution: choice.resolution };
+  }
+
+  private async keptPriorModel(
+    input: TurnInput,
+    droppedEvent:
+      | 'agent.continuation.model_dropped'
+      | 'agent.resume.model_dropped'
+  ): Promise<ModelChoice | null> {
+    if (input.model || !input.priorModel) {
+      return null;
+    }
+    const choice = await this.modelPreference.chooseTurnModel(input.execution, {
+      pinned: input.priorModel,
+    });
+    const dropped =
+      choice.kind === MODEL_CHOICE.UNAVAILABLE
+        ? choice.reason
+        : choice.resolution.fallback?.reason;
+    if (dropped === undefined) {
+      return choice;
+    }
+    this.logger.warn({
+      event: droppedEvent,
+      userId: input.execution.subject.userId,
+      tier: input.execution.tier,
+      model: input.priorModel,
+      reason: dropped,
+    });
+    return null;
   }
 
   private async persistRequestedModel(
