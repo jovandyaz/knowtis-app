@@ -469,6 +469,26 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().draft).toBe('hello\n\nnuevo');
     });
 
+    it('leaves the turn it interrupted on the thread', () => {
+      const interrupted = capture('turn-0');
+      useAgentStore.getState().sendMessage('a');
+      interrupted.get().onChunk({ text: 'partial' });
+      vi.advanceTimersByTime(50);
+      const { get } = capture('turn-1');
+      useAgentStore.getState().sendMessage('b', undefined, {
+        interrupt: true,
+      });
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      const { messages, draft } = useAgentStore.getState();
+      expect(messages.map((m) => [m.turnId, m.content])).toEqual([
+        ['turn-0', 'a'],
+        ['turn-0', 'partial'],
+      ]);
+      expect(draft).toBe('b');
+    });
+
     it('is not resent by retry', () => {
       const { get } = capture();
       useAgentStore.getState().sendMessage('hello');

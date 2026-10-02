@@ -239,7 +239,6 @@ function isUnresumedDecision(error: AgentErrorPayload): boolean {
   );
 }
 
-// Refused before the model ran, so the server stored nothing of the turn.
 function refusedBeforeRun(error: AgentErrorPayload): boolean {
   return (
     error.code === AI_INVALID_INPUT_CODE ||
