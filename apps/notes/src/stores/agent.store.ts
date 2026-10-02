@@ -10,6 +10,7 @@ import {
   isDecisionNotTaken,
   type AgentErrorPayload,
   type AgentSource,
+  type AgentStreamCallbacks,
   type AgentStreamHandle,
   type WebSource,
 } from '@knowtis/api-client';
@@ -30,6 +31,8 @@ import {
   AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
   isAgentStopReason,
+  isContinuableStop,
+  MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
   type MessageKind,
@@ -254,6 +257,8 @@ interface AgentState {
   newConversation: (options?: NewConversationOptions) => void;
   cancel: () => void;
   retryLast: () => void;
+  /** Continues `continuableTurnId`; a no-op while a turn runs or when none can be continued. */
+  continueTurn: (noteId?: string) => void;
   approveProposal: () => void;
   rejectProposal: (reason?: string) => void;
 }
@@ -283,6 +288,31 @@ function refusedBeforeRun(error: AgentErrorPayload): boolean {
     error.code === AI_INVALID_INPUT_CODE ||
     error.code === AI_QUOTA_EXHAUSTED_CODE
   );
+}
+
+const TURN_REQUEST_KIND = {
+  MESSAGE: 'message',
+  CONTINUE: 'continue',
+} as const;
+
+type TurnRequest =
+  | { kind: typeof TURN_REQUEST_KIND.MESSAGE; text: string }
+  | { kind: typeof TURN_REQUEST_KIND.CONTINUE; continuesTurnId: string };
+
+// The server refuses these again on every click: the thread moved on, or the
+// history no longer fits a turn, so the offer is withdrawn instead of returned.
+const CONTINUATION_ENDING_CODES: ReadonlySet<string> = new Set([
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+  AI_INVALID_INPUT_CODE,
+]);
+
+function continuedTurnOf(
+  messages: readonly AgentChatMessage[],
+  markerIndex: number
+): string | undefined {
+  return messages
+    .slice(0, markerIndex)
+    .findLast((m) => m.role === 'assistant' && m.turnId !== undefined)?.turnId;
 }
 
 function offersNoResend(error: AgentErrorPayload): boolean {
@@ -335,6 +365,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let unsentText: string | null = null;
   let titleEdits = 0;
   let boundUser: SessionUser | null = null;
+  let liveContinuation: { continuesTurnId: string; turnId: string } | null =
+    null;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -442,6 +474,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     thinkingBuffer.discard();
     activeAssistantId = null;
     unsentText = null;
+    liveContinuation = null;
   };
 
   const forgetGoneConversation = (error: AgentErrorPayload) => {
@@ -467,14 +500,38 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     }));
   };
 
-  const giveBackRefusedMessage = (error: AgentErrorPayload) => {
-    const assistantId = activeAssistantId;
-    const turnId = get().messages.find((m) => m.id === assistantId)?.turnId;
-    const ofRefusedTurn = (m: AgentChatMessage) =>
-      m.id === assistantId || (turnId !== undefined && m.turnId === turnId);
+  const withoutActiveTurn = (
+    messages: readonly AgentChatMessage[]
+  ): AgentChatMessage[] => {
+    const index = messages.findIndex((m) => m.id === activeAssistantId);
+    if (index === -1) {
+      return [...messages];
+    }
+    const active = messages[index];
+    const opener = index > 0 ? messages[index - 1] : undefined;
+    const openerId = opener?.role === 'user' ? opener.id : undefined;
+    return messages.filter(
+      (m) =>
+        m.id !== active.id &&
+        m.id !== openerId &&
+        (active.turnId === undefined || m.turnId !== active.turnId)
+    );
+  };
+
+  const activeAnswered = (): boolean => {
+    const answer = get().messages.find((m) => m.id === activeAssistantId);
+    return (
+      answer !== undefined &&
+      (answer.content.length > 0 || answer.proposal !== undefined)
+    );
+  };
+
+  const takeBackRefusedTurn = (
+    error: AgentErrorPayload,
+    continuableTurnId: string | null
+  ) => {
     const returned = unsentText;
     unsentText = null;
-    activeAssistantId = null;
     const lockedOut = error.code === AI_QUOTA_EXHAUSTED_CODE;
     set((s) => ({
       status: 'error',
@@ -483,7 +540,8 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       _streamHandle: null,
       thinkingText: '',
       decisionInFlight: null,
-      messages: s.messages.filter((m) => !ofRefusedTurn(m)),
+      continuableTurnId,
+      messages: withoutActiveTurn(s.messages),
       queue: lockedOut ? [] : s.queue,
       draft: joinDraft(
         returned,
@@ -491,10 +549,11 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         s.draft
       ),
     }));
+    activeAssistantId = null;
   };
 
   const run = (
-    text: string,
+    request: TurnRequest,
     assistantId: string,
     noteId?: string,
     resentTurnId?: string
@@ -507,180 +566,206 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       ...(effort ? { effort } : {}),
       ...(resentTurnId ? { turnId: resentTurnId } : {}),
     };
-    const handle = agentClient.sendMessage(
-      text,
-      {
-        onChunk: ({ text }) => {
-          if (version !== streamVersion) {
-            return;
-          }
-          buffer.push(text);
-        },
-        onThinking: ({ text }) => {
-          // Reasoning may arrive after the turn is suspended (pendingProposal) or
-          // already terminal; re-arming there would resurrect the watchdog and
-          // time out a proposal the user is still deliberating on.
-          if (version !== streamVersion || get().status !== 'streaming') {
-            return;
-          }
-          buffer.armInactivityTimer();
-          thinkingBuffer.push(text);
-        },
-        onConversation: (conversationId) => {
-          if (
-            version !== streamVersion ||
-            conversationId === get().conversationId
-          ) {
-            return;
-          }
-          set({
-            conversationId,
-            conversationTitle: deriveConversationTitle(text),
-          });
-        },
-        onDone: ({ sources, webSources, stopReason, continuable }) => {
-          if (version !== streamVersion || get().status !== 'streaming') {
-            return;
-          }
-          invalidateConversations(queryClient);
-          invalidateQuota();
-          buffer.clearInactivityTimer();
-          buffer.flush();
-          thinkingBuffer.discard();
-          const id = activeAssistantId;
-          set((s) => {
-            const answer = s.messages.find((m) => m.id === id);
-            return {
-              status: 'done',
-              _streamHandle: null,
-              thinkingText: '',
-              decisionInFlight: null,
-              continuableTurnId:
-                continuable === true ? (answer?.turnId ?? null) : null,
-              messages: s.messages.map((m) =>
-                m.id === id
-                  ? {
-                      ...m,
-                      sources,
-                      webSources,
-                      ...(isAgentStopReason(stopReason) ? { stopReason } : {}),
-                    }
-                  : m
-              ),
-            };
-          });
-          captureProductEvent('ai response completed', {
-            source: 'copilot',
-            assistant_type: 'agent',
-          });
-          drainQueue();
-        },
-        onError: (error) => {
-          if (version !== streamVersion) {
-            return;
-          }
-          invalidateConversations(queryClient);
-          invalidateQuota();
-          buffer.clearInactivityTimer();
-          buffer.flush();
-          thinkingBuffer.discard();
-          if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
-            forgetGoneConversation(error);
-            return;
-          }
-          if (!resumingDecision && refusedBeforeRun(error)) {
-            giveBackRefusedMessage(error);
-            return;
-          }
-          const inFlight = get().decisionInFlight;
-          if (resumingDecision && inFlight && isDecisionNotTaken(error)) {
-            restoreDecision(error, inFlight);
-            return;
-          }
-          if (resumingDecision && isUnresumedDecision(error)) {
-            endUnresumedDecision();
-            return;
-          }
-          set({
-            status: 'error',
-            error,
-            retryMode:
-              resumingDecision || offersNoResend(error) ? 'none' : 'resend',
+    const callbacks: AgentStreamCallbacks = {
+      onChunk: ({ text }) => {
+        if (version !== streamVersion) {
+          return;
+        }
+        buffer.push(text);
+      },
+      onThinking: ({ text }) => {
+        // Reasoning may arrive after the turn is suspended (pendingProposal) or
+        // already terminal; re-arming there would resurrect the watchdog and
+        // time out a proposal the user is still deliberating on.
+        if (version !== streamVersion || get().status !== 'streaming') {
+          return;
+        }
+        buffer.armInactivityTimer();
+        thinkingBuffer.push(text);
+      },
+      onConversation: (conversationId) => {
+        if (
+          version !== streamVersion ||
+          conversationId === get().conversationId
+        ) {
+          return;
+        }
+        set({
+          conversationId,
+          ...(request.kind === TURN_REQUEST_KIND.MESSAGE
+            ? { conversationTitle: deriveConversationTitle(request.text) }
+            : {}),
+        });
+      },
+      onDone: ({ sources, webSources, stopReason, continuable }) => {
+        if (version !== streamVersion || get().status !== 'streaming') {
+          return;
+        }
+        invalidateConversations(queryClient);
+        invalidateQuota();
+        buffer.clearInactivityTimer();
+        buffer.flush();
+        thinkingBuffer.discard();
+        const id = activeAssistantId;
+        set((s) => {
+          const answer = s.messages.find((m) => m.id === id);
+          return {
+            status: 'done',
             _streamHandle: null,
             thinkingText: '',
             decisionInFlight: null,
-          });
-        },
-        onProposal: (proposal) => {
-          if (version !== streamVersion) {
-            return;
-          }
-          invalidateConversations(queryClient);
-          buffer.clearInactivityTimer();
-          buffer.flush();
-          thinkingBuffer.discard();
-          const id = activeAssistantId;
-          set((s) => ({
-            status: 'pendingProposal',
-            pendingProposal: proposal,
-            decisionInFlight: null,
-            thinkingText: '',
-            messages: s.messages.map((m) =>
-              m.id === id ? { ...m, proposal: { kind: proposal.kind } } : m
-            ),
-          }));
-        },
-        onCommitted: ({ result }) => {
-          // Invalidate before the stale-stream guard: the mutation is committed
-          // server-side, so the caches must refresh even if a newer turn
-          // superseded this stream (only the chat update below is version-gated).
-          invalidateNoteCollections(queryClient);
-          void queryClient.invalidateQueries({
-            queryKey: notesQueryKeys.detail(result.noteId),
-          });
-          if (version !== streamVersion) {
-            return;
-          }
-          buffer.flush();
-          const id = activeAssistantId;
-          set((s) => ({
-            pendingProposal: null,
-            decisionInFlight: null,
+            continuableTurnId:
+              continuable === true ? (answer?.turnId ?? null) : null,
             messages: s.messages.map((m) =>
               m.id === id
                 ? {
                     ...m,
-                    committed: { kind: result.kind, title: result.title },
+                    sources,
+                    webSources,
+                    ...(isAgentStopReason(stopReason) ? { stopReason } : {}),
                   }
                 : m
             ),
-          }));
-        },
-        onTurnSettled: ({ turnId }) => {
-          if (version !== streamVersion) {
-            return;
-          }
-          invalidateConversations(queryClient);
-          // The transcript carries no pending proposal, so a card of this
-          // turn the user can still decide on must outlive the refetch.
-          if (get().pendingProposal?.turnId === turnId) {
-            void refreshThread();
-            return;
-          }
-          buffer.clearInactivityTimer();
-          buffer.flush();
-          thinkingBuffer.discard();
-          set({
-            _streamHandle: null,
-            thinkingText: '',
-            decisionInFlight: null,
-          });
-          void showStoredAnswer(turnId);
-        },
+          };
+        });
+        captureProductEvent('ai response completed', {
+          source: 'copilot',
+          assistant_type: 'agent',
+        });
+        drainQueue();
       },
-      noteId,
-      options
-    );
+      onError: (error) => {
+        if (version !== streamVersion) {
+          return;
+        }
+        invalidateConversations(queryClient);
+        invalidateQuota();
+        buffer.clearInactivityTimer();
+        buffer.flush();
+        thinkingBuffer.discard();
+        if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
+          forgetGoneConversation(error);
+          return;
+        }
+        if (
+          request.kind === TURN_REQUEST_KIND.CONTINUE &&
+          !resumingDecision &&
+          !activeAnswered()
+        ) {
+          takeBackRefusedTurn(
+            error,
+            CONTINUATION_ENDING_CODES.has(error.code)
+              ? null
+              : request.continuesTurnId
+          );
+          if (error.code === AGENT_TURN_NOT_CONTINUABLE_CODE) {
+            void refreshThread();
+          }
+          return;
+        }
+        if (!resumingDecision && refusedBeforeRun(error)) {
+          takeBackRefusedTurn(error, null);
+          return;
+        }
+        const inFlight = get().decisionInFlight;
+        if (resumingDecision && inFlight && isDecisionNotTaken(error)) {
+          restoreDecision(error, inFlight);
+          return;
+        }
+        if (resumingDecision && isUnresumedDecision(error)) {
+          endUnresumedDecision();
+          return;
+        }
+        set({
+          status: 'error',
+          error,
+          retryMode:
+            resumingDecision ||
+            request.kind === TURN_REQUEST_KIND.CONTINUE ||
+            offersNoResend(error)
+              ? 'none'
+              : 'resend',
+          _streamHandle: null,
+          thinkingText: '',
+          decisionInFlight: null,
+        });
+      },
+      onProposal: (proposal) => {
+        if (version !== streamVersion) {
+          return;
+        }
+        invalidateConversations(queryClient);
+        buffer.clearInactivityTimer();
+        buffer.flush();
+        thinkingBuffer.discard();
+        const id = activeAssistantId;
+        set((s) => ({
+          status: 'pendingProposal',
+          pendingProposal: proposal,
+          decisionInFlight: null,
+          thinkingText: '',
+          messages: s.messages.map((m) =>
+            m.id === id ? { ...m, proposal: { kind: proposal.kind } } : m
+          ),
+        }));
+      },
+      onCommitted: ({ result }) => {
+        // Invalidate before the stale-stream guard: the mutation is committed
+        // server-side, so the caches must refresh even if a newer turn
+        // superseded this stream (only the chat update below is version-gated).
+        invalidateNoteCollections(queryClient);
+        void queryClient.invalidateQueries({
+          queryKey: notesQueryKeys.detail(result.noteId),
+        });
+        if (version !== streamVersion) {
+          return;
+        }
+        buffer.flush();
+        const id = activeAssistantId;
+        set((s) => ({
+          pendingProposal: null,
+          decisionInFlight: null,
+          messages: s.messages.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  committed: { kind: result.kind, title: result.title },
+                }
+              : m
+          ),
+        }));
+      },
+      onTurnSettled: ({ turnId }) => {
+        if (version !== streamVersion) {
+          return;
+        }
+        invalidateConversations(queryClient);
+        // The transcript carries no pending proposal, so a card of this
+        // turn the user can still decide on must outlive the refetch.
+        if (get().pendingProposal?.turnId === turnId) {
+          void refreshThread();
+          return;
+        }
+        buffer.clearInactivityTimer();
+        buffer.flush();
+        thinkingBuffer.discard();
+        set({
+          _streamHandle: null,
+          thinkingText: '',
+          decisionInFlight: null,
+        });
+        void showStoredAnswer(turnId);
+      },
+    };
+    const handle =
+      request.kind === TURN_REQUEST_KIND.MESSAGE
+        ? agentClient.sendMessage(request.text, callbacks, noteId, options)
+        : agentClient.continueTurn(
+            request.continuesTurnId,
+            callbacks,
+            noteId,
+            options
+          );
     if (get().status === 'streaming') {
       buffer.armInactivityTimer();
       set({ _streamHandle: handle });
@@ -688,24 +773,34 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     return handle;
   };
 
-  const startTurn = (text: string, noteId?: string, resentTurnId?: string) => {
+  const beginTurn = (
+    request: TurnRequest,
+    noteId?: string,
+    resentTurnId?: string
+  ): string => {
     const current = get();
     if (current.status === 'streaming' && current._streamHandle) {
       current._streamHandle.cancel();
     }
     streamVersion++;
     lastNoteId = noteId;
-    unsentText = text;
+    unsentText =
+      request.kind === TURN_REQUEST_KIND.MESSAGE ? request.text : null;
     resumingDecision = false;
+    liveContinuation = null;
     buffer.clearInactivityTimer();
     buffer.discard();
     thinkingBuffer.discard();
 
-    const userMessage: AgentChatMessage = {
-      id: nextId(),
-      role: 'user',
-      content: text,
-    };
+    const userMessage: AgentChatMessage =
+      request.kind === TURN_REQUEST_KIND.MESSAGE
+        ? { id: nextId(), role: 'user', content: request.text }
+        : {
+            id: nextId(),
+            role: 'user',
+            content: '',
+            kind: MESSAGE_KIND.CONTINUE,
+          };
     const assistantMessage: AgentChatMessage = {
       id: nextId(),
       role: 'assistant',
@@ -723,7 +818,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       _streamHandle: null,
     });
 
-    const { turnId } = run(text, assistantMessage.id, noteId, resentTurnId);
+    const { turnId } = run(request, assistantMessage.id, noteId, resentTurnId);
     liveTurnId = turnId;
     set((s) => ({
       messages: s.messages.map((m) =>
@@ -732,6 +827,24 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           : m
       ),
     }));
+    return turnId;
+  };
+
+  const startTurn = (text: string, noteId?: string, resentTurnId?: string) => {
+    beginTurn({ kind: TURN_REQUEST_KIND.MESSAGE, text }, noteId, resentTurnId);
+  };
+
+  const startContinuation = (
+    continuesTurnId: string,
+    noteId?: string,
+    resentTurnId?: string
+  ) => {
+    const turnId = beginTurn(
+      { kind: TURN_REQUEST_KIND.CONTINUE, continuesTurnId },
+      noteId,
+      resentTurnId
+    );
+    liveContinuation = { continuesTurnId, turnId };
   };
 
   const turnInProgress = () =>
@@ -1060,19 +1173,30 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     },
 
     cancel: () => {
+      const wasAlive = isTurnAlive(get().status);
       get()._streamHandle?.cancel();
       streamVersion++;
       buffer.clearInactivityTimer();
       buffer.flush();
       thinkingBuffer.discard();
-      activeAssistantId = null;
-      set({
+      const restored =
+        wasAlive && !resumingDecision && !activeAnswered()
+          ? liveContinuation?.continuesTurnId
+          : undefined;
+      set((s) => ({
         status: 'idle',
         pendingProposal: null,
         decisionInFlight: null,
         thinkingText: '',
         _streamHandle: null,
-      });
+        ...(restored === undefined
+          ? {}
+          : {
+              messages: withoutActiveTurn(s.messages),
+              continuableTurnId: restored,
+            }),
+      }));
+      activeAssistantId = null;
     },
 
     retryLast: () => {
@@ -1111,8 +1235,44 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         failed.turnId !== undefined && agentClient.canResendTurn(failed.turnId)
           ? failed.turnId
           : undefined;
+      if (failed.kind === MESSAGE_KIND.CONTINUE) {
+        const continuesTurnId = continuedTurnOf(messages, lastUserIdx);
+        if (continuesTurnId === undefined) {
+          return;
+        }
+        set({ messages: messages.slice(0, lastUserIdx) });
+        startContinuation(continuesTurnId, lastNoteId, resentTurnId);
+        return;
+      }
       set({ messages: messages.slice(0, lastUserIdx) });
       startTurn(failed.content, lastNoteId, resentTurnId);
+    },
+
+    continueTurn: (noteId) => {
+      const { continuableTurnId, status, messages, userId } = get();
+      if (continuableTurnId === null || isTurnAlive(status)) {
+        return;
+      }
+      const stopReason = messages.findLast(
+        (m) => m.role === 'assistant' && m.turnId === continuableTurnId
+      )?.stopReason;
+      const tier =
+        userId === null
+          ? undefined
+          : queryClient.getQueryData<AiQuota>(aiQuotaQueryKeys.forUser(userId))
+              ?.tier;
+      captureProductEvent('ai continue clicked', {
+        ...(tier ? { tier } : {}),
+        ...(isContinuableStop(stopReason) ? { stop_reason: stopReason } : {}),
+      });
+      const previous = liveContinuation;
+      const resentTurnId =
+        previous !== null &&
+        previous.continuesTurnId === continuableTurnId &&
+        agentClient.canResendTurn(previous.turnId)
+          ? previous.turnId
+          : undefined;
+      startContinuation(continuableTurnId, noteId, resentTurnId);
     },
 
     approveProposal: () => {

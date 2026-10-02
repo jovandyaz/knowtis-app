@@ -175,6 +175,23 @@ describe('browser product events', () => {
     });
   });
 
+  it('captures a Continuar click with only its tier and stop reason', () => {
+    captureProductEvent('ai continue clicked', {
+      tier: 'free',
+      stop_reason: 'time_limit',
+    });
+
+    expect(posthog.capture).toHaveBeenCalledWith('ai continue clicked', {
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'en',
+      tier: 'free',
+      stop_reason: 'time_limit',
+    });
+  });
+
   it('does not expose an arbitrary property escape hatch', () => {
     expectTypeOf<Record<string, unknown>>().not.toExtend<
       BrowserProductEventMap['note activated']
