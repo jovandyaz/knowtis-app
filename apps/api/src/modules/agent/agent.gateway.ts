@@ -52,6 +52,7 @@ import { conversationIdForTurn } from './domain/turn-identity';
 import {
   TURN_CLAIM_OUTCOME,
   TurnClaimService,
+  type ConversationLeaseOutcome,
   type TurnClaimOutcome,
   type TurnClaimRequest,
 } from './infrastructure/turn-claim/turn-claim.service';
@@ -112,6 +113,32 @@ interface UnexpectedFailure {
   readonly turnId?: string;
   readonly leg?: TurnLeg;
   readonly error: unknown;
+}
+
+type ConversationLease = Pick<
+  TurnClaimRequest,
+  'userId' | 'turnId' | 'conversationId'
+>;
+
+interface TurnHold {
+  readonly lease: ConversationLease;
+  readonly claim?: TurnClaimRequest;
+}
+
+// A message without a turn id that names no conversation opens a new one, so
+// no other turn can hold it.
+function turnHoldOf(
+  userId: string,
+  turnId: string,
+  data: AgentTurnPayload
+): TurnHold | undefined {
+  const claim = turnClaimOf(userId, turnId, data);
+  if (claim) {
+    return { lease: claim, claim };
+  }
+  return data.conversationId
+    ? { lease: { userId, turnId, conversationId: data.conversationId } }
+    : undefined;
 }
 
 function turnClaimOf(
@@ -357,10 +384,10 @@ export class AgentGateway
       turnId,
       TURN_LEG.MESSAGE,
       (controller) =>
-        this.withTurnClaim(
+        this.withTurnHold(
           client,
           controller,
-          turnClaimOf(userId, turnId, data),
+          turnHoldOf(userId, turnId, data),
           (markSettled, markDiscarded) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
@@ -533,23 +560,26 @@ export class AgentGateway
   // or discarded after it) releases its claim, so a resend of it runs. A turn
   // the conversation already stores outlived its claim, so it is settled like
   // one that ran.
-  private async withTurnClaim(
+  private async withTurnHold(
     client: AuthenticatedSocket,
     controller: AbortController,
-    claim: TurnClaimRequest | undefined,
+    hold: TurnHold | undefined,
     turn: (markSettled: () => void, markDiscarded: () => void) => Promise<void>
   ): Promise<void> {
-    if (!claim) {
+    if (!hold) {
       return turn(
         () => undefined,
         () => undefined
       );
     }
+    const { lease, claim } = hold;
     const owner = randomUUID();
-    const outcome = await this.claimTurn(claim, owner);
+    const outcome = claim
+      ? await this.claimTurn(claim, owner)
+      : await this.leaseConversation(lease, owner);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
       this.endedLegs.add(controller);
-      this.refuseClaimedTurn(client, claim, outcome);
+      this.refuseTurn(client, lease, outcome);
       return;
     }
     let settled = false;
@@ -563,25 +593,21 @@ export class AgentGateway
         }
       );
     } finally {
-      await this.releaseStep(claim, () =>
-        settled
-          ? this.turnClaims.settle(claim, owner)
-          : this.turnClaims.release(claim, owner)
-      );
-      await this.releaseStep(claim, () =>
-        this.turnClaims.releaseConversation(
-          claim.userId,
-          claim.conversationId,
-          owner
-        )
-      );
+      if (claim) {
+        await this.releaseStep(claim, () =>
+          settled
+            ? this.turnClaims.settle(claim, owner)
+            : this.turnClaims.release(claim, owner)
+        );
+      }
+      await this.releaseLease(lease, owner);
     }
   }
 
   // A throw here would replace what the client is owed (the turn's own failure,
   // or the refusal of a turn it could not claim) and skip the steps after it.
   private async releaseStep(
-    { userId, conversationId, turnId }: TurnClaimRequest,
+    { userId, conversationId, turnId }: ConversationLease,
     step: () => Promise<void>
   ): Promise<void> {
     try {
@@ -612,29 +638,41 @@ export class AgentGateway
       }
       return outcome;
     }
-    const lease = await this.turnClaims.claimConversation(
-      claim.userId,
-      claim.conversationId,
-      owner
-    );
+    const lease = await this.leaseConversation(claim, owner);
     if (lease !== TURN_CLAIM_OUTCOME.CLAIMED) {
       await releaseClaim();
-    }
-    if (lease === TURN_CLAIM_OUTCOME.UNAVAILABLE) {
-      await this.releaseStep(claim, () =>
-        this.turnClaims.releaseConversation(
-          claim.userId,
-          claim.conversationId,
-          owner
-        )
-      );
     }
     return lease;
   }
 
-  private refuseClaimedTurn(
+  private async leaseConversation(
+    lease: ConversationLease,
+    owner: string
+  ): Promise<ConversationLeaseOutcome> {
+    const outcome = await this.turnClaims.claimConversation(
+      lease.userId,
+      lease.conversationId,
+      owner
+    );
+    if (outcome === TURN_CLAIM_OUTCOME.UNAVAILABLE) {
+      await this.releaseLease(lease, owner);
+    }
+    return outcome;
+  }
+
+  private releaseLease(lease: ConversationLease, owner: string): Promise<void> {
+    return this.releaseStep(lease, () =>
+      this.turnClaims.releaseConversation(
+        lease.userId,
+        lease.conversationId,
+        owner
+      )
+    );
+  }
+
+  private refuseTurn(
     client: AuthenticatedSocket,
-    { turnId, conversationId }: TurnClaimRequest,
+    { turnId, conversationId }: ConversationLease,
     outcome: Exclude<TurnClaimOutcome, typeof TURN_CLAIM_OUTCOME.CLAIMED>
   ): void {
     switch (outcome) {

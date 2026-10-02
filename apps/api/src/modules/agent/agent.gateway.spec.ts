@@ -2835,6 +2835,92 @@ describe('AgentGateway', () => {
         expect(claimOf(redis)).toBeNull();
       });
 
+      describe('a message sent without a turn id', () => {
+        const unclaimed = (content = 'hi') => ({
+          conversationId: CONVERSATION,
+          message: { content },
+        });
+
+        it.each([
+          ['a message without a turn id', unclaimed(), unclaimed('again')],
+          ['a claimed turn', turn(), unclaimed('again')],
+          ['a message without a turn id', unclaimed(), turn()],
+        ])(
+          'is refused with TURN_IN_PROGRESS, or refuses a claimed turn, while %s runs in its conversation',
+          async (_running, first, second) => {
+            const held = heldTurns();
+            const execute = vi
+              .fn<Execute>(completes)
+              .mockImplementationOnce(held.execute);
+            const gateway = makeGateway({ handler: { execute } });
+
+            const running = gateway.handleMessage(
+              makeClient('u1') as never,
+              first
+            );
+            await flushAsync();
+            const refused = makeClient('u1', 'c2');
+            await gateway.handleMessage(refused as never, second);
+
+            expect(turnErrors(refused)).toEqual([
+              expect.objectContaining({
+                code: 'TURN_IN_PROGRESS',
+                turnId: expect.stringMatching(UUID_PATTERN),
+              }),
+            ]);
+            expect(execute).toHaveBeenCalledOnce();
+            held.release();
+            await running;
+          }
+        );
+
+        it('holds its conversation while it runs and frees it once it ends', async () => {
+          const redis = createInMemoryClaimRedis();
+          let heldWhileRunning: string[] = [];
+          const execute = vi.fn<Execute>((input, cb, signal) => {
+            heldWhileRunning = leases(redis);
+            return completes(input, cb, signal);
+          });
+          const gateway = makeGateway({ handler: { execute }, redis });
+
+          await gateway.handleMessage(makeClient('u1') as never, unclaimed());
+          await gateway.handleMessage(
+            makeClient('u1', 'c2') as never,
+            unclaimed('again')
+          );
+
+          expect(heldWhileRunning).toEqual([LEASE_KEY]);
+          expect(leases(redis)).toEqual([]);
+          expect(execute).toHaveBeenCalledTimes(2);
+        });
+
+        it('fails closed with TURN_CLAIM_UNAVAILABLE when the lease times out after it landed, and frees it', async () => {
+          vi.spyOn(Logger.prototype, 'warn').mockImplementation(
+            () => undefined
+          );
+          const redis = createInMemoryClaimRedis();
+          const set = redis.client.set;
+          redis.client.set = async (key, value, ...options) => {
+            await set(key, value, ...options);
+            throw new Error('Command timed out');
+          };
+          const execute = vi.fn<Execute>(completes);
+          const gateway = makeGateway({ handler: { execute }, redis });
+          const client = makeClient('u1');
+
+          await gateway.handleMessage(client as never, unclaimed());
+
+          expect(turnErrors(client)).toEqual([
+            expect.objectContaining({
+              code: 'TURN_CLAIM_UNAVAILABLE',
+              turnId: expect.stringMatching(UUID_PATTERN),
+            }),
+          ]);
+          expect(execute).not.toHaveBeenCalled();
+          expect(leases(redis)).toEqual([]);
+        });
+      });
+
       it.each([
         [
           'approved',
