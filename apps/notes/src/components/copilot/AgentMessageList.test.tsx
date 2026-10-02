@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
+
 import {
   useAgentStore,
   type AgentChatMessage,
   type AgentStatus,
 } from '@/stores/agent.store';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +15,17 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 vi.mock('./AgentMessage', () => ({
-  AgentMessage: ({ message }: { message: AgentChatMessage }) => (
-    <div data-testid="message">{message.content}</div>
+  AgentMessage: ({
+    message,
+    footer,
+  }: {
+    message: AgentChatMessage;
+    footer?: ReactNode;
+  }) => (
+    <div data-testid="message">
+      {message.content}
+      {footer}
+    </div>
   ),
 }));
 
@@ -172,5 +183,24 @@ describe('AgentMessageList', () => {
     );
 
     expect(screen.queryByText('ai.copilot.history.earlier')).toBeNull();
+  });
+
+  it('puts the continuation under the last message only', () => {
+    render(
+      <AgentMessageList
+        messages={[
+          { id: 'u1', role: 'user', content: 'hola' },
+          { id: 'a1', role: 'assistant', content: 'Revisé.' },
+        ]}
+        status="done"
+        continuation={<button type="button">continue</button>}
+      />
+    );
+
+    const [question, answer] = screen.getAllByTestId('message');
+    expect(
+      within(answer).getByRole('button', { name: 'continue' })
+    ).toBeInTheDocument();
+    expect(within(question).queryByRole('button')).toBeNull();
   });
 });

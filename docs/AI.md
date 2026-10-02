@@ -1514,11 +1514,13 @@ Every refusal of `agent:approve` or `agent:reject` that comes after the proposal
 
 `agent:done` carries `{ usage: { inputTokens, outputTokens, model, costUsd }, sources, knownNotes, webSources, stopReason, continuable, conversationId? }`; `continuable` is described under [Continuing a capped turn](#continuing-a-capped-turn).
 
-The Notes client stores `stopReason` on the active assistant response only. It
-shows a polite status message for `max_steps`, `token_budget`, `time_limit`,
+The Notes client stores `stopReason` on the active assistant response only, and
+drops a reason it does not know (a newer server's) so it never shows a raw key.
+It shows a polite status message for `max_steps`, `token_budget`, `time_limit`,
 `length`, and `content_filter`, including when the response text is empty;
 `completed` adds no notice. A reopened conversation restores the notice from the
-stop reason persisted on the turn's last assistant row.
+stop reason persisted on the turn's last assistant row, and a leg stored as
+`error` or `aborted` with text shows "This reply was interrupted."
 
 The Notes client also owns a **message queue** (`useAgentStore.queue`): a send
 issued while a turn is alive (`streaming` or `pendingProposal`) is queued
@@ -1544,6 +1546,8 @@ A continuation reuses the model stored on the assistant row it continues, throug
 The continuation's user row is a marker: `content: ''` and `kind: 'continue'`. `pruneTranscript` replays every marker, and the live continuation, as the fixed `CONTINUE_REQUEST` instruction: continue from where you stopped, work on what is pending (or on the original request when nothing was listed), do not repeat what was already answered, and reply in the language of the user's own messages. That text is the server's own, so the injection guard skips it and memory retrieval embeds the last message the user wrote. History windows never start on a marker: the window opens on the first real question, and a window holding only markers is kept whole. Memory extraction never sees a marker, because its text-only load drops empty rows.
 
 `GET /agent/conversations/:id/messages` returns `continuableTurnId`: the newest turn's id when that turn stopped at a checkpoint and the caller has a message left, otherwise `null`. It degrades to `null` when the caller's tier or quota cannot be read, logging `agent.continuable.snapshot_failed`.
+
+The Notes client offers **Continuar** under the newest answer while its turn is the one to continue: live from `agent:done.continuable`, and after a reload from `continuableTurnId`, which it adopts only when no turn started while the transcript was in flight. A checkpoint stop also shows "Resultado parcial" next to the button. The button is hidden while a turn runs, once a newer turn exists, and while the daily quota is spent. One click sends the continue request (`agentClient.continueTurn`, resent like a message on `TURN_IN_PROGRESS` and `TURN_CLAIM_UNAVAILABLE`) and takes the offer away. A continuation that fails before its first text leaves the thread as it was and offers the button again, reusing the failed `turnId` while the client still offers it; `AGENT_TURN_NOT_CONTINUABLE` and `AI_INVALID_INPUT` withdraw the offer instead, and the first also reloads the thread. A continuation that fails after writing text stays on the thread without a retry. Marker rows render as a "Continuar" chip, live and after a reload, and a Retry on a timed-out continuation sends a continue again, never an empty message. Each click the client acts on is captured as `ai continue clicked`.
 
 Checkpoints and continuations are captured as `ai turn checkpoint reached` and `ai turn continued` ([PostHog analytics](./POSTHOG_ANALYTICS.md#event-contract)).
 

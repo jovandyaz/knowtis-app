@@ -15,6 +15,7 @@ import { clockTimeOf } from '@/lib/format-date';
 import {
   isTurnAlive,
   isUpdateProposal,
+  selectContinuableAnswer,
   useAgentStore,
 } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
@@ -29,6 +30,7 @@ import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  isContinuableStop,
 } from '@knowtis/shared-types';
 
 import {
@@ -36,6 +38,7 @@ import {
   GENERIC_AI_ERROR_KEY,
 } from '../editor/ai/ai-error-messages';
 import { AgentComposer } from './AgentComposer';
+import { AgentContinueAction } from './AgentContinueAction';
 import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
@@ -102,6 +105,8 @@ export function AgentCopilotPanel() {
   const hydration = useAgentStore((s) => s.hydration);
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
   const retryHydration = useAgentStore((s) => s.retryHydration);
+  const continuableAnswer = useAgentStore(selectContinuableAnswer);
+  const continueTurn = useAgentStore((s) => s.continueTurn);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
   const isGuest = authUser?.isAnonymous === true;
@@ -156,6 +161,13 @@ export function AgentCopilotPanel() {
   const sendNow = (text: string) => {
     sendMessage(text, noteId, { interrupt: true });
   };
+  const continuation =
+    continuableAnswer && !quotaLock ? (
+      <AgentContinueAction
+        partial={isContinuableStop(continuableAnswer.stopReason)}
+        onContinue={() => continueTurn(noteId)}
+      />
+    ) : undefined;
   const conversationRef = useRef<StickToBottomContext>(null);
   const historyRetryRef = useRef<HTMLButtonElement>(null);
   const [retryingHistory, setRetryingHistory] = useState(false);
@@ -272,6 +284,7 @@ export function AgentCopilotPanel() {
             status={status}
             thinkingDetail={thinkingText}
             hasEarlier={hasEarlier}
+            continuation={continuation}
             historyNotice={
               showHistoryRetry && (
                 <HistoryRetryRow

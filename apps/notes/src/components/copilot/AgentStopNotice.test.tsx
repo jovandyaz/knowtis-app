@@ -14,6 +14,7 @@ describe('AgentStopNotice', () => {
   it.each([
     [AGENT_STOP_REASON.MAX_STEPS, 'The step limit was reached.'],
     [AGENT_STOP_REASON.TOKEN_BUDGET, 'The turn budget was reached.'],
+    [AGENT_STOP_REASON.TIME_LIMIT, 'The time for this turn ran out.'],
     [AGENT_STOP_REASON.LENGTH, 'The response was cut short.'],
     [AGENT_STOP_REASON.CONTENT_FILTER, 'The provider filtered this response.'],
   ])('announces %s as a status', (reason, message) => {
@@ -26,6 +27,14 @@ describe('AgentStopNotice', () => {
     render(<AgentStopNotice reason={AGENT_STOP_REASON.COMPLETED} />);
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('announces a reply that was cut off', () => {
+    render(<AgentStopNotice interrupted />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This reply was interrupted.'
+    );
   });
 
   it('renders nothing without a stop reason', () => {

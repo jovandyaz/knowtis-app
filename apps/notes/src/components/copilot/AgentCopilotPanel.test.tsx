@@ -8,7 +8,7 @@ import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClient from '@knowtis/api-client';
 import {
@@ -94,6 +94,7 @@ vi.mock('@knowtis/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
+    continueTurn: vi.fn(() => ({ turnId: 'turn-2', cancel: vi.fn() })),
     canResume: vi.fn(() => true),
     approve: vi.fn(),
     reject: vi.fn(),
@@ -1213,5 +1214,165 @@ describe('AgentCopilotPanel daily quota', () => {
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AgentCopilotPanel continue offer', () => {
+  const RESETS_AT = '2026-10-03T00:00:00.000Z';
+  const CAPPED = [
+    {
+      id: 'u1',
+      turnId: 't1',
+      role: 'user' as const,
+      content: 'Compara mis notas',
+    },
+    {
+      id: 'a1',
+      turnId: 't1',
+      role: 'assistant' as const,
+      content: 'Revisé tres notas.',
+      stopReason: 'max_steps' as const,
+    },
+  ];
+  const freshWrapper = () =>
+    createAuthWrapper(createAuthApiMock(), { user: HARNESS_PROFILE });
+  const continueButton = () =>
+    screen.queryByRole('button', { name: 'ai.copilot.continue.action' });
+
+  function offer(
+    state: Partial<ReturnType<typeof useAgentStore.getState>> = {}
+  ) {
+    act(() => {
+      useAgentStore.getState().newConversation();
+      useAgentStore.setState({
+        userId: null,
+        status: 'done',
+        messages: CAPPED,
+        continuableTurnId: 't1',
+        ...state,
+      });
+    });
+  }
+
+  beforeEach(() => {
+    routeParams.current = { noteId: 'note-9' };
+    vi.mocked(agentClient.continueTurn).mockClear();
+  });
+
+  afterEach(() => {
+    routeParams.current = {};
+  });
+
+  it('offers Continuar with the partial label under a capped last answer, and continues it', async () => {
+    const user = userEvent.setup();
+    offer();
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(screen.getByText('ai.copilot.continue.partial')).toBeInTheDocument();
+    const button = continueButton();
+    expect(button).not.toBeNull();
+    if (button) {
+      await user.click(button);
+    }
+
+    expect(agentClient.continueTurn).toHaveBeenCalledExactlyOnceWith(
+      't1',
+      expect.any(Object),
+      'note-9',
+      {}
+    );
+    expect(continueButton()).toBeNull();
+  });
+
+  it('shows the button without the partial label when the stop reason is not a checkpoint', () => {
+    offer({
+      messages: [
+        CAPPED[0],
+        {
+          id: 'a1',
+          turnId: 't1',
+          role: 'assistant' as const,
+          content: 'Revisé tres notas.',
+        },
+      ],
+    });
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(continueButton()).not.toBeNull();
+    expect(screen.queryByText('ai.copilot.continue.partial')).toBeNull();
+  });
+
+  it.each([
+    ['a turn runs', { status: 'streaming' as const }],
+    [
+      'a newer turn is on screen',
+      {
+        messages: [
+          ...CAPPED,
+          { id: 'u2', turnId: 't2', role: 'user' as const, content: 'otra' },
+          {
+            id: 'a2',
+            turnId: 't2',
+            role: 'assistant' as const,
+            content: 'Hecho.',
+          },
+        ],
+      },
+    ],
+  ])('offers nothing while %s', (_why, state) => {
+    offer(state);
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(continueButton()).toBeNull();
+  });
+
+  it('offers nothing while the day’s messages are spent', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'free',
+      messages: { used: 30, limit: 30, resetsAt: RESETS_AT },
+    });
+    offer();
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    await screen.findByRole('button', { name: 'ai.copilot.quota.byokCta' });
+    expect(continueButton()).toBeNull();
+  });
+
+  it('offers Continuar to a caller paying with their own key', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'byok',
+      messages: null,
+    });
+    offer();
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByRole('button', { name: 'ai.copilot.continue.action' })
+    ).toBeInTheDocument();
+  });
+
+  it('shows a continue marker as its chip', () => {
+    offer({
+      messages: [
+        ...CAPPED,
+        {
+          id: 'u2',
+          turnId: 't2',
+          role: 'user' as const,
+          content: '',
+          kind: 'continue' as const,
+        },
+        {
+          id: 'a2',
+          turnId: 't2',
+          role: 'assistant' as const,
+          content: 'Sigo.',
+        },
+      ],
+      continuableTurnId: null,
+    });
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(screen.getByText('ai.copilot.continue.marker')).toBeInTheDocument();
   });
 });

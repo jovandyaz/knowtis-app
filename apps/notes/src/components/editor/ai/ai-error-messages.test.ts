@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { AGENT_TURN_NOT_CONTINUABLE_CODE } from '@knowtis/shared-types';
+
 import { aiErrorMessageKey } from './ai-error-messages';
 
 describe('aiErrorMessageKey', () => {
@@ -30,6 +32,12 @@ describe('aiErrorMessageKey', () => {
   it('maps an unavailable model to its own copy', () => {
     expect(aiErrorMessageKey({ code: 'AI_MODEL_UNAVAILABLE' })).toBe(
       'ai.errors.modelUnavailable'
+    );
+  });
+
+  it('names a turn that can no longer be continued', () => {
+    expect(aiErrorMessageKey({ code: AGENT_TURN_NOT_CONTINUABLE_CODE })).toBe(
+      'ai.errors.turnNotContinuable'
     );
   });
 

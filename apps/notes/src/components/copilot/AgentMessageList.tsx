@@ -22,6 +22,8 @@ interface AgentMessageListProps {
   historyNotice?: ReactNode;
   /** Reaches the log that scrolls, for instance to hand it focus. */
   conversationRef?: Ref<StickToBottomContext>;
+  /** Shown under the last message, the answer the copilot can continue. */
+  continuation?: ReactNode;
 }
 
 const LOG_FOCUS_CLASS =
@@ -34,6 +36,7 @@ export function AgentMessageList({
   hasEarlier = false,
   historyNotice,
   conversationRef,
+  continuation,
 }: AgentMessageListProps) {
   const { t } = useTranslation('notes');
   const lastAssistant = messages.at(-1);
@@ -58,13 +61,14 @@ export function AgentMessageList({
             {t('ai.copilot.history.earlier')}
           </p>
         )}
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <AgentMessage
             key={message.id}
             message={message}
             isStreaming={
               status === 'streaming' && message.id === lastAssistant?.id
             }
+            footer={index === messages.length - 1 ? continuation : undefined}
           />
         ))}
         {isAssistantTurn && (
