@@ -1553,7 +1553,9 @@ export class RunAgentTurnHandler {
 
   private async keptPriorModel(
     input: TurnInput,
-    droppedEvent: string
+    droppedEvent:
+      | 'agent.continuation.model_dropped'
+      | 'agent.resume.model_dropped'
   ): Promise<ModelChoice | null> {
     if (input.model || !input.priorModel) {
       return null;
