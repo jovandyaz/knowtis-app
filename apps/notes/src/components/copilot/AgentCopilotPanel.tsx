@@ -295,6 +295,7 @@ export function AgentCopilotPanel() {
             thinkingDetail={thinkingText}
             hasEarlier={hasEarlier}
             continuation={continuation}
+            onStop={cancel}
             historyNotice={
               showHistoryRetry && (
                 <HistoryRetryRow

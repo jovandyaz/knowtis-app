@@ -1402,3 +1402,82 @@ describe('AgentCopilotPanel continue offer', () => {
     expect(screen.getByText('ai.copilot.continue.marker')).toBeInTheDocument();
   });
 });
+
+describe('AgentCopilotPanel stopping from the thread', () => {
+  const realCancel = useAgentStore.getState().cancel;
+  const cancel = vi.fn();
+  const freshWrapper = () =>
+    createAuthWrapper(createAuthApiMock(), { user: HARNESS_PROFILE });
+  const thread = () =>
+    screen.getByRole('log', { name: 'ai.copilot.history.thread' });
+
+  function showTurn(state: Partial<ReturnType<typeof useAgentStore.getState>>) {
+    act(() => {
+      useAgentStore.getState().newConversation();
+      useAgentStore.setState({
+        userId: null,
+        cancel,
+        messages: [
+          { id: 'u1', turnId: 't1', role: 'user', content: 'Compara' },
+          { id: 'a1', turnId: 't1', role: 'assistant', content: 'Reviso' },
+        ],
+        ...state,
+      });
+    });
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+  }
+
+  beforeEach(() => {
+    cancel.mockClear();
+  });
+
+  afterEach(() => {
+    useAgentStore.setState({ cancel: realCancel });
+  });
+
+  it('stops the streaming turn on Escape while the thread has the focus', async () => {
+    const user = userEvent.setup();
+    showTurn({ status: 'streaming' });
+
+    thread().focus();
+    await user.keyboard('{Escape}');
+
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('stops nothing on Escape while no turn streams', async () => {
+    const user = userEvent.setup();
+    showTurn({ status: 'done' });
+
+    thread().focus();
+    await user.keyboard('{Escape}');
+
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('leaves an Escape pressed on a control inside the thread to that control', async () => {
+    const user = userEvent.setup();
+    showTurn({
+      status: 'streaming',
+      queue: [{ id: 'q1', text: 'y luego esto' }],
+    });
+
+    screen.getByRole('button', { name: 'ai.copilot.queueRemove' }).focus();
+    await user.keyboard('{Escape}');
+
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('leaves an Escape an open layer already claimed to that layer', async () => {
+    const user = userEvent.setup();
+    const claim = (event: KeyboardEvent) => event.preventDefault();
+    document.addEventListener('keydown', claim, { capture: true });
+    showTurn({ status: 'streaming' });
+
+    thread().focus();
+    await user.keyboard('{Escape}');
+    document.removeEventListener('keydown', claim, { capture: true });
+
+    expect(cancel).not.toHaveBeenCalled();
+  });
+});
