@@ -102,7 +102,9 @@ export function AgentCopilotPanel() {
   const hydration = useAgentStore((s) => s.hydration);
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
   const retryHydration = useAgentStore((s) => s.retryHydration);
-  const userId = useAuthUser()?.id ?? null;
+  const authUser = useAuthUser();
+  const userId = authUser?.id ?? null;
+  const isGuest = authUser?.isAnonymous === true;
   useAiQuotaSync();
   const quota = quotaStateOf(useAiQuota().data);
   const quotaRefusal = error?.code === AI_QUOTA_EXHAUSTED_CODE ? error : null;
@@ -140,13 +142,13 @@ export function AgentCopilotPanel() {
       return;
     }
     const store = useAgentStore.getState();
-    store.bindUser(userId);
+    store.bindUser({ id: userId, isAnonymous: isGuest });
     const { conversationId: remembered, messages: shown } =
       useAgentStore.getState();
     if (remembered && shown.length === 0) {
       void store.openConversation(remembered, 'reload');
     }
-  }, [userId]);
+  }, [userId, isGuest]);
 
   const send = (text: string) => {
     sendMessage(text, noteId);

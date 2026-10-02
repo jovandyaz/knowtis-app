@@ -903,6 +903,22 @@ describe('useAgentStore', () => {
       useAgentStore.getState().newConversation();
       expect(useAgentStore.getState().draft).toBe('');
     });
+
+    it('a new conversation that keeps the draft clears only the thread', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().setDraft('typing');
+
+      useAgentStore.getState().newConversation({ keepDraft: true });
+
+      const { messages, queue, draft } = useAgentStore.getState();
+      expect({ messages, queue, draft }).toEqual({
+        messages: [],
+        queue: [],
+        draft: 'typing',
+      });
+    });
   });
 });
 

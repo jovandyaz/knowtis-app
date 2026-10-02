@@ -1,4 +1,5 @@
 import { authStore } from '@/auth';
+import type * as AgentStore from '@/stores/agent.store';
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +18,7 @@ vi.mock('@/auth', async () => {
   return {
     authStore: createStore(() => ({
       isAuthenticated: true,
-      user: null as { id: string } | null,
+      user: null as { id: string; isAnonymous?: boolean } | null,
     })),
   };
 });
@@ -28,7 +29,8 @@ vi.mock('@knowtis/api-client', () => ({
 vi.mock('@/lib/query-client', () => ({
   queryClient: { cancelQueries, clear },
 }));
-vi.mock('@/stores/agent.store', () => ({
+vi.mock('@/stores/agent.store', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentStore>()),
   useAgentStore: { getState: () => ({ newConversation }) },
 }));
 
@@ -38,6 +40,8 @@ const profile = (id: string) => ({
   name: id,
   avatarUrl: null,
 });
+
+const guest = (id: string) => ({ ...profile(id), isAnonymous: true });
 
 describe('AuthCacheSync', () => {
   beforeEach(() => {
@@ -87,6 +91,41 @@ describe('AuthCacheSync', () => {
       vi.mocked(aiClient.disconnect).mock.calls.length,
       newConversation.mock.calls.length,
     ]).toEqual([1, 1, 1]);
+  });
+
+  it('keeps what a guest was typing when they sign in', () => {
+    authStore.setState({ user: guest('g') });
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ user: profile('b') }));
+
+    expect(newConversation).toHaveBeenCalledWith({ keepDraft: true });
+  });
+
+  it('wipes what one account was typing when another signs in', () => {
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ user: profile('b') }));
+
+    expect(newConversation).toHaveBeenCalledWith({ keepDraft: false });
+  });
+
+  it('wipes what a guest was typing when another guest takes over', () => {
+    authStore.setState({ user: guest('g1') });
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ user: guest('g2') }));
+
+    expect(newConversation).toHaveBeenCalledWith({ keepDraft: false });
+  });
+
+  it('wipes what a guest was typing when the session ends', () => {
+    authStore.setState({ user: guest('g') });
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ isAuthenticated: false, user: null }));
+
+    expect(newConversation.mock.calls).toEqual([[]]);
   });
 
   it('keeps the sockets when a refresh keeps the same user', () => {

@@ -95,7 +95,7 @@ function DockHeader() {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={newConversation}
+          onClick={() => newConversation()}
           aria-label={t('ai.copilot.newConversation')}
           className="shrink-0"
         >

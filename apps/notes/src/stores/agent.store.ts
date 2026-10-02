@@ -119,6 +119,22 @@ export interface SendMessageOptions {
   interrupt?: boolean;
 }
 
+export interface NewConversationOptions {
+  keepDraft?: boolean;
+}
+
+export interface SessionUser {
+  id: string;
+  isAnonymous?: boolean;
+}
+
+export function keepsDraftAcrossSwitch(
+  from: Pick<SessionUser, 'isAnonymous'> | null,
+  to: Pick<SessionUser, 'isAnonymous'>
+): boolean {
+  return from?.isAnonymous === true && to.isAnonymous !== true;
+}
+
 const TURN_ALIVE_STATUSES = [
   'streaming',
   'pendingProposal',
@@ -182,7 +198,7 @@ interface AgentState {
   retryMode: RetryMode;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
-  bindUser: (userId: string) => void;
+  bindUser: (user: SessionUser) => void;
   setConversationTitle: (title: string) => void;
   openConversation: (
     id: string,
@@ -202,7 +218,7 @@ interface AgentState {
   sendQueuedNow: (id: string) => void;
   /** Moves the newest queued item back into `draft`; no-op when the queue is empty or the draft has text. */
   takeBackQueued: () => void;
-  newConversation: () => void;
+  newConversation: (options?: NewConversationOptions) => void;
   cancel: () => void;
   retryLast: () => void;
   approveProposal: () => void;
@@ -291,6 +307,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;
   let titleEdits = 0;
+  let boundUser: SessionUser | null = null;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -810,15 +827,17 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
 
-    bindUser: (userId) => {
+    bindUser: (user) => {
+      const keepDraft = keepsDraftAcrossSwitch(boundUser, user);
+      boundUser = user;
       const { userId: boundUserId, conversationId } = get();
-      if (boundUserId === userId) {
+      if (boundUserId === user.id) {
         return;
       }
       if (conversationId !== null) {
-        get().newConversation();
+        get().newConversation({ keepDraft });
       }
-      set({ userId });
+      set({ userId: user.id });
     },
 
     setConversationTitle: (title) => {
@@ -942,14 +961,14 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       set({ queue: queue.slice(0, -1), draft: last.text });
     },
 
-    newConversation: () => {
+    newConversation: (options) => {
       abandonTurn();
       threadVersion++;
       agentClient.resetConversation();
-      set({
+      set((s) => ({
         messages: [],
         queue: [],
-        draft: '',
+        draft: options?.keepDraft ? s.draft : '',
         status: 'idle',
         error: null,
         retryMode: 'resend',
@@ -962,7 +981,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         hydration: 'unloaded',
         hasEarlier: false,
         _streamHandle: null,
-      });
+      }));
     },
 
     cancel: () => {
