@@ -12,6 +12,15 @@ import { useSettingsStore } from '@/stores/settings.store';
 
 import { Button } from '@knowtis/design-system';
 
+const RESET_RECHECK_FLOOR_MS = 5_000;
+
+function msUntilRecheck(resetsAt: string): number {
+  const untilReset = Date.parse(resetsAt) - Date.now();
+  return untilReset > RESET_RECHECK_FLOOR_MS
+    ? untilReset
+    : RESET_RECHECK_FLOOR_MS;
+}
+
 export interface QuotaLock {
   tier: Extract<QuotaState, { kind: 'metered' }>['tier'];
   /** Null when only the refusal is known, not today's quota. */
@@ -25,14 +34,15 @@ export function QuotaLockedNotice({ tier, limit, resetsAt }: QuotaLock) {
   const queryClient = useQueryClient();
   const messageId = useId();
 
-  // Nothing pushes the new day's quota, so the lock would outlive its reset.
   useEffect(() => {
-    const timer = setTimeout(
-      () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const recheckAfterReset = () => {
+      timer = setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
-      },
-      Math.max(Date.parse(resetsAt) - Date.now(), 0)
-    );
+        recheckAfterReset();
+      }, msUntilRecheck(resetsAt));
+    };
+    recheckAfterReset();
     return () => clearTimeout(timer);
   }, [queryClient, resetsAt]);
 

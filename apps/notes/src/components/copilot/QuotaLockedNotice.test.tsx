@@ -152,6 +152,45 @@ describe('QuotaLockedNotice', () => {
       });
     });
 
+    it('keeps reading the quota past the reset while the server still reports the old day', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
+      const { invalidate } = renderNotice(
+        <QuotaLockedNotice tier="free" limit={30} resetsAt={RESETS_AT} />
+      );
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(invalidate).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        vi.advanceTimersByTime(4_999);
+      });
+      expect(invalidate).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(invalidate).toHaveBeenCalledTimes(2);
+    });
+
+    it('waits the floor between reads when the reset time cannot be read', () => {
+      vi.useFakeTimers();
+      const { invalidate } = renderNotice(
+        <QuotaLockedNotice tier="free" limit={30} resetsAt="not-a-date" />
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(4_999);
+      });
+      expect(invalidate).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(invalidate).toHaveBeenCalledTimes(1);
+    });
+
     it('stops waiting once the lock lifts', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-10-02T23:59:00.000Z'));
