@@ -107,6 +107,13 @@ const TURN_LEG = { MESSAGE: 'message', RESUME: 'resume' } as const;
 
 type TurnLeg = (typeof TURN_LEG)[keyof typeof TURN_LEG];
 
+interface UnexpectedFailure {
+  readonly userId: string;
+  readonly turnId?: string;
+  readonly leg?: TurnLeg;
+  readonly error: unknown;
+}
+
 function turnClaimOf(
   userId: string,
   turnId: string,
@@ -276,7 +283,13 @@ export class AgentGateway
       client.emit('agent:error', AIErrors.tokenExpired());
       return;
     }
-    await this.tokenExpiry.track(client, () => request(userId));
+    await this.tokenExpiry.track(client, async () => {
+      try {
+        await request(userId);
+      } catch (error) {
+        this.answerUnexpectedFailure(client, { userId, error });
+      }
+    });
   }
 
   private async startTurn(
@@ -636,18 +649,11 @@ export class AgentGateway
     try {
       await body(controller);
     } catch (error) {
-      this.logger.error({
-        event: 'agent.turn.unexpected_failure',
-        userId,
-        turnId,
-        leg,
-        error: reasonOf(error),
-      });
-      if (!this.endedLegs.has(controller) && !controller.signal.aborted) {
-        client.emit('agent:error', {
-          ...AIErrors.internalError('Agent turn failed'),
-          turnId,
-        });
+      const failure = { userId, turnId, leg, error };
+      if (this.endedLegs.has(controller) || controller.signal.aborted) {
+        this.logUnexpectedFailure(failure);
+      } else {
+        this.answerUnexpectedFailure(client, failure);
       }
     } finally {
       // The handler ends a turn the drain aborted without a word, so the client
@@ -664,6 +670,25 @@ export class AgentGateway
       this.turns.release(userId, client.id, slotId);
       this.tokenExpiry.afterSlotRelease(client);
     }
+  }
+
+  private logUnexpectedFailure({ error, ...turn }: UnexpectedFailure): void {
+    this.logger.error({
+      event: 'agent.turn.unexpected_failure',
+      ...turn,
+      error: reasonOf(error),
+    });
+  }
+
+  private answerUnexpectedFailure(
+    client: AuthenticatedSocket,
+    failure: UnexpectedFailure
+  ): void {
+    this.logUnexpectedFailure(failure);
+    client.emit('agent:error', {
+      ...AIErrors.internalError('Agent turn failed'),
+      ...(failure.turnId ? { turnId: failure.turnId } : {}),
+    });
   }
 
   private emitQuota(

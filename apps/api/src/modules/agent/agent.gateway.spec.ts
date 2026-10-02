@@ -2766,7 +2766,7 @@ describe('AgentGateway', () => {
       );
     });
 
-    describe('a turn whose handler throws', () => {
+    describe('an unexpected failure', () => {
       const CAPPED_TURN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
       const FAILURE = 'database down';
       const continuation = {
@@ -3026,6 +3026,104 @@ describe('AgentGateway', () => {
           ],
         ]);
       });
+
+      const unansweredFailure = [
+        'agent:error',
+        {
+          code: 'AI_INTERNAL_ERROR',
+          message: 'AI internal error: Agent turn failed',
+        },
+      ];
+      const commitResult = ok({
+        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+        outcome: 'created the note "GTD"',
+        conversationId: CONVERSATION,
+        turnId: PROPOSAL_TURN,
+      });
+
+      it.each([
+        [
+          'a message',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleMessage(client as never, turn()),
+        ],
+        [
+          'an approval',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleApprove(client as never, approvePayload()),
+        ],
+        [
+          'a rejection',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleReject(client as never, approvePayload()),
+        ],
+      ])(
+        'answers %s whose feature check throws with one AI_INTERNAL_ERROR naming no turn, and runs nothing',
+        async (_request, send) => {
+          const log = failureLog();
+          const redis = createInMemoryClaimRedis();
+          const execute = vi.fn<Execute>(completes);
+          const commit = vi.fn().mockResolvedValue(commitResult);
+          const gateway = makeGateway({
+            handler: { execute },
+            approve: { execute: commit },
+            reject: { execute: commit },
+            featureFlags: {
+              isEnabled: vi.fn().mockRejectedValue(new Error(FAILURE)),
+            },
+            redis,
+          });
+          const client = makeClient('u1');
+
+          await send(gateway, client);
+
+          expect(client.emit.mock.calls).toEqual([unansweredFailure]);
+          expect(log).toHaveBeenCalledWith({
+            event: 'agent.turn.unexpected_failure',
+            userId: 'u1',
+            error: FAILURE,
+          });
+          expect(execute).not.toHaveBeenCalled();
+          expect(commit).not.toHaveBeenCalled();
+          expect([...redis.entries.keys()]).toEqual([]);
+        }
+      );
+
+      it.each([
+        [
+          'an approval',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleApprove(client as never, approvePayload()),
+        ],
+        [
+          'a rejection',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleReject(client as never, approvePayload()),
+        ],
+      ])(
+        'answers %s whose commit throws with one AI_INTERNAL_ERROR naming no turn, and never resumes',
+        async (_decision, decide) => {
+          const log = failureLog();
+          const commit = vi.fn().mockRejectedValue(new Error(FAILURE));
+          const resumeTurn = vi.fn<Execute>(completes);
+          const gateway = makeGateway({
+            handler: { resumeTurn },
+            approve: { execute: commit },
+            reject: { execute: commit },
+          });
+          const client = makeClient('u1');
+
+          await decide(gateway, client);
+
+          expect(client.emit.mock.calls).toEqual([unansweredFailure]);
+          expect(log).toHaveBeenCalledWith({
+            event: 'agent.turn.unexpected_failure',
+            userId: 'u1',
+            error: FAILURE,
+          });
+          expect(resumeTurn).not.toHaveBeenCalled();
+        }
+      );
     });
   });
 
