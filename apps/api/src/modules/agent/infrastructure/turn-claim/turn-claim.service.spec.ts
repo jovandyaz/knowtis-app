@@ -309,4 +309,86 @@ describe('TurnClaimService', () => {
       })
     );
   });
+
+  describe('a conversation lease', () => {
+    const LEASE_KEY = `agent:conversation:${USER}:${CONVERSATION}`;
+
+    it('is held by one turn at a time for the running lease, and free again once released', async () => {
+      const { redis, claims } = setup();
+
+      expect(await claims.claimConversation(USER, CONVERSATION, OWNER)).toBe(
+        'claimed'
+      );
+      expect(redis.entries.get(LEASE_KEY)?.ttlSeconds).toBe(
+        RUNNING_LEASE_SECONDS
+      );
+      expect(
+        await claims.claimConversation(USER, CONVERSATION, LATER_OWNER)
+      ).toBe('running');
+
+      await claims.releaseConversation(USER, CONVERSATION, OWNER);
+
+      expect(
+        await claims.claimConversation(USER, CONVERSATION, LATER_OWNER)
+      ).toBe('claimed');
+    });
+
+    it("is never held by another user's turn", async () => {
+      const { claims } = setup();
+      await claims.claimConversation(USER, CONVERSATION, OWNER);
+
+      expect(
+        await claims.claimConversation('user-2', CONVERSATION, LATER_OWNER)
+      ).toBe('claimed');
+    });
+
+    it('stays with the turn that took it over once it expired, when the turn it outlived releases it', async () => {
+      const { redis, claims } = setup();
+      await claims.claimConversation(USER, CONVERSATION, OWNER);
+      redis.entries.delete(LEASE_KEY);
+      await claims.claimConversation(USER, CONVERSATION, LATER_OWNER);
+
+      await claims.releaseConversation(USER, CONVERSATION, OWNER);
+
+      expect(await claims.claimConversation(USER, CONVERSATION, OWNER)).toBe(
+        'running'
+      );
+    });
+
+    it('fails closed when Redis errors', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { redis, claims } = setup();
+      redis.client.set = () => Promise.reject(new Error('connection lost'));
+
+      expect(await claims.claimConversation(USER, CONVERSATION, OWNER)).toBe(
+        'unavailable'
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.conversation.claim_failed',
+          conversationId: CONVERSATION,
+        })
+      );
+    });
+
+    it('logs a failed release instead of throwing into the turn', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { redis, claims } = setup();
+      redis.client.eval = () => Promise.reject(new Error('connection lost'));
+
+      await expect(
+        claims.releaseConversation(USER, CONVERSATION, OWNER)
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.conversation.release_failed',
+          conversationId: CONVERSATION,
+        })
+      );
+    });
+  });
 });

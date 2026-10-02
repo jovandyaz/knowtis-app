@@ -24,6 +24,7 @@ import type {
   RunAgentTurnCallbacks,
   RunAgentTurnHandler,
 } from './application/run-agent-turn.handler';
+import { AgentErrors } from './domain/agent-errors';
 import type {
   PendingMutationRecord,
   PendingMutationStore,
@@ -2439,6 +2440,322 @@ describe('AgentGateway', () => {
         ]);
         expect(execute).not.toHaveBeenCalled();
       });
+    });
+
+    describe('one turn per conversation at a time', () => {
+      const OTHER_TURN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const THIRD_TURN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+      const CAPPED_TURN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+      const LEASE_KEY = `agent:conversation:u1:${CONVERSATION}`;
+      const continuation = (turnId: string) => ({
+        turnId,
+        conversationId: CONVERSATION,
+        continuesTurnId: CAPPED_TURN,
+      });
+
+      function leases(redis: InMemoryClaimRedis) {
+        return [...redis.entries.keys()].filter((key) =>
+          key.startsWith('agent:conversation:')
+        );
+      }
+
+      function holdsFirstTurn() {
+        const held = heldTurns();
+        const run = vi.fn<Execute>((input, cb, signal) =>
+          input.turnId === TURN
+            ? held.execute(input, cb, signal)
+            : completes(input, cb, signal)
+        );
+        return { run, release: held.release };
+      }
+
+      it('refuses another turn of a running conversation on any API instance, and runs its resend once the conversation is free', async () => {
+        const redis = createInMemoryClaimRedis();
+        const { run, release } = holdsFirstTurn();
+        const instanceA = makeGateway({ handler: { execute: run }, redis });
+        const instanceB = makeGateway({ handler: { execute: run }, redis });
+
+        const running = instanceA.handleMessage(
+          makeClient('u1') as never,
+          turn()
+        );
+        await flushAsync();
+        const refused = makeClient('u1', 'c2');
+        await instanceB.handleMessage(
+          refused as never,
+          turn({ turnId: OTHER_TURN })
+        );
+        release();
+        await running;
+        const resent = makeClient('u1', 'c3');
+        await instanceB.handleMessage(
+          resent as never,
+          turn({ turnId: OTHER_TURN })
+        );
+
+        expect(refused.emit.mock.calls).toEqual([
+          [
+            'agent:error',
+            { ...AgentErrors.turnInProgress(), turnId: OTHER_TURN },
+          ],
+        ]);
+        expect(run.mock.calls.map(([input]) => input.turnId)).toEqual([
+          TURN,
+          OTHER_TURN,
+        ]);
+        expect(resent.emit).toHaveBeenCalledWith(
+          'agent:done',
+          expect.objectContaining({ turnId: OTHER_TURN })
+        );
+      });
+
+      it.each([
+        ['a message', turn()],
+        ['another continuation of the same turn', continuation(TURN)],
+      ])(
+        'refuses a continuation while %s runs in its conversation',
+        async (_running, first) => {
+          const { run, release } = holdsFirstTurn();
+          const gateway = makeGateway({
+            handler: { execute: run, continueTurn: run },
+          });
+
+          const running = gateway.handleMessage(
+            makeClient('u1') as never,
+            first
+          );
+          await flushAsync();
+          const refused = makeClient('u1', 'c2');
+          await gateway.handleMessage(
+            refused as never,
+            continuation(OTHER_TURN)
+          );
+
+          expect(turnErrors(refused)).toEqual([
+            expect.objectContaining({
+              code: 'TURN_IN_PROGRESS',
+              turnId: OTHER_TURN,
+            }),
+          ]);
+          expect(run).toHaveBeenCalledOnce();
+          release();
+          await running;
+        }
+      );
+
+      it('takes no lease for a turn that opens a new conversation', async () => {
+        const redis = createInMemoryClaimRedis();
+        const { execute, release } = heldTurns();
+        const gateway = makeGateway({ handler: { execute } as never, redis });
+
+        const running = gateway.handleMessage(
+          makeClient('u1') as never,
+          turn({ conversationId: undefined })
+        );
+        await flushAsync();
+
+        expect(claimOf(redis)).toMatchObject({ status: 'running' });
+        expect(leases(redis)).toEqual([]);
+        release();
+        await running;
+      });
+
+      it.each([
+        ['done', completes],
+        [
+          'error',
+          (async (_input, cb) => {
+            cb.onModelStart?.();
+            cb.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
+          }) as Execute,
+        ],
+        [
+          'a refusal before the model',
+          (async (_input, cb) => {
+            cb.onError({ code: 'AI_RATE_LIMIT_EXCEEDED', message: 'limit' });
+          }) as Execute,
+        ],
+        [
+          'a proposal',
+          (async (_input, cb) => {
+            cb.onModelStart?.();
+            cb.onProposal(
+              ProposedMutation.create({
+                id: '77777777-7777-4777-8777-777777777777',
+                kind: 'create',
+                payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+                summary: 'Create GTD',
+              })._unsafeUnwrap()
+            );
+          }) as Execute,
+        ],
+        [
+          'a throw',
+          (async (_input, cb) => {
+            cb.onModelStart?.();
+            throw new Error('persistence exploded');
+          }) as Execute,
+        ],
+      ])(
+        'frees the conversation once its turn ends in %s',
+        async (_ending, ending) => {
+          const redis = createInMemoryClaimRedis();
+          let heldWhileRunning: string[] = [];
+          const execute = vi.fn<Execute>((input, cb, signal) => {
+            if (input.turnId !== TURN) {
+              return completes(input, cb, signal);
+            }
+            heldWhileRunning = leases(redis);
+            return ending(input, cb, signal);
+          });
+          const gateway = makeGateway({ handler: { execute }, redis });
+
+          await gateway
+            .handleMessage(makeClient('u1') as never, turn())
+            .catch(() => undefined);
+          expect(heldWhileRunning).toEqual([LEASE_KEY]);
+          expect(leases(redis)).toEqual([]);
+          const next = makeClient('u1', 'c2');
+          await gateway.handleMessage(
+            next as never,
+            turn({ turnId: OTHER_TURN })
+          );
+
+          expect(turnErrors(next)).toEqual([]);
+          expect(execute).toHaveBeenCalledTimes(2);
+        }
+      );
+
+      it('frees the conversation once the client cancels its turn', async () => {
+        const redis = createInMemoryClaimRedis();
+        const execute = vi.fn<Execute>(async (_input, cb, signal) => {
+          cb.onModelStart?.();
+          await new Promise<void>((resolve) =>
+            signal.addEventListener('abort', () => resolve())
+          );
+        });
+        const gateway = makeGateway({ handler: { execute }, redis });
+        const client = makeClient('u1');
+
+        const running = gateway.handleMessage(client as never, turn());
+        await flushAsync();
+        expect(leases(redis)).toEqual([LEASE_KEY]);
+        gateway.handleCancel(client as never);
+        await running;
+
+        expect(leases(redis)).toEqual([]);
+      });
+
+      it('never frees the conversation for a turn that took the lease over once the lease of the turn it outlived expired', async () => {
+        const redis = createInMemoryClaimRedis();
+        const outlived = heldTurns();
+        const takeover = heldTurns();
+        const execute = vi
+          .fn<Execute>(completes)
+          .mockImplementationOnce(outlived.execute)
+          .mockImplementationOnce(takeover.execute);
+        const gateway = makeGateway({ handler: { execute }, redis });
+
+        const first = gateway.handleMessage(makeClient('u1') as never, turn());
+        await flushAsync();
+        redis.entries.clear();
+        const second = gateway.handleMessage(
+          makeClient('u1', 'c2') as never,
+          turn({ turnId: OTHER_TURN })
+        );
+        await flushAsync();
+        outlived.release();
+        await first;
+        const third = makeClient('u1', 'c3');
+        await gateway.handleMessage(
+          third as never,
+          turn({ turnId: THIRD_TURN })
+        );
+
+        expect(turnErrors(third)).toEqual([
+          expect.objectContaining({
+            code: 'TURN_IN_PROGRESS',
+            turnId: THIRD_TURN,
+          }),
+        ]);
+        takeover.release();
+        await second;
+      });
+
+      it('fails closed with TURN_CLAIM_UNAVAILABLE when the lease cannot be taken, and leaves the turn id free', async () => {
+        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+        const redis = createInMemoryClaimRedis();
+        const set = redis.client.set;
+        redis.client.set = (key, value, ...options) =>
+          key.startsWith('agent:conversation:')
+            ? Promise.reject(new Error('connection lost'))
+            : set(key, value, ...options);
+        const execute = vi.fn<Execute>(completes);
+        const gateway = makeGateway({ handler: { execute }, redis });
+        const client = makeClient('u1');
+
+        await gateway.handleMessage(client as never, turn());
+
+        expect(turnErrors(client)).toEqual([
+          expect.objectContaining({
+            code: 'TURN_CLAIM_UNAVAILABLE',
+            turnId: TURN,
+          }),
+        ]);
+        expect(execute).not.toHaveBeenCalled();
+        expect(claimOf(redis)).toBeNull();
+      });
+
+      it.each([
+        [
+          'approved',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleApprove(client as never, approvePayload()),
+        ],
+        [
+          'rejected',
+          (gateway: AgentGateway, client: ReturnType<typeof makeClient>) =>
+            gateway.handleReject(client as never, approvePayload()),
+        ],
+      ])(
+        'resumes a proposal %s while another turn holds its conversation',
+        async (_decision, decide) => {
+          const redis = createInMemoryClaimRedis();
+          const held = heldTurns();
+          const resumeTurn = vi.fn<Execute>(async (_input, cb) => {
+            cb.onChunk('done');
+          });
+          const decision = {
+            outcome: 'decided',
+            conversationId: CONVERSATION,
+            turnId: OTHER_TURN,
+          };
+          const gateway = makeGateway({
+            handler: { execute: held.execute, resumeTurn } as never,
+            approve: {
+              execute: vi.fn().mockResolvedValue(
+                ok({
+                  ...decision,
+                  result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+                })
+              ),
+            },
+            reject: { execute: vi.fn().mockResolvedValue(ok(decision)) },
+            redis,
+          });
+          const client = makeClient('u1');
+
+          const running = gateway.handleMessage(client as never, turn());
+          await flushAsync();
+          await decide(gateway, client);
+
+          expect(turnErrors(client)).toEqual([]);
+          expect(resumeTurn).toHaveBeenCalledOnce();
+          expect(leases(redis)).toEqual([LEASE_KEY]);
+          held.release();
+          await running;
+        }
+      );
     });
   });
 

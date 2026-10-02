@@ -93,4 +93,29 @@ describe.runIf(!!REDIS_URL)('TurnClaimService against Redis', () => {
 
     expect(await claims.claim(turn, OWNER)).toBe('running');
   });
+
+  it('leases a conversation to one turn at a time, and never frees the lease of the turn that took it over', async () => {
+    const { userId, conversationId } = newTurn();
+    const leaseKey = `agent:conversation:${userId}:${conversationId}`;
+    keysInUse.push(leaseKey);
+
+    expect(await claims.claimConversation(userId, conversationId, OWNER)).toBe(
+      'claimed'
+    );
+    expect(
+      await claims.claimConversation(userId, conversationId, LATER_OWNER)
+    ).toBe('running');
+    await redis.del(leaseKey);
+    await claims.claimConversation(userId, conversationId, LATER_OWNER);
+    await claims.releaseConversation(userId, conversationId, OWNER);
+    expect(await claims.claimConversation(userId, conversationId, OWNER)).toBe(
+      'running'
+    );
+
+    await claims.releaseConversation(userId, conversationId, LATER_OWNER);
+
+    expect(await claims.claimConversation(userId, conversationId, OWNER)).toBe(
+      'claimed'
+    );
+  });
 });
