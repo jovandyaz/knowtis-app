@@ -22,6 +22,7 @@ const POLLING_ROUTE_RE = /\/socket\.io\/\?.*EIO=4/;
 const COMPOSER_RE = /copilot|pregunta|ask/i;
 const DOCK_TOGGLE_RE = /^copilot$/i;
 const DOCK_HYDRATION_TIMEOUT_MS = 1_000;
+const DOCK_EXPAND_TIMEOUT_MS = 10_000;
 // Same origin as the app, so its localStorage is reachable without booting it.
 const STATIC_PAGE_PATH = '/apple-touch-icon.png';
 
@@ -58,6 +59,21 @@ function handshake(sid: string): string {
 /** `42/agent,["event",payload]` — socket.io v4 EVENT on the /agent namespace. */
 function event(name: string, payload: unknown): string {
   return `42/agent,${JSON.stringify([name, payload])}`;
+}
+
+/** The frontend origin differs from the API's, and the client sets
+ * withCredentials, so a fulfilled response needs the request's own Origin
+ * echoed back (never `*`) plus Allow-Credentials, or Chromium drops it. */
+export function corsHeaders(
+  request: Request,
+  contentType = 'text/plain; charset=UTF-8'
+): Record<string, string> {
+  const origin = request.headers()['origin'] ?? E2E.frontend;
+  return {
+    'content-type': contentType,
+    'access-control-allow-origin': origin,
+    'access-control-allow-credentials': 'true',
+  };
 }
 
 /** Interception must not outlive the test that installed it: the `sharing` pages
@@ -131,18 +147,6 @@ export async function scriptAgent(
     options: Parameters<Route['fulfill']>[0]
   ): Promise<void> {
     await route.fulfill(options).catch(() => undefined);
-  }
-
-  /** The frontend origin differs from the API's, and the client sets
-   * withCredentials, so a fulfilled response needs the request's own Origin
-   * echoed back (never `*`) plus Allow-Credentials, or Chromium drops it. */
-  function corsHeaders(request: Request): Record<string, string> {
-    const origin = request.headers()['origin'] ?? E2E.frontend;
-    return {
-      'content-type': 'text/plain; charset=UTF-8',
-      'access-control-allow-origin': origin,
-      'access-control-allow-credentials': 'true',
-    };
   }
 
   /** Release has to wake a sleeping poll instead of waiting it out, or teardown
@@ -282,12 +286,17 @@ export const test = sharingTest.extend<{ scriptedAgents: true }, object>({
     { auto: true },
   ],
 });
+
+function copilotComposer(page: Page) {
+  return page.getByRole('textbox', { name: COMPOSER_RE }).first();
+}
+
 /** The dock's open state persists across notes in the same worker, so right
  * after navigation the composer may just not have hydrated yet — an
  * `isVisible()` snapshot can't tell that from "closed" and toggling a dock
  * that is actually open closes it. Waiting bounds the hydration race instead. */
 export async function openCopilotDock(page: Page) {
-  const composer = page.getByRole('textbox', { name: COMPOSER_RE }).first();
+  const composer = copilotComposer(page);
   const alreadyOpen = await composer
     .waitFor({ state: 'visible', timeout: DOCK_HYDRATION_TIMEOUT_MS })
     .then(() => true)
@@ -296,4 +305,18 @@ export async function openCopilotDock(page: Page) {
     await page.getByRole('button', { name: DOCK_TOGGLE_RE }).first().click();
   }
   return composer;
+}
+
+export async function expandCopilotDock(page: Page) {
+  const toggle = page.getByRole('button', { name: DOCK_TOGGLE_RE }).first();
+  await expect(toggle).toBeVisible();
+  await expect(async () => {
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click();
+    }
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true', {
+      timeout: DOCK_HYDRATION_TIMEOUT_MS,
+    });
+  }).toPass({ timeout: DOCK_EXPAND_TIMEOUT_MS });
+  return copilotComposer(page);
 }
