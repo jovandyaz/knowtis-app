@@ -463,6 +463,7 @@
         "paysWithKey": "You pay with your {{provider}} key",
         "remaining_one": "{{count}} message left today",
         "remaining_other": "{{count}} messages left today",
+        "exhausted_zero": "AI messages aren't available today. They reset at {{time}}.",
         "exhausted_one": "You used your only message for today. It resets at {{time}}.",
         "exhausted_other": "You used your {{count}} messages for today. They reset at {{time}}.",
         "exhaustedToday": "You used your messages for today. They reset at {{time}}.",

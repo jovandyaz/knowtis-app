@@ -54,11 +54,13 @@ const QUOTA_REMAINING_CASES = [
 const QUOTA_EXHAUSTED_CASES = [
   {
     locale: 'en',
+    none: "AI messages aren't available today. They reset at 6:00 PM.",
     singular: 'You used your only message for today. It resets at 6:00 PM.',
     plural: 'You used your 2 messages for today. They reset at 6:00 PM.',
   },
   {
     locale: 'es',
+    none: 'Los mensajes de IA no están disponibles hoy. Se renuevan a las 6:00 PM.',
     singular: 'Usaste tu único mensaje de hoy. Se renueva a las 6:00 PM.',
     plural: 'Usaste tus 2 mensajes de hoy. Se renuevan a las 6:00 PM.',
   },
@@ -169,6 +171,17 @@ describe('plural forms', () => {
       );
       expect(i18n.t(QUOTA_EXHAUSTED_KEY, { count: 2, time: '6:00 PM' })).toBe(
         plural
+      );
+    }
+  );
+
+  it.each(QUOTA_EXHAUSTED_CASES)(
+    'says no messages are available when the daily limit is zero in $locale',
+    async ({ locale, none }) => {
+      const i18n = await translatorFor(locale);
+
+      expect(i18n.t(QUOTA_EXHAUSTED_KEY, { count: 0, time: '6:00 PM' })).toBe(
+        none
       );
     }
   );

@@ -463,6 +463,7 @@
         "paysWithKey": "Pagas con tu key de {{provider}}",
         "remaining_one": "Te queda {{count}} mensaje hoy",
         "remaining_other": "Te quedan {{count}} mensajes hoy",
+        "exhausted_zero": "Los mensajes de IA no están disponibles hoy. Se renuevan a las {{time}}.",
         "exhausted_one": "Usaste tu único mensaje de hoy. Se renueva a las {{time}}.",
         "exhausted_other": "Usaste tus {{count}} mensajes de hoy. Se renuevan a las {{time}}.",
         "exhaustedToday": "Usaste tus mensajes de hoy. Se renuevan a las {{time}}.",
