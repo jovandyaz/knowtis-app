@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { NoteErrors } from '../../notes/domain/errors/note.errors';
@@ -93,6 +93,10 @@ function make(d: ReturnType<typeof deps>) {
 }
 
 describe('ApproveMutationHandler', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('commits a create proposal and returns the result', async () => {
     const d = deps();
     const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
@@ -185,7 +189,6 @@ describe('ApproveMutationHandler', () => {
           error: 'database down',
         })
       );
-      log.mockRestore();
     }
   );
 

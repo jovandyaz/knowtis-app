@@ -96,6 +96,10 @@ function makeClient(userId?: string, id = 'c1', token?: string) {
 }
 
 describe('AgentGateway', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('rejects an unauthenticated message', async () => {
     const gateway = makeGateway();
     const client = makeClient();
@@ -623,7 +627,6 @@ describe('AgentGateway', () => {
       userId: 'u1',
       error: 'database down',
     });
-    log.mockRestore();
   });
 
   it('emits featureDisabled and does not start a turn when the flag turns off after connect', async () => {
@@ -2822,10 +2825,6 @@ describe('AgentGateway', () => {
         },
       ];
 
-      afterEach(() => {
-        vi.restoreAllMocks();
-      });
-
       function failureLog() {
         return vi
           .spyOn(Logger.prototype, 'error')
@@ -3486,7 +3485,6 @@ describe('AgentGateway', () => {
       );
       turn.finish();
       await running;
-      log.mockRestore();
     });
 
     it('refuses a new message, approval or rejection on the expired socket without running anything', async () => {
@@ -3645,24 +3643,20 @@ describe('AgentGateway', () => {
         .spyOn(Logger.prototype, 'warn')
         .mockImplementation(() => undefined);
 
-      try {
-        await gateway.handleMessage(client as never, {
-          turnId: TURN,
-          message: { content: 'hi' },
-        });
+      await gateway.handleMessage(client as never, {
+        turnId: TURN,
+        message: { content: 'hi' },
+      });
 
-        expect(log).toHaveBeenCalledWith({
-          event: 'agent.quota.emit_failed',
-          turnId: TURN,
-          error: 'socket write failed',
-        });
-        expect(client.emit).toHaveBeenCalledWith(
-          'agent:done',
-          expect.objectContaining({ turnId: TURN })
-        );
-      } finally {
-        log.mockRestore();
-      }
+      expect(log).toHaveBeenCalledWith({
+        event: 'agent.quota.emit_failed',
+        turnId: TURN,
+        error: 'socket write failed',
+      });
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:done',
+        expect.objectContaining({ turnId: TURN })
+      );
     });
   });
 });
