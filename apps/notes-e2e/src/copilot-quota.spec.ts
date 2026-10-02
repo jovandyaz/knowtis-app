@@ -21,6 +21,10 @@ import {
 } from './fixtures/copilot.fixture';
 
 const QUOTA_ROUTE_RE = /\/ai\/quota(?:\?|$)/;
+const QUOTA_REQUEST_HEADERS = 'accept-language, authorization, content-type';
+const QUOTA_METHODS = 'GET, OPTIONS';
+const OK = 200;
+const NO_CONTENT = 204;
 const DASHBOARD_PATH = '/dashboard';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RESETS_AT = new Date(
@@ -78,14 +82,24 @@ function badgeText(tier: MeteredTier, used: number, limit: number): RegExp {
   return new RegExp(`^(${TIER_LABEL_PATTERN[tier]}) · ${used}/${limit}$`);
 }
 
+function quotaCorsHeaders(route: Route): Record<string, string> {
+  return {
+    ...corsHeaders(route.request(), 'application/json'),
+    'access-control-allow-headers': QUOTA_REQUEST_HEADERS,
+    'access-control-allow-methods': QUOTA_METHODS,
+  };
+}
+
 async function routeQuota(page: Page, initial: AiQuota) {
   let quota = initial;
   const fulfill = (route: Route) =>
-    route.fulfill({
-      status: 200,
-      headers: corsHeaders(route.request(), 'application/json'),
-      body: JSON.stringify(quota),
-    });
+    route.request().method() === 'OPTIONS'
+      ? route.fulfill({ status: NO_CONTENT, headers: quotaCorsHeaders(route) })
+      : route.fulfill({
+          status: OK,
+          headers: quotaCorsHeaders(route),
+          body: JSON.stringify(quota),
+        });
   await page.route(QUOTA_ROUTE_RE, fulfill);
   return {
     answer(next: AiQuota) {
