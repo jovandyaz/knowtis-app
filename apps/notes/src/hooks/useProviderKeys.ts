@@ -32,7 +32,7 @@ export function useSetProviderKey() {
     }) => aiKeysApi.set(provider, apiKey),
     onSuccess: (keys) => {
       qc.setQueryData(providerKeysQueryKeys.list(), keys);
-      // The held keys decide the tier, so its models and quota go stale here.
+      // Which models a caller may run is derived from the keys they hold.
       void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.list() });
       void qc.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
     },
