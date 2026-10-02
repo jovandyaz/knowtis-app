@@ -27,6 +27,7 @@ import {
 import {
   AGENT_STREAM_INACTIVITY_MS,
   isTurnAlive,
+  selectContinuableAnswer,
   THINKING_TAIL_CHARS,
   useAgentStore,
 } from './agent.store';
@@ -1955,5 +1956,115 @@ describe('agent.store thinking tail', () => {
     get().onThinking?.({ text: 'late reasoning' });
     vi.advanceTimersByTime(50);
     expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+});
+
+describe('agent.store the continue offer', () => {
+  const DONE: AgentDonePayload = {
+    usage: USAGE,
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'completed',
+  };
+
+  function answerCapped(continuable: boolean | undefined) {
+    const { get } = capture('turn-1');
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    get().onChunk({ text: 'Revisé tres notas.' });
+    get().onDone({
+      ...DONE,
+      stopReason: 'max_steps',
+      ...(continuable === undefined ? {} : { continuable }),
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('is the turn the server reports continuable', () => {
+    answerCapped(true);
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBe('turn-1');
+    expect(selectContinuableAnswer(state)).toMatchObject({
+      turnId: 'turn-1',
+      role: 'assistant',
+      content: 'Revisé tres notas.',
+      stopReason: 'max_steps',
+    });
+  });
+
+  it.each([[false], [undefined]])(
+    'is not made when the server reports continuable as %s',
+    (continuable) => {
+      answerCapped(continuable);
+
+      expect(useAgentStore.getState().continuableTurnId).toBeNull();
+    }
+  );
+
+  it('is withdrawn by the next message', () => {
+    answerCapped(true);
+    capture('turn-2');
+
+    useAgentStore.getState().sendMessage('otra pregunta');
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBeNull();
+    expect(selectContinuableAnswer(state)).toBeNull();
+  });
+
+  it('is withdrawn by a new conversation', () => {
+    answerCapped(true);
+
+    useAgentStore.getState().newConversation();
+
+    expect(useAgentStore.getState().continuableTurnId).toBeNull();
+  });
+
+  it('is not shown while a turn runs or under an answer of another turn', () => {
+    answerCapped(true);
+    const { messages } = useAgentStore.getState();
+
+    expect(
+      selectContinuableAnswer({
+        messages,
+        status: 'streaming',
+        continuableTurnId: 'turn-1',
+      })
+    ).toBeNull();
+    expect(
+      selectContinuableAnswer({
+        messages,
+        status: 'done',
+        continuableTurnId: 'turn-0',
+      })
+    ).toBeNull();
+  });
+
+  it('drops a stop reason this build does not know instead of showing its key', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onChunk({ text: 'Listo.' });
+    const fromNewerServer = {
+      ...DONE,
+      stopReason: 'reconsidered',
+    } as unknown as AgentDonePayload;
+
+    get().onDone(fromNewerServer);
+
+    expect(useAgentStore.getState().messages.at(-1)).not.toHaveProperty(
+      'stopReason'
+    );
   });
 });

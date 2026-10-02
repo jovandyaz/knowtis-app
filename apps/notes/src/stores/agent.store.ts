@@ -29,8 +29,10 @@ import {
   AI_INVALID_INPUT_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
+  isAgentStopReason,
   type AgentStopReason,
   type AiQuota,
+  type MessageKind,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import {
@@ -100,6 +102,8 @@ export interface AgentChatMessage {
   turnId?: string;
   role: 'user' | 'assistant';
   content: string;
+  /** `continue` marks a user row with no text that asked the model to pick up the turn before it. */
+  kind?: MessageKind;
   stopReason?: AgentStopReason;
   sources?: AgentSource[];
   webSources?: WebSource[];
@@ -145,6 +149,31 @@ const TURN_ALIVE_STATUSES = [
 /** A turn is alive while the server may still stream for it: a send must queue, not replace. */
 export function isTurnAlive(status: AgentStatus): boolean {
   return (TURN_ALIVE_STATUSES as readonly AgentStatus[]).includes(status);
+}
+
+/** The part of the state `selectContinuableAnswer` reads. */
+export interface ContinueOfferView {
+  messages: readonly AgentChatMessage[];
+  status: AgentStatus;
+  continuableTurnId: string | null;
+}
+
+/**
+ * The answer to offer "Continuar" under: the last message, while it is the
+ * answer of the turn the server would continue and no turn is running. It
+ * returns a message held in the state, so it is a stable Zustand selector.
+ */
+export function selectContinuableAnswer(
+  state: ContinueOfferView
+): AgentChatMessage | null {
+  const last = state.messages.at(-1);
+  return state.continuableTurnId !== null &&
+    !isTurnAlive(state.status) &&
+    last !== undefined &&
+    last.role === 'assistant' &&
+    last.turnId === state.continuableTurnId
+    ? last
+    : null;
 }
 
 /**
@@ -198,6 +227,8 @@ interface AgentState {
   hydration: ConversationHydration;
   hasEarlier: boolean;
   retryMode: RetryMode;
+  /** The stored turn a continue request may resume now; null when none can. */
+  continuableTurnId: string | null;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
   bindUser: (user: SessionUser) => void;
@@ -431,6 +462,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       conversationTitle: null,
       hydration: 'unloaded',
       hasEarlier: false,
+      continuableTurnId: null,
       draft: joinDraft(returned, s.draft),
     }));
   };
@@ -506,7 +538,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             conversationTitle: deriveConversationTitle(text),
           });
         },
-        onDone: ({ sources, webSources, stopReason }) => {
+        onDone: ({ sources, webSources, stopReason, continuable }) => {
           if (version !== streamVersion || get().status !== 'streaming') {
             return;
           }
@@ -516,15 +548,27 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           buffer.flush();
           thinkingBuffer.discard();
           const id = activeAssistantId;
-          set((s) => ({
-            status: 'done',
-            _streamHandle: null,
-            thinkingText: '',
-            decisionInFlight: null,
-            messages: s.messages.map((m) =>
-              m.id === id ? { ...m, sources, webSources, stopReason } : m
-            ),
-          }));
+          set((s) => {
+            const answer = s.messages.find((m) => m.id === id);
+            return {
+              status: 'done',
+              _streamHandle: null,
+              thinkingText: '',
+              decisionInFlight: null,
+              continuableTurnId:
+                continuable === true ? (answer?.turnId ?? null) : null,
+              messages: s.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      sources,
+                      webSources,
+                      ...(isAgentStopReason(stopReason) ? { stopReason } : {}),
+                    }
+                  : m
+              ),
+            };
+          });
           captureProductEvent('ai response completed', {
             source: 'copilot',
             assistant_type: 'agent',
@@ -674,6 +718,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       pendingProposal: null,
       decisionInFlight: null,
       thinkingText: '',
+      continuableTurnId: null,
       _streamHandle: null,
     });
 
@@ -699,6 +744,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     const thread = threadVersion;
     const request = ++hydrationRequest;
     const titleEditsAtRequest = titleEdits;
+    const streamAtRequest = streamVersion;
     // A turn in progress when the server read the thread may have finished
     // since, and the transcript then holds only the part stored before.
     const inProgressAtRequest = turnInProgress();
@@ -713,12 +759,17 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       const inProgress = [inProgressAtRequest, turnInProgress()].filter(
         (turnId): turnId is string => turnId !== undefined
       );
+      const adoptsOffer =
+        inProgress.length === 0 && streamVersion === streamAtRequest;
       set((s) => ({
         messages: mergeTranscript(
           toChatMessages(transcript.messages, nextId),
           s.messages,
           inProgress
         ),
+        ...(adoptsOffer
+          ? { continuableTurnId: transcript.continuableTurnId ?? null }
+          : {}),
         ...(titleEdits === titleEditsAtRequest
           ? { conversationTitle: transcript.title }
           : {}),
@@ -843,6 +894,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     hydration: 'unloaded',
     hasEarlier: false,
     retryMode: 'resend',
+    continuableTurnId: null,
     _streamHandle: null,
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
@@ -886,6 +938,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         status: 'idle',
         error: null,
         retryMode: 'resend',
+        continuableTurnId: null,
         pendingProposal: null,
         decisionInFlight: null,
         thinkingText: '',
@@ -1000,6 +1053,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         conversationTitle: null,
         hydration: 'unloaded',
         hasEarlier: false,
+        continuableTurnId: null,
         _streamHandle: null,
       }));
     },

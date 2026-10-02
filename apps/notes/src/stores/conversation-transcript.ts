@@ -85,6 +85,7 @@ export function toChatMessages(
         ...turnOf(row),
         role: row.role,
         content: row.content,
+        ...(row.kind ? { kind: row.kind } : {}),
       });
     }
     previous = row;

@@ -21,7 +21,11 @@ import {
 } from '@knowtis/shared-types';
 import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
-import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
+import {
+  AGENT_STREAM_INACTIVITY_MS,
+  selectContinuableAnswer,
+  useAgentStore,
+} from './agent.store';
 
 const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
@@ -1335,5 +1339,96 @@ describe('agent.store retrying a failed turn', () => {
     useAgentStore.getState().sendMessage('hola');
 
     expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[3]).toEqual({});
+  });
+});
+
+describe('agent.store continue offer across a reload', () => {
+  it('adopts the turn the transcript says can be continued, with its marker', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue({
+      ...TRANSCRIPT,
+      hasEarlier: false,
+      messages: [
+        ...TRANSCRIPT.messages,
+        {
+          turnId: 't2',
+          role: 'user',
+          content: '',
+          sources: [],
+          stopReason: null,
+          kind: 'continue',
+        },
+        {
+          turnId: 't2',
+          role: 'assistant',
+          content: 'Day two.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+      ],
+      continuableTurnId: 't2',
+    });
+
+    await useAgentStore.getState().openConversation('c1', 'reload');
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBe('t2');
+    expect(selectContinuableAnswer(state)?.content).toBe('Day two.');
+    expect(
+      state.messages.map(({ role, content, kind }) => ({ role, content, kind }))
+    ).toEqual([
+      { role: 'user', content: 'Plan it', kind: undefined },
+      { role: 'assistant', content: 'Day one.', kind: undefined },
+      { role: 'user', content: '', kind: 'continue' },
+      { role: 'assistant', content: 'Day two.', kind: undefined },
+    ]);
+  });
+
+  it('keeps the offer of a turn that ended while an older transcript was in flight', async () => {
+    const pending = deferred<ConversationTranscript>();
+    vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+    const opening = useAgentStore.getState().openConversation('c1', 'reload');
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('new question');
+    callbacks().onChunk({ text: 'Partial answer.' });
+    callbacks().onDone({ ...DONE, stopReason: 'max_steps', continuable: true });
+
+    pending.resolve({ ...TRANSCRIPT, continuableTurnId: 't1' });
+    await opening;
+
+    expect(useAgentStore.getState().continuableTurnId).toBe(LIVE_TURN_ID);
+  });
+
+  it('offers nothing when an older server sends no continuableTurnId', async () => {
+    const olderServer: Omit<ConversationTranscript, 'continuableTurnId'> = {
+      id: 'c1',
+      title: 'Trip',
+      noteId: null,
+      hasEarlier: false,
+      messages: [
+        {
+          turnId: 't1',
+          role: 'user',
+          content: 'Plan it',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId: 't1',
+          role: 'assistant',
+          content: 'Day one.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+      ],
+    };
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(
+      olderServer as ConversationTranscript
+    );
+
+    await useAgentStore.getState().openConversation('c1', 'reload');
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBeNull();
+    expect(selectContinuableAnswer(state)).toBeNull();
   });
 });
