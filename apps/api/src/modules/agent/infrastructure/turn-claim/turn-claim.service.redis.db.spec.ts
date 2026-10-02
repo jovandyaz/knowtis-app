@@ -18,6 +18,7 @@ if (process.env['CI'] && !REDIS_URL) {
 }
 
 const AGENT_MAX_MS = 300_000;
+const RUNNING_LEASE_SECONDS = 360;
 const ONE_DAY_SECONDS = 86_400;
 const TTL_SLACK_SECONDS = 5;
 const OWNER = 'delivery-1';
@@ -102,6 +103,11 @@ describe.runIf(!!REDIS_URL)('TurnClaimService against Redis', () => {
     expect(await claims.claimConversation(userId, conversationId, OWNER)).toBe(
       'claimed'
     );
+    const leaseSeconds = await redis.ttl(leaseKey);
+    expect(leaseSeconds).toBeGreaterThan(
+      RUNNING_LEASE_SECONDS - TTL_SLACK_SECONDS
+    );
+    expect(leaseSeconds).toBeLessThanOrEqual(RUNNING_LEASE_SECONDS);
     expect(
       await claims.claimConversation(userId, conversationId, LATER_OWNER)
     ).toBe('running');
