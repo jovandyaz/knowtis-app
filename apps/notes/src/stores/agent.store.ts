@@ -1,3 +1,4 @@
+import { aiQuotaQueryKey } from '@/hooks/useAiQuota';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -22,7 +23,10 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
   type AgentStopReason,
   type ReasoningEffort,
@@ -235,8 +239,30 @@ function isUnresumedDecision(error: AgentErrorPayload): boolean {
   );
 }
 
-function refusesResend(error: AgentErrorPayload): boolean {
-  return error.code === AI_INVALID_INPUT_CODE;
+// Refused before the model ran, so the server stored nothing of the turn.
+function refusedBeforeRun(error: AgentErrorPayload): boolean {
+  return (
+    error.code === AI_INVALID_INPUT_CODE ||
+    error.code === AI_QUOTA_EXHAUSTED_CODE
+  );
+}
+
+function offersNoResend(error: AgentErrorPayload): boolean {
+  return (
+    refusedBeforeRun(error) ||
+    error.code === AI_BYOK_KEY_FAILED_CODE ||
+    error.code === AGENT_TURN_NOT_CONTINUABLE_CODE
+  );
+}
+
+function withReturnedText(returned: string | null, draft: string): string {
+  return [returned, draft]
+    .filter((part): part is string => part !== null && part.trim().length > 0)
+    .join(DRAFT_PARAGRAPH_SEPARATOR);
+}
+
+function invalidateQuota(): void {
+  void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKey });
 }
 
 function isPersistedConversation(
@@ -393,11 +419,27 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       conversationTitle: null,
       hydration: 'unloaded',
       hasEarlier: false,
-      draft: [returned, s.draft]
-        .filter(
-          (part): part is string => part !== null && part.trim().length > 0
-        )
-        .join(DRAFT_PARAGRAPH_SEPARATOR),
+      draft: withReturnedText(returned, s.draft),
+    }));
+  };
+
+  const giveBackRefusedMessage = (error: AgentErrorPayload) => {
+    const assistantId = activeAssistantId;
+    const turnId = get().messages.find((m) => m.id === assistantId)?.turnId;
+    const ofRefusedTurn = (m: AgentChatMessage) =>
+      m.id === assistantId || (turnId !== undefined && m.turnId === turnId);
+    const returned = unsentText;
+    unsentText = null;
+    activeAssistantId = null;
+    set((s) => ({
+      status: 'error',
+      error,
+      retryMode: 'none',
+      _streamHandle: null,
+      thinkingText: '',
+      decisionInFlight: null,
+      messages: s.messages.filter((m) => !ofRefusedTurn(m)),
+      draft: withReturnedText(returned, s.draft),
     }));
   };
 
@@ -451,6 +493,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             return;
           }
           invalidateConversations(queryClient);
+          invalidateQuota();
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
@@ -475,11 +518,16 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             return;
           }
           invalidateConversations(queryClient);
+          invalidateQuota();
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
           if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
             forgetGoneConversation(error);
+            return;
+          }
+          if (!resumingDecision && refusedBeforeRun(error)) {
+            giveBackRefusedMessage(error);
             return;
           }
           const inFlight = get().decisionInFlight;
@@ -495,7 +543,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             status: 'error',
             error,
             retryMode:
-              resumingDecision || refusesResend(error) ? 'none' : 'resend',
+              resumingDecision || offersNoResend(error) ? 'none' : 'resend',
             _streamHandle: null,
             thinkingText: '',
             decisionInFlight: null,
