@@ -251,6 +251,7 @@ export {
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   CONVERSATION_TITLE_MAX,
   deriveConversationTitle,
+  isMessageKind,
   isValidConversationTitle,
   MESSAGE_KIND,
   normalizeConversationTitle,

@@ -25,6 +25,15 @@ export const MESSAGE_KIND = { CONTINUE: 'continue' } as const;
 
 export type MessageKind = (typeof MESSAGE_KIND)[keyof typeof MESSAGE_KIND];
 
+const MESSAGE_KINDS: readonly string[] = Object.values(MESSAGE_KIND);
+
+/** Narrows a message kind read off the wire: a newer server may send one this build does not know. */
+export function isMessageKind(
+  value: string | null | undefined
+): value is MessageKind {
+  return typeof value === 'string' && MESSAGE_KINDS.includes(value);
+}
+
 const WHITESPACE_RUN = /\s+/g;
 const WORD_SEPARATOR = ' ';
 

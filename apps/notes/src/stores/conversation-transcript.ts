@@ -1,6 +1,7 @@
 import {
   AGENT_STOP_REASON,
   isAgentStopReason,
+  isMessageKind,
   MESSAGE_STOP_REASON,
   type ConversationTranscriptMessage,
 } from '@knowtis/shared-types';
@@ -85,7 +86,7 @@ export function toChatMessages(
         ...turnOf(row),
         role: row.role,
         content: row.content,
-        ...(row.kind ? { kind: row.kind } : {}),
+        ...(isMessageKind(row.kind) ? { kind: row.kind } : {}),
       });
     }
     previous = row;

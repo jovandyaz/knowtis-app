@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   CONVERSATION_TITLE_MAX,
   deriveConversationTitle,
+  isMessageKind,
   isValidConversationTitle,
+  MESSAGE_KIND,
   normalizeConversationTitle,
 } from './conversation.types';
 
@@ -59,4 +61,17 @@ describe('isValidConversationTitle', () => {
   it('should share its bound with the server', () => {
     expect(CONVERSATION_TITLE_MAX).toBe(120);
   });
+});
+
+describe('isMessageKind', () => {
+  it.each(Object.values(MESSAGE_KIND))('should know %s', (kind) => {
+    expect(isMessageKind(kind)).toBe(true);
+  });
+
+  it.each(['something_new', '', null, undefined])(
+    'should not know %s',
+    (value) => {
+      expect(isMessageKind(value)).toBe(false);
+    }
+  );
 });

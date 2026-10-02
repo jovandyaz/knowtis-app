@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ConversationTranscriptMessage } from '@knowtis/shared-types';
+import type {
+  ConversationTranscriptMessage,
+  MessageKind,
+} from '@knowtis/shared-types';
 
 import { toChatMessages } from './conversation-transcript';
 
@@ -332,5 +335,23 @@ describe('toChatMessages', () => {
         stopReason: 'completed',
       },
     ]);
+  });
+
+  it('drops a kind this build does not know, leaving a plain user row', () => {
+    const fromNewerServer = 'something_new' as unknown as MessageKind;
+
+    expect(
+      toChatMessages(
+        [
+          row({
+            turnId: 't1',
+            role: 'user',
+            content: 'Q',
+            kind: fromNewerServer,
+          }),
+        ],
+        nextId
+      )
+    ).toStrictEqual([{ id: 'h1', turnId: 't1', role: 'user', content: 'Q' }]);
   });
 });
