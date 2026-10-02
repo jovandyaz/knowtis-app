@@ -154,6 +154,32 @@ export const AGENT_STOP_REASON = {
 export type AgentStopReason =
   (typeof AGENT_STOP_REASON)[keyof typeof AGENT_STOP_REASON];
 
+const AGENT_STOP_REASONS: readonly string[] = Object.values(AGENT_STOP_REASON);
+
+/** Narrows a stop reason read off the wire: a newer server may send one this build does not know. */
+export function isAgentStopReason(
+  value: string | null | undefined
+): value is AgentStopReason {
+  return typeof value === 'string' && AGENT_STOP_REASONS.includes(value);
+}
+
+/** Stops that close a segment at a checkpoint: the answer is partial and a continuation can pick it up. */
+export const CONTINUABLE_STOP_REASONS = [
+  AGENT_STOP_REASON.MAX_STEPS,
+  AGENT_STOP_REASON.TOKEN_BUDGET,
+  AGENT_STOP_REASON.TIME_LIMIT,
+] as const satisfies readonly AgentStopReason[];
+export type ContinuableStopReason = (typeof CONTINUABLE_STOP_REASONS)[number];
+
+export function isContinuableStop(
+  reason: string | null | undefined
+): reason is ContinuableStopReason {
+  return (
+    typeof reason === 'string' &&
+    (CONTINUABLE_STOP_REASONS as readonly string[]).includes(reason)
+  );
+}
+
 /** Persisted stop reason: every loop stop reason plus the two interrupted outcomes. */
 export const MESSAGE_STOP_REASON = [
   ...Object.values(AGENT_STOP_REASON),

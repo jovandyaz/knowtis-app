@@ -15,6 +15,7 @@ import {
   BYOK_KEY_FAILURE_KIND,
   deriveConversationTitle,
   isByokKeyFailedError,
+  isContinuableStop,
   MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
@@ -81,11 +82,7 @@ import {
   seamHead,
   seamTail,
 } from '../domain/coalesce-messages';
-import {
-  hasMessagesLeft,
-  isContinuable,
-  isContinuableStop,
-} from '../domain/continuable';
+import { hasMessagesLeft, isContinuable } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
 import {

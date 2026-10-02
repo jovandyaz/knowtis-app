@@ -1,25 +1,8 @@
-import type {
-  AgentStopReason,
-  AiQuota,
-  MessageStopReason,
+import {
+  isContinuableStop,
+  type AiQuota,
+  type MessageStopReason,
 } from '@knowtis/shared-types';
-
-/** Stops a synthesis step closed at a checkpoint, leaving work a continuation can pick up. */
-export const CONTINUABLE_STOP_REASONS = [
-  'max_steps',
-  'token_budget',
-  'time_limit',
-] as const satisfies readonly AgentStopReason[];
-export type ContinuableStopReason = (typeof CONTINUABLE_STOP_REASONS)[number];
-
-export function isContinuableStop(
-  reason: MessageStopReason | null
-): reason is ContinuableStopReason {
-  return (
-    reason !== null &&
-    (CONTINUABLE_STOP_REASONS as readonly string[]).includes(reason)
-  );
-}
 
 /** The caller may start one more turn now: unmetered, or at least one message left. */
 export function hasMessagesLeft(quota: AiQuota | null): boolean {

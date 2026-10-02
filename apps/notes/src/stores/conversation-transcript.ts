@@ -1,7 +1,7 @@
 import {
   AGENT_STOP_REASON,
+  isAgentStopReason,
   MESSAGE_STOP_REASON,
-  type AgentStopReason,
   type ConversationTranscriptMessage,
 } from '@knowtis/shared-types';
 
@@ -9,18 +9,9 @@ import type { AgentChatMessage } from './agent.store';
 
 const ASSISTANT_ROLE = 'assistant' satisfies AgentChatMessage['role'];
 
-const DISPLAYED_STOP_REASONS: readonly string[] =
-  Object.values(AGENT_STOP_REASON);
-
 const INTERRUPTED_STOP_REASONS: readonly string[] = MESSAGE_STOP_REASON.filter(
-  (reason) => !DISPLAYED_STOP_REASONS.includes(reason)
+  (reason) => !isAgentStopReason(reason)
 );
-
-function isDisplayedStopReason(
-  reason: string | null
-): reason is AgentStopReason {
-  return reason !== null && DISPLAYED_STOP_REASONS.includes(reason);
-}
 
 // Each stored leg of a turn ends with the only row that carries a stop reason:
 // the reply before a proposal and the reply after the decision share the turn
@@ -45,7 +36,7 @@ function turnOf(row: ConversationTranscriptMessage) {
 function assistantDetails(row: ConversationTranscriptMessage) {
   return {
     sources: row.sources,
-    ...(isDisplayedStopReason(row.stopReason)
+    ...(isAgentStopReason(row.stopReason)
       ? { stopReason: row.stopReason }
       : {}),
     ...(row.stopReason !== null &&

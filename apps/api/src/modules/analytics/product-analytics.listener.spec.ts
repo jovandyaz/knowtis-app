@@ -6,9 +6,11 @@ import {
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { QuizScoreBucket } from '@knowtis/shared-types';
+import {
+  CONTINUABLE_STOP_REASONS,
+  type QuizScoreBucket,
+} from '@knowtis/shared-types';
 
-import { CONTINUABLE_STOP_REASONS } from '../agent/domain/continuable';
 import { TurnCheckpointReachedEvent } from '../agent/domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../agent/domain/events/turn-continued.event';
 import { ByokKeyFailedEvent } from '../ai/domain/events/byok-key-failed.event';

@@ -1,6 +1,7 @@
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
 } from '@knowtis/shared-types';
@@ -43,7 +44,7 @@ export const AgentErrors = {
       `Note ${noteId} changed since the proposal was created`
     ),
   proposalExpired: () =>
-    make('AGENT_PROPOSAL_EXPIRED', 'This proposal expired; ask again'),
+    make(AGENT_PROPOSAL_EXPIRED_CODE, 'This proposal expired; ask again'),
   permissionDenied: () =>
     make('AGENT_PERMISSION_DENIED', 'You cannot perform this action'),
   emailNotVerified: () =>

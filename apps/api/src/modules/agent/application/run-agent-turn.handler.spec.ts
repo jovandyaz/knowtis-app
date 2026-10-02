@@ -16,6 +16,7 @@ import {
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  CONTINUABLE_STOP_REASONS,
   type AgentStopReason,
   type AiQuota,
   type ByokProvider,
@@ -56,7 +57,6 @@ import { createMessageQuotaStub } from '../../ai/testing/create-message-quota-st
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import { COALESCED_MESSAGE_SEPARATOR } from '../domain/coalesce-messages';
-import { CONTINUABLE_STOP_REASONS } from '../domain/continuable';
 import { TurnCheckpointReachedEvent } from '../domain/events/turn-checkpoint-reached.event';
 import { TurnContinuedEvent } from '../domain/events/turn-continued.event';
 import {

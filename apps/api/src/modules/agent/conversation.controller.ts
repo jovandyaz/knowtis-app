@@ -21,9 +21,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 
-import type {
-  ConversationPage,
-  ConversationTranscript,
+import {
+  isContinuableStop,
+  type ConversationPage,
+  type ConversationTranscript,
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
@@ -37,7 +38,7 @@ import { AiUnavailableExceptionFilter } from '../ai/ai-unavailable.filter';
 import { MessageQuotaService } from '../ai/application/services/message-quota.service';
 import { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { CONVERSATION_NOT_FOUND_MESSAGE } from './domain/agent-errors';
-import { hasMessagesLeft, isContinuableStop } from './domain/continuable';
+import { hasMessagesLeft } from './domain/continuable';
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,

@@ -1,5 +1,6 @@
 import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
@@ -56,7 +57,7 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   [AI_INVALID_INPUT_CODE]: 'ai.errors.validation',
   PROMPT_INJECTION_DETECTED: 'ai.errors.injection',
   AGENT_STALE_NOTE: 'ai.errors.staleNote',
-  AGENT_PROPOSAL_EXPIRED: 'ai.errors.proposalExpired',
+  [AGENT_PROPOSAL_EXPIRED_CODE]: 'ai.errors.proposalExpired',
   AGENT_RESUME_UNAVAILABLE: 'ai.errors.resumeUnavailable',
   [AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS]: 'ai.errors.turnInProgress',
   [AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE]: 'ai.errors.turnUnavailable',
