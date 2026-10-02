@@ -469,6 +469,52 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().draft).toBe('hello\n\nnuevo');
     });
 
+    it('a quota refusal folds the queued messages into the draft in order', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      useAgentStore.getState().setDraft('nuevo');
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      const { draft, queue } = useAgentStore.getState();
+      expect({ draft, queue }).toEqual({
+        draft: 'hello\n\nsecond\n\nthird\n\nnuevo',
+        queue: [],
+      });
+    });
+
+    it('a quota refusal of a drained message folds the rest of the queue behind it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      get().onDone(DONE);
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      const { draft, queue } = useAgentStore.getState();
+      expect({ draft, queue }).toEqual({
+        draft: 'second\n\nthird',
+        queue: [],
+      });
+    });
+
+    it('an oversized message leaves the queue paused behind it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+      useAgentStore.getState().sendMessage('second');
+
+      get().onError({ code: AI_INVALID_INPUT_CODE, message: 'too large' });
+
+      const { draft, queue } = useAgentStore.getState();
+      expect({ draft, queue: queue.map((q) => q.text) }).toEqual({
+        draft: 'hello',
+        queue: ['second'],
+      });
+    });
+
     it('leaves the turn it interrupted on the thread', () => {
       const interrupted = capture('turn-0');
       useAgentStore.getState().sendMessage('a');
@@ -554,6 +600,62 @@ describe('useAgentStore', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: aiQuotaQueryKeys.all,
       });
+    });
+  });
+
+  describe('a queue behind the last message of the day', () => {
+    const DONE: AgentDonePayload = {
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    };
+    const RESETS_AT = '2026-10-03T00:00:00.000Z';
+
+    function cacheQuota(used: number, limit: number) {
+      useAgentStore.setState({ userId: 'u1' });
+      queryClient.setQueryData(aiQuotaQueryKeys.forUser('u1'), {
+        tier: 'free',
+        messages: { used, limit, resetsAt: RESETS_AT },
+      });
+    }
+
+    afterEach(() => {
+      queryClient.removeQueries({ queryKey: aiQuotaQueryKeys.all });
+      useAgentStore.setState({ userId: null });
+    });
+
+    it('is folded into the draft instead of sent into a quota known to be spent', () => {
+      cacheQuota(30, 30);
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      useAgentStore.getState().setDraft('nuevo');
+
+      get().onDone(DONE);
+
+      const { draft, queue, status } = useAgentStore.getState();
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+      expect({ draft, queue, status }).toEqual({
+        draft: 'second\n\nthird\n\nnuevo',
+        queue: [],
+        status: 'done',
+      });
+    });
+
+    it('drains while the cached quota has messages left', () => {
+      cacheQuota(29, 30);
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+
+      get().onDone(DONE);
+
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+        'second'
+      );
     });
   });
 

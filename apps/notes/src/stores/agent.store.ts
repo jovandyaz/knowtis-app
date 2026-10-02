@@ -1,4 +1,4 @@
-import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
+import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -29,6 +29,7 @@ import {
   AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
   type AgentStopReason,
+  type AiQuota,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import {
@@ -270,10 +271,14 @@ function offersNoResend(error: AgentErrorPayload): boolean {
   );
 }
 
-function withReturnedText(returned: string | null, draft: string): string {
-  return [returned, draft]
+function joinDraft(...parts: readonly (string | null)[]): string {
+  return parts
     .filter((part): part is string => part !== null && part.trim().length > 0)
     .join(DRAFT_PARAGRAPH_SEPARATOR);
+}
+
+function queuedTexts(queue: readonly QueuedMessage[]): string[] {
+  return queue.map((queued) => queued.text);
 }
 
 function invalidateQuota(): void {
@@ -435,7 +440,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       conversationTitle: null,
       hydration: 'unloaded',
       hasEarlier: false,
-      draft: withReturnedText(returned, s.draft),
+      draft: joinDraft(returned, s.draft),
     }));
   };
 
@@ -447,6 +452,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     const returned = unsentText;
     unsentText = null;
     activeAssistantId = null;
+    const lockedOut = error.code === AI_QUOTA_EXHAUSTED_CODE;
     set((s) => ({
       status: 'error',
       error,
@@ -455,7 +461,12 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       thinkingText: '',
       decisionInFlight: null,
       messages: s.messages.filter((m) => !ofRefusedTurn(m)),
-      draft: withReturnedText(returned, s.draft),
+      queue: lockedOut ? [] : s.queue,
+      draft: joinDraft(
+        returned,
+        ...(lockedOut ? queuedTexts(s.queue) : []),
+        s.draft
+      ),
     }));
   };
 
@@ -797,9 +808,27 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     }));
   };
 
+  const quotaKnownSpent = (): boolean => {
+    const { userId } = get();
+    if (userId === null) {
+      return false;
+    }
+    const quota = quotaStateOf(
+      queryClient.getQueryData<AiQuota>(aiQuotaQueryKeys.forUser(userId))
+    );
+    return quota.kind === 'metered' && quota.exhausted;
+  };
+
   const drainQueue = () => {
     const [next, ...rest] = get().queue;
     if (!next) {
+      return;
+    }
+    if (quotaKnownSpent()) {
+      set((s) => ({
+        queue: [],
+        draft: joinDraft(...queuedTexts(s.queue), s.draft),
+      }));
       return;
     }
     set({ queue: rest });
