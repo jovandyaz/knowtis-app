@@ -467,6 +467,9 @@
         "registerCta": "Crear cuenta gratis",
         "byokCta": "Usar tu propia API key"
       },
+      "byok": {
+        "reviewKey": "Revisar tu key"
+      },
       "history": {
         "recent": "Conversaciones recientes",
         "untitled": "Conversación sin título",

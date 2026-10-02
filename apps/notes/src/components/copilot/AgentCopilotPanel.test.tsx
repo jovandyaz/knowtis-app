@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
+import { useSettingsStore } from '@/stores/settings.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -104,6 +106,9 @@ vi.mock('@knowtis/api-client', async (importOriginal) => ({
   aiQuotaApi: { getQuota: vi.fn() },
   conversationsApi: { transcript: vi.fn() },
 }));
+vi.mock('@/lib/analytics/product-events', () => ({
+  captureProductEvent: vi.fn(),
+}));
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() },
 }));
@@ -187,6 +192,42 @@ describe('AgentCopilotPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'ai.errors.byokKeyFailed.credit'
     );
+  });
+
+  it('offers to check the key instead of a retry when the provider refused it', async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ isOpen: false, focusTarget: null });
+    vi.mocked(captureProductEvent).mockClear();
+    render(<AgentCopilotPanel />, { wrapper });
+    const refused: AgentByokKeyFailedError = {
+      code: AI_BYOK_KEY_FAILED_CODE,
+      message: 'Your API key was refused by the provider.',
+      provider: 'openai',
+      kind: 'auth',
+    };
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: refused,
+        retryMode: 'none',
+      });
+    });
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.byok.reviewKey' })
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'ai.preview.retry' })
+    ).not.toBeInTheDocument();
+    expect(useSettingsStore.getState()).toMatchObject({
+      isOpen: true,
+      activeSection: 'aiAssistant',
+      focusTarget: 'aiKeys',
+    });
+    expect(vi.mocked(captureProductEvent).mock.calls).toEqual([
+      ['ai upgrade cta clicked', { from_tier: 'byok', cta: 'review_key' }],
+    ]);
   });
 
   it('does not offer a code to a visitor with no address', () => {
@@ -772,6 +813,21 @@ describe('AgentCopilotPanel proposal routing', () => {
     expect(screen.getByTestId('review')).toBeInTheDocument();
     expect(screen.queryByTestId('composer')).not.toBeInTheDocument();
     expect(useRightDockStore.getState().reviewOpen).toBe(true);
+  });
+
+  it('shows the timeout banner while an update proposal is under review', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'timeout',
+        pendingProposal: updateProposal,
+      });
+      useRightDockStore.setState({ reviewOpen: true });
+    });
+
+    expect(screen.getByTestId('review')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('ai.errors.timeout');
   });
 
   it('returns to the chat with a pending row and reopens the review from it', async () => {

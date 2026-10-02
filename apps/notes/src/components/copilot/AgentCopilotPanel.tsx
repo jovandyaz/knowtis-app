@@ -10,6 +10,7 @@ import {
   type QuotaState,
 } from '@/hooks/useAiQuota';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { formatTime } from '@/lib/format-date';
 import {
   isTurnAlive,
@@ -17,6 +18,7 @@ import {
   useAgentStore,
 } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
+import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
@@ -25,6 +27,7 @@ import type { AgentErrorPayload } from '@knowtis/api-client';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
 } from '@knowtis/shared-types';
 
@@ -206,16 +209,37 @@ export function AgentCopilotPanel() {
         time: formatTime(liveQuotaRefusal.resetsAt, i18n.language),
       })
     : t(errorMessageKey);
-  const errorBanner = (status === 'error' ||
-    (status === 'pendingProposal' && error)) &&
-    !quotaRefusalNeedsNoBanner && (
-      <RetryBanner message={errorMessage} {...retryTurn} />
-    );
+  const reviewKey =
+    error?.code === AI_BYOK_KEY_FAILED_CODE
+      ? {
+          action: {
+            label: t('ai.copilot.byok.reviewKey'),
+            onClick: () => {
+              captureProductEvent('ai upgrade cta clicked', {
+                from_tier: 'byok',
+                cta: 'review_key',
+              });
+              useSettingsStore.getState().open('aiAssistant', 'aiKeys');
+            },
+          },
+        }
+      : {};
+  const banners = (
+    <>
+      {(status === 'error' || (status === 'pendingProposal' && error)) &&
+        !quotaRefusalNeedsNoBanner && (
+          <RetryBanner message={errorMessage} {...retryTurn} {...reviewKey} />
+        )}
+      {status === 'timeout' && (
+        <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
+      )}
+    </>
+  );
 
   if (updateProposal && reviewOpen) {
     return (
       <div className="flex h-full flex-col min-h-0">
-        {errorBanner}
+        {banners}
         <div className="flex-1 min-h-0">
           <ProposalReview
             proposal={updateProposal}
@@ -259,10 +283,7 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
-      {errorBanner}
-      {status === 'timeout' && (
-        <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
-      )}
+      {banners}
 
       {updateProposal && <ProposalPendingRow onOpen={openReview} />}
 

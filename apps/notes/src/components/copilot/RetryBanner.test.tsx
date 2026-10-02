@@ -31,4 +31,22 @@ describe('RetryBanner', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Something failed');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('offers an action that runs on click', async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RetryBanner
+        message="Something failed"
+        action={{ label: 'Check', onClick }}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole('button', { name: 'ai.preview.retry' })
+    ).not.toBeInTheDocument();
+  });
 });
