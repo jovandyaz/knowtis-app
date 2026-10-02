@@ -1,6 +1,6 @@
 import type { QueryKey } from '@tanstack/react-query';
 
-import { aiQuotaQueryKey } from '@/hooks/useAiQuota';
+import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -515,7 +515,9 @@ describe('useAgentStore', () => {
         stopReason: 'completed',
       });
 
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: aiQuotaQueryKey });
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
     });
 
     it.each([
@@ -529,7 +531,9 @@ describe('useAgentStore', () => {
 
       get().onError({ code, message: 'failed' });
 
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: aiQuotaQueryKey });
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
     });
   });
 

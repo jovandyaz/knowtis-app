@@ -1,4 +1,4 @@
-import { aiQuotaQueryKey } from '@/hooks/useAiQuota';
+import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -262,7 +262,7 @@ function withReturnedText(returned: string | null, draft: string): string {
 }
 
 function invalidateQuota(): void {
-  void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKey });
+  void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
 }
 
 function isPersistedConversation(

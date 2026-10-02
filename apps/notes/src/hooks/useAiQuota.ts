@@ -6,7 +6,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { useAuthUser } from '@jovandyaz/auth-react';
+import { useAuthStore, useAuthUser } from '@jovandyaz/auth-react';
 
 import { agentClient, aiQuotaApi } from '@knowtis/api-client';
 import {
@@ -15,7 +15,11 @@ import {
   type AiQuota,
 } from '@knowtis/shared-types';
 
-export const aiQuotaQueryKey = ['ai-quota'] as const;
+export const aiQuotaQueryKeys = {
+  all: ['ai-quota'] as const,
+  forUser: (userId: string | undefined) =>
+    [...aiQuotaQueryKeys.all, userId] as const,
+} as const;
 
 const AI_QUOTA_STALE_MS = 60_000;
 const UNMETERED_TIER = 'byok' satisfies AccessTier;
@@ -37,25 +41,29 @@ const UNKNOWN_QUOTA: QuotaState = { kind: 'unknown' };
 
 /** Today's message quota of the session user; idle while there is no session. */
 export function useAiQuota(): UseQueryResult<AiQuota> {
-  const user = useAuthUser();
+  const userId = useAuthUser()?.id;
   return useQuery({
-    queryKey: aiQuotaQueryKey,
+    queryKey: aiQuotaQueryKeys.forUser(userId),
     queryFn: () => aiQuotaApi.getQuota(),
     staleTime: AI_QUOTA_STALE_MS,
     retry: false,
-    enabled: user !== null,
+    enabled: userId !== undefined,
   });
 }
 
-/** Writes every `agent:quota` push into the quota cache while mounted. */
+/** While mounted, files each `agent:quota` push under the user signed in when it arrives. */
 export function useAiQuotaSync(): void {
   const queryClient = useQueryClient();
+  const authStore = useAuthStore();
   useEffect(
     () =>
       agentClient.onQuota((quota) => {
-        queryClient.setQueryData(aiQuotaQueryKey, quota);
+        const userId = authStore.getState().user?.id;
+        if (userId !== undefined) {
+          queryClient.setQueryData(aiQuotaQueryKeys.forUser(userId), quota);
+        }
       }),
-    [queryClient]
+    [queryClient, authStore]
   );
 }
 
