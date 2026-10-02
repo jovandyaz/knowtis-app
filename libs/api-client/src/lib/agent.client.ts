@@ -1,6 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 
 import {
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   type AgentQuotaPayload,
@@ -170,12 +171,13 @@ type TurnRequest =
 type PendingRequest = TurnRequest | DecisionRequest;
 
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
+const CONNECTION_FAILED_CODE = 'CONNECTION_FAILED';
 const AUTH_ERROR: AgentErrorPayload = {
   code: AUTH_REQUIRED_CODE,
   message: 'Authentication required',
 };
 const CONNECTION_ERROR: AgentErrorPayload = {
-  code: 'CONNECTION_FAILED',
+  code: CONNECTION_FAILED_CODE,
   message: 'Failed to connect to agent server',
 };
 const NOTHING_TO_CONTINUE_ERROR: AgentErrorPayload = {
@@ -199,20 +201,28 @@ const RESENDABLE_TURN_ERROR_CODES: ReadonlySet<string> = new Set([
   AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
 ]);
 
+// A session or connection failure ends the request whatever the server did,
+// so it says nothing about whether the proposal was taken.
+const UNPROVEN_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  AUTH_REQUIRED_CODE,
+  CONNECTION_FAILED_CODE,
+]);
+
 function isTurnRequest(request: PendingRequest): request is TurnRequest {
   return request.kind === 'message' || request.kind === 'continue';
 }
 
-// Every error after the server took a proposal names its turn, so a decision
-// refused without one was never applied and resending it cannot apply it twice.
-function isDecisionNotTaken(
-  request: PendingRequest,
-  error: AgentErrorPayload
-): boolean {
+/**
+ * True for an `agent:error` that refused an approve or reject before the
+ * server took its proposal, so the proposal is still stored and may be decided
+ * again. Every refusal after the take names its turn; an expired proposal is
+ * gone; a session or connection failure proves nothing.
+ */
+export function isDecisionNotTaken(error: AgentErrorPayload): boolean {
   return (
-    !isTurnRequest(request) &&
-    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
-    error.turnId === undefined
+    error.turnId === undefined &&
+    error.code !== AGENT_PROPOSAL_EXPIRED_CODE &&
+    !UNPROVEN_REFUSAL_CODES.has(error.code)
   );
 }
 
@@ -222,7 +232,8 @@ function isResendable(
 ): boolean {
   return isTurnRequest(request)
     ? RESENDABLE_TURN_ERROR_CODES.has(error.code)
-    : isDecisionNotTaken(request, error);
+    : error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
+        isDecisionNotTaken(error);
 }
 
 export class AgentClient {
@@ -782,7 +793,11 @@ export class AgentClient {
       }
       // The proposal is still stored, so the turn stays open for the user to
       // decide again once the server can take it.
-      if (this.pending && isDecisionNotTaken(this.pending, payload)) {
+      if (
+        this.pending &&
+        !isTurnRequest(this.pending) &&
+        isDecisionNotTaken(payload)
+      ) {
         this.awaitDecision();
         callbacks.onError(payload);
         return;

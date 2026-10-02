@@ -7,6 +7,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   agentClient,
   conversationsApi,
+  isDecisionNotTaken,
   type AgentErrorPayload,
   type AgentSource,
   type AgentStreamHandle,
@@ -237,16 +238,6 @@ interface PersistedConversation {
 export interface DecisionInFlight {
   readonly proposal: PendingProposal;
   readonly discardedId: string | undefined;
-}
-
-// A draining server refuses a decision before taking its proposal without a
-// turn id, so the proposal is still there to decide on; a refusal that names
-// the turn came after the decision was applied, and only its reply is missing.
-function isDecisionNotTaken(error: AgentErrorPayload): boolean {
-  return (
-    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
-    error.turnId === undefined
-  );
 }
 
 function isUnresumedDecision(error: AgentErrorPayload): boolean {

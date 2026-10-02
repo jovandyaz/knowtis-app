@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
 } from '@knowtis/shared-types';
 
-import { AgentClient } from './agent.client';
+import { AgentClient, isDecisionNotTaken } from './agent.client';
 import type { RefreshOutcome } from './token-refresh-policy';
 
 const emit = vi.fn();
@@ -2117,6 +2118,64 @@ describe('AgentClient – turn identity', () => {
       ).toEqual(['agent:message', `agent:${decision}`]);
     }
   );
+
+  describe('a decision refused before its proposal was taken', () => {
+    const sentApproves = () =>
+      (fake.socket.emit.mock.calls as unknown[][]).filter(
+        (call) => call[0] === 'agent:approve'
+      );
+
+    function approveSuspendedTurn() {
+      const callbacks = callbacksOf();
+      const handle = client.sendMessage('create a note', callbacks);
+      fake.trigger('agent:proposal', { ...PROPOSAL, turnId: handle.turnId });
+      client.approve(PROPOSAL.id);
+      return { callbacks, handle };
+    }
+
+    it('keeps the turn open for the decision without resending it', () => {
+      vi.useFakeTimers();
+      const { callbacks } = approveSuspendedTurn();
+      const internal = {
+        code: 'AI_INTERNAL_ERROR',
+        message: 'Agent turn failed',
+      };
+
+      fake.trigger('agent:error', internal);
+      vi.runAllTimers();
+
+      expect(callbacks.onError).toHaveBeenCalledExactlyOnceWith(internal);
+      expect(sentApproves()).toHaveLength(1);
+      expect(client.canResume()).toBe(true);
+    });
+
+    it('ends the turn when the proposal had expired', () => {
+      const { callbacks } = approveSuspendedTurn();
+      const expired = {
+        code: AGENT_PROPOSAL_EXPIRED_CODE,
+        message: 'This proposal expired; ask again',
+      };
+
+      fake.trigger('agent:error', expired);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(expired);
+      expect(client.canResume()).toBe(false);
+    });
+
+    it('ends the turn when the server refused it after taking the proposal', () => {
+      const { callbacks, handle } = approveSuspendedTurn();
+      const commitFailed = {
+        code: 'AGENT_COMMIT_FAILED',
+        message: 'The note could not be saved',
+        turnId: handle.turnId,
+      };
+
+      fake.trigger('agent:error', commitFailed);
+
+      expect(callbacks.onError).toHaveBeenCalledWith(commitFailed);
+      expect(client.canResume()).toBe(false);
+    });
+  });
 });
 
 describe('AgentClient – resending a failed turn', () => {
@@ -2702,5 +2761,30 @@ describe('AgentClient – continuing a capped turn', () => {
       })
     );
     expect(fake.socket.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('isDecisionNotTaken', () => {
+  it.each([
+    [{ code: 'AI_INTERNAL_ERROR', message: 'x' }, true],
+    [
+      { code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE, message: 'x' },
+      true,
+    ],
+    [{ code: 'AI_FEATURE_DISABLED', message: 'x' }, true],
+    [{ code: 'AGENT_COMMIT_FAILED', message: 'x', turnId: 't1' }, false],
+    [
+      {
+        code: AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
+        message: 'x',
+        turnId: 't1',
+      },
+      false,
+    ],
+    [{ code: AGENT_PROPOSAL_EXPIRED_CODE, message: 'x' }, false],
+    [{ code: 'CONNECTION_FAILED', message: 'x' }, false],
+    [{ code: 'AUTH_REQUIRED', message: 'x' }, false],
+  ])('%o → %s', (error, notTaken) => {
+    expect(isDecisionNotTaken(error)).toBe(notTaken);
   });
 });

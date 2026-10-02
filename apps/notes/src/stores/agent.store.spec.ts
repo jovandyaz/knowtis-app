@@ -4,6 +4,7 @@ import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ApiClient from '@knowtis/api-client';
 import { agentClient } from '@knowtis/api-client';
 import type {
   AgentCommittedPayload,
@@ -15,6 +16,7 @@ import type {
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_BYOK_KEY_FAILED_CODE,
@@ -33,7 +35,8 @@ const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
 }));
 
-vi.mock('@knowtis/api-client', () => ({
+vi.mock('@knowtis/api-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiClient>()),
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
     canResume: vi.fn(() => true),
@@ -1335,6 +1338,83 @@ describe('agent.store server-authoritative wire', () => {
     });
   });
 
+  describe('a decision refused before the server took its proposal', () => {
+    function approve() {
+      const turn = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      turn.get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      return turn;
+    }
+
+    it.each([
+      [
+        'an internal failure',
+        { code: 'AI_INTERNAL_ERROR', message: 'Agent turn failed' },
+      ],
+      [
+        'AI being switched off',
+        { code: 'AI_FEATURE_DISABLED', message: 'off' },
+      ],
+    ])('gives the approve card back after %s', (_why, refused) => {
+      const { get } = approve();
+
+      get().onError(refused);
+
+      const { status, error, retryMode, pendingProposal, messages } =
+        useAgentStore.getState();
+      expect({ status, error, retryMode, pendingProposal }).toEqual({
+        status: 'pendingProposal',
+        error: refused,
+        retryMode: 'none',
+        pendingProposal: PROPOSAL,
+      });
+      expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    });
+
+    it('takes the discard mark off a reject refused before the take', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().rejectProposal('too long');
+
+      get().onError({
+        code: 'AI_INTERNAL_ERROR',
+        message: 'Agent turn failed',
+      });
+
+      const { pendingProposal, messages } = useAgentStore.getState();
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(messages.some((m) => m.discarded)).toBe(false);
+    });
+
+    it.each([
+      [
+        'the proposal expired',
+        { code: AGENT_PROPOSAL_EXPIRED_CODE, message: 'expired' },
+      ],
+      [
+        'the commit failed after the take',
+        { code: 'AGENT_COMMIT_FAILED', message: 'failed', turnId: 'turn-1' },
+      ],
+      [
+        'only the client lost the connection',
+        { code: 'CONNECTION_FAILED', message: 'down' },
+      ],
+    ])('ends the turn when %s', (_why, failure) => {
+      const { get } = approve();
+
+      get().onError(failure);
+
+      const { status, pendingProposal, retryMode } = useAgentStore.getState();
+      expect({ status, pendingProposal, retryMode }).toEqual({
+        status: 'error',
+        pendingProposal: null,
+        retryMode: 'none',
+      });
+    });
+  });
+
   it.each(['create', 'update', 'share'] as const)(
     'invalidates the notes caches when a %s proposal is committed',
     (kind) => {
@@ -1628,7 +1708,7 @@ describe('agent.store proposals', () => {
 
   it('retries the failure of a turn sent after a failed decision', () => {
     const get = proposeThenDecide('approve');
-    get().onError({ code: 'AI_RATE_LIMIT_EXCEEDED', message: 'busy' });
+    get().onError({ code: 'CONNECTION_FAILED', message: 'down' });
     useAgentStore.getState().sendMessage('next question');
     get().onError({ code: 'AI_PROVIDER_ERROR', message: 'down' });
 
