@@ -539,6 +539,45 @@ describe('ApproveMutationHandler', () => {
     );
   });
 
+  it('reports a share that took effect as committed when the note title lookup after it fails', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          turnId: TURN,
+          conversationId: CONVERSATION,
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockRejectedValue(new Error('database down')),
+      },
+      shareHandler: {
+        execute: vi.fn().mockResolvedValue(ok({ id: 'perm-1' })),
+      },
+    });
+
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+
+    expect(r._unsafeUnwrap()).toEqual({
+      result: { noteId: 'note-1', title: 'Note', kind: 'share' },
+      outcome: 'shared "Note" with bob@example.com as viewer',
+      turnId: TURN,
+      conversationId: CONVERSATION,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.commit.title_lookup_failed',
+        proposalId: 'p3',
+        error: 'database down',
+      })
+    );
+  });
+
   it('surfaces the generic not-addable result without a redundant lookup', async () => {
     const d = deps({
       store: {

@@ -193,15 +193,29 @@ export class ApproveMutationHandler {
     if (res.isErr()) {
       return err(this.mapCommitError(m, res.error));
     }
-    const note = await this.noteRepo.findById(m.targetNoteId);
+    const title = (await this.sharedNoteTitle(m)) ?? 'Note';
     return ok({
-      result: {
-        noteId: m.targetNoteId,
-        title: note?.title ?? 'Note',
-        kind: 'share',
-      },
-      outcome: `shared "${note?.title ?? 'Note'}" with ${m.payload.targetEmail} as ${m.payload.permission}`,
+      result: { noteId: m.targetNoteId, title, kind: 'share' },
+      outcome: `shared "${title}" with ${m.payload.targetEmail} as ${m.payload.permission}`,
     });
+  }
+
+  // The share already took effect, so a failed lookup only costs the title:
+  // reporting the commit as failed would invite the user to share again.
+  private async sharedNoteTitle(
+    m: ShareProposedMutation
+  ): Promise<string | undefined> {
+    try {
+      return (await this.noteRepo.findById(m.targetNoteId))?.title;
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.commit.title_lookup_failed',
+        proposalId: m.id,
+        kind: m.kind,
+        error: reasonOf(error),
+      });
+      return undefined;
+    }
   }
 
   private mapCommitError(
