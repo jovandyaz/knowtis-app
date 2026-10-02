@@ -2543,19 +2543,29 @@ describe('AgentGateway', () => {
         }
       );
 
-      it('takes no lease for a turn that opens a new conversation', async () => {
-        const redis = createInMemoryClaimRedis();
-        const { execute, release } = heldTurns();
-        const gateway = makeGateway({ handler: { execute } as never, redis });
+      it('refuses a turn naming the conversation an opening turn announced while that turn runs', async () => {
+        const opened = uuidv5(`u1:${TURN}`, KNOWTIS_CONVERSATION_NAMESPACE);
+        const { run, release } = holdsFirstTurn();
+        const gateway = makeGateway({ handler: { execute: run } });
 
         const running = gateway.handleMessage(
           makeClient('u1') as never,
           turn({ conversationId: undefined })
         );
         await flushAsync();
+        const refused = makeClient('u1', 'c2');
+        await gateway.handleMessage(
+          refused as never,
+          turn({ turnId: OTHER_TURN, conversationId: opened })
+        );
 
-        expect(claimOf(redis)).toMatchObject({ status: 'running' });
-        expect(leases(redis)).toEqual([]);
+        expect(turnErrors(refused)).toEqual([
+          expect.objectContaining({
+            code: 'TURN_IN_PROGRESS',
+            turnId: OTHER_TURN,
+          }),
+        ]);
+        expect(run).toHaveBeenCalledOnce();
         release();
         await running;
       });

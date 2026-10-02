@@ -331,7 +331,6 @@ export class AgentGateway
           client,
           controller,
           turnClaimOf(userId, turnId, data),
-          data.conversationId,
           (markSettled, markDiscarded) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
@@ -508,7 +507,6 @@ export class AgentGateway
     client: AuthenticatedSocket,
     controller: AbortController,
     claim: TurnClaimRequest | undefined,
-    namedConversationId: string | undefined,
     turn: (markSettled: () => void, markDiscarded: () => void) => Promise<void>
   ): Promise<void> {
     if (!claim) {
@@ -518,7 +516,7 @@ export class AgentGateway
       );
     }
     const owner = randomUUID();
-    const outcome = await this.claimTurn(claim, namedConversationId, owner);
+    const outcome = await this.claimTurn(claim, owner);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
       this.endedLegs.add(controller);
       this.refuseClaimedTurn(client, claim, outcome);
@@ -538,28 +536,25 @@ export class AgentGateway
       await (settled
         ? this.turnClaims.settle(claim, owner)
         : this.turnClaims.release(claim, owner));
-      if (namedConversationId) {
-        await this.turnClaims.releaseConversation(
-          claim.userId,
-          namedConversationId,
-          owner
-        );
-      }
+      await this.turnClaims.releaseConversation(
+        claim.userId,
+        claim.conversationId,
+        owner
+      );
     }
   }
 
   private async claimTurn(
     claim: TurnClaimRequest,
-    namedConversationId: string | undefined,
     owner: string
   ): Promise<TurnClaimOutcome> {
     const outcome = await this.turnClaims.claim(claim, owner);
-    if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED || !namedConversationId) {
+    if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
       return outcome;
     }
     const lease = await this.turnClaims.claimConversation(
       claim.userId,
-      namedConversationId,
+      claim.conversationId,
       owner
     );
     if (lease !== TURN_CLAIM_OUTCOME.CLAIMED) {
