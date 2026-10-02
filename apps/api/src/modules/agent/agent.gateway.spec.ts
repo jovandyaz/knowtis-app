@@ -10,7 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_STOP_REASON } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
+import type { TierResolver } from '../ai/application/services/tier-resolver.service';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
+import type { AiCaller } from '../ai/domain/execution-context/ai-execution-context';
+import { createExecutionContext } from '../ai/testing/create-execution-context';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import {
   SHUTDOWN_ABORT_REASON,
@@ -20,11 +23,12 @@ import { TOKEN_EXPIRY_GRACE_MS } from '../websocket/socket-expiry';
 import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
-import type {
-  RunAgentTurnCallbacks,
+import {
   RunAgentTurnHandler,
+  type RunAgentTurnCallbacks,
 } from './application/run-agent-turn.handler';
 import { AgentErrors } from './domain/agent-errors';
+import type { ConversationRepository } from './domain/ports/conversation.repository';
 import type {
   PendingMutationRecord,
   PendingMutationStore,
@@ -2035,9 +2039,7 @@ describe('AgentGateway', () => {
       });
       const gateway = makeGateway({ handler: { execute } as never, redis });
 
-      await expect(
-        gateway.handleMessage(makeClient('u1') as never, turn())
-      ).rejects.toThrow('persistence exploded');
+      await gateway.handleMessage(makeClient('u1') as never, turn());
 
       expect(claimOf(redis)).toMatchObject({ status: 'settled' });
     });
@@ -2177,9 +2179,7 @@ describe('AgentGateway', () => {
           .mockRejectedValueOnce(new Error('database down'));
         const gateway = makeGateway({ handler: { execute } as never, redis });
 
-        await expect(
-          gateway.handleMessage(makeClient('u1') as never, turn())
-        ).rejects.toThrow('database down');
+        await gateway.handleMessage(makeClient('u1') as never, turn());
         expect(claimOf(redis)).toBeNull();
         await gateway.handleMessage(makeClient('u1', 'c2') as never, turn());
 
@@ -2620,9 +2620,7 @@ describe('AgentGateway', () => {
           });
           const gateway = makeGateway({ handler: { execute }, redis });
 
-          await gateway
-            .handleMessage(makeClient('u1') as never, turn())
-            .catch(() => undefined);
+          await gateway.handleMessage(makeClient('u1') as never, turn());
           expect(heldWhileRunning).toEqual([LEASE_KEY]);
           expect(leases(redis)).toEqual([]);
           const next = makeClient('u1', 'c2');
@@ -2766,6 +2764,268 @@ describe('AgentGateway', () => {
           await running;
         }
       );
+    });
+
+    describe('a turn whose handler throws', () => {
+      const CAPPED_TURN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+      const FAILURE = 'database down';
+      const continuation = {
+        turnId: TURN,
+        conversationId: CONVERSATION,
+        continuesTurnId: CAPPED_TURN,
+      };
+      const storedConversation = { id: CONVERSATION, model: null };
+      const cappedTurn = {
+        turnId: CAPPED_TURN,
+        role: 'assistant',
+        stopReason: 'max_steps',
+        model: null,
+      };
+      const internalError = (turnId: string) => [
+        'agent:error',
+        {
+          code: 'AI_INTERNAL_ERROR',
+          message: 'AI internal error: Agent turn failed',
+          turnId,
+        },
+      ];
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      function failureLog() {
+        return vi
+          .spyOn(Logger.prototype, 'error')
+          .mockImplementation(() => undefined);
+      }
+
+      function handlerOver(
+        conversations: Partial<ConversationRepository>
+      ): Partial<RunAgentTurnHandler> {
+        const unused = {} as never;
+        const tiers = {
+          resolve: async ({ userId }: AiCaller) =>
+            createExecutionContext({ userId }),
+        } as unknown as TierResolver;
+        const handler = new RunAgentTurnHandler(
+          unused,
+          unused,
+          { get: () => 2 } as unknown as ConfigService<EnvConfig, true>,
+          unused,
+          unused,
+          conversations as ConversationRepository,
+          unused,
+          unused,
+          unused,
+          unused,
+          unused,
+          unused,
+          unused,
+          tiers,
+          unused,
+          unused
+        );
+        return {
+          execute: handler.execute.bind(handler),
+          continueTurn: handler.continueTurn.bind(handler),
+          resumeTurn: handler.resumeTurn.bind(handler),
+        };
+      }
+
+      it.each([
+        [
+          'a message whose conversation cannot be resolved',
+          turn(),
+          (): Partial<ConversationRepository> => ({
+            findByIdForUser: vi.fn().mockRejectedValue(new Error(FAILURE)),
+          }),
+        ],
+        [
+          'a continuation whose capped turn cannot be read',
+          continuation,
+          (): Partial<ConversationRepository> => ({
+            findByIdForUser: vi.fn().mockResolvedValue(storedConversation),
+            hasTurn: vi.fn().mockResolvedValue(false),
+            findLastMessage: vi.fn().mockRejectedValue(new Error(FAILURE)),
+          }),
+        ],
+        [
+          'a continuation whose history cannot be loaded',
+          continuation,
+          (): Partial<ConversationRepository> => ({
+            findByIdForUser: vi.fn().mockResolvedValue(storedConversation),
+            hasTurn: vi.fn().mockResolvedValue(false),
+            findLastMessage: vi.fn().mockResolvedValue(cappedTurn),
+            loadMessages: vi.fn().mockRejectedValue(new Error(FAILURE)),
+          }),
+        ],
+      ])(
+        'answers %s with one AI_INTERNAL_ERROR under its turn id, logs why and frees the turn',
+        async (_failing, payload, conversations) => {
+          const log = failureLog();
+          const redis = createInMemoryClaimRedis();
+          const gateway = makeGateway({
+            handler: handlerOver(conversations()),
+            redis,
+          });
+          const client = makeClient('u1');
+
+          await gateway.handleMessage(client as never, payload);
+
+          expect(client.emit.mock.calls).toEqual([internalError(TURN)]);
+          expect(log).toHaveBeenCalledWith({
+            event: 'agent.turn.unexpected_failure',
+            userId: 'u1',
+            turnId: TURN,
+            leg: 'message',
+            error: FAILURE,
+          });
+          expect([...redis.entries.keys()]).toEqual([]);
+          const resent = makeClient('u1', 'c2');
+          await gateway.handleMessage(resent as never, payload);
+          expect(resent.emit.mock.calls).toEqual([internalError(TURN)]);
+        }
+      );
+
+      it('answers a resumed turn whose history cannot be loaded under the turn that proposed it', async () => {
+        const log = failureLog();
+        const gateway = makeGateway({
+          approve: {
+            execute: vi.fn().mockResolvedValue(
+              ok({
+                result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+                outcome: 'created the note "GTD"',
+                conversationId: CONVERSATION,
+                turnId: PROPOSAL_TURN,
+              })
+            ),
+          },
+          handler: handlerOver({
+            findByIdForUser: vi.fn().mockResolvedValue(storedConversation),
+            loadMessages: vi.fn().mockRejectedValue(new Error(FAILURE)),
+          }),
+        });
+        const client = makeClient('u1');
+
+        await gateway.handleApprove(client as never, approvePayload());
+
+        expect(client.emit.mock.calls).toEqual([
+          [
+            'agent:committed',
+            expect.objectContaining({ turnId: PROPOSAL_TURN }),
+          ],
+          internalError(PROPOSAL_TURN),
+        ]);
+        expect(log).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: 'agent.turn.unexpected_failure',
+            turnId: PROPOSAL_TURN,
+            leg: 'resume',
+          })
+        );
+      });
+
+      const endings: [string, (cb: RunAgentTurnCallbacks) => void][] = [
+        [
+          'agent:done',
+          (cb) => {
+            cb.onModelStart?.();
+            cb.onDone(doneUsage);
+          },
+        ],
+        [
+          'agent:error',
+          (cb) => cb.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' }),
+        ],
+        [
+          'agent:proposal',
+          (cb) => {
+            cb.onModelStart?.();
+            cb.onProposal(
+              ProposedMutation.create({
+                id: '77777777-7777-4777-8777-777777777777',
+                kind: 'create',
+                payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+                summary: 'Create GTD',
+              })._unsafeUnwrap()
+            );
+          },
+        ],
+        ['agent:turn_settled', (cb) => cb.onTurnSettled?.(CONVERSATION)],
+      ];
+
+      it.each(endings)(
+        'adds nothing to a turn that already ended with %s, but logs the throw',
+        async (ending, end) => {
+          const log = failureLog();
+          const execute = vi.fn<Execute>(async (_input, cb) => {
+            end(cb);
+            throw new Error(FAILURE);
+          });
+          const gateway = makeGateway({ handler: { execute } });
+          const client = makeClient('u1');
+
+          await gateway.handleMessage(client as never, turn());
+
+          expect(client.emit.mock.calls.map(([event]) => event)).toEqual([
+            ending,
+          ]);
+          expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+              event: 'agent.turn.unexpected_failure',
+              turnId: TURN,
+            })
+          );
+        }
+      );
+
+      it('stays silent about a turn the client cancelled before it threw', async () => {
+        failureLog();
+        const execute = vi.fn<Execute>(async (_input, _cb, signal) => {
+          await new Promise<void>((resolve) =>
+            signal.addEventListener('abort', () => resolve(), { once: true })
+          );
+          throw new Error(FAILURE);
+        });
+        const gateway = makeGateway({ handler: { execute } });
+        const client = makeClient('u1');
+
+        const running = gateway.handleMessage(client as never, turn());
+        await flushAsync();
+        gateway.handleCancel(client as never);
+        await running;
+
+        expect(client.emit.mock.calls).toEqual([]);
+      });
+
+      it('only tells the client to resend a turn the drain aborted before it threw', async () => {
+        failureLog();
+        const execute = vi.fn<Execute>(async (_input, _cb, signal) => {
+          await new Promise<void>((resolve) =>
+            signal.addEventListener('abort', () => resolve(), { once: true })
+          );
+          throw new Error(FAILURE);
+        });
+        const drain = new ShutdownDrain();
+        const gateway = makeGateway({ handler: { execute }, drain });
+        const client = makeClient('u1');
+
+        const running = gateway.handleMessage(client as never, turn());
+        await vi.waitFor(() => expect(execute).toHaveBeenCalled());
+        await drain.beforeApplicationShutdown();
+        await running;
+
+        expect(client.emit.mock.calls).toEqual([
+          [
+            'agent:error',
+            expect.objectContaining({
+              code: 'TURN_CLAIM_UNAVAILABLE',
+              turnId: TURN,
+            }),
+          ],
+        ]);
+      });
     });
   });
 

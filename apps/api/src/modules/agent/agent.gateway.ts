@@ -635,6 +635,20 @@ export class AgentGateway
     }
     try {
       await body(controller);
+    } catch (error) {
+      this.logger.error({
+        event: 'agent.turn.unexpected_failure',
+        userId,
+        turnId,
+        leg,
+        error: reasonOf(error),
+      });
+      if (!this.endedLegs.has(controller) && !controller.signal.aborted) {
+        client.emit('agent:error', {
+          ...AIErrors.internalError('Agent turn failed'),
+          turnId,
+        });
+      }
     } finally {
       // The handler ends a turn the drain aborted without a word, so the client
       // is told it is unavailable: it resends a message and ends a resume.
