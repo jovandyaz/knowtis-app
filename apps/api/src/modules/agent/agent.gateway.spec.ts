@@ -2311,6 +2311,40 @@ describe('AgentGateway', () => {
         expect(continueTurn).toHaveBeenCalledOnce();
       });
 
+      it('lets a resend rerun a continuation that stored nothing', async () => {
+        const redis = createInMemoryClaimRedis();
+        const continueTurn = vi
+          .fn<Execute>(completes)
+          .mockImplementationOnce(async (_input, cb) => {
+            cb.onModelStart?.();
+            cb.onTurnDiscarded?.();
+            cb.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
+          });
+        const gateway = makeGateway({
+          handler: { continueTurn } as never,
+          redis,
+        });
+        await gateway.handleMessage(
+          makeClient('u1') as never,
+          continueRequest()
+        );
+        expect(claimOf(redis)).toBeNull();
+        const resent = makeClient('u1', 'c2');
+
+        await gateway.handleMessage(resent as never, continueRequest());
+
+        expect(continueTurn).toHaveBeenCalledTimes(2);
+        expect(resent.emit).toHaveBeenCalledWith(
+          'agent:done',
+          expect.objectContaining({ turnId: TURN })
+        );
+        expect(resent.emit).not.toHaveBeenCalledWith(
+          'agent:turn_settled',
+          expect.anything()
+        );
+        expect(claimOf(redis)).toMatchObject({ status: 'settled' });
+      });
+
       it('refuses its turn id once a message ran under it', async () => {
         const execute = vi.fn<Execute>(completes);
         const continueTurn = vi.fn<Execute>(completes);

@@ -46,6 +46,10 @@ import {
 } from '../../ai/domain/execution-context/ai-execution-context';
 import type { ModelChoice } from '../../ai/domain/model-catalog/model-choice';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
+import type {
+  QuotaConsumeResult,
+  QuotaTurn,
+} from '../../ai/domain/ports/message-quota.port';
 import { utcDayOf } from '../../ai/domain/value-objects/utc-day';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { createMessageQuotaStub } from '../../ai/testing/create-message-quota-stub';
@@ -75,7 +79,7 @@ import {
   projectReplayText,
   REPLAY_REDACTION_MARKER,
 } from '../domain/replay-input-sanitizer';
-import { TURN_ABORT_REASON } from '../domain/turn-abort';
+import { TURN_ABORT_REASON, type TurnAbortReason } from '../domain/turn-abort';
 import { conversationIdForTurn } from '../domain/turn-identity';
 import type { InjectionGuardService } from './injection-guard.service';
 import {
@@ -8104,12 +8108,14 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       onProposal: vi.fn(),
       onModelStart: vi.fn(),
       onQuota: vi.fn(),
+      onTurnDiscarded: vi.fn(),
     };
     return {
       handler,
       callbacks,
       conversations,
       orchestrator,
+      pendingStore,
       quota,
       guard,
       embed,
@@ -8532,6 +8538,92 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       throw new Error('orchestrator failed');
     }
 
+    async function* failsAfterToolSteps(): AsyncGenerator<AgentEvent> {
+      yield {
+        type: 'step',
+        messages: [
+          {
+            role: 'assistant',
+            content: '',
+            parts: [
+              {
+                type: 'tool-call',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                input: { id: 'n1' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                output: { title: 'N1' },
+                outputType: 'json',
+              },
+            ],
+          },
+        ],
+      };
+      yield { type: 'error', error: MODEL_ERROR };
+    }
+
+    function abortsBeforeText(
+      controller: AbortController,
+      reason: TurnAbortReason
+    ) {
+      return async function* (): AsyncGenerator<AgentEvent> {
+        controller.abort(reason);
+        yield {
+          type: 'aborted',
+          usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
+        };
+      };
+    }
+
+    function markerCounters() {
+      const markers = new Set<string>();
+      let used = 0;
+      return {
+        consume: vi.fn(
+          async ({ turnId }: QuotaTurn): Promise<QuotaConsumeResult> => {
+            if (markers.has(turnId)) {
+              return { allowed: true, used, replayed: true };
+            }
+            markers.add(turnId);
+            used += 1;
+            return { allowed: true, used, replayed: false };
+          }
+        ),
+        refund: vi.fn(async ({ turnId }: QuotaTurn) => {
+          if (!markers.delete(turnId)) {
+            return false;
+          }
+          used -= 1;
+          return true;
+        }),
+        usage: vi.fn(async () => used),
+        used: () => used,
+      };
+    }
+
+    function meteredBy(counters: ReturnType<typeof markerCounters>) {
+      return new MessageQuotaService(
+        counters,
+        { countUserMessages: vi.fn() },
+        {
+          getDailyMessageLimits: vi
+            .fn()
+            .mockResolvedValue({ anonymous: 5, free: 30 }),
+        } as unknown as AIConfigService,
+        { emit: vi.fn() } as unknown as EventEmitter2
+      );
+    }
+
     function readsBackStoredRows(ctx: ReturnType<typeof setup>) {
       vi.mocked(ctx.conversations.findLastMessage).mockImplementation(
         async () => {
@@ -8563,6 +8655,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
         throwsMidRun,
         AIErrors.providerError('Agent turn failed'),
       ],
+      ['a model error after its tool steps', failsAfterToolSteps, MODEL_ERROR],
     ])(
       'stores nothing for a continuation ended by %s, gives its message back and reports the failure',
       async (_label, run, error) => {
@@ -8576,6 +8669,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
         expect(ctx.quota.refund).toHaveBeenCalledOnce();
         expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(error);
         expect(ctx.callbacks.onDone).not.toHaveBeenCalled();
+        expect(ctx.callbacks.onTurnDiscarded).toHaveBeenCalledOnce();
       }
     );
 
@@ -8587,13 +8681,9 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
       async (reason, _verb, refunds) => {
         const controller = new AbortController();
         const ctx = setup();
-        vi.mocked(ctx.orchestrator.run).mockImplementation(async function* () {
-          controller.abort(reason);
-          yield {
-            type: 'aborted',
-            usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
-          };
-        });
+        vi.mocked(ctx.orchestrator.run).mockImplementation(
+          abortsBeforeText(controller, reason)
+        );
 
         await ctx.handler.continueTurn(
           request,
@@ -8603,6 +8693,40 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
 
         expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
         expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+        expect(ctx.callbacks.onTurnDiscarded).toHaveBeenCalledOnce();
+      }
+    );
+
+    it.each([
+      ['a model error', null],
+      ['a disconnect', TURN_ABORT_REASON.DISCONNECTED],
+      ['a cancel', TURN_ABORT_REASON.CANCELLED],
+    ] as const)(
+      'draws one message in all when a continuation ended by %s before any text is resent under its turn id',
+      async (_label, abortReason) => {
+        const counters = markerCounters();
+        const ctx = setup({ quota: meteredBy(counters) });
+        const controller = new AbortController();
+        vi.mocked(ctx.orchestrator.run).mockImplementationOnce(
+          abortReason === null
+            ? failsWithModelError
+            : abortsBeforeText(controller, abortReason)
+        );
+
+        await ctx.handler.continueTurn(
+          request,
+          ctx.callbacks,
+          controller.signal
+        );
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(ctx.orchestrator.run).toHaveBeenCalledTimes(2);
+        expect(counters.consume).toHaveBeenCalledTimes(2);
+        expect(counters.used()).toBe(1);
+        expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ turnId: CONTINUATION })
+        );
+        expect(ctx.callbacks.onTurnDiscarded).toHaveBeenCalledOnce();
       }
     );
 
@@ -8653,6 +8777,28 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
           },
         ],
       });
+      expect(ctx.callbacks.onTurnDiscarded).not.toHaveBeenCalled();
+    });
+
+    it('keeps a continuation whose proposal it stored when saving the proposal fails', async () => {
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const ctx = setup({
+        events: [
+          {
+            type: 'proposal',
+            proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+            usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+          },
+        ],
+      });
+      vi.mocked(ctx.pendingStore.save).mockRejectedValue(
+        new Error('redis down')
+      );
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledOnce();
+      expect(ctx.callbacks.onTurnDiscarded).not.toHaveBeenCalled();
     });
 
     it('still stores a fresh message whose turn fails before any text', async () => {
@@ -8677,6 +8823,7 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
           { role: 'assistant', content: '', sources: [], stopReason: 'error' },
         ],
       });
+      expect(ctx.callbacks.onTurnDiscarded).not.toHaveBeenCalled();
     });
   });
 

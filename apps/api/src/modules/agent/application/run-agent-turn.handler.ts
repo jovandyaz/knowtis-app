@@ -200,6 +200,8 @@ export interface RunAgentTurnCallbacks {
   readonly onQuota?: (quota: AiQuota) => void;
   /** Fires instead of running when the turn id is already stored in the conversation. */
   readonly onTurnSettled?: (conversationId: string) => void;
+  /** Fires when a continuation ends before any text and so stores nothing; a resend of its turn id may run it again. */
+  readonly onTurnDiscarded?: () => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -851,6 +853,7 @@ export class RunAgentTurnHandler {
       | 'onThinking'
       | 'onModelStart'
       | 'onQuota'
+      | 'onTurnDiscarded'
     >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
@@ -1025,7 +1028,9 @@ export class RunAgentTurnHandler {
     const persistFailedTurn = async (
       stopReason: 'error' | 'aborted'
     ): Promise<void> => {
-      if (input.continuation && !answered) {
+      if (!persisted && input.continuation && !answered) {
+        persisted = true;
+        callbacks.onTurnDiscarded?.();
         return;
       }
       await persistTurnOnce([], stopReason);

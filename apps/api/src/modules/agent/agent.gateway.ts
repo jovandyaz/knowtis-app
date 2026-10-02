@@ -331,7 +331,7 @@ export class AgentGateway
           client,
           controller,
           turnClaimOf(userId, turnId, data),
-          (markSettled) => {
+          (markSettled, markDiscarded) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
               onProposal: (proposal) => {
@@ -339,6 +339,7 @@ export class AgentGateway
                 onProposal(proposal);
               },
               onModelStart: markSettled,
+              onTurnDiscarded: markDiscarded,
               onQuota: (quota) => this.emitQuota(client, turnId, quota),
               onTurnSettled: (conversationId) => {
                 markSettled();
@@ -498,17 +499,21 @@ export class AgentGateway
     );
   }
 
-  // Stripe's rule: a turn refused before the model ran saves nothing, so its
-  // claim is released and a resend of it runs. A turn the conversation
-  // already stores outlived its claim, so it is settled like one that ran.
+  // Stripe's rule: a turn that saves nothing (refused before the model ran,
+  // or discarded after it) releases its claim, so a resend of it runs. A turn
+  // the conversation already stores outlived its claim, so it is settled like
+  // one that ran.
   private async withTurnClaim(
     client: AuthenticatedSocket,
     controller: AbortController,
     claim: TurnClaimRequest | undefined,
-    turn: (markSettled: () => void) => Promise<void>
+    turn: (markSettled: () => void, markDiscarded: () => void) => Promise<void>
   ): Promise<void> {
     if (!claim) {
-      return turn(() => undefined);
+      return turn(
+        () => undefined,
+        () => undefined
+      );
     }
     const outcome = await this.turnClaims.claim(claim);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
@@ -518,9 +523,14 @@ export class AgentGateway
     }
     let settled = false;
     try {
-      await turn(() => {
-        settled = true;
-      });
+      await turn(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = false;
+        }
+      );
     } finally {
       await (settled
         ? this.turnClaims.settle(claim)
