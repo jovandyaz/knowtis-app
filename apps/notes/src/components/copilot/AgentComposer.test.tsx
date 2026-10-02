@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
 import type { AgentStatus } from '@/stores/agent.store';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as SharedUtil from '@knowtis/shared-util';
 
@@ -26,6 +26,22 @@ type Handlers = Partial<
     'onSend' | 'onSendNow' | 'onStop' | 'onTakeBack'
   >
 >;
+
+function Composer(props: Partial<Parameters<typeof AgentComposer>[0]>) {
+  return (
+    <AgentComposer
+      draft=""
+      onDraftChange={vi.fn()}
+      onSend={vi.fn()}
+      onSendNow={vi.fn()}
+      onStop={vi.fn()}
+      onTakeBack={vi.fn()}
+      queueLength={0}
+      status="idle"
+      {...props}
+    />
+  );
+}
 
 /** The real composer is controlled by the store; this harness stands in for it. */
 function Harness({
@@ -243,6 +259,185 @@ describe('AgentComposer', () => {
     );
     expect(screen.getByText('picker')).toBeInTheDocument();
   });
+
+  it('shows the counter on the hint line', () => {
+    render(<Composer counter={<span>6 left</span>} />);
+
+    expect(screen.getByText('6 left').parentElement).toContainElement(
+      screen.getByText('ai.copilot.composerHint')
+    );
+  });
+
+  it('replaces the input with the locked notice and leaves the draft alone', () => {
+    const onDraftChange = vi.fn();
+    render(
+      <Composer
+        draft="hola"
+        onDraftChange={onDraftChange}
+        counter={<span>0 left</span>}
+        locked={<p>locked-notice</p>}
+      />
+    );
+
+    expect(screen.getByText('locked-notice')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByText('ai.copilot.composerHint')).toBeNull();
+    expect(screen.queryByText('0 left')).toBeNull();
+    expect(onDraftChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentComposer focus under a lock', () => {
+  it('hands the focus to the lock when it takes the input the user was in', () => {
+    const { rerender } = render(<Composer draft="hola" />);
+    act(() => screen.getByRole('textbox').focus());
+
+    rerender(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    expect(screen.getByRole('button', { name: 'upgrade' })).toHaveFocus();
+  });
+
+  it('leaves the focus alone when the user was not in the input', () => {
+    const { rerender } = render(<Composer draft="hola" />);
+
+    rerender(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    expect(screen.getByRole('button', { name: 'upgrade' })).not.toHaveFocus();
+  });
+
+  it('leaves the focus on the page when the user clicked away from the input', () => {
+    const { rerender } = render(<Composer draft="hola" />);
+    const box = screen.getByRole('textbox');
+    act(() => box.focus());
+    act(() => box.blur());
+
+    rerender(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    expect(screen.getByRole('button', { name: 'upgrade' })).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('does not take the focus back from where the user moved it', () => {
+    const { rerender } = render(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer draft="hola" />
+      </>
+    );
+    act(() => screen.getByRole('textbox').focus());
+    act(() => screen.getByRole('button', { name: 'elsewhere' }).focus());
+
+    rerender(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer
+          draft="hola"
+          locked={<button type="button">upgrade</button>}
+        />
+      </>
+    );
+
+    expect(screen.getByRole('button', { name: 'elsewhere' })).toHaveFocus();
+  });
+});
+
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+function stubPointer(pointer: 'fine' | 'coarse') {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: pointer === 'coarse' && query === COARSE_POINTER_QUERY,
+    media: query,
+  }));
+}
+
+describe('AgentComposer focus when the lock lifts', () => {
+  beforeEach(() => {
+    stubPointer('fine');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('gives the focus to the input when the call to action held it', () => {
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+    act(() => screen.getByRole('button', { name: 'upgrade' }).focus());
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  });
+
+  it('gives the focus to the input when it had fallen to the page', () => {
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  });
+
+  it('leaves the focus where the user moved it', () => {
+    const { rerender } = render(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer
+          draft="hola"
+          locked={<button type="button">upgrade</button>}
+        />
+      </>
+    );
+    act(() => screen.getByRole('button', { name: 'elsewhere' }).focus());
+
+    rerender(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer draft="hola" />
+      </>
+    );
+
+    expect(screen.getByRole('button', { name: 'elsewhere' })).toHaveFocus();
+  });
+
+  it('keeps the keyboard closed on a touch screen when the focus had fallen to the page', () => {
+    stubPointer('coarse');
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('gives the focus back on a touch screen when the call to action held it', () => {
+    stubPointer('coarse');
+    const { rerender } = render(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+    act(() => screen.getByRole('button', { name: 'upgrade' }).focus());
+
+    rerender(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  });
+
+  it('does not take the focus when the composer first appears unlocked', () => {
+    render(<Composer draft="hola" />);
+
+    expect(screen.getByRole('textbox')).not.toHaveFocus();
+  });
 });
 
 describe('AgentComposer sizing', () => {
@@ -267,5 +462,22 @@ describe('AgentComposer sizing', () => {
     await user.keyboard('{Enter}');
     expect(box).toHaveValue('');
     expect(box.style.height).toBe('');
+  });
+
+  it('gives the draft back sized to its content once the lock lifts', () => {
+    vi.spyOn(
+      HTMLTextAreaElement.prototype,
+      'scrollHeight',
+      'get'
+    ).mockReturnValue(96);
+    const { rerender } = render(
+      <Composer draft={'line1\nline2'} locked={<p>locked-notice</p>} />
+    );
+
+    rerender(<Composer draft={'line1\nline2'} />);
+
+    const box = screen.getByRole('textbox');
+    expect(box).toHaveValue('line1\nline2');
+    expect(box.style.height).toBe('96px');
   });
 });

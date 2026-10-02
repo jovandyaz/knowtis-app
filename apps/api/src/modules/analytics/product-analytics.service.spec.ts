@@ -106,6 +106,53 @@ describe('ProductAnalytics', () => {
     await close();
   });
 
+  it('sends anonymous captures without a person profile and without person properties', async () => {
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+    });
+
+    analytics.capture({
+      distinctId: 'anon-1',
+      event: 'user signed up',
+      properties: { source: 'api' },
+      actor: { actor_type: 'anonymous', is_internal: false, locale: 'en' },
+      personProperties: {
+        email: 'person@example.com',
+        name: 'Person',
+        role: 'user',
+        locale: 'en',
+        is_internal: false,
+      },
+    });
+
+    const { properties } = capture.mock.calls[0][0];
+    expect(properties.$process_person_profile).toBe(false);
+    expect(properties).not.toHaveProperty('$set');
+
+    await close();
+  });
+
+  it('leaves registered captures with person processing on', async () => {
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+    });
+
+    analytics.capture({
+      distinctId: 'user-1',
+      event: 'note created',
+      properties: { source: 'api', actor_type: 'registered' },
+      actor: { actor_type: 'registered', is_internal: false, locale: 'en' },
+    });
+
+    expect(capture.mock.calls[0][0].properties).not.toHaveProperty(
+      '$process_person_profile'
+    );
+
+    await close();
+  });
+
   it('runtime-picks exact event, actor, and person allowlists from structural variables', async () => {
     const { analytics, close } = await createAnalytics({
       NODE_ENV: 'production',
@@ -218,6 +265,7 @@ describe('ProductAnalytics', () => {
         source: 'api',
         tier: 'anonymous',
         actor_type: 'anonymous',
+        $process_person_profile: false,
         is_internal: false,
         locale: 'en',
       },

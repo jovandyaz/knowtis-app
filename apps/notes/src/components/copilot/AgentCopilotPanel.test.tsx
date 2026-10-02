@@ -1,5 +1,9 @@
+import type { ReactNode } from 'react';
+
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAgentStore } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
+import { useSettingsStore } from '@/stores/settings.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ApiClient from '@knowtis/api-client';
 import {
   agentClient,
+  aiQuotaApi,
   ApiClientError,
   conversationsApi,
 } from '@knowtis/api-client';
@@ -17,8 +22,10 @@ import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AGENT_TURN_ERROR_CODE,
   AI_BYOK_KEY_FAILED_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
   type AgentByokKeyFailedError,
   type ConversationTranscript,
+  type QuotaUpgrade,
 } from '@knowtis/shared-types';
 
 import {
@@ -29,7 +36,11 @@ import {
 import { AgentCopilotPanel } from './AgentCopilotPanel';
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, opts?: { context?: string }) =>
+      opts?.context ? `${key}_${opts.context}` : key,
+    i18n: { language: 'en' },
+  }),
 }));
 const routeParams = vi.hoisted(() => ({ current: {} as { noteId?: string } }));
 vi.mock('@tanstack/react-router', () => ({
@@ -42,18 +53,25 @@ vi.mock('./AgentComposer', () => ({
     queueLength: number;
     onSend: (text: string) => void;
     onSendNow: (text: string) => void;
+    counter?: ReactNode;
+    locked?: ReactNode;
   }) => (
     <div
       data-testid="composer"
       data-draft={props.draft}
       data-queue={props.queueLength}
     >
-      <button type="button" onClick={() => props.onSend('later')}>
-        send
-      </button>
-      <button type="button" onClick={() => props.onSendNow('now')}>
-        send-now
-      </button>
+      {props.locked || (
+        <>
+          <button type="button" onClick={() => props.onSend('later')}>
+            send
+          </button>
+          <button type="button" onClick={() => props.onSendNow('now')}>
+            send-now
+          </button>
+        </>
+      )}
+      {props.counter}
     </div>
   ),
 }));
@@ -84,8 +102,13 @@ vi.mock('@knowtis/api-client', async (importOriginal) => ({
     setTokenProvider: vi.fn(),
     setAuthRefreshHandler: vi.fn(),
     setSessionExpiredHandler: vi.fn(),
+    onQuota: vi.fn(() => () => undefined),
   },
+  aiQuotaApi: { getQuota: vi.fn() },
   conversationsApi: { transcript: vi.fn() },
+}));
+vi.mock('@/lib/analytics/product-events', () => ({
+  captureProductEvent: vi.fn(),
 }));
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() },
@@ -97,6 +120,12 @@ const wrapper = createAuthWrapper(createAuthApiMock(), {
 
 const anonymousWrapper = createAuthWrapper(createAuthApiMock(), {
   user: { ...HARNESS_PROFILE, isAnonymous: true },
+});
+
+beforeEach(() => {
+  vi.mocked(aiQuotaApi.getQuota)
+    .mockReset()
+    .mockReturnValue(new Promise(() => undefined));
 });
 
 function failWith(code: string) {
@@ -164,6 +193,42 @@ describe('AgentCopilotPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'ai.errors.byokKeyFailed.credit'
     );
+  });
+
+  it('offers to check the key instead of a retry when the provider refused it', async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ isOpen: false, focusTarget: null });
+    vi.mocked(captureProductEvent).mockClear();
+    render(<AgentCopilotPanel />, { wrapper });
+    const refused: AgentByokKeyFailedError = {
+      code: AI_BYOK_KEY_FAILED_CODE,
+      message: 'Your API key was refused by the provider.',
+      provider: 'openai',
+      kind: 'auth',
+    };
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: refused,
+        retryMode: 'none',
+      });
+    });
+    await user.click(
+      screen.getByRole('button', { name: 'ai.copilot.byok.reviewKey' })
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'ai.preview.retry' })
+    ).not.toBeInTheDocument();
+    expect(useSettingsStore.getState()).toMatchObject({
+      isOpen: true,
+      activeSection: 'aiAssistant',
+      focusTarget: 'aiKeys',
+    });
+    expect(vi.mocked(captureProductEvent).mock.calls).toEqual([
+      ['ai upgrade cta clicked', { from_tier: 'byok', cta: 'review_key' }],
+    ]);
   });
 
   it('does not offer a code to a visitor with no address', () => {
@@ -751,6 +816,21 @@ describe('AgentCopilotPanel proposal routing', () => {
     expect(useRightDockStore.getState().reviewOpen).toBe(true);
   });
 
+  it('shows the timeout banner while an update proposal is under review', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'timeout',
+        pendingProposal: updateProposal,
+      });
+      useRightDockStore.setState({ reviewOpen: true });
+    });
+
+    expect(screen.getByTestId('review')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('ai.errors.timeout');
+  });
+
   it('returns to the chat with a pending row and reopens the review from it', async () => {
     render(<AgentCopilotPanel />, { wrapper });
     act(() => {
@@ -888,5 +968,250 @@ describe('AgentCopilotPanel proposal routing', () => {
     });
     expect(useRightDockStore.getState().reviewOpen).toBe(false);
     expect(screen.getByTestId('composer')).toBeInTheDocument();
+  });
+});
+
+describe('AgentCopilotPanel daily quota', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+  const RESETS_AT = new Date(Date.now() + HOUR_MS).toISOString();
+  const RESET_PASSED_AT = new Date(Date.now() - HOUR_MS).toISOString();
+
+  const freshWrapper = () =>
+    createAuthWrapper(createAuthApiMock(), { user: HARNESS_PROFILE });
+
+  function refuseWith(details: { resetsAt?: string; upgrade?: QuotaUpgrade }) {
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        retryMode: 'none',
+        draft: 'hola',
+        error: {
+          code: AI_QUOTA_EXHAUSTED_CODE,
+          message: 'Daily messages spent',
+          ...details,
+        },
+      });
+    });
+  }
+
+  function refuseForTheDay(upgrade: QuotaUpgrade) {
+    refuseWith({ resetsAt: RESETS_AT, upgrade });
+  }
+
+  beforeEach(() => {
+    vi.mocked(agentClient.onQuota).mockClear();
+    act(() => {
+      useAgentStore.setState({
+        status: 'idle',
+        error: null,
+        answeredError: null,
+        messages: [],
+        pendingProposal: null,
+        queue: [],
+        draft: '',
+        retryMode: 'resend',
+      });
+    });
+  });
+
+  it('locks the composer instead of showing a banner when a send is refused for the day', () => {
+    refuseForTheDay('byok');
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.copilot.quota.exhaustedToday'
+    );
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.quota.byokCta' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'send' })).toBeNull();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-draft',
+      'hola'
+    );
+  });
+
+  it('offers a guest an account when the refusal says to register', () => {
+    refuseForTheDay('register');
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.quota.registerCta' })
+    ).toBeInTheDocument();
+  });
+
+  it('locks the composer once today’s messages are spent', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'free',
+      messages: { used: 30, limit: 30, resetsAt: RESETS_AT },
+    });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByRole('button', { name: 'ai.copilot.quota.byokCta' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'ai.copilot.quota.exhausted'
+    );
+  });
+
+  it('keeps the composer while the turn that spent the last message still runs', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'free',
+      messages: { used: 30, limit: 30, resetsAt: RESETS_AT },
+    });
+    act(() => {
+      useAgentStore.setState({
+        status: 'streaming',
+        messages: [
+          { id: 'u1', role: 'user', content: 'hola' },
+          { id: 'a1', role: 'assistant', content: '' },
+        ],
+      });
+    });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByText('ai.copilot.quota.remaining')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'ai.copilot.quota.byokCta' })
+    ).toBeNull();
+  });
+
+  it('reports a refusal the cached quota does not explain', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'anonymous',
+      messages: { used: 3, limit: 5, resetsAt: RESETS_AT },
+    });
+    refuseForTheDay('register');
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByText('ai.copilot.quota.remaining')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.copilot.quota.exhaustedToday'
+    );
+    expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-draft',
+      'hola'
+    );
+  });
+
+  it('names a reset at one o’clock in its own form', async () => {
+    const resetsAtOne = new Date();
+    resetsAtOne.setHours(25, 0, 0, 0);
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'anonymous',
+      messages: { used: 3, limit: 5, resetsAt: resetsAtOne.toISOString() },
+    });
+    refuseWith({ resetsAt: resetsAtOne.toISOString(), upgrade: 'register' });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByText('ai.copilot.quota.remaining')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.copilot.quota.exhaustedToday_atOne'
+    );
+  });
+
+  it('reports a refusal that names no reset when the quota is unknown', () => {
+    refuseWith({});
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.rateLimited'
+    );
+    expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
+  });
+
+  it('drops a refusal whose reset has passed once messages are back', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'free',
+      messages: { used: 0, limit: 30, resetsAt: RESETS_AT },
+    });
+    refuseWith({ resetsAt: RESET_PASSED_AT, upgrade: 'byok' });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByText('ai.copilot.quota.remaining')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-draft',
+      'hola'
+    );
+  });
+
+  it('drops the refusal once a key moves the caller to the byok tier', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'byok',
+      messages: null,
+    });
+    refuseForTheDay('byok');
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByRole('button', { name: 'send' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-draft',
+      'hola'
+    );
+  });
+
+  it('neither counts nor locks for a byok caller', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'byok',
+      messages: null,
+    });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    await waitFor(() => expect(aiQuotaApi.getQuota).toHaveBeenCalled());
+    await act(async () => undefined);
+    expect(screen.queryByText('ai.copilot.quota.remaining')).toBeNull();
+    expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
+  });
+
+  it('does not lock the composer when the quota cannot be read', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockRejectedValue(
+      new ApiClientError('unavailable', 503)
+    );
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    await waitFor(() => expect(aiQuotaApi.getQuota).toHaveBeenCalled());
+    await act(async () => undefined);
+    expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
+    expect(screen.queryByText('ai.copilot.quota.remaining')).toBeNull();
+  });
+
+  it('listens for quota pushes while mounted', () => {
+    const unsubscribe = vi.fn();
+    vi.mocked(agentClient.onQuota).mockReturnValueOnce(unsubscribe);
+
+    const { unmount } = render(<AgentCopilotPanel />, {
+      wrapper: freshWrapper(),
+    });
+    expect(agentClient.onQuota).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

@@ -83,6 +83,8 @@ export class ProductAnalytics implements OnApplicationShutdown {
       return;
     }
 
+    const isAnonymous = input.actor.actor_type === 'anonymous';
+
     try {
       this.client.capture({
         distinctId: input.distinctId,
@@ -94,7 +96,8 @@ export class ProductAnalytics implements OnApplicationShutdown {
             EVENT_PROPERTY_KEYS[input.event] as readonly string[]
           ),
           ...pickDefined(input.actor, ACTOR_PROPERTY_KEYS),
-          ...(input.personProperties
+          ...(isAnonymous ? { $process_person_profile: false } : {}),
+          ...(input.personProperties && !isAnonymous
             ? {
                 $set: pickDefined(input.personProperties, PERSON_PROPERTY_KEYS),
               }

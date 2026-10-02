@@ -93,6 +93,7 @@ export {
 } from './lib/images.api';
 
 export { aiModelsApi, type ModelCatalogView } from './lib/ai-models.api';
+export { aiQuotaApi } from './lib/ai-quota.api';
 export { aiKeysApi } from './lib/ai-keys.api';
 
 export {

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiKeysApi } from '@knowtis/api-client';
 
+import { aiQuotaQueryKeys } from './useAiQuota';
 import { aiModelsQueryKeys } from './useAvailableModels';
 import {
   providerKeysQueryKeys,
@@ -160,6 +161,40 @@ describe('provider key mutations and the model list', () => {
 
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: aiModelsQueryKeys.preferences(),
+    });
+  });
+});
+
+describe('provider key mutations and the daily quota', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads the quota again once a key moves the caller to the byok tier', async () => {
+    vi.mocked(aiKeysApi.set).mockResolvedValue(mockKeys);
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useSetProviderKey(), { wrapper });
+
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-test' });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiQuotaQueryKeys.all,
+    });
+  });
+
+  it('reads the quota again once a key is removed', async () => {
+    vi.mocked(aiKeysApi.remove).mockResolvedValue(undefined);
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useDeleteProviderKey(), { wrapper });
+
+    result.current.mutate('anthropic');
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiQuotaQueryKeys.all,
     });
   });
 });

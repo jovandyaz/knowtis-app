@@ -1,3 +1,4 @@
+import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -22,9 +23,13 @@ import {
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
   type AgentStopReason,
+  type AiQuota,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import {
@@ -115,6 +120,22 @@ export interface SendMessageOptions {
   interrupt?: boolean;
 }
 
+export interface NewConversationOptions {
+  keepDraft?: boolean;
+}
+
+export interface SessionUser {
+  id: string;
+  isAnonymous?: boolean;
+}
+
+export function keepsDraftAcrossSwitch(
+  from: Pick<SessionUser, 'isAnonymous'> | null,
+  to: Pick<SessionUser, 'isAnonymous'>
+): boolean {
+  return from?.isAnonymous === true && to.isAnonymous !== true;
+}
+
 const TURN_ALIVE_STATUSES = [
   'streaming',
   'pendingProposal',
@@ -178,7 +199,7 @@ interface AgentState {
   retryMode: RetryMode;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
-  bindUser: (userId: string) => void;
+  bindUser: (user: SessionUser) => void;
   setConversationTitle: (title: string) => void;
   openConversation: (
     id: string,
@@ -198,7 +219,7 @@ interface AgentState {
   sendQueuedNow: (id: string) => void;
   /** Moves the newest queued item back into `draft`; no-op when the queue is empty or the draft has text. */
   takeBackQueued: () => void;
-  newConversation: () => void;
+  newConversation: (options?: NewConversationOptions) => void;
   cancel: () => void;
   retryLast: () => void;
   approveProposal: () => void;
@@ -235,8 +256,33 @@ function isUnresumedDecision(error: AgentErrorPayload): boolean {
   );
 }
 
-function refusesResend(error: AgentErrorPayload): boolean {
-  return error.code === AI_INVALID_INPUT_CODE;
+function refusedBeforeRun(error: AgentErrorPayload): boolean {
+  return (
+    error.code === AI_INVALID_INPUT_CODE ||
+    error.code === AI_QUOTA_EXHAUSTED_CODE
+  );
+}
+
+function offersNoResend(error: AgentErrorPayload): boolean {
+  return (
+    refusedBeforeRun(error) ||
+    error.code === AI_BYOK_KEY_FAILED_CODE ||
+    error.code === AGENT_TURN_NOT_CONTINUABLE_CODE
+  );
+}
+
+function joinDraft(...parts: readonly (string | null)[]): string {
+  return parts
+    .filter((part): part is string => part !== null && part.trim().length > 0)
+    .join(DRAFT_PARAGRAPH_SEPARATOR);
+}
+
+function queuedTexts(queue: readonly QueuedMessage[]): string[] {
+  return queue.map((queued) => queued.text);
+}
+
+function invalidateQuota(): void {
+  void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
 }
 
 function isPersistedConversation(
@@ -266,6 +312,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let lastNoteId: string | undefined;
   let unsentText: string | null = null;
   let titleEdits = 0;
+  let boundUser: SessionUser | null = null;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -393,11 +440,33 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       conversationTitle: null,
       hydration: 'unloaded',
       hasEarlier: false,
-      draft: [returned, s.draft]
-        .filter(
-          (part): part is string => part !== null && part.trim().length > 0
-        )
-        .join(DRAFT_PARAGRAPH_SEPARATOR),
+      draft: joinDraft(returned, s.draft),
+    }));
+  };
+
+  const giveBackRefusedMessage = (error: AgentErrorPayload) => {
+    const assistantId = activeAssistantId;
+    const turnId = get().messages.find((m) => m.id === assistantId)?.turnId;
+    const ofRefusedTurn = (m: AgentChatMessage) =>
+      m.id === assistantId || (turnId !== undefined && m.turnId === turnId);
+    const returned = unsentText;
+    unsentText = null;
+    activeAssistantId = null;
+    const lockedOut = error.code === AI_QUOTA_EXHAUSTED_CODE;
+    set((s) => ({
+      status: 'error',
+      error,
+      retryMode: 'none',
+      _streamHandle: null,
+      thinkingText: '',
+      decisionInFlight: null,
+      messages: s.messages.filter((m) => !ofRefusedTurn(m)),
+      queue: lockedOut ? [] : s.queue,
+      draft: joinDraft(
+        returned,
+        ...(lockedOut ? queuedTexts(s.queue) : []),
+        s.draft
+      ),
     }));
   };
 
@@ -451,6 +520,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             return;
           }
           invalidateConversations(queryClient);
+          invalidateQuota();
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
@@ -475,11 +545,16 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             return;
           }
           invalidateConversations(queryClient);
+          invalidateQuota();
           buffer.clearInactivityTimer();
           buffer.flush();
           thinkingBuffer.discard();
           if (error.code === AGENT_CONVERSATION_NOT_FOUND_CODE) {
             forgetGoneConversation(error);
+            return;
+          }
+          if (!resumingDecision && refusedBeforeRun(error)) {
+            giveBackRefusedMessage(error);
             return;
           }
           const inFlight = get().decisionInFlight;
@@ -495,7 +570,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             status: 'error',
             error,
             retryMode:
-              resumingDecision || refusesResend(error) ? 'none' : 'resend',
+              resumingDecision || offersNoResend(error) ? 'none' : 'resend',
             _streamHandle: null,
             thinkingText: '',
             decisionInFlight: null,
@@ -733,9 +808,27 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     }));
   };
 
+  const quotaKnownSpent = (): boolean => {
+    const { userId } = get();
+    if (userId === null) {
+      return false;
+    }
+    const quota = quotaStateOf(
+      queryClient.getQueryData<AiQuota>(aiQuotaQueryKeys.forUser(userId))
+    );
+    return quota.kind === 'metered' && quota.exhausted;
+  };
+
   const drainQueue = () => {
     const [next, ...rest] = get().queue;
     if (!next) {
+      return;
+    }
+    if (quotaKnownSpent()) {
+      set((s) => ({
+        queue: [],
+        draft: joinDraft(...queuedTexts(s.queue), s.draft),
+      }));
       return;
     }
     set({ queue: rest });
@@ -763,15 +856,17 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
     setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
 
-    bindUser: (userId) => {
+    bindUser: (user) => {
+      const keepDraft = keepsDraftAcrossSwitch(boundUser, user);
+      boundUser = user;
       const { userId: boundUserId, conversationId } = get();
-      if (boundUserId === userId) {
+      if (boundUserId === user.id) {
         return;
       }
       if (conversationId !== null) {
-        get().newConversation();
+        get().newConversation({ keepDraft });
       }
-      set({ userId });
+      set({ userId: user.id });
     },
 
     setConversationTitle: (title) => {
@@ -895,14 +990,14 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       set({ queue: queue.slice(0, -1), draft: last.text });
     },
 
-    newConversation: () => {
+    newConversation: (options) => {
       abandonTurn();
       threadVersion++;
       agentClient.resetConversation();
-      set({
+      set((s) => ({
         messages: [],
         queue: [],
-        draft: '',
+        draft: options?.keepDraft ? s.draft : '',
         status: 'idle',
         error: null,
         retryMode: 'resend',
@@ -915,7 +1010,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         hydration: 'unloaded',
         hasEarlier: false,
         _streamHandle: null,
-      });
+      }));
     },
 
     cancel: () => {

@@ -33,6 +33,7 @@ import { useCollapseFocusReturn, useMediaQuery } from '@knowtis/shared-hooks';
 import { isStudyFocusOpen } from '../artifacts/focus/study-focus-marker';
 import { AgentCopilotPanel } from '../copilot/AgentCopilotPanel';
 import { ConversationSwitcher } from '../copilot/ConversationSwitcher';
+import { TierBadge } from '../copilot/TierBadge';
 import { useDockInsetRef } from './dock-inset';
 
 const DOCK_COLLAPSE_THRESHOLD = 240;
@@ -88,12 +89,13 @@ function DockHeader() {
       <div className="min-w-0 flex-1">
         <ConversationSwitcher />
       </div>
+      <TierBadge />
       {hasConversation && (
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          onClick={newConversation}
+          onClick={() => newConversation()}
           aria-label={t('ai.copilot.newConversation')}
           className="shrink-0"
         >

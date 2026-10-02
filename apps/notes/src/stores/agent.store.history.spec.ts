@@ -196,7 +196,7 @@ describe('agent.store conversation identity', () => {
   });
 
   it('persists only the user and the conversation id', () => {
-    useAgentStore.getState().bindUser('u1');
+    useAgentStore.getState().bindUser({ id: 'u1' });
     const { callbacks } = capture();
     useAgentStore.getState().sendMessage('hola');
     callbacks().onConversation?.('c1');
@@ -210,7 +210,7 @@ describe('agent.store conversation identity', () => {
   it('forgets a conversation that belongs to another account', () => {
     useAgentStore.setState({ userId: 'u1', conversationId: 'c1' });
 
-    useAgentStore.getState().bindUser('u2');
+    useAgentStore.getState().bindUser({ id: 'u2' });
 
     const { userId, conversationId } = useAgentStore.getState();
     expect({ userId, conversationId }).toEqual({
@@ -220,10 +220,35 @@ describe('agent.store conversation identity', () => {
     expect(agentClient.resetConversation).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps what a guest was typing when they sign in', () => {
+    useAgentStore.getState().bindUser({ id: 'g1', isAnonymous: true });
+    useAgentStore.setState({ conversationId: 'c1' });
+    useAgentStore.getState().setDraft('hola');
+
+    useAgentStore.getState().bindUser({ id: 'u1' });
+
+    const { userId, conversationId, draft } = useAgentStore.getState();
+    expect({ userId, conversationId, draft }).toEqual({
+      userId: 'u1',
+      conversationId: null,
+      draft: 'hola',
+    });
+  });
+
+  it('wipes what one account was typing when another signs in', () => {
+    useAgentStore.getState().bindUser({ id: 'u1' });
+    useAgentStore.setState({ conversationId: 'c1' });
+    useAgentStore.getState().setDraft('hola');
+
+    useAgentStore.getState().bindUser({ id: 'u2' });
+
+    expect(useAgentStore.getState().draft).toBe('');
+  });
+
   it('keeps the conversation of the same account', () => {
     useAgentStore.setState({ userId: 'u1', conversationId: 'c1' });
 
-    useAgentStore.getState().bindUser('u1');
+    useAgentStore.getState().bindUser({ id: 'u1' });
 
     expect(useAgentStore.getState().conversationId).toBe('c1');
   });
@@ -231,7 +256,7 @@ describe('agent.store conversation identity', () => {
   it('forgets an id whose owner it never recorded', () => {
     useAgentStore.setState({ userId: null, conversationId: 'c1' });
 
-    useAgentStore.getState().bindUser('u1');
+    useAgentStore.getState().bindUser({ id: 'u1' });
 
     expect(useAgentStore.getState().conversationId).toBeNull();
   });

@@ -1,5 +1,6 @@
 import type { QueryKey } from '@tanstack/react-query';
 
+import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +14,12 @@ import type {
 } from '@knowtis/api-client';
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 import {
+  AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
 } from '@knowtis/shared-types';
 
 import {
@@ -80,7 +85,7 @@ function invalidationOf(keys: QueryKey[]) {
   return keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);
 }
 
-function capture(): {
+function capture(turnId = 'turn-1'): {
   cancel: ReturnType<typeof vi.fn>;
   get: () => Cbs;
 } {
@@ -88,7 +93,7 @@ function capture(): {
   let captured: Cbs | null = null;
   vi.mocked(agentClient.sendMessage).mockImplementation((_text, cbs) => {
     captured = cbs as Cbs;
-    return { turnId: 'turn-1', cancel };
+    return { turnId, cancel };
   });
   return {
     cancel,
@@ -415,15 +420,243 @@ describe('useAgentStore', () => {
     expect(sent).toBe('hello');
   });
 
-  it('offers no retry for a message the server refused as invalid input', () => {
-    const { get } = capture();
-    useAgentStore.getState().sendMessage('hello');
-    get().onError({ code: AI_INVALID_INPUT_CODE, message: 'too large' });
+  describe('a message refused before the model ran', () => {
+    const DONE: AgentDonePayload = {
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    };
 
-    useAgentStore.getState().retryLast();
+    it.each([AI_INVALID_INPUT_CODE, AI_QUOTA_EXHAUSTED_CODE])(
+      '%s takes its bubbles off the thread and gives the text back to the composer',
+      (code) => {
+        const earlier = capture('turn-0');
+        useAgentStore.getState().sendMessage('earlier');
+        earlier.get().onChunk({ text: 'answer' });
+        earlier.get().onDone(DONE);
+        const { get } = capture('turn-1');
+        useAgentStore.getState().sendMessage('hello');
+        const error: AgentErrorPayload = { code, message: 'refused' };
 
-    expect(useAgentStore.getState().retryMode).toBe('none');
-    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+        get().onError(error);
+
+        const {
+          messages,
+          draft,
+          retryMode,
+          status,
+          error: shown,
+        } = useAgentStore.getState();
+        expect(messages.map((m) => m.content)).toEqual(['earlier', 'answer']);
+        expect({ draft, retryMode, status, error: shown }).toEqual({
+          draft: 'hello',
+          retryMode: 'none',
+          status: 'error',
+          error,
+        });
+      }
+    );
+
+    it('puts the sent text before what the user typed since', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+      useAgentStore.getState().setDraft('nuevo');
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      expect(useAgentStore.getState().draft).toBe('hello\n\nnuevo');
+    });
+
+    it('a quota refusal folds the queued messages into the draft in order', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      useAgentStore.getState().setDraft('nuevo');
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      const { draft, queue } = useAgentStore.getState();
+      expect({ draft, queue }).toEqual({
+        draft: 'hello\n\nsecond\n\nthird\n\nnuevo',
+        queue: [],
+      });
+    });
+
+    it('a quota refusal of a drained message folds the rest of the queue behind it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      get().onDone(DONE);
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      const { draft, queue } = useAgentStore.getState();
+      expect({ draft, queue }).toEqual({
+        draft: 'second\n\nthird',
+        queue: [],
+      });
+    });
+
+    it('an oversized message leaves the queue paused behind it', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+      useAgentStore.getState().sendMessage('second');
+
+      get().onError({ code: AI_INVALID_INPUT_CODE, message: 'too large' });
+
+      const { draft, queue } = useAgentStore.getState();
+      expect({ draft, queue: queue.map((q) => q.text) }).toEqual({
+        draft: 'hello',
+        queue: ['second'],
+      });
+    });
+
+    it('leaves the turn it interrupted on the thread', () => {
+      const interrupted = capture('turn-0');
+      useAgentStore.getState().sendMessage('a');
+      interrupted.get().onChunk({ text: 'partial' });
+      vi.advanceTimersByTime(50);
+      const { get } = capture('turn-1');
+      useAgentStore.getState().sendMessage('b', undefined, {
+        interrupt: true,
+      });
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      const { messages, draft } = useAgentStore.getState();
+      expect(messages.map((m) => [m.turnId, m.content])).toEqual([
+        ['turn-0', 'a'],
+        ['turn-0', 'partial'],
+      ]);
+      expect(draft).toBe('b');
+    });
+
+    it('is not resent by retry', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+      get().onError({ code: AI_INVALID_INPUT_CODE, message: 'too large' });
+
+      useAgentStore.getState().retryLast();
+
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+      expect(useAgentStore.getState().messages).toEqual([]);
+    });
+  });
+
+  it.each([AI_BYOK_KEY_FAILED_CODE, AGENT_TURN_NOT_CONTINUABLE_CODE])(
+    '%s keeps the turn on the thread and offers no resend',
+    (code) => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+
+      get().onError({ code, message: 'refused' });
+      useAgentStore.getState().retryLast();
+
+      const { messages, draft, retryMode, status } = useAgentStore.getState();
+      expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+      expect({ draft, retryMode, status }).toEqual({
+        draft: '',
+        retryMode: 'none',
+        status: 'error',
+      });
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  describe('the daily quota', () => {
+    it('is refetched when a turn is done, in case its push was missed', () => {
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+
+      get().onDone({
+        usage: USAGE,
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+        stopReason: 'completed',
+      });
+
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
+    });
+
+    it.each([
+      'AI_PROVIDER_ERROR',
+      AI_QUOTA_EXHAUSTED_CODE,
+      AGENT_CONVERSATION_NOT_FOUND_CODE,
+    ])('is refetched when a turn fails with %s', (code) => {
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+
+      get().onError({ code, message: 'failed' });
+
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
+    });
+  });
+
+  describe('a queue behind the last message of the day', () => {
+    const DONE: AgentDonePayload = {
+      usage: USAGE,
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    };
+    const RESETS_AT = '2026-10-03T00:00:00.000Z';
+
+    function cacheQuota(used: number, limit: number) {
+      useAgentStore.setState({ userId: 'u1' });
+      queryClient.setQueryData(aiQuotaQueryKeys.forUser('u1'), {
+        tier: 'free',
+        messages: { used, limit, resetsAt: RESETS_AT },
+      });
+    }
+
+    afterEach(() => {
+      queryClient.removeQueries({ queryKey: aiQuotaQueryKeys.all });
+      useAgentStore.setState({ userId: null });
+    });
+
+    it('is folded into the draft instead of sent into a quota known to be spent', () => {
+      cacheQuota(30, 30);
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().sendMessage('third');
+      useAgentStore.getState().setDraft('nuevo');
+
+      get().onDone(DONE);
+
+      const { draft, queue, status } = useAgentStore.getState();
+      expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
+      expect({ draft, queue, status }).toEqual({
+        draft: 'second\n\nthird\n\nnuevo',
+        queue: [],
+        status: 'done',
+      });
+    });
+
+    it('drains while the cached quota has messages left', () => {
+      cacheQuota(29, 30);
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+
+      get().onDone(DONE);
+
+      expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+        'second'
+      );
+    });
   });
 
   it('retries a turn that timed out under its own id', () => {
@@ -771,6 +1004,22 @@ describe('useAgentStore', () => {
       useAgentStore.getState().setDraft('typing');
       useAgentStore.getState().newConversation();
       expect(useAgentStore.getState().draft).toBe('');
+    });
+
+    it('a new conversation that keeps the draft clears only the thread', () => {
+      capture();
+      useAgentStore.getState().sendMessage('first');
+      useAgentStore.getState().sendMessage('second');
+      useAgentStore.getState().setDraft('typing');
+
+      useAgentStore.getState().newConversation({ keepDraft: true });
+
+      const { messages, queue, draft } = useAgentStore.getState();
+      expect({ messages, queue, draft }).toEqual({
+        messages: [],
+        queue: [],
+        draft: 'typing',
+      });
     });
   });
 });

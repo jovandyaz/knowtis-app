@@ -2,8 +2,13 @@ import { io, type Socket } from 'socket.io-client';
 
 import {
   AGENT_TURN_ERROR_CODE,
+  type AgentQuotaPayload,
   type AgentStopReason,
+  type AiQuota,
+  type ByokKeyFailureKind,
+  type ByokProvider,
   type ModelResolution,
+  type QuotaUpgrade,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
@@ -66,6 +71,12 @@ export interface AgentErrorPayload {
   code: string;
   message: string;
   turnId?: string;
+  /** AI_QUOTA_EXHAUSTED */
+  resetsAt?: string;
+  upgrade?: QuotaUpgrade;
+  /** AI_BYOK_KEY_FAILED */
+  provider?: ByokProvider;
+  kind?: ByokKeyFailureKind;
 }
 
 export interface AgentProposalPayload {
@@ -197,6 +208,7 @@ function isResendable(
 
 export class AgentClient {
   private socket: Socket | null = null;
+  private quotaListeners = new Set<(quota: AiQuota) => void>();
   private activeCallbacks: AgentStreamCallbacks | null = null;
   private activeTurnId: string | undefined;
   private pending: PendingRequest | null = null;
@@ -235,6 +247,13 @@ export class AgentClient {
 
   setSessionExpiredHandler(handler: (() => void) | null): void {
     this.onSessionExpired = handler;
+  }
+
+  onQuota(listener: (quota: AiQuota) => void): () => void {
+    this.quotaListeners.add(listener);
+    return () => {
+      this.quotaListeners.delete(listener);
+    };
   }
 
   isConnected(): boolean {
@@ -613,6 +632,15 @@ export class AgentClient {
         handle(payload);
       });
     };
+
+    socket.on('agent:quota', ({ tier, messages }: AgentQuotaPayload) => {
+      if (this.socket !== socket) {
+        return;
+      }
+      for (const listener of [...this.quotaListeners]) {
+        listener({ tier, messages });
+      }
+    });
 
     onCurrentSocket('agent:chunk', (payload: AgentChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);

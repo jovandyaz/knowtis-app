@@ -3,16 +3,32 @@ import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
 
+import {
+  quotaStateOf,
+  useAiQuota,
+  useAiQuotaSync,
+  type QuotaState,
+} from '@/hooks/useAiQuota';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
-import { isUpdateProposal, useAgentStore } from '@/stores/agent.store';
+import { captureProductEvent } from '@/lib/analytics/product-events';
+import { clockTimeOf } from '@/lib/format-date';
+import {
+  isTurnAlive,
+  isUpdateProposal,
+  useAgentStore,
+} from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
+import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
 
+import type { AgentErrorPayload } from '@knowtis/api-client';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AI_BYOK_KEY_FAILED_CODE,
+  AI_QUOTA_EXHAUSTED_CODE,
 } from '@knowtis/shared-types';
 
 import {
@@ -28,10 +44,44 @@ import { CopilotModelPicker } from './CopilotModelPicker';
 import { HistoryRetryRow } from './HistoryRetryRow';
 import { ProposalPendingRow } from './ProposalPendingRow';
 import { ProposalReview } from './ProposalReview';
+import { QuotaCounter } from './QuotaCounter';
+import { QuotaLockedNotice, type QuotaLock } from './QuotaLockedNotice';
 import { RetryBanner } from './RetryBanner';
 
+function quotaMovedPast(
+  quota: QuotaState,
+  refusal: AgentErrorPayload
+): boolean {
+  if (quota.kind === 'unmetered') {
+    return true;
+  }
+  return (
+    quota.kind === 'metered' &&
+    refusal.resetsAt !== undefined &&
+    Date.parse(quota.resetsAt) > Date.parse(refusal.resetsAt)
+  );
+}
+
+function quotaLockOf(
+  quota: QuotaState,
+  refusal: AgentErrorPayload | null
+): QuotaLock | null {
+  if (quota.kind === 'metered') {
+    const { tier, limit, resetsAt } = quota;
+    return quota.exhausted ? { tier, limit, resetsAt } : null;
+  }
+  if (quota.kind === 'unknown' && refusal?.resetsAt && refusal.upgrade) {
+    return {
+      tier: refusal.upgrade === 'register' ? 'anonymous' : 'free',
+      limit: null,
+      resetsAt: refusal.resetsAt,
+    };
+  }
+  return null;
+}
+
 export function AgentCopilotPanel() {
-  const { t } = useTranslation('notes');
+  const { t, i18n } = useTranslation('notes');
   const messages = useAgentStore((s) => s.messages);
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
@@ -52,7 +102,19 @@ export function AgentCopilotPanel() {
   const hydration = useAgentStore((s) => s.hydration);
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
   const retryHydration = useAgentStore((s) => s.retryHydration);
-  const userId = useAuthUser()?.id ?? null;
+  const authUser = useAuthUser();
+  const userId = authUser?.id ?? null;
+  const isGuest = authUser?.isAnonymous === true;
+  useAiQuotaSync();
+  const quota = quotaStateOf(useAiQuota().data);
+  const quotaRefusal = error?.code === AI_QUOTA_EXHAUSTED_CODE ? error : null;
+  const liveQuotaRefusal =
+    quotaRefusal && !quotaMovedPast(quota, quotaRefusal) ? quotaRefusal : null;
+  const quotaLock = isTurnAlive(status)
+    ? null
+    : quotaLockOf(quota, liveQuotaRefusal);
+  const quotaRefusalNeedsNoBanner =
+    quotaRefusal !== null && (quotaLock !== null || liveQuotaRefusal === null);
   // Not the editor's activeNoteId: that stays null until the lazy editor chunk
   // mounts, and a message sent in that window would lose its note.
   const { noteId } = useParams({ strict: false }) as { noteId?: string };
@@ -80,13 +142,13 @@ export function AgentCopilotPanel() {
       return;
     }
     const store = useAgentStore.getState();
-    store.bindUser(userId);
+    store.bindUser({ id: userId, isAnonymous: isGuest });
     const { conversationId: remembered, messages: shown } =
       useAgentStore.getState();
     if (remembered && shown.length === 0) {
       void store.openConversation(remembered, 'reload');
     }
-  }, [userId]);
+  }, [userId, isGuest]);
 
   const send = (text: string) => {
     sendMessage(text, noteId);
@@ -144,15 +206,42 @@ export function AgentCopilotPanel() {
     toast.info(t('ai.copilot.history.gone'));
   }, [error, conversationWasGone, answeredError, markErrorAnswered, t]);
 
-  const errorBanner = (status === 'error' ||
-    (status === 'pendingProposal' && error)) && (
-    <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
+  const errorMessage = liveQuotaRefusal?.resetsAt
+    ? t('ai.copilot.quota.exhaustedToday', {
+        ...clockTimeOf(liveQuotaRefusal.resetsAt, i18n.language),
+      })
+    : t(errorMessageKey);
+  const reviewKey =
+    error?.code === AI_BYOK_KEY_FAILED_CODE
+      ? {
+          action: {
+            label: t('ai.copilot.byok.reviewKey'),
+            onClick: () => {
+              captureProductEvent('ai upgrade cta clicked', {
+                from_tier: 'byok',
+                cta: 'review_key',
+              });
+              useSettingsStore.getState().open('aiAssistant', 'aiKeys');
+            },
+          },
+        }
+      : {};
+  const banners = (
+    <>
+      {(status === 'error' || (status === 'pendingProposal' && error)) &&
+        !quotaRefusalNeedsNoBanner && (
+          <RetryBanner message={errorMessage} {...retryTurn} {...reviewKey} />
+        )}
+      {status === 'timeout' && (
+        <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
+      )}
+    </>
   );
 
   if (updateProposal && reviewOpen) {
     return (
       <div className="flex h-full flex-col min-h-0">
-        {errorBanner}
+        {banners}
         <div className="flex-1 min-h-0">
           <ProposalReview
             proposal={updateProposal}
@@ -196,10 +285,7 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
-      {errorBanner}
-      {status === 'timeout' && (
-        <RetryBanner message={t('ai.errors.timeout')} {...retryTurn} />
-      )}
+      {banners}
 
       {updateProposal && <ProposalPendingRow onOpen={openReview} />}
 
@@ -223,6 +309,8 @@ export function AgentCopilotPanel() {
         queueLength={queueLength}
         status={status}
         modelPicker={<CopilotModelPicker />}
+        counter={<QuotaCounter quota={quota} />}
+        locked={quotaLock && <QuotaLockedNotice {...quotaLock} />}
       />
     </div>
   );
