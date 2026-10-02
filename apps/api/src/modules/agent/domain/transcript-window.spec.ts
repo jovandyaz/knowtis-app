@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
+import { MESSAGE_KIND, type MessageKind } from '@knowtis/shared-types';
+
 import { alignTranscriptWindow } from './transcript-window';
 
-const row = (role: 'user' | 'assistant', content: string) => ({
+interface Row {
+  readonly role: 'user' | 'assistant';
+  readonly content: string;
+  readonly kind?: MessageKind;
+}
+
+const row = (role: Row['role'], content: string): Row => ({
   role,
   content,
 });
+const marker: Row = { role: 'user', content: '', kind: MESSAGE_KIND.CONTINUE };
 
 describe('alignTranscriptWindow', () => {
   it('should return a window that reaches the first row as it is', () => {
@@ -35,6 +44,62 @@ describe('alignTranscriptWindow', () => {
 
     expect(alignTranscriptWindow(rows, true)).toEqual({
       rows,
+      hasEarlier: true,
+    });
+  });
+
+  it.each([
+    ['on a continue marker', [marker, row('assistant', 'continued answer')]],
+    [
+      'on the tail of a capped answer before its continue marker',
+      [
+        row('assistant', 'tail of a capped answer'),
+        marker,
+        row('assistant', 'continued answer'),
+      ],
+    ],
+  ])(
+    'should open a cut window that starts %s on the first question after it',
+    (_start, orphaned) => {
+      const rows = [
+        ...orphaned,
+        row('user', 'question'),
+        row('assistant', 'answer'),
+      ];
+
+      expect(alignTranscriptWindow(rows, true)).toEqual({
+        rows: [row('user', 'question'), row('assistant', 'answer')],
+        hasEarlier: true,
+      });
+    }
+  );
+
+  it('should keep the continue markers that follow the first question of a cut window', () => {
+    const rows = [
+      row('assistant', 'tail of an older answer'),
+      row('user', 'question'),
+      row('assistant', 'capped answer'),
+      marker,
+      row('assistant', 'continued answer'),
+    ];
+
+    expect(alignTranscriptWindow(rows, true)).toEqual({
+      rows: rows.slice(1),
+      hasEarlier: true,
+    });
+  });
+
+  it('should leave nothing of a cut window whose only questions are continue markers', () => {
+    const rows = [
+      row('assistant', 'tail of a capped answer'),
+      marker,
+      row('assistant', 'continued answer'),
+      marker,
+      row('assistant', 'continued again'),
+    ];
+
+    expect(alignTranscriptWindow(rows, true)).toEqual({
+      rows: [],
       hasEarlier: true,
     });
   });

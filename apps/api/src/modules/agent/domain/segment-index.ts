@@ -1,5 +1,4 @@
-import { MESSAGE_KIND } from '@knowtis/shared-types';
-
+import { isContinueMarker } from './continue-marker';
 import type { ConversationMessageRow } from './ports/conversation.repository';
 
 /** How many continue markers follow the newest user message that is not one: 0 for a plain turn, 1 for its first continuation. */
@@ -11,7 +10,7 @@ export function segmentIndexOf(
     if (row.role !== 'user') {
       continue;
     }
-    if (row.kind !== MESSAGE_KIND.CONTINUE) {
+    if (!isContinueMarker(row)) {
       return markers;
     }
     markers += 1;
