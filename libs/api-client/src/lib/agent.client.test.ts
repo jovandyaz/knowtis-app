@@ -2509,6 +2509,22 @@ describe('AgentClient – onQuota', () => {
     expect(listener).toHaveBeenCalledWith(QUOTA);
   });
 
+  it('ignores a quota event from a socket that was replaced', () => {
+    const client = makeClient();
+    const listener = vi.fn();
+    client.onQuota(listener);
+    const handle = client.sendMessage('hi', callbacks());
+    handle.cancel();
+    client.disconnect();
+    const next = createFakeSocket();
+    vi.mocked(io).mockReturnValue(next.socket as never);
+    client.sendMessage('again', callbacks());
+
+    handlers.get('agent:quota')?.({ turnId: 'stale', ...(QUOTA as object) });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('stops delivering after unsubscribe', () => {
     const client = makeClient();
     const listener = vi.fn();

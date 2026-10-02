@@ -634,6 +634,9 @@ export class AgentClient {
     };
 
     socket.on('agent:quota', ({ tier, messages }: AgentQuotaPayload) => {
+      if (this.socket !== socket) {
+        return;
+      }
       for (const listener of [...this.quotaListeners]) {
         listener({ tier, messages });
       }
