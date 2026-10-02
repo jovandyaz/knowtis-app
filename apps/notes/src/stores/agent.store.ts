@@ -385,6 +385,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
   let liveContinuation: { continuesTurnId: string; turnId: string } | null =
     null;
 
+  const streamingReplyId = (status: AgentStatus): string | null =>
+    status === 'streaming' ? activeAssistantId : null;
+
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
     inactivityMs: AGENT_STREAM_INACTIVITY_MS,
@@ -407,13 +410,14 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       }
       get()._streamHandle?.cancel();
       thinkingBuffer.discard();
-      set({
+      set((s) => ({
         status: 'timeout',
         retryMode: resumingDecision ? 'none' : 'resend',
         _streamHandle: null,
         thinkingText: '',
         decisionInFlight: null,
-      });
+        messages: withInterruptedReply(s.messages, streamingReplyId(s.status)),
+      }));
     },
   });
 
@@ -708,7 +712,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           endUnresumedDecision();
           return;
         }
-        set({
+        set((s) => ({
           status: 'error',
           error,
           retryMode:
@@ -720,7 +724,11 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           _streamHandle: null,
           thinkingText: '',
           decisionInFlight: null,
-        });
+          messages: withInterruptedReply(
+            s.messages,
+            streamingReplyId(s.status)
+          ),
+        }));
       },
       onProposal: (proposal) => {
         if (version !== streamVersion) {
@@ -824,7 +832,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     thinkingBuffer.discard();
     const thread = withInterruptedReply(
       withoutUnansweredContinuation(get().messages),
-      current.status === 'streaming' ? activeAssistantId : null
+      streamingReplyId(current.status)
     );
     liveContinuation = null;
 
@@ -1219,7 +1227,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         isTurnAlive(status) && !resumingDecision && !activeAnswered()
           ? liveContinuation?.continuesTurnId
           : undefined;
-      const cutReply = status === 'streaming' ? activeAssistantId : null;
+      const cutReply = streamingReplyId(status);
       set((s) => ({
         status: 'idle',
         pendingProposal: null,

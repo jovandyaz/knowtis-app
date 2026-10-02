@@ -510,6 +510,66 @@ describe('useAgentStore', () => {
         false
       );
     });
+
+    const TURN_ENDS: [string, (cbs: Cbs) => void][] = [
+      [
+        'an error',
+        (cbs) => cbs.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' }),
+      ],
+      [
+        'the inactivity timeout',
+        () => vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS),
+      ],
+    ];
+
+    it.each(TURN_ENDS)(
+      'is marked interrupted and keeps its text when %s ends it mid-text',
+      (_end, end) => {
+        const { get } = capture();
+        useAgentStore.getState().sendMessage('hola');
+        get().onChunk({ text: 'partial' });
+
+        end(get());
+
+        expect(useAgentStore.getState().messages.at(-1)).toMatchObject({
+          content: 'partial',
+          interrupted: true,
+        });
+      }
+    );
+
+    it.each(TURN_ENDS)(
+      'is not marked when %s ends it before any text',
+      (_end, end) => {
+        const { get } = capture();
+        useAgentStore.getState().sendMessage('hola');
+
+        end(get());
+
+        expect(
+          useAgentStore.getState().messages.some((m) => m.interrupted)
+        ).toBe(false);
+      }
+    );
+
+    it('is not marked when an error ends a turn waiting on its proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onChunk({ text: 'Here is a draft.' });
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 'Create "My Note"',
+        payload: {},
+      });
+
+      get().onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
   });
 
   it('retryLast replays the last user message after an error', () => {

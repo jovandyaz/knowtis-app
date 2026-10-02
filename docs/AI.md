@@ -1521,8 +1521,8 @@ It shows a polite status message for `max_steps`, `token_budget`, `time_limit`,
 `completed` adds no notice. A reopened conversation restores the notice from the
 stop reason persisted on the turn's last assistant row, and a leg stored as
 `error` or `aborted` with text shows "This reply was interrupted." A live reply
-cut off mid-text by Stop, by "Send now" or by the shutdown drain shows the same
-notice.
+cut off mid-text by Stop, by "Send now", by an error, by the inactivity timeout
+or by the shutdown drain shows the same notice.
 
 The Notes client also owns a **message queue** (`useAgentStore.queue`): a send
 issued while a turn is alive (`streaming` or `pendingProposal`) is queued
