@@ -186,6 +186,10 @@ describe('AIGateway', () => {
     );
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('handleConnection', () => {
     it('should authenticate client with valid token', async () => {
       const client = createMockAISocket({
@@ -373,7 +377,6 @@ describe('AIGateway', () => {
         userId: 'user-123',
         error: 'database down',
       });
-      log.mockRestore();
     });
   });
 
@@ -469,7 +472,6 @@ describe('AIGateway', () => {
         error: 'db down',
       });
       expect(mockStreamHandler.execute).not.toHaveBeenCalled();
-      warn.mockRestore();
     });
 
     it('frees the stream slot when tier resolution fails', async () => {
@@ -580,7 +582,6 @@ describe('AIGateway', () => {
         error: 'database down',
       });
       expect(mockStreamHandler.execute).not.toHaveBeenCalled();
-      log.mockRestore();
     });
 
     it('should emit AUTH_REQUIRED when no userId', async () => {
@@ -1134,7 +1135,6 @@ describe('AIGateway', () => {
       );
       completion.finish();
       await running;
-      log.mockRestore();
     });
 
     it('refuses a new completion on the expired socket without running it', async () => {
