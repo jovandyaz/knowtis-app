@@ -1022,6 +1022,14 @@ export class RunAgentTurnHandler {
       );
       return stored;
     };
+    const persistFailedTurn = async (
+      stopReason: 'error' | 'aborted'
+    ): Promise<void> => {
+      if (input.continuation && !answered) {
+        return;
+      }
+      await persistTurnOnce([], stopReason);
+    };
     if (signal?.aborted) {
       await this.recordUsageSafe(ctx, {
         inputTokens: 0,
@@ -1073,7 +1081,7 @@ export class RunAgentTurnHandler {
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
-            await persistTurnOnce([], 'error');
+            await persistFailedTurn('error');
             if (!answered) {
               await hold.refund();
             }
@@ -1094,7 +1102,7 @@ export class RunAgentTurnHandler {
           case 'aborted':
             await this.recordUsageSafe(ctx, event.usage);
             ctx.reconciled = true;
-            await persistTurnOnce([], 'aborted');
+            await persistFailedTurn('aborted');
             if (!answered && !isUserCancel(signal)) {
               await hold.refund();
             }
@@ -1196,7 +1204,7 @@ export class RunAgentTurnHandler {
           model: ctx.model,
         });
       }
-      await persistTurnOnce([], 'error');
+      await persistFailedTurn('error');
       if (!answered) {
         await hold.refund();
       }
@@ -1204,7 +1212,7 @@ export class RunAgentTurnHandler {
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
     } catch (error) {
-      await persistTurnOnce([], signal?.aborted ? 'aborted' : 'error');
+      await persistFailedTurn(signal?.aborted ? 'aborted' : 'error');
       if (signal?.aborted) {
         if (!ctx.reconciled) {
           await this.recordUsageSafe(ctx, {

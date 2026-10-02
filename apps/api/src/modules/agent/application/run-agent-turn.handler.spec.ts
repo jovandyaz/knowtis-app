@@ -8514,25 +8514,132 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
     expect(ctx.emitter.emit).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
-    [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
-  ] as const)(
-    'a %s abort before any text %s the message and stores the marker with an aborted reply',
-    async (reason, _verb, refunds) => {
-      const controller = new AbortController();
+  describe('failing before any text', () => {
+    const RETRY = '77777777-7777-4777-8777-777777777777';
+    const MODEL_ERROR = AIErrors.providerError('upstream 500');
+
+    async function* failsWithModelError(): AsyncGenerator<AgentEvent> {
+      yield { type: 'thinking', text: 'let me see' };
+      yield { type: 'error', error: MODEL_ERROR };
+    }
+
+    async function* endsWithoutTerminalEvent(): AsyncGenerator<AgentEvent> {
+      yield { type: 'chunk', text: '' };
+    }
+
+    async function* throwsMidRun(): AsyncGenerator<AgentEvent> {
+      yield { type: 'thinking', text: 'let me see' };
+      throw new Error('orchestrator failed');
+    }
+
+    function readsBackStoredRows(ctx: ReturnType<typeof setup>) {
+      vi.mocked(ctx.conversations.findLastMessage).mockImplementation(
+        async () => {
+          const stored = vi
+            .mocked(ctx.conversations.appendTurn)
+            .mock.calls.at(-1)?.[0];
+          const row = stored?.messages.at(-1);
+          return stored && row
+            ? {
+                turnId: stored.turnId,
+                role: row.role,
+                stopReason: row.stopReason ?? null,
+                model: row.model ?? null,
+              }
+            : CAPPED_LAST;
+        }
+      );
+    }
+
+    it.each([
+      ['a model error', failsWithModelError, MODEL_ERROR],
+      [
+        'a run with no terminal event',
+        endsWithoutTerminalEvent,
+        AIErrors.providerError('Agent turn ended without a terminal event'),
+      ],
+      [
+        'an unexpected throw',
+        throwsMidRun,
+        AIErrors.providerError('Agent turn failed'),
+      ],
+    ])(
+      'stores nothing for a continuation ended by %s, gives its message back and reports the failure',
+      async (_label, run, error) => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const ctx = setup();
+        vi.mocked(ctx.orchestrator.run).mockImplementation(run);
+
+        await ctx.handler.continueTurn(request, ctx.callbacks);
+
+        expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+        expect(ctx.quota.refund).toHaveBeenCalledOnce();
+        expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(error);
+        expect(ctx.callbacks.onDone).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each([
+      [TURN_ABORT_REASON.DISCONNECTED, 'refunds', 1],
+      [TURN_ABORT_REASON.CANCELLED, 'keeps', 0],
+    ] as const)(
+      'a %s abort before any text %s the message and stores nothing',
+      async (reason, _verb, refunds) => {
+        const controller = new AbortController();
+        const ctx = setup();
+        vi.mocked(ctx.orchestrator.run).mockImplementation(async function* () {
+          controller.abort(reason);
+          yield {
+            type: 'aborted',
+            usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
+          };
+        });
+
+        await ctx.handler.continueTurn(
+          request,
+          ctx.callbacks,
+          controller.signal
+        );
+
+        expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+        expect(ctx.conversations.appendTurn).not.toHaveBeenCalled();
+      }
+    );
+
+    it('leaves the capped turn continuable, so continuing it again is accepted', async () => {
       const ctx = setup();
-      vi.mocked(ctx.orchestrator.run).mockImplementation(async function* () {
-        controller.abort(reason);
-        yield {
-          type: 'aborted',
-          usage: { inputTokens: 0, outputTokens: 0, model: SERVED_MODEL },
-        };
+      readsBackStoredRows(ctx);
+      vi.mocked(ctx.orchestrator.run).mockImplementationOnce(
+        failsWithModelError
+      );
+
+      await ctx.handler.continueTurn(request, ctx.callbacks);
+      await ctx.handler.continueTurn(
+        { ...request, turnId: RETRY },
+        ctx.callbacks
+      );
+
+      expect(ctx.callbacks.onError).toHaveBeenCalledExactlyOnceWith(
+        MODEL_ERROR
+      );
+      expect(ctx.orchestrator.run).toHaveBeenCalledTimes(2);
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ turnId: RETRY })
+      );
+      expect(ctx.callbacks.onDone).toHaveBeenCalledOnce();
+    });
+
+    it('stores a continuation that streamed text before it failed', async () => {
+      const ctx = setup({
+        events: [
+          { type: 'chunk', text: 'Found B.' },
+          { type: 'error', error: MODEL_ERROR },
+        ],
       });
 
-      await ctx.handler.continueTurn(request, ctx.callbacks, controller.signal);
+      await ctx.handler.continueTurn(request, ctx.callbacks);
 
-      expect(ctx.quota.refund).toHaveBeenCalledTimes(refunds);
+      expect(ctx.quota.refund).not.toHaveBeenCalled();
       expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
         conversationId: 'conv-1',
         turnId: CONTINUATION,
@@ -8540,14 +8647,38 @@ describe('RunAgentTurnHandler continuing a capped turn', () => {
           { role: 'user', content: '', kind: 'continue' },
           {
             role: 'assistant',
-            content: '',
+            content: 'Found B.',
             sources: [],
-            stopReason: 'aborted',
+            stopReason: 'error',
           },
         ],
       });
-    }
-  );
+    });
+
+    it('still stores a fresh message whose turn fails before any text', async () => {
+      const ctx = setup({ events: [{ type: 'error', error: MODEL_ERROR }] });
+
+      await ctx.handler.execute(
+        {
+          userId: USER,
+          turnId: CONTINUATION,
+          conversationId: 'conv-1',
+          message: { content: 'now research Y' },
+        },
+        ctx.callbacks
+      );
+
+      expect(ctx.quota.refund).toHaveBeenCalledOnce();
+      expect(ctx.conversations.appendTurn).toHaveBeenCalledExactlyOnceWith({
+        conversationId: 'conv-1',
+        turnId: CONTINUATION,
+        messages: [
+          { role: 'user', content: 'now research Y' },
+          { role: 'assistant', content: '', sources: [], stopReason: 'error' },
+        ],
+      });
+    });
+  });
 
   describe('announcing segments', () => {
     const EARLIER_CONTINUATION = 'earlier-continuation';
