@@ -249,6 +249,45 @@ describe('agent.store conversation identity', () => {
     expect(useAgentStore.getState().draft).toBe('');
   });
 
+  function finishCappedFirstTurn() {
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    callbacks().onChunk({ text: 'Revisé tres notas.' });
+    callbacks().onDone({ ...DONE, stopReason: 'max_steps', continuable: true });
+  }
+
+  it('forgets a first turn whose conversation id never arrived when another account signs in', () => {
+    useAgentStore.getState().bindUser({ id: 'u1' });
+    finishCappedFirstTurn();
+    useAgentStore.getState().setDraft('y luego esto');
+
+    useAgentStore.getState().bindUser({ id: 'u2' });
+
+    const { userId, messages, continuableTurnId, draft } =
+      useAgentStore.getState();
+    expect({ userId, messages, continuableTurnId, draft }).toEqual({
+      userId: 'u2',
+      messages: [],
+      continuableTurnId: null,
+      draft: '',
+    });
+  });
+
+  it('keeps only the draft of a guest’s first turn when they sign in', () => {
+    useAgentStore.getState().bindUser({ id: 'g1', isAnonymous: true });
+    finishCappedFirstTurn();
+    useAgentStore.getState().setDraft('y luego esto');
+
+    useAgentStore.getState().bindUser({ id: 'u1' });
+
+    const { messages, continuableTurnId, draft } = useAgentStore.getState();
+    expect({ messages, continuableTurnId, draft }).toEqual({
+      messages: [],
+      continuableTurnId: null,
+      draft: 'y luego esto',
+    });
+  });
+
   it('keeps the conversation of the same account', () => {
     useAgentStore.setState({ userId: 'u1', conversationId: 'c1' });
 

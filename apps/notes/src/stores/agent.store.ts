@@ -1073,7 +1073,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       if (boundUserId === user.id) {
         return;
       }
-      if (conversationId !== null) {
+      if (boundUserId !== null || conversationId !== null) {
         get().newConversation({ keepDraft });
       }
       set({ userId: user.id });
