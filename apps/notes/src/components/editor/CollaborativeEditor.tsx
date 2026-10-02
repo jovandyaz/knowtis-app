@@ -331,6 +331,7 @@ export function CollaborativeEditor({
   const { t } = useTranslation('notes');
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const collaborationEnabled = !localFirst;
+  const userId = useAuthUser()?.id;
   const editorState = useCollaborativeEditor(noteId, {
     skipProviderDelay: localFirst,
   });
@@ -383,6 +384,7 @@ export function CollaborativeEditor({
   const { status, isConnected, isSynced, readOnly } =
     useHocuspocusCollaboration({
       noteId,
+      userId,
       yDoc: editorState.yDoc,
       awareness: editorState.awareness,
       serverUrl: getCollaborationServerUrl(),

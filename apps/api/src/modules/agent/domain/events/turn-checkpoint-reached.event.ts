@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import type { AccessTier } from '@knowtis/shared-types';
+import type { AccessTier, ContinuableStopReason } from '@knowtis/shared-types';
 
 import type { DomainEvent } from '../../../../core/domain/events/domain-event.interface';
-import type { ContinuableStopReason } from '../continuable';
 
 export class TurnCheckpointReachedEvent implements DomainEvent {
   static readonly EVENT_NAME = 'agent.turn.checkpoint_reached';

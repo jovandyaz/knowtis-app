@@ -2,12 +2,16 @@ import { randomUUID } from 'node:crypto';
 
 import postgres from 'postgres';
 
+import type { MessageKind, MessageStopReason } from '@knowtis/shared-types';
+
 import { E2E } from '../../support/environment';
 import { test as copilotTest } from './copilot.fixture';
 
 export interface SeededMessage {
   role: 'user' | 'assistant';
   content: string;
+  stopReason?: MessageStopReason;
+  kind?: MessageKind;
 }
 
 interface ConversationSeed {
@@ -46,8 +50,8 @@ export const test = copilotTest.extend<{ conversations: ConversationsFixture }>(
                 turnId = randomUUID();
               }
               await db`
-                insert into conversation_messages (conversation_id, turn_id, role, content)
-                values (${conversation.id}, ${turnId}, ${message.role}::conversation_role, ${message.content})
+                insert into conversation_messages (conversation_id, turn_id, role, content, stop_reason, kind)
+                values (${conversation.id}, ${turnId}, ${message.role}::conversation_role, ${message.content}, ${message.stopReason ?? null}, ${message.kind ?? null})
               `;
             }
             return conversation.id;

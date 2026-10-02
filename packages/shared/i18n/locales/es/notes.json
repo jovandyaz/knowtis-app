@@ -423,6 +423,7 @@
       "turnIdReused": "Este mensaje chocó con un intento anterior. Reinténtalo para enviarlo como uno nuevo.",
       "answerUnavailable": "Tu mensaje ya tiene respuesta, pero no se pudo cargar. Reinténtalo para cargarla.",
       "turnInterrupted": "La respuesta se interrumpió. Reinténtalo para preguntar de nuevo.",
+      "turnNotContinuable": "Esta respuesta ya no se puede continuar. Escribe tu siguiente pregunta.",
       "permissionDenied": "No tienes permiso para hacer eso.",
       "noteNotFound": "La nota ya no existe.",
       "invalidProposal": "No se pudo procesar esa solicitud. Inténtalo de nuevo.",
@@ -510,6 +511,12 @@
         "length": "La respuesta quedó incompleta.",
         "content_filter": "El proveedor limitó esta respuesta."
       },
+      "continue": {
+        "action": "Continuar",
+        "partial": "Resultado parcial",
+        "marker": "Continuar"
+      },
+      "interrupted": "Esta respuesta se interrumpió.",
       "empty": {
         "title": "Pregúntale a tus notas",
         "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",

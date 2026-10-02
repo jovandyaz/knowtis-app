@@ -1,6 +1,11 @@
+import type { ReactNode } from 'react';
+
 import type { AgentChatMessage } from '@/stores/agent.store';
 
+import { MESSAGE_KIND } from '@knowtis/shared-types';
+
 import { Message, MessageContent, Response } from '../ai-elements/message';
+import { AgentContinueChip } from './AgentContinueChip';
 import { AgentResolvedChip } from './AgentResolvedChip';
 import { AgentSourceChips } from './AgentSourceChips';
 import { AgentStopNotice } from './AgentStopNotice';
@@ -9,10 +14,20 @@ import { AgentWebSourceChips } from './AgentWebSourceChips';
 export function AgentMessage({
   message,
   isStreaming,
+  footer,
 }: {
   message: AgentChatMessage;
   isStreaming: boolean;
+  footer?: ReactNode;
 }) {
+  if (message.kind === MESSAGE_KIND.CONTINUE) {
+    return (
+      <Message from="user">
+        <AgentContinueChip />
+      </Message>
+    );
+  }
+
   return (
     <Message from={message.role}>
       <MessageContent>
@@ -34,7 +49,8 @@ export function AgentMessage({
               {message.content}
             </Response>
             <AgentStopNotice
-              {...(message.stopReason ? { reason: message.stopReason } : {})}
+              reason={message.stopReason}
+              interrupted={message.interrupted}
             />
             {isStreaming && message.content.length > 0 && (
               <span
@@ -46,6 +62,7 @@ export function AgentMessage({
             {message.webSources && (
               <AgentWebSourceChips sources={message.webSources} />
             )}
+            {footer}
           </>
         )}
       </MessageContent>

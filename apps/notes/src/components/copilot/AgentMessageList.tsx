@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import type { KeyboardEvent, ReactNode, Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
@@ -22,6 +22,10 @@ interface AgentMessageListProps {
   historyNotice?: ReactNode;
   /** Reaches the log that scrolls, for instance to hand it focus. */
   conversationRef?: Ref<StickToBottomContext>;
+  /** Shown under the last message, the answer the copilot can continue. */
+  continuation?: ReactNode;
+  /** Stops the streaming turn on an Escape pressed while the log itself has focus. */
+  onStop?: () => void;
 }
 
 const LOG_FOCUS_CLASS =
@@ -34,12 +38,29 @@ export function AgentMessageList({
   hasEarlier = false,
   historyNotice,
   conversationRef,
+  continuation,
+  onStop,
 }: AgentMessageListProps) {
   const { t } = useTranslation('notes');
   const lastAssistant = messages.at(-1);
   const isAssistantTurn =
     status === 'streaming' && lastAssistant?.role === 'assistant';
   const answering = isAssistantTurn && lastAssistant.content.length > 0;
+
+  // Streamdown's overlays inside a message close on Escape without preventing
+  // its default, and React bubbles that Escape up through this log.
+  const stopOnEscape = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key !== 'Escape' ||
+      status !== 'streaming' ||
+      event.target !== event.currentTarget ||
+      event.defaultPrevented
+    ) {
+      return;
+    }
+    event.preventDefault();
+    onStop?.();
+  };
 
   return (
     <Conversation {...(conversationRef ? { contextRef: conversationRef } : {})}>
@@ -50,6 +71,7 @@ export function AgentMessageList({
           'aria-live': 'polite',
           tabIndex: -1,
           className: LOG_FOCUS_CLASS,
+          onKeyDown: stopOnEscape,
         }}
       >
         {historyNotice}
@@ -58,13 +80,14 @@ export function AgentMessageList({
             {t('ai.copilot.history.earlier')}
           </p>
         )}
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <AgentMessage
             key={message.id}
             message={message}
             isStreaming={
               status === 'streaming' && message.id === lastAssistant?.id
             }
+            footer={index === messages.length - 1 ? continuation : undefined}
           />
         ))}
         {isAssistantTurn && (

@@ -5,6 +5,7 @@ import type {
   ArtifactType,
   ByokKeyFailureKind,
   ByokProvider,
+  ContinuableStopReason,
   FlashcardReviewKind,
   McpScopeLevel,
   NoteShareType,
@@ -16,8 +17,6 @@ import type {
   QuizScoreBucket,
   QuotaRemainingBucket,
 } from '@knowtis/shared-types';
-
-import type { ContinuableStopReason } from '../agent/domain/continuable';
 
 export type ServerActorContext = ProductActorContext;
 

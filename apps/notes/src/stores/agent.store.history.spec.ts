@@ -21,7 +21,11 @@ import {
 } from '@knowtis/shared-types';
 import { COPILOT_CONVERSATION_STORAGE_KEY } from '@knowtis/shared-util';
 
-import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
+import {
+  AGENT_STREAM_INACTIVITY_MS,
+  selectContinuableAnswer,
+  useAgentStore,
+} from './agent.store';
 
 const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
@@ -243,6 +247,45 @@ describe('agent.store conversation identity', () => {
     useAgentStore.getState().bindUser({ id: 'u2' });
 
     expect(useAgentStore.getState().draft).toBe('');
+  });
+
+  function finishCappedFirstTurn() {
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    callbacks().onChunk({ text: 'Revisé tres notas.' });
+    callbacks().onDone({ ...DONE, stopReason: 'max_steps', continuable: true });
+  }
+
+  it('forgets a first turn whose conversation id never arrived when another account signs in', () => {
+    useAgentStore.getState().bindUser({ id: 'u1' });
+    finishCappedFirstTurn();
+    useAgentStore.getState().setDraft('y luego esto');
+
+    useAgentStore.getState().bindUser({ id: 'u2' });
+
+    const { userId, messages, continuableTurnId, draft } =
+      useAgentStore.getState();
+    expect({ userId, messages, continuableTurnId, draft }).toEqual({
+      userId: 'u2',
+      messages: [],
+      continuableTurnId: null,
+      draft: '',
+    });
+  });
+
+  it('keeps only the draft of a guest’s first turn when they sign in', () => {
+    useAgentStore.getState().bindUser({ id: 'g1', isAnonymous: true });
+    finishCappedFirstTurn();
+    useAgentStore.getState().setDraft('y luego esto');
+
+    useAgentStore.getState().bindUser({ id: 'u1' });
+
+    const { messages, continuableTurnId, draft } = useAgentStore.getState();
+    expect({ messages, continuableTurnId, draft }).toEqual({
+      messages: [],
+      continuableTurnId: null,
+      draft: 'y luego esto',
+    });
   });
 
   it('keeps the conversation of the same account', () => {
@@ -1335,5 +1378,106 @@ describe('agent.store retrying a failed turn', () => {
     useAgentStore.getState().sendMessage('hola');
 
     expect(vi.mocked(agentClient.sendMessage).mock.lastCall?.[3]).toEqual({});
+  });
+});
+
+describe('agent.store continue offer across a reload', () => {
+  it('adopts the turn the transcript says can be continued, with its marker', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue({
+      ...TRANSCRIPT,
+      hasEarlier: false,
+      messages: [
+        ...TRANSCRIPT.messages,
+        {
+          turnId: 't2',
+          role: 'user',
+          content: '',
+          sources: [],
+          stopReason: null,
+          kind: 'continue',
+        },
+        {
+          turnId: 't2',
+          role: 'assistant',
+          content: 'Day two.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+      ],
+      continuableTurnId: 't2',
+    });
+
+    await useAgentStore.getState().openConversation('c1', 'reload');
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBe('t2');
+    expect(selectContinuableAnswer(state)?.content).toBe('Day two.');
+    expect(
+      state.messages.map(({ role, content, kind }) => ({ role, content, kind }))
+    ).toEqual([
+      { role: 'user', content: 'Plan it', kind: undefined },
+      { role: 'assistant', content: 'Day one.', kind: undefined },
+      { role: 'user', content: '', kind: 'continue' },
+      { role: 'assistant', content: 'Day two.', kind: undefined },
+    ]);
+  });
+
+  it.each([
+    ['moves to an older turn', 't1'],
+    ['hides', null],
+  ])(
+    'keeps the offer of a turn that ended while an older transcript in flight %s it',
+    async (_why, staleOffer) => {
+      const pending = deferred<ConversationTranscript>();
+      vi.mocked(conversationsApi.transcript).mockReturnValue(pending.promise);
+      const opening = useAgentStore.getState().openConversation('c1', 'reload');
+      const { callbacks } = capture();
+      useAgentStore.getState().sendMessage('new question');
+      callbacks().onChunk({ text: 'Partial answer.' });
+      callbacks().onDone({
+        ...DONE,
+        stopReason: 'max_steps',
+        continuable: true,
+      });
+
+      pending.resolve({ ...TRANSCRIPT, continuableTurnId: staleOffer });
+      await opening;
+
+      expect(useAgentStore.getState().continuableTurnId).toBe(LIVE_TURN_ID);
+    }
+  );
+
+  it('offers nothing when an older server sends no continuableTurnId', async () => {
+    const olderServer: Omit<ConversationTranscript, 'continuableTurnId'> = {
+      id: 'c1',
+      title: 'Trip',
+      noteId: null,
+      hasEarlier: false,
+      messages: [
+        {
+          turnId: 't1',
+          role: 'user',
+          content: 'Plan it',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId: 't1',
+          role: 'assistant',
+          content: 'Day one.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+      ],
+    };
+    vi.mocked(conversationsApi.transcript).mockResolvedValue(
+      olderServer as ConversationTranscript
+    );
+
+    await useAgentStore.getState().openConversation('c1', 'reload');
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBeNull();
+    expect(selectContinuableAnswer(state)).toBeNull();
   });
 });

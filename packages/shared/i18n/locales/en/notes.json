@@ -423,6 +423,7 @@
       "turnIdReused": "This message clashed with an earlier attempt. Retry to send it as a new one.",
       "answerUnavailable": "Your message was answered, but the answer couldn't be loaded. Retry to load it.",
       "turnInterrupted": "The answer was interrupted. Retry to ask again.",
+      "turnNotContinuable": "This answer can't be continued anymore. Ask your next question instead.",
       "permissionDenied": "You don't have permission to do that.",
       "noteNotFound": "The note no longer exists.",
       "invalidProposal": "That request couldn't be processed. Please try again.",
@@ -510,6 +511,12 @@
         "length": "The response was cut short.",
         "content_filter": "The provider filtered this response."
       },
+      "continue": {
+        "action": "Continue",
+        "partial": "Partial answer",
+        "marker": "Continue"
+      },
+      "interrupted": "This reply was interrupted.",
       "empty": {
         "title": "Ask your notes",
         "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",

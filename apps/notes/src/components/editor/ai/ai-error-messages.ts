@@ -1,6 +1,8 @@
 import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
@@ -29,6 +31,7 @@ type AIErrorMessageKey =
   | 'ai.errors.turnIdReused'
   | 'ai.errors.answerUnavailable'
   | 'ai.errors.turnInterrupted'
+  | 'ai.errors.turnNotContinuable'
   | 'ai.errors.permissionDenied'
   | 'ai.errors.noteNotFound'
   | 'ai.errors.invalidProposal'
@@ -56,13 +59,14 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   [AI_INVALID_INPUT_CODE]: 'ai.errors.validation',
   PROMPT_INJECTION_DETECTED: 'ai.errors.injection',
   AGENT_STALE_NOTE: 'ai.errors.staleNote',
-  AGENT_PROPOSAL_EXPIRED: 'ai.errors.proposalExpired',
+  [AGENT_PROPOSAL_EXPIRED_CODE]: 'ai.errors.proposalExpired',
   AGENT_RESUME_UNAVAILABLE: 'ai.errors.resumeUnavailable',
   [AGENT_TURN_ERROR_CODE.TURN_IN_PROGRESS]: 'ai.errors.turnInProgress',
   [AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE]: 'ai.errors.turnUnavailable',
   [AGENT_TURN_ERROR_CODE.TURN_ID_REUSED]: 'ai.errors.turnIdReused',
   AGENT_ANSWER_UNAVAILABLE: 'ai.errors.answerUnavailable',
   AGENT_TURN_INTERRUPTED: 'ai.errors.turnInterrupted',
+  [AGENT_TURN_NOT_CONTINUABLE_CODE]: 'ai.errors.turnNotContinuable',
   AGENT_PERMISSION_DENIED: 'ai.errors.permissionDenied',
   AGENT_NOTE_NOT_FOUND: 'ai.errors.noteNotFound',
   AGENT_INVALID_PROPOSAL: 'ai.errors.invalidProposal',

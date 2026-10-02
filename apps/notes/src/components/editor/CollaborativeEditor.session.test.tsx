@@ -20,6 +20,7 @@ const performSessionLogout = vi.fn();
 const navigate = vi.fn();
 let accessChanged: (() => void) | undefined;
 let expireSession: (() => void) | undefined;
+let connectedAs: string | undefined;
 
 vi.mock('@/auth', () => ({
   authStore: { getState: () => ({}) },
@@ -30,13 +31,18 @@ vi.mock('@/auth', () => ({
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
 }));
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => ({ id: 'user-1', isAnonymous: false }),
+}));
 vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
   getCollaborationServerUrl: () => 'ws://test/collaboration',
   isWebSocketEnabled: () => true,
   useHocuspocusCollaboration: (opts: {
+    userId?: string;
     onSessionExpired?: () => void;
     onAccessChanged?: () => void;
   }) => {
+    connectedAs = opts.userId;
     expireSession = opts.onSessionExpired;
     accessChanged = opts.onAccessChanged;
     return {
@@ -69,6 +75,7 @@ describe('CollaborativeEditor session expiry', () => {
     vi.clearAllMocks();
     expireSession = undefined;
     accessChanged = undefined;
+    connectedAs = undefined;
   });
 
   afterEach(() => {
@@ -150,6 +157,14 @@ describe('CollaborativeEditor session expiry', () => {
       queryClient.getQueryState(notesQueryKeys.sharedNote('tok'))?.isInvalidated
     ).toBe(true);
     expect(noteRead).not.toHaveBeenCalled();
+  });
+
+  it('connects as the signed-in user', () => {
+    render(
+      <CollaborativeEditor noteId="n1" initialContent="" onUpdate={vi.fn()} />
+    );
+
+    expect(connectedAs).toBe('user-1');
   });
 
   it('sends a signed-in user to the login page', () => {

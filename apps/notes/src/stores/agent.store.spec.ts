@@ -4,27 +4,33 @@ import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { agentClient } from '@knowtis/api-client';
+import type * as ApiClient from '@knowtis/api-client';
+import { agentClient, conversationsApi } from '@knowtis/api-client';
 import type {
   AgentCommittedPayload,
   AgentDonePayload,
   AgentErrorPayload,
   AgentProposalPayload,
   AgentThinkingPayload,
+  AgentTurnSettledPayload,
 } from '@knowtis/api-client';
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 import {
   AGENT_CONVERSATION_NOT_FOUND_CODE,
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  MESSAGE_KIND,
+  type ConversationTranscript,
 } from '@knowtis/shared-types';
 
 import {
   AGENT_STREAM_INACTIVITY_MS,
   isTurnAlive,
+  selectContinuableAnswer,
   THINKING_TAIL_CHARS,
   useAgentStore,
 } from './agent.store';
@@ -33,9 +39,11 @@ const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
 }));
 
-vi.mock('@knowtis/api-client', () => ({
+vi.mock('@knowtis/api-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiClient>()),
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
+    continueTurn: vi.fn(() => ({ turnId: 'turn-2', cancel: vi.fn() })),
     canResume: vi.fn(() => true),
     canResendTurn: vi.fn(() => false),
     approve: vi.fn(),
@@ -63,6 +71,7 @@ interface Cbs {
   onProposal?: (p: AgentProposalPayload) => void;
   onCommitted?: (p: AgentCommittedPayload) => void;
   onThinking?: (p: AgentThinkingPayload) => void;
+  onTurnSettled?: (p: AgentTurnSettledPayload) => void;
 }
 
 const SIDEBAR_RECENT_LIMIT = 20;
@@ -404,6 +413,165 @@ describe('useAgentStore', () => {
     expect(messages.at(-1)?.content).toBe('partial');
   });
 
+  describe('a reply cut off before it finished', () => {
+    it('is marked interrupted when the user stops it mid-text', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hola');
+      get().onChunk({ text: 'partial' });
+
+      useAgentStore.getState().cancel();
+
+      expect(useAgentStore.getState().messages.at(-1)).toMatchObject({
+        content: 'partial',
+        interrupted: true,
+      });
+    });
+
+    it('is not marked when the user stops it before any text', () => {
+      capture();
+      useAgentStore.getState().sendMessage('hola');
+
+      useAgentStore.getState().cancel();
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+
+    it('is not marked when the user stops a turn waiting on its proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onChunk({ text: 'Here is a draft.' });
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 'Create "My Note"',
+        payload: {},
+      });
+
+      useAgentStore.getState().cancel();
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+
+    it.each([
+      [
+        'a message sent now',
+        () =>
+          useAgentStore
+            .getState()
+            .sendMessage('otra cosa', undefined, { interrupt: true }),
+      ],
+      [
+        'a queued message sent now',
+        () => {
+          useAgentStore.getState().sendMessage('otra cosa');
+          const [queued] = useAgentStore.getState().queue;
+          useAgentStore.getState().sendQueuedNow(queued.id);
+        },
+      ],
+    ])('is marked interrupted when %s replaces it mid-text', (_by, replace) => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hola');
+      get().onChunk({ text: 'partial' });
+      capture('turn-2');
+
+      replace();
+
+      expect(
+        useAgentStore
+          .getState()
+          .messages.filter((m) => m.interrupted)
+          .map((m) => m.content)
+      ).toEqual(['partial']);
+    });
+
+    it('is not marked when a message sent now replaces a turn waiting on its proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onChunk({ text: 'Here is a draft.' });
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 'Create "My Note"',
+        payload: {},
+      });
+      capture('turn-2');
+
+      useAgentStore
+        .getState()
+        .sendMessage('otra cosa', undefined, { interrupt: true });
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+
+    const TURN_ENDS: [string, (cbs: Cbs) => void][] = [
+      [
+        'an error',
+        (cbs) => cbs.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' }),
+      ],
+      [
+        'the inactivity timeout',
+        () => vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS),
+      ],
+    ];
+
+    it.each(TURN_ENDS)(
+      'is marked interrupted and keeps its text when %s ends it mid-text',
+      (_end, end) => {
+        const { get } = capture();
+        useAgentStore.getState().sendMessage('hola');
+        get().onChunk({ text: 'partial' });
+
+        end(get());
+
+        expect(useAgentStore.getState().messages.at(-1)).toMatchObject({
+          content: 'partial',
+          interrupted: true,
+        });
+      }
+    );
+
+    it.each(TURN_ENDS)(
+      'is not marked when %s ends it before any text',
+      (_end, end) => {
+        const { get } = capture();
+        useAgentStore.getState().sendMessage('hola');
+
+        end(get());
+
+        expect(
+          useAgentStore.getState().messages.some((m) => m.interrupted)
+        ).toBe(false);
+      }
+    );
+
+    it('is not marked when an error ends a turn waiting on its proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onChunk({ text: 'Here is a draft.' });
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 'Create "My Note"',
+        payload: {},
+      });
+
+      get().onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+  });
+
   it('retryLast replays the last user message after an error', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('hello');
@@ -600,6 +768,41 @@ describe('useAgentStore', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: aiQuotaQueryKeys.all,
       });
+    });
+
+    it.each([
+      ['the user stops', () => useAgentStore.getState().cancel()],
+      [
+        'a new conversation abandons',
+        () => useAgentStore.getState().newConversation(),
+      ],
+      [
+        'the client times out',
+        () => vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS),
+      ],
+    ])(
+      'is refetched when %s a running turn, whose push the dropped socket loses',
+      (_why, leave) => {
+        capture();
+        useAgentStore.getState().sendMessage('hello');
+        const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+        invalidate.mockClear();
+
+        leave();
+
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: aiQuotaQueryKeys.all,
+        });
+      }
+    );
+
+    it('is not refetched by a stop with no turn running', () => {
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      invalidate.mockClear();
+
+      useAgentStore.getState().cancel();
+
+      expect(invalidate).not.toHaveBeenCalled();
     });
   });
 
@@ -1258,6 +1461,38 @@ describe('agent.store server-authoritative wire', () => {
       });
     });
 
+    it('marks a resume the drain cut mid-reply as interrupted', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onChunk({ text: 'Done, your note' });
+
+      get().onError(resumeRefused);
+
+      expect(useAgentStore.getState().messages.at(-1)).toMatchObject({
+        content: 'Done, your note',
+        interrupted: true,
+      });
+    });
+
+    it('does not mark a resume the drain cut before it wrote anything', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+
+      get().onError(resumeRefused);
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
+
     it('ends a rejected turn without an error or an empty reply', () => {
       const { get } = capture();
       useAgentStore.getState().sendMessage('create a note');
@@ -1332,6 +1567,109 @@ describe('agent.store server-authoritative wire', () => {
       const { pendingProposal, messages } = useAgentStore.getState();
       expect(pendingProposal).toEqual(PROPOSAL);
       expect(messages.some((m) => m.discarded)).toBe(false);
+    });
+  });
+
+  describe('a decision refused before the server took its proposal', () => {
+    function approve() {
+      const turn = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      turn.get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().approveProposal();
+      return turn;
+    }
+
+    it.each([
+      [
+        'an internal failure',
+        { code: 'AI_INTERNAL_ERROR', message: 'Agent turn failed' },
+      ],
+      [
+        'AI being switched off',
+        { code: 'AI_FEATURE_DISABLED', message: 'off' },
+      ],
+    ])('gives the approve card back after %s', (_why, refused) => {
+      const { get } = approve();
+
+      get().onError(refused);
+
+      const { status, error, retryMode, pendingProposal, messages } =
+        useAgentStore.getState();
+      expect({ status, error, retryMode, pendingProposal }).toEqual({
+        status: 'pendingProposal',
+        error: refused,
+        retryMode: 'none',
+        pendingProposal: PROPOSAL,
+      });
+      expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    });
+
+    it('keeps the committed message when the resume then fails without a turn id', () => {
+      const { get } = approve();
+      get().onCommitted?.({
+        proposalId: 'p1',
+        result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+      });
+      const failure = {
+        code: 'AI_INTERNAL_ERROR',
+        message: 'Agent turn failed',
+      };
+
+      get().onError(failure);
+
+      const { status, error, pendingProposal, messages } =
+        useAgentStore.getState();
+      expect({ status, error, pendingProposal }).toEqual({
+        status: 'error',
+        error: failure,
+        pendingProposal: null,
+      });
+      expect(messages.find((m) => m.committed)?.committed).toEqual({
+        kind: 'create',
+        title: 'My Note',
+      });
+    });
+
+    it('takes the discard mark off a reject refused before the take', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onProposal?.(PROPOSAL);
+      useAgentStore.getState().rejectProposal('too long');
+
+      get().onError({
+        code: 'AI_INTERNAL_ERROR',
+        message: 'Agent turn failed',
+      });
+
+      const { pendingProposal, messages } = useAgentStore.getState();
+      expect(pendingProposal).toEqual(PROPOSAL);
+      expect(messages.some((m) => m.discarded)).toBe(false);
+    });
+
+    it.each([
+      [
+        'the proposal expired',
+        { code: AGENT_PROPOSAL_EXPIRED_CODE, message: 'expired' },
+      ],
+      [
+        'the commit failed after the take',
+        { code: 'AGENT_COMMIT_FAILED', message: 'failed', turnId: 'turn-1' },
+      ],
+      [
+        'only the client lost the connection',
+        { code: 'CONNECTION_FAILED', message: 'down' },
+      ],
+    ])('ends the turn when %s', (_why, failure) => {
+      const { get } = approve();
+
+      get().onError(failure);
+
+      const { status, pendingProposal, retryMode } = useAgentStore.getState();
+      expect({ status, pendingProposal, retryMode }).toEqual({
+        status: 'error',
+        pendingProposal: null,
+        retryMode: 'none',
+      });
     });
   });
 
@@ -1628,7 +1966,7 @@ describe('agent.store proposals', () => {
 
   it('retries the failure of a turn sent after a failed decision', () => {
     const get = proposeThenDecide('approve');
-    get().onError({ code: 'AI_RATE_LIMIT_EXCEEDED', message: 'busy' });
+    get().onError({ code: 'CONNECTION_FAILED', message: 'down' });
     useAgentStore.getState().sendMessage('next question');
     get().onError({ code: 'AI_PROVIDER_ERROR', message: 'down' });
 
@@ -1875,5 +2213,635 @@ describe('agent.store thinking tail', () => {
     get().onThinking?.({ text: 'late reasoning' });
     vi.advanceTimersByTime(50);
     expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+});
+
+describe('agent.store the continue offer', () => {
+  const DONE: AgentDonePayload = {
+    usage: USAGE,
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'completed',
+  };
+
+  function answerCapped(continuable: boolean | undefined) {
+    const { get } = capture('turn-1');
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    get().onChunk({ text: 'Revisé tres notas.' });
+    get().onDone({
+      ...DONE,
+      stopReason: 'max_steps',
+      ...(continuable === undefined ? {} : { continuable }),
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('is the turn the server reports continuable', () => {
+    answerCapped(true);
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBe('turn-1');
+    expect(selectContinuableAnswer(state)).toMatchObject({
+      turnId: 'turn-1',
+      role: 'assistant',
+      content: 'Revisé tres notas.',
+      stopReason: 'max_steps',
+    });
+  });
+
+  it.each([[false], [undefined]])(
+    'withdraws an offer still standing when the server reports continuable as %s',
+    (continuable) => {
+      const { get } = capture('turn-1');
+      useAgentStore.getState().sendMessage('Compara mis notas');
+      useAgentStore.setState({ continuableTurnId: 'turn-1' });
+      get().onChunk({ text: 'Revisé tres notas.' });
+
+      get().onDone({
+        ...DONE,
+        stopReason: 'max_steps',
+        ...(continuable === undefined ? {} : { continuable }),
+      });
+
+      expect(useAgentStore.getState().continuableTurnId).toBeNull();
+    }
+  );
+
+  it('is withdrawn by the next message', () => {
+    answerCapped(true);
+    capture('turn-2');
+
+    useAgentStore.getState().sendMessage('otra pregunta');
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBeNull();
+    expect(selectContinuableAnswer(state)).toBeNull();
+  });
+
+  it('is withdrawn by a new conversation', () => {
+    answerCapped(true);
+
+    useAgentStore.getState().newConversation();
+
+    expect(useAgentStore.getState().continuableTurnId).toBeNull();
+  });
+
+  it('is withdrawn when another conversation opens', () => {
+    answerCapped(true);
+    vi.mocked(conversationsApi.transcript).mockReturnValueOnce(
+      new Promise(() => undefined)
+    );
+
+    void useAgentStore.getState().openConversation('conv-2', 'switcher');
+
+    expect(useAgentStore.getState().continuableTurnId).toBeNull();
+  });
+
+  it('is withdrawn with a conversation the server no longer has', () => {
+    const { get } = capture('turn-1');
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    useAgentStore.setState({ continuableTurnId: 'turn-0' });
+
+    get().onError({
+      code: AGENT_CONVERSATION_NOT_FOUND_CODE,
+      message: 'gone',
+      turnId: 'turn-1',
+    });
+
+    expect(useAgentStore.getState().continuableTurnId).toBeNull();
+  });
+
+  it('is not shown while a turn runs or under an answer of another turn', () => {
+    answerCapped(true);
+    const { messages } = useAgentStore.getState();
+
+    expect(
+      selectContinuableAnswer({
+        messages,
+        status: 'streaming',
+        continuableTurnId: 'turn-1',
+      })
+    ).toBeNull();
+    expect(
+      selectContinuableAnswer({
+        messages,
+        status: 'done',
+        continuableTurnId: 'turn-0',
+      })
+    ).toBeNull();
+  });
+
+  it('drops a stop reason this build does not know instead of showing its key', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onChunk({ text: 'Listo.' });
+    const fromNewerServer = {
+      ...DONE,
+      stopReason: 'reconsidered',
+    } as unknown as AgentDonePayload;
+
+    get().onDone(fromNewerServer);
+
+    expect(useAgentStore.getState().messages.at(-1)).not.toHaveProperty(
+      'stopReason'
+    );
+  });
+});
+
+describe('agent.store continuing a capped turn', () => {
+  const CAPPED: AgentDonePayload = {
+    usage: USAGE,
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'max_steps',
+    continuable: true,
+  };
+  const RESETS_AT = '2026-10-03T00:00:00.000Z';
+
+  function captureContinue(turnId = 'turn-2') {
+    const cancel = vi.fn();
+    let captured: Cbs | null = null;
+    vi.mocked(agentClient.continueTurn).mockImplementation(
+      (_continuesTurnId, cbs) => {
+        captured = cbs as Cbs;
+        return { turnId, cancel };
+      }
+    );
+    return {
+      cancel,
+      get: (): Cbs => {
+        if (!captured) {
+          throw new Error('callbacks not captured');
+        }
+        return captured;
+      },
+    };
+  }
+
+  function capTurn() {
+    const first = capture('turn-1');
+    useAgentStore.getState().sendMessage('Compara mis notas');
+    first.get().onChunk({ text: 'Revisé tres notas.' });
+    first.get().onDone(CAPPED);
+  }
+
+  const turnIds = () => useAgentStore.getState().messages.map((m) => m.turnId);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    useAgentStore.setState({ userId: null });
+    queryClient.clear();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('sends a continue for the capped turn and shows a marker, not a bubble with text', () => {
+    capTurn();
+    captureContinue();
+
+    useAgentStore.getState().continueTurn('note-1');
+
+    expect(vi.mocked(agentClient.continueTurn)).toHaveBeenCalledExactlyOnceWith(
+      'turn-1',
+      expect.any(Object),
+      'note-1',
+      {}
+    );
+    const { messages, status, continuableTurnId } = useAgentStore.getState();
+    expect({ status, continuableTurnId }).toEqual({
+      status: 'streaming',
+      continuableTurnId: null,
+    });
+    expect(
+      messages.slice(-2).map(({ role, content, kind, turnId }) => ({
+        role,
+        content,
+        kind,
+        turnId,
+      }))
+    ).toEqual([
+      {
+        role: 'user',
+        content: '',
+        kind: MESSAGE_KIND.CONTINUE,
+        turnId: 'turn-2',
+      },
+      { role: 'assistant', content: '', kind: undefined, turnId: 'turn-2' },
+    ]);
+  });
+
+  it('sends and counts one continue however fast the user clicks twice', () => {
+    capTurn();
+    captureContinue();
+
+    useAgentStore.getState().continueTurn();
+    useAgentStore.getState().continueTurn();
+
+    expect(vi.mocked(agentClient.continueTurn)).toHaveBeenCalledOnce();
+    expect(
+      vi
+        .mocked(captureProductEvent)
+        .mock.calls.filter(([event]) => event === 'ai continue clicked')
+    ).toHaveLength(1);
+  });
+
+  it('moves the offer to the continuation when it is capped again', () => {
+    capTurn();
+    const continuation = captureContinue('turn-2');
+    useAgentStore.getState().continueTurn();
+
+    continuation.get().onChunk({ text: 'Sigo con el presupuesto.' });
+    continuation.get().onDone(CAPPED);
+
+    const state = useAgentStore.getState();
+    expect(state.continuableTurnId).toBe('turn-2');
+    expect(selectContinuableAnswer(state)?.content).toBe(
+      'Sigo con el presupuesto.'
+    );
+  });
+
+  it('captures the click with the tier and the stop reason', () => {
+    useAgentStore.setState({ userId: 'u1' });
+    queryClient.setQueryData(aiQuotaQueryKeys.forUser('u1'), {
+      tier: 'free',
+      messages: { used: 3, limit: 30, resetsAt: RESETS_AT },
+    });
+    capTurn();
+    captureContinue();
+
+    useAgentStore.getState().continueTurn();
+
+    expect(captureProductEvent).toHaveBeenCalledWith('ai continue clicked', {
+      tier: 'free',
+      stop_reason: 'max_steps',
+    });
+  });
+
+  describe('a continuation that fails before its first text', () => {
+    it.each([
+      [
+        'the provider failing',
+        { code: 'AI_PROVIDER_ERROR', message: 'boom', turnId: 'turn-2' },
+      ],
+      ['a lost connection', { code: 'CONNECTION_FAILED', message: 'down' }],
+      [
+        'the key being refused',
+        { code: AI_BYOK_KEY_FAILED_CODE, message: 'refused', turnId: 'turn-2' },
+      ],
+    ])(
+      'leaves the thread as it was and offers to continue again after %s',
+      (_why, error) => {
+        capTurn();
+        const continuation = captureContinue();
+        useAgentStore.getState().continueTurn();
+
+        continuation.get().onError(error);
+
+        const state = useAgentStore.getState();
+        expect(turnIds()).toEqual(['turn-1', 'turn-1']);
+        expect({
+          status: state.status,
+          error: state.error,
+          retryMode: state.retryMode,
+          continuableTurnId: state.continuableTurnId,
+        }).toEqual({
+          status: 'error',
+          error,
+          retryMode: 'none',
+          continuableTurnId: 'turn-1',
+        });
+        expect(selectContinuableAnswer(state)?.turnId).toBe('turn-1');
+      }
+    );
+
+    it('resends under the same turn id while the client still offers it', () => {
+      capTurn();
+      const continuation = captureContinue('turn-2');
+      useAgentStore.getState().continueTurn();
+      continuation
+        .get()
+        .onError({ code: 'CONNECTION_FAILED', message: 'down' });
+      vi.mocked(agentClient.canResendTurn).mockReturnValueOnce(true);
+      captureContinue('turn-2');
+
+      useAgentStore.getState().continueTurn();
+
+      expect(vi.mocked(agentClient.canResendTurn)).toHaveBeenCalledWith(
+        'turn-2'
+      );
+      expect(
+        vi.mocked(agentClient.continueTurn).mock.calls.at(-1)?.[3]
+      ).toEqual({
+        turnId: 'turn-2',
+      });
+    });
+
+    it.each([AGENT_TURN_NOT_CONTINUABLE_CODE, AI_INVALID_INPUT_CODE])(
+      'withdraws the offer when the server answers %s',
+      (code) => {
+        capTurn();
+        const continuation = captureContinue();
+        useAgentStore.getState().continueTurn();
+
+        continuation
+          .get()
+          .onError({ code, message: 'refused', turnId: 'turn-2' });
+
+        const state = useAgentStore.getState();
+        expect(turnIds()).toEqual(['turn-1', 'turn-1']);
+        expect(state.continuableTurnId).toBeNull();
+        expect(selectContinuableAnswer(state)).toBeNull();
+      }
+    );
+
+    it('reloads the thread when the server says the turn can no longer be continued', () => {
+      useAgentStore.setState({ conversationId: 'conv-1' });
+      capTurn();
+      const continuation = captureContinue();
+      useAgentStore.getState().continueTurn();
+      vi.mocked(conversationsApi.transcript).mockClear();
+
+      continuation.get().onError({
+        code: AGENT_TURN_NOT_CONTINUABLE_CODE,
+        message: 'no',
+        turnId: 'turn-2',
+      });
+
+      expect(conversationsApi.transcript).toHaveBeenCalledWith(
+        'conv-1',
+        undefined
+      );
+    });
+
+    it('folds the queue into the draft when the day’s messages are spent', () => {
+      capTurn();
+      const continuation = captureContinue();
+      useAgentStore.getState().continueTurn();
+      useAgentStore.getState().sendMessage('y luego esto');
+
+      continuation.get().onError({
+        code: AI_QUOTA_EXHAUSTED_CODE,
+        message: 'spent',
+        turnId: 'turn-2',
+        resetsAt: RESETS_AT,
+        upgrade: 'byok',
+      });
+
+      const { queue, draft, continuableTurnId } = useAgentStore.getState();
+      expect({ queue, draft, continuableTurnId }).toEqual({
+        queue: [],
+        draft: 'y luego esto',
+        continuableTurnId: 'turn-1',
+      });
+    });
+
+    it('drops a continuation the user stopped before any text and offers it again', () => {
+      capTurn();
+      const continuation = captureContinue();
+      useAgentStore.getState().continueTurn();
+
+      useAgentStore.getState().cancel();
+
+      expect(continuation.cancel).toHaveBeenCalledOnce();
+      expect(turnIds()).toEqual(['turn-1', 'turn-1']);
+      expect(useAgentStore.getState().continuableTurnId).toBe('turn-1');
+    });
+
+    it('refetches the quota the stopped continuation was still charged', () => {
+      capTurn();
+      captureContinue();
+      useAgentStore.getState().continueTurn();
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      invalidate.mockClear();
+
+      useAgentStore.getState().cancel();
+
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiQuotaQueryKeys.all,
+      });
+    });
+
+    it('resends a continuation the user stopped under the same turn id', () => {
+      capTurn();
+      captureContinue('turn-2');
+      useAgentStore.getState().continueTurn();
+      useAgentStore.getState().cancel();
+      vi.mocked(agentClient.canResendTurn).mockReturnValueOnce(true);
+      captureContinue('turn-2');
+
+      useAgentStore.getState().continueTurn();
+
+      expect(vi.mocked(agentClient.canResendTurn)).toHaveBeenCalledWith(
+        'turn-2'
+      );
+      expect(
+        vi.mocked(agentClient.continueTurn).mock.calls.at(-1)?.[3]
+      ).toEqual({ turnId: 'turn-2' });
+    });
+
+    it('drops the marker of a continue the client refuses before sending it', () => {
+      capTurn();
+      vi.mocked(agentClient.continueTurn).mockImplementationOnce(
+        (_continuesTurnId, cbs) => {
+          cbs.onError({
+            code: AGENT_TURN_NOT_CONTINUABLE_CODE,
+            message: 'nothing to continue',
+            turnId: 'turn-2',
+          });
+          return { turnId: 'turn-2', cancel: vi.fn() };
+        }
+      );
+
+      useAgentStore.getState().continueTurn();
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+
+      const { status, continuableTurnId } = useAgentStore.getState();
+      expect(turnIds()).toEqual(['turn-1', 'turn-1']);
+      expect({ status, continuableTurnId }).toEqual({
+        status: 'error',
+        continuableTurnId: null,
+      });
+    });
+  });
+
+  it('keeps a continuation that failed after it wrote text, with no retry', () => {
+    capTurn();
+    const continuation = captureContinue();
+    useAgentStore.getState().continueTurn();
+    continuation.get().onChunk({ text: 'Sigo con' });
+
+    continuation.get().onError({
+      code: 'AI_PROVIDER_ERROR',
+      message: 'boom',
+      turnId: 'turn-2',
+    });
+
+    const state = useAgentStore.getState();
+    expect(state.messages.at(-1)?.content).toBe('Sigo con');
+    expect({
+      retryMode: state.retryMode,
+      continuableTurnId: state.continuableTurnId,
+    }).toEqual({
+      retryMode: 'none',
+      continuableTurnId: null,
+    });
+  });
+
+  it('retries a timed-out continuation as a continue, never as an empty message', () => {
+    capTurn();
+    captureContinue('turn-2');
+    useAgentStore.getState().continueTurn('note-1');
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+    expect(useAgentStore.getState().retryMode).toBe('resend');
+    vi.mocked(agentClient.canResendTurn).mockReturnValueOnce(true);
+    captureContinue('turn-2');
+
+    useAgentStore.getState().retryLast();
+
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledOnce();
+    expect(vi.mocked(agentClient.continueTurn).mock.calls.at(-1)).toEqual([
+      'turn-1',
+      expect.any(Object),
+      'note-1',
+      { turnId: 'turn-2' },
+    ]);
+    expect(
+      useAgentStore
+        .getState()
+        .messages.filter((m) => m.kind === MESSAGE_KIND.CONTINUE)
+    ).toHaveLength(1);
+  });
+
+  describe('a message that replaces a continuation before its first text', () => {
+    const STORED_CAPPED_TURN: ConversationTranscript = {
+      id: 'conv-1',
+      title: null,
+      noteId: null,
+      hasEarlier: false,
+      messages: [
+        {
+          turnId: 'turn-1',
+          role: 'user',
+          content: 'Compara mis notas',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId: 'turn-1',
+          role: 'assistant',
+          content: 'Revisé tres notas.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+      ],
+      continuableTurnId: null,
+    };
+
+    function startContinuation() {
+      useAgentStore.setState({ conversationId: 'conv-1' });
+      capTurn();
+      const continuation = captureContinue('turn-2');
+      useAgentStore.getState().continueTurn();
+      return continuation;
+    }
+
+    async function expectOnlyTheCappedTurnAndTheMessage() {
+      expect(turnIds()).toEqual(['turn-1', 'turn-1', 'turn-3', 'turn-3']);
+      vi.mocked(conversationsApi.transcript).mockResolvedValueOnce(
+        STORED_CAPPED_TURN
+      );
+      await useAgentStore.getState().retryHydration();
+      expect(turnIds()).toEqual(['turn-1', 'turn-1', 'turn-3', 'turn-3']);
+    }
+
+    it('drops the continuation a message sent now interrupts', async () => {
+      startContinuation();
+      capture('turn-3');
+
+      useAgentStore
+        .getState()
+        .sendMessage('otra cosa', undefined, { interrupt: true });
+
+      expect(useAgentStore.getState().continuableTurnId).toBeNull();
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('drops the continuation a queued message sent now interrupts', async () => {
+      startContinuation();
+      useAgentStore.getState().sendMessage('otra cosa');
+      const [queued] = useAgentStore.getState().queue;
+      capture('turn-3');
+
+      useAgentStore.getState().sendQueuedNow(queued.id);
+
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('drops a timed-out continuation when a message follows it', async () => {
+      startContinuation();
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+      capture('turn-3');
+
+      useAgentStore.getState().sendMessage('otra cosa');
+
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('drops a continuation whose stored answer could not be loaded when a message follows it', async () => {
+      const continuation = startContinuation();
+      vi.mocked(conversationsApi.transcript).mockRejectedValueOnce(
+        new Error('boom')
+      );
+      continuation
+        .get()
+        .onTurnSettled?.({ turnId: 'turn-2', conversationId: 'conv-1' });
+      await vi.waitFor(() =>
+        expect(useAgentStore.getState().retryMode).toBe('reload')
+      );
+      capture('turn-3');
+
+      useAgentStore.getState().sendMessage('otra cosa');
+
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('keeps a continuation that wrote text when a message interrupts it, before the text is shown', () => {
+      const continuation = startContinuation();
+      continuation.get().onChunk({ text: 'Sigo con' });
+      capture('turn-3');
+
+      useAgentStore
+        .getState()
+        .sendMessage('otra cosa', undefined, { interrupt: true });
+
+      const { messages } = useAgentStore.getState();
+      expect(messages.map((m) => [m.turnId, m.content])).toEqual([
+        ['turn-1', 'Compara mis notas'],
+        ['turn-1', 'Revisé tres notas.'],
+        ['turn-2', ''],
+        ['turn-2', 'Sigo con'],
+        ['turn-3', 'otra cosa'],
+        ['turn-3', ''],
+      ]);
+    });
   });
 });

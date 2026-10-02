@@ -29,7 +29,11 @@ export type {
   AuthRefreshHandler,
 } from './lib/ai.client';
 
-export { agentClient, AgentClient } from './lib/agent.client';
+export {
+  agentClient,
+  AgentClient,
+  isDecisionNotTaken,
+} from './lib/agent.client';
 export type {
   AgentSource,
   WebSource,
@@ -38,6 +42,7 @@ export type {
   AgentDonePayload,
   AgentErrorPayload,
   AgentSendOptions,
+  AgentStreamCallbacks,
   AgentStreamHandle,
   AgentProposalPayload,
   AgentCommittedPayload,

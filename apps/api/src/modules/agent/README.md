@@ -31,7 +31,7 @@ Every client → server event is acknowledged on receipt, before validation (`@A
 
 Connection-time checks mirror the `/ai` gateway: JWT from `auth.token` or the `Authorization: Bearer` header, `ai_enabled` flag, and a timer at the token's expiry that emits `agent:error` `AUTH_REQUIRED` and disconnects. Turns (fresh or resumed) run inside a `ConcurrencySlotTracker` slot capped at `AI_MAX_CONCURRENT_STREAMS` per user; an acquire past the cap emits `agent:error` `AI_RATE_LIMIT_EXCEEDED`.
 
-The Notes client attaches `agent:done.stopReason` only to the active assistant response. It renders a polite status notice for non-`completed` reasons even when the response has no text. A reloaded or reopened conversation is read over REST (`ConversationController`), not replayed over this socket.
+The Notes client attaches `agent:done.stopReason` only to the active assistant response, ignoring a reason it does not know. It renders a polite status notice for non-`completed` reasons even when the response has no text, and offers Continuar under the newest answer while `agent:done.continuable` (live) or the transcript's `continuableTurnId` (after a reload) names its turn. A reloaded or reopened conversation is read over REST (`ConversationController`), not replayed over this socket.
 
 Also exposes two REST controllers, both `JwtAuthGuard` only with no `ai_enabled` gate: `MemoryController` ([memory.controller.ts](memory.controller.ts)) lists and deletes long-term memories, and `ConversationController` ([conversation.controller.ts](conversation.controller.ts)) lists, reads, renames and deletes the caller's conversations.
 

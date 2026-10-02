@@ -1,6 +1,7 @@
 import type {
   AccessTier,
   AIAction,
+  ContinuableStopReason,
   StudyDurationBucket,
   StudySessionSource,
 } from '@knowtis/shared-types';
@@ -46,6 +47,10 @@ export interface BrowserProductEventMap {
     from_tier: AccessTier;
     cta: 'register' | 'byok' | 'review_key';
   };
+  'ai continue clicked': {
+    tier?: AccessTier;
+    stop_reason?: ContinuableStopReason;
+  };
   'study session started': {
     source: StudySessionSource;
     due_count: number;
@@ -70,6 +75,7 @@ const PRODUCT_EVENT_PROPERTY_KEYS = {
   'ai conversation opened': ['source'],
   'ai conversation deleted': ['source'],
   'ai upgrade cta clicked': ['from_tier', 'cta'],
+  'ai continue clicked': ['tier', 'stop_reason'],
   'study session started': ['source', 'due_count', 'new_count'],
   'study session completed': [
     'source',

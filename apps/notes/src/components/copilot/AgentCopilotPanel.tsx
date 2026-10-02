@@ -15,6 +15,7 @@ import { clockTimeOf } from '@/lib/format-date';
 import {
   isTurnAlive,
   isUpdateProposal,
+  selectContinuableAnswer,
   useAgentStore,
 } from '@/stores/agent.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
@@ -29,6 +30,7 @@ import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  isContinuableStop,
 } from '@knowtis/shared-types';
 
 import {
@@ -36,6 +38,7 @@ import {
   GENERIC_AI_ERROR_KEY,
 } from '../editor/ai/ai-error-messages';
 import { AgentComposer } from './AgentComposer';
+import { AgentContinueAction } from './AgentContinueAction';
 import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
@@ -102,6 +105,8 @@ export function AgentCopilotPanel() {
   const hydration = useAgentStore((s) => s.hydration);
   const hasEarlier = useAgentStore((s) => s.hasEarlier);
   const retryHydration = useAgentStore((s) => s.retryHydration);
+  const continuableAnswer = useAgentStore(selectContinuableAnswer);
+  const continueTurn = useAgentStore((s) => s.continueTurn);
   const authUser = useAuthUser();
   const userId = authUser?.id ?? null;
   const isGuest = authUser?.isAnonymous === true;
@@ -157,6 +162,7 @@ export function AgentCopilotPanel() {
     sendMessage(text, noteId, { interrupt: true });
   };
   const conversationRef = useRef<StickToBottomContext>(null);
+  const focusThread = () => conversationRef.current?.scrollRef.current?.focus();
   const historyRetryRef = useRef<HTMLButtonElement>(null);
   const [retryingHistory, setRetryingHistory] = useState(false);
   const showHistoryRetry = hydration === 'failed' || retryingHistory;
@@ -168,9 +174,25 @@ export function AgentCopilotPanel() {
     const focusWasOnRetry = document.activeElement === historyRetryRef.current;
     setRetryingHistory(false);
     if (focusWasOnRetry && useAgentStore.getState().hydration !== 'failed') {
-      conversationRef.current?.scrollRef.current?.focus();
+      focusThread();
     }
   };
+  const continueRef = useRef<HTMLButtonElement>(null);
+  const continueAnswer = () => {
+    const focusWasOnContinue = document.activeElement === continueRef.current;
+    continueTurn(noteId);
+    if (focusWasOnContinue) {
+      focusThread();
+    }
+  };
+  const continuation =
+    continuableAnswer && !quotaLock ? (
+      <AgentContinueAction
+        ref={continueRef}
+        partial={isContinuableStop(continuableAnswer.stopReason)}
+        onContinue={continueAnswer}
+      />
+    ) : undefined;
   const retryTurn = retryMode === 'none' ? {} : { onRetry: retryLast };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
@@ -272,6 +294,8 @@ export function AgentCopilotPanel() {
             status={status}
             thinkingDetail={thinkingText}
             hasEarlier={hasEarlier}
+            continuation={continuation}
+            onStop={cancel}
             historyNotice={
               showHistoryRetry && (
                 <HistoryRetryRow

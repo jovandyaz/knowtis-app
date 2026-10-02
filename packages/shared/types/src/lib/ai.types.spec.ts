@@ -6,8 +6,11 @@ import {
   AI_ACTIONS,
   AI_CONFIG_KEYS,
   COMPLETION_AI_ACTIONS,
+  CONTINUABLE_STOP_REASONS,
   GLOBAL_REASONING_EFFORTS,
+  isAgentStopReason,
   isByokProvider,
+  isContinuableStop,
   isGlobalReasoningEffort,
   isReasoningEffort,
   MESSAGE_STOP_REASON,
@@ -103,5 +106,43 @@ describe('isByokProvider', () => {
 
   it('rejects a provider that takes no stored key', () => {
     expect(isByokProvider('mistral')).toBe(false);
+  });
+});
+
+describe('isAgentStopReason', () => {
+  it.each(Object.values(AGENT_STOP_REASON))('knows %s', (reason) => {
+    expect(isAgentStopReason(reason)).toBe(true);
+  });
+
+  it.each(['error', 'aborted', 'reconsidered', '', null, undefined])(
+    'does not know %s',
+    (value) => {
+      expect(isAgentStopReason(value)).toBe(false);
+    }
+  );
+});
+
+describe('continuable stops', () => {
+  it('are the checkpoints a segment closes at', () => {
+    expect(CONTINUABLE_STOP_REASONS).toEqual([
+      'max_steps',
+      'token_budget',
+      'time_limit',
+    ]);
+    for (const reason of CONTINUABLE_STOP_REASONS) {
+      expect(isContinuableStop(reason)).toBe(true);
+    }
+  });
+
+  it.each([
+    'completed',
+    'length',
+    'content_filter',
+    'error',
+    'aborted',
+    null,
+    undefined,
+  ])('%s is not a checkpoint', (reason) => {
+    expect(isContinuableStop(reason)).toBe(false);
   });
 });

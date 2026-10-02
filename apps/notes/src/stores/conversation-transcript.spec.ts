@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ConversationTranscriptMessage } from '@knowtis/shared-types';
+import type {
+  ConversationTranscriptMessage,
+  MessageKind,
+} from '@knowtis/shared-types';
 
 import { toChatMessages } from './conversation-transcript';
 
@@ -289,5 +292,66 @@ describe('toChatMessages', () => {
     expect(
       toChatMessages(rows, nextId).map((message) => message.content)
     ).toEqual(bubbles);
+  });
+
+  it('keeps a continue marker as a user row with no text', () => {
+    expect(
+      toChatMessages(
+        [
+          row({ turnId: 't1', role: 'user', content: 'Q' }),
+          row({
+            turnId: 't1',
+            role: 'assistant',
+            content: 'Part one.',
+            stopReason: 'max_steps',
+          }),
+          row({ turnId: 't2', role: 'user', content: '', kind: 'continue' }),
+          row({
+            turnId: 't2',
+            role: 'assistant',
+            content: 'Part two.',
+            stopReason: 'completed',
+          }),
+        ],
+        nextId
+      )
+    ).toEqual([
+      { id: 'h1', turnId: 't1', role: 'user', content: 'Q' },
+      {
+        id: 'h2',
+        turnId: 't1',
+        role: 'assistant',
+        content: 'Part one.',
+        sources: [],
+        stopReason: 'max_steps',
+      },
+      { id: 'h3', turnId: 't2', role: 'user', content: '', kind: 'continue' },
+      {
+        id: 'h4',
+        turnId: 't2',
+        role: 'assistant',
+        content: 'Part two.',
+        sources: [],
+        stopReason: 'completed',
+      },
+    ]);
+  });
+
+  it('drops a kind this build does not know, leaving a plain user row', () => {
+    const fromNewerServer = 'something_new' as unknown as MessageKind;
+
+    expect(
+      toChatMessages(
+        [
+          row({
+            turnId: 't1',
+            role: 'user',
+            content: 'Q',
+            kind: fromNewerServer,
+          }),
+        ],
+        nextId
+      )
+    ).toStrictEqual([{ id: 'h1', turnId: 't1', role: 'user', content: 'Q' }]);
   });
 });

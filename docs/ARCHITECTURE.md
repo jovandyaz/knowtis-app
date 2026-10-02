@@ -461,7 +461,7 @@ We use [Yjs](https://yjs.dev/) for conflict-free real-time collaboration. The se
 
 1. User edits → Tiptap updates the `Y.Doc`.
 2. `Y.Doc` emits a binary update (`Uint8Array`).
-3. `HocuspocusProvider` sends it over the `/collaboration` WebSocket; the token is supplied through the provider's `token` callback (`apps/notes/src/collaboration/useHocuspocusCollaboration.ts`).
+3. `HocuspocusProvider` sends it over the `/collaboration` WebSocket; the token is supplied through the provider's `token` callback (`apps/notes/src/collaboration/useHocuspocusCollaboration.ts`). The connection is keyed on the signed-in user id: a change of user in the same tab closes it and opens a new one, because a live connection keeps the identity it authenticated with. Without a signed-in user there is no connection, since every handshake needs a JWT, share link or not.
 4. The server applies it to the room document, persists it (`HocuspocusPersistenceExtension`), and broadcasts to other clients.
 5. Clients merge automatically (CRDT); Tiptap re-renders.
 

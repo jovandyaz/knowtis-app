@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ApiClient from '@knowtis/api-client';
+
 import { useAgentStore, type AgentChatMessage } from './agent.store';
 
-vi.mock('@knowtis/api-client', () => ({
+vi.mock('@knowtis/api-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiClient>()),
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
     resetConversation: vi.fn(),

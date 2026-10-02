@@ -1,7 +1,9 @@
 import { io, type Socket } from 'socket.io-client';
 
 import {
+  AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
   type AgentQuotaPayload,
   type AgentStopReason,
   type AiQuota,
@@ -103,7 +105,7 @@ export interface AgentTurnSettledPayload {
   conversationId: string;
 }
 
-interface AgentStreamCallbacks {
+export interface AgentStreamCallbacks {
   onChunk: (payload: AgentChunkPayload) => void;
   onThinking?: (payload: AgentThinkingPayload) => void;
   onDone: (payload: AgentDonePayload) => void;
@@ -154,18 +156,33 @@ interface AgentMessageBody {
   effort?: ReasoningEffort;
 }
 
-type PendingRequest =
+interface AgentContinueBody {
+  turnId: string;
+  conversationId: string;
+  continuesTurnId: string;
+  noteId?: string;
+  effort?: ReasoningEffort;
+}
+
+type TurnRequest =
   | { kind: 'message'; body: AgentMessageBody }
-  | DecisionRequest;
+  | { kind: 'continue'; body: AgentContinueBody };
+
+type PendingRequest = TurnRequest | DecisionRequest;
 
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
+const CONNECTION_FAILED_CODE = 'CONNECTION_FAILED';
 const AUTH_ERROR: AgentErrorPayload = {
   code: AUTH_REQUIRED_CODE,
   message: 'Authentication required',
 };
 const CONNECTION_ERROR: AgentErrorPayload = {
-  code: 'CONNECTION_FAILED',
+  code: CONNECTION_FAILED_CODE,
   message: 'Failed to connect to agent server',
+};
+const NOTHING_TO_CONTINUE_ERROR: AgentErrorPayload = {
+  code: AGENT_TURN_NOT_CONTINUABLE_CODE,
+  message: 'No conversation is open to continue',
 };
 /**
  * socket.io delivers at most once: an event written to a transport that has
@@ -184,16 +201,28 @@ const RESENDABLE_TURN_ERROR_CODES: ReadonlySet<string> = new Set([
   AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE,
 ]);
 
-// Every error after the server took a proposal names its turn, so a decision
-// refused without one was never applied and resending it cannot apply it twice.
-function isDecisionNotTaken(
-  request: PendingRequest,
-  error: AgentErrorPayload
-): boolean {
+// A session or connection failure ends the request whatever the server did,
+// so it says nothing about whether the proposal was taken.
+const UNPROVEN_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  AUTH_REQUIRED_CODE,
+  CONNECTION_FAILED_CODE,
+]);
+
+function isTurnRequest(request: PendingRequest): request is TurnRequest {
+  return request.kind === 'message' || request.kind === 'continue';
+}
+
+/**
+ * True for an `agent:error` that refused an approve or reject before the
+ * server took its proposal, so the proposal is still stored and may be decided
+ * again. Every refusal after the take names its turn; an expired proposal is
+ * gone; a session or connection failure proves nothing.
+ */
+export function isDecisionNotTaken(error: AgentErrorPayload): boolean {
   return (
-    request.kind !== 'message' &&
-    error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
-    error.turnId === undefined
+    error.turnId === undefined &&
+    error.code !== AGENT_PROPOSAL_EXPIRED_CODE &&
+    !UNPROVEN_REFUSAL_CODES.has(error.code)
   );
 }
 
@@ -201,9 +230,10 @@ function isResendable(
   request: PendingRequest,
   error: AgentErrorPayload
 ): boolean {
-  return request.kind === 'message'
+  return isTurnRequest(request)
     ? RESENDABLE_TURN_ERROR_CODES.has(error.code)
-    : isDecisionNotTaken(request, error);
+    : error.code === AGENT_TURN_ERROR_CODE.TURN_CLAIM_UNAVAILABLE &&
+        isDecisionNotTaken(error);
 }
 
 export class AgentClient {
@@ -271,6 +301,54 @@ export class AgentClient {
     noteId?: string,
     options?: AgentSendOptions
   ): AgentStreamHandle {
+    return this.openTurn(callbacks, noteId, options, (turnId) => ({
+      kind: 'message',
+      body: {
+        turnId,
+        ...(this.conversationId ? { conversationId: this.conversationId } : {}),
+        message: { content },
+        ...(noteId ? { noteId } : {}),
+        ...(options?.effort ? { effort: options.effort } : {}),
+      },
+    }));
+  }
+
+  /**
+   * Continues the capped turn `continuesTurnId` as a new turn of the open
+   * conversation, with no text of its own. Without an open conversation it
+   * fails at once with `AGENT_TURN_NOT_CONTINUABLE`, since only a stored turn
+   * can be continued.
+   */
+  continueTurn(
+    continuesTurnId: string,
+    callbacks: AgentStreamCallbacks,
+    noteId?: string,
+    options?: AgentSendOptions
+  ): AgentStreamHandle {
+    const conversationId = this.conversationId;
+    if (!conversationId) {
+      const turnId = options?.turnId ?? crypto.randomUUID();
+      callbacks.onError({ ...NOTHING_TO_CONTINUE_ERROR, turnId });
+      return { turnId, cancel: () => undefined };
+    }
+    return this.openTurn(callbacks, noteId, options, (turnId) => ({
+      kind: 'continue',
+      body: {
+        turnId,
+        conversationId,
+        continuesTurnId,
+        ...(noteId ? { noteId } : {}),
+        ...(options?.effort ? { effort: options.effort } : {}),
+      },
+    }));
+  }
+
+  private openTurn(
+    callbacks: AgentStreamCallbacks,
+    noteId: string | undefined,
+    options: AgentSendOptions | undefined,
+    requestOf: (turnId: string) => TurnRequest
+  ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.abandonPending();
     }
@@ -283,14 +361,7 @@ export class AgentClient {
 
     // An idempotency key only holds while the body it names never changes, so
     // every replay and resend sends this snapshot, not the client's live state.
-    const body: AgentMessageBody = {
-      turnId,
-      ...(this.conversationId ? { conversationId: this.conversationId } : {}),
-      message: { content },
-      ...(noteId ? { noteId } : {}),
-      ...(options?.effort ? { effort: options.effort } : {}),
-    };
-    this.dispatch({ kind: 'message', body }, callbacks);
+    this.dispatch(requestOf(turnId), callbacks);
 
     return {
       turnId,
@@ -394,6 +465,7 @@ export class AgentClient {
     const receipt = this.deliveryReceipt(socket, request, callbacks);
     switch (request.kind) {
       case 'message':
+      case 'continue':
         socket.emit('agent:message', request.body, receipt);
         return;
       case 'approve':
@@ -508,7 +580,8 @@ export class AgentClient {
   private holdForReconnect(): void {
     const request = this.pending;
     if (
-      request?.kind === 'message' &&
+      request &&
+      isTurnRequest(request) &&
       this.awaitingReceipt !== request &&
       !this.resentOnReconnect
     ) {
@@ -681,6 +754,11 @@ export class AgentClient {
     });
 
     onCurrentSocket('agent:committed', (payload: AgentCommittedPayload) => {
+      // The decision was applied, so nothing after it can be "not taken".
+      if (this.pending && !isTurnRequest(this.pending)) {
+        this.pending = null;
+        this.awaitingReceipt = null;
+      }
       this.activeCallbacks?.onCommitted?.(payload);
     });
 
@@ -720,7 +798,11 @@ export class AgentClient {
       }
       // The proposal is still stored, so the turn stays open for the user to
       // decide again once the server can take it.
-      if (this.pending && isDecisionNotTaken(this.pending, payload)) {
+      if (
+        this.pending &&
+        !isTurnRequest(this.pending) &&
+        isDecisionNotTaken(payload)
+      ) {
         this.awaitDecision();
         callbacks.onError(payload);
         return;
