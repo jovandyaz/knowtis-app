@@ -7578,6 +7578,34 @@ describe('RunAgentTurnHandler daily message quota', () => {
       );
     });
 
+    it.each([
+      ['another run already stored it', () => Promise.resolve(false)],
+      ['storing it failed', () => Promise.reject(new Error('db down'))],
+    ])(
+      'is not continuable when a capped turn is not stored because %s',
+      async (_label, appendTurn) => {
+        vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+        const conversations = makeConversations();
+        vi.mocked(conversations.appendTurn).mockImplementation(appendTurn);
+        const { handler } = build({
+          quota: consumedQuota(),
+          events: doneWith('max_steps'),
+          conversations,
+        });
+        const cb = callbacks();
+
+        await handler.execute(turn, cb);
+
+        expect(conversations.appendTurn).toHaveBeenCalledOnce();
+        expect(cb.onDone).toHaveBeenCalledWith(
+          expect.objectContaining({
+            stopReason: 'max_steps',
+            continuable: false,
+          })
+        );
+      }
+    );
+
     it('is not continuable when the capped turn drew the last message', async () => {
       const quota = createMessageQuotaStub({
         kind: 'consumed',
@@ -7668,6 +7696,33 @@ describe('RunAgentTurnHandler daily message quota', () => {
           error: 'redis down',
         })
       );
+    });
+
+    it('is not continuable, and reads no quota, when a capped resume leg is not stored', async () => {
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const quota = consumedQuota();
+      vi.mocked(quota.snapshot).mockResolvedValue(AFTER_CONSUME);
+      const conversations = makeConversations();
+      vi.mocked(conversations.appendTurn).mockRejectedValue(
+        new Error('db down')
+      );
+      const { handler } = build({
+        quota,
+        events: doneWith('max_steps'),
+        conversations,
+      });
+      const onDone = vi.fn();
+
+      await handler.resumeTurn(resumed, {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+      });
+
+      expect(onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ stopReason: 'max_steps', continuable: false })
+      );
+      expect(quota.snapshot).not.toHaveBeenCalled();
     });
 
     it('never reads the quota for a resume leg that completed', async () => {

@@ -628,7 +628,7 @@ export class RunAgentTurnHandler {
     sources: readonly AgentSource[],
     stopReason: MessageStopReason,
     servedModel?: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     const messages = buildTurnRows({
       userContent: persistence.userContent,
       ...(persistence.userKind ? { userKind: persistence.userKind } : {}),
@@ -639,7 +639,7 @@ export class RunAgentTurnHandler {
       ...(servedModel ? { model: servedModel } : {}),
     });
     if (messages.length === 0) {
-      return;
+      return false;
     }
     try {
       const persisted = await this.conversations.appendTurn({
@@ -648,7 +648,7 @@ export class RunAgentTurnHandler {
         messages,
       });
       if (!persisted) {
-        return;
+        return false;
       }
       this.logger.log({
         event: 'agent.conversation.persisted',
@@ -658,12 +658,14 @@ export class RunAgentTurnHandler {
         toolRows: messages.filter((m) => m.role === 'tool').length,
         stopReason,
       });
+      return true;
     } catch (error) {
       this.logger.error({
         event: 'agent.conversation.persist_failed',
         conversationId: persistence.conversationId,
         error: reasonOf(error),
       });
+      return false;
     }
   }
 
@@ -1000,16 +1002,17 @@ export class RunAgentTurnHandler {
     let assistantText = '';
     let answered = false;
     let persisted = false;
+    let stored = false;
     const persistTurnOnce = async (
       sources: readonly AgentSource[],
       stopReason: MessageStopReason,
       servedModel?: string
-    ): Promise<void> => {
+    ): Promise<boolean> => {
       if (!persistence || persisted) {
-        return;
+        return stored;
       }
       persisted = true;
-      await this.persistTurn(
+      stored = await this.persistTurn(
         persistence,
         turnMessages,
         assistantText,
@@ -1017,6 +1020,7 @@ export class RunAgentTurnHandler {
         stopReason,
         servedModel
       );
+      return stored;
     };
     if (signal?.aborted) {
       await this.recordUsageSafe(ctx, {
@@ -1120,7 +1124,7 @@ export class RunAgentTurnHandler {
             if (execution.billing.kind === 'byok') {
               void this.byok.markUsed(userId, execution.billing.provider);
             }
-            await persistTurnOnce(
+            const turnStored = await persistTurnOnce(
               event.sources,
               event.stopReason,
               event.usage.model
@@ -1135,12 +1139,14 @@ export class RunAgentTurnHandler {
                 )
               );
             }
-            const continuable = policy.consumesQuota
-              ? isContinuable(event.stopReason, hold.quota())
-              : await this.continuableFromSnapshot(
-                  event.stopReason,
-                  input.execution
-                );
+            const continuable =
+              turnStored &&
+              (policy.consumesQuota
+                ? isContinuable(event.stopReason, hold.quota())
+                : await this.continuableFromSnapshot(
+                    event.stopReason,
+                    input.execution
+                  ));
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
