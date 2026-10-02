@@ -310,6 +310,20 @@ describe('AgentComposer focus under a lock', () => {
     expect(screen.getByRole('button', { name: 'upgrade' })).not.toHaveFocus();
   });
 
+  it('leaves the focus on the page when the user clicked away from the input', () => {
+    const { rerender } = render(<Composer draft="hola" />);
+    const box = screen.getByRole('textbox');
+    act(() => box.focus());
+    act(() => box.blur());
+
+    rerender(
+      <Composer draft="hola" locked={<button type="button">upgrade</button>} />
+    );
+
+    expect(screen.getByRole('button', { name: 'upgrade' })).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
   it('does not take the focus back from where the user moved it', () => {
     const { rerender } = render(
       <>

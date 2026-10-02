@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useLayoutEffect,
   useRef,
   type KeyboardEvent,
@@ -27,22 +28,15 @@ interface ComposerInputProps {
 }
 
 interface AgentComposerProps extends ComposerInputProps {
-  /** Trails the hint line. */
   counter?: ReactNode;
-  /** Stands in for the input while nothing may be sent; the draft is kept. */
   locked?: ReactNode;
 }
 
 const ICON_BUTTON_CLASS = 'h-8 w-8 shrink-0 p-0';
 const FOCUSABLE_SELECTOR = 'button, a[href], [tabindex]:not([tabindex="-1"])';
 
-function focusWasDropped(): boolean {
-  const active = document.activeElement;
-  return active === null || active === document.body;
-}
-
-/** Its own component so the textarea's resize binding mounts with it once a lock lifts. */
 function ComposerInput({
+  onUnmount,
   draft,
   onDraftChange,
   onSend,
@@ -52,10 +46,11 @@ function ComposerInput({
   queueLength,
   status,
   modelPicker,
-}: ComposerInputProps) {
+}: ComposerInputProps & { onUnmount: () => void }) {
   const { t } = useTranslation('notes');
   const ref = useRef<HTMLTextAreaElement>(null);
   useAutoResizeTextarea(ref, draft);
+  useLayoutEffect(() => onUnmount, [onUnmount]);
 
   const alive = isTurnAlive(status);
   const isStreaming = status === 'streaming';
@@ -145,19 +140,22 @@ export function AgentComposer({
   const { t } = useTranslation('notes');
   const { status, queueLength } = inputProps;
   const shellRef = useRef<HTMLDivElement>(null);
-  const focusInside = useRef(false);
+  const inputHeldFocusWhenRemoved = useRef(false);
   const isLocked = Boolean(locked);
 
+  const noteFocusOnInputRemoval = useCallback(() => {
+    inputHeldFocusWhenRemoved.current =
+      shellRef.current?.contains(document.activeElement) === true;
+  }, []);
+
   useLayoutEffect(() => {
-    if (!isLocked || !focusInside.current) {
+    if (!isLocked || !inputHeldFocusWhenRemoved.current) {
       return;
     }
-    focusInside.current = false;
-    if (focusWasDropped()) {
-      shellRef.current
-        ?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
-        ?.focus({ preventScroll: true });
-    }
+    inputHeldFocusWhenRemoved.current = false;
+    shellRef.current
+      ?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+      ?.focus({ preventScroll: true });
   }, [isLocked]);
 
   const hint = isTurnAlive(status)
@@ -172,23 +170,15 @@ export function AgentComposer({
     <div className="p-2">
       <div
         ref={shellRef}
-        onFocus={() => {
-          focusInside.current = true;
-        }}
-        onBlur={(e) => {
-          // Removing the focused input never blurs it toward another element,
-          // so only a real move away clears this.
-          if (e.relatedTarget !== null) {
-            focusInside.current = false;
-          }
-        }}
         className={cn(
           'flex flex-col gap-1.5 rounded-2xl border border-border bg-background p-2',
           !isLocked &&
             'focus-within:ring-2 focus-within:ring-(--ring) focus-within:ring-offset-1'
         )}
       >
-        {locked || <ComposerInput {...inputProps} />}
+        {locked || (
+          <ComposerInput {...inputProps} onUnmount={noteFocusOnInputRemoval} />
+        )}
       </div>
       {!isLocked && (
         <div className="mt-1 flex items-baseline justify-between gap-2 px-1 text-[10px]">
