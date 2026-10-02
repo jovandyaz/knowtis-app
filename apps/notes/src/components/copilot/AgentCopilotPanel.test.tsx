@@ -23,6 +23,7 @@ import {
   AI_QUOTA_EXHAUSTED_CODE,
   type AgentByokKeyFailedError,
   type ConversationTranscript,
+  type QuotaUpgrade,
 } from '@knowtis/shared-types';
 
 import {
@@ -914,12 +915,14 @@ describe('AgentCopilotPanel proposal routing', () => {
 });
 
 describe('AgentCopilotPanel daily quota', () => {
-  const RESETS_AT = '2026-10-03T00:00:00.000Z';
+  const HOUR_MS = 60 * 60 * 1000;
+  const RESETS_AT = new Date(Date.now() + HOUR_MS).toISOString();
+  const RESET_PASSED_AT = new Date(Date.now() - HOUR_MS).toISOString();
 
   const freshWrapper = () =>
     createAuthWrapper(createAuthApiMock(), { user: HARNESS_PROFILE });
 
-  function refuseForTheDay(upgrade: 'register' | 'byok') {
+  function refuseWith(details: { resetsAt?: string; upgrade?: QuotaUpgrade }) {
     act(() => {
       useAgentStore.setState({
         status: 'error',
@@ -928,11 +931,14 @@ describe('AgentCopilotPanel daily quota', () => {
         error: {
           code: AI_QUOTA_EXHAUSTED_CODE,
           message: 'Daily messages spent',
-          resetsAt: RESETS_AT,
-          upgrade,
+          ...details,
         },
       });
     });
+  }
+
+  function refuseForTheDay(upgrade: QuotaUpgrade) {
+    refuseWith({ resetsAt: RESETS_AT, upgrade });
   }
 
   beforeEach(() => {
@@ -1022,24 +1028,75 @@ describe('AgentCopilotPanel daily quota', () => {
     ).toBeNull();
   });
 
-  it('lifts the lock without a stale banner once messages are available again', async () => {
+  it('reports a refusal the cached quota does not explain', async () => {
     vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
-      tier: 'free',
-      messages: { used: 3, limit: 30, resetsAt: RESETS_AT },
+      tier: 'anonymous',
+      messages: { used: 3, limit: 5, resetsAt: RESETS_AT },
     });
-    refuseForTheDay('byok');
+    refuseForTheDay('register');
 
     render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
 
     expect(
       await screen.findByText('ai.copilot.quota.remaining')
     ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.copilot.quota.exhaustedToday'
+    );
     expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
     expect(screen.getByTestId('composer')).toHaveAttribute(
       'data-draft',
       'hola'
     );
+  });
+
+  it('reports a refusal that names no reset when the quota is unknown', () => {
+    refuseWith({});
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.rateLimited'
+    );
+    expect(screen.getByRole('button', { name: 'send' })).toBeInTheDocument();
+  });
+
+  it('drops a refusal whose reset has passed once messages are back', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'free',
+      messages: { used: 0, limit: 30, resetsAt: RESETS_AT },
+    });
+    refuseWith({ resetsAt: RESET_PASSED_AT, upgrade: 'byok' });
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByText('ai.copilot.quota.remaining')
+    ).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-draft',
+      'hola'
+    );
+  });
+
+  it('drops the refusal once a key moves the caller to the byok tier', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue({
+      tier: 'byok',
+      messages: null,
+    });
+    refuseForTheDay('byok');
+
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    expect(
+      await screen.findByRole('button', { name: 'send' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-draft',
+      'hola'
+    );
   });
 
   it('neither counts nor locks for a byok caller', async () => {

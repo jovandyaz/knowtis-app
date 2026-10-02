@@ -10,6 +10,7 @@ import {
   type QuotaState,
 } from '@/hooks/useAiQuota';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { formatTime } from '@/lib/format-date';
 import {
   isTurnAlive,
   isUpdateProposal,
@@ -44,32 +45,40 @@ import { QuotaCounter } from './QuotaCounter';
 import { QuotaLockedNotice, type QuotaLock } from './QuotaLockedNotice';
 import { RetryBanner } from './RetryBanner';
 
-/** Today's quota decides; a refusal stands in only while that quota is unknown. */
+function quotaMovedPast(
+  quota: QuotaState,
+  refusal: AgentErrorPayload
+): boolean {
+  if (quota.kind === 'unmetered') {
+    return true;
+  }
+  return (
+    quota.kind === 'metered' &&
+    refusal.resetsAt !== undefined &&
+    Date.parse(quota.resetsAt) > Date.parse(refusal.resetsAt)
+  );
+}
+
 function quotaLockOf(
   quota: QuotaState,
-  error: AgentErrorPayload | null
+  refusal: AgentErrorPayload | null
 ): QuotaLock | null {
   if (quota.kind === 'metered') {
     const { tier, limit, resetsAt } = quota;
     return quota.exhausted ? { tier, limit, resetsAt } : null;
   }
-  if (
-    quota.kind === 'unknown' &&
-    error?.code === AI_QUOTA_EXHAUSTED_CODE &&
-    error.resetsAt &&
-    error.upgrade
-  ) {
+  if (quota.kind === 'unknown' && refusal?.resetsAt && refusal.upgrade) {
     return {
-      tier: error.upgrade === 'register' ? 'anonymous' : 'free',
+      tier: refusal.upgrade === 'register' ? 'anonymous' : 'free',
       limit: null,
-      resetsAt: error.resetsAt,
+      resetsAt: refusal.resetsAt,
     };
   }
   return null;
 }
 
 export function AgentCopilotPanel() {
-  const { t } = useTranslation('notes');
+  const { t, i18n } = useTranslation('notes');
   const messages = useAgentStore((s) => s.messages);
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
@@ -93,8 +102,14 @@ export function AgentCopilotPanel() {
   const userId = useAuthUser()?.id ?? null;
   useAiQuotaSync();
   const quota = quotaStateOf(useAiQuota().data);
-  // The turn that spends the last message still streams, and Stop must stay.
-  const quotaLock = isTurnAlive(status) ? null : quotaLockOf(quota, error);
+  const quotaRefusal = error?.code === AI_QUOTA_EXHAUSTED_CODE ? error : null;
+  const liveQuotaRefusal =
+    quotaRefusal && !quotaMovedPast(quota, quotaRefusal) ? quotaRefusal : null;
+  const quotaLock = isTurnAlive(status)
+    ? null
+    : quotaLockOf(quota, liveQuotaRefusal);
+  const quotaRefusalNeedsNoBanner =
+    quotaRefusal !== null && (quotaLock !== null || liveQuotaRefusal === null);
   // Not the editor's activeNoteId: that stays null until the lazy editor chunk
   // mounts, and a message sent in that window would lose its note.
   const { noteId } = useParams({ strict: false }) as { noteId?: string };
@@ -186,10 +201,15 @@ export function AgentCopilotPanel() {
     toast.info(t('ai.copilot.history.gone'));
   }, [error, conversationWasGone, answeredError, markErrorAnswered, t]);
 
+  const errorMessage = liveQuotaRefusal?.resetsAt
+    ? t('ai.copilot.quota.exhaustedToday', {
+        time: formatTime(liveQuotaRefusal.resetsAt, i18n.language),
+      })
+    : t(errorMessageKey);
   const errorBanner = (status === 'error' ||
     (status === 'pendingProposal' && error)) &&
-    error?.code !== AI_QUOTA_EXHAUSTED_CODE && (
-      <RetryBanner message={t(errorMessageKey)} {...retryTurn} />
+    !quotaRefusalNeedsNoBanner && (
+      <RetryBanner message={errorMessage} {...retryTurn} />
     );
 
   if (updateProposal && reviewOpen) {
