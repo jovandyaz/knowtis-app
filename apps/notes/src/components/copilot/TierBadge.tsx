@@ -54,7 +54,7 @@ export function TierBadge() {
     const tier = t(`ai.copilot.quota.tier.${quota.tier}`);
     content = {
       text: t('ai.copilot.quota.badge.metered', { tier, used, limit }),
-      label: t('ai.copilot.quota.usedLabel', { tier, used, limit }),
+      label: t('ai.copilot.quota.usedLabel', { tier, used, count: limit }),
       tooltip: t('ai.copilot.quota.resetsAt', {
         time: formatTime(quota.resetsAt, i18n.language),
       }),

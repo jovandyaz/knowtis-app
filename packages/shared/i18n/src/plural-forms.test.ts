@@ -7,6 +7,8 @@ const NOTES_NAMESPACE = 'notes';
 const REVIEWED_OF_KEY = 'ai.artifacts.flashcards.reviewedOf';
 const IMAGE_IMPORT_FAILED_KEY = 'ai.image.importFailed';
 const QUOTA_REMAINING_KEY = 'ai.copilot.quota.remaining';
+const QUOTA_EXHAUSTED_KEY = 'ai.copilot.quota.exhausted';
+const QUOTA_USED_LABEL_KEY = 'ai.copilot.quota.usedLabel';
 
 const BUNDLES = { en: enNotes, es: esNotes };
 
@@ -46,6 +48,32 @@ const QUOTA_REMAINING_CASES = [
     locale: 'es',
     singular: 'Te queda 1 mensaje hoy',
     plural: 'Te quedan 2 mensajes hoy',
+  },
+] as const;
+
+const QUOTA_EXHAUSTED_CASES = [
+  {
+    locale: 'en',
+    singular: 'You used your only message for today. It resets at 6:00 PM.',
+    plural: 'You used your 2 messages for today. They reset at 6:00 PM.',
+  },
+  {
+    locale: 'es',
+    singular: 'Usaste tu único mensaje de hoy. Se renueva a las 6:00 PM.',
+    plural: 'Usaste tus 2 mensajes de hoy. Se renuevan a las 6:00 PM.',
+  },
+] as const;
+
+const QUOTA_USED_LABEL_CASES = [
+  {
+    locale: 'en',
+    singular: 'Free: 1 of 1 message used today',
+    plural: 'Free: 1 of 2 messages used today',
+  },
+  {
+    locale: 'es',
+    singular: 'Free: 1 de 1 mensaje usado hoy',
+    plural: 'Free: 1 de 2 mensajes usados hoy',
   },
 ] as const;
 
@@ -128,6 +156,34 @@ describe('plural forms', () => {
 
       expect(i18n.t(QUOTA_REMAINING_KEY, { count: 1 })).toBe(singular);
       expect(i18n.t(QUOTA_REMAINING_KEY, { count: 2 })).toBe(plural);
+    }
+  );
+
+  it.each(QUOTA_EXHAUSTED_CASES)(
+    'reports the spent daily messages with the right plural in $locale',
+    async ({ locale, singular, plural }) => {
+      const i18n = await translatorFor(locale);
+
+      expect(i18n.t(QUOTA_EXHAUSTED_KEY, { count: 1, time: '6:00 PM' })).toBe(
+        singular
+      );
+      expect(i18n.t(QUOTA_EXHAUSTED_KEY, { count: 2, time: '6:00 PM' })).toBe(
+        plural
+      );
+    }
+  );
+
+  it.each(QUOTA_USED_LABEL_CASES)(
+    'labels the messages used today with the right plural in $locale',
+    async ({ locale, singular, plural }) => {
+      const i18n = await translatorFor(locale);
+
+      expect(
+        i18n.t(QUOTA_USED_LABEL_KEY, { tier: 'Free', used: 1, count: 1 })
+      ).toBe(singular);
+      expect(
+        i18n.t(QUOTA_USED_LABEL_KEY, { tier: 'Free', used: 1, count: 2 })
+      ).toBe(plural);
     }
   );
 });

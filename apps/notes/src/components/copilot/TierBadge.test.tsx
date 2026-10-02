@@ -89,7 +89,7 @@ describe('TierBadge', () => {
     renderBadge();
 
     const badge = await screen.findByLabelText(
-      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.anonymous,used=3,limit=5)'
+      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.anonymous,used=3,count=5)'
     );
     expect(badge).toHaveTextContent(
       'ai.copilot.quota.badge.metered(tier=ai.copilot.quota.tier.anonymous,used=3,limit=5)'
@@ -105,7 +105,7 @@ describe('TierBadge', () => {
     renderBadge();
 
     const badge = await screen.findByLabelText(
-      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.free,used=25,limit=30)'
+      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.free,used=25,count=30)'
     );
     expect(badge).toHaveTextContent(
       'ai.copilot.quota.badge.metered(tier=ai.copilot.quota.tier.free,used=25,limit=30)'
@@ -117,7 +117,7 @@ describe('TierBadge', () => {
     vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(metered('free', 12, 30));
     renderBadge();
     const badge = await screen.findByLabelText(
-      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.free,used=12,limit=30)'
+      'ai.copilot.quota.usedLabel(tier=ai.copilot.quota.tier.free,used=12,count=30)'
     );
 
     act(() => badge.focus());

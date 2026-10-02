@@ -61,7 +61,7 @@ describe('QuotaLockedNotice', () => {
     const time = formatTime(RESETS_AT, 'en');
     expect(time).toMatch(/\d{1,2}:\d{2}/);
     expect(screen.getByRole('status')).toHaveTextContent(
-      `ai.copilot.quota.exhausted(limit=30,time=${time})`
+      `ai.copilot.quota.exhausted(count=30,time=${time})`
     );
   });
 
@@ -83,7 +83,7 @@ describe('QuotaLockedNotice', () => {
     expect(
       screen.getByRole('button', { name: 'ai.copilot.quota.byokCta' })
     ).toHaveAccessibleDescription(
-      `ai.copilot.quota.exhausted(limit=30,time=${formatTime(RESETS_AT, 'en')})`
+      `ai.copilot.quota.exhausted(count=30,time=${formatTime(RESETS_AT, 'en')})`
     );
   });
 

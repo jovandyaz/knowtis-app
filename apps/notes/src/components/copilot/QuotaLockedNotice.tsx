@@ -66,7 +66,7 @@ export function QuotaLockedNotice({ tier, limit, resetsAt }: QuotaLock) {
       <p id={messageId} role="status" className="text-sm text-foreground">
         {limit === null
           ? t('ai.copilot.quota.exhaustedToday', { time })
-          : t('ai.copilot.quota.exhausted', { limit, time })}
+          : t('ai.copilot.quota.exhausted', { count: limit, time })}
       </p>
       <Button
         type="button"

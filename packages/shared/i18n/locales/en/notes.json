@@ -456,13 +456,15 @@
           "metered": "{{tier}} · {{used}}/{{limit}}",
           "byok": "Your key · {{provider}}"
         },
-        "usedLabel": "{{tier}}: {{used}} of {{limit}} messages used today",
+        "usedLabel_one": "{{tier}}: {{used}} of {{count}} message used today",
+        "usedLabel_other": "{{tier}}: {{used}} of {{count}} messages used today",
         "byokLabel": "You use your {{provider}} key",
         "resetsAt": "Resets at {{time}}",
         "paysWithKey": "You pay with your {{provider}} key",
         "remaining_one": "{{count}} message left today",
         "remaining_other": "{{count}} messages left today",
-        "exhausted": "You used your {{limit}} messages for today. They reset at {{time}}.",
+        "exhausted_one": "You used your only message for today. It resets at {{time}}.",
+        "exhausted_other": "You used your {{count}} messages for today. They reset at {{time}}.",
         "exhaustedToday": "You used your messages for today. They reset at {{time}}.",
         "registerCta": "Create a free account",
         "byokCta": "Use your own API key"
