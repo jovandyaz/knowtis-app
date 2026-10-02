@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
+import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import '../../../../test-support/database';
 
@@ -21,6 +30,8 @@ const AGENT_MAX_MS = 300_000;
 const RUNNING_LEASE_SECONDS = 360;
 const ONE_DAY_SECONDS = 86_400;
 const TTL_SLACK_SECONDS = 5;
+const COMMAND_TIMEOUT_MS = 250;
+const WRITE_PAUSE_CAP_MS = 5_000;
 const OWNER = 'delivery-1';
 const LATER_OWNER = 'delivery-2';
 
@@ -28,13 +39,13 @@ describe.runIf(!!REDIS_URL)('TurnClaimService against Redis', () => {
   let redis: Redis;
   let claims: TurnClaimService;
   const keysInUse: string[] = [];
+  const config = { get: () => AGENT_MAX_MS } as unknown as ConfigService<
+    EnvConfig,
+    true
+  >;
 
   beforeAll(() => {
     redis = new Redis(REDIS_URL as string, { maxRetriesPerRequest: 1 });
-    const config = { get: () => AGENT_MAX_MS } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
     claims = new TurnClaimService(
       { client: redis } as unknown as AIRedisProvider,
       config
@@ -122,6 +133,85 @@ describe.runIf(!!REDIS_URL)('TurnClaimService against Redis', () => {
 
     expect(await claims.claimConversation(userId, conversationId, OWNER)).toBe(
       'claimed'
+    );
+  });
+
+  describe('a claim whose command timed out on its client', () => {
+    type Step = (
+      service: TurnClaimService,
+      turn: TurnClaimRequest,
+      owner: string
+    ) => Promise<unknown>;
+
+    let timingOut: Redis;
+    let timingOutClaims: TurnClaimService;
+
+    beforeAll(async () => {
+      timingOut = new Redis(REDIS_URL as string, {
+        maxRetriesPerRequest: 1,
+        commandTimeout: COMMAND_TIMEOUT_MS,
+      });
+      timingOutClaims = new TurnClaimService(
+        { client: timingOut } as unknown as AIRedisProvider,
+        config
+      );
+      await timingOut.ping();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    afterAll(() => {
+      timingOut.disconnect();
+    });
+
+    // A paused client's commands run in the order it sent them once the pause
+    // lifts, so the PING returns only after every command before it landed.
+    async function whileWritesPause(run: () => Promise<void>): Promise<void> {
+      await redis.call('CLIENT', 'PAUSE', WRITE_PAUSE_CAP_MS, 'WRITE');
+      try {
+        await run();
+      } finally {
+        await redis.call('CLIENT', 'UNPAUSE');
+      }
+      await timingOut.ping();
+    }
+
+    it.each<[string, Step, Step]>([
+      [
+        'turn claim',
+        (service, turn, owner) => service.claim(turn, owner),
+        (service, turn, owner) => service.release(turn, owner),
+      ],
+      [
+        'conversation lease',
+        (service, { userId, conversationId }, owner) =>
+          service.claimConversation(userId, conversationId, owner),
+        (service, { userId, conversationId }, owner) =>
+          service.releaseConversation(userId, conversationId, owner),
+      ],
+    ])(
+      'still takes the %s, and only the release its delivery sends next frees it',
+      async (_held, take, free) => {
+        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+        const leaked = newTurn();
+        const freed = newTurn();
+        for (const { userId, conversationId } of [leaked, freed]) {
+          keysInUse.push(`agent:conversation:${userId}:${conversationId}`);
+        }
+        const outcomes: unknown[] = [];
+
+        await whileWritesPause(async () => {
+          outcomes.push(await take(timingOutClaims, leaked, OWNER));
+          outcomes.push(await take(timingOutClaims, freed, OWNER));
+          await free(timingOutClaims, freed, OWNER);
+        });
+
+        expect(outcomes).toEqual(['unavailable', 'unavailable']);
+        expect(await take(claims, leaked, LATER_OWNER)).toBe('running');
+        expect(await take(claims, freed, LATER_OWNER)).toBe('claimed');
+      }
     );
   });
 });

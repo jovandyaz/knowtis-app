@@ -1949,6 +1949,92 @@ describe('AgentGateway', () => {
       expect(execute).not.toHaveBeenCalled();
     });
 
+    describe('a claim whose SET timed out after it landed', () => {
+      const TIMED_OUT = 'Command timed out';
+      const unavailable = [
+        'agent:error',
+        expect.objectContaining({
+          code: 'TURN_CLAIM_UNAVAILABLE',
+          turnId: TURN,
+        }),
+      ];
+
+      function landsThenTimesOutOnce(
+        redis: InMemoryClaimRedis,
+        keyPrefix: string
+      ) {
+        const set = redis.client.set;
+        let timedOut = false;
+        redis.client.set = async (key, value, ...options) => {
+          const reply = await set(key, value, ...options);
+          if (!timedOut && key.startsWith(keyPrefix)) {
+            timedOut = true;
+            throw new Error(TIMED_OUT);
+          }
+          return reply;
+        };
+      }
+
+      it.each([
+        ['turn claim', 'agent:turn:'],
+        ['conversation lease', 'agent:conversation:'],
+      ])(
+        'frees the %s its delivery holds, so the resend runs',
+        async (_held, keyPrefix) => {
+          vi.spyOn(Logger.prototype, 'warn').mockImplementation(
+            () => undefined
+          );
+          const redis = createInMemoryClaimRedis();
+          landsThenTimesOutOnce(redis, keyPrefix);
+          const execute = vi.fn<Execute>(completes);
+          const gateway = makeGateway({ handler: { execute }, redis });
+          const client = makeClient('u1');
+          const resend = makeClient('u1', 'c2');
+
+          await gateway.handleMessage(client as never, turn());
+          const held = [...redis.entries.keys()];
+          await gateway.handleMessage(resend as never, turn());
+
+          expect(client.emit.mock.calls).toEqual([unavailable]);
+          expect(held).toEqual([]);
+          expect(turnErrors(resend)).toEqual([]);
+          expect(execute).toHaveBeenCalledOnce();
+        }
+      );
+
+      it.each([
+        ['turn claim', 'agent:turn:', 'release'],
+        ['conversation lease', 'agent:conversation:', 'releaseConversation'],
+      ] as const)(
+        'answers only TURN_CLAIM_UNAVAILABLE when freeing the %s throws',
+        async (_held, keyPrefix, release) => {
+          const warn = vi
+            .spyOn(Logger.prototype, 'warn')
+            .mockImplementation(() => undefined);
+          vi.spyOn(TurnClaimService.prototype, release).mockRejectedValue(
+            new Error('redis gone')
+          );
+          const redis = createInMemoryClaimRedis();
+          landsThenTimesOutOnce(redis, keyPrefix);
+          const execute = vi.fn<Execute>(completes);
+          const gateway = makeGateway({ handler: { execute }, redis });
+          const client = makeClient('u1');
+
+          await gateway.handleMessage(client as never, turn());
+
+          expect(client.emit.mock.calls).toEqual([unavailable]);
+          expect(execute).not.toHaveBeenCalled();
+          expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+              event: 'agent.turn.claim_release_failed',
+              turnId: TURN,
+              error: 'redis gone',
+            })
+          );
+        }
+      );
+    });
+
     it('gives the concurrency slot back when a duplicate is refused', async () => {
       const held = heldTurns();
       const execute = vi.fn<Execute>(async (input, cb, signal) =>

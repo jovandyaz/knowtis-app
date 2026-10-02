@@ -578,8 +578,8 @@ export class AgentGateway
     }
   }
 
-  // Runs in the finally of a turn, so a throw here would mask the turn's own
-  // failure and skip the steps after it.
+  // A throw here would replace what the client is owed (the turn's own failure,
+  // or the refusal of a turn it could not claim) and skip the steps after it.
   private async releaseStep(
     { userId, conversationId, turnId }: TurnClaimRequest,
     step: () => Promise<void>
@@ -597,12 +597,19 @@ export class AgentGateway
     }
   }
 
+  // A Redis command that timed out can still land, so a claim or lease that came
+  // back UNAVAILABLE is released too; a release only frees what this owner holds.
   private async claimTurn(
     claim: TurnClaimRequest,
     owner: string
   ): Promise<TurnClaimOutcome> {
+    const releaseClaim = () =>
+      this.releaseStep(claim, () => this.turnClaims.release(claim, owner));
     const outcome = await this.turnClaims.claim(claim, owner);
     if (outcome !== TURN_CLAIM_OUTCOME.CLAIMED) {
+      if (outcome === TURN_CLAIM_OUTCOME.UNAVAILABLE) {
+        await releaseClaim();
+      }
       return outcome;
     }
     const lease = await this.turnClaims.claimConversation(
@@ -611,7 +618,16 @@ export class AgentGateway
       owner
     );
     if (lease !== TURN_CLAIM_OUTCOME.CLAIMED) {
-      await this.turnClaims.release(claim, owner);
+      await releaseClaim();
+    }
+    if (lease === TURN_CLAIM_OUTCOME.UNAVAILABLE) {
+      await this.releaseStep(claim, () =>
+        this.turnClaims.releaseConversation(
+          claim.userId,
+          claim.conversationId,
+          owner
+        )
+      );
     }
     return lease;
   }
