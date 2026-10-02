@@ -345,7 +345,7 @@ describe('pruneTranscript', () => {
     }
   );
 
-  it('replays nothing of a history window whose only questions are continue markers', () => {
+  it('keeps whole a history window whose only questions are continue markers, so a long chain keeps its newest segments', () => {
     const rows = [
       row({
         role: 'assistant',
@@ -369,7 +369,18 @@ describe('pruneTranscript', () => {
       }),
     ];
 
-    expect(pruneTranscript(rows, { keepToolTurns: 2 })).toEqual([]);
+    expect(
+      pruneTranscript(rows, { keepToolTurns: 2 }).map((m) => [
+        m.role,
+        m.content,
+      ])
+    ).toEqual([
+      ['assistant', 'Found A. Pending: B.'],
+      ['user', CONTINUE_REQUEST],
+      ['assistant', 'Found B. Pending: C.'],
+      ['user', CONTINUE_REQUEST],
+      ['assistant', 'Found C.'],
+    ]);
   });
 
   it('opens a history window on its first question when a concurrent turn left a continue marker before it', () => {

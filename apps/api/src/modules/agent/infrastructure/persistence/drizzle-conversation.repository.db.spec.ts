@@ -1316,6 +1316,64 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       expect(transcript?.hasEarlier).toBe(true);
     });
 
+    describe('a cut window of a continuation chain', () => {
+      async function chain(turns: readonly { question?: string }[]) {
+        const { id } = await repo.create({
+          id: randomUUID(),
+          userId: LISTER,
+          title: 't',
+        });
+        for (const [index, turn] of turns.entries()) {
+          await repo.appendTurn({
+            conversationId: id,
+            turnId: randomUUID(),
+            messages: [
+              turn.question === undefined
+                ? { role: 'user', content: '', kind: MESSAGE_KIND.CONTINUE }
+                : { role: 'user', content: turn.question },
+              {
+                role: 'assistant',
+                content: `a${index}`,
+                stopReason: 'max_steps',
+              },
+            ],
+          });
+        }
+        return id;
+      }
+
+      it('opens on the next question, past a continue marker whose capped turn the cut dropped', async () => {
+        const id = await chain([{ question: 'u0' }, {}, { question: 'u2' }]);
+
+        const transcript = await repo.loadTranscriptForUser(id, LISTER, 4);
+
+        expect(transcript?.messages.map((message) => message.content)).toEqual([
+          'u2',
+          'a2',
+        ]);
+        expect(transcript?.hasEarlier).toBe(true);
+      });
+
+      it('is kept whole when its only questions are continue markers', async () => {
+        const id = await chain([{ question: 'u0' }, {}, {}]);
+
+        const transcript = await repo.loadTranscriptForUser(id, LISTER, 4);
+
+        expect(
+          transcript?.messages.map((message) => [
+            message.content,
+            message.kind ?? null,
+          ])
+        ).toEqual([
+          ['', MESSAGE_KIND.CONTINUE],
+          ['a1', null],
+          ['', MESSAGE_KIND.CONTINUE],
+          ['a2', null],
+        ]);
+        expect(transcript?.hasEarlier).toBe(true);
+      });
+    });
+
     it('renames only the owner conversation', async () => {
       const id = await withTurn(LISTER, { title: 'Before' });
 

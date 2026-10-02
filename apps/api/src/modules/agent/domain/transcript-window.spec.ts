@@ -89,20 +89,35 @@ describe('alignTranscriptWindow', () => {
     });
   });
 
-  it('should leave nothing of a cut window whose only questions are continue markers', () => {
-    const rows = [
-      row('assistant', 'tail of a capped answer'),
-      marker,
-      row('assistant', 'continued answer'),
-      marker,
-      row('assistant', 'continued again'),
-    ];
-
-    expect(alignTranscriptWindow(rows, true)).toEqual({
-      rows: [],
-      hasEarlier: true,
-    });
-  });
+  it.each([
+    [
+      'on the tail of a capped answer',
+      [
+        row('assistant', 'tail of a capped answer'),
+        marker,
+        row('assistant', 'continued answer'),
+        marker,
+        row('assistant', 'continued again'),
+      ],
+    ],
+    [
+      'on a continue marker',
+      [
+        marker,
+        row('assistant', 'continued answer'),
+        marker,
+        row('assistant', 'continued again'),
+      ],
+    ],
+  ])(
+    'should keep whole a cut window that starts %s and whose only questions are continue markers, so a long chain still shows its newest segments',
+    (_start, rows) => {
+      expect(alignTranscriptWindow(rows, true)).toEqual({
+        rows,
+        hasEarlier: true,
+      });
+    }
+  );
 
   it('should keep a cut window with no question at all rather than show nothing', () => {
     const rows = [row('assistant', 'one'), row('assistant', 'two')];

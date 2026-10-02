@@ -56,9 +56,9 @@ function markPartial(
     : { ...message, content };
 }
 
-// Nothing serializes turns per conversation, so a concurrent turn's row can
-// land between an assistant tool-call and its result; a provider rejects that
-// ordering, and the rows replay on every load until the window slides past.
+// A resume leg runs outside the conversation lease, and older rows predate it,
+// so another turn's row can still land between a tool call and its result; a
+// provider rejects that ordering.
 function groupTurns(
   rows: readonly ConversationMessageRow[]
 ): readonly ConversationMessageRow[] {

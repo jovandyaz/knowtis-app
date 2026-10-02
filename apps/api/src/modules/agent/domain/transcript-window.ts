@@ -6,15 +6,12 @@ function isQuestion(row: MarkableRow): boolean {
   return row.role === QUESTION_ROLE && !isContinueMarker(row);
 }
 
-/** A window cut mid-conversation from its first question on, so it never opens on a reply or on a continue marker whose capped turn was cut off: empty when every user row in it is a marker, whole when it has no user row. */
+/** A window cut mid-conversation from its first question on, so it never opens on a reply or on a continue marker whose capped turn was cut off; a window with no question, such as the newest segments of a long continuation chain, is kept whole. */
 export function alignToFirstQuestion<T extends MarkableRow>(
   rows: readonly T[]
 ): T[] {
   const firstQuestion = rows.findIndex(isQuestion);
-  if (firstQuestion >= 0) {
-    return rows.slice(firstQuestion);
-  }
-  return rows.some(isContinueMarker) ? [] : [...rows];
+  return firstQuestion >= 0 ? rows.slice(firstQuestion) : [...rows];
 }
 
 export function alignTranscriptWindow<T extends MarkableRow>(
