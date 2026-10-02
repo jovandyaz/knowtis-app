@@ -822,7 +822,10 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     buffer.clearInactivityTimer();
     buffer.flush();
     thinkingBuffer.discard();
-    const thread = withoutUnansweredContinuation(get().messages);
+    const thread = withInterruptedReply(
+      withoutUnansweredContinuation(get().messages),
+      current.status === 'streaming' ? activeAssistantId : null
+    );
     liveContinuation = null;
 
     const userMessage: AgentChatMessage =

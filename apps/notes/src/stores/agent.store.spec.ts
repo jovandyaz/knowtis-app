@@ -456,6 +456,60 @@ describe('useAgentStore', () => {
         false
       );
     });
+
+    it.each([
+      [
+        'a message sent now',
+        () =>
+          useAgentStore
+            .getState()
+            .sendMessage('otra cosa', undefined, { interrupt: true }),
+      ],
+      [
+        'a queued message sent now',
+        () => {
+          useAgentStore.getState().sendMessage('otra cosa');
+          const [queued] = useAgentStore.getState().queue;
+          useAgentStore.getState().sendQueuedNow(queued.id);
+        },
+      ],
+    ])('is marked interrupted when %s replaces it mid-text', (_by, replace) => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hola');
+      get().onChunk({ text: 'partial' });
+      capture('turn-2');
+
+      replace();
+
+      expect(
+        useAgentStore
+          .getState()
+          .messages.filter((m) => m.interrupted)
+          .map((m) => m.content)
+      ).toEqual(['partial']);
+    });
+
+    it('is not marked when a message sent now replaces a turn waiting on its proposal', () => {
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('create a note');
+      get().onChunk({ text: 'Here is a draft.' });
+      get().onProposal?.({
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 'Create "My Note"',
+        payload: {},
+      });
+      capture('turn-2');
+
+      useAgentStore
+        .getState()
+        .sendMessage('otra cosa', undefined, { interrupt: true });
+
+      expect(useAgentStore.getState().messages.some((m) => m.interrupted)).toBe(
+        false
+      );
+    });
   });
 
   it('retryLast replays the last user message after an error', () => {
