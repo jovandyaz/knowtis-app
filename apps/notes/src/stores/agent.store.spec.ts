@@ -12,6 +12,7 @@ import type {
   AgentErrorPayload,
   AgentProposalPayload,
   AgentThinkingPayload,
+  AgentTurnSettledPayload,
 } from '@knowtis/api-client';
 import { notesQueryKeys, tagsQueryKeys } from '@knowtis/data-access-notes';
 import {
@@ -23,6 +24,7 @@ import {
   AI_INVALID_INPUT_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
   MESSAGE_KIND,
+  type ConversationTranscript,
 } from '@knowtis/shared-types';
 
 import {
@@ -69,6 +71,7 @@ interface Cbs {
   onProposal?: (p: AgentProposalPayload) => void;
   onCommitted?: (p: AgentCommittedPayload) => void;
   onThinking?: (p: AgentThinkingPayload) => void;
+  onTurnSettled?: (p: AgentTurnSettledPayload) => void;
 }
 
 const SIDEBAR_RECENT_LIMIT = 20;
@@ -2429,5 +2432,119 @@ describe('agent.store continuing a capped turn', () => {
         .getState()
         .messages.filter((m) => m.kind === MESSAGE_KIND.CONTINUE)
     ).toHaveLength(1);
+  });
+
+  describe('a message that replaces a continuation before its first text', () => {
+    const STORED_CAPPED_TURN: ConversationTranscript = {
+      id: 'conv-1',
+      title: null,
+      noteId: null,
+      hasEarlier: false,
+      messages: [
+        {
+          turnId: 'turn-1',
+          role: 'user',
+          content: 'Compara mis notas',
+          sources: [],
+          stopReason: null,
+        },
+        {
+          turnId: 'turn-1',
+          role: 'assistant',
+          content: 'Revisé tres notas.',
+          sources: [],
+          stopReason: 'max_steps',
+        },
+      ],
+      continuableTurnId: null,
+    };
+
+    function startContinuation() {
+      useAgentStore.setState({ conversationId: 'conv-1' });
+      capTurn();
+      const continuation = captureContinue('turn-2');
+      useAgentStore.getState().continueTurn();
+      return continuation;
+    }
+
+    async function expectOnlyTheCappedTurnAndTheMessage() {
+      expect(turnIds()).toEqual(['turn-1', 'turn-1', 'turn-3', 'turn-3']);
+      vi.mocked(conversationsApi.transcript).mockResolvedValueOnce(
+        STORED_CAPPED_TURN
+      );
+      await useAgentStore.getState().retryHydration();
+      expect(turnIds()).toEqual(['turn-1', 'turn-1', 'turn-3', 'turn-3']);
+    }
+
+    it('drops the continuation a message sent now interrupts', async () => {
+      startContinuation();
+      capture('turn-3');
+
+      useAgentStore
+        .getState()
+        .sendMessage('otra cosa', undefined, { interrupt: true });
+
+      expect(useAgentStore.getState().continuableTurnId).toBeNull();
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('drops the continuation a queued message sent now interrupts', async () => {
+      startContinuation();
+      useAgentStore.getState().sendMessage('otra cosa');
+      const [queued] = useAgentStore.getState().queue;
+      capture('turn-3');
+
+      useAgentStore.getState().sendQueuedNow(queued.id);
+
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('drops a timed-out continuation when a message follows it', async () => {
+      startContinuation();
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+      capture('turn-3');
+
+      useAgentStore.getState().sendMessage('otra cosa');
+
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('drops a continuation whose stored answer could not be loaded when a message follows it', async () => {
+      const continuation = startContinuation();
+      vi.mocked(conversationsApi.transcript).mockRejectedValueOnce(
+        new Error('boom')
+      );
+      continuation
+        .get()
+        .onTurnSettled?.({ turnId: 'turn-2', conversationId: 'conv-1' });
+      await vi.waitFor(() =>
+        expect(useAgentStore.getState().retryMode).toBe('reload')
+      );
+      capture('turn-3');
+
+      useAgentStore.getState().sendMessage('otra cosa');
+
+      await expectOnlyTheCappedTurnAndTheMessage();
+    });
+
+    it('keeps a continuation that wrote text when a message interrupts it, before the text is shown', () => {
+      const continuation = startContinuation();
+      continuation.get().onChunk({ text: 'Sigo con' });
+      capture('turn-3');
+
+      useAgentStore
+        .getState()
+        .sendMessage('otra cosa', undefined, { interrupt: true });
+
+      const { messages } = useAgentStore.getState();
+      expect(messages.map((m) => [m.turnId, m.content])).toEqual([
+        ['turn-1', 'Compara mis notas'],
+        ['turn-1', 'Revisé tres notas.'],
+        ['turn-2', ''],
+        ['turn-2', 'Sigo con'],
+        ['turn-3', 'otra cosa'],
+        ['turn-3', ''],
+      ]);
+    });
   });
 });

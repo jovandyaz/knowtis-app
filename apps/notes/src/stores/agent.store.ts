@@ -306,6 +306,14 @@ const CONTINUATION_ENDING_CODES: ReadonlySet<string> = new Set([
   AI_INVALID_INPUT_CODE,
 ]);
 
+function hasAnswered(message: AgentChatMessage): boolean {
+  return (
+    message.content.length > 0 ||
+    message.proposal !== undefined ||
+    message.stopReason !== undefined
+  );
+}
+
 function continuedTurnOf(
   messages: readonly AgentChatMessage[],
   markerIndex: number
@@ -520,10 +528,21 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
 
   const activeAnswered = (): boolean => {
     const answer = get().messages.find((m) => m.id === activeAssistantId);
-    return (
-      answer !== undefined &&
-      (answer.content.length > 0 || answer.proposal !== undefined)
-    );
+    return answer !== undefined && hasAnswered(answer);
+  };
+
+  // The server stores nothing for a continuation that never answered, so no
+  // refetch would ever take its marker off a thread that moved on without it.
+  const withoutUnansweredContinuation = (
+    messages: readonly AgentChatMessage[]
+  ): AgentChatMessage[] => {
+    const turnId = liveContinuation?.turnId;
+    const unanswered =
+      turnId !== undefined &&
+      !messages.some((m) => m.turnId === turnId && hasAnswered(m));
+    return unanswered
+      ? messages.filter((m) => m.turnId !== turnId)
+      : [...messages];
   };
 
   const takeBackRefusedTurn = (
@@ -787,10 +806,11 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     unsentText =
       request.kind === TURN_REQUEST_KIND.MESSAGE ? request.text : null;
     resumingDecision = false;
-    liveContinuation = null;
     buffer.clearInactivityTimer();
-    buffer.discard();
+    buffer.flush();
     thinkingBuffer.discard();
+    const thread = withoutUnansweredContinuation(get().messages);
+    liveContinuation = null;
 
     const userMessage: AgentChatMessage =
       request.kind === TURN_REQUEST_KIND.MESSAGE
@@ -808,7 +828,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
     };
 
     set({
-      messages: [...current.messages, userMessage, assistantMessage],
+      messages: [...thread, userMessage, assistantMessage],
       status: 'streaming',
       error: null,
       pendingProposal: null,
