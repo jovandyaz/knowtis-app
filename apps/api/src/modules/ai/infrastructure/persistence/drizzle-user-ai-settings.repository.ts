@@ -66,6 +66,18 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
       .returning({ userId: userAiSettings.userId });
   }
 
+  async clearPreferredModel(userId: string, model: string): Promise<void> {
+    await this.db
+      .update(userAiSettings)
+      .set({ preferredModel: null, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(userAiSettings.userId, userId),
+          eq(userAiSettings.preferredModel, model)
+        )
+      );
+  }
+
   async clearBoundToUnheldProvider(
     userId: string,
     provider: ByokProvider

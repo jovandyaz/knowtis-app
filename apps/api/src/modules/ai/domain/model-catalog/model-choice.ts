@@ -221,3 +221,27 @@ export function chooseModel(
   }
   return { kind: MODEL_CHOICE.UNAVAILABLE, reason, suggestedModel: substitute };
 }
+
+/**
+ * The stored model pick a turn's choice reports as retired, which the turn may
+ * forget once reported; null otherwise. An explicit or pinned model is not the
+ * stored pick, and a pick dropped for a removed key or the plan is kept, since
+ * either can come back.
+ */
+export function retiredStoredPick(
+  request: ModelRequest,
+  choice: ModelChoice
+): string | null {
+  if (
+    request.explicit !== undefined ||
+    request.pinned ||
+    choice.kind !== MODEL_CHOICE.RESOLVED
+  ) {
+    return null;
+  }
+  const fallback = choice.resolution.fallback;
+  return fallback?.reason === 'model_retired' &&
+    fallback.from === request.preferredModel
+    ? fallback.from
+    : null;
+}
