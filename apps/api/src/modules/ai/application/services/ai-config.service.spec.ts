@@ -4,7 +4,6 @@ import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
@@ -18,6 +17,7 @@ const CUSTOM_FAST = 'anthropic:claude-haiku-4-5';
 const A_VALID_CHAIN = 'anthropic:claude-haiku-4-5,openai:gpt-4o-mini';
 const ACTOR = 'admin-user-id';
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
+const NON_SELECTOR_ID = 'openrouter:z-ai/glm-5.2';
 const UNKNOWN_ID = 'openrouter:vendor/unknown-one';
 
 function deletedRow(value: string) {
@@ -45,7 +45,6 @@ describe('AIConfigService', () => {
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let mockRegistry: { isModelAvailable: ReturnType<typeof vi.fn> };
   let mockCatalog: { isSupported: ReturnType<typeof vi.fn> };
-  let mockPromoted: { snapshot: ReturnType<typeof vi.fn> };
 
   /** Wires the real promoted cache and composite catalog so promoted models reach validation exactly as they do at runtime. */
   async function serviceWith(models: readonly CatalogModel[]) {
@@ -62,8 +61,7 @@ describe('AIConfigService', () => {
       mockCache as never,
       mockAudit as never,
       mockRegistry as never,
-      catalog,
-      promoted
+      catalog
     );
   }
 
@@ -82,14 +80,12 @@ describe('AIConfigService', () => {
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
     mockRegistry = { isModelAvailable: vi.fn().mockReturnValue(true) };
     mockCatalog = { isSupported: vi.fn().mockReturnValue(true) };
-    mockPromoted = { snapshot: vi.fn().mockReturnValue([]) };
     service = new AIConfigService(
       mockRepo as never,
       mockCache as never,
       mockAudit as never,
       mockRegistry as never,
-      mockCatalog as never,
-      mockPromoted as never
+      mockCatalog as never
     );
   });
 
@@ -136,15 +132,27 @@ describe('AIConfigService', () => {
     expect(mockRepo.set).not.toHaveBeenCalled();
   });
 
-  it('should reject a value that is neither curated nor promoted', async () => {
+  it('should reject a model the catalog does not support', async () => {
+    mockCatalog.isSupported.mockReturnValue(false);
     await expect(
       service.setConfig('ai_default_model', 'anthropic:not-a-model', ACTOR)
-    ).rejects.toThrow("'anthropic:not-a-model' is not a selectable model id");
+    ).rejects.toThrow(
+      "'anthropic:not-a-model' is not a model the catalog supports"
+    );
     expect(mockRepo.set).not.toHaveBeenCalled();
     expect(mockAudit.record).not.toHaveBeenCalled();
   });
 
-  it('should reject a curated model the server cannot invoke', async () => {
+  it('should accept a supported, routable model outside the selectors', async () => {
+    await service.setConfig('ai_default_model', NON_SELECTOR_ID, ACTOR);
+    expect(mockRepo.set).toHaveBeenCalledWith(
+      'ai_default_model',
+      NON_SELECTOR_ID,
+      undefined
+    );
+  });
+
+  it('should reject a supported model the server cannot invoke', async () => {
     mockRegistry.isModelAvailable.mockReturnValue(false);
     await expect(
       service.setConfig('ai_default_model', CUSTOM_MODEL, ACTOR)
@@ -1109,21 +1117,6 @@ describe('AIConfigService', () => {
 });
 
 describe('AI_SETTING_DEFAULTS', () => {
-  it('names only curated model ids so a typo fails CI, not prod', () => {
-    const curatedIds = new Set(CURATED_MODELS.map((m) => m.id));
-    const referenced = [
-      AI_SETTING_DEFAULTS.ai_default_model,
-      AI_SETTING_DEFAULTS.ai_fast_model,
-      AI_SETTING_DEFAULTS.ai_deep_model,
-      ...AI_SETTING_DEFAULTS.ai_fallback_chain
-        .split(',')
-        .map((id) => id.trim()),
-    ];
-    for (const id of referenced) {
-      expect(curatedIds.has(id)).toBe(true);
-    }
-  });
-
   it('every reasoning default is a member of the global effort union', () => {
     expect(GLOBAL_REASONING_EFFORTS).toContain(
       AI_SETTING_DEFAULTS.ai_reasoning_effort

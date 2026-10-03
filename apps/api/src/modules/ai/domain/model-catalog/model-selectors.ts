@@ -43,6 +43,12 @@ export interface ModelSelector extends EligibilityRule {
 }
 
 export const RETIREMENT_WINDOW_DAYS = 30;
+
+/** What an admin may pin as a platform default: any eligible row that can call tools and emit structured output. */
+export const ASSIGNABLE_RULE: EligibilityRule = {
+  requires: ['tool_call', 'structured_output'],
+  allowPreview: true,
+};
 export const EXCLUDED_STATUSES: readonly ModelStatus[] = [
   'deprecated',
   'alpha',

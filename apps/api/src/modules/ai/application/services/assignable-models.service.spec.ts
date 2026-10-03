@@ -1,26 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { providerOf } from '@knowtis/ai-gateway';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import type { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { AssignableModelsService } from './assignable-models.service';
 
-const ANTHROPIC_CURATED = 'anthropic:claude-sonnet-5';
-const OPENAI_CURATED = 'openai:gpt-5.6-sol';
-const PROMOTED_ID = 'openrouter:vendor/promoted-one';
-const PROMOTED_LABEL = 'Promoted One';
+const SONNET_ID = 'anthropic:claude-sonnet-5-5';
+const SONNET_LABEL = 'Claude Sonnet 5.5';
+const GLM_ID = 'openrouter:z-ai/glm-5.2';
+const IMAGE_ID = 'google:gemini-3-pro-image';
+const ALIAS_ID = 'openrouter:~anthropic/claude-opus-latest';
+const PROMOTED_LABEL = 'Promoted Sonnet';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
-/** A promoted row sharing a curated id: curated must win, mirroring SelectableModelsService.offered(). */
-const CURATED_COLLISION_ID = ANTHROPIC_CURATED;
+const PROVIDER_ORDER = ['anthropic', 'openai', 'google', 'openrouter'];
 
 type RegistryStub = Pick<ProviderRegistryFactory, 'isModelAvailable'>;
 type PromotedCacheStub = Pick<PromotedModelsCache, 'snapshot'>;
 
-/** Typed against the real ports so a shape change breaks compilation here instead of at runtime. */
 function makeService(opts: {
   configuredProviders?: readonly string[];
   promoted?: readonly CatalogModel[];
@@ -34,103 +37,115 @@ function makeService(opts: {
   };
   return new AssignableModelsService(
     registry as ProviderRegistryFactory,
-    promoted as PromotedModelsCache
+    promoted as PromotedModelsCache,
+    createSnapshotIndex()
   );
 }
 
 describe('AssignableModelsService', () => {
-  it('marks a curated model of an unconfigured provider as needsKey, never hides it', async () => {
-    const svc = makeService({ configuredProviders: ['anthropic'] });
-    const rows = await svc.list();
-    const openai = rows.find((row) => row.id === OPENAI_CURATED);
-    expect(openai).toMatchObject({
-      routableByServer: false,
-      needsKey: true,
-      promoted: false,
-    });
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
   });
 
-  it('marks a curated model of a configured provider as routable', async () => {
-    const svc = makeService({ configuredProviders: ['anthropic'] });
-    const rows = await svc.list();
-    const anthropic = rows.find((row) => row.id === ANTHROPIC_CURATED);
-    expect(anthropic).toMatchObject({
-      routableByServer: true,
-      needsKey: false,
-      promoted: false,
-    });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('lists every curated model whatever the key state', async () => {
-    const svc = makeService({});
-    const rows = await svc.list();
-    expect(rows.map((row) => row.id)).toEqual(
-      expect.arrayContaining(CURATED_MODELS.map((model) => model.id))
-    );
-  });
-
-  it('serves the curated label, an empty description and the provider of the id', async () => {
-    const svc = makeService({});
-    const rows = await svc.list();
-    const anthropic = rows.find((row) => row.id === ANTHROPIC_CURATED);
-    expect(anthropic).toMatchObject({
-      label: 'Sonnet 5',
+  it('lists an eligible index row with its name and intent tier', async () => {
+    const rows = await makeService({
+      configuredProviders: ['anthropic'],
+    }).list();
+    expect(rows.find((row) => row.id === SONNET_ID)).toEqual({
+      id: SONNET_ID,
+      label: SONNET_LABEL,
       description: '',
       tier: 'balanced',
       provider: 'anthropic',
+      routableByServer: true,
+      needsKey: false,
+      promoted: false,
     });
   });
 
-  it('appends promoted rows flagged promoted with their stored copy', async () => {
-    const svc = makeService({
+  it('lists nothing from an unconfigured provider', async () => {
+    const rows = await makeService({
+      configuredProviders: ['anthropic'],
+    }).list();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.provider === 'anthropic')).toBe(true);
+  });
+
+  it('never lists an image model or an alias id', async () => {
+    const ids = (
+      await makeService({
+        configuredProviders: ['google', 'openrouter'],
+      }).list()
+    ).map((row) => row.id);
+    expect(ids).not.toContain(IMAGE_ID);
+    expect(ids).not.toContain(ALIAS_ID);
+  });
+
+  it('gives an openrouter glm row the open tier', async () => {
+    const rows = await makeService({
       configuredProviders: ['openrouter'],
-      promoted: [
-        createCatalogModel({
-          id: PROMOTED_ID,
-          label: PROMOTED_LABEL,
-          description: PROMOTED_DESCRIPTION,
-        }),
-      ],
-    });
-    const rows = await svc.list();
-    const promoted = rows.find((row) => row.id === PROMOTED_ID);
-    expect(promoted).toMatchObject({
-      label: PROMOTED_LABEL,
-      description: PROMOTED_DESCRIPTION,
+    }).list();
+    expect(rows.find((row) => row.id === GLM_ID)).toMatchObject({
       tier: 'open',
       provider: 'openrouter',
-      routableByServer: true,
-      needsKey: false,
+    });
+  });
+
+  it('lists a promoted id once, promoted, with its stored copy', async () => {
+    const rows = await makeService({
+      configuredProviders: ['anthropic'],
+      promoted: [
+        createCatalogModel({
+          id: SONNET_ID,
+          label: PROMOTED_LABEL,
+          description: PROMOTED_DESCRIPTION,
+          tier: 'powerful',
+        }),
+      ],
+    }).list();
+    const matches = rows.filter((row) => row.id === SONNET_ID);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      label: PROMOTED_LABEL,
+      description: PROMOTED_DESCRIPTION,
+      tier: 'powerful',
       promoted: true,
     });
   });
 
   it('still computes routability for a promoted row through the registry', async () => {
-    const svc = makeService({
-      promoted: [createCatalogModel({ id: PROMOTED_ID })],
-    });
-    const rows = await svc.list();
-    const promoted = rows.find((row) => row.id === PROMOTED_ID);
-    expect(promoted).toMatchObject({
-      routableByServer: false,
-      needsKey: false,
-      promoted: true,
-    });
+    const rows = await makeService({
+      promoted: [createCatalogModel({ id: 'openrouter:vendor/promoted-one' })],
+    }).list();
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: 'openrouter:vendor/promoted-one',
+        routableByServer: false,
+        needsKey: false,
+        promoted: true,
+      }),
+    ]);
   });
 
-  it('never duplicates an id: the curated row wins over a promoted one', async () => {
-    const svc = makeService({
-      configuredProviders: ['anthropic'],
-      promoted: [
-        createCatalogModel({
-          id: CURATED_COLLISION_ID,
-          label: 'Shadowing row',
-        }),
-      ],
-    });
-    const rows = await svc.list();
-    const matches = rows.filter((row) => row.id === CURATED_COLLISION_ID);
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatchObject({ label: 'Sonnet 5', promoted: false });
+  it('orders by provider, then newest release, then id', async () => {
+    const rows = await makeService({
+      configuredProviders: PROVIDER_ORDER,
+    }).list();
+    const ranks = rows.map((row) => PROVIDER_ORDER.indexOf(row.provider));
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    const ids = rows.filter((row) => row.provider === 'anthropic');
+    const dates = ids.map(
+      (row) =>
+        createSnapshotIndex()
+          .catalog()
+          .all()
+          .find((indexed) => indexed.id === row.id)?.releasedAt ?? ''
+    );
+    expect(dates).toEqual([...dates].sort().reverse());
   });
 });

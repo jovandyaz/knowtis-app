@@ -20,13 +20,11 @@ import {
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { DailyMessageLimits } from '../../domain/execution-context/quota-policy';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
   type AIConfigRepository,
   type AIConfigRow,
 } from '../../domain/ports/ai-config.repository';
-import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const CACHE_PREFIX = 'ai:config:';
@@ -143,8 +141,7 @@ export class AIConfigService {
     private readonly adminAuditService: AdminAuditService,
     private readonly registry: ProviderRegistryFactory,
     @Inject(MODEL_CATALOG)
-    private readonly modelCatalog: ModelCatalog,
-    private readonly promotedModels: PromotedModelsCache
+    private readonly modelCatalog: ModelCatalog
   ) {}
 
   async getDefaultModel(): Promise<string> {
@@ -365,11 +362,10 @@ export class AIConfigService {
   }
 
   private validateModel(value: string): void {
-    const offered =
-      CURATED_MODELS.some((m) => m.id === value) ||
-      this.promotedModels.snapshot().some((row) => row.id === value);
-    if (!offered) {
-      throw new InvalidAIConfigError(`'${value}' is not a selectable model id`);
+    if (!this.modelCatalog.isSupported(value)) {
+      throw new InvalidAIConfigError(
+        `'${value}' is not a model the catalog supports`
+      );
     }
     if (!this.registry.isModelAvailable(value)) {
       throw new InvalidAIConfigError(
