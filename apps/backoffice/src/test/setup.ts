@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-// jsdom ships no ResizeObserver, and both TabsList and recharts construct one on mount.
+// jsdom has no ResizeObserver, so TabsList and recharts would throw on mount without it.
 class ResizeObserverPolyfill implements ResizeObserver {
   observe() {}
   unobserve() {}
@@ -8,3 +8,6 @@ class ResizeObserverPolyfill implements ResizeObserver {
 }
 
 globalThis.ResizeObserver = ResizeObserverPolyfill;
+
+// jsdom does no layout and leaves scrollIntoView undefined, so cmdk would throw on every highlight.
+Element.prototype.scrollIntoView = () => undefined;

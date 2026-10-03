@@ -43,6 +43,9 @@ class ResizeObserverPolyfill implements ResizeObserver {
 
 globalThis.ResizeObserver = ResizeObserverPolyfill;
 
+// jsdom does no layout and leaves scrollIntoView undefined, so cmdk would throw on every highlight.
+Element.prototype.scrollIntoView = () => undefined;
+
 /** Runs every connected ResizeObserver callback; wrap the call in `act` when it drives React state. */
 export function triggerResizeObservers() {
   for (const observer of resizeObservers) {

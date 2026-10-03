@@ -211,7 +211,7 @@ describe('ModelsSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
     await userEvent.click(
-      await screen.findByRole('menuitemradio', { name: /haiku/i })
+      await screen.findByRole('option', { name: /haiku/i })
     );
     rerender(
       <ModelsSection
@@ -311,7 +311,7 @@ describe('ModelsSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
 
-    const locked = await screen.findByRole('menuitemradio', { name: /gpt/i });
+    const locked = await screen.findByRole('option', { name: /gpt/i });
     expect(locked).toHaveAttribute('aria-disabled', 'true');
     expect(within(locked).getByTitle(NEEDS_KEY_HINT)).toBeInTheDocument();
   });
@@ -321,7 +321,7 @@ describe('ModelsSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
 
-    const locked = await screen.findByRole('menuitemradio', {
+    const locked = await screen.findByRole('option', {
       name: /promoted vendor/i,
     });
     expect(locked).toHaveAttribute('aria-disabled', 'true');
@@ -333,9 +333,7 @@ describe('ModelsSection', () => {
     renderSection();
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
-    await userEvent.click(
-      await screen.findByRole('menuitemradio', { name: /gpt/i })
-    );
+    await userEvent.click(await screen.findByRole('option', { name: /gpt/i }));
 
     expect(setConfigMutate).not.toHaveBeenCalled();
   });
@@ -345,13 +343,45 @@ describe('ModelsSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
     await userEvent.click(
-      await screen.findByRole('menuitemradio', { name: /haiku/i })
+      await screen.findByRole('option', { name: /haiku/i })
     );
 
     expect(setConfigMutate).toHaveBeenCalledWith({
       key: 'ai_default_model',
       value: 'anthropic:haiku',
     });
+  });
+
+  it('opens the model picker on a search box', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+
+    const search = await screen.findByRole('combobox', {
+      name: 'Search by name or ID',
+    });
+    expect(search).toHaveFocus();
+  });
+
+  it('narrows the model picker to the rows matching the search', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+    await userEvent.type(await screen.findByRole('combobox'), 'openai');
+
+    const rows = screen.getAllByRole('option');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('GPT');
+  });
+
+  it('says so when no model matches the search', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+    await userEvent.type(await screen.findByRole('combobox'), 'no-such-model');
+
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText('No models match your search')).toBeInTheDocument();
   });
 
   it('links to the Providers tab for key configuration', async () => {
