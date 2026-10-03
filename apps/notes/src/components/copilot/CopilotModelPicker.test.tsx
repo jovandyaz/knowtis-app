@@ -253,6 +253,14 @@ describe('CopilotModelPicker', () => {
       expect(prefsRequested).not.toHaveBeenCalled();
     });
 
+    it('tells a screen reader what the label names', () => {
+      render(<CopilotModelPicker />);
+
+      expect(screen.getByText('aiAssistant.intent.label:')).toHaveClass(
+        'sr-only'
+      );
+    });
+
     it('never names an effort level, whatever the conversation holds', () => {
       useAgentStore.setState({ reasoningEffort: 'high' });
 

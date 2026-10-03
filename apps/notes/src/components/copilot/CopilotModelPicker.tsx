@@ -49,7 +49,8 @@ function GuestModelLabel() {
   const { t } = useTranslation('common');
   return (
     <span className="inline-flex h-8 items-center px-2 text-sm text-(--muted-foreground)">
-      {t(`aiAssistant.intent.${DEFAULT_MODEL_INTENT}` as never)}
+      <span className="sr-only">{t('aiAssistant.intent.label')}: </span>
+      <span>{t(`aiAssistant.intent.${DEFAULT_MODEL_INTENT}` as never)}</span>
     </span>
   );
 }
