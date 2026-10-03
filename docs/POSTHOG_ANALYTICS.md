@@ -256,7 +256,10 @@ event (`alert`, `signal`, `rate`, `threshold`, `samples`, `window_hours`,
 `provider`, `failures`, `spent_usd`, `limit_usd`, `alerted_at`) and never maps
 user ids. The `API raised an operational alert` insight alert checks hourly and
 emails its subscribers when any alert other than `webhook.test` fires. Test the
-webhook only with `"event": "webhook.test"`. Its ID is the public ingestion URL, so it lives only in Railway's `AI_ALERT_WEBHOOK_URL` and in PostHog's data pipelines, never in the repository.
+webhook only with `"event": "webhook.test"`.
+The webhook's ID is its public ingestion URL, so it lives only in Railway's
+`AI_ALERT_WEBHOOK_URL` and in PostHog's data pipelines, never in the
+repository.
 
 When verifying these assets, confirm the dashboard contains the six saved
 insights listed above and that each remains attached to dashboard `2065684`.
