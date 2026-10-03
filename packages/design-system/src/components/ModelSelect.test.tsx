@@ -717,6 +717,15 @@ describe('ModelSelect', () => {
       return screen.getAllByRole('option').map((o) => o.textContent);
     }
 
+    it('names the dialog after the search placeholder when no aria-label is given', async () => {
+      renderSearchable();
+      await openAndSearch('');
+
+      expect(
+        screen.getByRole('dialog', { name: SEARCH_PLACEHOLDER })
+      ).toBeInTheDocument();
+    });
+
     it('focuses the search input as soon as it opens', async () => {
       renderSearchable();
       await openAndSearch('');
@@ -735,6 +744,7 @@ describe('ModelSelect', () => {
       await openAndSearch('BALANCED');
 
       expect(optionLabels()).toEqual([expect.stringContaining('Balanced One')]);
+      expect(screen.queryByText('No models available')).not.toBeInTheDocument();
     });
 
     it('filters the rows by id', async () => {
@@ -830,6 +840,7 @@ describe('ModelSelect', () => {
       await userEvent.keyboard('{Enter}');
       expect(onSelect).toHaveBeenCalledWith('a:bal');
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.getByRole('button')).toHaveFocus();
     });
 
     it('selects a row on click and closes', async () => {
@@ -870,6 +881,13 @@ describe('ModelSelect', () => {
       expect(
         screen.getByRole('option', { name: /Fast One/ }).querySelector('svg')
       ).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /Fast One/ })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      );
+      expect(
+        screen.getByRole('option', { name: /Balanced One/ })
+      ).toHaveAttribute('aria-checked', 'false');
       expect(
         screen
           .getByRole('option', { name: /Balanced One/ })

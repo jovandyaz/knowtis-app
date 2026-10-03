@@ -368,6 +368,7 @@ function SearchOption({
     <CommandItem
       value={id}
       disabled={disabled}
+      aria-checked={asAction ? undefined : isCurrent}
       onSelect={() => onPick(id)}
       className={cn(
         OPTION_ROW_CLASSES,
@@ -617,7 +618,7 @@ export function ModelSelect({
         <PopoverContent
           align="start"
           collisionPadding={COLLISION_PADDING_PX}
-          aria-label={ariaLabel}
+          aria-label={ariaLabel ?? searchPlaceholder}
           className="flex max-h-(--radix-popover-content-available-height) flex-col p-0"
         >
           <ModelSearchList
