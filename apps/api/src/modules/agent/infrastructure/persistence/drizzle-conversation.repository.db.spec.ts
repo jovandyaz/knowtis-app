@@ -41,6 +41,15 @@ import { pruneTranscript } from '../../domain/prune-transcript';
 import { buildTurnRows } from '../../domain/turn-transcript';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
 
+const BACKOFF_BASE_SECONDS = 60;
+const EXTRACTION_RETRY = {
+  maxAttempts: 3,
+  backoffBaseSeconds: BACKOFF_BASE_SECONDS,
+};
+const HOUR_MS = 60 * 60 * 1000;
+const IDLE_HOURS = 3;
+const LONG_AFTER_EVERY_BACKOFF_SECONDS = 2 * 60 * 60;
+
 const USER = '00000000-0000-4000-8000-000000000091';
 const OTHER = '00000000-0000-4000-8000-000000000092';
 
@@ -269,9 +278,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         .where(eq(conversations.id, id));
       return row?.at ?? null;
     };
-    await repo.markExtracted(OTHER, id);
+    const [{ version }] = await db
+      .select({ version: sql<string>`${conversations.updatedAt}::text` })
+      .from(conversations)
+      .where(eq(conversations.id, id));
+    await repo.markExtracted(OTHER, id, version);
     expect(await extractedAt()).toBeNull();
-    await repo.markExtracted(USER, id);
+    await repo.markExtracted(USER, id, version);
     expect(await extractedAt()).not.toBeNull();
   });
 
@@ -926,6 +939,22 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         .set({ updatedAt: at })
         .where(eq(conversations.id, id));
 
+    const extractable = (id: string) =>
+      repo
+        .findExtractable(0, 10_000, EXTRACTION_RETRY)
+        .then((rows) => rows.find((row) => row.id === id));
+
+    const dueForExtraction = async (id: string): Promise<boolean> =>
+      (await extractable(id)) !== undefined;
+
+    const selectedVersion = async (id: string): Promise<string> => {
+      const row = await extractable(id);
+      if (!row) {
+        throw new Error(`conversation ${id} is not due for extraction`);
+      }
+      return row.version;
+    };
+
     beforeAll(async () => {
       for (const [id, isAnonymous] of [
         [LISTER, false],
@@ -1411,17 +1440,144 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
 
     it('does not make a renamed conversation due for memory extraction again', async () => {
       const id = await withTurn(LISTER);
-      await touch(id, new Date(Date.now() - 60 * 60 * 1000));
-      const due = async () =>
-        (await repo.findExtractable(0, 10_000)).some((row) => row.id === id);
+      await touch(id, new Date(Date.now() - HOUR_MS));
 
-      expect(await due()).toBe(true);
-      await repo.markExtracted(LISTER, id);
-      expect(await due()).toBe(false);
+      await repo.markExtracted(LISTER, id, await selectedVersion(id));
+      expect(await dueForExtraction(id)).toBe(false);
 
       await repo.rename(id, LISTER, 'Renamed');
 
-      expect(await due()).toBe(false);
+      expect(await dueForExtraction(id)).toBe(false);
+    });
+
+    describe('memory extraction retries', () => {
+      const lastFailedSecondsAgo = (id: string, seconds: number) =>
+        db
+          .update(conversations)
+          .set({
+            memoryExtractionFailedAt: sql`now() - make_interval(secs => ${seconds})`,
+          })
+          .where(eq(conversations.id, id));
+
+      const idleConversation = async (): Promise<{
+        id: string;
+        version: string;
+      }> => {
+        const id = await withTurn(LISTER);
+        await touch(id, new Date(Date.now() - IDLE_HOURS * HOUR_MS));
+        return { id, version: await selectedVersion(id) };
+      };
+
+      const failUpToTheCap = async (
+        id: string,
+        version: string
+      ): Promise<void> => {
+        for (
+          let attempt = 1;
+          attempt <= EXTRACTION_RETRY.maxAttempts;
+          attempt++
+        ) {
+          expect(await repo.recordExtractionFailure(LISTER, id, version)).toBe(
+            attempt
+          );
+        }
+      };
+
+      const failureState = async (id: string) => {
+        const [row] = await db
+          .select({
+            attempts: conversations.memoryExtractionAttempts,
+            failedAt: conversations.memoryExtractionFailedAt,
+          })
+          .from(conversations)
+          .where(eq(conversations.id, id));
+        return row;
+      };
+
+      it('backs a failed conversation off, doubling the wait after each failure', async () => {
+        const { id, version } = await idleConversation();
+
+        expect(await repo.recordExtractionFailure(LISTER, id, version)).toBe(1);
+        expect(await dueForExtraction(id)).toBe(false);
+        await lastFailedSecondsAgo(id, BACKOFF_BASE_SECONDS + 1);
+        expect(await dueForExtraction(id)).toBe(true);
+
+        expect(await repo.recordExtractionFailure(LISTER, id, version)).toBe(2);
+        await lastFailedSecondsAgo(id, BACKOFF_BASE_SECONDS + 1);
+        expect(await dueForExtraction(id)).toBe(false);
+        await lastFailedSecondsAgo(id, 2 * BACKOFF_BASE_SECONDS + 1);
+        expect(await dueForExtraction(id)).toBe(true);
+      });
+
+      it('gives a conversation up once its failures reach the cap', async () => {
+        const { id, version } = await idleConversation();
+
+        await failUpToTheCap(id, version);
+        await lastFailedSecondsAgo(id, LONG_AFTER_EVERY_BACKOFF_SECONDS);
+
+        expect(await dueForExtraction(id)).toBe(false);
+      });
+
+      it('makes a given-up conversation due again once a new message arrives, counting afresh', async () => {
+        const { id, version } = await idleConversation();
+        await failUpToTheCap(id, version);
+        await lastFailedSecondsAgo(id, LONG_AFTER_EVERY_BACKOFF_SECONDS);
+
+        await answer(id);
+
+        const next = await selectedVersion(id);
+        expect(await repo.recordExtractionFailure(LISTER, id, next)).toBe(1);
+      });
+
+      it('clears the failures once the conversation is extracted', async () => {
+        const { id, version } = await idleConversation();
+        await repo.recordExtractionFailure(LISTER, id, version);
+
+        await repo.markExtracted(LISTER, id, version);
+
+        expect(await failureState(id)).toEqual({
+          attempts: 0,
+          failedAt: null,
+        });
+      });
+
+      it("counts no failure on another user's conversation", async () => {
+        const { id, version } = await idleConversation();
+
+        expect(
+          await repo.recordExtractionFailure(STRANGER, id, version)
+        ).toBeNull();
+        expect(await failureState(id)).toEqual({
+          attempts: 0,
+          failedAt: null,
+        });
+      });
+
+      it('does not stamp a state that moved on after it was selected', async () => {
+        const { id, version } = await idleConversation();
+
+        await answer(id);
+        await repo.markExtracted(LISTER, id, version);
+
+        expect(await dueForExtraction(id)).toBe(true);
+        await repo.markExtracted(LISTER, id, await selectedVersion(id));
+        expect(await dueForExtraction(id)).toBe(false);
+      });
+
+      it('counts no failure on a state that moved on after it was selected', async () => {
+        const { id, version } = await idleConversation();
+
+        await answer(id);
+
+        expect(
+          await repo.recordExtractionFailure(LISTER, id, version)
+        ).toBeNull();
+        expect(await failureState(id)).toEqual({
+          attempts: 0,
+          failedAt: null,
+        });
+        expect(await dueForExtraction(id)).toBe(true);
+      });
     });
 
     it('deletes only the owner conversation, with its messages', async () => {

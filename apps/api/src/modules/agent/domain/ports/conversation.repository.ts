@@ -55,6 +55,21 @@ export interface LoadMessagesOptions {
   readonly textOnly?: boolean;
 }
 
+/** How long a conversation whose memory extraction failed waits, and how often it may fail, before it is given up on. */
+export interface ExtractionRetryPolicy {
+  /** Failures of one conversation state after which it is given up on until a new message changes it. */
+  readonly maxAttempts: number;
+  /** Wait after the first failure; each further failure of the same state doubles it. */
+  readonly backoffBaseSeconds: number;
+}
+
+export interface ExtractableConversation {
+  readonly id: string;
+  readonly userId: string;
+  /** The state that was read: `updated_at` as Postgres text, exact to the microsecond. */
+  readonly version: string;
+}
+
 export interface ConversationRepository {
   create(input: CreateConversationInput): Promise<{ id: string }>;
   findByIdForUser(
@@ -85,11 +100,30 @@ export interface ConversationRepository {
   appendTurn(input: AppendTurnInput): Promise<boolean>;
   /** Whether the conversation already stores the user row of `turnId`: a stored turn never runs again. */
   hasTurn(conversationId: string, turnId: string): Promise<boolean>;
+  /**
+   * Registered users' conversations idle for `quietSeconds` whose current state has no extracted memories yet,
+   * oldest first. A state that failed is skipped while its backoff runs and for good once it has failed `retry.maxAttempts` times.
+   */
   findExtractable(
     quietSeconds: number,
-    limit: number
-  ): Promise<{ id: string; userId: string }[]>;
-  markExtracted(userId: string, conversationId: string): Promise<void>;
+    limit: number,
+    retry: ExtractionRetryPolicy
+  ): Promise<ExtractableConversation[]>;
+  /** Stamps state `version` as extracted and clears its failures; writes nothing once a new message has moved the conversation past it. */
+  markExtracted(
+    userId: string,
+    conversationId: string,
+    version: string
+  ): Promise<void>;
+  /**
+   * Counts one failed extraction of state `version` and resolves how many it has had, or null when nothing was
+   * counted: `userId` owns no such conversation, or a new message has moved it past `version` (a state that starts with no failures).
+   */
+  recordExtractionFailure(
+    userId: string,
+    conversationId: string,
+    version: string
+  ): Promise<number | null>;
   listForUser(
     userId: string,
     page: { offset: number; limit: number }

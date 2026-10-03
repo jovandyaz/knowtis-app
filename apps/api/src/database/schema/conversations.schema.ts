@@ -3,6 +3,7 @@ import {
   bigserial,
   check,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -49,6 +50,12 @@ export const conversations = pgTable(
       .notNull()
       .defaultNow(),
     memoriesExtractedAt: timestamp('memories_extracted_at', {
+      withTimezone: true,
+    }),
+    memoryExtractionAttempts: integer('memory_extraction_attempts')
+      .notNull()
+      .default(0),
+    memoryExtractionFailedAt: timestamp('memory_extraction_failed_at', {
       withTimezone: true,
     }),
     model: varchar('model', { length: MODEL_ID_MAX_LENGTH }),

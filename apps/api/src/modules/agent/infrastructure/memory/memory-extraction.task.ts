@@ -34,6 +34,8 @@ import {
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
+  type ExtractableConversation,
+  type ExtractionRetryPolicy,
 } from '../../domain/ports/conversation.repository';
 import {
   MEMORY_REPOSITORY,
@@ -45,11 +47,18 @@ const INTERVAL_MS = 120_000;
 const TRANSCRIPT_MESSAGES = 40;
 const MAX_OUTPUT_TOKENS = 1024;
 
+// A failure can land after the reconcile call was charged to the user, so each
+// retry of the same conversation state may charge again: the cap bounds that.
+const EXTRACTION_RETRY: ExtractionRetryPolicy = {
+  maxAttempts: 3,
+  backoffBaseSeconds: 1800,
+};
+
 /**
  * Memories are persisted as the user's data: a cross-family fallback would
  * store another model's judgement about which memories to keep, merge or
- * drop. Skipping a reconcile round (the conversation is retried on the next
- * tick) is cheaper than an inconsistent memory set.
+ * drop. Skipping a reconcile round (the conversation is retried after a
+ * backoff) is cheaper than an inconsistent memory set.
  */
 const MEMORY_FALLBACK_SCOPE = 'same-family' as const;
 
@@ -96,19 +105,20 @@ export class MemoryExtractionTask {
       }
       const quiet = this.config.get('AI_MEMORY_QUIET_SECONDS');
       const batch = this.config.get('AI_MEMORY_BATCH_SIZE');
-      const candidates = await this.conversations.findExtractable(quiet, batch);
+      const candidates = await this.conversations.findExtractable(
+        quiet,
+        batch,
+        EXTRACTION_RETRY
+      );
       let processed = 0;
       for (const conv of candidates) {
         if (processed > 0 && (await this.globalSpendExhausted())) {
           break;
         }
         try {
-          await this.extractOne(conv.id, conv.userId);
+          await this.extractOne(conv);
         } catch (error) {
-          this.logger.warn(
-            `Memory extraction failed for conversation ${conv.id}`,
-            stackOf(error)
-          );
+          await this.recordFailure(conv, error);
         }
         processed++;
       }
@@ -122,6 +132,37 @@ export class MemoryExtractionTask {
     }
   }
 
+  private async recordFailure(
+    { id: conversationId, userId, version }: ExtractableConversation,
+    error: unknown
+  ): Promise<void> {
+    let attempts: number | null = null;
+    try {
+      attempts = await this.conversations.recordExtractionFailure(
+        userId,
+        conversationId,
+        version
+      );
+    } catch (recordError) {
+      this.logger.warn({
+        event: 'agent.memory.extraction_failure_unrecorded',
+        conversationId,
+        reason: reasonOf(recordError),
+      });
+    }
+    const abandoned =
+      attempts !== null && attempts >= EXTRACTION_RETRY.maxAttempts;
+    this.logger.warn({
+      event: abandoned
+        ? 'agent.memory.extraction_abandoned'
+        : 'agent.memory.extraction_failed',
+      conversationId,
+      attempts,
+      reason: reasonOf(error),
+      stack: stackOf(error),
+    });
+  }
+
   private async globalSpendExhausted(): Promise<boolean> {
     if (!(await this.rateLimit.isGlobalSpendExhausted())) {
       return false;
@@ -133,10 +174,11 @@ export class MemoryExtractionTask {
     return true;
   }
 
-  private async extractOne(
-    conversationId: string,
-    userId: string
-  ): Promise<void> {
+  private async extractOne({
+    id: conversationId,
+    userId,
+    version,
+  }: ExtractableConversation): Promise<void> {
     const max = this.config.get('AI_MEMORY_MAX_PER_USER');
     const messages = await this.conversations.loadMessages(
       conversationId,
@@ -145,7 +187,7 @@ export class MemoryExtractionTask {
       { textOnly: true }
     );
     if (messages.length === 0) {
-      await this.conversations.markExtracted(userId, conversationId);
+      await this.conversations.markExtracted(userId, conversationId, version);
       return;
     }
     const transcript = messages
@@ -243,6 +285,6 @@ export class MemoryExtractionTask {
       inserts,
       updates: memoryUpdates,
     });
-    await this.conversations.markExtracted(userId, conversationId);
+    await this.conversations.markExtracted(userId, conversationId, version);
   }
 }
