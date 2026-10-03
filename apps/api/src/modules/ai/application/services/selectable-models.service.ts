@@ -113,6 +113,7 @@ export class SelectableModelsService {
     return {
       heldProviders: byokProviders,
       isSupported: (id) => this.catalog.isSupported(id),
+      canonicalOf: (id) => this.index.catalog().get(id)?.canonical,
       isPlatformBilled: (id) =>
         platformIntentIds.has(id) ||
         (openTier.has(id) && this.registry.isModelAvailable(id)),

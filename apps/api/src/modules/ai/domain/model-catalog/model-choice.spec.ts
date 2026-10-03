@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@knowtis/ai-gateway';
 import type {
   AccessTier,
   ByokProvider,
@@ -22,6 +23,7 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
 const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
 const OPEN_MODEL = 'openrouter:z-ai/glm-5.2';
 const OPEN_TIER_IDS: readonly string[] = [...PLATFORM_INTENT_IDS, OPEN_MODEL];
+const INDEX = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
 const RETIRED = 'anthropic:claude-sonnet-3';
 const platformRoutes = (id: string) => id.startsWith('openrouter:');
 const offered = (id: string): OfferedModel => ({
@@ -51,6 +53,7 @@ function setup(
   const facts: ModelFacts = {
     heldProviders: new Set(held),
     isSupported,
+    canonicalOf: (id) => INDEX.get(id)?.canonical,
     isPlatformBilled: (id) =>
       platformIntentIds.includes(id) ||
       (OPEN_TIER_IDS.includes(id) && platformRoutes(id)),
@@ -365,6 +368,16 @@ describe('chooseModel', () => {
           },
         },
       });
+    });
+
+    it('falls back visibly from an id the index does not list', () => {
+      const unlisted = 'anthropic:claude-sonnet-3';
+      expect(setup('byok', ['openrouter'])({ pinned: unlisted })).toMatchObject(
+        {
+          kind: 'resolved',
+          resolution: { fallback: { from: unlisted } },
+        }
+      );
     });
 
     it('never moves a pinned platform-billed route onto the caller key', () => {

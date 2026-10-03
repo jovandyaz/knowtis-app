@@ -104,16 +104,6 @@ export const BYOK_INTENT_CANDIDATES: Readonly<
   ],
 };
 
-const CANDIDATES: readonly CanonicalModel[] = Object.values(
-  BYOK_INTENT_CANDIDATES
-).flat();
-
-export function canonicalOf(modelId: string): CanonicalModel | undefined {
-  return CANDIDATES.find((candidate) =>
-    Object.values(candidate.routes).includes(modelId)
-  );
-}
-
 /** The stored primary while its key is held, else the first key added. */
 export function effectivePrimary(
   held: readonly ByokProvider[],

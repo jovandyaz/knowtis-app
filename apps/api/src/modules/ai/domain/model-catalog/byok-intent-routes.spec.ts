@@ -5,7 +5,6 @@ import { MODEL_INTENTS, type ByokProvider } from '@knowtis/shared-types';
 import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
 import {
   BYOK_INTENT_CANDIDATES,
-  canonicalOf,
   effectivePrimary,
   routeIntent,
 } from './byok-intent-routes';
@@ -154,14 +153,5 @@ describe('BYOK_INTENT_CANDIDATES', () => {
     expect(route('balanced', ['openrouter'], () => true)?.modelId).toBe(
       'openrouter:anthropic/claude-sonnet-5'
     );
-  });
-});
-
-describe('canonicalOf', () => {
-  it('finds the canonical model behind any of its routes', () => {
-    expect(canonicalOf('openrouter:anthropic/claude-opus-5')?.slug).toBe(
-      'anthropic/claude-opus-5'
-    );
-    expect(canonicalOf('openrouter:z-ai/glm-5.2')).toBeUndefined();
   });
 });

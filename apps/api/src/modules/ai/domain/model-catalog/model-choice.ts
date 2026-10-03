@@ -7,7 +7,6 @@ import {
   type ModelUnavailableReason,
 } from '@knowtis/shared-types';
 
-import { canonicalOf } from './byok-intent-routes';
 import {
   CATALOG_BILLING,
   findInCatalog,
@@ -30,6 +29,8 @@ export interface ModelFacts {
   readonly isSupported: (modelId: string) => boolean;
   /** Per model, never per provider: true only for a model the platform pays for, its configured intent models and the open-tier models it can route. */
   readonly isPlatformBilled: (modelId: string) => boolean;
+  /** The index identity shared by every route of one model; undefined for an id the index does not list. */
+  readonly canonicalOf: (modelId: string) => string | undefined;
 }
 
 export const MODEL_CHOICE = {
@@ -108,9 +109,14 @@ function sameModelRoute(
   ) {
     return undefined;
   }
-  return Object.values(canonicalOf(modelId)?.routes ?? {}).find(
-    (route) => findInCatalog(catalog, route) !== undefined
-  );
+  const canonical = facts.canonicalOf(modelId);
+  if (canonical === undefined) {
+    return undefined;
+  }
+  return catalog.models.find(
+    ({ model }) =>
+      model.id !== modelId && facts.canonicalOf(model.id) === canonical
+  )?.model.id;
 }
 
 /** The model a turn runs on: another model is substituted only inside the same billing class, and the substitution is reported, never silent; another held key's route of the same model is no substitution. */
