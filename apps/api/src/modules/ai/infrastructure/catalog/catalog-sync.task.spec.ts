@@ -2,8 +2,8 @@ import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
+import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
 import { PLATFORM_FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
-import { watchedSlug } from '../../domain/model-catalog/openrouter-watch';
 import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type {
   UpstreamCatalog,
@@ -12,8 +12,6 @@ import type {
 import { CatalogSyncTask } from './catalog-sync.task';
 import type { ModelIndexWriter } from './model-index.writer';
 
-const WATCHED_ID = 'openrouter:deepseek/deepseek-v3.2';
-const WATCHED_SLUG = 'deepseek/deepseek-v3.2';
 const WATCHED_OUTPUT_COST = 0.0000044;
 const REPRICE_FACTOR = 2;
 const PROMOTED_SLUG = 'qwen/qwen3-max';
@@ -56,14 +54,18 @@ const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
 const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
-const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.flatMap((id) => {
-  const slug = watchedSlug(id);
-  return slug === null ? [] : [slug];
-});
+const MIN_WATCHED_MODELS = 2;
 
-if (WATCHED_SLUGS.length < 2) {
+const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
+  id.startsWith(OPENROUTER_ID_PREFIX)
+).map((id) => id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase());
+
+if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
   throw new Error('the sync spec needs two watched OpenRouter models');
 }
+
+const [WATCHED_SLUG] = WATCHED_SLUGS;
+const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
 const WATCHED_COUNT = WATCHED_SLUGS.length;
 
@@ -212,7 +214,7 @@ describe('CatalogSyncTask', () => {
     );
   });
 
-  it('should raise a deprecation alert when OpenRouter dates a curated model', async () => {
+  it('should raise a deprecation alert when OpenRouter dates a watched model', async () => {
     const { task, repo } = make({
       upstream: [
         upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
@@ -228,7 +230,21 @@ describe('CatalogSyncTask', () => {
     );
   });
 
-  it('should raise an unavailable alert when a curated model leaves OpenRouter', async () => {
+  it('should alert once when a promoted platform default leaves OpenRouter', async () => {
+    const { task, repo, openRouter } = make({ promoted: [WATCHED_ID] });
+    const inSync = withWatchedInSync();
+    openRouter.fetchModels.mockResolvedValue({
+      ...inSync,
+      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
+    });
+
+    const result = await task.run();
+
+    expect(result.alerts).toBe(1);
+    expect(repo.createAlert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should raise an unavailable alert when a watched model leaves OpenRouter', async () => {
     const { task, repo, openRouter } = make();
     const inSync = withWatchedInSync();
     openRouter.fetchModels.mockResolvedValue({
@@ -259,7 +275,7 @@ describe('CatalogSyncTask', () => {
     expect(repo.createAlert).not.toHaveBeenCalled();
   });
 
-  it('should raise no alert when OpenRouter reprices a curated model', async () => {
+  it('should raise no alert when OpenRouter reprices a watched model', async () => {
     const { task, repo } = make({
       upstream: [
         upstreamModel(WATCHED_SLUG, {

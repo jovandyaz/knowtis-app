@@ -19,11 +19,6 @@ const WATCHED_SLUGS: ReadonlyMap<string, string> = new Map(
   ).map((id) => [id, id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase()])
 );
 
-/** The OpenRouter slug behind a platform default model, or null when that id is billed elsewhere or is not a platform default. */
-export function watchedSlug(modelId: string): string | null {
-  return WATCHED_SLUGS.get(modelId) ?? null;
-}
-
 function unavailableDetail(slug: string): string {
   return `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`;
 }
@@ -90,7 +85,8 @@ export function findOpenRouterDrift(catalog: UpstreamCatalog): DriftFinding[] {
 }
 
 /**
- * Promoted models OpenRouter stopped listing. Absence is read from the payload
+ * Promoted models OpenRouter stopped listing, except platform defaults, which
+ * `findOpenRouterDrift` already reports. Absence is read from the payload
  * rather than from `lastSeenAt`, which only refreshes for rows still passing the
  * candidate filter — a promoted model whose price outgrew that ceiling is still
  * listed, and reporting it as vanished would be wrong.
@@ -102,7 +98,9 @@ export function findPromotedDrift(
   const { isGone } = absenceCheck(catalog);
 
   return promotedIds
-    .filter((id) => id.startsWith(OPENROUTER_ID_PREFIX))
+    .filter(
+      (id) => id.startsWith(OPENROUTER_ID_PREFIX) && !WATCHED_SLUGS.has(id)
+    )
     .flatMap((id) => {
       const slug = id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase();
       return isGone(slug)
