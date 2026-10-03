@@ -17,7 +17,8 @@ import { AIKeysManager } from './AIKeysManager';
 
 export function AIAssistantSection() {
   const { t } = useTranslation('common');
-  const { data: models, isError, refetch } = useAvailableModels();
+  const { data: catalog, isError, refetch } = useAvailableModels();
+  const models = catalog?.models;
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
   const focusTarget = useSettingsStore((s) => s.focusTarget);

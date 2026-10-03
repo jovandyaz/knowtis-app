@@ -1,41 +1,34 @@
-import type {
-  AccessTier,
-  AIPreferences,
-  ModelCatalogResponse,
-  SelectableModel,
-  UpdateAiPreferencesInput,
+import {
+  AI_ACCESS_TIERS,
+  type AIPreferences,
+  type ModelCatalogResponse,
+  type UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
 import { httpClient } from './http-client';
 
-/** The catalog as the client reads it; `tier` is null from a server that still answers with a bare array. */
-export type ModelCatalogView = Omit<ModelCatalogResponse, 'tier'> & {
-  tier: AccessTier | null;
-};
+const ACCESS_TIERS: readonly string[] = AI_ACCESS_TIERS;
 
-function toCatalogView(
-  body: Partial<ModelCatalogResponse> | SelectableModel[] | null
-): ModelCatalogView {
-  if (Array.isArray(body)) {
-    return { tier: null, models: body, intents: [] };
+function isModelCatalog(body: unknown): body is ModelCatalogResponse {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return false;
   }
-  if (body && Array.isArray(body.models)) {
-    return {
-      tier: body.tier ?? null,
-      models: body.models,
-      intents: Array.isArray(body.intents) ? body.intents : [],
-    };
-  }
-  throw new Error('Malformed /ai/models response');
+  const { tier, models, intents } = body as Record<string, unknown>;
+  return (
+    typeof tier === 'string' &&
+    ACCESS_TIERS.includes(tier) &&
+    Array.isArray(models) &&
+    Array.isArray(intents)
+  );
 }
 
 export const aiModelsApi = {
-  async getModels(): Promise<ModelCatalogView> {
-    return toCatalogView(
-      await httpClient.get<
-        Partial<ModelCatalogResponse> | SelectableModel[] | null
-      >('/ai/models')
-    );
+  async getModels(): Promise<ModelCatalogResponse> {
+    const body = await httpClient.get<unknown>('/ai/models');
+    if (!isModelCatalog(body)) {
+      throw new Error('Malformed /ai/models response');
+    }
+    return body;
   },
   getPreferences(): Promise<AIPreferences> {
     return httpClient.get<AIPreferences>('/ai/preferences');

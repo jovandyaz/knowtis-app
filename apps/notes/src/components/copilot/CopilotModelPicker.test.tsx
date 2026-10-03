@@ -4,12 +4,21 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SelectableModel } from '@knowtis/shared-types';
+import type {
+  ModelCatalogResponse,
+  SelectableModel,
+} from '@knowtis/shared-types';
 
 import { CopilotModelPicker } from './CopilotModelPicker';
 
+function catalogOf(
+  models: SelectableModel[] | undefined
+): ModelCatalogResponse | undefined {
+  return models && { tier: 'free', models, intents: [] };
+}
+
 const updatePreferences = vi.fn();
-const modelsData = vi.fn();
+const modelsData = vi.fn<() => SelectableModel[] | undefined>();
 const modelsPending = vi.fn<() => boolean>();
 const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
@@ -54,7 +63,7 @@ vi.mock('@/hooks', () => ({
   useAvailableModels: (enabled?: boolean) => {
     modelsEnabled(enabled);
     return {
-      data: modelsData(),
+      data: catalogOf(modelsData()),
       isPending: modelsPending(),
       isError: modelsError(),
       refetch: modelsRefetch,

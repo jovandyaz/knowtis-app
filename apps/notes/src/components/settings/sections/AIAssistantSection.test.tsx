@@ -3,7 +3,18 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  ModelCatalogResponse,
+  SelectableModel,
+} from '@knowtis/shared-types';
+
 import { AIAssistantSection } from './AIAssistantSection';
+
+function catalogOf(
+  models: SelectableModel[] | undefined
+): ModelCatalogResponse | undefined {
+  return models && { tier: 'free', models, intents: [] };
+}
 
 const update = vi.fn();
 const modelsData = vi.fn();
@@ -22,7 +33,7 @@ vi.mock('./AIKeysManager', () => ({
 }));
 vi.mock('@/hooks', () => ({
   useAvailableModels: () => ({
-    data: modelsData(),
+    data: catalogOf(modelsData()),
     isPending: false,
     isError: modelsError(),
     refetch: modelsRefetch,

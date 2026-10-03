@@ -45,11 +45,12 @@ export function CopilotModelPicker() {
   // The key endpoints reject a guest, so BYOK stays registered-only.
   const canUseByok = !isAnonymous;
   const {
-    data: models,
+    data: catalog,
     isPending,
     isError,
     refetch,
   } = useAvailableModels(showPicker);
+  const models = catalog?.models;
   const { data: prefs } = useAISettings(showPicker);
   const { mutate: update } = useUpdateAISettings();
   const openSettings = useSettingsStore((s) => s.open);

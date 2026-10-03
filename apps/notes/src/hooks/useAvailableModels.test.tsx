@@ -6,7 +6,10 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { aiModelsApi } from '@knowtis/api-client';
-import type { SelectableModel } from '@knowtis/shared-types';
+import type {
+  ModelCatalogResponse,
+  SelectableModel,
+} from '@knowtis/shared-types';
 
 import { useAvailableModels } from './useAvailableModels';
 
@@ -22,17 +25,17 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe('useAvailableModels', () => {
-  it('yields the catalog models whatever shape the server answered', async () => {
-    const model = { id: 'anthropic:claude-sonnet-5' } as SelectableModel;
-    vi.mocked(aiModelsApi.getModels).mockResolvedValue({
+  it('yields the tier envelope the server answered', async () => {
+    const catalog: ModelCatalogResponse = {
       tier: 'byok',
-      models: [model],
+      models: [{ id: 'anthropic:claude-sonnet-5' } as SelectableModel],
       intents: [],
-    });
+    };
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(catalog);
 
     const { result } = renderHook(() => useAvailableModels(true), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual([model]);
+    expect(result.current.data).toEqual(catalog);
   });
 });
