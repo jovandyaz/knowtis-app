@@ -51,6 +51,7 @@ import {
   MESSAGE_QUOTA_PORT,
   USER_MESSAGE_COUNT_PORT,
 } from './domain/ports/message-quota.port';
+import { MODEL_INDEX_REPOSITORY } from './domain/ports/model-index.repository';
 import { OPENROUTER_MODELS_CLIENT } from './domain/ports/openrouter-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
@@ -68,6 +69,7 @@ import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedd
 import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
+import { DrizzleModelIndexRepository } from './infrastructure/persistence/drizzle-model-index.repository';
 import { DrizzleSystemProviderKeysRepository } from './infrastructure/persistence/drizzle-system-provider-keys.repository';
 import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
 import { DrizzleUserMessageCountRepository } from './infrastructure/persistence/drizzle-user-message-count.repository';
@@ -159,6 +161,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       useClass: AIStructuredOutputSDKProvider,
     },
     { provide: AI_CATALOG_REPOSITORY, useClass: DrizzleAiCatalogRepository },
+    { provide: MODEL_INDEX_REPOSITORY, useClass: DrizzleModelIndexRepository },
     { provide: AI_CONFIG_REPOSITORY, useClass: DrizzleAIConfigRepository },
     { provide: AI_USAGE_REPOSITORY, useClass: DrizzleAIUsageRepository },
     { provide: EMBEDDING_PORT, useClass: VoyageEmbeddingAdapter },
