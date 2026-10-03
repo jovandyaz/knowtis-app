@@ -13,10 +13,12 @@ import {
 
 const EFFORT_OPTION = 'effort';
 const TOGGLE_OPTION = 'toggle';
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_MONTH = /^\d{4}-\d{2}$/;
 const FIRST_DAY_OF_MONTH = '01';
 const PRICE_SIGNIFICANT_DIGITS = 15;
+const UNRECOGNIZED_MODEL_STATUS: ModelStatus = 'alpha';
+
+const calendarDate = z.iso.date();
 
 const perMillionCost = z.number().nonnegative().nullish();
 const tokenLimit = z.number().nonnegative().nullish();
@@ -27,7 +29,7 @@ const modelsDevEntrySchema = z.object({
   name: z.string().min(1),
   family: z.string().nullish(),
   release_date: z.string().nullish(),
-  status: z.enum(MODEL_STATUSES).nullish(),
+  status: z.string().nullish(),
   tool_call: z.boolean().nullish(),
   structured_output: z.boolean().nullish(),
   modalities: z.object({ input: modalityList, output: modalityList }).nullish(),
@@ -62,7 +64,7 @@ export interface ModelsDevEnrichment {
   readonly status: ModelStatus;
 }
 
-/** Normalizes one models.dev model entry; null when the entry fails the schema (missing id or name, negative or non-finite cost). */
+/** Normalizes one models.dev model entry; null when the entry fails the schema (missing id or name, negative or non-finite cost). An unrecognized status is kept as `alpha`. */
 export function fromModelsDev(
   provider: (typeof MODELS_DEV_PROVIDERS)[number],
   raw: unknown
@@ -78,7 +80,7 @@ export function fromModelsDev(
     name: entry.name,
     family: entry.family ?? null,
     releasedAt: toReleaseDate(entry.release_date),
-    status: entry.status ?? DEFAULT_MODEL_STATUS,
+    status: toModelStatus(entry.status),
     toolCall: entry.tool_call ?? null,
     structuredOutput: entry.structured_output ?? null,
     inputModalities: entry.modalities?.input ?? [],
@@ -90,15 +92,16 @@ export function fromModelsDev(
     maxInputTokens: entry.limit?.input ?? entry.limit?.context ?? null,
     maxOutputTokens: entry.limit?.output ?? null,
     reasoning: toReasoning(entry),
-    canonical:
-      entry.canonical_model_id ?? deriveCanonical(`${provider}/${entry.id}`),
+    canonical: deriveCanonical(
+      entry.canonical_model_id ?? `${provider}/${entry.id}`
+    ),
     openWeights: entry.open_weights ?? null,
     retiresAt: null,
     source: 'models_dev',
   };
 }
 
-/** Identity facts of one entry from the models.dev `openrouter` section; null when the entry fails the schema. */
+/** Identity facts of one entry from the models.dev `openrouter` section, with the canonical id as published; null when the entry fails the schema. */
 export function enrichmentFromModelsDev(
   raw: unknown
 ): ModelsDevEnrichment | null {
@@ -111,21 +114,28 @@ export function enrichmentFromModelsDev(
     family: entry.family ?? null,
     canonical: entry.canonical_model_id ?? null,
     openWeights: entry.open_weights ?? null,
-    status: entry.status ?? DEFAULT_MODEL_STATUS,
+    status: toModelStatus(entry.status),
   };
+}
+
+function toModelStatus(status: string | null | undefined): ModelStatus {
+  if (status == null) {
+    return DEFAULT_MODEL_STATUS;
+  }
+  return (
+    MODEL_STATUSES.find((known) => known === status) ??
+    UNRECOGNIZED_MODEL_STATUS
+  );
 }
 
 function toReleaseDate(date: string | null | undefined): string | null {
   if (date == null) {
     return null;
   }
-  if (ISO_DATE.test(date)) {
-    return date;
-  }
-  if (ISO_MONTH.test(date)) {
-    return `${date}-${FIRST_DAY_OF_MONTH}`;
-  }
-  return null;
+  const candidate = ISO_MONTH.test(date)
+    ? `${date}-${FIRST_DAY_OF_MONTH}`
+    : date;
+  return calendarDate.safeParse(candidate).success ? candidate : null;
 }
 
 function toPerToken(perMillion: number | null | undefined): number | null {

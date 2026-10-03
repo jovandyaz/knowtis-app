@@ -80,6 +80,12 @@ const DEEPSEEK_ROUTE: IndexedModel = {
   source: 'openrouter',
 };
 
+const WHISPER_AS_TEXT_ROW: IndexedModel = {
+  ...SONNET,
+  id: 'openai:whisper-1',
+  provider: 'openai',
+};
+
 const catalog = new ModelIndexCatalog([
   SONNET,
   GPT_IMAGE,
@@ -116,6 +122,12 @@ describe('ModelIndexCatalog', () => {
 
     it('never supports a transcription model even though it is priced', () => {
       expect(catalog.isSupported('openai:whisper-1')).toBe(false);
+    });
+
+    it('never supports a transcription model even when indexed with text modalities', () => {
+      const withWhisperRow = new ModelIndexCatalog([WHISPER_AS_TEXT_ROW]);
+
+      expect(withWhisperRow.isSupported('openai:whisper-1')).toBe(false);
     });
   });
 
@@ -154,9 +166,7 @@ describe('ModelIndexCatalog', () => {
     });
 
     it('keeps the per-second price when the index also lists the transcription model', () => {
-      const withWhisperRow = new ModelIndexCatalog([
-        { ...SPEECH_INPUT, id: 'openai:whisper-1' },
-      ]);
+      const withWhisperRow = new ModelIndexCatalog([WHISPER_AS_TEXT_ROW]);
 
       expect(withWhisperRow.getPricing('openai:whisper-1')).toEqual({
         inputCostPerSecond: 0.0001,

@@ -64,7 +64,7 @@ export const TOKENS_PER_MILLION = 1_000_000;
 const VARIANT_SEPARATOR = ':';
 const DOT_BETWEEN_DIGITS = /(?<=\d)\.(?=\d)/g;
 
-/** `author/slug` identity shared by every route of one model: digit dots become dashes and `:variant` is dropped, matching models.dev `canonical_model_id`. */
+/** The index's normalized `author/slug` identity key, shared by every route of one model: `:variant` is dropped, dots between digits become dashes, and the result is lowercased. Every `IndexedModel.canonical` passes through it, whatever its source. */
 export function deriveCanonical(authorSlug: string): string {
   const variantStart = authorSlug.indexOf(VARIANT_SEPARATOR);
   const withoutVariant =

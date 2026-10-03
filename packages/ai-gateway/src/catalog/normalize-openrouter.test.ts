@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { enrichmentFromModelsDev } from './normalize-models-dev';
+import { enrichmentFromModelsDev, fromModelsDev } from './normalize-models-dev';
 import {
   fromOpenRouter,
   type OpenRouterModelInput,
@@ -158,6 +158,140 @@ const SEED_2_0_CODE: OpenRouterModelInput = {
   reasoning: { levels: ['high', 'medium', 'low'], mandatory: false },
 };
 
+const GPT_5_6_LUNA: OpenRouterModelInput = {
+  id: 'openai/gpt-5.6-luna',
+  name: 'OpenAI: GPT-5.6 Luna',
+  createdAt: new Date('2026-07-09T09:54:24Z'),
+  contextLength: 1050000,
+  maxCompletionTokens: 128000,
+  promptCostPerToken: Number('0.0000002'),
+  completionCostPerToken: Number('0.0000012'),
+  cacheReadCostPerToken: Number('0.00000002'),
+  cacheWriteCostPerToken: Number('0.00000025'),
+  expirationDate: null,
+  inputModalities: ['file', 'image', 'text'],
+  outputModalities: ['text'],
+  supportedParameters: [
+    'include_reasoning',
+    'max_completion_tokens',
+    'max_tokens',
+    'reasoning',
+    'reasoning_effort',
+    'response_format',
+    'seed',
+    'structured_outputs',
+    'tool_choice',
+    'tools',
+    'verbosity',
+  ],
+  reasoning: {
+    levels: ['max', 'xhigh', 'high', 'medium', 'low', 'none'],
+    mandatory: false,
+  },
+};
+
+const MODELS_DEV_GPT_5_6_LUNA_ON_OPENROUTER = {
+  id: 'openai/gpt-5.6-luna',
+  name: 'GPT-5.6 Luna',
+  description:
+    'GPT model for general reasoning, writing, coding, and tool-assisted tasks',
+  family: 'gpt-luna',
+  attachment: true,
+  reasoning: true,
+  reasoning_options: [
+    {
+      type: 'effort',
+      values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+    },
+  ],
+  tool_call: true,
+  structured_output: true,
+  temperature: false,
+  knowledge: '2026-02-16',
+  release_date: '2026-07-09',
+  last_updated: '2026-07-09',
+  modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+  open_weights: false,
+  limit: { context: 1050000, input: 922000, output: 128000 },
+  cost: {
+    input: 0.2,
+    output: 1.2,
+    cache_read: 0.02,
+    cache_write: 0.25,
+    tiers: [
+      {
+        input: 0.4,
+        output: 1.8,
+        cache_read: 0.04,
+        cache_write: 0.5,
+        tier: { type: 'context', size: 272000 },
+      },
+    ],
+    context_over_200k: {
+      input: 0.4,
+      output: 1.8,
+      cache_read: 0.04,
+      cache_write: 0.5,
+    },
+  },
+  canonical_model_id: 'openai/gpt-5.6-luna',
+};
+
+const MODELS_DEV_GPT_5_6_LUNA_DIRECT = {
+  id: 'gpt-5.6-luna',
+  name: 'GPT-5.6 Luna',
+  description: 'Cost-efficient GPT-5.6 model for fast, high-volume workloads',
+  family: 'gpt-luna',
+  attachment: true,
+  reasoning: true,
+  reasoning_options: [
+    {
+      type: 'effort',
+      values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+    },
+  ],
+  tool_call: true,
+  structured_output: true,
+  temperature: false,
+  knowledge: '2026-02-16',
+  release_date: '2026-07-09',
+  last_updated: '2026-07-09',
+  modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
+  open_weights: false,
+  limit: { context: 1050000, input: 922000, output: 128000 },
+  experimental: {
+    modes: {
+      fast: {
+        cost: { input: 0.4, output: 2.4, cache_read: 0.04, cache_write: 0.5 },
+        provider: { body: { service_tier: 'priority' } },
+      },
+      pro: { provider: { body: { reasoning: { mode: 'pro' } } } },
+    },
+  },
+  cost: {
+    input: 0.2,
+    output: 1.2,
+    cache_read: 0.02,
+    cache_write: 0.25,
+    tiers: [
+      {
+        input: 0.4,
+        output: 1.8,
+        cache_read: 0.04,
+        cache_write: 0.5,
+        tier: { type: 'context', size: 272000 },
+      },
+    ],
+    context_over_200k: {
+      input: 0.4,
+      output: 1.8,
+      cache_read: 0.04,
+      cache_write: 0.5,
+    },
+  },
+  canonical_model_id: 'openai/gpt-5.6-luna',
+};
+
 describe('fromOpenRouter', () => {
   it('normalizes an OpenRouter model enriched by its models.dev entry', () => {
     expect(
@@ -190,11 +324,22 @@ describe('fromOpenRouter', () => {
     });
   });
 
-  it('takes the canonical id from the enrichment over the derived one', () => {
+  it('takes the canonical id from the enrichment and normalizes it', () => {
     expect(
       fromOpenRouter(GLM_5_3, enrichmentFromModelsDev(MODELS_DEV_GLM_5_3))
         .canonical
-    ).toBe('zhipuai/glm-5.3');
+    ).toBe('zhipuai/glm-5-3');
+  });
+
+  it('gives the direct and OpenRouter routes of one model the same canonical key', () => {
+    const direct = fromModelsDev('openai', MODELS_DEV_GPT_5_6_LUNA_DIRECT);
+    const routed = fromOpenRouter(
+      GPT_5_6_LUNA,
+      enrichmentFromModelsDev(MODELS_DEV_GPT_5_6_LUNA_ON_OPENROUTER)
+    );
+
+    expect(direct?.canonical).toBe('openai/gpt-5-6-luna');
+    expect(routed.canonical).toBe(direct?.canonical);
   });
 
   it('derives the canonical id and leaves models.dev facts unknown without enrichment', () => {
@@ -217,6 +362,20 @@ describe('fromOpenRouter', () => {
 
   it('turns the expiration date into the retirement date', () => {
     expect(fromOpenRouter(SEED_2_0_CODE, null).retiresAt).toBe('2026-11-11');
+  });
+
+  it('leaves an invalid release or expiration date null', () => {
+    const model = fromOpenRouter(
+      {
+        ...SEED_2_0_CODE,
+        createdAt: new Date('2026-13-45'),
+        expirationDate: new Date('2026-13-45'),
+      },
+      null
+    );
+
+    expect(model.releasedAt).toBeNull();
+    expect(model.retiresAt).toBeNull();
   });
 
   it('dates the release in UTC', () => {

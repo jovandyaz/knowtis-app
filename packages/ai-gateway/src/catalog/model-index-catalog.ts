@@ -24,6 +24,9 @@ export class ModelIndexCatalog implements ModelCatalog {
 
   /** Indexed (listed) and text in, text out. Transcription models are priced but never supported. */
   isSupported(modelId: string): boolean {
+    if (isTranscriptionModel(modelId)) {
+      return false;
+    }
     const model = this.models.get(modelId);
     return (
       model !== undefined &&
@@ -34,7 +37,7 @@ export class ModelIndexCatalog implements ModelCatalog {
 
   /** Token prices of an indexed model, or the per-second price of a transcription model. */
   getPricing(modelId: string): ModelPricing | undefined {
-    if (Object.hasOwn(TRANSCRIPTION_PRICES, modelId)) {
+    if (isTranscriptionModel(modelId)) {
       return { inputCostPerSecond: TRANSCRIPTION_PRICES[modelId] };
     }
     const model = this.models.get(modelId);
@@ -67,4 +70,8 @@ export class ModelIndexCatalog implements ModelCatalog {
   all(): readonly IndexedModel[] {
     return this.rows;
   }
+}
+
+function isTranscriptionModel(modelId: string): boolean {
+  return Object.hasOwn(TRANSCRIPTION_PRICES, modelId);
 }

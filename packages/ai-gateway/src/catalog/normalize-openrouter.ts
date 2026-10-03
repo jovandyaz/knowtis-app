@@ -33,7 +33,7 @@ export interface OpenRouterModelInput {
   } | null;
 }
 
-/** Normalizes one OpenRouter model; family, canonical id, open weights and status come from its models.dev entry when one exists. */
+/** Normalizes one OpenRouter model; family, canonical id, open weights and status come from its models.dev entry when one exists. An invalid date becomes null. */
 export function fromOpenRouter(
   model: OpenRouterModelInput,
   enrichment: ModelsDevEnrichment | null
@@ -58,13 +58,16 @@ export function fromOpenRouter(
     maxInputTokens: model.contextLength,
     maxOutputTokens: model.maxCompletionTokens,
     reasoning: model.reasoning,
-    canonical: enrichment?.canonical ?? deriveCanonical(model.id),
+    canonical: deriveCanonical(enrichment?.canonical ?? model.id),
     openWeights: enrichment?.openWeights ?? null,
     retiresAt: model.expirationDate ? toUtcDate(model.expirationDate) : null,
     source: 'openrouter',
   };
 }
 
-function toUtcDate(date: Date): string {
+function toUtcDate(date: Date): string | null {
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
   return date.toISOString().slice(0, ISO_DATE_LENGTH);
 }

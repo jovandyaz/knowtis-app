@@ -197,6 +197,15 @@ describe('fromModelsDev', () => {
     expect(fromModelsDev('openai', GPT_5_4)?.canonical).toBe('openai/gpt-5-4');
   });
 
+  it('normalizes a published canonical id into the index identity form', () => {
+    expect(
+      fromModelsDev('openai', {
+        ...GPT_5_4,
+        canonical_model_id: 'OpenAI/GPT-5.4:flex',
+      })?.canonical
+    ).toBe('openai/gpt-5-4');
+  });
+
   it('prefers the input limit over the context window and ignores tiered costs', () => {
     const model = fromModelsDev('openai', GPT_5_4);
 
@@ -215,6 +224,18 @@ describe('fromModelsDev', () => {
       })?.releasedAt
     ).toBe('2026-01-01');
   });
+
+  it.each(['2026-13-45', '2026-02-30', '2026-13'])(
+    'drops the impossible release date %s',
+    (releaseDate) => {
+      expect(
+        fromModelsDev('anthropic', {
+          ...CLAUDE_SONNET_5_5,
+          release_date: releaseDate,
+        })?.releasedAt
+      ).toBeNull();
+    }
+  );
 
   it('drops a release date in any other format', () => {
     expect(
@@ -237,6 +258,16 @@ describe('fromModelsDev', () => {
       maxOutputTokens: 0,
       structuredOutput: null,
     });
+  });
+
+  it('keeps an entry with an unrecognized status as alpha', () => {
+    const model = fromModelsDev('anthropic', {
+      ...CLAUDE_SONNET_5_5,
+      status: 'preview',
+    });
+
+    expect(model?.id).toBe('anthropic:claude-sonnet-5-5');
+    expect(model?.status).toBe('alpha');
   });
 
   it('defaults absent optional facts to null or empty', () => {
@@ -317,6 +348,20 @@ describe('enrichmentFromModelsDev', () => {
       enrichmentFromModelsDev({ ...OPENROUTER_DEEPSEEK_V4_PRO, status: 'beta' })
         ?.status
     ).toBe('beta');
+  });
+
+  it('keeps the enrichment of an entry with an unrecognized status as alpha', () => {
+    expect(
+      enrichmentFromModelsDev({
+        ...OPENROUTER_DEEPSEEK_V4_PRO,
+        status: 'preview',
+      })
+    ).toEqual({
+      family: 'deepseek-thinking',
+      canonical: 'deepseek/deepseek-v4-pro-0813',
+      openWeights: true,
+      status: 'alpha',
+    });
   });
 
   it('returns null for an entry that fails the schema', () => {
