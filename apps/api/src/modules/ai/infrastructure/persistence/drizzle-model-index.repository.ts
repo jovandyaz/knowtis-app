@@ -52,7 +52,6 @@ function toRow(model: IndexedModel, seenAt: Date): NewAiModelIndexRow {
   };
 }
 
-/** Postgres exposes the row being inserted as `excluded` only inside ON CONFLICT DO UPDATE; this is invalid SQL anywhere else. */
 function proposed(column: PgColumn) {
   return sql`excluded.${sql.identifier(column.name)}`;
 }
@@ -65,12 +64,15 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
     rows: readonly IndexedModel[],
     seenAt: Date
   ): Promise<number> {
-    if (rows.length === 0) {
+    const distinct = [
+      ...new Map(rows.map((model) => [model.id, model])).values(),
+    ];
+    if (distinct.length === 0) {
       return 0;
     }
     await this.db.transaction(async (tx) => {
-      for (let start = 0; start < rows.length; start += UPSERT_CHUNK_SIZE) {
-        const chunk = rows
+      for (let start = 0; start < distinct.length; start += UPSERT_CHUNK_SIZE) {
+        const chunk = distinct
           .slice(start, start + UPSERT_CHUNK_SIZE)
           .map((model) => toRow(model, seenAt));
         await tx
@@ -110,7 +112,7 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
           });
       }
     });
-    return rows.length;
+    return distinct.length;
   }
 
   async markAbsent(provider: IndexProvider, seenAt: Date): Promise<number> {

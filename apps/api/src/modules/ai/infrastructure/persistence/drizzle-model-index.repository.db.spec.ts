@@ -20,12 +20,31 @@ const SECOND_ID = 'openrouter:spec-index/second';
 const OTHER_PROVIDER_ID = 'anthropic:spec-index-claude';
 const TEST_IDS = [FIRST_ID, SECOND_ID, OTHER_PROVIDER_ID];
 
-const FIRST_SEEN_AT = new Date('2026-10-01T00:00:00.000Z');
-const SECOND_SEEN_AT = new Date('2026-10-02T00:00:00.000Z');
+const FIRST_SEEN_AT = new Date('2000-01-01T00:00:00.000Z');
+const SECOND_SEEN_AT = new Date('2000-01-02T00:00:00.000Z');
 
 const SMALL_INPUT_COST = 1.88e-8;
 const SMALLEST_OUTPUT_COST = 5e-11;
 const REPRICED_INPUT_COST = 2.5e-8;
+
+function allNullOptionals(id: string): IndexedModel {
+  return indexed(id, {
+    name: 'Second',
+    family: null,
+    releasedAt: null,
+    toolCall: null,
+    structuredOutput: null,
+    inputCostPerToken: null,
+    outputCostPerToken: null,
+    cacheReadCostPerToken: null,
+    cacheWriteCostPerToken: null,
+    maxInputTokens: null,
+    maxOutputTokens: null,
+    reasoning: null,
+    openWeights: null,
+    retiresAt: null,
+  });
+}
 
 function indexed(
   id: string,
@@ -107,7 +126,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
 
   it('upserts rows and lists them with every field mapped', async () => {
     const first = indexed(FIRST_ID);
-    const second = indexed(SECOND_ID, { name: 'Second', releasedAt: null });
+    const second = allNullOptionals(SECOND_ID);
 
     const written = await repo.upsertMany([first, second], FIRST_SEEN_AT);
 
@@ -116,6 +135,22 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     expect(listed).toHaveLength(2);
     expect(listed.find((model) => model.id === FIRST_ID)).toEqual(first);
     expect(listed.find((model) => model.id === SECOND_ID)).toEqual(second);
+  });
+
+  it('keeps the last row when a batch repeats an id', async () => {
+    const written = await repo.upsertMany(
+      [
+        indexed(FIRST_ID, { name: 'Earlier' }),
+        indexed(SECOND_ID),
+        indexed(FIRST_ID, { name: 'Later' }),
+      ],
+      FIRST_SEEN_AT
+    );
+
+    expect(written).toBe(2);
+    const listed = await ownListed();
+    expect(listed).toHaveLength(2);
+    expect(listed.find((model) => model.id === FIRST_ID)?.name).toBe('Later');
   });
 
   it('returns 0 for an empty batch', async () => {
