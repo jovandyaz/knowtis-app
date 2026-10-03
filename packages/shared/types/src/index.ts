@@ -62,6 +62,7 @@ export {
   type AccessTier,
   MODEL_INTENTS,
   DEFAULT_MODEL_INTENT,
+  INTENT_FALLBACK_ORDER,
   isModelIntent,
   REASONING_EFFORTS,
   isReasoningEffort,

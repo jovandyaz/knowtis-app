@@ -1,6 +1,7 @@
 import { providerOf } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
+  INTENT_FALLBACK_ORDER,
   type ModelFallbackReason,
   type ModelIntent,
   type ModelResolution,
@@ -49,13 +50,6 @@ export type ModelChoice =
       readonly reason: ModelUnavailableReason;
       readonly suggestedModel: string | null;
     };
-
-/** Order an unavailable intent is substituted in; the first one is the tier default. */
-export const INTENT_FALLBACK_ORDER = [
-  'balanced',
-  'fast',
-  'powerful',
-] as const satisfies readonly ModelIntent[];
 
 interface IntentPick {
   readonly intent: ModelIntent;

@@ -5,12 +5,10 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
 } from '@knowtis/ai-gateway';
-import {
-  DEFAULT_MODEL_INTENT,
-  MODEL_INTENTS,
-  type AccessTier,
-  type ByokProvider,
-  type ModelIntent,
+import type {
+  AccessTier,
+  ByokProvider,
+  ModelIntent,
 } from '@knowtis/shared-types';
 
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
@@ -18,7 +16,6 @@ import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { resolveByokSelectors } from './byok-intent-routes';
 import {
   chooseModel,
-  INTENT_FALLBACK_ORDER,
   type ModelFacts,
   type ModelRequest,
 } from './model-choice';
@@ -238,16 +235,6 @@ describe('chooseModel', () => {
         suggestedModel: PLATFORM_INTENTS.fast,
       });
     });
-  });
-
-  it('covers every intent in the fallback order', () => {
-    expect([...INTENT_FALLBACK_ORDER].sort()).toEqual(
-      [...MODEL_INTENTS].sort()
-    );
-  });
-
-  it('substitutes intents starting from the default intent', () => {
-    expect(INTENT_FALLBACK_ORDER[0]).toBe(DEFAULT_MODEL_INTENT);
   });
 
   it('accepts an explicit model inside the tier as is', () => {

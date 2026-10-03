@@ -141,8 +141,6 @@ export class SelectableModelsService {
     });
   }
 
-  // A promoted row's stored ladder is never served: the index row is the one
-  // source of reasoning levels.
   private offered(): readonly OfferedModel[] {
     return this.promotedModels.snapshot().map((promoted) => {
       const model: OfferedModel = {

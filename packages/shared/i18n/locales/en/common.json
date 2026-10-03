@@ -160,7 +160,7 @@
     },
     "primaryProvider": {
       "title": "Primary provider",
-      "description": "When an assistant style is available through several of your keys, this one runs it. A model you pick under Advanced runs on the key shown with it.",
+      "description": "When the same model is available through several of your keys, for example directly and through OpenRouter, this key runs it. A model you pick under Advanced runs on the key shown with it.",
       "saveFailed": "Couldn't change the primary provider. Check your API keys and try again."
     }
   },

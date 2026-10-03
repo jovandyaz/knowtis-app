@@ -18,7 +18,7 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
-import { resolveSelectedModel } from './intent-picker-options';
+import { resolveServingModel } from './intent-picker-options';
 
 interface BadgeContent {
   text: string;
@@ -53,14 +53,9 @@ export function TierBadge() {
     !keys.isPending &&
     !catalog.isPending
   ) {
-    // An Advanced pick, or an intent no primary-key route serves, runs on
-    // another key, so the badge names the key of the model a turn resolves to.
-    const selected = resolveSelectedModel(
-      catalog.data?.models,
-      preferences.data
-    );
+    const serving = resolveServingModel(catalog.data?.models, preferences.data);
     const provider =
-      (selected && providerOfModel(selected.id)) ??
+      (serving && providerOfModel(serving.id)) ??
       effectivePrimaryProvider(preferences.data, keys.data ?? []);
     if (provider) {
       const name = PROVIDER_LABEL[provider];
