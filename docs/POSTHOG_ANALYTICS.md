@@ -221,6 +221,16 @@ rename or delete historical assets.
 | `Knowtis AI adoption`                         | Trends insight            | `11618353`                             |
 | `Knowtis MCP adoption`                        | Trends insight            | `11618354`                             |
 | `AI turn checkpoint rate`                     | Trends insight            | `12353729`                             |
+| `AI tiers and copilot health`                 | Dashboard                 | `2165520`                              |
+| `AI messages by tier`                         | Trends insight            | `12479824`                             |
+| `AI quota exhaustion rate by tier`            | Trends insight            | `12479825`                             |
+| `Copilot continue rate`                       | Trends insight            | `12479826`                             |
+| `Copilot continuation chain length`           | Trends insight            | `12479827`                             |
+| `AI upgrade CTA clicks`                       | Trends insight            | `12479828`                             |
+| `BYOK key failures`                           | Trends insight            | `12479829`                             |
+| `API operational alerts`                      | Trends insight            | `12479830`                             |
+| `API raised an operational alert`             | Insight alert             | `01a100b5-fa3c-0000-3140-0c6518b827f7` |
+| `Knowtis API alerts`                          | Incoming webhook source   | not published                          |
 
 PostHog can create custom event definitions before first ingestion, but its
 property-definition endpoint can only update properties that already exist in
@@ -228,10 +238,28 @@ the taxonomy. Until real production events introduce a custom property, an
 update returns `Property definition not found`. Do not send synthetic
 production events to work around this. After the first real ingestion,
 describe and verify the custom properties listed in the event contract above.
-The `ai quota consumed`, `ai quota exhausted`, `ai turn checkpoint reached`, and
-`ai turn continued` event definitions already exist in project `344524` with
-descriptions. After their first real ingestion, describe their custom properties
-and mark the events verified.
+The AI tier events (`ai quota consumed`, `ai quota exhausted`,
+`ai turn checkpoint reached`, `ai turn continued`, `byok key failed`,
+`ai upgrade cta clicked`) are verified, and their custom properties (`tier`,
+`remaining_bucket`, `segment_index`, `stop_reason`, `cta`, `from_tier`,
+`provider`, `kind`) are described. `ai continue clicked` is still waiting for its
+first real ingestion.
+
+The `AI tiers and copilot health` dashboard follows the same production filters.
+`ai turn continued` and `ai turn checkpoint reached` count attempts, and no AI
+event carries a conversation id, so the continue rate is an upper bound and
+cannot be deduplicated per conversation.
+
+The `Knowtis API alerts` incoming webhook is the production value of the API's
+`AI_ALERT_WEBHOOK_URL`. It captures each alert as a personless `ai alert fired`
+event (`alert`, `signal`, `rate`, `threshold`, `samples`, `window_hours`,
+`provider`, `failures`, `spent_usd`, `limit_usd`, `alerted_at`) and never maps
+user ids. The `API raised an operational alert` insight alert checks hourly and
+emails its subscribers when any alert other than `webhook.test` fires. Test the
+webhook only with `"event": "webhook.test"`.
+The webhook's ID is its public ingestion URL, so it lives only in Railway's
+`AI_ALERT_WEBHOOK_URL` and in PostHog's data pipelines, never in the
+repository.
 
 When verifying these assets, confirm the dashboard contains the six saved
 insights listed above and that each remains attached to dashboard `2065684`.
