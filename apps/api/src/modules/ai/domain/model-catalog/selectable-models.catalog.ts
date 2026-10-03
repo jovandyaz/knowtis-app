@@ -1,8 +1,5 @@
 import type { ModelReasoning, ModelTier } from '@knowtis/shared-types';
 
-/** Namespace every OpenRouter model id carries: this prefix followed by the upstream slug. */
-export const OPENROUTER_ID_PREFIX = 'openrouter:';
-
 export interface CuratedModel {
   id: string;
   label: string;

@@ -2,8 +2,8 @@ import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
-import { openTierSlug } from '../../domain/model-catalog/curated-watch';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import { PLATFORM_FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
+import { watchedSlug } from '../../domain/model-catalog/openrouter-watch';
 import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type {
   UpstreamCatalog,
@@ -12,9 +12,9 @@ import type {
 import { CatalogSyncTask } from './catalog-sync.task';
 import type { ModelIndexWriter } from './model-index.writer';
 
-const GLM_CURATED_ID = 'openrouter:z-ai/glm-5.2';
-const GLM_SLUG = 'z-ai/glm-5.2';
-const GLM_OUTPUT_COST = 0.0000044;
+const WATCHED_ID = 'openrouter:deepseek/deepseek-v3.2';
+const WATCHED_SLUG = 'deepseek/deepseek-v3.2';
+const WATCHED_OUTPUT_COST = 0.0000044;
 const REPRICE_FACTOR = 2;
 const PROMOTED_SLUG = 'qwen/qwen3-max';
 const PROMOTED_ID = `openrouter:${PROMOTED_SLUG}`;
@@ -56,16 +56,23 @@ const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
 const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
-const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
-  openTierSlug(model.id)
-).filter((slug): slug is string => slug !== null);
+const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.flatMap((id) => {
+  const slug = watchedSlug(id);
+  return slug === null ? [] : [slug];
+});
 
-/** Curated open-tier models present and undated, so they raise nothing: a fixture that omits one asserts it vanished upstream. */
-function withCuratedInSync(...models: UpstreamModel[]): UpstreamCatalog {
+if (WATCHED_SLUGS.length < 2) {
+  throw new Error('the sync spec needs two watched OpenRouter models');
+}
+
+const WATCHED_COUNT = WATCHED_SLUGS.length;
+
+/** Watched models present and undated, so they raise nothing: a fixture that omits one asserts it vanished upstream. */
+function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
   const provided = new Set(models.map((model) => model.id));
   return {
     models: [
-      ...CURATED_OPEN_SLUGS.filter((slug) => !provided.has(slug)).map((slug) =>
+      ...WATCHED_SLUGS.filter((slug) => !provided.has(slug)).map((slug) =>
         upstreamModel(slug)
       ),
       ...models,
@@ -93,7 +100,7 @@ function make(
   const openRouter = {
     fetchModels: vi
       .fn()
-      .mockResolvedValue(withCuratedInSync(...(options.upstream ?? []))),
+      .mockResolvedValue(withWatchedInSync(...(options.upstream ?? []))),
   };
   const modelsDev = {
     fetchCatalog: vi.fn().mockResolvedValue(MODELS_DEV_CATALOG),
@@ -147,7 +154,7 @@ describe('CatalogSyncTask', () => {
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(2);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(2 + WATCHED_COUNT);
     expect(repo.upsertCandidate).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'openrouter:qwen/qwen3.8-max',
@@ -165,7 +172,7 @@ describe('CatalogSyncTask', () => {
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + WATCHED_COUNT);
     expect(repo.upsertCandidate).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'openrouter:qwen/qwen3.8-max' })
     );
@@ -207,13 +214,15 @@ describe('CatalogSyncTask', () => {
 
   it('should raise a deprecation alert when OpenRouter dates a curated model', async () => {
     const { task, repo } = make({
-      upstream: [upstreamModel(GLM_SLUG, { expirationDate: EXPIRATION_DATE })],
+      upstream: [
+        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
+      ],
     });
 
     await task.sync();
 
     expect(repo.createAlert).toHaveBeenCalledWith(
-      GLM_CURATED_ID,
+      WATCHED_ID,
       'deprecation',
       expect.stringContaining('2026-12-31')
     );
@@ -221,27 +230,27 @@ describe('CatalogSyncTask', () => {
 
   it('should raise an unavailable alert when a curated model leaves OpenRouter', async () => {
     const { task, repo, openRouter } = make();
-    const inSync = withCuratedInSync();
+    const inSync = withWatchedInSync();
     openRouter.fetchModels.mockResolvedValue({
       ...inSync,
-      models: inSync.models.filter((model) => model.id !== GLM_SLUG),
+      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
     });
 
     await task.sync();
 
     expect(repo.createAlert).toHaveBeenCalledWith(
-      GLM_CURATED_ID,
+      WATCHED_ID,
       'unavailable',
-      expect.stringContaining(GLM_SLUG)
+      expect.stringContaining(WATCHED_SLUG)
     );
   });
 
   it('should raise no unavailable alert when the fetch stopped paginating early', async () => {
     const { task, repo, openRouter } = make();
-    const inSync = withCuratedInSync();
+    const inSync = withWatchedInSync();
     openRouter.fetchModels.mockResolvedValue({
       ...inSync,
-      models: inSync.models.filter((model) => model.id !== GLM_SLUG),
+      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
       complete: false,
     });
 
@@ -253,8 +262,8 @@ describe('CatalogSyncTask', () => {
   it('should raise no alert when OpenRouter reprices a curated model', async () => {
     const { task, repo } = make({
       upstream: [
-        upstreamModel(GLM_SLUG, {
-          completionCostPerToken: GLM_OUTPUT_COST * REPRICE_FACTOR,
+        upstreamModel(WATCHED_SLUG, {
+          completionCostPerToken: WATCHED_OUTPUT_COST * REPRICE_FACTOR,
         }),
       ],
     });
@@ -325,7 +334,7 @@ describe('CatalogSyncTask', () => {
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(2);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(2 + WATCHED_COUNT);
     expect(warnLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.sync_write_failed',
@@ -336,7 +345,9 @@ describe('CatalogSyncTask', () => {
 
   it('should keep raising the other alerts when one alert write fails', async () => {
     const { task, repo } = make({
-      upstream: [upstreamModel(GLM_SLUG, { expirationDate: EXPIRATION_DATE })],
+      upstream: [
+        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
+      ],
       promoted: [PROMOTED_ID],
     });
     repo.createAlert.mockRejectedValueOnce(new Error('alerts table locked'));
@@ -350,7 +361,7 @@ describe('CatalogSyncTask', () => {
         count: 1,
         failures: [
           {
-            target: `${GLM_CURATED_ID} deprecation`,
+            target: `${WATCHED_ID} deprecation`,
             reason: 'alerts table locked',
           },
         ],
@@ -365,8 +376,8 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 3 + CURATED_OPEN_SLUGS.length,
-      candidates: 2,
+      upstream: 3 + WATCHED_COUNT,
+      candidates: 2 + WATCHED_COUNT,
       indexed: INDEXED_ROWS,
       alerts: 0,
       failures: 0,
@@ -382,8 +393,8 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 2 + CURATED_OPEN_SLUGS.length,
-      candidates: 1,
+      upstream: 2 + WATCHED_COUNT,
+      candidates: 1 + WATCHED_COUNT,
       indexed: INDEXED_ROWS,
       alerts: 0,
       failures: 1,
@@ -446,7 +457,7 @@ describe('CatalogSyncTask', () => {
 
   it('should warn that the vanish watch is blind on an inconclusive read', async () => {
     const { task, openRouter } = make();
-    const inSync = withCuratedInSync();
+    const inSync = withWatchedInSync();
     openRouter.fetchModels.mockResolvedValue({ ...inSync, complete: false });
 
     await task.sync();
@@ -503,11 +514,11 @@ describe('CatalogSyncTask', () => {
     expect(result).toEqual(
       expect.objectContaining({
         status: 'completed',
-        candidates: 1,
+        candidates: 1 + WATCHED_COUNT,
         indexed: INDEXED_ROWS,
       })
     );
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + WATCHED_COUNT);
     expect(warnLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.model_index.models_dev_fetch_failed',
@@ -520,7 +531,7 @@ describe('CatalogSyncTask', () => {
     const { task, repo, indexWriter } = make({
       upstream: [
         QWEN_CANDIDATE,
-        upstreamModel(GLM_SLUG, { expirationDate: EXPIRATION_DATE }),
+        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
       ],
     });
     indexWriter.write.mockRejectedValue(new Error('model index locked'));
@@ -530,13 +541,13 @@ describe('CatalogSyncTask', () => {
     expect(result).toEqual(
       expect.objectContaining({
         status: 'completed',
-        candidates: 1,
+        candidates: 1 + WATCHED_COUNT,
         indexed: 0,
         alerts: 1,
       })
     );
     expect(repo.createAlert).toHaveBeenCalledWith(
-      GLM_CURATED_ID,
+      WATCHED_ID,
       'deprecation',
       expect.any(String)
     );

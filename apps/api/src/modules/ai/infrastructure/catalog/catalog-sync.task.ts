@@ -20,7 +20,7 @@ import {
   findOpenRouterDrift,
   findPromotedDrift,
   type DriftFinding,
-} from '../../domain/model-catalog/curated-watch';
+} from '../../domain/model-catalog/openrouter-watch';
 import {
   AI_CATALOG_REPOSITORY,
   type AiCatalogRepository,

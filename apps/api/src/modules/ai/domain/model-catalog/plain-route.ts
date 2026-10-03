@@ -1,6 +1,6 @@
 import { deriveCanonical, providerOf } from '@knowtis/ai-gateway';
 
-import { OPENROUTER_ID_PREFIX } from './selectable-models.catalog';
+import { OPENROUTER_ID_PREFIX } from './catalog-model';
 
 const VARIANT_SEPARATOR = ':';
 
