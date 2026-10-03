@@ -472,4 +472,67 @@ describe('ByokService', () => {
       expect(settings.patchSettings).not.toHaveBeenCalled();
     });
   });
+
+  describe('setKey and the settings bound to its provider', () => {
+    const BOUND_TO_OPENAI = {
+      preferredModel: 'openai:gpt-6',
+      preferredIntent: 'fast',
+      primaryProvider: 'openai',
+      ghostTextEnabled: true,
+    } as const;
+
+    it('starts a key for a provider the caller did not hold clean, before storing it', async () => {
+      const { service, repo, settings } = makeService({
+        settings: { getSettings: vi.fn().mockResolvedValue(BOUND_TO_OPENAI) },
+      });
+
+      await service.setKey('u1', 'openai', 'sk-openai-key-123456');
+
+      expect(settings.patchSettings.mock.calls).toEqual([
+        ['u1', { preferredModel: null, primaryProvider: null }],
+      ]);
+      expect(settings.patchSettings.mock.invocationCallOrder[0]).toBeLessThan(
+        repo.upsert.mock.invocationCallOrder[0] ?? 0
+      );
+    });
+
+    it('keeps the settings of a key it replaces', async () => {
+      const { service, repo, settings } = makeService({
+        repo: { getEnabledProviders: vi.fn().mockResolvedValue(['openai']) },
+        settings: { getSettings: vi.fn().mockResolvedValue(BOUND_TO_OPENAI) },
+      });
+
+      await service.setKey('u1', 'openai', 'sk-openai-key-123456');
+
+      expect(repo.upsert).toHaveBeenCalledTimes(1);
+      expect(settings.getSettings).not.toHaveBeenCalled();
+      expect(settings.patchSettings).not.toHaveBeenCalled();
+    });
+
+    it('leaves settings bound to another provider alone', async () => {
+      const { service, settings } = makeService({
+        settings: { getSettings: vi.fn().mockResolvedValue(BOUND_TO_OPENAI) },
+      });
+
+      await service.setKey('u1', 'anthropic', 'sk-ant-key-123456');
+
+      expect(settings.patchSettings).not.toHaveBeenCalled();
+    });
+
+    it('touches no settings when the provider rejects the key', async () => {
+      const { service, settings } = makeService({
+        settings: { getSettings: vi.fn().mockResolvedValue(BOUND_TO_OPENAI) },
+        validate: async () => ({
+          valid: false,
+          reason: 'rejected',
+          error: '401 unauthorized',
+        }),
+      });
+
+      await expect(
+        service.setKey('u1', 'openai', 'sk-bad')
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(settings.patchSettings).not.toHaveBeenCalled();
+    });
+  });
 });

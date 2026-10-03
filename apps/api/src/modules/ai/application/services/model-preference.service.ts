@@ -102,10 +102,11 @@ export class ModelPreferenceService {
   }
 
   /**
-   * The stored preferences as a turn reads them, so every surface shows the
-   * intent a turn serves. The tier is read, through `tierOf`, only for a
-   * stored model an intent is configured to; when it cannot be resolved the
-   * stored row is answered as is.
+   * The stored preferences as a turn reads them, so every surface shows what a
+   * turn serves: a primary provider only while the caller holds its key, and a
+   * stored platform model as the intent it serves. The tier is read, once and
+   * through `tierOf`, only when one of those needs it; when it cannot be
+   * resolved the stored row is answered as is.
    */
   async getUserPreferences(
     userId: string,
@@ -123,13 +124,18 @@ export class ModelPreferenceService {
       primaryProvider,
       ghostTextEnabled,
     };
-    if (!preferredModel) {
-      return stored;
-    }
-    const platformIntents = await this.aiConfig.getIntentModels();
+    const platformIntents = preferredModel
+      ? await this.aiConfig.getIntentModels()
+      : null;
     // A platform catalog lists only the configured intent models, so any other
     // pick reads as stored without touching the key store behind the tier.
-    if (!Object.values(platformIntents).includes(preferredModel)) {
+    const intentModels =
+      platformIntents !== null &&
+      preferredModel !== null &&
+      Object.values(platformIntents).includes(preferredModel)
+        ? platformIntents
+        : null;
+    if (intentModels === null && primaryProvider === null) {
       return stored;
     }
     let execution: AiExecutionContext;
@@ -146,10 +152,19 @@ export class ModelPreferenceService {
       });
       return stored;
     }
-    return servedPreference(
-      this.scopeOf(execution, platformIntents, primaryProvider).catalog,
-      stored
-    );
+    const held: AIPreferences = {
+      ...stored,
+      primaryProvider:
+        primaryProvider !== null && execution.byokProviders.has(primaryProvider)
+          ? primaryProvider
+          : null,
+    };
+    return intentModels === null
+      ? held
+      : servedPreference(
+          this.scopeOf(execution, intentModels, held.primaryProvider).catalog,
+          held
+        );
   }
 
   /**

@@ -137,6 +137,10 @@ export class ByokService {
       );
     }
     const secret = encryptSecret(apiKey, this.masterKey);
+    const held = await this.repo.getEnabledProviders(userId);
+    if (!held.includes(provider)) {
+      await this.clearSettingsBoundTo(userId, provider);
+    }
     await this.repo.upsert(
       userId,
       provider,
@@ -147,9 +151,18 @@ export class ByokService {
 
   async deleteKey(userId: string, provider: ByokProvider): Promise<void> {
     await this.repo.remove(userId, provider);
+    await this.clearSettingsBoundTo(userId, provider);
+  }
+
+  // Settings honoured only on a provider's key never outlive it: deleting the
+  // key drops them, and a key added for a provider the caller did not hold
+  // starts clean, so a write that raced the delete cannot resurface.
+  private async clearSettingsBoundTo(
+    userId: string,
+    provider: ByokProvider
+  ): Promise<void> {
     const { preferredModel, primaryProvider } =
       await this.settings.getSettings(userId);
-    // Settings honoured only on this key must not resurface the day it is added back.
     const patch = {
       ...(preferredModel && providerOf(preferredModel) === provider
         ? { preferredModel: null }
