@@ -17,6 +17,7 @@ import type { AiExecutionContext } from '../../domain/execution-context/ai-execu
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
 import { toModelReasoning } from '../../domain/model-catalog/index-reasoning';
 import type { ModelFacts } from '../../domain/model-catalog/model-choice';
+import { plainRouteCanonical } from '../../domain/model-catalog/plain-route';
 import {
   CURATED_MODEL_IDS,
   CURATED_MODELS,
@@ -113,7 +114,8 @@ export class SelectableModelsService {
     return {
       heldProviders: byokProviders,
       isSupported: (id) => this.catalog.isSupported(id),
-      canonicalOf: (id) => this.index.catalog().get(id)?.canonical,
+      canonicalOf: (id) =>
+        plainRouteCanonical(id, this.index.catalog().get(id)?.canonical),
       isPlatformBilled: (id) =>
         platformIntentIds.has(id) ||
         (openTier.has(id) && this.registry.isModelAvailable(id)),

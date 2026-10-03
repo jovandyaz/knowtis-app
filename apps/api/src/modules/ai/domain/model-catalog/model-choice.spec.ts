@@ -13,6 +13,7 @@ import {
   type ModelFacts,
   type ModelRequest,
 } from './model-choice';
+import { plainRouteCanonical } from './plain-route';
 import { tierCatalog, type OfferedModel } from './tier-catalog';
 
 const PLATFORM_INTENTS: Record<ModelIntent, string> = {
@@ -24,6 +25,8 @@ const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
 const OPEN_MODEL = 'openrouter:z-ai/glm-5.2';
 const OPEN_TIER_IDS: readonly string[] = [...PLATFORM_INTENT_IDS, OPEN_MODEL];
 const INDEX = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+const UNLISTED = 'anthropic:claude-unlisted-1';
+const UNLISTED_ROUTE = 'openrouter:acme/unlisted-model';
 const RETIRED = 'anthropic:claude-sonnet-3';
 const platformRoutes = (id: string) => id.startsWith('openrouter:');
 const offered = (id: string): OfferedModel => ({
@@ -34,6 +37,10 @@ const offered = (id: string): OfferedModel => ({
 });
 const OFFERED = [
   ...OPEN_TIER_IDS,
+  'openrouter:openai/gpt-6-sol',
+  'openrouter:openai/gpt-5.6-sol-pro',
+  'openrouter:google/gemini-3.5-flash:batch',
+  UNLISTED_ROUTE,
   'anthropic:claude-haiku-4-5',
   'anthropic:claude-sonnet-5',
   'anthropic:claude-opus-5',
@@ -53,7 +60,7 @@ function setup(
   const facts: ModelFacts = {
     heldProviders: new Set(held),
     isSupported,
-    canonicalOf: (id) => INDEX.get(id)?.canonical,
+    canonicalOf: (id) => plainRouteCanonical(id, INDEX.get(id)?.canonical),
     isPlatformBilled: (id) =>
       platformIntentIds.includes(id) ||
       (OPEN_TIER_IDS.includes(id) && platformRoutes(id)),
@@ -370,15 +377,53 @@ describe('chooseModel', () => {
       });
     });
 
-    it('falls back visibly from an id the index does not list', () => {
-      const unlisted = 'anthropic:claude-sonnet-3';
-      expect(setup('byok', ['openrouter'])({ pinned: unlisted })).toMatchObject(
-        {
-          kind: 'resolved',
-          resolution: { fallback: { from: unlisted } },
-        }
-      );
+    it('keeps a pinned model on a removed key over any index route of it, not only an intent candidate', () => {
+      expect(
+        setup('byok', ['openrouter'])({ pinned: 'openai:gpt-6-sol' })
+      ).toEqual({
+        kind: 'resolved',
+        model: 'openrouter:openai/gpt-6-sol',
+        resolution: {
+          requested: 'openai:gpt-6-sol',
+          resolved: 'openrouter:openai/gpt-6-sol',
+        },
+      });
     });
+
+    it('falls back visibly from an id the index does not list', () => {
+      expect(setup('byok', ['openrouter'])({ pinned: UNLISTED })).toEqual({
+        kind: 'resolved',
+        model: ROUTED_SONNET,
+        resolution: {
+          requested: UNLISTED,
+          resolved: ROUTED_SONNET,
+          fallback: {
+            reason: 'key_removed',
+            from: UNLISTED,
+            to: ROUTED_SONNET,
+          },
+        },
+      });
+    });
+
+    it.each([
+      ['a pro SKU', 'openai:gpt-5.6-sol', 'openrouter:openai/gpt-5.6-sol-pro'],
+      [
+        'a batch variant',
+        'google:gemini-3.5-flash',
+        'openrouter:google/gemini-3.5-flash:batch',
+      ],
+    ])(
+      'never moves a pin onto %s of the same canonical model',
+      (_, pinned, sku) => {
+        const choice = setup('byok', ['openrouter'])({ pinned });
+        expect(choice).toMatchObject({
+          kind: 'resolved',
+          resolution: { fallback: { reason: 'key_removed', from: pinned } },
+        });
+        expect(choice).not.toMatchObject({ model: sku });
+      }
+    );
 
     it('never moves a pinned platform-billed route onto the caller key', () => {
       const platformHaiku = 'openrouter:anthropic/claude-haiku-4.5';
