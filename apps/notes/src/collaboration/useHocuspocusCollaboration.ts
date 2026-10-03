@@ -87,6 +87,23 @@ function mapStatus(status: WebSocketStatus): CollaborationStatus {
   }
 }
 
+// Peers keep a client's awareness clock after it leaves and every connection
+// reuses the doc's clientID, so a fresh clock at 0 would be ignored by them.
+const lastPresenceClocks = new WeakMap<Y.Doc, number>();
+
+function createConnectionAwareness(
+  yDoc: Y.Doc,
+  user: Pick<CollaborativeUser, 'name' | 'color'>
+): Awareness {
+  const awareness = new Awareness(yDoc);
+  const clock = lastPresenceClocks.get(yDoc);
+  if (clock !== undefined) {
+    awareness.meta.set(awareness.clientID, { clock, lastUpdated: Date.now() });
+  }
+  awareness.setLocalStateField('user', user);
+  return awareness;
+}
+
 function buildUrl(serverUrl: string, shareToken: string | undefined): string {
   if (!shareToken) {
     return serverUrl;
@@ -207,8 +224,7 @@ export function useHocuspocusCollaboration({
           pauseEditing();
           setStatus('disconnected');
           setAwareness(null);
-          provider.destroy();
-          transport.destroy();
+          closeConnection();
           onSessionExpiredRef.current?.();
         },
         onError: () =>
@@ -226,11 +242,20 @@ export function useHocuspocusCollaboration({
       maxAttempts: 1,
       onClose: () => transport.disconnect(),
     });
-    const connectionAwareness = new Awareness(yDoc);
-    connectionAwareness.setLocalStateField('user', {
+    const connectionAwareness = createConnectionAwareness(yDoc, {
       name: userName,
       color: userColor,
     });
+    const closeConnection = () => {
+      provider.destroy();
+      transport.destroy();
+      const presence = connectionAwareness.meta.get(
+        connectionAwareness.clientID
+      );
+      if (presence) {
+        lastPresenceClocks.set(yDoc, presence.clock);
+      }
+    };
     const provider = new HocuspocusProvider({
       websocketProvider: transport,
       name: noteId,
@@ -332,8 +357,7 @@ export function useHocuspocusCollaboration({
     return () => {
       disposed = true;
       clearRecovery();
-      provider.destroy();
-      transport.destroy();
+      closeConnection();
       setStatus('connecting');
       setIsSynced(false);
       setReadOnly(false);

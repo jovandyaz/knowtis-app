@@ -23,6 +23,7 @@ import { useHocuspocusCollaboration } from '../useHocuspocusCollaboration';
 const NOTE_ID = 'transport-recovery';
 const USER = { name: 'Brave Otter', color: '#4ade80' };
 const COLLABORATOR = { name: 'Quiet Heron', color: '#22d3ee' };
+const CURSOR_MOVES = 20;
 
 /** Only the network boundary is controlled: the hook, provider, retry timers,
  *  authentication messages, and Yjs synchronization use their actual code. */
@@ -107,11 +108,13 @@ class ControlledWebSocket extends EventTarget {
   }
 }
 
-function presenceSentBy(socket: ControlledWebSocket, clientId: number) {
+function presenceOnServer(clientId: number) {
   const serverDoc = new Y.Doc();
   const serverAwareness = new Awareness(serverDoc);
-  for (const update of socket.awarenessUpdates) {
-    applyAwarenessUpdate(serverAwareness, update, 'server');
+  for (const socket of ControlledWebSocket.instances) {
+    for (const update of socket.awarenessUpdates) {
+      applyAwarenessUpdate(serverAwareness, update, socket);
+    }
   }
   const state = serverAwareness.getStates().get(clientId);
   serverAwareness.destroy();
@@ -464,7 +467,15 @@ describe('useHocuspocusCollaboration — presence on every connection', () => {
   it('broadcasts the local user on the connection opened for another user', async () => {
     const hook = connect({ userId: 'user-a' });
     await act(async () => vi.advanceTimersByTimeAsync(20));
-    expect(presenceSentBy(lastSocket(), yDoc.clientID)?.['user']).toEqual(USER);
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
+    act(() => {
+      for (let position = 1; position <= CURSOR_MOVES; position++) {
+        hook.result.current.awareness?.setLocalStateField('cursor', {
+          anchor: position,
+          head: position,
+        });
+      }
+    });
 
     tokens.setAccessToken('token-b');
     hook.rerender({ userId: 'user-b' });
@@ -474,7 +485,7 @@ describe('useHocuspocusCollaboration — presence on every connection', () => {
     expect(hook.result.current.awareness?.getLocalState()?.['user']).toEqual(
       USER
     );
-    expect(presenceSentBy(lastSocket(), yDoc.clientID)?.['user']).toEqual(USER);
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
   });
 
   it('receives collaborators on the connection opened for another user', async () => {
@@ -521,7 +532,7 @@ describe('useHocuspocusCollaboration — presence on every connection', () => {
     expect(second.result.current.awareness?.getLocalState()?.['user']).toEqual(
       USER
     );
-    expect(presenceSentBy(lastSocket(), yDoc.clientID)?.['user']).toEqual(USER);
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
   });
 
   it('broadcasts the local user after a StrictMode double effect', async () => {
@@ -531,6 +542,6 @@ describe('useHocuspocusCollaboration — presence on every connection', () => {
     expect(hook.result.current.awareness?.getLocalState()?.['user']).toEqual(
       USER
     );
-    expect(presenceSentBy(lastSocket(), yDoc.clientID)?.['user']).toEqual(USER);
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
   });
 });

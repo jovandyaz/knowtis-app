@@ -340,6 +340,39 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     expect(result.current.readOnly).toBe(true);
   });
 
+  it('opens the next connection above the presence clock of one whose session expired', async () => {
+    const options = {
+      noteId: 'note-1',
+      yDoc,
+      user: USER,
+      serverUrl: 'ws://localhost:3333/collaboration',
+      userId: 'user-1',
+    };
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        ...options,
+        onAuthRefresh: vi.fn().mockResolvedValue('rejected'),
+      })
+    );
+    const expired = mockProviderInstances[0];
+    const expiredAwareness = expired.options['awareness'] as Awareness;
+    await act(async () => {
+      (
+        expired.options['onAuthenticationFailed'] as (params: {
+          reason: string;
+        }) => void
+      )({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
+    });
+    await waitFor(() => expect(expired.destroy).toHaveBeenCalledOnce());
+    const expiredClock =
+      expiredAwareness.meta.get(expiredAwareness.clientID)?.clock ?? 0;
+
+    const { result } = renderHook(() => useHocuspocusCollaboration(options));
+
+    const next = result.current.awareness;
+    expect(next?.meta.get(next.clientID)?.clock).toBeGreaterThan(expiredClock);
+  });
+
   it('passes onAuthenticationFailed to the HocuspocusProvider constructor', () => {
     renderHook(() =>
       useHocuspocusCollaboration({
