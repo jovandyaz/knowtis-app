@@ -327,13 +327,20 @@ describe('ModelIndexWriter', () => {
     const SNAPSHOT_SLUG = 'amazon/nova-2-lite-v1';
     const SNAPSHOT_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${SNAPSHOT_SLUG}`;
 
-    const listedClaude: IndexedModel = {
-      ...fromOpenRouter(upstreamModel(CLAUDE_SLUG), {
+    const listedClaude: IndexedModel = fromOpenRouter(
+      upstreamModel(CLAUDE_SLUG),
+      {
         family: 'claude-sonnet',
-        canonical: 'anthropic/claude-sonnet-5-5',
-        openWeights: false,
-        status: 'active',
-      }),
+        canonical: 'anthropic/claude-sonnet-5',
+        openWeights: true,
+        status: 'deprecated',
+      }
+    );
+    const CARRIED_FIELDS = {
+      family: 'claude-sonnet',
+      canonical: 'anthropic/claude-sonnet-5',
+      openWeights: true,
+      status: 'deprecated',
     };
 
     function catalogWithClaude(): UpstreamCatalog {
@@ -354,29 +361,23 @@ describe('ModelIndexWriter', () => {
       return rows.find((row) => row.id === id);
     }
 
-    it('should keep the stored family and canonical when models.dev failed', async () => {
+    it('should keep every stored enrichment field when models.dev failed', async () => {
       const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
 
       await writer.write(catalogWithClaude(), null);
 
       expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)).toEqual(
-        expect.objectContaining({
-          family: 'claude-sonnet',
-          canonical: 'anthropic/claude-sonnet-5-5',
-        })
+        expect.objectContaining(CARRIED_FIELDS)
       );
     });
 
-    it('should keep the stored family when models.dev has no entry for the model', async () => {
+    it('should keep every stored enrichment field when models.dev has no entry for the model', async () => {
       const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
 
       await writer.write(catalogWithClaude(), modelsDevCatalog());
 
       expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)).toEqual(
-        expect.objectContaining({
-          family: 'claude-sonnet',
-          canonical: 'anthropic/claude-sonnet-5-5',
-        })
+        expect.objectContaining(CARRIED_FIELDS)
       );
     });
 
