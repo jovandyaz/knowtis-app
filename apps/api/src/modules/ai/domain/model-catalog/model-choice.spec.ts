@@ -7,6 +7,7 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
+  MODEL_INTENTS,
   type AccessTier,
   type ByokProvider,
   type ModelIntent,
@@ -183,6 +184,39 @@ describe('chooseModel', () => {
       });
     });
 
+    it('serves the first remaining intent on a partial byok key', () => {
+      const HAIKU = 'anthropic:claude-haiku-4-5';
+      expect(
+        setup('byok', ['anthropic'], undefined, {
+          rows: MODEL_INDEX_SNAPSHOT.filter(
+            (row) => row.family !== 'claude-sonnet'
+          ),
+        })({})
+      ).toEqual({
+        kind: 'resolved',
+        model: HAIKU,
+        resolution: {
+          requested: null,
+          resolved: HAIKU,
+          fallback: {
+            reason: 'intent_unavailable',
+            from: 'balanced',
+            to: HAIKU,
+          },
+        },
+      });
+    });
+
+    it('refuses an anonymous caller whose only intent has no route', () => {
+      expect(
+        setup('anonymous', [], without(PLATFORM_INTENTS.balanced))({})
+      ).toEqual({
+        kind: 'unavailable',
+        reason: 'no_route',
+        suggestedModel: null,
+      });
+    });
+
     it('refuses with no_route when no intent has a route', () => {
       expect(setup('free', [], without(...PLATFORM_INTENT_IDS))({})).toEqual({
         kind: 'unavailable',
@@ -204,6 +238,12 @@ describe('chooseModel', () => {
         suggestedModel: PLATFORM_INTENTS.fast,
       });
     });
+  });
+
+  it('covers every intent in the fallback order', () => {
+    expect([...INTENT_FALLBACK_ORDER].sort()).toEqual(
+      [...MODEL_INTENTS].sort()
+    );
   });
 
   it('substitutes intents starting from the default intent', () => {

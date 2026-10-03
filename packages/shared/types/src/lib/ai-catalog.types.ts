@@ -35,7 +35,9 @@ export function isModelFallbackReason(
 }
 
 export const MODEL_UNAVAILABLE_REASONS = [
-  ...MODEL_FALLBACK_REASONS,
+  'model_retired',
+  'key_removed',
+  'not_in_tier',
   'no_route',
 ] as const;
 export type ModelUnavailableReason = (typeof MODEL_UNAVAILABLE_REASONS)[number];

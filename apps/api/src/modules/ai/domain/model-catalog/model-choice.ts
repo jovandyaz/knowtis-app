@@ -112,7 +112,7 @@ function fallbackReason(
   modelId: string,
   facts: ModelFacts,
   billing: CatalogBilling
-): ModelFallbackReason {
+): Exclude<ModelFallbackReason, 'intent_unavailable'> {
   if (isRetired(modelId, facts, billing)) {
     return 'model_retired';
   }

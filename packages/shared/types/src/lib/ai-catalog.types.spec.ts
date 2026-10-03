@@ -16,12 +16,11 @@ describe('model unavailable reasons', () => {
     ]);
   });
 
-  it('refuses for those reasons and for a tier with no route at all', () => {
+  it('refuses for the model reasons, never for a substituted intent, and for a tier with no route at all', () => {
     expect(MODEL_UNAVAILABLE_REASONS).toEqual([
       'model_retired',
       'key_removed',
       'not_in_tier',
-      'intent_unavailable',
       'no_route',
     ]);
   });
