@@ -34,6 +34,9 @@ const CATALOG: ModelCatalogResponse = {
 vi.mock('@/hooks/useAvailableModels', () => ({
   useAvailableModels: () => ({ data: CATALOG }),
 }));
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => ({ isAnonymous: false }),
+}));
 
 function followsInDocument(earlier: Node, later: Node): boolean {
   return (

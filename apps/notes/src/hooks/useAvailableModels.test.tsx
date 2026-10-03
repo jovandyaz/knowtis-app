@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiModelsApi } from '@knowtis/api-client';
 import type {
@@ -25,6 +25,10 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe('useAvailableModels', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('yields the tier envelope the server answered', async () => {
     const catalog: ModelCatalogResponse = {
       tier: 'byok',
@@ -37,5 +41,14 @@ describe('useAvailableModels', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(catalog);
+  });
+
+  it('requests nothing while disabled', () => {
+    const { result } = renderHook(() => useAvailableModels(false), {
+      wrapper,
+    });
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(aiModelsApi.getModels).not.toHaveBeenCalled();
   });
 });

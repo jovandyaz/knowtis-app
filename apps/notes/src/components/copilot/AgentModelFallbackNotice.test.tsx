@@ -11,9 +11,17 @@ import { AgentModelFallbackNotice } from './AgentModelFallbackNotice';
 
 const SUBSTITUTE = 'anthropic:claude-sonnet-5';
 const catalog = vi.fn<() => ModelCatalogResponse | undefined>();
+const catalogRequested = vi.fn<(enabled: boolean | undefined) => void>();
+const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
 
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => authUser(),
+}));
 vi.mock('@/hooks/useAvailableModels', () => ({
-  useAvailableModels: () => ({ data: catalog() }),
+  useAvailableModels: (enabled?: boolean) => {
+    catalogRequested(enabled);
+    return { data: enabled === false ? undefined : catalog() };
+  },
 }));
 
 const CATALOG: ModelCatalogResponse = {
@@ -40,7 +48,9 @@ describe('AgentModelFallbackNotice', () => {
   });
 
   beforeEach(() => {
+    vi.clearAllMocks();
     catalog.mockReturnValue(CATALOG);
+    authUser.mockReturnValue({ isAnonymous: false });
   });
 
   it.each<[ModelFallbackReason, string]>([
@@ -89,6 +99,39 @@ describe('AgentModelFallbackNotice', () => {
         `Answered by ${SUBSTITUTE} because the model you picked is no longer available.`
       )
     ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a guest', { isAnonymous: true }],
+    ['a missing session', null],
+  ])(
+    'names the model by its id without reading the catalog for %s',
+    (_who, user) => {
+      authUser.mockReturnValue(user);
+
+      render(
+        <AgentModelFallbackNotice
+          fallback={{ reason: 'model_retired', to: SUBSTITUTE }}
+        />
+      );
+
+      expect(catalogRequested).toHaveBeenCalledWith(false);
+      expect(
+        screen.getByText(
+          `Answered by ${SUBSTITUTE} because the model you picked is no longer available.`
+        )
+      ).toBeInTheDocument();
+    }
+  );
+
+  it('reads the catalog for an account', () => {
+    render(
+      <AgentModelFallbackNotice
+        fallback={{ reason: 'model_retired', to: SUBSTITUTE }}
+      />
+    );
+
+    expect(catalogRequested).toHaveBeenCalledWith(true);
   });
 
   it('arrives with the reply as plain text, not as a live region', () => {
