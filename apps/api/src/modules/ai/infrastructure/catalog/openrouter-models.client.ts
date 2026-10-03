@@ -31,8 +31,6 @@ const costPerTokenSchema = z
 
 const optionalCostPerTokenSchema = costPerTokenSchema.nullish().catch(null);
 
-const optionalStringListSchema = z.array(z.string()).nullish().catch(null);
-
 const upstreamModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -41,7 +39,7 @@ const upstreamModelSchema = z.object({
   context_length: z.number().int().positive(),
   architecture: z
     .object({
-      input_modalities: optionalStringListSchema,
+      input_modalities: z.array(z.string()).nullish(),
       output_modalities: z.array(z.string()).nullish(),
     })
     .nullish(),
@@ -51,7 +49,7 @@ const upstreamModelSchema = z.object({
     input_cache_read: optionalCostPerTokenSchema,
     input_cache_write: optionalCostPerTokenSchema,
   }),
-  supported_parameters: optionalStringListSchema,
+  supported_parameters: z.array(z.string()).nullish(),
   top_provider: z
     .object({ max_completion_tokens: z.number().int().positive().nullish() })
     .nullish(),

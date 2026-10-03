@@ -75,6 +75,19 @@ function fitsColumns(row: IndexedModel): boolean {
   );
 }
 
+function listedCounts(
+  listed: readonly IndexedModel[]
+): Readonly<Record<IndexProvider, number>> {
+  const countOf = (provider: IndexProvider) =>
+    listed.filter((row) => row.provider === provider).length;
+  return {
+    anthropic: countOf('anthropic'),
+    openai: countOf('openai'),
+    google: countOf('google'),
+    openrouter: countOf('openrouter'),
+  };
+}
+
 function idsOf(
   rows: readonly IndexedModel[],
   provider: IndexProvider
@@ -106,8 +119,9 @@ export class ModelIndexWriter {
     modelsDev: ModelsDevCatalog | null
   ): Promise<ModelIndexWriteResult> {
     const batches = providerBatches(openRouter, modelsDev);
-    const previousListed = await this.repo.countListedByProvider();
-    const served = servedIndexRows(await this.repo.listListed());
+    const listed = await this.repo.listListed();
+    const previousListed = listedCounts(listed);
+    const served = servedIndexRows(listed);
     const plan = planIndexSync(batches, previousListed, served);
     const batchOf = new Map(batches.map((batch) => [batch.provider, batch]));
 

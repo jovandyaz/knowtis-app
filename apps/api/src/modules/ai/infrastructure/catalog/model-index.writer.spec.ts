@@ -28,7 +28,6 @@ import { ModelIndexWriter } from './model-index.writer';
 
 const QWEN_SLUG = 'qwen/qwen3.8-max';
 const DEEPSEEK_SLUG = 'deepseek/deepseek-v4-flash';
-const DISCARDED_SLUG = 'z-ai/glm-5.2-air';
 
 // OpenRouter only proves absence while it still lists a curated open-tier model.
 function curatedOpenSlug(): string {
@@ -43,13 +42,7 @@ function curatedOpenSlug(): string {
 
 const CURATED_OPEN_SLUG = curatedOpenSlug();
 const CURATED_OPEN_ID = `openrouter:${CURATED_OPEN_SLUG}`;
-
-const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
-  anthropic: 0,
-  openai: 0,
-  google: 0,
-  openrouter: 0,
-};
+const QWEN_ID = `openrouter:${QWEN_SLUG}`;
 
 function upstreamModel(id: string): UpstreamModel {
   return {
@@ -132,14 +125,8 @@ function modelsDevCatalog(
   };
 }
 
-function make(
-  previousListed: Partial<Record<IndexProvider, number>> = {},
-  listed: readonly IndexedModel[] = LISTED_ROWS
-) {
+function make(listed: readonly IndexedModel[] = LISTED_ROWS) {
   const repo = {
-    countListedByProvider: vi
-      .fn<ModelIndexRepository['countListedByProvider']>()
-      .mockResolvedValue({ ...NOTHING_LISTED, ...previousListed }),
     upsertMany: vi.fn<ModelIndexRepository['upsertMany']>(
       async (rows) => rows.length
     ),
@@ -225,15 +212,15 @@ describe('ModelIndexWriter', () => {
     }
   });
 
-  it('should read the listed counts before it upserts', async () => {
+  it('should read the listed rows once, before it upserts', async () => {
     const { writer, repo } = make();
 
     await writer.write(openRouterCatalog(), modelsDevCatalog());
 
-    const [countedAt = Infinity] =
-      repo.countListedByProvider.mock.invocationCallOrder;
+    expect(repo.listListed).toHaveBeenCalledOnce();
+    const [listedAt = Infinity] = repo.listListed.mock.invocationCallOrder;
     const [upsertedAt = -Infinity] = repo.upsertMany.mock.invocationCallOrder;
-    expect(countedAt).toBeLessThan(upsertedAt);
+    expect(listedAt).toBeLessThan(upsertedAt);
   });
 
   it('should mark absences only after every row is upserted', async () => {
@@ -283,7 +270,7 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should index only OpenRouter and touch no direct provider when models.dev failed', async () => {
-    const { writer, repo } = make({ anthropic: 4, openai: 4, google: 4 });
+    const { writer, repo } = make();
 
     await writer.write(openRouterCatalog(), null);
 
@@ -297,7 +284,7 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should conclude no absence anywhere when models.dev failed and OpenRouter is inconclusive', async () => {
-    const { writer, repo } = make({ openrouter: 2 });
+    const { writer, repo } = make();
 
     await writer.write(openRouterCatalog({ complete: false }), null);
 
@@ -356,7 +343,7 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should still upsert the direct providers but conclude no absence for them when models.dev discarded an entry', async () => {
-    const { writer, repo } = make({ anthropic: 1, openai: 1, google: 1 });
+    const { writer, repo } = make();
 
     const result = await writer.write(
       openRouterCatalog(),
@@ -374,24 +361,29 @@ describe('ModelIndexWriter', () => {
     ]);
   });
 
-  it('should keep a model OpenRouter published but discarded from absence', async () => {
-    const { writer, repo } = make({ openrouter: 3 });
+  it('should neither rewrite nor retire the listed row of a model OpenRouter discarded', async () => {
+    const { writer, repo } = make();
 
     await writer.write(
-      openRouterCatalog({ discarded: [DISCARDED_SLUG] }),
+      openRouterCatalog({
+        models: [upstreamModel(CURATED_OPEN_SLUG)],
+        discarded: [QWEN_SLUG],
+      }),
       modelsDevCatalog()
     );
 
+    expect(LISTED_ROWS.map((row) => row.id)).toContain(QWEN_ID);
+    expect(upsertedIds(repo)).not.toContain(QWEN_ID);
     expect(absenceConcludedFor(repo)).toContain('openrouter');
     expect(repo.markAbsent).toHaveBeenCalledWith(
       'openrouter',
       expect.any(Date),
-      [`openrouter:${DISCARDED_SLUG}`]
+      [QWEN_ID]
     );
   });
 
   it('should warn with the counts behind a rejection on an inconclusive OpenRouter read', async () => {
-    const { writer, repo } = make({ openrouter: 2 });
+    const { writer, repo } = make();
 
     await writer.write(
       openRouterCatalog({ discarded: [UNPARSEABLE_MODEL_ID] }),
@@ -409,7 +401,11 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should keep a provider listed whose rows shrank by more than half', async () => {
-    const { writer, repo } = make({ anthropic: 3 });
+    const { writer, repo } = make([
+      ...LISTED_ROWS,
+      directModel('anthropic', 'claude-earlier'),
+      directModel('anthropic', 'claude-earliest'),
+    ]);
 
     const result = await writer.write(openRouterCatalog(), modelsDevCatalog());
 
@@ -428,7 +424,7 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should write none of an OpenRouter batch whose rows lost their input modalities', async () => {
-    const { writer, repo } = make({ openrouter: 2 });
+    const { writer, repo } = make();
     const textless = openRouterCatalog().models.map((model) => ({
       ...model,
       inputModalities: [],
@@ -457,7 +453,7 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should write none of a batch that drops a floor model its provider serves', async () => {
-    const { writer, repo } = make({ anthropic: 1, openai: 1, google: 1 });
+    const { writer, repo } = make();
 
     const result = await writer.write(
       openRouterCatalog(),
@@ -472,7 +468,7 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should accept a batch that still serves its provider floor models under new facts', async () => {
-    const { writer, repo } = make({ openrouter: 2 });
+    const { writer, repo } = make();
     const repriced = openRouterCatalog().models.map((model) => ({
       ...model,
       promptCostPerToken: model.promptCostPerToken * 2,
@@ -492,7 +488,6 @@ describe('ModelIndexWriter', () => {
 
   it('should hold a provider with no listed rows to the floor models its snapshot rows serve', async () => {
     const { writer, repo } = make(
-      {},
       LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
     );
 
@@ -516,7 +511,6 @@ describe('ModelIndexWriter', () => {
       (row) => row.provider === 'anthropic'
     );
     const { writer, repo } = make(
-      {},
       LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
     );
 
@@ -627,9 +621,9 @@ describe('ModelIndexWriter', () => {
     });
   });
 
-  it('should write nothing when the listed counts cannot be read', async () => {
+  it('should write nothing when the listed rows cannot be read', async () => {
     const { writer, repo } = make();
-    repo.countListedByProvider.mockRejectedValue(new Error('db down'));
+    repo.listListed.mockRejectedValue(new Error('db down'));
 
     await expect(
       writer.write(openRouterCatalog(), modelsDevCatalog())

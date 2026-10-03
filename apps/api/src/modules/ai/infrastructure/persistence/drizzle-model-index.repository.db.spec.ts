@@ -237,31 +237,4 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     expect(await absentSince(FIRST_ID)).toBeNull();
     expect(await ownListed()).toHaveLength(1);
   });
-
-  it('counts listed rows per provider, zero for empty providers', async () => {
-    const before = await repo.countListedByProvider();
-    await repo.upsertMany(
-      [
-        indexed(FIRST_ID),
-        indexed(OTHER_PROVIDER_ID, {
-          provider: 'anthropic',
-          source: 'models_dev',
-        }),
-      ],
-      FIRST_SEEN_AT
-    );
-
-    const after = await repo.countListedByProvider();
-
-    expect(after.openrouter).toBe(before.openrouter + 1);
-    expect(after.anthropic).toBe(before.anthropic + 1);
-    expect(after.openai).toBe(before.openai);
-    expect(after.google).toBe(before.google);
-    expect(Object.keys(after).sort()).toEqual([
-      'anthropic',
-      'google',
-      'openai',
-      'openrouter',
-    ]);
-  });
 });

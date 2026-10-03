@@ -13,5 +13,4 @@ export interface ModelIndexRepository {
   ): Promise<string[]>;
   /** Rows with `absent_since` null. */
   listListed(): Promise<IndexedModel[]>;
-  countListedByProvider(): Promise<Readonly<Record<IndexProvider, number>>>;
 }

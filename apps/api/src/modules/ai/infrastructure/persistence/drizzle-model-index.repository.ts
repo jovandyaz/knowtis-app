@@ -1,8 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, eq, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, notInArray, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
-import { INDEX_PROVIDERS } from '@knowtis/ai-gateway';
 import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
 
 import {
@@ -141,22 +140,5 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
       .from(aiModelIndex)
       .where(isNull(aiModelIndex.absentSince));
     return rows.map(toIndexedModel);
-  }
-
-  async countListedByProvider(): Promise<
-    Readonly<Record<IndexProvider, number>>
-  > {
-    const grouped = await this.db
-      .select({ provider: aiModelIndex.provider, value: count() })
-      .from(aiModelIndex)
-      .where(isNull(aiModelIndex.absentSince))
-      .groupBy(aiModelIndex.provider);
-    const counts = Object.fromEntries(
-      INDEX_PROVIDERS.map((provider) => [provider, 0])
-    ) as Record<IndexProvider, number>;
-    for (const { provider, value } of grouped) {
-      counts[provider] = value;
-    }
-    return counts;
   }
 }

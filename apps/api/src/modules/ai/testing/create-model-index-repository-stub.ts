@@ -9,6 +9,5 @@ export function createModelIndexRepositoryStub(
     listListed: vi.fn(listListed),
     upsertMany: vi.fn(),
     markAbsent: vi.fn(),
-    countListedByProvider: vi.fn(),
   };
 }

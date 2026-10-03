@@ -280,34 +280,33 @@ describe('OpenRouterModelsHttpClient', () => {
     expect(discarded).toEqual([]);
   });
 
-  it('should keep a model whose input modalities or supported parameters are unreadable, defaulting them', async () => {
-    fetchMock.mockResolvedValueOnce(
-      okResponse(
-        page([
-          {
-            ...CLAUDE_SONNET_45,
-            architecture: {
-              ...CLAUDE_SONNET_45.architecture,
-              input_modalities: ['text', { kind: 'image' }],
-            },
-            supported_parameters: 'tools',
-          },
-        ])
-      )
-    );
+  it.each([
+    {
+      field: 'input modalities',
+      model: {
+        ...CLAUDE_SONNET_45,
+        architecture: {
+          ...CLAUDE_SONNET_45.architecture,
+          input_modalities: ['text', { kind: 'image' }],
+        },
+      },
+    },
+    {
+      field: 'supported parameters',
+      model: { ...CLAUDE_SONNET_45, supported_parameters: 'tools' },
+    },
+  ])(
+    'should discard by id a model whose $field are unreadable, so its last-good row is kept',
+    async ({ model }) => {
+      fetchMock.mockResolvedValueOnce(okResponse(page([model])));
 
-    const { models, discarded } =
-      await new OpenRouterModelsHttpClient().fetchModels();
+      const { models, discarded } =
+        await new OpenRouterModelsHttpClient().fetchModels();
 
-    expect(models).toHaveLength(1);
-    expect(models[0]).toMatchObject({
-      id: 'anthropic/claude-sonnet-4.5',
-      inputModalities: [],
-      outputModalities: ['text'],
-      supportedParameters: [],
-    });
-    expect(discarded).toEqual([]);
-  });
+      expect(models).toEqual([]);
+      expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
+    }
+  );
 
   it('should capture declared reasoning efforts, dropping unknown values', async () => {
     fetchMock.mockResolvedValueOnce(
