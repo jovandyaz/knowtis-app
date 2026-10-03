@@ -602,7 +602,7 @@
       "includes": {
         "anonymous": "No account. The Balanced model, with a few messages a day.",
         "free": "With your account. The Fast, Balanced and Deep models, memory across conversations and more messages a day.",
-        "byok": "With your own API key. Only your keys' models, with no daily message limit."
+        "byok": "With your own API key. Only your keys' models, memory across conversations and no daily message limit."
       },
       "pays": {
         "platform": "Knowtis pays.",
