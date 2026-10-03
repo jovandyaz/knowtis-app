@@ -240,6 +240,33 @@ describe('TierBadge', () => {
     );
   });
 
+  it('names the provider of the style the server substitutes when the preferred one has no route', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
+    vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(
+      preferences('anthropic')
+    );
+    vi.mocked(aiKeysApi.list).mockResolvedValue([
+      key('anthropic', '2026-01-01T00:00:00.000Z'),
+      key('openrouter', '2026-02-01T00:00:00.000Z'),
+    ]);
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(
+      byokCatalog([
+        model('openrouter:anthropic/claude-haiku-4.5', 'fast'),
+        model('anthropic:claude-opus-5-5', 'powerful'),
+      ])
+    );
+    renderBadge();
+    const badge = await screen.findByLabelText(
+      'ai.copilot.quota.byokLabel(provider=OpenRouter)'
+    );
+
+    act(() => badge.focus());
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'ai.copilot.quota.paysWithKey(provider=OpenRouter)'
+    );
+  });
+
   it('names the provider of an Advanced pick, not the primary', async () => {
     vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
     vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(

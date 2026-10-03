@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
-import type { SelectableModel } from '@knowtis/shared-types';
+import type { ModelIntent, SelectableModel } from '@knowtis/shared-types';
 
 import {
   advancedGroups,
@@ -10,6 +10,7 @@ import {
   effortOptions,
   primaryRows,
   resolveSelectedModel,
+  resolveServingModel,
 } from './intent-picker-options';
 
 const t = ((key: string, opts?: Record<string, unknown>) =>
@@ -199,5 +200,42 @@ describe('advancedOptionDescription', () => {
         t
       )
     ).toBe('Open model');
+  });
+});
+
+describe('resolveServingModel', () => {
+  const servingIntent = (id: string, servesIntent: ModelIntent) => ({
+    ...model,
+    id,
+    servesIntent,
+  });
+  const fast = servingIntent('openrouter:anthropic/claude-haiku-4.5', 'fast');
+  const balanced = servingIntent('google:gemini-3.8-flash', 'balanced');
+
+  it('serves the selected model while the list offers it', () => {
+    expect(
+      resolveServingModel([fast, balanced], {
+        preferredModel: null,
+        preferredIntent: 'fast',
+      })
+    ).toBe(fast);
+  });
+
+  it('substitutes the next intent in the server’s fallback order when the preferred one has no model', () => {
+    expect(
+      resolveServingModel([fast, balanced], {
+        preferredModel: null,
+        preferredIntent: 'powerful',
+      })
+    ).toBe(balanced);
+  });
+
+  it('resolves nothing when no listed model serves an intent', () => {
+    expect(
+      resolveServingModel([model], {
+        preferredModel: null,
+        preferredIntent: 'balanced',
+      })
+    ).toBeUndefined();
   });
 });
