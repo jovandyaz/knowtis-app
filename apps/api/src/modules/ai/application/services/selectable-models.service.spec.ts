@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  MODEL_INDEX_SNAPSHOT,
   ModelIndexCatalog,
   type IndexedModel,
   type ModelCatalog,
@@ -21,6 +22,7 @@ import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
+const SONNET_5_5 = 'anthropic:claude-sonnet-5-5';
 const NO_BYOK: ReadonlySet<string> = new Set();
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
@@ -222,11 +224,53 @@ describe('SelectableModelsService', () => {
 
     const models = listed(service, ANTHROPIC_KEY);
 
-    expect(models.map((m) => m.id)).toEqual([SONNET_5]);
-    expect(models[0]).toMatchObject({
+    expect(models.find((m) => m.id === SONNET_5)).toMatchObject({
       routableByServer: false,
       billedToUser: true,
       contextWindow: PORT_CONTEXT_WINDOW,
+    });
+  });
+
+  describe('BYOK routes', () => {
+    it('lists each route a key reaches with its index name and the intent copy', () => {
+      const route = listed(makeOpenService(), OPENROUTER_KEY).find(
+        (m) => m.id === 'openrouter:anthropic/claude-sonnet-5.5'
+      );
+
+      expect(route).toMatchObject({
+        label: 'Anthropic: Claude Sonnet 5.5',
+        descriptionKey: 'aiModels.class.balanced',
+        tier: 'balanced',
+        servesIntent: 'balanced',
+        isDefault: true,
+        billedToUser: true,
+      });
+    });
+
+    it('resolves the selectors once per served index catalog', () => {
+      const catalog = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const all = vi.spyOn(catalog, 'all');
+      const service = makeOpenService([], { catalog: () => catalog });
+
+      listed(service, ANTHROPIC_KEY);
+      listed(service, OPENROUTER_KEY);
+
+      expect(all).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves the selectors again once the index serves a new catalog', () => {
+      let served = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const service = makeOpenService([], { catalog: () => served });
+      const balancedOf = () =>
+        service
+          .catalogFor(ANTHROPIC_KEY, INTENTS, null)
+          .intents.find((entry) => entry.intent === 'balanced');
+
+      expect(balancedOf()).toMatchObject({ modelId: SONNET_5_5 });
+      served = new ModelIndexCatalog(
+        MODEL_INDEX_SNAPSHOT.filter((row) => row.id !== SONNET_5_5)
+      );
+      expect(balancedOf()).toMatchObject({ modelId: SONNET_5 });
     });
   });
 
@@ -456,7 +500,7 @@ describe('SelectableModelsService', () => {
       expect(catalog.intents).toContainEqual({
         intent: 'balanced',
         available: true,
-        modelId: 'anthropic:claude-sonnet-5',
+        modelId: SONNET_5_5,
         substituted: false,
       });
     });

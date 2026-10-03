@@ -69,17 +69,21 @@ function keyBilledPreference(
     : null;
 }
 
+// Plans never gate a model on the caller's own key, so a key catalog that no
+// longer lists one means its selector moved on, never that the plan excludes it.
 function fallbackReason(
   modelId: string,
-  facts: ModelFacts
+  facts: ModelFacts,
+  billing: CatalogBilling
 ): ModelFallbackReason {
   if (!facts.isSupported(modelId)) {
     return 'model_retired';
   }
-  if (
-    !facts.isPlatformBilled(modelId) &&
-    !facts.heldProviders.has(providerOf(modelId))
-  ) {
+  const onHeldKey = facts.heldProviders.has(providerOf(modelId));
+  if (onHeldKey && billing === CATALOG_BILLING.KEY) {
+    return 'model_retired';
+  }
+  if (!facts.isPlatformBilled(modelId) && !onHeldKey) {
     return 'key_removed';
   }
   return 'not_in_tier';
@@ -157,7 +161,7 @@ export function chooseModel(
   if (route) {
     return resolved(wanted, route);
   }
-  const reason = fallbackReason(wanted, facts);
+  const reason = fallbackReason(wanted, facts, catalog.billing);
   if (substitute && billingOf(wanted, facts) === catalog.billing) {
     return {
       kind: MODEL_CHOICE.RESOLVED,

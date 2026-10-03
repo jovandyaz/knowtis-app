@@ -1,24 +1,46 @@
 import { describe, expect, it } from 'vitest';
 
-import { MODEL_INTENTS, type ByokProvider } from '@knowtis/shared-types';
-
-import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
+import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
 import {
-  BYOK_INTENT_CANDIDATES,
+  BYOK_PROVIDERS,
+  MODEL_INTENTS,
+  type ByokProvider,
+  type ModelIntent,
+} from '@knowtis/shared-types';
+
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import {
   effectivePrimary,
+  reachableRoutes,
+  resolveByokSelectors,
   routeIntent,
+  type ByokResolutions,
 } from './byok-intent-routes';
+import { BYOK_SELECTORS, resolveByokIntent } from './model-selectors';
+
+const RESOLUTIONS = resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE);
+const WITHIN_RETIREMENT_WINDOW = '2026-10-20';
 
 function route(
-  intent: 'fast' | 'balanced' | 'powerful',
+  intent: ModelIntent,
   held: readonly ByokProvider[],
-  isSupported: (id: string) => boolean = supportedAtSnapshot
+  resolutions: ByokResolutions = RESOLUTIONS
 ) {
-  return routeIntent(
-    BYOK_INTENT_CANDIDATES[intent],
+  const chosen = routeIntent(
+    resolutions[intent],
     held,
-    effectivePrimary(held, null),
-    isSupported
+    effectivePrimary(held, null)
+  );
+  return chosen && { id: chosen.row.id, substituted: chosen.substituted };
+}
+
+function reachableIds(
+  intent: ModelIntent,
+  held: readonly ByokProvider[],
+  primary: ByokProvider | null
+): string[] {
+  return reachableRoutes(RESOLUTIONS[intent], held, primary).map(
+    (row) => row.id
   );
 }
 
@@ -44,14 +66,147 @@ describe('effectivePrimary', () => {
   });
 });
 
+describe('resolveByokSelectors', () => {
+  it('keeps one entry per BYOK selector, in selector order', () => {
+    for (const intent of MODEL_INTENTS) {
+      expect(
+        RESOLUTIONS[intent].map((candidate) => candidate.selector)
+      ).toEqual(BYOK_SELECTORS[intent]);
+    }
+  });
+
+  it("resolves each selector only on its author's direct provider and OpenRouter", () => {
+    expect(
+      MODEL_INTENTS.map((intent) =>
+        RESOLUTIONS[intent].map((candidate) =>
+          Object.fromEntries(
+            Object.entries(candidate.routes).map(([provider, row]) => [
+              provider,
+              row?.id,
+            ])
+          )
+        )
+      )
+    ).toEqual([
+      [
+        {
+          anthropic: 'anthropic:claude-haiku-4-5',
+          openrouter: 'openrouter:anthropic/claude-haiku-4.5',
+        },
+        {
+          openai: 'openai:gpt-6-luna',
+          openrouter: 'openrouter:openai/gpt-6-luna',
+        },
+        {
+          google: 'google:gemini-3.5-flash-lite',
+          openrouter: 'openrouter:google/gemini-3.5-flash-lite',
+        },
+      ],
+      [
+        {
+          anthropic: 'anthropic:claude-sonnet-5-5',
+          openrouter: 'openrouter:anthropic/claude-sonnet-5.5',
+        },
+        {
+          openai: 'openai:gpt-5.6-terra',
+          openrouter: 'openrouter:openai/gpt-5.6-terra',
+        },
+        {
+          google: 'google:gemini-3.8-flash',
+          openrouter: 'openrouter:google/gemini-3.8-flash',
+        },
+      ],
+      [
+        {
+          anthropic: 'anthropic:claude-opus-5-5',
+          openrouter: 'openrouter:anthropic/claude-opus-5.5',
+        },
+        {
+          openai: 'openai:gpt-6.1-sol',
+          openrouter: 'openrouter:openai/gpt-6.1-sol',
+        },
+        {
+          google: 'google:gemini-3.1-pro-preview',
+          openrouter: 'openrouter:google/gemini-3.1-pro-preview',
+        },
+      ],
+    ]);
+  });
+
+  it('leaves out a provider on which the selector resolves nothing', () => {
+    const withoutGoogle = resolveByokSelectors(
+      MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
+      SNAPSHOT_DATE
+    );
+    expect(Object.keys(withoutGoogle.powerful[2]?.routes ?? {})).toEqual([
+      'openrouter',
+    ]);
+  });
+
+  it('resolves at the given time, so a row inside its retirement window drops out', () => {
+    const rows: IndexedModel[] = MODEL_INDEX_SNAPSHOT.map((row) =>
+      row.id === 'anthropic:claude-sonnet-5-5'
+        ? { ...row, retiresAt: WITHIN_RETIREMENT_WINDOW }
+        : row
+    );
+    expect(
+      resolveByokSelectors(rows, SNAPSHOT_DATE).balanced[0]?.routes.anthropic
+        ?.id
+    ).toBe('anthropic:claude-sonnet-5');
+  });
+
+  it('never resolves one row for two intents', () => {
+    const ids = MODEL_INTENTS.flatMap((intent) =>
+      RESOLUTIONS[intent].flatMap((candidate) =>
+        Object.values(candidate.routes).map((row) => row?.id)
+      )
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('reachableRoutes', () => {
+  it('lists every candidate a lone OpenRouter key reaches, in selector order', () => {
+    expect(reachableIds('balanced', ['openrouter'], 'openrouter')).toEqual([
+      'openrouter:anthropic/claude-sonnet-5.5',
+      'openrouter:openai/gpt-5.6-terra',
+      'openrouter:google/gemini-3.8-flash',
+    ]);
+  });
+
+  it("orders each candidate's routes primary first, then direct keys in add order, OpenRouter last", () => {
+    expect(
+      reachableIds('fast', ['openrouter', 'google', 'anthropic'], 'anthropic')
+    ).toEqual([
+      'anthropic:claude-haiku-4-5',
+      'openrouter:anthropic/claude-haiku-4.5',
+      'openrouter:openai/gpt-6-luna',
+      'google:gemini-3.5-flash-lite',
+      'openrouter:google/gemini-3.5-flash-lite',
+    ]);
+    expect(
+      reachableIds('fast', ['anthropic', 'openrouter'], 'openrouter')
+    ).toEqual([
+      'openrouter:anthropic/claude-haiku-4.5',
+      'anthropic:claude-haiku-4-5',
+      'openrouter:openai/gpt-6-luna',
+      'openrouter:google/gemini-3.5-flash-lite',
+    ]);
+  });
+
+  it('reaches nothing without keys', () => {
+    expect(reachableIds('fast', [], null)).toEqual([]);
+  });
+});
+
 describe('routeIntent', () => {
   it('routes every intent over the direct key of an Anthropic-only user', () => {
     expect(
-      MODEL_INTENTS.map((intent) => route(intent, ['anthropic'])?.modelId)
+      MODEL_INTENTS.map((intent) => route(intent, ['anthropic'])?.id)
     ).toEqual([
       'anthropic:claude-haiku-4-5',
-      'anthropic:claude-sonnet-5',
-      'anthropic:claude-opus-5',
+      'anthropic:claude-sonnet-5-5',
+      'anthropic:claude-opus-5-5',
     ]);
   });
 
@@ -59,99 +214,72 @@ describe('routeIntent', () => {
     expect(
       MODEL_INTENTS.map((intent) => route(intent, ['openrouter']))
     ).toEqual([
-      {
-        modelId: 'openrouter:anthropic/claude-haiku-4.5',
-        label: 'Haiku 4.5',
-        substituted: false,
-      },
-      {
-        modelId: 'openrouter:anthropic/claude-sonnet-5',
-        label: 'Sonnet 5',
-        substituted: false,
-      },
-      {
-        modelId: 'openrouter:anthropic/claude-opus-5',
-        label: 'Opus 5',
-        substituted: false,
-      },
+      { id: 'openrouter:anthropic/claude-haiku-4.5', substituted: false },
+      { id: 'openrouter:anthropic/claude-sonnet-5.5', substituted: false },
+      { id: 'openrouter:anthropic/claude-opus-5.5', substituted: false },
+    ]);
+  });
+
+  it('routes every intent over the direct key of a Google-only user', () => {
+    expect(
+      MODEL_INTENTS.map((intent) => route(intent, ['google'])?.id)
+    ).toEqual([
+      'google:gemini-3.5-flash-lite',
+      'google:gemini-3.8-flash',
+      'google:gemini-3.1-pro-preview',
     ]);
   });
 
   it('lets the first servable candidate win even when the primary provider cannot serve it', () => {
     expect(route('balanced', ['openai', 'anthropic'])).toEqual({
-      modelId: 'anthropic:claude-sonnet-5',
-      label: 'Sonnet 5',
+      id: 'anthropic:claude-sonnet-5-5',
       substituted: true,
     });
   });
 
   it('lets the primary provider choose between the routes of one candidate', () => {
     expect(route('fast', ['openrouter', 'anthropic'])).toEqual({
-      modelId: 'openrouter:anthropic/claude-haiku-4.5',
-      label: 'Haiku 4.5',
+      id: 'openrouter:anthropic/claude-haiku-4.5',
       substituted: false,
     });
     expect(route('fast', ['anthropic', 'openrouter'])).toEqual({
-      modelId: 'anthropic:claude-haiku-4-5',
-      label: 'Haiku 4.5',
+      id: 'anthropic:claude-haiku-4-5',
       substituted: false,
     });
   });
 
   it('prefers the direct vendor key over OpenRouter when the primary has no route', () => {
+    const withoutGoogle = resolveByokSelectors(
+      MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
+      SNAPSHOT_DATE
+    );
     expect(
-      route(
-        'fast',
-        ['google', 'openrouter', 'anthropic'],
-        (id) => supportedAtSnapshot(id) && !id.startsWith('google:')
-      )
-    ).toEqual({
-      modelId: 'anthropic:claude-haiku-4-5',
-      label: 'Haiku 4.5',
-      substituted: true,
-    });
+      route('fast', ['google', 'openrouter', 'anthropic'], withoutGoogle)
+    ).toEqual({ id: 'anthropic:claude-haiku-4-5', substituted: true });
   });
 
   it('returns null when no held key reaches any candidate', () => {
     expect(route('fast', [])).toBeNull();
   });
-});
 
-describe('BYOK_INTENT_CANDIDATES', () => {
-  it('never lets one model serve two intents', () => {
-    const ids = MODEL_INTENTS.flatMap((intent) =>
-      BYOK_INTENT_CANDIDATES[intent].flatMap((c) => Object.values(c.routes))
-    );
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('keys every route by the provider that serves it', () => {
-    for (const intent of MODEL_INTENTS) {
-      for (const candidate of BYOK_INTENT_CANDIDATES[intent]) {
-        for (const [provider, id] of Object.entries(candidate.routes)) {
-          expect(id.startsWith(`${provider}:`)).toBe(true);
+  it("serves a lone key exactly that provider's BYOK resolution of each intent", () => {
+    const servedProviders = new Set<ByokProvider>();
+    for (const provider of BYOK_PROVIDERS) {
+      for (const intent of MODEL_INTENTS) {
+        const expected = resolveByokIntent(
+          intent,
+          provider,
+          MODEL_INDEX_SNAPSHOT,
+          SNAPSHOT_DATE
+        );
+        expect(
+          routeIntent(RESOLUTIONS[intent], [provider], provider)?.row ?? null
+        ).toBe(expected);
+        if (expected !== null) {
+          servedProviders.add(provider);
         }
       }
     }
-  });
-
-  it('declares an OpenRouter route for every candidate', () => {
-    const withoutOpenRouter = MODEL_INTENTS.flatMap((intent) =>
-      BYOK_INTENT_CANDIDATES[intent].filter((c) => !c.routes.openrouter)
-    ).map((c) => c.slug);
-    expect(withoutOpenRouter).toEqual([]);
-  });
-
-  it('gates each declared route on the catalog at runtime', () => {
-    expect(
-      route(
-        'balanced',
-        ['openrouter'],
-        (id) => id !== 'openrouter:anthropic/claude-sonnet-5'
-      )?.modelId
-    ).toBe('openrouter:openai/gpt-5.6-terra');
-    expect(route('balanced', ['openrouter'], () => true)?.modelId).toBe(
-      'openrouter:anthropic/claude-sonnet-5'
-    );
+    expect([...servedProviders]).toEqual([...BYOK_PROVIDERS]);
   });
 });

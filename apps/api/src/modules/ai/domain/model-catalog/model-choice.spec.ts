@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { MODEL_INDEX_SNAPSHOT, ModelIndexCatalog } from '@knowtis/ai-gateway';
+import {
+  MODEL_INDEX_SNAPSHOT,
+  ModelIndexCatalog,
+  type IndexedModel,
+} from '@knowtis/ai-gateway';
 import type {
   AccessTier,
   ByokProvider,
   ModelIntent,
 } from '@knowtis/shared-types';
 
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
+import { resolveByokSelectors } from './byok-intent-routes';
 import {
   chooseModel,
   type ModelFacts,
@@ -28,6 +34,11 @@ const INDEX = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
 const UNLISTED = 'anthropic:claude-unlisted-1';
 const UNLISTED_ROUTE = 'openrouter:acme/unlisted-model';
 const RETIRED = 'anthropic:claude-sonnet-3';
+const SUPERSEDED = 'anthropic:claude-sonnet-5';
+const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
+const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
+const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
+const ROUTED_OPUS = 'openrouter:anthropic/claude-opus-5.5';
 const platformRoutes = (id: string) => id.startsWith('openrouter:');
 const offered = (id: string): OfferedModel => ({
   id,
@@ -41,10 +52,15 @@ const OFFERED = [
   'openrouter:openai/gpt-5.6-sol-pro',
   'openrouter:google/gemini-3.5-flash:batch',
   UNLISTED_ROUTE,
-  'anthropic:claude-haiku-4-5',
-  'anthropic:claude-sonnet-5',
-  'anthropic:claude-opus-5',
 ].map(offered);
+
+function unpriced(modelId: string): readonly IndexedModel[] {
+  return MODEL_INDEX_SNAPSHOT.map((row) =>
+    row.id === modelId
+      ? { ...row, inputCostPerToken: null, outputCostPerToken: null }
+      : row
+  );
+}
 
 function setup(
   tier: AccessTier,
@@ -53,6 +69,7 @@ function setup(
   options: {
     storedPrimary?: ByokProvider | null;
     platformIntents?: Record<ModelIntent, string>;
+    rows?: readonly IndexedModel[];
   } = {}
 ) {
   const platformIntents = options.platformIntents ?? PLATFORM_INTENTS;
@@ -75,6 +92,10 @@ function setup(
     isSupported,
     isPlatformRoutable: platformRoutes,
     indexRow: () => undefined,
+    byok: resolveByokSelectors(
+      options.rows ?? MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    ),
   });
   return (request: Partial<ModelRequest>) =>
     chooseModel(
@@ -139,14 +160,14 @@ describe('chooseModel', () => {
   it('honours a key-billed preference inside the byok catalog', () => {
     expect(
       setup('byok', ['anthropic'])({
-        preferredModel: 'anthropic:claude-opus-5',
+        preferredModel: DIRECT_OPUS,
       })
     ).toEqual({
       kind: 'resolved',
-      model: 'anthropic:claude-opus-5',
+      model: DIRECT_OPUS,
       resolution: {
-        requested: 'anthropic:claude-opus-5',
-        resolved: 'anthropic:claude-opus-5',
+        requested: DIRECT_OPUS,
+        resolved: DIRECT_OPUS,
       },
     });
   });
@@ -158,24 +179,51 @@ describe('chooseModel', () => {
       })
     ).toEqual({
       kind: 'resolved',
-      model: 'anthropic:claude-sonnet-5',
-      resolution: { requested: null, resolved: 'anthropic:claude-sonnet-5' },
+      model: DIRECT_SONNET,
+      resolution: { requested: null, resolved: DIRECT_SONNET },
     });
   });
 
   it('falls back visibly from a retired key model to the key intent model', () => {
     expect(setup('byok', ['anthropic'])({ preferredModel: RETIRED })).toEqual({
       kind: 'resolved',
-      model: 'anthropic:claude-sonnet-5',
+      model: DIRECT_SONNET,
       resolution: {
         requested: RETIRED,
-        resolved: 'anthropic:claude-sonnet-5',
+        resolved: DIRECT_SONNET,
         fallback: {
           reason: 'model_retired',
           from: RETIRED,
-          to: 'anthropic:claude-sonnet-5',
+          to: DIRECT_SONNET,
         },
       },
+    });
+  });
+
+  it.each(['preferredModel', 'pinned'] as const)(
+    'falls back from a superseded key model the catalog still supports as retired, given as %s',
+    (field) => {
+      expect(setup('byok', ['anthropic'])({ [field]: SUPERSEDED })).toEqual({
+        kind: 'resolved',
+        model: DIRECT_SONNET,
+        resolution: {
+          requested: SUPERSEDED,
+          resolved: DIRECT_SONNET,
+          fallback: {
+            reason: 'model_retired',
+            from: SUPERSEDED,
+            to: DIRECT_SONNET,
+          },
+        },
+      });
+    }
+  );
+
+  it('keeps refusing a key model outside a platform catalog as not in the tier', () => {
+    expect(setup('free', ['openrouter'])({ pinned: OPEN_MODEL })).toEqual({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: PLATFORM_INTENTS.balanced,
     });
   });
 
@@ -183,7 +231,7 @@ describe('chooseModel', () => {
     'falls back from a retired model on a held OpenRouter key given as %s',
     (field) => {
       const retiredRoute = 'openrouter:mistralai/mistral-large-2';
-      const keyIntent = 'openrouter:anthropic/claude-sonnet-5';
+      const keyIntent = ROUTED_SONNET;
       expect(
         setup(
           'byok',
@@ -208,7 +256,7 @@ describe('chooseModel', () => {
 
   it('treats a platform-billed model on a held key as key-billed', () => {
     const fastRetired = (id: string) => id !== PLATFORM_INTENTS.fast;
-    const keyIntent = 'openrouter:anthropic/claude-sonnet-5';
+    const keyIntent = ROUTED_SONNET;
     expect(
       setup(
         'byok',
@@ -231,17 +279,15 @@ describe('chooseModel', () => {
   });
 
   it('falls back from a pinned model on a removed key onto another held key', () => {
-    expect(
-      setup('byok', ['openai'])({ pinned: 'anthropic:claude-opus-5' })
-    ).toEqual({
+    expect(setup('byok', ['openai'])({ pinned: DIRECT_OPUS })).toEqual({
       kind: 'resolved',
       model: 'openai:gpt-5.6-terra',
       resolution: {
-        requested: 'anthropic:claude-opus-5',
+        requested: DIRECT_OPUS,
         resolved: 'openai:gpt-5.6-terra',
         fallback: {
           reason: 'key_removed',
-          from: 'anthropic:claude-opus-5',
+          from: DIRECT_OPUS,
           to: 'openai:gpt-5.6-terra',
         },
       },
@@ -289,7 +335,7 @@ describe('chooseModel', () => {
   });
 
   it('refuses a pinned key model after the key is gone instead of billing the platform', () => {
-    expect(setup('free')({ pinned: 'anthropic:claude-opus-5' })).toEqual({
+    expect(setup('free')({ pinned: DIRECT_OPUS })).toEqual({
       kind: 'unavailable',
       reason: 'key_removed',
       suggestedModel: PLATFORM_INTENTS.balanced,
@@ -302,16 +348,13 @@ describe('chooseModel', () => {
     ).toEqual({
       kind: 'unavailable',
       reason: 'not_in_tier',
-      suggestedModel: 'anthropic:claude-sonnet-5',
+      suggestedModel: DIRECT_SONNET,
     });
   });
 
   describe('a pick of a canonical model served over another held key', () => {
-    const DIRECT_SONNET = 'anthropic:claude-sonnet-5';
-    const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5';
-
     it.each(['preferredModel', 'pinned'] as const)(
-      'runs the route the primary provider picks, with no fallback, given as %s',
+      'runs a listed route as picked whatever the primary provider, given as %s',
       (field) => {
         expect(
           setup('byok', ['anthropic', 'openrouter'], undefined, {
@@ -319,33 +362,25 @@ describe('chooseModel', () => {
           })({ [field]: ROUTED_SONNET })
         ).toEqual({
           kind: 'resolved',
-          model: DIRECT_SONNET,
-          resolution: { requested: ROUTED_SONNET, resolved: DIRECT_SONNET },
+          model: ROUTED_SONNET,
+          resolution: { requested: ROUTED_SONNET, resolved: ROUTED_SONNET },
         });
       }
     );
 
     it('keeps a pinned model on a removed key when another held key routes it', () => {
-      expect(
-        setup('byok', ['openrouter'])({ pinned: 'anthropic:claude-opus-5' })
-      ).toEqual({
+      expect(setup('byok', ['openrouter'])({ pinned: DIRECT_OPUS })).toEqual({
         kind: 'resolved',
-        model: 'openrouter:anthropic/claude-opus-5',
-        resolution: {
-          requested: 'anthropic:claude-opus-5',
-          resolved: 'openrouter:anthropic/claude-opus-5',
-        },
+        model: ROUTED_OPUS,
+        resolution: { requested: DIRECT_OPUS, resolved: ROUTED_OPUS },
       });
     });
 
     it('re-routes a stored model silently when its vendor id is no longer priced', () => {
-      const directSonnetUnpriced = (id: string) => id !== DIRECT_SONNET;
       expect(
-        setup(
-          'byok',
-          ['anthropic', 'openrouter'],
-          directSonnetUnpriced
-        )({ preferredModel: DIRECT_SONNET })
+        setup('byok', ['anthropic', 'openrouter'], undefined, {
+          rows: unpriced(DIRECT_SONNET),
+        })({ preferredModel: DIRECT_SONNET })
       ).toEqual({
         kind: 'resolved',
         model: ROUTED_SONNET,
@@ -354,23 +389,19 @@ describe('chooseModel', () => {
     });
 
     it('still falls back visibly when no route of the model is servable', () => {
-      const routedOpusUnpriced = (id: string) =>
-        id !== 'openrouter:anthropic/claude-opus-5';
       expect(
-        setup(
-          'byok',
-          ['openrouter'],
-          routedOpusUnpriced
-        )({ pinned: 'anthropic:claude-opus-5' })
+        setup('byok', ['openrouter'], undefined, {
+          rows: unpriced(ROUTED_OPUS),
+        })({ pinned: DIRECT_OPUS })
       ).toEqual({
         kind: 'resolved',
         model: ROUTED_SONNET,
         resolution: {
-          requested: 'anthropic:claude-opus-5',
+          requested: DIRECT_OPUS,
           resolved: ROUTED_SONNET,
           fallback: {
             reason: 'key_removed',
-            from: 'anthropic:claude-opus-5',
+            from: DIRECT_OPUS,
             to: ROUTED_SONNET,
           },
         },
@@ -453,8 +484,11 @@ describe('chooseModel', () => {
   });
 
   it('refuses with no_route when a byok caller has no servable intent', () => {
-    const noGoogleRoute = (id: string) => !id.startsWith('google:');
-    expect(setup('byok', ['google'], noGoogleRoute)({})).toEqual({
+    expect(
+      setup('byok', ['google'], undefined, {
+        rows: MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
+      })({})
+    ).toEqual({
       kind: 'unavailable',
       reason: 'no_route',
       suggestedModel: null,

@@ -4,6 +4,7 @@ import {
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
+  type ModelIndexCatalog,
 } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
@@ -14,6 +15,10 @@ import {
 } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import {
+  resolveByokSelectors,
+  type ByokResolutions,
+} from '../../domain/model-catalog/byok-intent-routes';
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
 import { toModelReasoning } from '../../domain/model-catalog/index-reasoning';
 import type { ModelFacts } from '../../domain/model-catalog/model-choice';
@@ -48,6 +53,8 @@ function offeredReasoning(
 
 @Injectable()
 export class SelectableModelsService {
+  private readonly byokMemo = new WeakMap<ModelIndexCatalog, ByokResolutions>();
+
   constructor(
     @Inject(MODEL_CATALOG) private readonly catalog: ModelCatalog,
     private readonly registry: ProviderRegistryFactory,
@@ -98,6 +105,7 @@ export class SelectableModelsService {
       isSupported: (id) => this.catalog.isSupported(id),
       isPlatformRoutable: (id) => this.registry.isModelAvailable(id),
       indexRow: (id) => this.index.catalog().get(id),
+      byok: this.byokResolutions(),
     });
   }
 
@@ -161,6 +169,19 @@ export class SelectableModelsService {
         ...(servesIntent ? { servesIntent } : {}),
       };
     });
+  }
+
+  // Each index refresh serves a new catalog instance, so keying on it re-resolves
+  // the selectors once per refresh and never per request.
+  private byokResolutions(): ByokResolutions {
+    const catalog = this.index.catalog();
+    const memoized = this.byokMemo.get(catalog);
+    if (memoized) {
+      return memoized;
+    }
+    const resolutions = resolveByokSelectors(catalog.all(), new Date());
+    this.byokMemo.set(catalog, resolutions);
+    return resolutions;
   }
 
   private indexReasoning(modelId: string): ModelReasoning | undefined {

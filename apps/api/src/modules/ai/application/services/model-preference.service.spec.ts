@@ -16,6 +16,9 @@ import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 const RETIRED_MODEL = 'anthropic:claude-retired';
+const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
+const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
+const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
 
 function makeChooser(
   settings: {
@@ -156,13 +159,13 @@ describe('ModelPreferenceService', () => {
         {
           intent: 'balanced',
           available: true,
-          modelId: 'anthropic:claude-sonnet-5',
+          modelId: DIRECT_SONNET,
           substituted: false,
         },
         {
           intent: 'powerful',
           available: true,
-          modelId: 'anthropic:claude-opus-5',
+          modelId: DIRECT_OPUS,
           substituted: false,
         },
       ]);
@@ -184,7 +187,7 @@ describe('ModelPreferenceService', () => {
       const catalog = await makeChooser().svc.listModels(BYOK_ANTHROPIC);
       expect(
         catalog.models.filter((m) => m.isDefault).map((m) => m.id)
-      ).toEqual(['anthropic:claude-sonnet-5']);
+      ).toEqual([DIRECT_SONNET]);
     });
 
     it.each(
@@ -270,7 +273,7 @@ describe('ModelPreferenceService', () => {
       const error = await writeAs(
         makeChooser().svc,
         createExecutionContext({ tier: 'free' }),
-        { preferredModel: 'anthropic:claude-opus-5' }
+        { preferredModel: DIRECT_OPUS }
       ).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ModelUnavailableException);
       expect((error as ModelUnavailableException).getResponse()).toEqual({
@@ -300,10 +303,10 @@ describe('ModelPreferenceService', () => {
       await writeAs(
         svc,
         createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
-        { preferredModel: 'anthropic:claude-opus-5' }
+        { preferredModel: DIRECT_OPUS }
       );
       expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
-        preferredModel: 'anthropic:claude-opus-5',
+        preferredModel: DIRECT_OPUS,
       });
     });
 
@@ -327,11 +330,11 @@ describe('ModelPreferenceService', () => {
         { preferredModel: 'openrouter:deepseek/deepseek-v3.2' }
       );
       await writeAs(svc, BYOK_ANTHROPIC, {
-        preferredModel: 'anthropic:claude-sonnet-5',
+        preferredModel: DIRECT_SONNET,
       });
       expect(repo.patchSettings.mock.calls).toEqual([
         ['user-1', { preferredModel: 'openrouter:deepseek/deepseek-v3.2' }],
-        ['user-1', { preferredModel: 'anthropic:claude-sonnet-5' }],
+        ['user-1', { preferredModel: DIRECT_SONNET }],
       ]);
     });
 
@@ -491,11 +494,11 @@ describe('ModelPreferenceService', () => {
     it('answers no primary provider once its key is gone', async () => {
       expect(
         await makeChooser({
-          preferredModel: 'anthropic:claude-sonnet-5',
+          preferredModel: DIRECT_SONNET,
           primaryProvider: 'openai',
         }).svc.getUserPreferences('u1', async () => BYOK_ANTHROPIC)
       ).toEqual({
-        preferredModel: 'anthropic:claude-sonnet-5',
+        preferredModel: DIRECT_SONNET,
         preferredIntent: null,
         primaryProvider: null,
         ghostTextEnabled: true,
@@ -595,12 +598,10 @@ describe('ModelPreferenceService', () => {
           BYOK_ANTHROPIC_OPENROUTER,
           {}
         )
-      ).resolves.toMatchObject({
-        model: 'openrouter:anthropic/claude-sonnet-5',
-      });
+      ).resolves.toMatchObject({ model: ROUTED_SONNET });
       await expect(
         makeChooser().svc.chooseTurnModel(BYOK_ANTHROPIC_OPENROUTER, {})
-      ).resolves.toMatchObject({ model: 'anthropic:claude-sonnet-5' });
+      ).resolves.toMatchObject({ model: DIRECT_SONNET });
     });
 
     it('lists the intents over the stored primary provider', async () => {
@@ -610,40 +611,61 @@ describe('ModelPreferenceService', () => {
       expect(intents).toContainEqual({
         intent: 'balanced',
         available: true,
-        modelId: 'openrouter:anthropic/claude-sonnet-5',
+        modelId: ROUTED_SONNET,
         substituted: false,
       });
     });
 
-    it('serves a stored routed model over the key the primary provider picks, with no fallback', async () => {
-      const route = 'openrouter:anthropic/claude-sonnet-5';
+    it('serves a stored routed model over the key it names, whatever the primary provider', async () => {
       await expect(
         makeChooser({
-          preferredModel: route,
+          preferredModel: ROUTED_SONNET,
           primaryProvider: 'anthropic',
         }).svc.chooseTurnModel(BYOK_ANTHROPIC_OPENROUTER, {})
       ).resolves.toEqual({
         kind: 'resolved',
-        model: 'anthropic:claude-sonnet-5',
-        resolution: { requested: route, resolved: 'anthropic:claude-sonnet-5' },
+        model: ROUTED_SONNET,
+        resolution: { requested: ROUTED_SONNET, resolved: ROUTED_SONNET },
+      });
+    });
+
+    it('serves a pinned model on a removed key over another held key’s route of it, with no fallback', async () => {
+      await expect(
+        makeChooser().svc.chooseTurnModel(
+          createExecutionContext({
+            tier: 'byok',
+            byokProviders: ['openrouter'],
+          }),
+          { pinned: DIRECT_SONNET }
+        )
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: ROUTED_SONNET,
+        resolution: { requested: DIRECT_SONNET, resolved: ROUTED_SONNET },
       });
     });
 
     it('judges a model written with a primary provider by the primary it stores', async () => {
-      const route = 'openrouter:anthropic/claude-sonnet-5';
       const { svc, repo } = makeChooser();
+      const refusalOf = (patch: UpdateAiPreferencesInput) =>
+        writeAs(svc, BYOK_ANTHROPIC_OPENROUTER, patch).then(
+          () => null,
+          (error: unknown) =>
+            error instanceof ModelUnavailableException
+              ? error.getResponse()
+              : error
+        );
 
-      await expect(
-        writeAs(svc, BYOK_ANTHROPIC_OPENROUTER, { preferredModel: route })
-      ).rejects.toBeInstanceOf(ModelUnavailableException);
-      await writeAs(svc, BYOK_ANTHROPIC_OPENROUTER, {
-        preferredModel: route,
-        primaryProvider: 'openrouter',
-      });
-
-      expect(repo.patchSettings.mock.calls).toEqual([
-        ['user-1', { preferredModel: route, primaryProvider: 'openrouter' }],
-      ]);
+      expect(
+        await refusalOf({ preferredModel: 'openai:gpt-6-luna' })
+      ).toMatchObject({ details: { suggestedModel: DIRECT_SONNET } });
+      expect(
+        await refusalOf({
+          preferredModel: 'openai:gpt-6-luna',
+          primaryProvider: 'openrouter',
+        })
+      ).toMatchObject({ details: { suggestedModel: ROUTED_SONNET } });
+      expect(repo.patchSettings).not.toHaveBeenCalled();
     });
   });
 
@@ -651,12 +673,12 @@ describe('ModelPreferenceService', () => {
     it('reads the full ladder of a model on the caller key', async () => {
       expect(
         await makeChooser().svc.reasoningFor(
-          'anthropic:claude-sonnet-5',
+          DIRECT_SONNET,
           new Set(['anthropic'])
         )
       ).toEqual({
         levels: ['low', 'medium', 'high', 'xhigh', 'max'],
-        mandatory: false,
+        mandatory: true,
       });
     });
 
@@ -691,7 +713,7 @@ describe('ModelPreferenceService', () => {
         )
       ).resolves.toMatchObject({
         kind: 'resolved',
-        model: 'anthropic:claude-sonnet-5',
+        model: DIRECT_SONNET,
       });
     });
 
@@ -732,16 +754,16 @@ describe('ModelPreferenceService', () => {
     it('serves a byok caller’s stored key-billed model as that model', async () => {
       await expect(
         makeChooser({
-          preferredModel: 'anthropic:claude-opus-5',
+          preferredModel: DIRECT_OPUS,
         }).svc.chooseTurnModel(BYOK_ANTHROPIC, {})
-      ).resolves.toMatchObject({ model: 'anthropic:claude-opus-5' });
+      ).resolves.toMatchObject({ model: DIRECT_OPUS });
     });
 
     it('refuses an explicit model outside the tier', async () => {
       await expect(
         makeChooser().svc.chooseTurnModel(
           createExecutionContext({ tier: 'free' }),
-          { explicit: 'anthropic:claude-opus-5' }
+          { explicit: DIRECT_OPUS }
         )
       ).resolves.toEqual({
         kind: 'unavailable',
@@ -775,7 +797,7 @@ describe('ModelPreferenceService', () => {
       await expect(
         makeChooser().svc.chooseTurnModel(
           createExecutionContext({ tier: 'free' }),
-          { pinned: 'anthropic:claude-opus-5' }
+          { pinned: DIRECT_OPUS }
         )
       ).resolves.toEqual({
         kind: 'unavailable',
