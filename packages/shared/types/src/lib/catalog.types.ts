@@ -73,6 +73,8 @@ export interface CatalogSyncResultDto {
   skippedReason: CatalogSyncSkipReason | null;
   upstream: number;
   candidates: number;
+  /** Distinct model-index rows the pass upserted; zero when the index write failed. */
+  indexed: number;
   alerts: number;
   failures: number;
 }

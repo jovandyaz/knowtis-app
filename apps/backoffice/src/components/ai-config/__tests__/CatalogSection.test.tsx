@@ -383,6 +383,7 @@ describe('CatalogSection', () => {
         skippedReason: null,
         upstream: 120,
         candidates: 97,
+        indexed: 640,
         alerts: 2,
         failures: 0,
       },
@@ -390,7 +391,7 @@ describe('CatalogSection', () => {
     renderSection();
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      '120 upstream models: 97 candidate(s), 2 alert(s)'
+      'Synced 120 upstream models: 97 candidate(s), 2 alert(s). Indexed 640 model(s).'
     );
   });
 
@@ -403,6 +404,7 @@ describe('CatalogSection', () => {
         skippedReason: 'locked',
         upstream: 0,
         candidates: 0,
+        indexed: 0,
         alerts: 0,
         failures: 0,
       },
@@ -423,6 +425,7 @@ describe('CatalogSection', () => {
         skippedReason: 'some_future_reason',
         upstream: 0,
         candidates: 0,
+        indexed: 0,
         alerts: 0,
         failures: 0,
       },

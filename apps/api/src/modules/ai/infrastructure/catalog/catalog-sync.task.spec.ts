@@ -4,11 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 import { CatalogSyncTask } from './catalog-sync.task';
+import type { ModelIndexWriter } from './model-index.writer';
 
 const GLM_CURATED_ID = 'openrouter:z-ai/glm-5.2';
 const GLM_SLUG = 'z-ai/glm-5.2';
@@ -48,6 +50,13 @@ function upstreamModel(
     ...overrides,
   };
 }
+
+const MODELS_DEV_CATALOG: ModelsDevCatalog = {
+  models: [],
+  openRouterEnrichment: new Map(),
+  discarded: [],
+};
+const INDEXED_ROWS = 640;
 
 const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
@@ -109,14 +118,35 @@ function make(
   const catalog = {
     getPricing: vi.fn((modelId: string) => VENDORED_PRICING[modelId]),
   };
+  const modelsDev = {
+    fetchCatalog: vi.fn().mockResolvedValue(MODELS_DEV_CATALOG),
+  };
+  const indexWriter = {
+    write: vi.fn<ModelIndexWriter['write']>().mockResolvedValue({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+    }),
+  };
   const task = new CatalogSyncTask(
     lock.client,
     repo as never,
     openRouter as never,
     liteLlm as never,
-    catalog as never
+    catalog as never,
+    modelsDev as never,
+    indexWriter as never
   );
-  return { task, lock, repo, openRouter, liteLlm, catalog };
+  return {
+    task,
+    lock,
+    repo,
+    openRouter,
+    liteLlm,
+    catalog,
+    modelsDev,
+    indexWriter,
+  };
 }
 
 describe('CatalogSyncTask', () => {
@@ -347,7 +377,7 @@ describe('CatalogSyncTask', () => {
   // both call OpenRouter and LiteLLM before either takes the lock waste four
   // upstream calls and make the reported "skipped" outcome a lie.
   it('should never call upstream when another run holds the lock', async () => {
-    const { task, openRouter, liteLlm } = make({
+    const { task, openRouter, liteLlm, modelsDev, indexWriter } = make({
       upstream: [QWEN_CANDIDATE],
       locked: false,
     });
@@ -356,6 +386,8 @@ describe('CatalogSyncTask', () => {
 
     expect(openRouter.fetchModels).not.toHaveBeenCalled();
     expect(liteLlm.fetchPrices).not.toHaveBeenCalled();
+    expect(modelsDev.fetchCatalog).not.toHaveBeenCalled();
+    expect(indexWriter.write).not.toHaveBeenCalled();
   });
 
   it('should unlock and free the reserved connection after a pass', async () => {
@@ -437,6 +469,7 @@ describe('CatalogSyncTask', () => {
       skippedReason: null,
       upstream: 3 + CURATED_OPEN_SLUGS.length,
       candidates: 2,
+      indexed: INDEXED_ROWS,
       alerts: 0,
       failures: 0,
     });
@@ -453,6 +486,7 @@ describe('CatalogSyncTask', () => {
       skippedReason: null,
       upstream: 2 + CURATED_OPEN_SLUGS.length,
       candidates: 1,
+      indexed: INDEXED_ROWS,
       alerts: 0,
       failures: 1,
     });
@@ -466,6 +500,7 @@ describe('CatalogSyncTask', () => {
       skippedReason: 'locked',
       upstream: 0,
       candidates: 0,
+      indexed: 0,
       alerts: 0,
       failures: 0,
     });
@@ -542,6 +577,79 @@ describe('CatalogSyncTask', () => {
 
     await expect(task.run()).rejects.toThrow('openrouter down');
     expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it('should index the OpenRouter read together with the models.dev read', async () => {
+    const { task, openRouter, indexWriter } = make({
+      upstream: [QWEN_CANDIDATE],
+    });
+
+    await task.run();
+
+    const openRouterRead = await openRouter.fetchModels.mock.results[0]?.value;
+    expect(indexWriter.write).toHaveBeenCalledWith(
+      openRouterRead,
+      MODELS_DEV_CATALOG
+    );
+  });
+
+  it('should index OpenRouter alone and still complete when the models.dev fetch fails', async () => {
+    const { task, repo, modelsDev, indexWriter } = make({
+      upstream: [QWEN_CANDIDATE],
+    });
+    modelsDev.fetchCatalog.mockRejectedValue(new Error('models.dev down'));
+
+    const result = await task.run();
+
+    expect(indexWriter.write).toHaveBeenCalledWith(expect.anything(), null);
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'completed',
+        candidates: 1,
+        indexed: INDEXED_ROWS,
+      })
+    );
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1);
+    expect(warnLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.model_index.models_dev_fetch_failed',
+        reason: 'models.dev down',
+      })
+    );
+  });
+
+  it('should report nothing indexed but still sync candidates and alerts when the index write fails', async () => {
+    const { task, repo, indexWriter } = make({
+      upstream: [
+        QWEN_CANDIDATE,
+        upstreamModel(GLM_SLUG, {
+          completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 2,
+        }),
+      ],
+    });
+    indexWriter.write.mockRejectedValue(new Error('model index locked'));
+
+    const result = await task.run();
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'completed',
+        candidates: 1,
+        indexed: 0,
+        alerts: 1,
+      })
+    );
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      GLM_CURATED_ID,
+      'price_drift',
+      expect.any(String)
+    );
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.model_index.write_failed',
+        reason: 'model index locked',
+      })
+    );
   });
 
   it('should release the lock when the upstream fetch fails inside it', async () => {

@@ -1,0 +1,100 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+
+import { fromOpenRouter, MODELS_DEV_PROVIDERS } from '@knowtis/ai-gateway';
+
+import { canConcludeAbsence } from '../../domain/model-catalog/curated-watch';
+import {
+  planIndexSync,
+  type IndexSyncPlan,
+  type ProviderBatch,
+} from '../../domain/model-catalog/index-sync-plan';
+import {
+  MODEL_INDEX_REPOSITORY,
+  type ModelIndexRepository,
+} from '../../domain/ports/model-index.repository';
+import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
+import type { UpstreamCatalog } from '../../domain/ports/openrouter-models.port';
+
+export interface ModelIndexWriteResult {
+  /** Distinct rows upserted. */
+  readonly indexed: number;
+  /** Rows newly marked absent. */
+  readonly absent: number;
+  readonly rejected: IndexSyncPlan['rejected'];
+}
+
+function providerBatches(
+  openRouter: UpstreamCatalog,
+  modelsDev: ModelsDevCatalog | null
+): ProviderBatch[] {
+  const openRouterBatch: ProviderBatch = {
+    provider: 'openrouter',
+    rows: openRouter.models.map((model) =>
+      fromOpenRouter(
+        model,
+        modelsDev?.openRouterEnrichment.get(model.id) ?? null
+      )
+    ),
+    conclusive: canConcludeAbsence(openRouter),
+  };
+  if (modelsDev === null) {
+    return [openRouterBatch];
+  }
+  const conclusive = modelsDev.discarded.length === 0;
+  return [
+    ...MODELS_DEV_PROVIDERS.map((provider) => ({
+      provider,
+      rows: modelsDev.models.filter((model) => model.provider === provider),
+      conclusive,
+    })),
+    openRouterBatch,
+  ];
+}
+
+/** Writes one sync pass into the model index. */
+@Injectable()
+export class ModelIndexWriter {
+  private readonly logger = new Logger(ModelIndexWriter.name);
+
+  constructor(
+    @Inject(MODEL_INDEX_REPOSITORY)
+    private readonly repo: ModelIndexRepository
+  ) {}
+
+  /**
+   * Upserts every row both reads produced, then marks absent the rows of each
+   * provider whose batch may conclude absence. A `null` models.dev read (its
+   * fetch failed) leaves the providers it serves untouched. Rejects when a
+   * repository call fails.
+   */
+  async write(
+    openRouter: UpstreamCatalog,
+    modelsDev: ModelsDevCatalog | null
+  ): Promise<ModelIndexWriteResult> {
+    const batches = providerBatches(openRouter, modelsDev);
+    const previousListed = await this.repo.countListedByProvider();
+    const plan = planIndexSync(batches, previousListed);
+
+    for (const { provider, reason } of plan.rejected) {
+      this.logger.warn({
+        event: 'ai.model_index.sync_rejected',
+        provider,
+        reason,
+        rows:
+          batches.find((batch) => batch.provider === provider)?.rows.length ??
+          0,
+        previous: previousListed[provider],
+      });
+    }
+
+    const seenAt = new Date();
+    const indexed = await this.repo.upsertMany(plan.upserts, seenAt);
+    let absent = 0;
+    for (const provider of plan.concludeAbsence) {
+      absent += await this.repo.markAbsent(provider, seenAt);
+    }
+
+    this.logger.log({ event: 'ai.model_index.sync', indexed, absent });
+    return { indexed, absent, rejected: plan.rejected };
+  }
+}

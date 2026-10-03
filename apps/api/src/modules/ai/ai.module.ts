@@ -64,6 +64,7 @@ import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
 import { LiteLlmPricesHttpClient } from './infrastructure/catalog/litellm-prices.client';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
+import { ModelIndexWriter } from './infrastructure/catalog/model-index.writer';
 import { ModelsDevHttpClient } from './infrastructure/catalog/models-dev.client';
 import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-models.client';
 import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
@@ -155,6 +156,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     },
     { provide: MODELS_DEV_CLIENT, useClass: ModelsDevHttpClient },
     LiteLlmPricesHttpClient,
+    ModelIndexWriter,
     CatalogSyncTask,
     AiCatalogAdminService,
     AssignableModelsService,

@@ -251,6 +251,7 @@ export const CatalogSyncResultSchema = z.object({
   skippedReason: z.string().nullable().default(null),
   upstream: z.number().int(),
   candidates: z.number().int(),
+  indexed: z.number().int(),
   alerts: z.number().int(),
   failures: z.number().int(),
 });
