@@ -178,6 +178,10 @@ function isConcreteId(slug: string, allowPreview: boolean): boolean {
   );
 }
 
+function isPriced(row: IndexedModel): boolean {
+  return (row.inputCostPerToken ?? 0) > 0 && (row.outputCostPerToken ?? 0) > 0;
+}
+
 function isWithinCeiling(
   row: IndexedModel,
   ceilingPerMillion: number | undefined
@@ -191,7 +195,7 @@ function isWithinCeiling(
   );
 }
 
-/** Whether auto-selection may pick the row under `rule` at `now`; an unknown capability or price never qualifies. */
+/** Whether auto-selection may pick the row under `rule` at `now`; an unknown capability, or an unknown or zero input or output price, never qualifies. */
 export function isEligible(
   row: IndexedModel,
   rule: EligibilityRule,
@@ -205,6 +209,7 @@ export function isEligible(
     rule.requires.every(
       (capability) => row[CAPABILITY_FLAG[capability]] === true
     ) &&
+    isPriced(row) &&
     isWithinCeiling(row, rule.maxOutputCostPerMillion)
   );
 }

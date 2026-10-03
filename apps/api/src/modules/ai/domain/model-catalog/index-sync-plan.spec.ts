@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   INDEX_PROVIDERS,
@@ -8,6 +8,7 @@ import {
 } from '@knowtis/ai-gateway';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { byokFloorKey, PLATFORM_FLOOR_MODEL_IDS } from './floor-models';
 import {
   planIndexSync,
@@ -94,6 +95,15 @@ function batch(
 }
 
 describe('planIndexSync', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should conclude absence for a conclusive batch that kept its size', () => {
     const anthropic = batch('anthropic', 10);
 

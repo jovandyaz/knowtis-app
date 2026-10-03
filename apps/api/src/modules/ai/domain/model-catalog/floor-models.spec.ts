@@ -15,6 +15,7 @@ import {
   PLATFORM_FLOOR_MODEL_IDS,
   unservedFloorModels,
 } from './floor-models';
+import { resolveByokIntent } from './model-selectors';
 
 const UNPRICED_OUTPUT_MODEL_ID = AI_SETTING_DEFAULTS.ai_fast_model;
 const WINDOWLESS_MODEL_ID = AI_SETTING_DEFAULTS.ai_deep_model;
@@ -24,7 +25,9 @@ const IMAGE_ONLY = ['image'];
 
 const ANTHROPIC_FAST_ROUTE_ID = 'anthropic:claude-haiku-4-5';
 const ANTHROPIC_FAST_KEY = 'byok.fast@anthropic';
-const RETIRED_PREVIEW_ID = 'openrouter:google/gemini-3.1-pro-preview';
+const OPENROUTER_GOOGLE_PREVIEW_ID = 'openrouter:google/gemini-3.1-pro-preview';
+const GOOGLE_PREVIEW_ID = 'google:gemini-3.1-pro-preview';
+const GOOGLE_STABLE_PRO_ID = 'google:gemini-2.5-pro';
 const OPENROUTER_KEYS = [
   'byok.fast@openrouter',
   'byok.balanced@openrouter',
@@ -145,11 +148,38 @@ describe('floorModelsLost', () => {
   it('loses nothing when OpenRouter delists a resolved preview while another selector still routes its intent', () => {
     const current = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
     const next = new ModelIndexCatalog(
-      MODEL_INDEX_SNAPSHOT.filter((row) => row.id !== RETIRED_PREVIEW_ID)
+      MODEL_INDEX_SNAPSHOT.filter(
+        (row) => row.id !== OPENROUTER_GOOGLE_PREVIEW_ID
+      )
     );
 
-    expect(current.get(RETIRED_PREVIEW_ID)).toBeDefined();
+    expect(current.get(OPENROUTER_GOOGLE_PREVIEW_ID)).toBeDefined();
     expect(floorModelsLost(current, next, SNAPSHOT_DATE)).toEqual([]);
+  });
+
+  it('loses nothing when Google retires the preview its powerful route resolves to and the route falls back to a served stable row', () => {
+    const nextRows = MODEL_INDEX_SNAPSHOT.filter(
+      (row) => row.id !== GOOGLE_PREVIEW_ID
+    );
+
+    expect(
+      resolveByokIntent(
+        'powerful',
+        'google',
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      )?.id
+    ).toBe(GOOGLE_PREVIEW_ID);
+    expect(
+      resolveByokIntent('powerful', 'google', nextRows, SNAPSHOT_DATE)?.id
+    ).toBe(GOOGLE_STABLE_PRO_ID);
+    expect(
+      floorModelsLost(
+        new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT),
+        new ModelIndexCatalog(nextRows),
+        SNAPSHOT_DATE
+      )
+    ).toEqual([]);
   });
 
   it('loses every OpenRouter route when the OpenRouter rows lose their family', () => {

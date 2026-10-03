@@ -21,6 +21,7 @@ import {
   byokFloorKey,
   PLATFORM_FLOOR_MODEL_IDS,
 } from '../../domain/model-catalog/floor-models';
+import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
@@ -35,6 +36,7 @@ import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { ModelIndexWriter } from './model-index.writer';
 
 const QWEN_SLUG = 'qwen/qwen3.8-max';
@@ -57,11 +59,15 @@ const CURATED_OPEN_ID = `openrouter:${CURATED_OPEN_SLUG}`;
 const OPENROUTER_FLOOR_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
   id.startsWith(OPENROUTER_ID_PREFIX)
 ).map((id) => id.slice(OPENROUTER_ID_PREFIX.length));
-const OPENROUTER_ROUTE_SLUGS = [
-  'anthropic/claude-haiku-4.5',
-  'anthropic/claude-sonnet-5.5',
-  'anthropic/claude-opus-5.5',
-];
+const OPENROUTER_ROUTE_SLUGS = MODEL_INTENTS.flatMap((intent) => {
+  const route = resolveByokIntent(
+    intent,
+    'openrouter',
+    MODEL_INDEX_SNAPSHOT,
+    SNAPSHOT_DATE
+  );
+  return route === null ? [] : [route.id.slice(OPENROUTER_ID_PREFIX.length)];
+});
 const OPENROUTER_ROUTE_KEYS = MODEL_INTENTS.map((intent) =>
   byokFloorKey(intent, 'openrouter')
 );
@@ -200,6 +206,8 @@ describe('ModelIndexWriter', () => {
   let errorLog: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     logLog = vi
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);
@@ -212,6 +220,7 @@ describe('ModelIndexWriter', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -649,7 +658,10 @@ describe('ModelIndexWriter', () => {
         provider: 'openrouter',
         reason: 'floor',
         models: [
-          ...PLATFORM_FLOOR_MODEL_IDS.filter((id) => id !== CURATED_OPEN_ID),
+          ...PLATFORM_FLOOR_MODEL_IDS.filter(
+            (id) =>
+              id.startsWith(OPENROUTER_ID_PREFIX) && id !== CURATED_OPEN_ID
+          ),
           ...OPENROUTER_ROUTE_KEYS,
         ],
       },

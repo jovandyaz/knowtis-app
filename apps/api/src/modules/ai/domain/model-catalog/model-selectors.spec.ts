@@ -378,6 +378,23 @@ describe('resolveSelector over the snapshot', () => {
     expect(resolvedId(stableGeminiPro, 'openrouter')).toBeNull();
   });
 
+  it.each([
+    ['an unknown input price', { inputCostPerToken: null }],
+    ['a $0 output price', { outputCostPerToken: 0 }],
+  ])(
+    'falls back past a newest row with %s to the next eligible one',
+    (_, unpriced) => {
+      const newest = { ...row('anthropic:claude-sonnet-5-5'), ...unpriced };
+
+      expect(
+        resolvedId(selectorOf('balanced', 'anthropic'), 'anthropic', [
+          newest,
+          row('anthropic:claude-sonnet-5'),
+        ])
+      ).toBe('anthropic:claude-sonnet-5');
+    }
+  );
+
   it('still resolves gemini-pro on openrouter to the preview over its newer -customtools sibling', () => {
     expect(resolvedId(selectorOf('powerful', 'google'), 'openrouter')).toBe(
       'openrouter:google/gemini-3.1-pro-preview'
@@ -668,16 +685,18 @@ describe('isEligible', () => {
     ).toBe(true);
   });
 
-  it('excludes an unpriced row under a ceiling and keeps it without one', () => {
-    const unpriced = {
-      ...row('anthropic:claude-haiku-4-5'),
-      outputCostPerToken: null,
-    };
+  it.each([
+    ['an unknown input price', { inputCostPerToken: null }],
+    ['a $0 input price', { inputCostPerToken: 0 }],
+    ['an unknown output price', { outputCostPerToken: null }],
+    ['a $0 output price', { outputCostPerToken: 0 }],
+  ])('excludes a row with %s, with or without a ceiling', (_, unpriced) => {
+    const haiku = { ...row('anthropic:claude-haiku-4-5'), ...unpriced };
 
     expect(
-      isEligible(unpriced, selectorOf('fast', 'anthropic'), SNAPSHOT_DATE)
+      isEligible(haiku, selectorOf('fast', 'anthropic'), SNAPSHOT_DATE)
     ).toBe(false);
-    expect(isEligible(unpriced, BYOK_RULE, SNAPSHOT_DATE)).toBe(true);
+    expect(isEligible(haiku, BYOK_RULE, SNAPSHOT_DATE)).toBe(false);
   });
 });
 
