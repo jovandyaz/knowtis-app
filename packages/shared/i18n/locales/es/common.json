@@ -160,7 +160,8 @@
     },
     "primaryProvider": {
       "title": "Proveedor principal",
-      "description": "Cuando un modelo está disponible con varias de tus claves, se cobra a esta."
+      "description": "Cuando un modelo está disponible con varias de tus claves, se cobra a esta.",
+      "saveFailed": "No se pudo cambiar el proveedor principal. Revisa tus claves de API e inténtalo de nuevo."
     }
   },
   "aiModels": {

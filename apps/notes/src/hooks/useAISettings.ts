@@ -1,4 +1,8 @@
+import { useTranslation } from 'react-i18next';
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { toast } from 'sonner';
 
 import { aiModelsApi } from '@knowtis/api-client';
 import type {
@@ -7,6 +11,7 @@ import type {
 } from '@knowtis/shared-types';
 
 import { aiModelsQueryKeys } from './useAvailableModels';
+import { providerKeysQueryKeys } from './useProviderKeys';
 
 export function useAISettings(enabled = true) {
   return useQuery({
@@ -18,6 +23,7 @@ export function useAISettings(enabled = true) {
 }
 
 export function useUpdateAISettings() {
+  const { t } = useTranslation('common');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateAiPreferencesInput) =>
@@ -37,12 +43,18 @@ export function useUpdateAISettings() {
       }
       return { previous };
     },
-    onError: (_err, _input, context) => {
+    onError: (_err, input, context) => {
       if (context?.previous !== undefined) {
         queryClient.setQueryData(
           aiModelsQueryKeys.preferences(),
           context.previous
         );
+      }
+      if (input.primaryProvider !== undefined) {
+        void queryClient.invalidateQueries({
+          queryKey: providerKeysQueryKeys.list(),
+        });
+        toast.error(t('aiAssistant.primaryProvider.saveFailed'));
       }
     },
     onSettled: (_data, _error, input) => {

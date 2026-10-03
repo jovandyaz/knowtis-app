@@ -160,7 +160,8 @@
     },
     "primaryProvider": {
       "title": "Primary provider",
-      "description": "When a model is available through several of your keys, it is billed to this one."
+      "description": "When a model is available through several of your keys, it is billed to this one.",
+      "saveFailed": "Couldn't change the primary provider. Check your API keys and try again."
     }
   },
   "aiModels": {

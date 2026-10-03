@@ -3,18 +3,24 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { renderHook, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiModelsApi } from '@knowtis/api-client';
 
 import { useAISettings, useUpdateAISettings } from './useAISettings';
 import { aiModelsQueryKeys } from './useAvailableModels';
+import { providerKeysQueryKeys } from './useProviderKeys';
 
 vi.mock('@knowtis/api-client', () => ({
   aiModelsApi: {
     getPreferences: vi.fn(),
     updatePreferences: vi.fn(),
   },
+}));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 function createWrapper() {
@@ -168,6 +174,42 @@ describe('useUpdateAISettings', () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: aiModelsQueryKeys.list(),
     });
+  });
+
+  it('reloads the keys and says so when a primary provider pick is rejected', async () => {
+    vi.mocked(aiModelsApi.updatePreferences).mockRejectedValue(
+      new Error('no key held for that provider')
+    );
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ primaryProvider: 'openai' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: providerKeysQueryKeys.list(),
+    });
+    expect(vi.mocked(toast.error).mock.calls).toEqual([
+      ['aiAssistant.primaryProvider.saveFailed'],
+    ]);
+  });
+
+  it('stays quiet about the keys when another preference write is rejected', async () => {
+    vi.mocked(aiModelsApi.updatePreferences).mockRejectedValue(
+      new Error('network error')
+    );
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ preferredIntent: 'fast' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: providerKeysQueryKeys.list(),
+    });
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('leaves the catalog cached after a write that cannot change it', async () => {
