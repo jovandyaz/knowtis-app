@@ -326,6 +326,8 @@ A refund of a turn that crossed midnight gives the message back on the day it wa
 
 **Client contract.** `GET /ai/quota` serves `{ tier, messages: { used, limit, resetsAt } | null }` — `messages` is null for the byok tier. The `agent:quota` socket event carries the same shape plus `turnId`, pushed after each consume, and after each refund that gives a message back unless reading the quota after it fails. An exhausted turn is refused with `agent:error` `AI_QUOTA_EXHAUSTED` (`{ resetsAt, upgrade }`) instead of an `agent:quota` push. Every `agent:quota` for a turn arrives before that turn's `agent:done`, `agent:proposal` or `agent:error`, so a client can treat it as last-write-wins state keyed by `turnId`.
 
+**Plan (notes Settings).** Settings → **Plan** (`PlanSection`) explains the three tiers in order: what each includes, and who pays — the platform for `anonymous` and `free`, the user's own key for `byok`. The caller's tier, read from `GET /ai/quota`, is marked "Tu plan" and carries the copilot's tier badge with today's usage or the paying provider. While the quota is unknown, no tier is marked. The section shows no limits of its own, because those are `ai_config` knobs.
+
 ---
 
 ## Response Caching

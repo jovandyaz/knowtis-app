@@ -9,7 +9,8 @@ export type SettingsSection =
   | 'integrations'
   | 'connectedApps'
   | 'account'
-  | 'aiAssistant';
+  | 'aiAssistant'
+  | 'plan';
 
 export type SettingsFocusTarget = 'aiKeys';
 

@@ -451,7 +451,8 @@
       "quota": {
         "tier": {
           "anonymous": "Guest",
-          "free": "Free"
+          "free": "Free",
+          "byok": "Your key"
         },
         "badge": {
           "metered": "{{tier}} · {{used}}/{{limit}}",
@@ -589,6 +590,18 @@
         }
       },
       "openSource": "Open note"
+    },
+    "plan": {
+      "current": "Your plan",
+      "includes": {
+        "anonymous": "No account. The Balanced model, with a few messages a day.",
+        "free": "With your account. The Fast, Balanced and Deep models, memory across conversations and more messages a day.",
+        "byok": "With your own API key. Only your keys' models, with no daily message limit."
+      },
+      "pays": {
+        "platform": "Knowtis pays.",
+        "key": "You pay: your provider bills each message to your key."
+      }
     },
     "groups": {
       "ai": "AI",

@@ -451,7 +451,8 @@
       "quota": {
         "tier": {
           "anonymous": "Invitado",
-          "free": "Gratis"
+          "free": "Gratis",
+          "byok": "Tu key"
         },
         "badge": {
           "metered": "{{tier}} · {{used}}/{{limit}}",
@@ -589,6 +590,18 @@
         }
       },
       "openSource": "Abrir nota"
+    },
+    "plan": {
+      "current": "Tu plan",
+      "includes": {
+        "anonymous": "Sin cuenta. El modelo Balanceado, con pocos mensajes al día.",
+        "free": "Con tu cuenta. Los modelos Rápido, Balanceado y Profundo, memoria entre conversaciones y más mensajes al día.",
+        "byok": "Con tu propia API key. Solo los modelos de tus keys, sin límite diario de mensajes."
+      },
+      "pays": {
+        "platform": "Paga Knowtis.",
+        "key": "Pagas tú: tu proveedor cobra cada mensaje a tu key."
+      }
     },
     "groups": {
       "ai": "IA",

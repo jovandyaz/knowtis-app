@@ -40,4 +40,17 @@ describe('SettingsNav', () => {
       screen.getByRole('button', { name: 'settings.sections.connectedApps' })
     ).toBeInTheDocument();
   });
+
+  it('lists the Plan right after the AI assistant', () => {
+    useConnectedAppsAvailable.mockReturnValue(false);
+
+    render(<SettingsNav activeSection="profile" onSectionChange={vi.fn()} />);
+
+    const sections = screen
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+    expect(sections.indexOf('settings.sections.plan')).toBe(
+      sections.indexOf('settings.sections.aiAssistant') + 1
+    );
+  });
 });
