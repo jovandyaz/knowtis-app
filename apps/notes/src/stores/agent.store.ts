@@ -1,4 +1,6 @@
 import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
+import { aiModelsQueryKeys } from '@/hooks/useAvailableModels';
+import { providerKeysQueryKeys } from '@/hooks/useProviderKeys';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -28,6 +30,7 @@ import {
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
   isAgentStopReason,
@@ -286,7 +289,8 @@ function isUnresumedDecision(error: AgentErrorPayload): boolean {
 function refusedBeforeRun(error: AgentErrorPayload): boolean {
   return (
     error.code === AI_INVALID_INPUT_CODE ||
-    error.code === AI_QUOTA_EXHAUSTED_CODE
+    error.code === AI_QUOTA_EXHAUSTED_CODE ||
+    error.code === AI_MODEL_UNAVAILABLE_CODE
   );
 }
 
@@ -352,6 +356,13 @@ function queuedTexts(queue: readonly QueuedMessage[]): string[] {
 
 function invalidateQuota(): void {
   void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
+}
+
+// The caller's tier no longer runs the model this client last saw (a key
+// deleted elsewhere), so the picker must re-read what it may offer.
+function refreshModelChoice(): void {
+  void queryClient.invalidateQueries({ queryKey: aiModelsQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: providerKeysQueryKeys.all });
 }
 
 function isPersistedConversation(
@@ -685,6 +696,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         }
         invalidateConversations(queryClient);
         invalidateQuota();
+        if (error.code === AI_MODEL_UNAVAILABLE_CODE) {
+          refreshModelChoice();
+        }
         buffer.clearInactivityTimer();
         buffer.flush();
         thinkingBuffer.discard();

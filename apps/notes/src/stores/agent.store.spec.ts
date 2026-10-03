@@ -1,6 +1,8 @@
 import type { QueryKey } from '@tanstack/react-query';
 
 import { aiQuotaQueryKeys } from '@/hooks/useAiQuota';
+import { aiModelsQueryKeys } from '@/hooks/useAvailableModels';
+import { providerKeysQueryKeys } from '@/hooks/useProviderKeys';
 import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +24,7 @@ import {
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
   MESSAGE_KIND,
   type ConversationTranscript,
@@ -597,7 +600,11 @@ describe('useAgentStore', () => {
       stopReason: 'completed',
     };
 
-    it.each([AI_INVALID_INPUT_CODE, AI_QUOTA_EXHAUSTED_CODE])(
+    it.each([
+      AI_INVALID_INPUT_CODE,
+      AI_QUOTA_EXHAUSTED_CODE,
+      AI_MODEL_UNAVAILABLE_CODE,
+    ])(
       '%s takes its bubbles off the thread and gives the text back to the composer',
       (code) => {
         const earlier = capture('turn-0');
@@ -701,6 +708,36 @@ describe('useAgentStore', () => {
         ['turn-0', 'partial'],
       ]);
       expect(draft).toBe('b');
+    });
+
+    it('a model the caller can no longer run refreshes what the picker offers', () => {
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+
+      get().onError({
+        code: AI_MODEL_UNAVAILABLE_CODE,
+        message: 'key removed',
+      });
+
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiModelsQueryKeys.all,
+      });
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: providerKeysQueryKeys.all,
+      });
+    });
+
+    it('a quota refusal leaves the model caches as they are', () => {
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+
+      get().onError({ code: AI_QUOTA_EXHAUSTED_CODE, message: 'spent' });
+
+      expect(invalidate).not.toHaveBeenCalledWith({
+        queryKey: aiModelsQueryKeys.all,
+      });
     });
 
     it('is not resent by retry', () => {
