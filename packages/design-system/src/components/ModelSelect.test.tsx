@@ -740,11 +740,11 @@ describe('ModelSelect', () => {
     });
 
     it('filters the rows by label, ignoring case', async () => {
-      renderSearchable();
+      renderSearchable({ noMatchesLabel: 'No models match' });
       await openAndSearch('BALANCED');
 
       expect(optionLabels()).toEqual([expect.stringContaining('Balanced One')]);
-      expect(screen.queryByText('No models available')).not.toBeInTheDocument();
+      expect(screen.queryByText('No models match')).not.toBeInTheDocument();
     });
 
     it('filters the rows by id', async () => {
