@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MODEL_INDEX_SNAPSHOT,
+  TOKENS_PER_MILLION,
   type IndexedModel,
   type IndexProvider,
 } from '@knowtis/ai-gateway';
@@ -139,11 +140,10 @@ function resolvedId(
 }
 
 function expectIdRuleExcludes(
-  id: string,
+  model: IndexedModel,
   idWithoutToken: string,
   rule: EligibilityRule = BYOK_RULE
 ): void {
-  const model = row(id);
   expect(isEligible(model, rule, SNAPSHOT_DATE)).toBe(false);
   expect(isEligible(otherwiseEligible(model), rule, SNAPSHOT_DATE)).toBe(false);
   expect(
@@ -279,12 +279,21 @@ describe('resolveSelector over the snapshot', () => {
     ).toBeNull();
   });
 
-  it('ignores a direct row when resolving on openrouter', () => {
+  it('ignores a direct row when resolving on openrouter, even one whose slug carries the author prefix', () => {
+    const direct = createIndexedModel({
+      id: 'anthropic:anthropic/claude-haiku-9',
+      provider: 'anthropic',
+      family: 'claude-haiku',
+      releasedAt: '2027-01-01',
+    });
+    const selector = selectorOf('fast', 'anthropic');
+
+    expect(resolvedId(selector, 'openrouter', [direct])).toBeNull();
     expect(
-      resolvedId(selectorOf('fast', 'anthropic'), 'openrouter', [
-        row('anthropic:claude-haiku-4-5'),
+      resolvedId(selector, 'openrouter', [
+        { ...direct, provider: 'openrouter' },
       ])
-    ).toBeNull();
+    ).toBe('anthropic:anthropic/claude-haiku-9');
   });
 
   it('gives the alias over its dated snapshot released the same day', () => {
@@ -416,7 +425,7 @@ describe('resolveByokIntent', () => {
 describe('isEligible', () => {
   it('excludes a -code id', () => {
     expectIdRuleExcludes(
-      'openrouter:moonshotai/kimi-k2.7-code',
+      row('openrouter:moonshotai/kimi-k2.7-code'),
       'openrouter:moonshotai/kimi-k2.7'
     );
   });
@@ -425,12 +434,12 @@ describe('isEligible', () => {
     ['google:gemini-3-pro-image', 'google:gemini-3-pro'],
     ['google:gemini-3.1-flash-lite-image', 'google:gemini-3.1-flash-lite'],
   ])('excludes the -image id %s', (id, idWithoutToken) => {
-    expectIdRuleExcludes(id, idWithoutToken);
+    expectIdRuleExcludes(row(id), idWithoutToken);
   });
 
   it('excludes a -tts id', () => {
     expectIdRuleExcludes(
-      'google:gemini-3.1-flash-tts-preview',
+      row('google:gemini-3.1-flash-tts-preview'),
       'google:gemini-3.1-flash-preview',
       PREVIEW_RULE
     );
@@ -438,7 +447,7 @@ describe('isEligible', () => {
 
   it('excludes a -live id', () => {
     expectIdRuleExcludes(
-      'google:gemini-3.1-flash-live-preview',
+      row('google:gemini-3.1-flash-live-preview'),
       'google:gemini-3.1-flash-preview',
       PREVIEW_RULE
     );
@@ -446,9 +455,42 @@ describe('isEligible', () => {
 
   it('excludes a -customtools id even where previews are allowed', () => {
     expectIdRuleExcludes(
-      'openrouter:google/gemini-3.1-pro-preview-customtools',
+      row('openrouter:google/gemini-3.1-pro-preview-customtools'),
       'openrouter:google/gemini-3.1-pro-preview',
       PREVIEW_RULE
+    );
+  });
+
+  it('excludes a -vision id', () => {
+    const visionExp = row('openrouter:deepseek/deepseek-v4-flash-vision-exp');
+
+    expectIdRuleExcludes(
+      { ...visionExp, id: 'openrouter:deepseek/deepseek-v4-flash-vision' },
+      'openrouter:deepseek/deepseek-v4-flash'
+    );
+  });
+
+  it('excludes an -exp id', () => {
+    expectIdRuleExcludes(
+      row('openrouter:deepseek/deepseek-v3.2-exp'),
+      'openrouter:deepseek/deepseek-v3.2'
+    );
+  });
+
+  it('excludes a -her id', () => {
+    expectIdRuleExcludes(
+      row('openrouter:minimax/minimax-m2-her'),
+      'openrouter:minimax/minimax-m2'
+    );
+  });
+
+  it('excludes a -batch id', () => {
+    expectIdRuleExcludes(
+      {
+        ...row('anthropic:claude-haiku-4-5'),
+        id: 'anthropic:claude-haiku-4-5-batch',
+      },
+      'anthropic:claude-haiku-4-5'
     );
   });
 
@@ -615,7 +657,9 @@ describe('isEligible', () => {
       outputCostPerToken: 0.000123,
     };
 
-    expect(atCeiling.outputCostPerToken * 1_000_000).toBeGreaterThan(123);
+    expect(atCeiling.outputCostPerToken * TOKENS_PER_MILLION).toBeGreaterThan(
+      123
+    );
     expect(
       isEligible(
         atCeiling,

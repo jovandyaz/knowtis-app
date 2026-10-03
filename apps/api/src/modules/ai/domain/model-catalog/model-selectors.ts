@@ -3,6 +3,7 @@ import {
   TOKENS_PER_MILLION,
   type IndexedModel,
   type IndexProvider,
+  type MODELS_DEV_PROVIDERS,
   type ModelStatus,
 } from '@knowtis/ai-gateway';
 import {
@@ -13,9 +14,11 @@ import {
 
 import type { OPEN_WEIGHT_AUTHORS } from './candidate-filter';
 
-const ANTHROPIC = 'anthropic' satisfies IndexProvider;
-const OPENAI = 'openai' satisfies IndexProvider;
-const GOOGLE = 'google' satisfies IndexProvider;
+type DirectProvider = (typeof MODELS_DEV_PROVIDERS)[number];
+
+const ANTHROPIC = 'anthropic' satisfies DirectProvider;
+const OPENAI = 'openai' satisfies DirectProvider;
+const GOOGLE = 'google' satisfies DirectProvider;
 
 export type OpenWeightAuthor = (typeof OPEN_WEIGHT_AUTHORS)[number];
 export type SelectorCapability = 'tool_call' | 'structured_output';
