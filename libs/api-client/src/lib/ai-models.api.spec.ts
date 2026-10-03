@@ -71,6 +71,35 @@ describe('aiModelsApi', () => {
     await expect(aiModelsApi.getModels()).resolves.toEqual(CATALOG);
   });
 
+  it('getModels drops an intent this build does not know and keeps the rest', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...CATALOG,
+      intents: [
+        {
+          intent: 'turbo',
+          available: true,
+          modelId: MODEL.id,
+          substituted: false,
+        },
+        ...CATALOG.intents,
+      ],
+    });
+
+    await expect(aiModelsApi.getModels()).resolves.toEqual(CATALOG);
+  });
+
+  it('getModels keeps a model serving an intent this build does not know, as a plain model', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...CATALOG,
+      models: [MODEL, { ...OWN_KEY_MODEL, servesIntent: 'turbo' }],
+    });
+
+    const catalog = await aiModelsApi.getModels();
+
+    expect(catalog.models[1]).toStrictEqual(OWN_KEY_MODEL);
+    expect(catalog.models[0]).toStrictEqual(MODEL);
+  });
+
   it.each([
     ['nothing', null],
     [
@@ -95,13 +124,13 @@ describe('aiModelsApi', () => {
       withModel({ ...MODEL, billedToUser: 'yes' }),
     ],
     [
-      'a model serving an intent this client does not know',
-      withModel({ ...MODEL, servesIntent: 'turbo' }),
+      'a model whose served intent is not a string',
+      withModel({ ...MODEL, servesIntent: 7 }),
     ],
     ['an intent entry that is not an object', withIntent(null)],
     [
-      'an intent this client does not know',
-      withIntent({ intent: 'turbo', available: false, reason: 'no_route' }),
+      'an intent entry without a string intent',
+      withIntent({ intent: 7, available: false, reason: 'no_route' }),
     ],
     [
       'an intent entry that does not say whether it is available',
