@@ -105,6 +105,54 @@ const WHITESPACE_PRICED_MODEL = {
   pricing: { prompt: '   ', completion: '   ' },
 };
 
+const CLAUDE_SONNET_45 = {
+  id: 'anthropic/claude-sonnet-4.5',
+  canonical_slug: 'anthropic/claude-4.5-sonnet-20250929',
+  hugging_face_id: '',
+  name: 'Anthropic: Claude Sonnet 4.5',
+  created: 1759161676,
+  description:
+    'Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date...',
+  context_length: 1000000,
+  architecture: {
+    modality: 'text+image+file->text',
+    input_modalities: ['text', 'image', 'file'],
+    output_modalities: ['text'],
+    tokenizer: 'Claude',
+    instruct_type: null,
+  },
+  pricing: {
+    prompt: '0.000003',
+    completion: '0.000015',
+    web_search: '0.01',
+    input_cache_read: '0.0000003',
+    input_cache_write: '0.00000375',
+    input_cache_write_1h: '0.000006',
+  },
+  top_provider: {
+    context_length: 1000000,
+    max_completion_tokens: 64000,
+    is_moderated: true,
+  },
+  per_request_limits: null,
+  supported_parameters: [
+    'include_reasoning',
+    'max_completion_tokens',
+    'max_tokens',
+    'reasoning',
+    'response_format',
+    'stop',
+    'structured_outputs',
+    'temperature',
+    'tool_choice',
+    'tools',
+    'top_k',
+    'top_p',
+  ],
+  expiration_date: null,
+  reasoning: { mandatory: false },
+};
+
 const MINIMAL_MODEL = {
   id: 'qwen/qwen3.8-max',
   name: 'Qwen: Qwen3.8 Max',
@@ -166,9 +214,61 @@ describe('OpenRouterModelsHttpClient', () => {
       completionCostPerToken: 0.0000004,
       expirationDate: null,
       intelligenceIndex: 47.6,
+      inputModalities: ['text'],
       outputModalities: ['text'],
+      supportedParameters: [],
+      cacheReadCostPerToken: 0.0000001345,
+      cacheWriteCostPerToken: null,
       reasoning: null,
     });
+  });
+
+  it('should read input modalities, supported parameters and cache prices', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(page([CLAUDE_SONNET_45])));
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model).toMatchObject({
+      inputModalities: ['text', 'image', 'file'],
+      supportedParameters: CLAUDE_SONNET_45.supported_parameters,
+      cacheReadCostPerToken: 0.0000003,
+      cacheWriteCostPerToken: 0.00000375,
+    });
+  });
+
+  it('should default the input modalities, supported parameters and cache prices when upstream omits them', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(page([MINIMAL_MODEL])));
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model).toMatchObject({
+      inputModalities: [],
+      supportedParameters: [],
+      cacheReadCostPerToken: null,
+      cacheWriteCostPerToken: null,
+    });
+  });
+
+  it('should discard a model whose cache price is unreadable instead of dropping the price', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...CLAUDE_SONNET_45,
+            pricing: { ...CLAUDE_SONNET_45.pricing, input_cache_read: '' },
+          },
+          DEEPSEEK_V32,
+        ])
+      )
+    );
+
+    const { models, discarded } =
+      await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
+    expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
   });
 
   it('should capture declared reasoning efforts, dropping unknown values', async () => {

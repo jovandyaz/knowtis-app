@@ -37,9 +37,13 @@ function upstreamModel(
     maxCompletionTokens: 65_536,
     promptCostPerToken: 0.0000012,
     completionCostPerToken: 0.000006,
+    cacheReadCostPerToken: null,
+    cacheWriteCostPerToken: null,
     expirationDate: null,
     intelligenceIndex: 58.1,
+    inputModalities: ['text'],
     outputModalities: ['text'],
+    supportedParameters: [],
     reasoning: null,
     ...overrides,
   };

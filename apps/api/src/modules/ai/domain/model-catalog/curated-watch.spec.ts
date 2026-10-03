@@ -84,9 +84,13 @@ function upstreamModel(
     maxCompletionTokens: 32_768,
     promptCostPerToken: 0.0000006,
     completionCostPerToken: GLM_VENDORED_OUTPUT_COST,
+    cacheReadCostPerToken: null,
+    cacheWriteCostPerToken: null,
     expirationDate: null,
     intelligenceIndex: null,
+    inputModalities: ['text'],
     outputModalities: ['text'],
+    supportedParameters: [],
     reasoning: null,
     ...overrides,
   };

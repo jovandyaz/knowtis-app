@@ -12,10 +12,14 @@ export interface UpstreamModel {
   maxCompletionTokens: number | null;
   promptCostPerToken: number;
   completionCostPerToken: number;
+  cacheReadCostPerToken: number | null;
+  cacheWriteCostPerToken: number | null;
   /** Null when upstream publishes no date or a far-future sentinel meaning "never expires". */
   expirationDate: Date | null;
   intelligenceIndex: number | null;
+  inputModalities: readonly string[];
   outputModalities: readonly string[];
+  supportedParameters: readonly string[];
   /** Null when the model declares no recognized reasoning effort levels. */
   reasoning: ModelReasoning | null;
 }

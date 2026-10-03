@@ -3,12 +3,12 @@ import { z } from 'zod';
 
 import { isReasoningEffort, type ModelReasoning } from '@knowtis/shared-types';
 
-import {
-  UNPARSEABLE_MODEL_ID,
-  type OpenRouterModelsClient,
-  type UpstreamCatalog,
-  type UpstreamModel,
+import type {
+  OpenRouterModelsClient,
+  UpstreamCatalog,
+  UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
+import { DISCARD_LOG_SAMPLE_SIZE, upstreamIdOf } from './upstream-discards';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const OPENROUTER_ORIGIN = new URL(OPENROUTER_MODELS_URL).origin;
@@ -19,8 +19,6 @@ const MS_PER_SECOND = 1_000;
 const MS_PER_DAY = 86_400_000;
 /** OpenRouter flags perpetual models with a far-future sentinel date (`2098-12-31`) instead of null. */
 const EXPIRATION_SENTINEL_HORIZON_MS = 10 * 365 * MS_PER_DAY;
-
-const DISCARD_LOG_SAMPLE_SIZE = 10;
 
 const costPerTokenSchema = z
   .string()
@@ -35,12 +33,18 @@ const upstreamModelSchema = z.object({
   created: z.number().int().nonnegative(),
   context_length: z.number().int().positive(),
   architecture: z
-    .object({ output_modalities: z.array(z.string()).nullish() })
+    .object({
+      input_modalities: z.array(z.string()).nullish(),
+      output_modalities: z.array(z.string()).nullish(),
+    })
     .nullish(),
   pricing: z.object({
     prompt: costPerTokenSchema,
     completion: costPerTokenSchema,
+    input_cache_read: costPerTokenSchema.nullish(),
+    input_cache_write: costPerTokenSchema.nullish(),
   }),
+  supported_parameters: z.array(z.string()).nullish(),
   top_provider: z
     .object({ max_completion_tokens: z.number().int().positive().nullish() })
     .nullish(),
@@ -65,8 +69,6 @@ const modelsPageSchema = z.object({
   data: z.array(z.unknown()),
   links: z.object({ next: z.string().nullish() }).nullish(),
 });
-
-const modelIdSchema = z.object({ id: z.string() });
 
 type ParsedUpstreamModel = z.infer<typeof upstreamModelSchema>;
 
@@ -110,17 +112,16 @@ function toUpstreamModel(raw: ParsedUpstreamModel): UpstreamModel {
     maxCompletionTokens: raw.top_provider?.max_completion_tokens ?? null,
     promptCostPerToken: raw.pricing.prompt,
     completionCostPerToken: raw.pricing.completion,
+    cacheReadCostPerToken: raw.pricing.input_cache_read ?? null,
+    cacheWriteCostPerToken: raw.pricing.input_cache_write ?? null,
     expirationDate: toExpirationDate(raw.expiration_date),
     intelligenceIndex:
       raw.benchmarks?.artificial_analysis?.intelligence_index ?? null,
+    inputModalities: raw.architecture?.input_modalities ?? [],
     outputModalities: raw.architecture?.output_modalities ?? [],
+    supportedParameters: raw.supported_parameters ?? [],
     reasoning: toReasoning(raw.reasoning),
   };
-}
-
-function idOf(raw: unknown): string {
-  const parsed = modelIdSchema.safeParse(raw);
-  return parsed.success ? parsed.data.id : UNPARSEABLE_MODEL_ID;
 }
 
 function resolveUrl(raw: string, base: string): URL | null {
@@ -163,7 +164,7 @@ export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
         if (parsed.success) {
           models.push(toUpstreamModel(parsed.data));
         } else {
-          discarded.push(idOf(raw));
+          discarded.push(upstreamIdOf(raw));
         }
       }
       const nextLink = page.links?.next;
