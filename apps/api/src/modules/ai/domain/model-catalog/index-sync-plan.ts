@@ -53,30 +53,37 @@ function absenceRejection(
 
 function floorLost(
   batch: ProviderBatch,
+  listedRows: readonly IndexedModel[],
   served: readonly IndexedModel[]
 ): string[] {
+  const discarded = new Set(batch.discarded);
   return floorModelsLost(
     new ModelIndexCatalog(
       served.filter((row) => row.provider === batch.provider)
     ),
-    new ModelIndexCatalog(batch.rows)
+    new ModelIndexCatalog([
+      ...listedRows.filter((row) => discarded.has(row.id)),
+      ...batch.rows,
+    ])
   );
 }
 
 /**
  * Decides what one sync pass writes. A batch that would leave unserved a floor
  * model its provider serves now is rejected whole: none of its rows are
- * written and it retires nothing. Every row of any other batch is upserted. A
- * provider retires its missing rows only when its batch is conclusive and did
- * not shrink past `SYNC_MAX_SHRINK_RATIO`, or when none of its rows were listed
- * before; a provider without a batch is left untouched.
+ * written and it retires nothing. It is judged by what the write leaves
+ * served: its rows plus the listed rows of its discarded ids, which are kept.
+ * Every row of any other batch is upserted. A provider retires its missing
+ * rows only when its batch is conclusive and did not shrink past
+ * `SYNC_MAX_SHRINK_RATIO`, or when none of its rows were listed before; a
+ * provider without a batch is left untouched.
  *
- * `previousListed` is the provider's listed-row count before this pass, and
- * `served` the rows the index serves before it (see `servedIndexRows`).
+ * `listed` holds the index's listed rows before this pass, and `served` the
+ * rows it serves before it (`servedIndexRows(listed)`).
  */
 export function planIndexSync(
   batches: readonly ProviderBatch[],
-  previousListed: Readonly<Record<IndexProvider, number>>,
+  listed: readonly IndexedModel[],
   served: readonly IndexedModel[]
 ): IndexSyncPlan {
   const upserts: IndexedModel[] = [];
@@ -84,7 +91,8 @@ export function planIndexSync(
   const rejected: SyncRejection[] = [];
 
   for (const batch of batches) {
-    const lost = floorLost(batch, served);
+    const listedRows = listed.filter((row) => row.provider === batch.provider);
+    const lost = floorLost(batch, listedRows, served);
     if (lost.length > 0) {
       rejected.push({
         provider: batch.provider,
@@ -94,7 +102,7 @@ export function planIndexSync(
       continue;
     }
     upserts.push(...batch.rows);
-    const reason = absenceRejection(batch, previousListed[batch.provider]);
+    const reason = absenceRejection(batch, listedRows.length);
     if (reason === null) {
       concludeAbsence.push(batch.provider);
     } else {

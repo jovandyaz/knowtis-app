@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
+import {
+  INDEX_PROVIDERS,
+  type IndexedModel,
+  type IndexProvider,
+} from '@knowtis/ai-gateway';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { FLOOR_MODEL_IDS } from './floor-models';
@@ -64,6 +68,14 @@ function rows(provider: IndexProvider, count: number): IndexedModel[] {
   );
 }
 
+function listedRows(
+  counts: Readonly<Record<IndexProvider, number>>
+): IndexedModel[] {
+  return INDEX_PROVIDERS.flatMap((provider) =>
+    rows(provider, counts[provider])
+  );
+}
+
 function batch(
   provider: IndexProvider,
   count: number,
@@ -78,10 +90,10 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync(
       [anthropic],
-      {
+      listedRows({
         ...NOTHING_LISTED,
         anthropic: 10,
-      },
+      }),
       NOTHING_SERVED
     );
 
@@ -94,7 +106,7 @@ describe('planIndexSync', () => {
     const previous = 10;
     const plan = planIndexSync(
       [batch('openai', previous * SYNC_MAX_SHRINK_RATIO)],
-      { ...NOTHING_LISTED, openai: previous },
+      listedRows({ ...NOTHING_LISTED, openai: previous }),
       NOTHING_SERVED
     );
 
@@ -108,10 +120,10 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync(
       [google],
-      {
+      listedRows({
         ...NOTHING_LISTED,
         google: previous,
-      },
+      }),
       NOTHING_SERVED
     );
 
@@ -125,10 +137,10 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync(
       [openrouter],
-      {
+      listedRows({
         ...NOTHING_LISTED,
         openrouter: 10,
-      },
+      }),
       NOTHING_SERVED
     );
 
@@ -142,10 +154,10 @@ describe('planIndexSync', () => {
   it('should report an inconclusive batch as inconclusive even when it also shrank', () => {
     const plan = planIndexSync(
       [batch('openrouter', 1, false)],
-      {
+      listedRows({
         ...NOTHING_LISTED,
         openrouter: 10,
-      },
+      }),
       NOTHING_SERVED
     );
 
@@ -157,7 +169,7 @@ describe('planIndexSync', () => {
   it('should always conclude absence for a provider with nothing listed before', () => {
     const plan = planIndexSync(
       [batch('anthropic', 0), batch('openrouter', 3, false)],
-      NOTHING_LISTED,
+      listedRows(NOTHING_LISTED),
       NOTHING_SERVED
     );
 
@@ -171,11 +183,11 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync(
       [anthropic, openrouter],
-      {
+      listedRows({
         ...NOTHING_LISTED,
         anthropic: 4,
         openrouter: 100,
-      },
+      }),
       NOTHING_SERVED
     );
 
@@ -189,11 +201,11 @@ describe('planIndexSync', () => {
   it('should conclude nothing for a provider that sent no batch', () => {
     const plan = planIndexSync(
       [batch('openrouter', 5)],
-      {
+      listedRows({
         ...NOTHING_LISTED,
         anthropic: 5,
         openrouter: 5,
-      },
+      }),
       NOTHING_SERVED
     );
 
@@ -213,7 +225,7 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync(
       [anthropic, openrouter],
-      { ...NOTHING_LISTED, anthropic: 2, openrouter: 3 },
+      listedRows({ ...NOTHING_LISTED, anthropic: 2, openrouter: 3 }),
       [createIndexedModel({ id: OPENROUTER_FLOOR_ID })]
     );
 
@@ -233,7 +245,7 @@ describe('planIndexSync', () => {
 
     const plan = planIndexSync(
       [openrouter],
-      { ...NOTHING_LISTED, openrouter: 2 },
+      listedRows({ ...NOTHING_LISTED, openrouter: 2 }),
       [
         createIndexedModel({
           id: ANTHROPIC_FLOOR_ID,
@@ -245,5 +257,44 @@ describe('planIndexSync', () => {
 
     expect(plan.upserts).toEqual(openrouter.rows);
     expect(plan.rejected).toEqual([]);
+  });
+
+  it('should count the listed row of a discarded id as still served', () => {
+    const listed = [
+      ...rows('openrouter', 2),
+      createIndexedModel({ id: OPENROUTER_FLOOR_ID }),
+    ];
+    const openrouter: ProviderBatch = {
+      ...batch('openrouter', 2),
+      discarded: [OPENROUTER_FLOOR_ID],
+    };
+
+    const plan = planIndexSync([openrouter], listed, listed);
+
+    expect(plan.upserts).toEqual(openrouter.rows);
+    expect(plan.concludeAbsence).toEqual(['openrouter']);
+    expect(plan.rejected).toEqual([]);
+  });
+
+  it('should not count a discarded id the index never listed as served', () => {
+    const openrouter: ProviderBatch = {
+      ...batch('openrouter', 2),
+      discarded: [OPENROUTER_FLOOR_ID],
+    };
+
+    const plan = planIndexSync(
+      [openrouter],
+      [],
+      [createIndexedModel({ id: OPENROUTER_FLOOR_ID })]
+    );
+
+    expect(plan.upserts).toEqual([]);
+    expect(plan.rejected).toEqual([
+      {
+        provider: 'openrouter',
+        reason: 'floor',
+        models: [OPENROUTER_FLOOR_ID],
+      },
+    ]);
   });
 });

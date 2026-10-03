@@ -13,7 +13,10 @@ import {
 import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
 import { FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import {
+  CURATED_MODELS,
+  OPENROUTER_ID_PREFIX,
+} from '../../domain/model-catalog/selectable-models.catalog';
 import {
   DISCARD_LOG_SAMPLE_SIZE,
   UNPARSEABLE_MODEL_ID,
@@ -30,18 +33,20 @@ const QWEN_SLUG = 'qwen/qwen3.8-max';
 const DEEPSEEK_SLUG = 'deepseek/deepseek-v4-flash';
 
 // OpenRouter only proves absence while it still lists a curated open-tier model.
-function curatedOpenSlug(): string {
-  for (const model of CURATED_MODELS) {
-    const slug = openTierSlug(model.id);
-    if (slug !== null) {
-      return slug;
-    }
-  }
-  throw new Error('the writer spec needs one curated open-tier model');
+const CURATED_OPEN_SLUGS = CURATED_MODELS.flatMap((model) => {
+  const slug = openTierSlug(model.id);
+  return slug === null ? [] : [slug];
+});
+
+if (CURATED_OPEN_SLUGS.length < 2) {
+  throw new Error('the writer spec needs two curated open-tier models');
 }
 
-const CURATED_OPEN_SLUG = curatedOpenSlug();
+const [CURATED_OPEN_SLUG, OTHER_CURATED_OPEN_SLUG] = CURATED_OPEN_SLUGS;
 const CURATED_OPEN_ID = `openrouter:${CURATED_OPEN_SLUG}`;
+const OPENROUTER_FLOOR_SLUGS = FLOOR_MODEL_IDS.filter((id) =>
+  id.startsWith(OPENROUTER_ID_PREFIX)
+).map((id) => id.slice(OPENROUTER_ID_PREFIX.length));
 const QWEN_ID = `openrouter:${QWEN_SLUG}`;
 
 function upstreamModel(id: string): UpstreamModel {
@@ -106,6 +111,7 @@ const CLAUDE = directModel('anthropic', 'claude-sonnet-5');
 const GPT = directModel('openai', 'gpt-5.4');
 const GEMINI = directModel('google', 'gemini-3-pro');
 const CLAUDE_NEXT = directModel('anthropic', 'claude-next');
+const GPT_MINI = directModel('openai', 'gpt-5.4-mini');
 
 const LISTED_ROWS: readonly IndexedModel[] = [
   CLAUDE,
@@ -559,7 +565,7 @@ describe('ModelIndexWriter', () => {
 
       await writer.write(
         openRouterCatalog(),
-        modelsDevCatalog({ models: [CLAUDE, row, GEMINI] })
+        modelsDevCatalog({ models: [CLAUDE, row, GPT_MINI, GEMINI] })
       );
 
       expect(upsertedIds(repo)).not.toContain(row.id);
@@ -571,6 +577,7 @@ describe('ModelIndexWriter', () => {
       ]);
       expect(warnLog).toHaveBeenCalledWith({
         event: 'ai.model_index.rows_skipped',
+        provider: 'openai',
         count: 1,
         models: [row.id],
       });
@@ -614,11 +621,115 @@ describe('ModelIndexWriter', () => {
 
     expect(warnLog).toHaveBeenCalledWith({
       event: 'ai.model_index.rows_skipped',
+      provider: 'openai',
       count: overflowing.length,
       models: overflowing
         .slice(0, DISCARD_LOG_SAMPLE_SIZE)
         .map((row) => row.id),
     });
+  });
+
+  it('should log the skipped rows once per provider', async () => {
+    const { writer } = make();
+    const overflowingName = 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.name + 1);
+    const openai = { ...GPT_MINI, name: overflowingName };
+    const google = {
+      ...directModel('google', 'gemini-next'),
+      name: overflowingName,
+    };
+
+    await writer.write(
+      openRouterCatalog(),
+      modelsDevCatalog({ models: [CLAUDE, GPT, openai, GEMINI, google] })
+    );
+
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.model_index.rows_skipped',
+      provider: 'openai',
+      count: 1,
+      models: [openai.id],
+    });
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.model_index.rows_skipped',
+      provider: 'google',
+      count: 1,
+      models: [google.id],
+    });
+  });
+
+  it('should accept a batch whose discarded floor model keeps its served listed row', async () => {
+    const { writer, repo } = make();
+
+    const result = await writer.write(
+      openRouterCatalog({
+        models: [
+          upstreamModel(OTHER_CURATED_OPEN_SLUG),
+          upstreamModel(QWEN_SLUG),
+        ],
+        discarded: [CURATED_OPEN_SLUG],
+      }),
+      modelsDevCatalog()
+    );
+
+    expect(result.rejected).toEqual([]);
+    expect(upsertedIds(repo)).toEqual(
+      expect.arrayContaining([`openrouter:${OTHER_CURATED_OPEN_SLUG}`, QWEN_ID])
+    );
+    expect(repo.markAbsent).toHaveBeenCalledWith(
+      'openrouter',
+      expect.any(Date),
+      [CURATED_OPEN_ID]
+    );
+  });
+
+  it('should reject a batch whose discarded floor model has no listed row to keep', async () => {
+    const { writer, repo } = make(
+      LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
+    );
+
+    const result = await writer.write(
+      openRouterCatalog({
+        models: OPENROUTER_FLOOR_SLUGS.filter(
+          (slug) => slug !== CURATED_OPEN_SLUG
+        ).map(upstreamModel),
+        discarded: [CURATED_OPEN_SLUG],
+      }),
+      modelsDevCatalog()
+    );
+
+    expect(upsertedIds(repo).some((id) => id.startsWith('openrouter:'))).toBe(
+      false
+    );
+    expect(result.rejected).toEqual([
+      { provider: 'openrouter', reason: 'floor', models: [CURATED_OPEN_ID] },
+    ]);
+  });
+
+  it('should reject a batch whose overflowing floor row its snapshot rows still serve', async () => {
+    const snapshotRows = MODEL_INDEX_SNAPSHOT.filter(
+      (row) => row.provider === 'anthropic' && row.id !== CLAUDE.id
+    );
+    const overflowing = {
+      ...CLAUDE,
+      name: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.name + 1),
+    };
+    const { writer, repo } = make(
+      LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
+    );
+
+    const result = await writer.write(
+      openRouterCatalog(),
+      modelsDevCatalog({
+        models: [...snapshotRows, overflowing, GPT, GEMINI],
+      })
+    );
+
+    expect(upsertedIds(repo).some((id) => id.startsWith('anthropic:'))).toBe(
+      false
+    );
+    expect(result.rejected).toEqual([
+      { provider: 'anthropic', reason: 'floor', models: [CLAUDE.id] },
+    ]);
   });
 
   it('should write nothing when the listed rows cannot be read', async () => {
