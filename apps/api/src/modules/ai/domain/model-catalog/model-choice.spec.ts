@@ -64,6 +64,7 @@ function setup(
     offered: OFFERED,
     isSupported,
     isPlatformRoutable: platformRoutes,
+    indexRow: () => undefined,
   });
   return (request: Partial<ModelRequest>) =>
     chooseModel(

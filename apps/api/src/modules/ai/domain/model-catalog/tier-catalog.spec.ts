@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import type { IndexedModel } from '@knowtis/ai-gateway';
 import {
   MODEL_INTENTS,
   type ByokProvider,
   type ModelIntent,
 } from '@knowtis/shared-types';
 
+import { createIndexedModel } from '../../testing/create-indexed-model';
+import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import {
@@ -22,10 +25,7 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 };
 const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
-const SONNET_LADDER = {
-  levels: ['low', 'medium', 'high'],
-  mandatory: false,
-} as const;
+const SNAPSHOT = createSnapshotIndex().catalog();
 const OPUS_LADDER = {
   levels: ['low', 'medium', 'high', 'xhigh', 'max'],
   mandatory: false,
@@ -39,9 +39,7 @@ const offered = (
 
 const OFFERED: OfferedModel[] = [
   offered('anthropic:claude-haiku-4-5', 'fast'),
-  offered('anthropic:claude-sonnet-5', 'balanced', {
-    reasoning: SONNET_LADDER,
-  }),
+  offered('anthropic:claude-sonnet-5', 'balanced'),
   offered('anthropic:claude-opus-5', 'powerful', { reasoning: OPUS_LADDER }),
   offered('openrouter:minimax/minimax-m2.5', 'open'),
   offered('openrouter:deepseek/deepseek-v3.2', 'open'),
@@ -58,6 +56,7 @@ function catalogFor(
     offered?: readonly OfferedModel[];
     isSupported?: (id: string) => boolean;
     isPlatformRoutable?: (id: string) => boolean;
+    indexRow?: (id: string) => IndexedModel | undefined;
   } = {}
 ) {
   return tierCatalog({
@@ -70,6 +69,7 @@ function catalogFor(
     isSupported: options.isSupported ?? supportedAtSnapshot,
     isPlatformRoutable:
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
+    indexRow: options.indexRow ?? ((id) => SNAPSHOT.get(id)),
   });
 }
 
@@ -186,7 +186,10 @@ describe('tierCatalog', () => {
         label: 'Sonnet 5',
         descriptionKey: '',
         tier: 'balanced',
-        reasoning: SONNET_LADDER,
+        reasoning: {
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          mandatory: false,
+        },
       },
       servesIntent: 'balanced',
     });
@@ -235,12 +238,32 @@ describe('tierCatalog', () => {
     ).toBe('anthropic:claude-haiku-4-5');
   });
 
-  it('gives an OpenRouter route of a curated model that model’s effort ladder', () => {
-    const catalog = catalogFor('byok', { heldProviders: ['openrouter'] });
-    expect(
-      findInCatalog(catalog, 'openrouter:anthropic/claude-opus-5')?.model
-        .reasoning
-    ).toEqual(OPUS_LADDER);
+  it('reads a routed model’s ladder from its own index row, not from a sibling route', () => {
+    const routed = 'openrouter:anthropic/claude-opus-5';
+    const catalog = catalogFor('byok', {
+      heldProviders: ['openrouter'],
+      indexRow: (id) =>
+        id === routed
+          ? createIndexedModel({
+              id,
+              reasoning: { levels: ['xhigh', 'high'], mandatory: true },
+            })
+          : SNAPSHOT.get(id),
+    });
+    expect(findInCatalog(catalog, routed)?.model.reasoning).toEqual({
+      levels: ['high', 'xhigh'],
+      mandatory: true,
+    });
+  });
+
+  it('gives a routed model with no index ladder no effort control', () => {
+    const catalog = catalogFor('byok', {
+      heldProviders: ['openrouter'],
+      indexRow: () => undefined,
+    });
+    const routed = findInCatalog(catalog, 'openrouter:anthropic/claude-opus-5');
+    expect(routed?.servesIntent).toBe('powerful');
+    expect(routed && 'reasoning' in routed.model).toBe(false);
   });
 });
 

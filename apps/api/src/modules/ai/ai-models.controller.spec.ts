@@ -8,6 +8,7 @@ import type { TierResolver } from './application/services/tier-resolver.service'
 import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
 import { ModelUnavailableException } from './model-unavailable.exception';
 import { createExecutionContext } from './testing/create-execution-context';
+import { createSnapshotIndex } from './testing/snapshot-index';
 
 const user = { id: 'u1' } as never;
 const req = { ip: '203.0.113.7', headers: {} } as never;
@@ -56,7 +57,8 @@ function makeWired(
     {
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
-    { snapshot: () => [] } as never
+    { snapshot: () => [] } as never,
+    createSnapshotIndex()
   );
   const repo = {
     getSettings: vi.fn().mockResolvedValue({

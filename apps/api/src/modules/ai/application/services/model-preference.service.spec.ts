@@ -11,6 +11,7 @@ import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { createExecutionContext } from '../../testing/create-execution-context';
+import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
@@ -35,7 +36,8 @@ function makeChooser(
     {
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
-    { snapshot: () => [] } as never
+    { snapshot: () => [] } as never,
+    createSnapshotIndex()
   );
   const repo = {
     getSettings: vi.fn().mockResolvedValue({

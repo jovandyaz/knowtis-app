@@ -1,4 +1,4 @@
-import { providerOf } from '@knowtis/ai-gateway';
+import { providerOf, type IndexedModel } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
   MODEL_INTENTS,
@@ -16,10 +16,10 @@ import {
 } from '../execution-context/tier-policy';
 import {
   BYOK_INTENT_CANDIDATES,
-  canonicalOf,
   effectivePrimary,
   routeIntent,
 } from './byok-intent-routes';
+import { toModelReasoning } from './index-reasoning';
 
 export interface OfferedModel {
   readonly id: string;
@@ -56,6 +56,7 @@ export interface TierCatalogInput {
   readonly offered: readonly OfferedModel[];
   readonly isSupported: (modelId: string) => boolean;
   readonly isPlatformRoutable: (modelId: string) => boolean;
+  readonly indexRow: (modelId: string) => IndexedModel | undefined;
 }
 
 const NO_ROUTE = 'no_route';
@@ -74,20 +75,6 @@ export function tierCatalog(input: TierCatalogInput): TierCatalog {
       throw new Error(`Unhandled catalog scope: ${String(_exhaustive)}`);
     }
   }
-}
-
-/** The effort ladder another route of the same canonical model declares, so a model reached only over OpenRouter keeps its effort control. */
-export function routeReasoning(
-  modelId: string,
-  offered: readonly OfferedModel[]
-): ModelReasoning | undefined {
-  const siblings: readonly string[] = Object.values(
-    canonicalOf(modelId)?.routes ?? {}
-  );
-  return offered.find(
-    (model) =>
-      model.id !== modelId && siblings.includes(model.id) && model.reasoning
-  )?.reasoning;
 }
 
 // An operator-configured intent stays servable when the offered list lacks it
@@ -158,7 +145,9 @@ function keyCatalog(input: TierCatalogInput): TierCatalog {
       substituted: route.substituted,
     });
     if (!input.offered.some((model) => model.id === route.modelId)) {
-      const reasoning = routeReasoning(route.modelId, input.offered);
+      const reasoning = toModelReasoning(
+        input.indexRow(route.modelId)?.reasoning ?? null
+      );
       routed.push({
         id: route.modelId,
         label: route.label,
