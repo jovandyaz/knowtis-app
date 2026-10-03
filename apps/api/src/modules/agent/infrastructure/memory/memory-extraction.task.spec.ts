@@ -12,6 +12,8 @@ const SERVED_MODEL = 'openrouter:fast';
 const EMBEDDING_MODEL = 'voyage-4';
 const INPUT_COST_PER_TOKEN = 0.000001;
 const OUTPUT_COST_PER_TOKEN = 0.000004;
+const MAX_EXTRACTION_ATTEMPTS = 3;
+const TICKS_PAST_THE_CAP = MAX_EXTRACTION_ATTEMPTS + 2;
 
 // Mirrors what the text-only SQL returns: no tool rows, but an assistant row
 // carrying tool-call parts beside its text still comes back whole.
@@ -85,6 +87,7 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
       },
     ]),
     markExtracted: vi.fn().mockResolvedValue(undefined),
+    recordExtractionFailure: vi.fn().mockResolvedValue(1),
   };
   const memory = {
     listForUser: vi.fn().mockResolvedValue([]),
@@ -391,11 +394,152 @@ describe('MemoryExtractionTask', () => {
     expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
   });
 
-  it('does not mark the conversation extracted when persistence fails', async () => {
+  it('does not mark the conversation extracted when persistence fails, and counts the failure', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const { task, memory, conversations } = make();
     memory.applyReconcile.mockRejectedValue(new Error('db down'));
     await task.reconcile();
     expect(conversations.markExtracted).not.toHaveBeenCalled();
+    expect(conversations.recordExtractionFailure).toHaveBeenCalledWith(
+      'u1',
+      'c1'
+    );
+  });
+
+  it('asks only for conversations the retry policy still allows', async () => {
+    const { task, conversations } = make();
+
+    await task.reconcile();
+
+    expect(conversations.findExtractable).toHaveBeenCalledWith(180, 20, {
+      maxAttempts: MAX_EXTRACTION_ATTEMPTS,
+      backoffBaseSeconds: 600,
+    });
+  });
+
+  it('counts a failure that happens after the extraction was charged, and marks nothing', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { task, embed, rateLimit, conversations } = make();
+    embed.embedDocuments.mockRejectedValue(new Error('voyage down'));
+
+    await task.reconcile();
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
+    expect(conversations.recordExtractionFailure).toHaveBeenCalledWith(
+      'u1',
+      'c1'
+    );
+    expect(conversations.markExtracted).not.toHaveBeenCalled();
+  });
+
+  it('charges a conversation whose embedding keeps failing at most once per attempt, then gives it up', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { task, embed, rateLimit, conversations } = make();
+    let failures = 0;
+    conversations.findExtractable.mockImplementation(
+      async (_quiet: number, _limit: number, retry: { maxAttempts: number }) =>
+        failures < retry.maxAttempts ? [{ id: 'c1', userId: 'u1' }] : []
+    );
+    conversations.recordExtractionFailure.mockImplementation(
+      async () => ++failures
+    );
+    embed.embedDocuments.mockRejectedValue(new Error('voyage down'));
+
+    for (let tick = 0; tick < TICKS_PAST_THE_CAP; tick++) {
+      await task.reconcile();
+    }
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledTimes(
+      MAX_EXTRACTION_ATTEMPTS
+    );
+    expect(warn).toHaveBeenCalledTimes(MAX_EXTRACTION_ATTEMPTS);
+    expect(warn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        event: 'agent.memory.extraction_abandoned',
+        conversationId: 'c1',
+        attempts: MAX_EXTRACTION_ATTEMPTS,
+        reason: 'voyage down',
+      })
+    );
+  });
+
+  it('logs a failure below the attempt cap as one to retry, not as abandoned', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { task, structured, conversations } = make();
+    structured.generateStructuredOutput.mockRejectedValue(
+      new Error('provider down')
+    );
+    conversations.recordExtractionFailure.mockResolvedValue(1);
+
+    await task.reconcile();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.memory.extraction_failed',
+        conversationId: 'c1',
+        attempts: 1,
+        reason: 'provider down',
+      })
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'agent.memory.extraction_abandoned' })
+    );
+  });
+
+  it('gives a conversation up when its failure reaches the attempt cap', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { task, structured, conversations } = make();
+    structured.generateStructuredOutput.mockRejectedValue(
+      new Error('provider down')
+    );
+    conversations.recordExtractionFailure.mockResolvedValue(
+      MAX_EXTRACTION_ATTEMPTS
+    );
+
+    await task.reconcile();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.memory.extraction_abandoned',
+        conversationId: 'c1',
+        attempts: MAX_EXTRACTION_ATTEMPTS,
+        reason: 'provider down',
+      })
+    );
+  });
+
+  it('keeps going through the batch when a failure cannot be counted', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { task, structured, conversations } = make();
+    conversations.findExtractable.mockResolvedValue([
+      { id: 'c1', userId: 'u1' },
+      { id: 'c2', userId: 'u2' },
+    ]);
+    structured.generateStructuredOutput.mockRejectedValueOnce(
+      new Error('provider down')
+    );
+    conversations.recordExtractionFailure.mockRejectedValue(
+      new Error('db down')
+    );
+
+    await task.reconcile();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.memory.extraction_failure_unrecorded',
+        conversationId: 'c1',
+        reason: 'db down',
+      })
+    );
+    expect(conversations.markExtracted).toHaveBeenCalledWith('u2', 'c2');
   });
 
   it('does nothing when embeddings are not configured', async () => {

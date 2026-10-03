@@ -1,0 +1,2 @@
+ALTER TABLE "conversations" ADD COLUMN "memory_extraction_attempts" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "conversations" ADD COLUMN "memory_extraction_failed_at" timestamp with time zone;

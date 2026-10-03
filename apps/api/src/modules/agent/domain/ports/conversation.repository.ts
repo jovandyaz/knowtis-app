@@ -55,6 +55,14 @@ export interface LoadMessagesOptions {
   readonly textOnly?: boolean;
 }
 
+/** How long a conversation whose memory extraction failed waits, and how often it may fail, before it is given up on. */
+export interface ExtractionRetryPolicy {
+  /** Failures of one conversation state after which it is given up on until a new message changes it. */
+  readonly maxAttempts: number;
+  /** Wait after the first failure; each further failure of the same state doubles it. */
+  readonly backoffBaseSeconds: number;
+}
+
 export interface ConversationRepository {
   create(input: CreateConversationInput): Promise<{ id: string }>;
   findByIdForUser(
@@ -85,11 +93,25 @@ export interface ConversationRepository {
   appendTurn(input: AppendTurnInput): Promise<boolean>;
   /** Whether the conversation already stores the user row of `turnId`: a stored turn never runs again. */
   hasTurn(conversationId: string, turnId: string): Promise<boolean>;
+  /**
+   * Registered users' conversations idle for `quietSeconds` whose current state has no extracted memories yet,
+   * oldest first. A state that failed is skipped while its backoff runs and for good once it has failed `retry.maxAttempts` times.
+   */
   findExtractable(
     quietSeconds: number,
-    limit: number
+    limit: number,
+    retry: ExtractionRetryPolicy
   ): Promise<{ id: string; userId: string }[]>;
+  /** Stamps the current state as extracted and clears its failures. */
   markExtracted(userId: string, conversationId: string): Promise<void>;
+  /**
+   * Counts one failed extraction of the conversation's current state and resolves how many it has had,
+   * or null when `userId` owns no such conversation. A new message starts a state with no failures.
+   */
+  recordExtractionFailure(
+    userId: string,
+    conversationId: string
+  ): Promise<number | null>;
   listForUser(
     userId: string,
     page: { offset: number; limit: number }
