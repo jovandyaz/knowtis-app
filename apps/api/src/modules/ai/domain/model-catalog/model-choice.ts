@@ -50,6 +50,31 @@ export type ModelChoice =
       readonly suggestedModel: string | null;
     };
 
+/** Order an unavailable intent is substituted in; the first one is the tier default. */
+export const INTENT_FALLBACK_ORDER = [
+  'balanced',
+  'fast',
+  'powerful',
+] as const satisfies readonly ModelIntent[];
+
+interface IntentPick {
+  readonly intent: ModelIntent;
+  readonly model: string;
+}
+
+function intentPick(
+  catalog: TierCatalog,
+  requested: ModelIntent
+): IntentPick | null {
+  for (const intent of [requested, ...INTENT_FALLBACK_ORDER]) {
+    const model = intentModelOf(catalog, intent);
+    if (model) {
+      return { intent, model };
+    }
+  }
+  return null;
+}
+
 function resolved(requested: string | null, model: string): ModelChoice {
   return {
     kind: MODEL_CHOICE.RESOLVED,
@@ -140,9 +165,9 @@ export function chooseModel(
   request: ModelRequest,
   facts: ModelFacts
 ): ModelChoice {
-  const substitute =
-    intentModelOf(catalog, request.preferredIntent ?? DEFAULT_MODEL_INTENT) ??
-    intentModelOf(catalog, DEFAULT_MODEL_INTENT);
+  const requestedIntent = request.preferredIntent ?? DEFAULT_MODEL_INTENT;
+  const pick = intentPick(catalog, requestedIntent);
+  const substitute = pick?.model ?? null;
   if (request.explicit !== undefined) {
     return findInCatalog(catalog, request.explicit)
       ? resolved(request.explicit, request.explicit)
@@ -157,13 +182,29 @@ export function chooseModel(
   const wanted =
     request.pinned ?? keyBilledPreference(request.preferredModel, facts);
   if (!wanted) {
-    return substitute
-      ? resolved(null, substitute)
-      : {
-          kind: MODEL_CHOICE.UNAVAILABLE,
-          reason: 'no_route',
-          suggestedModel: null,
-        };
+    if (!pick) {
+      return {
+        kind: MODEL_CHOICE.UNAVAILABLE,
+        reason: 'no_route',
+        suggestedModel: null,
+      };
+    }
+    if (pick.intent === requestedIntent) {
+      return resolved(null, pick.model);
+    }
+    return {
+      kind: MODEL_CHOICE.RESOLVED,
+      model: pick.model,
+      resolution: {
+        requested: null,
+        resolved: pick.model,
+        fallback: {
+          reason: 'intent_unavailable',
+          from: requestedIntent,
+          to: pick.model,
+        },
+      },
+    };
   }
   if (findInCatalog(catalog, wanted)) {
     return resolved(wanted, wanted);

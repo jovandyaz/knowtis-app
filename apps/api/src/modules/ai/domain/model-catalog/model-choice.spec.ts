@@ -5,10 +5,11 @@ import {
   ModelIndexCatalog,
   type IndexedModel,
 } from '@knowtis/ai-gateway';
-import type {
-  AccessTier,
-  ByokProvider,
-  ModelIntent,
+import {
+  DEFAULT_MODEL_INTENT,
+  type AccessTier,
+  type ByokProvider,
+  type ModelIntent,
 } from '@knowtis/shared-types';
 
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
@@ -16,6 +17,7 @@ import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { resolveByokSelectors } from './byok-intent-routes';
 import {
   chooseModel,
+  INTENT_FALLBACK_ORDER,
   type ModelFacts,
   type ModelRequest,
 } from './model-choice';
@@ -120,15 +122,92 @@ describe('chooseModel', () => {
     });
   });
 
-  it('serves the default intent when the stored intent has no route', () => {
-    const fastRetired = (id: string) => id !== PLATFORM_INTENTS.fast;
-    expect(setup('free', [], fastRetired)({ preferredIntent: 'fast' })).toEqual(
-      {
+  describe('an intent with no route', () => {
+    const without =
+      (...models: string[]) =>
+      (id: string) =>
+        id !== RETIRED && !models.includes(id);
+
+    it('serves another intent and reports it when the stored intent has no route', () => {
+      expect(
+        setup(
+          'free',
+          [],
+          without(PLATFORM_INTENTS.fast)
+        )({ preferredIntent: 'fast' })
+      ).toEqual({
         kind: 'resolved',
         model: PLATFORM_INTENTS.balanced,
-        resolution: { requested: null, resolved: PLATFORM_INTENTS.balanced },
-      }
-    );
+        resolution: {
+          requested: null,
+          resolved: PLATFORM_INTENTS.balanced,
+          fallback: {
+            reason: 'intent_unavailable',
+            from: 'fast',
+            to: PLATFORM_INTENTS.balanced,
+          },
+        },
+      });
+    });
+
+    it('serves fast when balanced has no route', () => {
+      expect(setup('free', [], without(PLATFORM_INTENTS.balanced))({})).toEqual(
+        {
+          kind: 'resolved',
+          model: PLATFORM_INTENTS.fast,
+          resolution: {
+            requested: null,
+            resolved: PLATFORM_INTENTS.fast,
+            fallback: {
+              reason: 'intent_unavailable',
+              from: 'balanced',
+              to: PLATFORM_INTENTS.fast,
+            },
+          },
+        }
+      );
+    });
+
+    it('serves powerful when balanced and fast have no route', () => {
+      expect(
+        setup(
+          'free',
+          [],
+          without(PLATFORM_INTENTS.balanced, PLATFORM_INTENTS.fast)
+        )({})
+      ).toMatchObject({
+        model: PLATFORM_INTENTS.powerful,
+        resolution: {
+          fallback: { reason: 'intent_unavailable', from: 'balanced' },
+        },
+      });
+    });
+
+    it('refuses with no_route when no intent has a route', () => {
+      expect(setup('free', [], without(...PLATFORM_INTENT_IDS))({})).toEqual({
+        kind: 'unavailable',
+        reason: 'no_route',
+        suggestedModel: null,
+      });
+    });
+
+    it('suggests the first available intent for an explicit model outside the tier', () => {
+      expect(
+        setup(
+          'free',
+          [],
+          without(PLATFORM_INTENTS.balanced)
+        )({ explicit: OPEN_MODEL })
+      ).toEqual({
+        kind: 'unavailable',
+        reason: 'not_in_tier',
+        suggestedModel: PLATFORM_INTENTS.fast,
+      });
+    });
+  });
+
+  it('substitutes intents starting from the default intent', () => {
+    expect(INTENT_FALLBACK_ORDER[0]).toBe(DEFAULT_MODEL_INTENT);
   });
 
   it('accepts an explicit model inside the tier as is', () => {
