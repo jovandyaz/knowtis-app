@@ -107,7 +107,7 @@ export class AiCatalogController {
   @ApiOperation({
     summary: 'List every model assignable as an intent default',
     description:
-      'All curated models — those of unconfigured providers carry `needsKey` instead of being hidden — plus every promoted model, each annotated with server routability.',
+      'Eligible model-index rows of providers the server holds a key for, plus every promoted model (a promoted id replaces its index row), each annotated with server routability.',
   })
   @ApiResponse({ status: 200, description: 'Assignable models' })
   @ApiAuthErrors(AI_DISABLED)

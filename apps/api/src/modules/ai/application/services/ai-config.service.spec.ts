@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
@@ -10,6 +10,10 @@ import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-model
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { AIConfigService, InvalidAIConfigError } from './ai-config.service';
 
 const CUSTOM_MODEL = 'anthropic:claude-sonnet-5';
@@ -18,6 +22,16 @@ const A_VALID_CHAIN = 'anthropic:claude-haiku-4-5,openai:gpt-4o-mini';
 const ACTOR = 'admin-user-id';
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const NON_SELECTOR_ID = 'openrouter:z-ai/glm-5.2';
+const IMAGE_ID = 'google:gemini-3-pro-image';
+const ALIAS_ID = 'openrouter:~anthropic/claude-opus-latest';
+const UNPRICED_ID = 'google:gemma-4-26b-a4b-it';
+const PROD_PINS = [
+  ['ai_default_model', 'openrouter:deepseek/deepseek-v4-pro-0813'],
+  ['ai_default_model', 'openrouter:deepseek/deepseek-v4.1-flash'],
+  ['ai_fast_model', 'openrouter:minimax/minimax-m2.5'],
+  ['ai_deep_model', 'openrouter:moonshotai/kimi-k2.5'],
+  ['ai_default_model', 'openrouter:z-ai/glm-5.3'],
+] as const;
 const UNKNOWN_ID = 'openrouter:vendor/unknown-one';
 
 function deletedRow(value: string) {
@@ -52,20 +66,28 @@ describe('AIConfigService', () => {
       createCatalogRepositoryStub(async () => [...models])
     );
     await promoted.onModuleInit();
-    const catalog = new CompositeModelCatalog(
-      promoted,
-      new ModelIndexCache(createModelIndexRepositoryStub(async () => []))
+    const index = new ModelIndexCache(
+      createModelIndexRepositoryStub(async () => [])
     );
+    const catalog = new CompositeModelCatalog(promoted, index);
     return new AIConfigService(
       mockRepo as never,
       mockCache as never,
       mockAudit as never,
       mockRegistry as never,
-      catalog
+      catalog,
+      promoted,
+      index
     );
   }
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     mockRepo = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn(),
@@ -85,7 +107,9 @@ describe('AIConfigService', () => {
       mockCache as never,
       mockAudit as never,
       mockRegistry as never,
-      mockCatalog as never
+      mockCatalog as never,
+      { snapshot: () => [] } as never,
+      createSnapshotIndex()
     );
   });
 
@@ -144,12 +168,37 @@ describe('AIConfigService', () => {
   });
 
   it('should accept a supported, routable model outside the selectors', async () => {
-    await service.setConfig('ai_default_model', NON_SELECTOR_ID, ACTOR);
+    const real = await serviceWith([]);
+    await real.setConfig('ai_default_model', NON_SELECTOR_ID, ACTOR);
     expect(mockRepo.set).toHaveBeenCalledWith(
       'ai_default_model',
       NON_SELECTOR_ID,
       undefined
     );
+  });
+
+  it.each([
+    ['an image model', IMAGE_ID],
+    ['an alias', ALIAS_ID],
+    ['an unpriced row', UNPRICED_ID],
+  ])('should reject %s as not eligible', async (_label, id) => {
+    const real = await serviceWith([]);
+    await expect(real.setConfig('ai_default_model', id, ACTOR)).rejects.toThrow(
+      `'${id}' is not an eligible platform model`
+    );
+    expect(mockRepo.set).not.toHaveBeenCalled();
+  });
+
+  it('should accept a promoted id that has no index row', async () => {
+    const real = await serviceWith([createCatalogModel({ id: PROMOTED_ID })]);
+    await real.setConfig('ai_default_model', PROMOTED_ID, ACTOR);
+    expect(mockRepo.set).toHaveBeenCalledOnce();
+  });
+
+  it.each(PROD_PINS)('should still accept %s pin %s', async (key, id) => {
+    const real = await serviceWith([]);
+    await real.setConfig(key, id, ACTOR);
+    expect(mockRepo.set).toHaveBeenCalledOnce();
   });
 
   it('should reject a supported model the server cannot invoke', async () => {

@@ -13,6 +13,7 @@ import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-model
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const DEFAULT_TIER = 'open';
+const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 
 interface AssignableEntry {
   readonly dto: AssignableModelDto;
@@ -72,7 +73,6 @@ export class AssignableModelsService {
             tier: intentOfFamily(row.family) ?? DEFAULT_TIER,
             provider: row.provider,
             routableByServer: true,
-            needsKey: false,
             promoted: false,
           },
         });
@@ -81,7 +81,10 @@ export class AssignableModelsService {
     const releasedAtById = new Map(rows.map((row) => [row.id, row.releasedAt]));
     for (const model of this.promotedModels.snapshot()) {
       entries.set(model.id, {
-        releasedAt: releasedAtById.get(model.id) ?? null,
+        releasedAt:
+          releasedAtById.get(model.id) ??
+          model.upstreamCreatedAt?.toISOString().slice(0, ISO_DATE_LENGTH) ??
+          null,
         dto: {
           id: model.id,
           label: model.label,
@@ -91,7 +94,6 @@ export class AssignableModelsService {
           // Promotion implies the server-keyed openrouter route, but the
           // registry stays the one source of truth for routability.
           routableByServer: this.registry.isModelAvailable(model.id),
-          needsKey: false,
           promoted: true,
         },
       });

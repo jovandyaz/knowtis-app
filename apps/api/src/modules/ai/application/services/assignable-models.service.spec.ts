@@ -17,6 +17,8 @@ const SONNET_LABEL = 'Claude Sonnet 5.5';
 const GLM_ID = 'openrouter:z-ai/glm-5.2';
 const IMAGE_ID = 'google:gemini-3-pro-image';
 const ALIAS_ID = 'openrouter:~anthropic/claude-opus-latest';
+const PROMOTED_ONLY_ID = 'openrouter:vendor/promoted-one';
+const PROMOTED_ONLY_CREATED = new Date('2099-01-01T00:00:00Z');
 const PROMOTED_LABEL = 'Promoted Sonnet';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PROVIDER_ORDER = ['anthropic', 'openai', 'google', 'openrouter'];
@@ -63,7 +65,6 @@ describe('AssignableModelsService', () => {
       tier: 'balanced',
       provider: 'anthropic',
       routableByServer: true,
-      needsKey: false,
       promoted: false,
     });
   });
@@ -120,32 +121,51 @@ describe('AssignableModelsService', () => {
 
   it('still computes routability for a promoted row through the registry', async () => {
     const rows = await makeService({
-      promoted: [createCatalogModel({ id: 'openrouter:vendor/promoted-one' })],
+      promoted: [createCatalogModel({ id: PROMOTED_ONLY_ID })],
     }).list();
     expect(rows).toEqual([
       expect.objectContaining({
-        id: 'openrouter:vendor/promoted-one',
+        id: PROMOTED_ONLY_ID,
         routableByServer: false,
-        needsKey: false,
         promoted: true,
       }),
     ]);
   });
 
   it('orders by provider, then newest release, then id', async () => {
+    const released = new Map(
+      createSnapshotIndex()
+        .catalog()
+        .all()
+        .map((row) => [row.id, row.releasedAt ?? ''])
+    );
     const rows = await makeService({
       configuredProviders: PROVIDER_ORDER,
     }).list();
-    const ranks = rows.map((row) => PROVIDER_ORDER.indexOf(row.provider));
-    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
-    const ids = rows.filter((row) => row.provider === 'anthropic');
-    const dates = ids.map(
-      (row) =>
-        createSnapshotIndex()
-          .catalog()
-          .all()
-          .find((indexed) => indexed.id === row.id)?.releasedAt ?? ''
+    const keys = rows.map((row) => [
+      PROVIDER_ORDER.indexOf(row.provider),
+      released.get(row.id) ?? '',
+      row.id,
+    ]);
+    const expected = [...keys].sort(
+      (a, b) =>
+        (a[0] as number) - (b[0] as number) ||
+        (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : 0) ||
+        (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0)
     );
-    expect(dates).toEqual([...dates].sort().reverse());
+    expect(keys).toEqual(expected);
+  });
+
+  it('sorts a promoted-only row by its upstream creation date', async () => {
+    const rows = await makeService({
+      configuredProviders: ['openrouter'],
+      promoted: [
+        createCatalogModel({
+          id: PROMOTED_ONLY_ID,
+          upstreamCreatedAt: PROMOTED_ONLY_CREATED,
+        }),
+      ],
+    }).list();
+    expect(rows[0]?.id).toBe(PROMOTED_ONLY_ID);
   });
 });

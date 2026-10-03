@@ -144,6 +144,8 @@ function harness(failPrimary = false, toolStep = false) {
     } as never,
     {} as never,
     registry,
+    {} as never,
+    {} as never,
     {} as never
   );
   return { requests, config, registry, chain, routing };

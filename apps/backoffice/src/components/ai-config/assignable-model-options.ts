@@ -5,9 +5,8 @@ export const NEEDS_KEY_HINT =
   'Needs a provider key — configure it in Providers';
 
 /**
- * Assignability keys off `routableByServer`, not `needsKey`: `needsKey` is
- * curated-only by formula, so a promoted row whose provider lost its key would
- * otherwise render assignable while the server cannot route it.
+ * Assignability keys off `routableByServer`: a promoted row whose provider lost
+ * its key would otherwise render assignable while the server cannot route it.
  */
 export function toModelSelectOption(
   model: AssignableModelDto
