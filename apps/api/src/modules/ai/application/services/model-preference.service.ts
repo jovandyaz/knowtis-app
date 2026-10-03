@@ -25,6 +25,7 @@ import { CATALOG_SCOPE } from '../../domain/execution-context/tier-policy';
 import {
   chooseModel,
   MODEL_CHOICE,
+  retiredStoredPick,
   type ModelChoice,
   type ModelFacts,
 } from '../../domain/model-catalog/model-choice';
@@ -77,13 +78,20 @@ export class ModelPreferenceService {
     return this.selectable.reasoningOf(modelId, byokProviders);
   }
 
+  /**
+   * The model a turn runs on. A stored pick the index has retired is reported
+   * by the turn that resolves it and then cleared, keeping the stored intent,
+   * so the notice shows once; the clear is best-effort and never fails the
+   * turn.
+   */
   async chooseTurnModel(
     execution: AiExecutionContext,
     request: { explicit?: string; pinned?: string | null }
   ): Promise<ModelChoice> {
+    const { userId } = execution.subject;
     const [platformIntents, settings] = await Promise.all([
       this.aiConfig.getIntentModels(),
-      this.settings.getSettings(execution.subject.userId),
+      this.settings.getSettings(userId),
     ]);
     const { catalog, facts } = this.scopeOf(
       execution,
@@ -94,11 +102,13 @@ export class ModelPreferenceService {
       preferredModel: settings.preferredModel,
       preferredIntent: settings.preferredIntent,
     });
-    return chooseModel(
-      catalog,
-      { ...request, preferredModel, preferredIntent },
-      facts
-    );
+    const modelRequest = { ...request, preferredModel, preferredIntent };
+    const choice = chooseModel(catalog, modelRequest, facts);
+    const retired = retiredStoredPick(modelRequest, choice);
+    if (retired !== null) {
+      await this.forgetRetiredPick(userId, retired);
+    }
+    return choice;
   }
 
   /**
@@ -235,6 +245,22 @@ export class ModelPreferenceService {
       caller.userId,
       servedPreference(catalog, patch)
     );
+  }
+
+  private async forgetRetiredPick(
+    userId: string,
+    model: string
+  ): Promise<void> {
+    try {
+      await this.settings.clearPreferredModel(userId, model);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.preferences.retired_pick_clear_failed',
+        userId,
+        model,
+        error: reasonOf(error),
+      });
+    }
   }
 
   // The primary provider only orders routes over the caller's own keys, so no

@@ -10,6 +10,8 @@ export interface UserAiSettings {
 export interface UserAiSettingsRepository {
   getSettings(userId: string): Promise<UserAiSettings>;
   patchSettings(userId: string, patch: Partial<UserAiSettings>): Promise<void>;
+  /** Clears the preferred model only while it is still `model`, so a pick written after the caller read it is never erased. */
+  clearPreferredModel(userId: string, model: string): Promise<void>;
   /**
    * Clears the primary provider and a preferred model on `provider`, in one
    * write that does nothing while the caller holds a key for it: a clear that

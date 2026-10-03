@@ -16,6 +16,8 @@ import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { resolveByokSelectors } from './byok-intent-routes';
 import {
   chooseModel,
+  retiredStoredPick,
+  type ModelChoice,
   type ModelFacts,
   type ModelRequest,
 } from './model-choice';
@@ -623,5 +625,87 @@ describe('chooseModel', () => {
       reason: 'no_route',
       suggestedModel: null,
     });
+  });
+});
+
+describe('retiredStoredPick', () => {
+  const STORED: ModelRequest = {
+    preferredModel: SUPERSEDED,
+    preferredIntent: null,
+  };
+
+  function fallbackFrom(
+    from: string,
+    reason:
+      | 'model_retired'
+      | 'key_removed'
+      | 'not_in_tier'
+      | 'intent_unavailable'
+  ): ModelChoice {
+    return {
+      kind: 'resolved',
+      model: DIRECT_SONNET,
+      resolution: {
+        requested: from,
+        resolved: DIRECT_SONNET,
+        fallback: { reason, from, to: DIRECT_SONNET },
+      },
+    };
+  }
+
+  it('names the stored pick a turn reports as retired', () => {
+    expect(
+      retiredStoredPick(STORED, fallbackFrom(SUPERSEDED, 'model_retired'))
+    ).toBe(SUPERSEDED);
+  });
+
+  it.each(['key_removed', 'not_in_tier', 'intent_unavailable'] as const)(
+    'keeps a stored pick dropped as %s',
+    (reason) => {
+      expect(
+        retiredStoredPick(STORED, fallbackFrom(SUPERSEDED, reason))
+      ).toBeNull();
+    }
+  );
+
+  it('keeps the stored pick when the turn named its model explicitly', () => {
+    expect(
+      retiredStoredPick(
+        { ...STORED, explicit: SUPERSEDED },
+        fallbackFrom(SUPERSEDED, 'model_retired')
+      )
+    ).toBeNull();
+  });
+
+  it('keeps the stored pick when the turn resolved a pinned model', () => {
+    expect(
+      retiredStoredPick(
+        { ...STORED, pinned: SUPERSEDED },
+        fallbackFrom(SUPERSEDED, 'model_retired')
+      )
+    ).toBeNull();
+  });
+
+  it('keeps the stored pick when another model retired', () => {
+    expect(
+      retiredStoredPick(STORED, fallbackFrom(RETIRED, 'model_retired'))
+    ).toBeNull();
+  });
+
+  it('keeps the stored pick when the turn reports no fallback', () => {
+    expect(
+      retiredStoredPick(STORED, {
+        kind: 'resolved',
+        model: SUPERSEDED,
+        resolution: { requested: SUPERSEDED, resolved: SUPERSEDED },
+      })
+    ).toBeNull();
+    expect(
+      retiredStoredPick(STORED, {
+        kind: 'unavailable',
+        reason: 'model_retired',
+        suggestedModel: null,
+      })
+    ).toBeNull();
   });
 });
