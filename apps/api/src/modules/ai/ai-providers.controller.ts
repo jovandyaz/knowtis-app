@@ -17,7 +17,6 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { APICallError, generateText } from 'ai';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import {
   FEATURE_FLAG_KEYS,
   type AIProvider,
@@ -34,9 +33,10 @@ import {
   RequireFeatureFlag,
 } from '../feature-flags/feature-flag.guard';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
-import { CURATED_MODELS } from './domain/model-catalog/selectable-models.catalog';
+import { resolveByokIntent } from './domain/model-catalog/model-selectors';
 import { SetSystemProviderDto } from './dto/set-system-provider.dto';
 import { SystemProviderParamDto } from './dto/system-provider-param.dto';
+import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
 import {
   ProviderNotConfiguredError,
   ProviderRegistryFactory,
@@ -56,7 +56,8 @@ export class AiProvidersController {
 
   constructor(
     private readonly systemKeys: SystemProviderKeysService,
-    private readonly registry: ProviderRegistryFactory
+    private readonly registry: ProviderRegistryFactory,
+    private readonly index: ModelIndexCache
   ) {}
 
   @Get()
@@ -125,15 +126,16 @@ export class AiProvidersController {
 
   /** Sends one cheap turn through whatever key currently routes for the provider. */
   private async probe(provider: AIProvider): Promise<ProviderTestResult> {
-    const candidates = CURATED_MODELS.filter(
-      (m) => providerOf(m.id) === provider
+    const model = resolveByokIntent(
+      'fast',
+      provider,
+      this.index.catalog().all()
     );
-    const model = candidates.find((m) => m.tier === 'fast') ?? candidates[0];
     if (!model) {
       return {
         ok: false,
         reason: 'unconfigured',
-        message: `No curated model found for provider '${provider}'`,
+        message: `No model resolves for provider '${provider}'`,
       };
     }
     let secrets: string[] = [];

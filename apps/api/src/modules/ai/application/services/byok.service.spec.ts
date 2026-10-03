@@ -23,6 +23,10 @@ import {
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
 import type { ProbeResult } from '../../infrastructure/providers/provider-probe';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { ByokService } from './byok.service';
 
 vi.mock('ai', async (importOriginal) => ({
@@ -69,7 +73,8 @@ function makeService(overrides: MakeOverrides) {
     config as never,
     registry as never,
     policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED),
-    settings as never
+    settings as never,
+    createSnapshotIndex()
   );
   const validateKey = vi.fn(
     overrides.validate ?? (async () => ({ valid: true }) as ProbeResult)
@@ -82,6 +87,8 @@ function makeService(overrides: MakeOverrides) {
 
 describe('ByokService', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     vi.clearAllMocks();
   });
 
@@ -246,16 +253,21 @@ describe('ByokService', () => {
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
-      { clearBoundToUnheldProvider: vi.fn() } as never
+      { clearBoundToUnheldProvider: vi.fn() } as never,
+      createSnapshotIndex()
     );
 
     await expect(
       service.setKey('u1', 'openai', 'sk-valid-123456')
     ).resolves.toBeUndefined();
     expect(repo.upsert).toHaveBeenCalled();
+    expect(registry.languageModel).toHaveBeenCalledWith(
+      'openai:gpt-6-luna',
+      'sk-valid-123456'
+    );
   });
 
-  it('validates an openrouter key against the first open-tier model', async () => {
+  it('validates an openrouter key against its fast BYOK route', async () => {
     const registry = { languageModel: vi.fn().mockReturnValue({}) };
     const config = {
       get: (k: string) =>
@@ -274,13 +286,14 @@ describe('ByokService', () => {
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
-      { clearBoundToUnheldProvider: vi.fn() } as never
+      { clearBoundToUnheldProvider: vi.fn() } as never,
+      createSnapshotIndex()
     );
 
     await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
 
     expect(registry.languageModel).toHaveBeenCalledWith(
-      'openrouter:deepseek/deepseek-v3.2',
+      'openrouter:anthropic/claude-haiku-4.5',
       'sk-or-v1-valid-key-000'
     );
   });

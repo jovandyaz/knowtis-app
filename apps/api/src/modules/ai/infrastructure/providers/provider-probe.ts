@@ -1,10 +1,8 @@
 import { APICallError, generateText } from 'ai';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import type { AIProvider } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import type { ProviderRegistryFactory } from './provider-registry.factory';
 
 // OpenAI's Responses API rejects max_output_tokens < 16; Anthropic/Google accept it.
@@ -37,17 +35,14 @@ export type ProbeResult =
 export async function probeProviderKey(
   registry: ProviderRegistryFactory,
   provider: AIProvider,
-  apiKey: string
+  apiKey: string,
+  probeModelId: string | null
 ): Promise<ProbeResult> {
-  const candidates = CURATED_MODELS.filter(
-    (m) => providerOf(m.id) === provider
-  );
-  const probe = candidates.find((m) => m.tier === 'fast') ?? candidates[0];
-  if (!probe) {
+  if (probeModelId === null) {
     return {
       valid: false,
-      reason: 'rejected',
-      error: `No curated model found for provider '${provider}'`,
+      reason: 'unavailable',
+      error: `No model resolves for provider '${provider}'`,
     };
   }
   // A plain timer rather than AbortSignal.timeout: the bound is observable
@@ -59,7 +54,7 @@ export async function probeProviderKey(
   );
   try {
     await generateText({
-      model: registry.languageModel(probe.id, apiKey),
+      model: registry.languageModel(probeModelId, apiKey),
       prompt: 'ping',
       maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
       abortSignal: bound.signal,

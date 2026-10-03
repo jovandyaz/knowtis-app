@@ -20,10 +20,12 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
+import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
 import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
   type SystemProviderKeysRepository,
 } from '../../domain/ports/system-provider-keys.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import {
   decryptSecret,
   encryptSecret,
@@ -55,7 +57,8 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     private readonly repo: SystemProviderKeysRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly adminAuditService: AdminAuditService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly index: ModelIndexCache
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -112,10 +115,16 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
       );
     }
+    const probeModel = resolveByokIntent(
+      'fast',
+      provider,
+      this.index.catalog().all()
+    );
     const probe = await probeProviderKey(
       this.moduleRef.get(ProviderRegistryFactory),
       provider,
-      apiKey
+      apiKey,
+      probeModel?.id ?? null
     );
     if (!probe.valid) {
       this.logger.warn({

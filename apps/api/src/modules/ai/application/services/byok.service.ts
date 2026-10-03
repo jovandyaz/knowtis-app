@@ -12,6 +12,7 @@ import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
+import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -20,6 +21,7 @@ import {
   USER_PROVIDER_KEYS_REPOSITORY,
   type UserProviderKeysRepository,
 } from '../../domain/ports/user-provider-keys.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import {
   decryptSecret,
   encryptSecret,
@@ -57,7 +59,8 @@ export class ByokService {
     private readonly registry: ProviderRegistryFactory,
     private readonly verifiedIdentity: VerifiedIdentityPolicy,
     @Inject(USER_AI_SETTINGS_REPOSITORY)
-    private readonly settings: UserAiSettingsRepository
+    private readonly settings: UserAiSettingsRepository,
+    private readonly index: ModelIndexCache
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -162,6 +165,16 @@ export class ByokService {
     provider: ByokProvider,
     apiKey: string
   ): Promise<ProbeResult> {
-    return probeProviderKey(this.registry, provider, apiKey);
+    const probeModel = resolveByokIntent(
+      'fast',
+      provider,
+      this.index.catalog().all()
+    );
+    return probeProviderKey(
+      this.registry,
+      provider,
+      apiKey,
+      probeModel?.id ?? null
+    );
   }
 }

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
 import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
+import { createSnapshotIndex, SNAPSHOT_DATE } from './testing/snapshot-index';
 
 // Only the call is stubbed; the error classes must stay real because the
 // classifier reads the SDK's own retryability verdict off them.
@@ -42,7 +43,8 @@ function make() {
   return {
     controller: new AiProvidersController(
       systemKeys as never,
-      registry as never
+      registry as never,
+      createSnapshotIndex()
     ),
     systemKeys,
     registry,
@@ -57,6 +59,8 @@ async function probeFailsWith(error: unknown) {
 describe('AiProvidersController', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockResolvedValue({} as never);
   });
@@ -159,13 +163,23 @@ describe('AiProvidersController', () => {
       const result = await controller.test(anthropic);
 
       expect(registry.languageModel).toHaveBeenCalledWith(
-        expect.stringContaining('anthropic:')
+        'anthropic:claude-haiku-4-5'
       );
       expect(generateText).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
         ok: true,
-        model: expect.stringContaining('anthropic:'),
+        model: 'anthropic:claude-haiku-4-5',
       });
+    });
+
+    it('should probe the fast OpenRouter route, not a curated pick', async () => {
+      const { controller, registry } = make();
+
+      await controller.test({ provider: 'openrouter' } as never);
+
+      expect(registry.languageModel).toHaveBeenCalledWith(
+        'openrouter:anthropic/claude-haiku-4.5'
+      );
     });
 
     it('should report a refusal with the routing secret scrubbed from the provider echo', async () => {

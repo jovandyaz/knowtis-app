@@ -5,6 +5,10 @@ import type { AIProvider } from '@knowtis/shared-types';
 
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
 import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { SystemProviderKeysService } from './system-provider-keys.service';
 
 vi.mock('../../infrastructure/providers/provider-probe', () => ({
@@ -55,11 +59,14 @@ describe('SystemProviderKeysService', () => {
       mockRepo as never,
       configService as never,
       mockAudit as never,
-      moduleRef as never
+      moduleRef as never,
+      createSnapshotIndex()
     );
   }
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     env = {};
     mockRepo = {
       getAll: vi.fn().mockResolvedValue([]),
@@ -213,7 +220,8 @@ describe('SystemProviderKeysService', () => {
       expect(probeProviderKey).toHaveBeenCalledWith(
         registry,
         'anthropic',
-        'sk-ant-good-key'
+        'sk-ant-good-key',
+        'anthropic:claude-haiku-4-5'
       );
     });
 
