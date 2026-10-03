@@ -68,6 +68,10 @@ const OPENROUTER_ROUTE_SLUGS = MODEL_INTENTS.flatMap((intent) => {
   );
   return route === null ? [] : [route.id.slice(OPENROUTER_ID_PREFIX.length)];
 });
+
+if (OPENROUTER_ROUTE_SLUGS.length !== MODEL_INTENTS.length) {
+  throw new Error('the writer spec needs an OpenRouter route for every intent');
+}
 const OPENROUTER_ROUTE_KEYS = MODEL_INTENTS.map((intent) =>
   byokFloorKey(intent, 'openrouter')
 );
