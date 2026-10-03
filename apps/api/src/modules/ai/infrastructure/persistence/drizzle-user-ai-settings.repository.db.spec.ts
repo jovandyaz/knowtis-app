@@ -1,13 +1,16 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq, inArray } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import type { ByokProvider } from '@knowtis/shared-types';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
   DATABASE_CONNECTION,
   DatabaseModule,
   userAiSettings,
+  userProviderKeys,
   users,
   type Database,
 } from '../../../../database';
@@ -16,6 +19,7 @@ import type { UserAiSettings } from '../../domain/ports/user-ai-settings.reposit
 import { DrizzleUserAiSettingsRepository } from './drizzle-user-ai-settings.repository';
 
 const USER_ID = '00000000-0000-4000-8000-0000000000c3';
+const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000c9';
 
 describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
   let moduleRef: TestingModule;
@@ -38,18 +42,20 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
 
     await db
       .insert(users)
-      .values({
-        id: USER_ID,
-        email: `e-${USER_ID}@test.local`,
-        name: 'T',
-        isAnonymous: false,
-      })
+      .values(
+        [USER_ID, OTHER_USER_ID].map((id) => ({
+          id,
+          email: `e-${id}@test.local`,
+          name: 'T',
+          isAnonymous: false,
+        }))
+      )
       .onConflictDoNothing();
     await db.delete(userAiSettings).where(eq(userAiSettings.userId, USER_ID));
   });
 
   afterAll(async () => {
-    await db.delete(users).where(eq(users.id, USER_ID));
+    await db.delete(users).where(inArray(users.id, [USER_ID, OTHER_USER_ID]));
     await moduleRef.close();
   });
 
@@ -139,5 +145,93 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect((await repo.getSettings(USER_ID)).primaryProvider).toBeNull();
     await repo.patchSettings(USER_ID, { primaryProvider: 'openai' });
     expect((await repo.getSettings(USER_ID)).primaryProvider).toBe('openai');
+  });
+
+  describe('clearBoundToUnheldProvider', () => {
+    const BOUND_TO_OPENAI = {
+      preferredModel: 'openai:gpt-6',
+      preferredIntent: 'fast',
+      primaryProvider: 'openai',
+      ghostTextEnabled: false,
+    } as const satisfies UserAiSettings;
+
+    const holdKey = (userId: string, provider: ByokProvider) =>
+      db.insert(userProviderKeys).values({
+        userId,
+        provider,
+        ciphertext: 'ct',
+        iv: 'iv',
+        authTag: 'tag',
+        keyPrefix: 'sk-x',
+      });
+
+    beforeEach(async () => {
+      await db
+        .delete(userProviderKeys)
+        .where(inArray(userProviderKeys.userId, [USER_ID, OTHER_USER_ID]));
+      await db.delete(userAiSettings).where(eq(userAiSettings.userId, USER_ID));
+    });
+
+    it('clears the primary provider and the model bound to a provider no key is stored for', async () => {
+      await holdKey(USER_ID, 'anthropic');
+      await holdKey(OTHER_USER_ID, 'openai');
+      await repo.patchSettings(USER_ID, BOUND_TO_OPENAI);
+
+      await repo.clearBoundToUnheldProvider(USER_ID, 'openai');
+
+      expect(await repo.getSettings(USER_ID)).toEqual({
+        ...BOUND_TO_OPENAI,
+        preferredModel: null,
+        primaryProvider: null,
+      });
+    });
+
+    it('leaves them intact once a key for that provider is stored again', async () => {
+      await holdKey(USER_ID, 'openai');
+      await repo.patchSettings(USER_ID, BOUND_TO_OPENAI);
+
+      await repo.clearBoundToUnheldProvider(USER_ID, 'openai');
+
+      expect(await repo.getSettings(USER_ID)).toEqual(BOUND_TO_OPENAI);
+    });
+
+    it('clears only the setting bound to the provider', async () => {
+      await repo.patchSettings(USER_ID, {
+        ...BOUND_TO_OPENAI,
+        primaryProvider: 'anthropic',
+      });
+
+      await repo.clearBoundToUnheldProvider(USER_ID, 'openai');
+
+      expect(await repo.getSettings(USER_ID)).toEqual({
+        ...BOUND_TO_OPENAI,
+        preferredModel: null,
+        primaryProvider: 'anthropic',
+      });
+    });
+
+    it('leaves settings bound to another provider alone', async () => {
+      const elsewhere = {
+        ...BOUND_TO_OPENAI,
+        preferredModel: 'openrouter:openai/gpt-oss-120b',
+        primaryProvider: 'anthropic',
+      } as const satisfies UserAiSettings;
+      await repo.patchSettings(USER_ID, elsewhere);
+
+      await repo.clearBoundToUnheldProvider(USER_ID, 'openai');
+
+      expect(await repo.getSettings(USER_ID)).toEqual(elsewhere);
+    });
+
+    it('writes nothing for a caller with no stored settings', async () => {
+      await repo.clearBoundToUnheldProvider(USER_ID, 'openai');
+
+      expect(
+        await db
+          .select()
+          .from(userAiSettings)
+          .where(eq(userAiSettings.userId, USER_ID))
+      ).toEqual([]);
+    });
   });
 });

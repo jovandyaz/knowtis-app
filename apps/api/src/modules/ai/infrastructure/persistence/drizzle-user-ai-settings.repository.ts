@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, notExists, or, sql } from 'drizzle-orm';
+import { QueryBuilder } from 'drizzle-orm/pg-core';
 
 import {
   isByokProvider,
@@ -11,6 +12,7 @@ import {
 import {
   DATABASE_CONNECTION,
   userAiSettings,
+  userProviderKeys,
   type Database,
 } from '../../../../database';
 import type {
@@ -61,6 +63,38 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
         target: userAiSettings.userId,
         set: { ...patch, updatedAt: sql`now()` },
       })
+      .returning({ userId: userAiSettings.userId });
+  }
+
+  async clearBoundToUnheldProvider(
+    userId: string,
+    provider: ByokProvider
+  ): Promise<void> {
+    const modelOnProvider = sql`split_part(${userAiSettings.preferredModel}, ':', 1) = ${provider}`;
+    const primaryIsProvider = eq(userAiSettings.primaryProvider, provider);
+    const heldKey = new QueryBuilder()
+      .select({ provider: userProviderKeys.provider })
+      .from(userProviderKeys)
+      .where(
+        and(
+          eq(userProviderKeys.userId, userId),
+          eq(userProviderKeys.provider, provider)
+        )
+      );
+    await this.db
+      .update(userAiSettings)
+      .set({
+        preferredModel: sql`CASE WHEN ${modelOnProvider} THEN NULL ELSE ${userAiSettings.preferredModel} END`,
+        primaryProvider: sql`CASE WHEN ${primaryIsProvider} THEN NULL ELSE ${userAiSettings.primaryProvider} END`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(userAiSettings.userId, userId),
+          or(modelOnProvider, primaryIsProvider),
+          notExists(heldKey)
+        )
+      )
       .returning({ userId: userAiSettings.userId });
   }
 }

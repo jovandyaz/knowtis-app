@@ -10,6 +10,15 @@ export interface UserAiSettings {
 export interface UserAiSettingsRepository {
   getSettings(userId: string): Promise<UserAiSettings>;
   patchSettings(userId: string, patch: Partial<UserAiSettings>): Promise<void>;
+  /**
+   * Clears the primary provider and a preferred model on `provider`, in one
+   * write that does nothing while the caller holds a key for it: a clear that
+   * lands after the key was added back never erases a choice made on that key.
+   */
+  clearBoundToUnheldProvider(
+    userId: string,
+    provider: ByokProvider
+  ): Promise<void>;
 }
 
 export const USER_AI_SETTINGS_REPOSITORY = Symbol(
