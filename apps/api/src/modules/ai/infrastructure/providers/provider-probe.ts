@@ -1,4 +1,4 @@
-import { APICallError, generateText } from 'ai';
+import { APICallError, generateText, type LanguageModel } from 'ai';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
@@ -25,6 +25,20 @@ export type ProbeFailureReason = 'rejected' | 'unavailable' | 'timeout';
 export type ProbeResult =
   | { valid: true }
   | { valid: false; error: string; reason: ProbeFailureReason };
+
+/** One bounded `ping` turn: the single request every key probe sends. */
+export function sendProbeTurn(
+  model: LanguageModel,
+  abortSignal: AbortSignal
+): Promise<unknown> {
+  return generateText({
+    model,
+    prompt: 'ping',
+    maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
+    abortSignal,
+    telemetry: { isEnabled: false },
+  });
+}
 
 /**
  * Sends one cheap turn through the provider with the candidate key. A failure
@@ -53,13 +67,10 @@ export async function probeProviderKey(
     PROBE_TIMEOUT_MS
   );
   try {
-    await generateText({
-      model: registry.languageModel(probeModelId, apiKey),
-      prompt: 'ping',
-      maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
-      abortSignal: bound.signal,
-      telemetry: { isEnabled: false },
-    });
+    await sendProbeTurn(
+      registry.languageModel(probeModelId, apiKey),
+      bound.signal
+    );
     return { valid: true };
   } catch (error) {
     return {

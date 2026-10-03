@@ -12,7 +12,7 @@ import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
-import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
+import { byokProbeModelId } from '../../domain/model-catalog/probe-model';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -165,16 +165,11 @@ export class ByokService {
     provider: ByokProvider,
     apiKey: string
   ): Promise<ProbeResult> {
-    const probeModel = resolveByokIntent(
-      'fast',
-      provider,
-      this.index.catalog().all()
-    );
     return probeProviderKey(
       this.registry,
       provider,
       apiKey,
-      probeModel?.id ?? null
+      byokProbeModelId(provider, this.index.catalog().all())
     );
   }
 }

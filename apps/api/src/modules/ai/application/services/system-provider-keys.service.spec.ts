@@ -1,5 +1,5 @@
 import { UnprocessableEntityException } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
@@ -63,6 +63,10 @@ describe('SystemProviderKeysService', () => {
       createSnapshotIndex()
     );
   }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -222,6 +226,17 @@ describe('SystemProviderKeysService', () => {
         'anthropic',
         'sk-ant-good-key',
         'anthropic:claude-haiku-4-5'
+      );
+    });
+
+    it('should probe the platform floor model of the provider', async () => {
+      await service.setKey('openrouter', 'sk-or-good-key', ACTOR);
+
+      expect(probeProviderKey).toHaveBeenCalledWith(
+        registry,
+        'openrouter',
+        'sk-or-good-key',
+        'openrouter:deepseek/deepseek-v3.2'
       );
     });
 

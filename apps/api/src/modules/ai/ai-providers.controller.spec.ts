@@ -3,7 +3,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { APICallError, RetryError } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
 import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
@@ -28,7 +28,7 @@ function apiCallError(statusCode: number, message = 'nope') {
 }
 const anthropic = { provider: 'anthropic' } as never;
 
-function make() {
+function make(index = createSnapshotIndex()) {
   const systemKeys = {
     list: vi.fn().mockResolvedValue([]),
     setKey: vi.fn().mockResolvedValue({ valid: true }),
@@ -44,7 +44,7 @@ function make() {
     controller: new AiProvidersController(
       systemKeys as never,
       registry as never,
-      createSnapshotIndex()
+      index
     ),
     systemKeys,
     registry,
@@ -63,6 +63,10 @@ describe('AiProvidersController', () => {
     vi.setSystemTime(SNAPSHOT_DATE);
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockResolvedValue({} as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should reject a request that changes nothing', async () => {
@@ -172,14 +176,38 @@ describe('AiProvidersController', () => {
       });
     });
 
-    it('should probe the fast OpenRouter route, not a curated pick', async () => {
+    it('should probe the platform floor model of the provider', async () => {
       const { controller, registry } = make();
 
       await controller.test({ provider: 'openrouter' } as never);
 
       expect(registry.languageModel).toHaveBeenCalledWith(
-        'openrouter:anthropic/claude-haiku-4.5'
+        'openrouter:deepseek/deepseek-v3.2'
       );
+    });
+
+    it('should fall back to the fast BYOK route when the platform has no floor model there', async () => {
+      const { controller, registry } = make();
+
+      await controller.test({ provider: 'openai' } as never);
+
+      expect(registry.languageModel).toHaveBeenCalledWith('openai:gpt-6-luna');
+    });
+
+    it('should report unconfigured, without a request, when no model resolves', async () => {
+      const { generateText } = vi.mocked(await import('ai'));
+      const emptyIndex = { catalog: () => ({ all: () => [] }) };
+      const { controller, registry } = make(emptyIndex as never);
+
+      await expect(
+        controller.test({ provider: 'openai' } as never)
+      ).resolves.toEqual({
+        ok: false,
+        reason: 'unconfigured',
+        message: "No model resolves for provider 'openai'",
+      });
+      expect(registry.languageModel).not.toHaveBeenCalled();
+      expect(generateText).not.toHaveBeenCalled();
     });
 
     it('should report a refusal with the routing secret scrubbed from the provider echo', async () => {

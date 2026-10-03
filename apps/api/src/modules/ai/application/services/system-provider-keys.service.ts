@@ -20,7 +20,7 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
-import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
+import { systemProbeModelId } from '../../domain/model-catalog/probe-model';
 import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
   type SystemProviderKeysRepository,
@@ -115,16 +115,11 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
       );
     }
-    const probeModel = resolveByokIntent(
-      'fast',
-      provider,
-      this.index.catalog().all()
-    );
     const probe = await probeProviderKey(
       this.moduleRef.get(ProviderRegistryFactory),
       provider,
       apiKey,
-      probeModel?.id ?? null
+      systemProbeModelId(provider, this.index.catalog().all())
     );
     if (!probe.valid) {
       this.logger.warn({
