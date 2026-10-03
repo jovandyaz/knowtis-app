@@ -17,8 +17,9 @@ import { DrizzleModelIndexRepository } from './drizzle-model-index.repository';
 
 const FIRST_ID = 'openrouter:spec-index/first';
 const SECOND_ID = 'openrouter:spec-index/second';
+const THIRD_ID = 'openrouter:spec-index/third';
 const OTHER_PROVIDER_ID = 'anthropic:spec-index-claude';
-const TEST_IDS = [FIRST_ID, SECOND_ID, OTHER_PROVIDER_ID];
+const TEST_IDS = [FIRST_ID, SECOND_ID, THIRD_ID, OTHER_PROVIDER_ID];
 
 const FIRST_SEEN_AT = new Date('2000-01-01T00:00:00.000Z');
 const SECOND_SEEN_AT = new Date('2000-01-02T00:00:00.000Z');
@@ -190,7 +191,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     );
     await repo.upsertMany([indexed(FIRST_ID)], SECOND_SEEN_AT);
 
-    const marked = await repo.markAbsent('openrouter', SECOND_SEEN_AT);
+    const marked = await repo.markAbsent('openrouter', SECOND_SEEN_AT, []);
 
     expect(marked).toBe(1);
     expect(await absentSince(SECOND_ID)).toBeInstanceOf(Date);
@@ -199,14 +200,30 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     expect((await ownListed()).map((model) => model.id).sort()).toEqual(
       [FIRST_ID, OTHER_PROVIDER_ID].sort()
     );
-    await expect(repo.markAbsent('openrouter', SECOND_SEEN_AT)).resolves.toBe(
-      0
+    await expect(
+      repo.markAbsent('openrouter', SECOND_SEEN_AT, [])
+    ).resolves.toBe(0);
+  });
+
+  it('keeps an unseen row listed when its id is in keep', async () => {
+    await repo.upsertMany(
+      [indexed(FIRST_ID), indexed(SECOND_ID), indexed(THIRD_ID)],
+      FIRST_SEEN_AT
+    );
+    await repo.upsertMany([indexed(FIRST_ID)], SECOND_SEEN_AT);
+
+    await repo.markAbsent('openrouter', SECOND_SEEN_AT, [SECOND_ID]);
+
+    expect(await absentSince(SECOND_ID)).toBeNull();
+    expect(await absentSince(THIRD_ID)).toBeInstanceOf(Date);
+    expect((await ownListed()).map((model) => model.id).sort()).toEqual(
+      [FIRST_ID, SECOND_ID].sort()
     );
   });
 
   it('clears absent_since when an absent row is seen again', async () => {
     await repo.upsertMany([indexed(FIRST_ID)], FIRST_SEEN_AT);
-    await repo.markAbsent('openrouter', SECOND_SEEN_AT);
+    await repo.markAbsent('openrouter', SECOND_SEEN_AT, []);
     expect(await absentSince(FIRST_ID)).toBeInstanceOf(Date);
 
     await repo.upsertMany([indexed(FIRST_ID)], SECOND_SEEN_AT);

@@ -10,6 +10,8 @@ export interface ProviderBatch {
   readonly provider: IndexProvider;
   readonly rows: readonly IndexedModel[];
   readonly conclusive: boolean;
+  /** Index ids upstream published that `rows` leaves out: not gone, so never marked absent. */
+  readonly discarded: readonly string[];
 }
 
 export interface IndexSyncPlan {

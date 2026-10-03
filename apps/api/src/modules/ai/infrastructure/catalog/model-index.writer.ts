@@ -8,6 +8,7 @@ import {
   type IndexSyncPlan,
   type ProviderBatch,
 } from '../../domain/model-catalog/index-sync-plan';
+import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   MODEL_INDEX_REPOSITORY,
   type ModelIndexRepository,
@@ -37,6 +38,7 @@ export function providerBatches(
       )
     ),
     conclusive: canConcludeAbsence(openRouter),
+    discarded: openRouter.discarded.map((id) => `${OPENROUTER_ID_PREFIX}${id}`),
   };
   if (modelsDev === null) {
     return [openRouterBatch];
@@ -47,6 +49,9 @@ export function providerBatches(
       provider,
       rows: modelsDev.models.filter((model) => model.provider === provider),
       conclusive,
+      discarded: modelsDev.discarded.filter((id) =>
+        id.startsWith(`${provider}:`)
+      ),
     })),
     openRouterBatch,
   ];
@@ -64,7 +69,8 @@ export class ModelIndexWriter {
 
   /**
    * Upserts every row both reads produced, then marks absent the rows of each
-   * provider whose batch may conclude absence. A `null` models.dev read (its
+   * provider whose batch may conclude absence, except the ids upstream
+   * published but the read discarded. A `null` models.dev read (its
    * fetch failed) leaves the providers it serves untouched. Rejects when a
    * repository call fails.
    */
@@ -93,11 +99,18 @@ export class ModelIndexWriter {
       });
     }
 
+    const discardedOf = new Map(
+      batches.map(({ provider, discarded }) => [provider, discarded])
+    );
     const seenAt = new Date();
     const indexed = await this.repo.upsertMany(plan.upserts, seenAt);
     let absent = 0;
     for (const provider of plan.concludeAbsence) {
-      absent += await this.repo.markAbsent(provider, seenAt);
+      absent += await this.repo.markAbsent(
+        provider,
+        seenAt,
+        discardedOf.get(provider) ?? []
+      );
     }
 
     this.logger.log({ event: 'ai.model_index.sync', indexed, absent });

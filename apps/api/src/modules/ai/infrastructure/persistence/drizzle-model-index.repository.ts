@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, count, eq, isNull, lt, notInArray, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { INDEX_PROVIDERS } from '@knowtis/ai-gateway';
@@ -115,7 +115,11 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
     return distinct.length;
   }
 
-  async markAbsent(provider: IndexProvider, seenAt: Date): Promise<number> {
+  async markAbsent(
+    provider: IndexProvider,
+    seenAt: Date,
+    keep: readonly string[]
+  ): Promise<number> {
     const marked = await this.db
       .update(aiModelIndex)
       .set({ absentSince: sql`now()`, updatedAt: sql`now()` })
@@ -123,7 +127,8 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
         and(
           eq(aiModelIndex.provider, provider),
           lt(aiModelIndex.lastSeenAt, seenAt),
-          isNull(aiModelIndex.absentSince)
+          isNull(aiModelIndex.absentSince),
+          notInArray(aiModelIndex.id, [...keep])
         )
       )
       .returning({ id: aiModelIndex.id });

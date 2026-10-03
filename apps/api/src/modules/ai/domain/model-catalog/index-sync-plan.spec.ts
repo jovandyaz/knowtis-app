@@ -52,7 +52,7 @@ function batch(
   count: number,
   conclusive = true
 ): ProviderBatch {
-  return { provider, rows: rows(provider, count), conclusive };
+  return { provider, rows: rows(provider, count), conclusive, discarded: [] };
 }
 
 describe('planIndexSync', () => {

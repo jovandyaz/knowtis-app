@@ -21,6 +21,7 @@ import { ModelIndexWriter } from './model-index.writer';
 
 const QWEN_SLUG = 'qwen/qwen3.8-max';
 const DEEPSEEK_SLUG = 'deepseek/deepseek-v4-flash';
+const DISCARDED_SLUG = 'z-ai/glm-5.2-air';
 
 // OpenRouter only proves absence while it still lists a curated open-tier model.
 function curatedOpenSlug(): string {
@@ -321,6 +322,22 @@ describe('ModelIndexWriter', () => {
       { provider: 'openai', reason: 'inconclusive' },
       { provider: 'google', reason: 'inconclusive' },
     ]);
+  });
+
+  it('should keep a model OpenRouter published but discarded from absence', async () => {
+    const { writer, repo } = make({ openrouter: 3 });
+
+    await writer.write(
+      openRouterCatalog({ discarded: [DISCARDED_SLUG] }),
+      modelsDevCatalog()
+    );
+
+    expect(absenceConcludedFor(repo)).toContain('openrouter');
+    expect(repo.markAbsent).toHaveBeenCalledWith(
+      'openrouter',
+      expect.any(Date),
+      [`openrouter:${DISCARDED_SLUG}`]
+    );
   });
 
   it('should warn with the counts behind a rejection on an inconclusive OpenRouter read', async () => {
