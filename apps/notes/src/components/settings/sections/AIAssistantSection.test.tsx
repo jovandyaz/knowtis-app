@@ -22,7 +22,14 @@ const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts
+        ? `${key}(${Object.entries(opts)
+            .map(([name, value]) => `${name}=${String(value)}`)
+            .join(',')})`
+        : key,
+  }),
 }));
 vi.mock('./AIKeysManager', () => ({
   AIKeysManager: ({ focusFirstField }: { focusFirstField?: boolean }) => (
@@ -112,17 +119,23 @@ describe('AIAssistantSection', () => {
     render(<AIAssistantSection />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+    ).toHaveAttribute(
       'title',
-      'aiAssistant.intent.fastHint'
+      'aiAssistant.intent.rowDetail(model=Fast One,hint=aiAssistant.intent.fastHint)'
     );
-    expect(screen.getByRole('radio', { name: 'Balanced One' })).toHaveAttribute(
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
+    ).toHaveAttribute(
       'title',
-      'aiAssistant.intent.balancedHint'
+      'aiAssistant.intent.rowDetail(model=Balanced One,hint=aiAssistant.intent.balancedHint)'
     );
-    expect(screen.getByRole('radio', { name: 'Premium One' })).toHaveAttribute(
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
+    ).toHaveAttribute(
       'title',
-      'aiAssistant.intent.powerfulHint'
+      'aiAssistant.intent.rowDetail(model=Premium One,hint=aiAssistant.intent.powerfulHint)'
     );
     expect(
       screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
@@ -146,10 +159,9 @@ describe('AIAssistantSection', () => {
   it('activates the default intent when the account has none stored', () => {
     render(<AIAssistantSection />);
 
-    expect(screen.getByRole('radio', { name: 'Balanced One' })).toHaveAttribute(
-      'data-state',
-      'on'
-    );
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
+    ).toHaveAttribute('data-state', 'on');
   });
 
   it('deactivates every chip while an advanced account override is in effect', () => {
@@ -186,10 +198,9 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
-      'data-state',
-      'on'
-    );
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+    ).toHaveAttribute('data-state', 'on');
   });
 
   it('renders no chips while the model list is unresolved', () => {
@@ -227,7 +238,9 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Premium One' }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
+    );
 
     expect(update).toHaveBeenCalledWith({
       preferredModel: null,
@@ -335,7 +348,7 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    const chip = screen.getByRole('radio', { name: 'Fast One' });
+    const chip = screen.getByRole('radio', { name: 'aiAssistant.intent.fast' });
     expect(chip).toBeEnabled();
     await userEvent.click(chip);
 

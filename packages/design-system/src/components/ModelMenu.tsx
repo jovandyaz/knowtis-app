@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 
-import { ChevronDown, KeyRound, Loader2, Lock } from 'lucide-react';
+import { ChevronDown, KeyRound, Loader2 } from 'lucide-react';
 
 import { cn } from '../utils/cn';
 import { Button } from './Button';
@@ -21,9 +21,9 @@ import {
 export interface ModelMenuPrimaryRow {
   /** Intent value ('fast' | 'balanced' | 'powerful') — opaque here. */
   id: string;
-  /** Resolved model name, e.g. "Sonnet 5". */
+  /** Intent name, e.g. "Balanceado". */
   label: string;
-  /** Job line, e.g. "Balance entre calidad y velocidad". */
+  /** Detail line, e.g. "Sonnet 5 · El equilibrio ideal". */
   description: string;
 }
 
@@ -44,13 +44,11 @@ export interface ModelMenuEffort {
   value: string;
   options: ReadonlyArray<{ id: string; label: string; description?: string }>;
   footnote?: string;
-  /** Anonymous: inert locked row. */
-  locked?: boolean;
   onChange: (id: string) => void;
 }
 
 export interface ModelMenuMoreModels {
-  /** "Más modelos". */
+  /** "Avanzado". */
   label: string;
   groups: ReadonlyArray<{ label: string; options: ModelMenuModelRow[] }>;
 }
@@ -62,14 +60,14 @@ export interface ModelMenuProps {
   onSelect: (id: string) => void;
   effort?: ModelMenuEffort;
   moreModels?: ModelMenuMoreModels;
-  /** Anonymous upsell. */
+  /** Upsell entry closing the menu, e.g. "Más modelos con tu API key →". */
   footerCta?: { label: string; onClick: () => void };
   /**
    * Renders the effort and more-models sections inline instead of as side
    * flyouts. Required below ~768px, where a flyout cannot fit beside the menu.
    */
   inlineSections?: boolean;
-  /** Model name. */
+  /** Active intent or override model name. */
   triggerLabel: string;
   /** Effort tail — renders "· {detail}" muted. */
   triggerDetail?: string;
@@ -84,7 +82,6 @@ export interface ModelMenuProps {
 
 const OPTION_ROW_CLASSES = 'relative flex-col items-start gap-0.5';
 const SECTION_LABEL_CLASSES = 'text-xs uppercase tracking-wide';
-const LOCK_GLYPH_CLASSES = 'h-3.5 w-3.5 text-(--muted-foreground)';
 const FOOTNOTE_CLASSES = 'px-2 py-1.5 text-xs text-(--muted-foreground)';
 const FALLBACK_LABEL = '—';
 
@@ -266,15 +263,7 @@ export function ModelMenu({
             </DropdownMenuRadioGroup>
             {(effort || moreModels) && <DropdownMenuSeparator />}
             {effort &&
-              (effort.locked ? (
-                <DropdownMenuItem
-                  disabled
-                  className="justify-between opacity-50"
-                >
-                  <span>{effort.label}</span>
-                  <Lock className={LOCK_GLYPH_CLASSES} />
-                </DropdownMenuItem>
-              ) : !inlineSections ? (
+              (!inlineSections ? (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <span className="flex-1">{effort.label}</span>

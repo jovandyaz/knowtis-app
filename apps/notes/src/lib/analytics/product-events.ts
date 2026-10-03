@@ -45,7 +45,7 @@ export interface BrowserProductEventMap {
   };
   'ai upgrade cta clicked': {
     from_tier: AccessTier;
-    cta: 'register' | 'byok' | 'review_key';
+    cta: 'register' | 'byok' | 'more_models' | 'review_key';
   };
   'ai continue clicked': {
     tier?: AccessTier;

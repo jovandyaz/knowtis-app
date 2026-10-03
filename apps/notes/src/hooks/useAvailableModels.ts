@@ -9,11 +9,10 @@ export const aiModelsQueryKeys = {
 } as const;
 
 /** The caller's tier catalog: the tier the server resolved, the models it may run and the intent each serves. */
-export function useAvailableModels(enabled = true) {
+export function useAvailableModels() {
   return useQuery({
     queryKey: aiModelsQueryKeys.list(),
     queryFn: () => aiModelsApi.getModels(),
     staleTime: 1000 * 60 * 10,
-    enabled,
   });
 }

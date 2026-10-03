@@ -156,32 +156,6 @@ describe('ModelMenu', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('renders a locked effort row as inert, with no submenu', async () => {
-    const user = userEvent.setup();
-    render(
-      <ModelMenu
-        {...baseProps({
-          effort: {
-            label: 'Esfuerzo',
-            value: 'auto',
-            options: EFFORT_OPTIONS,
-            locked: true,
-            onChange: vi.fn(),
-          },
-        })}
-      />
-    );
-    await user.click(screen.getByRole('button'));
-
-    const row = screen.getByRole('menuitem', { name: /Esfuerzo/ });
-    expect(row).toHaveAttribute('aria-disabled', 'true');
-    expect(row).not.toHaveAttribute('aria-haspopup');
-    expect(row.querySelector('svg')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('menuitemradio', { name: /^Auto/ })
-    ).not.toBeInTheDocument();
-  });
-
   it('more-models submenu renders group headings, cost, billed pill and reports selection', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

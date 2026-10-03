@@ -33,7 +33,7 @@ describe('useAvailableModels', () => {
     };
     vi.mocked(aiModelsApi.getModels).mockResolvedValue(catalog);
 
-    const { result } = renderHook(() => useAvailableModels(true), { wrapper });
+    const { result } = renderHook(() => useAvailableModels(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(catalog);

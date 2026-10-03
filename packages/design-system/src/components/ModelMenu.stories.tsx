@@ -5,13 +5,21 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ModelMenu, type ModelMenuProps } from './ModelMenu';
 
 const PRIMARY = [
-  { id: 'fast', label: 'Haiku 4.5', description: 'Respuestas instantáneas' },
+  {
+    id: 'fast',
+    label: 'Rápido',
+    description: 'Haiku 4.5 · Respuestas al instante',
+  },
   {
     id: 'balanced',
-    label: 'Sonnet 5',
-    description: 'Balance entre calidad y velocidad',
+    label: 'Balanceado',
+    description: 'Sonnet 5 · El equilibrio ideal',
   },
-  { id: 'powerful', label: 'Opus 5', description: 'Razonamiento profundo' },
+  {
+    id: 'powerful',
+    label: 'Profundo',
+    description: 'Opus 5 · Razonamiento a fondo',
+  },
 ];
 
 const EFFORT_OPTIONS = [
@@ -22,27 +30,28 @@ const EFFORT_OPTIONS = [
 ];
 
 const MORE_MODELS = {
-  label: 'Más modelos',
+  label: 'Avanzado',
   groups: [
     {
-      label: 'Modelos abiertos',
-      options: [
-        {
-          id: 'openrouter:deepseek/deepseek-v4-flash-0731',
-          label: 'DeepSeek V4 Flash 0731',
-          description: 'Insignia open-weight a una fracción del costo',
-          cost: '$',
-        },
-      ],
-    },
-    {
-      label: 'Con tu clave',
+      label: 'Anthropic',
       options: [
         {
           id: 'anthropic:claude-opus-5',
           label: 'Opus 5',
           description: 'El más capaz para razonamiento complejo',
           cost: '$$$',
+          billedBadge: 'Tu clave',
+        },
+      ],
+    },
+    {
+      label: 'OpenRouter',
+      options: [
+        {
+          id: 'openrouter:deepseek/deepseek-v4-flash-0731',
+          label: 'DeepSeek V4 Flash 0731',
+          description: 'Insignia open-weight a una fracción del costo',
+          cost: '$',
           billedBadge: 'Tu clave',
         },
       ],
@@ -117,37 +126,14 @@ function ControlledWithEffort({
   );
 }
 
-export const Anonymous: Story = {
-  render: () => (
-    <ModelMenu
-      primary={PRIMARY.filter((row) => row.id === 'balanced')}
-      value="balanced"
-      onSelect={() => undefined}
-      effort={{
-        label: 'Esfuerzo',
-        value: 'auto',
-        options: EFFORT_OPTIONS,
-        locked: true,
-        onChange: () => undefined,
-      }}
-      footerCta={{
-        label: 'Crea una cuenta gratis para elegir modelo',
-        onClick: () => undefined,
-      }}
-      triggerLabel="Sonnet 5"
-      aria-label="Modelo"
-    />
-  ),
-};
-
 export const FreeRegistered: Story = {
   render: () => (
     <Controlled
       initial="balanced"
       primary={PRIMARY}
-      moreModels={{
-        label: 'Más modelos',
-        groups: [MORE_MODELS.groups[0]],
+      footerCta={{
+        label: 'Más modelos con tu API key →',
+        onClick: () => undefined,
       }}
       aria-label="Modelo"
     />
@@ -171,7 +157,7 @@ export const Loading: Story = {
       value={null}
       onSelect={() => undefined}
       status="loading"
-      triggerLabel="Sonnet 5"
+      triggerLabel="Balanceado"
       loadingLabel="Cargando modelos…"
       aria-label="Modelo"
     />

@@ -125,20 +125,19 @@
       "effortMax": "Máximo",
       "effortFootnote": "Más esfuerzo usa más tokens de tu clave y tarda más.",
       "effortFootnoteFree": "Más esfuerzo tarda más en responder.",
-      "moreModels": "Más modelos",
-      "groupOpen": "Modelos abiertos",
-      "groupByok": "Con tu clave",
-      "registerCta": "Crea tu cuenta para elegir modelo y esfuerzo",
+      "advanced": "Avanzado",
+      "byokCta": "Más modelos con tu API key →",
       "triggerLabel": "Modelo y esfuerzo"
     },
     "intent": {
       "label": "Estilo del asistente",
       "fast": "Rápido",
-      "balanced": "Equilibrado",
+      "balanced": "Balanceado",
       "powerful": "Profundo",
       "fastHint": "Respuestas al instante",
       "balancedHint": "El equilibrio ideal",
-      "powerfulHint": "Razonamiento a fondo"
+      "powerfulHint": "Razonamiento a fondo",
+      "rowDetail": "{{model}} · {{hint}}"
     },
     "advanced": {
       "trigger": "Avanzado: elegir modelo"
@@ -154,9 +153,7 @@
       "stored": "Clave guardada ({{prefix}}…)",
       "billedBadge": "Tu clave",
       "lastUsed": "Último uso {{when}}",
-      "neverUsed": "Sin usar todavía",
-      "bridge": "Agrega tu clave",
-      "bridgeHint": "Usa tu propia clave de API para ejecutar más modelos"
+      "neverUsed": "Sin usar todavía"
     }
   },
   "aiModels": {

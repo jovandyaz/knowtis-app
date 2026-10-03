@@ -1,3 +1,5 @@
+import { providerOfModel } from '@/lib/ai/byok-providers';
+import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
 import type { TFunction } from 'i18next';
 
 import type {
@@ -7,6 +9,7 @@ import type {
   ModelMenuPrimaryRow,
 } from '@knowtis/design-system';
 import {
+  BYOK_PROVIDERS,
   DEFAULT_MODEL_INTENT,
   MODEL_INTENTS,
   REASONING_EFFORTS,
@@ -18,11 +21,6 @@ import {
 export interface ModelPreference {
   preferredModel?: string | null;
   preferredIntent?: ModelIntent | null;
-}
-
-/** A catalogue model the caller may pick from "more models": one no intent is assigned to. */
-function isMoreModel(model: SelectableModel): boolean {
-  return !model.servesIntent;
 }
 
 /**
@@ -90,9 +88,9 @@ export function advancedOverride(
 }
 
 /**
- * One row per served intent, in MODEL_INTENTS order, named after the model that
- * serves it. The job line is the intent's hint, not the model's copy: the row
- * stands for the job, and the backoffice may repoint it at another model.
+ * One row per served intent, in MODEL_INTENTS order, named after the intent:
+ * the backoffice may repoint an intent at another model, so the row stands for
+ * the job and its detail line names the model serving it today.
  */
 export function primaryRows(
   models: readonly SelectableModel[] | undefined,
@@ -107,41 +105,46 @@ export function primaryRows(
     return [
       {
         id: intent,
-        label: model.label,
-        description: t(`aiAssistant.intent.${intent}Hint` as never),
+        label: t(`aiAssistant.intent.${intent}` as never),
+        description: t('aiAssistant.intent.rowDetail', {
+          model: model.label,
+          hint: t(`aiAssistant.intent.${intent}Hint` as never),
+        }),
       },
     ];
   });
 }
 
-/** The "more models" catalogue: the open pool first, then the caller's BYOK models. */
-export function moreModelGroups(
+/** Avanzado: the caller's own-key models no intent row offers, one group per provider, so a model two of their keys serve shows once under each route. */
+export function advancedGroups(
   models: readonly SelectableModel[] | undefined,
   t: TFunction<'common'>
 ): ModelMenuMoreModels['groups'] {
-  const list = (models ?? []).filter(isMoreModel);
-  const toRow = (model: SelectableModel): ModelMenuModelRow => {
-    const description = modelDescription(model, t);
-    return {
-      id: model.id,
-      label: model.label,
-      cost: '$'.repeat(model.costClass),
-      ...(description !== undefined && { description }),
-      ...(model.billedToUser && {
-        billedBadge: t('aiAssistant.byok.billedBadge'),
-      }),
-    };
+  const listed = (models ?? []).filter(
+    (m) => m.billedToUser && !m.servesIntent
+  );
+  return BYOK_PROVIDERS.flatMap((provider) => {
+    const options = listed
+      .filter((m) => providerOfModel(m.id) === provider)
+      .map((m) => advancedRow(m, t));
+    return options.length > 0
+      ? [{ label: PROVIDER_LABEL[provider], options }]
+      : [];
+  });
+}
+
+function advancedRow(
+  model: SelectableModel,
+  t: TFunction<'common'>
+): ModelMenuModelRow {
+  const description = modelDescription(model, t);
+  return {
+    id: model.id,
+    label: model.label,
+    cost: '$'.repeat(model.costClass),
+    ...(description !== undefined && { description }),
+    billedBadge: t('aiAssistant.byok.billedBadge'),
   };
-  const open = list.filter((m) => !m.billedToUser).map(toRow);
-  const byok = list.filter((m) => m.billedToUser).map(toRow);
-  const groups: Array<{ label: string; options: ModelMenuModelRow[] }> = [];
-  if (open.length > 0) {
-    groups.push({ label: t('aiAssistant.menu.groupOpen'), options: open });
-  }
-  if (byok.length > 0) {
-    groups.push({ label: t('aiAssistant.menu.groupByok'), options: byok });
-  }
-  return groups;
 }
 
 /**
