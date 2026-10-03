@@ -720,7 +720,7 @@ The **Esfuerzo** row appears whenever the selected model's listing carries `reas
 
 **Global breaker:** when the global daily-spend circuit breaker trips (see [Rate Limiting](#rate-limiting)), every rejection logs `ai.budget.global_breaker` at error level, and the `budget.global_breaker` webhook alert fires once per day (Redis `SET NX` on `ai:global-breaker-fired:{day}` with 25h TTL; per-instance in-memory fallback when Redis is down).
 
-**Webhook:** if `AI_ALERT_WEBHOOK_URL` is set, `budget.warning`, `budget.global_breaker`, `cooldown_start`, and `agent.health.alert` events POST a JSON payload to it — fire-and-forget with a 5s timeout; failures are logged and never block the request.
+**Webhook:** if `AI_ALERT_WEBHOOK_URL` is set, `budget.warning`, `budget.global_breaker`, `cooldown_start`, and `agent.health.alert` events POST a JSON payload to it — fire-and-forget with a 5s timeout; failures are logged and never block the request. In production it points to a PostHog incoming webhook that turns each alert into an `ai alert fired` event and emails the subscribers of an hourly insight alert ([PostHog analytics](./POSTHOG_ANALYTICS.md#posthog-project-assets)). `budget.warning` carries a `userId`, which that webhook does not map.
 
 ---
 
