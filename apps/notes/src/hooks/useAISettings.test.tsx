@@ -150,4 +150,42 @@ describe('useUpdateAISettings', () => {
       queryClient.getQueryData(aiModelsQueryKeys.preferences())
     ).toBeUndefined();
   });
+
+  it('refreshes the catalog after a primary provider write, since it re-routes the intents', async () => {
+    vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+      primaryProvider: 'openai',
+      ghostTextEnabled: true,
+    });
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ primaryProvider: 'openai' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.list(),
+    });
+  });
+
+  it('leaves the catalog cached after a write that cannot change it', async () => {
+    vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+      primaryProvider: null,
+      ghostTextEnabled: false,
+    });
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ ghostTextEnabled: false });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.list(),
+    });
+  });
 });

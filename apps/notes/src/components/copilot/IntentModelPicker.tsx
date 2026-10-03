@@ -2,13 +2,17 @@ import { useTranslation } from 'react-i18next';
 
 import { ModelSelect, SegmentedControl } from '@knowtis/design-system';
 import {
-  MODEL_TIERS,
   isModelIntent,
+  MODEL_TIERS,
   type ModelIntent,
   type SelectableModel,
 } from '@knowtis/shared-types';
 
-import { advancedModelOptions, primaryRows } from './intent-picker-options';
+import {
+  advancedModelOptions,
+  advancedOptionDescription,
+  primaryRows,
+} from './intent-picker-options';
 
 export interface IntentModelPickerProps {
   models: readonly SelectableModel[] | undefined;
@@ -62,11 +66,7 @@ export function IntentModelPicker({
           errorLabel={t('aiAssistant.loadError')}
           retryLabel={t('aiAssistant.retry')}
           modelsLabel={t('aiAssistant.modelsGroup')}
-          renderDescription={(m) =>
-            m.descriptionKey
-              ? t(m.descriptionKey as never)
-              : (m.description ?? '')
-          }
+          renderDescription={(m) => advancedOptionDescription(m, t)}
           triggerLabel={t('aiAssistant.advanced.trigger')}
           billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
         />

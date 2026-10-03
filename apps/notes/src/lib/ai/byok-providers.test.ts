@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { providerOfModel } from './byok-providers';
+import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
+
+import {
+  effectivePrimaryProvider,
+  keysInAddedOrder,
+  providerOfModel,
+} from './byok-providers';
 
 describe('providerOfModel', () => {
   it.each([
@@ -18,4 +24,52 @@ describe('providerOfModel', () => {
       expect(providerOfModel(modelId)).toBeNull();
     }
   );
+});
+
+function key(provider: ByokProvider, createdAt: string): ProviderKeyInfo {
+  return { provider, keyPrefix: 'sk-***', lastUsedAt: null, createdAt };
+}
+
+const OLDER = '2026-01-01T00:00:00.000Z';
+const NEWER = '2026-03-01T00:00:00.000Z';
+
+describe('keysInAddedOrder', () => {
+  it('lists the oldest key first and breaks a tie by provider, as the server routes them', () => {
+    expect(
+      keysInAddedOrder([
+        key('openrouter', NEWER),
+        key('openai', OLDER),
+        key('anthropic', OLDER),
+      ]).map((k) => k.provider)
+    ).toEqual(['anthropic', 'openai', 'openrouter']);
+  });
+});
+
+describe('effectivePrimaryProvider', () => {
+  const keys = [key('openrouter', NEWER), key('google', OLDER)];
+
+  it('answers the stored primary while its key is held', () => {
+    expect(
+      effectivePrimaryProvider({ primaryProvider: 'openrouter' }, keys)
+    ).toBe('openrouter');
+  });
+
+  it.each([null, 'openai' as const])(
+    'answers the first key added when the stored primary is %s',
+    (primaryProvider) => {
+      expect(effectivePrimaryProvider({ primaryProvider }, keys)).toBe(
+        'google'
+      );
+    }
+  );
+
+  it('answers the first key added while preferences are unknown', () => {
+    expect(effectivePrimaryProvider(undefined, keys)).toBe('google');
+  });
+
+  it('answers null without keys', () => {
+    expect(
+      effectivePrimaryProvider({ primaryProvider: 'openai' }, [])
+    ).toBeNull();
+  });
 });

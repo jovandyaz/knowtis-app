@@ -45,10 +45,17 @@ export function useUpdateAISettings() {
         );
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, input) => {
       void queryClient.invalidateQueries({
         queryKey: aiModelsQueryKeys.preferences(),
       });
+      // The primary provider picks which key serves each intent, so the
+      // catalog's intents move with it.
+      if (input.primaryProvider !== undefined) {
+        void queryClient.invalidateQueries({
+          queryKey: aiModelsQueryKeys.list(),
+        });
+      }
     },
   });
 }

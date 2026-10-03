@@ -52,13 +52,34 @@ const EFFORT_LABEL_KEYS = {
   max: 'aiAssistant.menu.effortMax',
 } as const satisfies Record<ReasoningEffort, string>;
 
+interface ModelCopy {
+  readonly descriptionKey?: string;
+  readonly description?: string;
+}
+
 function modelDescription(
-  model: SelectableModel,
+  model: ModelCopy,
   t: TFunction<'common'>
 ): string | undefined {
   return model.descriptionKey
     ? t(model.descriptionKey as never)
     : model.description;
+}
+
+/** The settings Avanzado detail line: the provider whose key serves the model first, so one model on two keys reads as two routes. */
+export function advancedOptionDescription(
+  model: ModelCopy & { readonly id: string },
+  t: TFunction<'common'>
+): string {
+  const detail = modelDescription(model, t) ?? '';
+  const provider = providerOfModel(model.id);
+  if (provider === null) {
+    return detail;
+  }
+  const name = PROVIDER_LABEL[provider];
+  return detail
+    ? t('aiAssistant.advanced.routeDetail', { provider: name, detail })
+    : name;
 }
 
 /** Models the caller can run on their own key — the Advanced picker's option set. */

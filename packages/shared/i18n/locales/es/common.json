@@ -140,7 +140,8 @@
       "rowDetail": "{{model}} · {{hint}}"
     },
     "advanced": {
-      "trigger": "Avanzado: elegir modelo"
+      "trigger": "Avanzado: elegir modelo",
+      "routeDetail": "{{provider}} · {{detail}}"
     },
     "byok": {
       "title": "Tus claves de API",
@@ -154,6 +155,10 @@
       "billedBadge": "Tu clave",
       "lastUsed": "Último uso {{when}}",
       "neverUsed": "Sin usar todavía"
+    },
+    "primaryProvider": {
+      "title": "Proveedor principal",
+      "description": "Cuando un modelo está disponible con varias de tus claves, se cobra a esta."
     }
   },
   "aiModels": {

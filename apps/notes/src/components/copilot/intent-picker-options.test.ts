@@ -6,6 +6,7 @@ import type { SelectableModel } from '@knowtis/shared-types';
 import {
   advancedGroups,
   advancedModelOptions,
+  advancedOptionDescription,
   effortOptions,
   primaryRows,
   resolveSelectedModel,
@@ -163,5 +164,39 @@ describe('resolveSelectedModel', () => {
         preferredIntent: 'fast',
       })
     ).toBe(fast);
+  });
+});
+
+describe('advancedOptionDescription', () => {
+  it('leads with the provider whose key serves the model', () => {
+    expect(
+      advancedOptionDescription(
+        {
+          id: 'openrouter:anthropic/claude-haiku-4.5',
+          descriptionKey: 'aiModels.haiku45',
+        },
+        t
+      )
+    ).toBe(
+      'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.haiku45)'
+    );
+  });
+
+  it('names only the provider of a model with no copy', () => {
+    expect(
+      advancedOptionDescription(
+        { id: 'anthropic:claude-haiku-4-5', descriptionKey: '' },
+        t
+      )
+    ).toBe('Anthropic');
+  });
+
+  it('keeps the copy alone for a model no BYOK key serves', () => {
+    expect(
+      advancedOptionDescription(
+        { id: 'z-ai:glm-5.3', descriptionKey: '', description: 'Open model' },
+        t
+      )
+    ).toBe('Open model');
   });
 });

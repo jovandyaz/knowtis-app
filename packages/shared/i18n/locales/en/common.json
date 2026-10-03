@@ -140,7 +140,8 @@
       "rowDetail": "{{model}} · {{hint}}"
     },
     "advanced": {
-      "trigger": "Advanced: choose model"
+      "trigger": "Advanced: choose model",
+      "routeDetail": "{{provider}} · {{detail}}"
     },
     "byok": {
       "title": "Your API keys",
@@ -154,6 +155,10 @@
       "billedBadge": "Your key",
       "lastUsed": "Last used {{when}}",
       "neverUsed": "Not used yet"
+    },
+    "primaryProvider": {
+      "title": "Primary provider",
+      "description": "When a model is available through several of your keys, it is billed to this one."
     }
   },
   "aiModels": {
