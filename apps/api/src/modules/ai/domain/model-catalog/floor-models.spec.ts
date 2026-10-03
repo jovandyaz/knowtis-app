@@ -5,7 +5,11 @@ import { parseChain } from '@knowtis/shared-types';
 
 import { createFloorRows } from '../../testing/create-floor-rows';
 import { AI_SETTING_DEFAULTS } from '../ai-settings';
-import { FLOOR_MODEL_IDS, unservedFloorModels } from './floor-models';
+import {
+  FLOOR_MODEL_IDS,
+  floorModelsLost,
+  unservedFloorModels,
+} from './floor-models';
 import { CURATED_MODELS } from './selectable-models.catalog';
 
 const UNPRICED_OUTPUT_MODEL_ID = AI_SETTING_DEFAULTS.ai_fast_model;
@@ -69,5 +73,38 @@ describe('unservedFloorModels', () => {
         UNSUPPORTED_MODEL_ID,
       ])
     );
+  });
+});
+
+describe('floorModelsLost', () => {
+  it('names the floor models the current catalog serves and the next one drops or degrades', () => {
+    const current = createFloorRows();
+    const next = createFloorRows((row) =>
+      row.id === UNSUPPORTED_MODEL_ID
+        ? { ...row, inputModalities: IMAGE_ONLY }
+        : row
+    ).filter((row) => row.id !== MISSING_MODEL_ID);
+
+    expect(
+      new Set(
+        floorModelsLost(
+          new ModelIndexCatalog(current),
+          new ModelIndexCatalog(next)
+        )
+      )
+    ).toEqual(new Set([UNSUPPORTED_MODEL_ID, MISSING_MODEL_ID]));
+  });
+
+  it('ignores a floor model the current catalog does not serve', () => {
+    const current = createFloorRows().filter(
+      (row) => row.id !== MISSING_MODEL_ID
+    );
+
+    expect(
+      floorModelsLost(
+        new ModelIndexCatalog(current),
+        new ModelIndexCatalog(current)
+      )
+    ).toEqual([]);
   });
 });

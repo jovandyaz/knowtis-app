@@ -2,11 +2,28 @@ import { describe, expect, it } from 'vitest';
 
 import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
 
+import { createIndexedModel } from '../../testing/create-indexed-model';
+import { FLOOR_MODEL_IDS } from './floor-models';
 import {
   planIndexSync,
   SYNC_MAX_SHRINK_RATIO,
   type ProviderBatch,
 } from './index-sync-plan';
+
+const NOTHING_SERVED: readonly IndexedModel[] = [];
+
+function floorIdOf(provider: IndexProvider): string {
+  const id = FLOOR_MODEL_IDS.find((floorId) =>
+    floorId.startsWith(`${provider}:`)
+  );
+  if (id === undefined) {
+    throw new Error(`the plan spec needs a ${provider} floor model`);
+  }
+  return id;
+}
+
+const OPENROUTER_FLOOR_ID = floorIdOf('openrouter');
+const ANTHROPIC_FLOOR_ID = floorIdOf('anthropic');
 
 const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
   anthropic: 0,
@@ -59,10 +76,14 @@ describe('planIndexSync', () => {
   it('should conclude absence for a conclusive batch that kept its size', () => {
     const anthropic = batch('anthropic', 10);
 
-    const plan = planIndexSync([anthropic], {
-      ...NOTHING_LISTED,
-      anthropic: 10,
-    });
+    const plan = planIndexSync(
+      [anthropic],
+      {
+        ...NOTHING_LISTED,
+        anthropic: 10,
+      },
+      NOTHING_SERVED
+    );
 
     expect(plan.upserts).toEqual(anthropic.rows);
     expect(plan.concludeAbsence).toEqual(['anthropic']);
@@ -73,7 +94,8 @@ describe('planIndexSync', () => {
     const previous = 10;
     const plan = planIndexSync(
       [batch('openai', previous * SYNC_MAX_SHRINK_RATIO)],
-      { ...NOTHING_LISTED, openai: previous }
+      { ...NOTHING_LISTED, openai: previous },
+      NOTHING_SERVED
     );
 
     expect(plan.concludeAbsence).toEqual(['openai']);
@@ -84,10 +106,14 @@ describe('planIndexSync', () => {
     const previous = 10;
     const google = batch('google', previous * SYNC_MAX_SHRINK_RATIO - 1);
 
-    const plan = planIndexSync([google], {
-      ...NOTHING_LISTED,
-      google: previous,
-    });
+    const plan = planIndexSync(
+      [google],
+      {
+        ...NOTHING_LISTED,
+        google: previous,
+      },
+      NOTHING_SERVED
+    );
 
     expect(plan.upserts).toEqual(google.rows);
     expect(plan.concludeAbsence).toEqual([]);
@@ -97,10 +123,14 @@ describe('planIndexSync', () => {
   it('should reject absence but still upsert an inconclusive batch', () => {
     const openrouter = batch('openrouter', 10, false);
 
-    const plan = planIndexSync([openrouter], {
-      ...NOTHING_LISTED,
-      openrouter: 10,
-    });
+    const plan = planIndexSync(
+      [openrouter],
+      {
+        ...NOTHING_LISTED,
+        openrouter: 10,
+      },
+      NOTHING_SERVED
+    );
 
     expect(plan.upserts).toEqual(openrouter.rows);
     expect(plan.concludeAbsence).toEqual([]);
@@ -110,10 +140,14 @@ describe('planIndexSync', () => {
   });
 
   it('should report an inconclusive batch as inconclusive even when it also shrank', () => {
-    const plan = planIndexSync([batch('openrouter', 1, false)], {
-      ...NOTHING_LISTED,
-      openrouter: 10,
-    });
+    const plan = planIndexSync(
+      [batch('openrouter', 1, false)],
+      {
+        ...NOTHING_LISTED,
+        openrouter: 10,
+      },
+      NOTHING_SERVED
+    );
 
     expect(plan.rejected).toEqual([
       { provider: 'openrouter', reason: 'inconclusive' },
@@ -123,7 +157,8 @@ describe('planIndexSync', () => {
   it('should always conclude absence for a provider with nothing listed before', () => {
     const plan = planIndexSync(
       [batch('anthropic', 0), batch('openrouter', 3, false)],
-      NOTHING_LISTED
+      NOTHING_LISTED,
+      NOTHING_SERVED
     );
 
     expect(plan.concludeAbsence).toEqual(['anthropic', 'openrouter']);
@@ -134,11 +169,15 @@ describe('planIndexSync', () => {
     const anthropic = batch('anthropic', 4);
     const openrouter = batch('openrouter', 2);
 
-    const plan = planIndexSync([anthropic, openrouter], {
-      ...NOTHING_LISTED,
-      anthropic: 4,
-      openrouter: 100,
-    });
+    const plan = planIndexSync(
+      [anthropic, openrouter],
+      {
+        ...NOTHING_LISTED,
+        anthropic: 4,
+        openrouter: 100,
+      },
+      NOTHING_SERVED
+    );
 
     expect(plan.upserts).toEqual([...anthropic.rows, ...openrouter.rows]);
     expect(plan.concludeAbsence).toEqual(['anthropic']);
@@ -148,13 +187,63 @@ describe('planIndexSync', () => {
   });
 
   it('should conclude nothing for a provider that sent no batch', () => {
-    const plan = planIndexSync([batch('openrouter', 5)], {
-      ...NOTHING_LISTED,
-      anthropic: 5,
-      openrouter: 5,
-    });
+    const plan = planIndexSync(
+      [batch('openrouter', 5)],
+      {
+        ...NOTHING_LISTED,
+        anthropic: 5,
+        openrouter: 5,
+      },
+      NOTHING_SERVED
+    );
 
     expect(plan.concludeAbsence).toEqual(['openrouter']);
+    expect(plan.rejected).toEqual([]);
+  });
+
+  it('should write none of a batch that would unserve a floor model its provider serves now', () => {
+    const anthropic = batch('anthropic', 2);
+    const openrouter: ProviderBatch = {
+      ...batch('openrouter', 2),
+      rows: [
+        ...rows('openrouter', 2),
+        createIndexedModel({ id: OPENROUTER_FLOOR_ID, inputModalities: [] }),
+      ],
+    };
+
+    const plan = planIndexSync(
+      [anthropic, openrouter],
+      { ...NOTHING_LISTED, anthropic: 2, openrouter: 3 },
+      [createIndexedModel({ id: OPENROUTER_FLOOR_ID })]
+    );
+
+    expect(plan.upserts).toEqual(anthropic.rows);
+    expect(plan.concludeAbsence).toEqual(['anthropic']);
+    expect(plan.rejected).toEqual([
+      {
+        provider: 'openrouter',
+        reason: 'floor',
+        models: [OPENROUTER_FLOOR_ID],
+      },
+    ]);
+  });
+
+  it('should hold a batch only to the floor models its own provider serves', () => {
+    const openrouter = batch('openrouter', 2);
+
+    const plan = planIndexSync(
+      [openrouter],
+      { ...NOTHING_LISTED, openrouter: 2 },
+      [
+        createIndexedModel({
+          id: ANTHROPIC_FLOOR_ID,
+          provider: 'anthropic',
+          source: 'models_dev',
+        }),
+      ]
+    );
+
+    expect(plan.upserts).toEqual(openrouter.rows);
     expect(plan.rejected).toEqual([]);
   });
 });

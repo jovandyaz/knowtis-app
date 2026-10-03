@@ -11,6 +11,7 @@ import {
 } from '@knowtis/ai-gateway';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
+import { servedIndexRows } from '../../domain/model-catalog/served-index-rows';
 import {
   MODEL_INDEX_REPOSITORY,
   type ModelIndexRepository,
@@ -78,13 +79,9 @@ export class ModelIndexCache implements ModelCatalog, OnModuleInit {
   }
 
   private withFloor(rows: readonly IndexedModel[]): ModelIndexCatalog {
-    const synced = new Set(rows.map((row) => row.provider));
-    if (synced.size === 0) {
+    if (rows.length === 0) {
       return this.floor;
     }
-    return new ModelIndexCatalog([
-      ...MODEL_INDEX_SNAPSHOT.filter((row) => !synced.has(row.provider)),
-      ...rows,
-    ]);
+    return new ModelIndexCatalog(servedIndexRows(rows));
   }
 }

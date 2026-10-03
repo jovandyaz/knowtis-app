@@ -7,8 +7,10 @@ import {
   planIndexSync,
   type IndexSyncPlan,
   type ProviderBatch,
+  type SyncRejection,
 } from '../../domain/model-catalog/index-sync-plan';
 import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/selectable-models.catalog';
+import { servedIndexRows } from '../../domain/model-catalog/served-index-rows';
 import { DISCARD_LOG_SAMPLE_SIZE } from '../../domain/model-catalog/upstream-discards';
 import {
   MODEL_INDEX_REPOSITORY,
@@ -69,11 +71,12 @@ export class ModelIndexWriter {
   ) {}
 
   /**
-   * Upserts every row both reads produced, then marks absent the rows of each
+   * Upserts the rows both reads produced, then marks absent the rows of each
    * provider whose batch may conclude absence, except the ids upstream
-   * published but the read discarded. A `null` models.dev read (its
-   * fetch failed) leaves the providers it serves untouched. Rejects when a
-   * repository call fails.
+   * published but the read discarded. A batch that would leave unserved a floor
+   * model its provider serves now is written not at all. A `null` models.dev
+   * read (its fetch failed) leaves the providers it serves untouched. Rejects
+   * when a repository call fails.
    */
   async write(
     openRouter: UpstreamCatalog,
@@ -81,28 +84,18 @@ export class ModelIndexWriter {
   ): Promise<ModelIndexWriteResult> {
     const batches = providerBatches(openRouter, modelsDev);
     const previousListed = await this.repo.countListedByProvider();
-    const plan = planIndexSync(batches, previousListed);
+    const served = servedIndexRows(await this.repo.listListed());
+    const plan = planIndexSync(batches, previousListed, served);
+    const batchOf = new Map(batches.map((batch) => [batch.provider, batch]));
 
-    const rejectionOf = new Map(
-      plan.rejected.map(({ provider, reason }) => [provider, reason])
-    );
-    for (const { provider, rows } of batches) {
-      const reason = rejectionOf.get(provider);
-      if (reason === undefined) {
-        continue;
-      }
-      this.logger.warn({
-        event: 'ai.model_index.sync_rejected',
-        provider,
-        reason,
-        rows: rows.length,
-        previous: previousListed[provider],
-      });
+    for (const rejection of plan.rejected) {
+      this.logRejection(
+        rejection,
+        batchOf.get(rejection.provider)?.rows.length ?? 0,
+        previousListed[rejection.provider]
+      );
     }
 
-    const discardedOf = new Map(
-      batches.map(({ provider, discarded }) => [provider, discarded])
-    );
     const seenAt = new Date();
     const indexed = await this.repo.upsertMany(plan.upserts, seenAt);
     let absent = 0;
@@ -110,7 +103,7 @@ export class ModelIndexWriter {
       const retired = await this.repo.markAbsent(
         provider,
         seenAt,
-        discardedOf.get(provider) ?? []
+        batchOf.get(provider)?.discarded ?? []
       );
       absent += retired.length;
       if (retired.length > 0) {
@@ -125,5 +118,24 @@ export class ModelIndexWriter {
 
     this.logger.log({ event: 'ai.model_index.sync', indexed, absent });
     return { indexed, absent, rejected: plan.rejected };
+  }
+
+  private logRejection(
+    rejection: SyncRejection,
+    rows: number,
+    previous: number
+  ): void {
+    const entry = {
+      event: 'ai.model_index.sync_rejected',
+      provider: rejection.provider,
+      reason: rejection.reason,
+      rows,
+      previous,
+    };
+    if (rejection.reason === 'floor') {
+      this.logger.error({ ...entry, models: rejection.models });
+      return;
+    }
+    this.logger.warn(entry);
   }
 }

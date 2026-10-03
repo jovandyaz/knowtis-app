@@ -1,9 +1,24 @@
-import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
+import {
+  ModelIndexCatalog,
+  type IndexedModel,
+  type IndexProvider,
+} from '@knowtis/ai-gateway';
+
+import { floorModelsLost } from './floor-models';
 
 /** Fewest rows a provider's batch may carry, as a share of its previously listed rows, and still retire the rows it no longer lists. */
 export const SYNC_MAX_SHRINK_RATIO = 0.5;
 
 type AbsenceRejection = 'shrink' | 'inconclusive';
+
+/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the floor models the batch would leave unserved. */
+export type SyncRejection =
+  | { readonly provider: IndexProvider; readonly reason: AbsenceRejection }
+  | {
+      readonly provider: IndexProvider;
+      readonly reason: 'floor';
+      readonly models: readonly string[];
+    };
 
 /** One provider's rows from one sync pass. `conclusive` is false when the read may have missed rows that still exist upstream. */
 export interface ProviderBatch {
@@ -18,10 +33,7 @@ export interface IndexSyncPlan {
   readonly upserts: readonly IndexedModel[];
   /** Providers whose missing rows may be marked absent. */
   readonly concludeAbsence: readonly IndexProvider[];
-  readonly rejected: readonly {
-    provider: IndexProvider;
-    reason: AbsenceRejection;
-  }[];
+  readonly rejected: readonly SyncRejection[];
 }
 
 function absenceRejection(
@@ -39,22 +51,49 @@ function absenceRejection(
     : 'shrink';
 }
 
+function floorLost(
+  batch: ProviderBatch,
+  served: readonly IndexedModel[]
+): string[] {
+  return floorModelsLost(
+    new ModelIndexCatalog(
+      served.filter((row) => row.provider === batch.provider)
+    ),
+    new ModelIndexCatalog(batch.rows)
+  );
+}
+
 /**
- * Decides what one sync pass writes. Every seen row is upserted, even from a
- * rejected batch. A provider retires its missing rows only when its batch is
- * conclusive and did not shrink past `SYNC_MAX_SHRINK_RATIO`, or when none of
- * its rows were listed before; a provider without a batch is left untouched.
+ * Decides what one sync pass writes. A batch that would leave unserved a floor
+ * model its provider serves now is rejected whole: none of its rows are
+ * written and it retires nothing. Every row of any other batch is upserted. A
+ * provider retires its missing rows only when its batch is conclusive and did
+ * not shrink past `SYNC_MAX_SHRINK_RATIO`, or when none of its rows were listed
+ * before; a provider without a batch is left untouched.
  *
- * `previousListed` is the provider's listed-row count before this pass.
+ * `previousListed` is the provider's listed-row count before this pass, and
+ * `served` the rows the index serves before it (see `servedIndexRows`).
  */
 export function planIndexSync(
   batches: readonly ProviderBatch[],
-  previousListed: Readonly<Record<IndexProvider, number>>
+  previousListed: Readonly<Record<IndexProvider, number>>,
+  served: readonly IndexedModel[]
 ): IndexSyncPlan {
+  const upserts: IndexedModel[] = [];
   const concludeAbsence: IndexProvider[] = [];
-  const rejected: IndexSyncPlan['rejected'][number][] = [];
+  const rejected: SyncRejection[] = [];
 
   for (const batch of batches) {
+    const lost = floorLost(batch, served);
+    if (lost.length > 0) {
+      rejected.push({
+        provider: batch.provider,
+        reason: 'floor',
+        models: lost,
+      });
+      continue;
+    }
+    upserts.push(...batch.rows);
     const reason = absenceRejection(batch, previousListed[batch.provider]);
     if (reason === null) {
       concludeAbsence.push(batch.provider);
@@ -63,9 +102,5 @@ export function planIndexSync(
     }
   }
 
-  return {
-    upserts: batches.flatMap((batch) => batch.rows),
-    concludeAbsence,
-    rejected,
-  };
+  return { upserts, concludeAbsence, rejected };
 }

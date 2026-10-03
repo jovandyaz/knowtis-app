@@ -2,13 +2,16 @@ import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  fromOpenRouter,
   INDEX_PROVIDERS,
+  MODEL_INDEX_SNAPSHOT,
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
 
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
+import { FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   DISCARD_LOG_SAMPLE_SIZE,
@@ -38,6 +41,7 @@ function curatedOpenSlug(): string {
 }
 
 const CURATED_OPEN_SLUG = curatedOpenSlug();
+const CURATED_OPEN_ID = `openrouter:${CURATED_OPEN_SLUG}`;
 
 const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
   anthropic: 0,
@@ -107,6 +111,14 @@ function directModel(provider: IndexProvider, slug: string): IndexedModel {
 const CLAUDE = directModel('anthropic', 'claude-sonnet-5');
 const GPT = directModel('openai', 'gpt-5.4');
 const GEMINI = directModel('google', 'gemini-3-pro');
+const CLAUDE_NEXT = directModel('anthropic', 'claude-next');
+
+const LISTED_ROWS: readonly IndexedModel[] = [
+  CLAUDE,
+  GPT,
+  GEMINI,
+  ...openRouterCatalog().models.map((model) => fromOpenRouter(model, null)),
+];
 
 function modelsDevCatalog(
   overrides: Partial<ModelsDevCatalog> = {}
@@ -119,7 +131,10 @@ function modelsDevCatalog(
   };
 }
 
-function make(previousListed: Partial<Record<IndexProvider, number>> = {}) {
+function make(
+  previousListed: Partial<Record<IndexProvider, number>> = {},
+  listed: readonly IndexedModel[] = LISTED_ROWS
+) {
   const repo = {
     countListedByProvider: vi
       .fn<ModelIndexRepository['countListedByProvider']>()
@@ -130,7 +145,9 @@ function make(previousListed: Partial<Record<IndexProvider, number>> = {}) {
     markAbsent: vi
       .fn<ModelIndexRepository['markAbsent']>()
       .mockResolvedValue([]),
-    listListed: vi.fn<ModelIndexRepository['listListed']>(),
+    listListed: vi
+      .fn<ModelIndexRepository['listListed']>()
+      .mockResolvedValue([...listed]),
   };
   return { writer: new ModelIndexWriter(repo), repo };
 }
@@ -156,6 +173,7 @@ function absenceConcludedFor(
 describe('ModelIndexWriter', () => {
   let logLog: ReturnType<typeof vi.spyOn>;
   let warnLog: ReturnType<typeof vi.spyOn>;
+  let errorLog: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     logLog = vi
@@ -163,6 +181,9 @@ describe('ModelIndexWriter', () => {
       .mockImplementation(() => undefined);
     warnLog = vi
       .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    errorLog = vi
+      .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
   });
 
@@ -403,6 +424,111 @@ describe('ModelIndexWriter', () => {
       rows: 1,
       previous: 3,
     });
+  });
+
+  it('should write none of an OpenRouter batch whose rows lost their input modalities', async () => {
+    const { writer, repo } = make({ openrouter: 2 });
+    const textless = openRouterCatalog().models.map((model) => ({
+      ...model,
+      inputModalities: [],
+    }));
+
+    const result = await writer.write(
+      openRouterCatalog({ models: textless }),
+      modelsDevCatalog()
+    );
+
+    expect(upsertedIds(repo).sort()).toEqual(
+      [CLAUDE.id, GPT.id, GEMINI.id].sort()
+    );
+    expect(absenceConcludedFor(repo)).not.toContain('openrouter');
+    expect(result.rejected).toEqual([
+      { provider: 'openrouter', reason: 'floor', models: [CURATED_OPEN_ID] },
+    ]);
+    expect(errorLog).toHaveBeenCalledWith({
+      event: 'ai.model_index.sync_rejected',
+      provider: 'openrouter',
+      reason: 'floor',
+      models: [CURATED_OPEN_ID],
+      rows: 2,
+      previous: 2,
+    });
+  });
+
+  it('should write none of a batch that drops a floor model its provider serves', async () => {
+    const { writer, repo } = make({ anthropic: 1, openai: 1, google: 1 });
+
+    const result = await writer.write(
+      openRouterCatalog(),
+      modelsDevCatalog({ models: [CLAUDE_NEXT, GPT, GEMINI] })
+    );
+
+    expect(upsertedIds(repo)).not.toContain(CLAUDE_NEXT.id);
+    expect(absenceConcludedFor(repo)).not.toContain('anthropic');
+    expect(result.rejected).toEqual([
+      { provider: 'anthropic', reason: 'floor', models: [CLAUDE.id] },
+    ]);
+  });
+
+  it('should accept a batch that still serves its provider floor models under new facts', async () => {
+    const { writer, repo } = make({ openrouter: 2 });
+    const repriced = openRouterCatalog().models.map((model) => ({
+      ...model,
+      promptCostPerToken: model.promptCostPerToken * 2,
+      contextLength: model.contextLength / 2,
+    }));
+
+    const result = await writer.write(
+      openRouterCatalog({ models: repriced }),
+      modelsDevCatalog()
+    );
+
+    expect(upsertedIds(repo)).toContain(CURATED_OPEN_ID);
+    expect(absenceConcludedFor(repo)).toContain('openrouter');
+    expect(result.rejected).toEqual([]);
+    expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it('should hold a provider with no listed rows to the floor models its snapshot rows serve', async () => {
+    const { writer, repo } = make(
+      {},
+      LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
+    );
+
+    const result = await writer.write(openRouterCatalog(), modelsDevCatalog());
+
+    expect(upsertedIds(repo)).not.toContain(CLAUDE.id);
+    expect(absenceConcludedFor(repo)).not.toContain('anthropic');
+    expect(result.rejected).toEqual([
+      {
+        provider: 'anthropic',
+        reason: 'floor',
+        models: FLOOR_MODEL_IDS.filter(
+          (id) => id.startsWith('anthropic:') && id !== CLAUDE.id
+        ),
+      },
+    ]);
+  });
+
+  it('should accept a provider with no listed rows whose batch serves what its snapshot rows serve', async () => {
+    const snapshotRows = MODEL_INDEX_SNAPSHOT.filter(
+      (row) => row.provider === 'anthropic'
+    );
+    const { writer, repo } = make(
+      {},
+      LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
+    );
+
+    const result = await writer.write(
+      openRouterCatalog(),
+      modelsDevCatalog({ models: [...snapshotRows, GPT, GEMINI] })
+    );
+
+    expect(upsertedIds(repo)).toEqual(
+      expect.arrayContaining(snapshotRows.map((row) => row.id))
+    );
+    expect(absenceConcludedFor(repo)).toContain('anthropic');
+    expect(result.rejected).toEqual([]);
   });
 
   it('should write nothing when the listed counts cannot be read', async () => {

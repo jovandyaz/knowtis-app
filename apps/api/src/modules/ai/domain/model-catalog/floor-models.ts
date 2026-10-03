@@ -33,3 +33,13 @@ function isServed(catalog: ModelCatalog, modelId: string): boolean {
 export function unservedFloorModels(catalog: ModelCatalog): string[] {
   return FLOOR_MODEL_IDS.filter((id) => !isServed(catalog, id));
 }
+
+/** Floor models `current` serves that `next` would not, whether `next` degrades or drops them. */
+export function floorModelsLost(
+  current: ModelCatalog,
+  next: ModelCatalog
+): string[] {
+  return FLOOR_MODEL_IDS.filter(
+    (id) => isServed(current, id) && !isServed(next, id)
+  );
+}
