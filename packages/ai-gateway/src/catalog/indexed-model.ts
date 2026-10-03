@@ -61,6 +61,9 @@ export interface IndexedModel {
 
 export const TOKENS_PER_MILLION = 1_000_000;
 
+/** Largest token limit an `IndexedModel` carries: the signed 32-bit integer the index stores it as. */
+export const MAX_INT32 = 2_147_483_647;
+
 const VARIANT_SEPARATOR = ':';
 const DOT_BETWEEN_DIGITS = /(?<=\d)\.(?=\d)/g;
 

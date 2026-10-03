@@ -3,7 +3,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import type { IndexedModel } from '@knowtis/ai-gateway';
+import { MAX_INT32, type IndexedModel } from '@knowtis/ai-gateway';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
@@ -12,7 +12,10 @@ import {
   DatabaseModule,
   type Database,
 } from '../../../../database';
-import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
+import {
+  AI_MODEL_INDEX_COST_CEILING,
+  AI_MODEL_INDEX_MAX_LENGTHS,
+} from '../../../../database/schema/ai-model-index.schema';
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleModelIndexRepository } from './drizzle-model-index.repository';
 
@@ -29,6 +32,9 @@ const SECOND_SEEN_AT = new Date('2000-01-02T00:00:00.000Z');
 const SMALL_INPUT_COST = 1.88e-8;
 const SMALLEST_OUTPUT_COST = 5e-11;
 const REPRICED_INPUT_COST = 2.5e-8;
+const LARGEST_COST_BELOW_CEILING =
+  AI_MODEL_INDEX_COST_CEILING * (1 - Number.EPSILON);
+const NUMERIC_VALUE_OUT_OF_RANGE = '22003';
 
 function allNullOptionals(id: string): IndexedModel {
   return indexed(id, {
@@ -178,6 +184,44 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     expect(row.inputCostPerToken).toBe(SMALL_INPUT_COST);
     expect(row.outputCostPerToken).toBe(SMALLEST_OUTPUT_COST);
   });
+
+  it('holds the largest token limits and cost the writer lets through', async () => {
+    await repo.upsertMany(
+      [
+        indexed(FIRST_ID, {
+          maxInputTokens: MAX_INT32,
+          maxOutputTokens: MAX_INT32,
+          inputCostPerToken: LARGEST_COST_BELOW_CEILING,
+        }),
+      ],
+      FIRST_SEEN_AT
+    );
+
+    const [row] = await ownListed();
+    expect(row.maxInputTokens).toBe(MAX_INT32);
+    expect(row.maxOutputTokens).toBe(MAX_INT32);
+    expect(row.inputCostPerToken).toBe(LARGEST_COST_BELOW_CEILING);
+  });
+
+  it.each([
+    {
+      column: 'max_input_tokens',
+      overrides: { maxInputTokens: MAX_INT32 + 1 },
+    },
+    {
+      column: 'input_cost_per_token',
+      overrides: { inputCostPerToken: AI_MODEL_INDEX_COST_CEILING },
+    },
+  ])(
+    'rejects a $column one step past what the writer lets through',
+    async ({ overrides }) => {
+      await expect(
+        repo.upsertMany([indexed(FIRST_ID, overrides)], FIRST_SEEN_AT)
+      ).rejects.toMatchObject({
+        cause: { code: NUMERIC_VALUE_OUT_OF_RANGE },
+      });
+    }
+  );
 
   it('marks only the unseen row of the given provider absent, once', async () => {
     await repo.upsertMany(

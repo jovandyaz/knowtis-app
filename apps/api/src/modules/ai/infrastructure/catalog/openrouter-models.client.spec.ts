@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_INT32 } from '@knowtis/ai-gateway';
+
 import {
   MAX_MODEL_PAGES,
   OpenRouterModelsHttpClient,
@@ -307,6 +309,59 @@ describe('OpenRouterModelsHttpClient', () => {
       expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
     }
   );
+
+  it.each([
+    {
+      field: 'context length',
+      model: { ...CLAUDE_SONNET_45, context_length: MAX_INT32 + 1 },
+    },
+    {
+      field: 'max completion tokens',
+      model: {
+        ...CLAUDE_SONNET_45,
+        top_provider: {
+          ...CLAUDE_SONNET_45.top_provider,
+          max_completion_tokens: MAX_INT32 + 1,
+        },
+      },
+    },
+  ])(
+    'should discard by id a model whose $field exceeds MAX_INT32',
+    async ({ model }) => {
+      fetchMock.mockResolvedValueOnce(okResponse(page([model])));
+
+      const { models, discarded } =
+        await new OpenRouterModelsHttpClient().fetchModels();
+
+      expect(models).toEqual([]);
+      expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
+    }
+  );
+
+  it('should keep a model whose token limits are exactly MAX_INT32', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...CLAUDE_SONNET_45,
+            context_length: MAX_INT32,
+            top_provider: {
+              ...CLAUDE_SONNET_45.top_provider,
+              max_completion_tokens: MAX_INT32,
+            },
+          },
+        ])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model).toMatchObject({
+      contextLength: MAX_INT32,
+      maxCompletionTokens: MAX_INT32,
+    });
+  });
 
   it('should capture declared reasoning efforts, dropping unknown values', async () => {
     fetchMock.mockResolvedValueOnce(

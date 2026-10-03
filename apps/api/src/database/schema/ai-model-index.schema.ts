@@ -31,6 +31,9 @@ import { sqlLiteralList } from './sql-literal-list';
 
 const COST_PRECISION = 20;
 const COST_SCALE = 15;
+
+/** Exclusive upper bound of a per-token cost the cost columns hold: `numeric(COST_PRECISION, COST_SCALE)` keeps `COST_PRECISION - COST_SCALE` integer digits. */
+export const AI_MODEL_INDEX_COST_CEILING = 10 ** (COST_PRECISION - COST_SCALE);
 const ENUM_COLUMN_LENGTH = 16;
 const FAMILY_MAX_LENGTH = 64;
 

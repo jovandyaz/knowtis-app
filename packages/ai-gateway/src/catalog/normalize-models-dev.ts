@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   DEFAULT_MODEL_STATUS,
   deriveCanonical,
+  MAX_INT32,
   MODEL_STATUSES,
   TOKENS_PER_MILLION,
   type IndexedModel,
@@ -21,7 +22,7 @@ const UNRECOGNIZED_MODEL_STATUS: ModelStatus = 'alpha';
 const calendarDate = z.iso.date();
 
 const perMillionCost = z.number().nonnegative().nullish();
-const tokenLimit = z.number().nonnegative().nullish();
+const tokenLimit = z.number().int().nonnegative().max(MAX_INT32).nullish();
 const modalityList = z.array(z.string()).nullish();
 
 const modelsDevEntrySchema = z.object({
@@ -64,7 +65,7 @@ export interface ModelsDevEnrichment {
   readonly status: ModelStatus;
 }
 
-/** Normalizes one models.dev model entry; null when the entry fails the schema (missing id or name, negative or non-finite cost). An unrecognized status is kept as `alpha`. */
+/** Normalizes one models.dev model entry; null when the entry fails the schema (missing id or name, negative or non-finite cost, a token limit that is not an integer from 0 to `MAX_INT32`). An unrecognized status is kept as `alpha`. */
 export function fromModelsDev(
   provider: (typeof MODELS_DEV_PROVIDERS)[number],
   raw: unknown

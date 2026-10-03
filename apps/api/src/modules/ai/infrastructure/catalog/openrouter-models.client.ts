@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
+import { MAX_INT32 } from '@knowtis/ai-gateway';
 import { isReasoningEffort, type ModelReasoning } from '@knowtis/shared-types';
 
 import {
@@ -36,7 +37,7 @@ const upstreamModelSchema = z.object({
   name: z.string().min(1),
   description: z.string().nullish(),
   created: z.number().int().nonnegative(),
-  context_length: z.number().int().positive(),
+  context_length: z.number().int().positive().max(MAX_INT32),
   architecture: z
     .object({
       input_modalities: z.array(z.string()).nullish(),
@@ -51,7 +52,14 @@ const upstreamModelSchema = z.object({
   }),
   supported_parameters: z.array(z.string()).nullish(),
   top_provider: z
-    .object({ max_completion_tokens: z.number().int().positive().nullish() })
+    .object({
+      max_completion_tokens: z
+        .number()
+        .int()
+        .positive()
+        .max(MAX_INT32)
+        .nullish(),
+    })
     .nullish(),
   expiration_date: z.string().nullish(),
   reasoning: z

@@ -2,11 +2,15 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
   fromOpenRouter,
+  MAX_INT32,
   MODELS_DEV_PROVIDERS,
   type IndexedModel,
 } from '@knowtis/ai-gateway';
 
-import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
+import {
+  AI_MODEL_INDEX_COST_CEILING,
+  AI_MODEL_INDEX_MAX_LENGTHS,
+} from '../../../../database/schema/ai-model-index.schema';
 import { canConcludeAbsence } from '../../domain/model-catalog/curated-watch';
 import {
   planIndexSync,
@@ -65,12 +69,26 @@ export function providerBatches(
   ];
 }
 
+function fitsTokenColumn(limit: number | null): boolean {
+  return limit === null || (Number.isInteger(limit) && limit <= MAX_INT32);
+}
+
+function fitsCostColumn(cost: number | null): boolean {
+  return cost === null || cost < AI_MODEL_INDEX_COST_CEILING;
+}
+
 function fitsColumns(row: IndexedModel): boolean {
   return (
     row.id.length <= AI_MODEL_INDEX_MAX_LENGTHS.id &&
     row.name.length <= AI_MODEL_INDEX_MAX_LENGTHS.name &&
     (row.family?.length ?? 0) <= AI_MODEL_INDEX_MAX_LENGTHS.family &&
-    row.canonical.length <= AI_MODEL_INDEX_MAX_LENGTHS.canonical
+    row.canonical.length <= AI_MODEL_INDEX_MAX_LENGTHS.canonical &&
+    fitsTokenColumn(row.maxInputTokens) &&
+    fitsTokenColumn(row.maxOutputTokens) &&
+    fitsCostColumn(row.inputCostPerToken) &&
+    fitsCostColumn(row.outputCostPerToken) &&
+    fitsCostColumn(row.cacheReadCostPerToken) &&
+    fitsCostColumn(row.cacheWriteCostPerToken)
   );
 }
 

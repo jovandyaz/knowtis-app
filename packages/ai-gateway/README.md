@@ -30,7 +30,7 @@ This package imports **no other `@knowtis/*` package** and **no framework** (no 
 Everything is exported from [`src/index.ts`](src/index.ts):
 
 - **Logger:** `GatewayLogger` type.
-- **Catalog:** `MODEL_CATALOG`, `ModelIndexCatalog`, `MODEL_INDEX_SNAPSHOT`, `TRANSCRIPTION_PRICES`, `fromModelsDev`, `enrichmentFromModelsDev`, `fromOpenRouter`, `deriveCanonical`, `INDEX_PROVIDERS`, `INDEX_SOURCES`, `MODEL_STATUSES`, `MODELS_DEV_PROVIDERS`, `TOKENS_PER_MILLION`, `computeTokenCostUsd` (+ `ModelCatalog`, `ModelPricing`, `ModelContextWindow`, `IndexedModel`, `IndexedReasoning`, `IndexProvider`, `IndexSource`, `ModelStatus`, `ModelsDevEnrichment`, `OpenRouterModelInput`, `TokenCostInput` types).
+- **Catalog:** `MODEL_CATALOG`, `ModelIndexCatalog`, `MODEL_INDEX_SNAPSHOT`, `TRANSCRIPTION_PRICES`, `fromModelsDev`, `enrichmentFromModelsDev`, `fromOpenRouter`, `deriveCanonical`, `INDEX_PROVIDERS`, `INDEX_SOURCES`, `MAX_INT32`, `MODEL_STATUSES`, `MODELS_DEV_PROVIDERS`, `TOKENS_PER_MILLION`, `computeTokenCostUsd` (+ `ModelCatalog`, `ModelPricing`, `ModelContextWindow`, `IndexedModel`, `IndexedReasoning`, `IndexProvider`, `IndexSource`, `ModelStatus`, `ModelsDevEnrichment`, `OpenRouterModelInput`, `TokenCostInput` types).
 - **Chain:** `executeWithChain`, `streamWithChain`, `resolveChainCandidates`, `providerOf`, `cooldownKeyOf`, `OPENROUTER_PROVIDER`, `isAbortError`, `isOverloadedError`, `ProviderCooldownTracker` (+ `ChainScope`, `ChainContext`, `StreamChainContext`, `ChainAttemptInfo`, `ChainResolutionInput`, `CooldownConfig`, `ProviderCooldown`, `ProviderHealthSnapshot` types).
 - **Guard:** `detectPromptInjection`, `sanitizeContent`.
 - **Tokens:** `estimateTokenCount`.

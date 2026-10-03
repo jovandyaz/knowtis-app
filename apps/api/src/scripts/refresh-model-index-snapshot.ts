@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { writeFile } from 'node:fs/promises';
+import { rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { INDEX_PROVIDERS, ModelIndexCatalog } from '@knowtis/ai-gateway';
@@ -16,6 +16,7 @@ const SNAPSHOT_PATH = resolve(
   __dirname,
   '../../../../packages/ai-gateway/src/catalog/model-index.snapshot.ts'
 );
+const SNAPSHOT_TEMP_PATH = `${SNAPSHOT_PATH}.tmp`;
 
 async function main(): Promise<void> {
   const [modelsDev, openRouter] = await Promise.all([
@@ -36,7 +37,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  await writeFile(SNAPSHOT_PATH, renderModelIndexSnapshot(catalog.all()));
+  await writeFile(SNAPSHOT_TEMP_PATH, renderModelIndexSnapshot(catalog.all()));
+  await rename(SNAPSHOT_TEMP_PATH, SNAPSHOT_PATH);
   const perProvider = INDEX_PROVIDERS.map(
     (provider) =>
       `${provider} ${catalog.all().filter((row) => row.provider === provider).length}`

@@ -4,13 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fromOpenRouter,
   INDEX_PROVIDERS,
+  MAX_INT32,
   MODEL_INDEX_SNAPSHOT,
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
 
-import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
+import {
+  AI_MODEL_INDEX_COST_CEILING,
+  AI_MODEL_INDEX_MAX_LENGTHS,
+} from '../../../../database/schema/ai-model-index.schema';
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
 import { FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
 import {
@@ -30,6 +34,8 @@ import type {
 import { ModelIndexWriter } from './model-index.writer';
 
 const QWEN_SLUG = 'qwen/qwen3.8-max';
+const LARGEST_COST_BELOW_CEILING =
+  AI_MODEL_INDEX_COST_CEILING * (1 - Number.EPSILON);
 const DEEPSEEK_SLUG = 'deepseek/deepseek-v4-flash';
 
 // OpenRouter only proves absence while it still lists a curated open-tier model.
@@ -558,8 +564,21 @@ describe('ModelIndexWriter', () => {
         canonical: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.canonical + 1),
       },
     },
+    {
+      column: 'maxInputTokens',
+      row: { ...GPT, maxInputTokens: MAX_INT32 + 1 },
+    },
+    { column: 'maxOutputTokens', row: { ...GPT, maxOutputTokens: 1.5 } },
+    {
+      column: 'inputCostPerToken',
+      row: { ...GPT, inputCostPerToken: AI_MODEL_INDEX_COST_CEILING },
+    },
+    {
+      column: 'cacheReadCostPerToken',
+      row: { ...GPT, cacheReadCostPerToken: Number.NaN },
+    },
   ])(
-    'should skip a row whose $column overflows its column, write the rest and keep it from absence',
+    'should skip a row whose $column does not fit its column, write the rest and keep it from absence',
     async ({ row }) => {
       const { writer, repo } = make();
 
@@ -591,6 +610,10 @@ describe('ModelIndexWriter', () => {
       name: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.name),
       family: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.family),
       canonical: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.canonical),
+      maxInputTokens: MAX_INT32,
+      maxOutputTokens: MAX_INT32,
+      inputCostPerToken: LARGEST_COST_BELOW_CEILING,
+      outputCostPerToken: LARGEST_COST_BELOW_CEILING,
     };
 
     await writer.write(

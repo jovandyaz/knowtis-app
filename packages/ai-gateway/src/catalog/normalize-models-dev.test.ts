@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_INT32 } from './indexed-model';
 import { enrichmentFromModelsDev, fromModelsDev } from './normalize-models-dev';
 
 const CLAUDE_SONNET_5_5 = {
@@ -314,6 +315,38 @@ describe('fromModelsDev', () => {
         cost: { ...CLAUDE_SONNET_5_5.cost, input: Number.POSITIVE_INFINITY },
       })
     ).toBeNull();
+  });
+
+  it.each([
+    {
+      field: 'fractional context',
+      limit: { context: 1_000_000.5, output: 128_000 },
+    },
+    {
+      field: 'oversized input',
+      limit: { input: MAX_INT32 + 1, output: 128_000 },
+    },
+    {
+      field: 'fractional output',
+      limit: { context: 1_000_000, output: 128_000.5 },
+    },
+    {
+      field: 'oversized context',
+      limit: { context: MAX_INT32 + 1, output: 128_000 },
+    },
+  ])('rejects an entry with a $field token limit', ({ limit }) => {
+    expect(
+      fromModelsDev('anthropic', { ...CLAUDE_SONNET_5_5, limit })
+    ).toBeNull();
+  });
+
+  it('accepts a token limit of exactly MAX_INT32', () => {
+    expect(
+      fromModelsDev('anthropic', {
+        ...CLAUDE_SONNET_5_5,
+        limit: { context: MAX_INT32, output: MAX_INT32 },
+      })
+    ).toMatchObject({ maxInputTokens: MAX_INT32, maxOutputTokens: MAX_INT32 });
   });
 
   it('rejects an entry without an id or a name', () => {
