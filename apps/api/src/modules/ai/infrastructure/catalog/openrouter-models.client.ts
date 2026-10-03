@@ -3,12 +3,15 @@ import { z } from 'zod';
 
 import { isReasoningEffort, type ModelReasoning } from '@knowtis/shared-types';
 
+import {
+  DISCARD_LOG_SAMPLE_SIZE,
+  upstreamIdOf,
+} from '../../domain/model-catalog/upstream-discards';
 import type {
   OpenRouterModelsClient,
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
-import { DISCARD_LOG_SAMPLE_SIZE, upstreamIdOf } from './upstream-discards';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const OPENROUTER_ORIGIN = new URL(OPENROUTER_MODELS_URL).origin;
@@ -26,6 +29,8 @@ const costPerTokenSchema = z
   .transform(Number)
   .refine((cost) => Number.isFinite(cost) && cost >= 0);
 
+const optionalCostPerTokenSchema = costPerTokenSchema.nullish().catch(null);
+
 const upstreamModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -41,8 +46,8 @@ const upstreamModelSchema = z.object({
   pricing: z.object({
     prompt: costPerTokenSchema,
     completion: costPerTokenSchema,
-    input_cache_read: costPerTokenSchema.nullish(),
-    input_cache_write: costPerTokenSchema.nullish(),
+    input_cache_read: optionalCostPerTokenSchema,
+    input_cache_write: optionalCostPerTokenSchema,
   }),
   supported_parameters: z.array(z.string()).nullish(),
   top_provider: z

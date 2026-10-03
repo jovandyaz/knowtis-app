@@ -9,11 +9,14 @@ import {
   type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
 
+import {
+  DISCARD_LOG_SAMPLE_SIZE,
+  upstreamIdOf,
+} from '../../domain/model-catalog/upstream-discards';
 import type {
   ModelsDevCatalog,
   ModelsDevClient,
 } from '../../domain/ports/models-dev.port';
-import { DISCARD_LOG_SAMPLE_SIZE, upstreamIdOf } from './upstream-discards';
 
 export const MODELS_DEV_URL = 'https://models.dev/api.json';
 
@@ -22,15 +25,15 @@ const REQUEST_TIMEOUT_MS = 15_000;
 export const MAX_BODY_BYTES = 16 * 1024 * 1024;
 
 const OPENROUTER_SECTION = 'openrouter';
-const PROTOTYPE_KEY = '__proto__';
 
 const catalogPayloadSchema = z.record(z.string(), z.unknown());
 
-const providerSectionSchema = z.object({
-  models: z.record(z.string(), z.unknown()),
-});
+const providerSectionSchema = z
+  .object({ models: z.record(z.string(), z.unknown()) })
+  .optional();
 
 type CatalogPayload = z.infer<typeof catalogPayloadSchema>;
+type ProviderSection = z.infer<typeof providerSectionSchema>;
 
 function payloadTooLarge(): Error {
   return new Error(`models.dev payload exceeds ${MAX_BODY_BYTES} bytes`);
@@ -64,14 +67,8 @@ async function readBoundedBody(response: Response): Promise<string> {
   return body + decoder.decode();
 }
 
-function sectionEntries(payload: CatalogPayload, provider: string): unknown[] {
-  const section = providerSectionSchema.optional().parse(payload[provider]);
-  if (section === undefined) {
-    return [];
-  }
-  return Object.entries(section.models)
-    .filter(([key]) => key !== PROTOTYPE_KEY)
-    .map(([, entry]) => entry);
+function entriesOf(section: ProviderSection): unknown[] {
+  return section === undefined ? [] : Object.values(section.models);
 }
 
 @Injectable()
@@ -88,11 +85,20 @@ export class ModelsDevHttpClient implements ModelsDevClient {
     const payload = catalogPayloadSchema.parse(
       JSON.parse(await readBoundedBody(response))
     );
+    const { models, discarded } = this.indexedRows(payload);
+    return {
+      models,
+      openRouterEnrichment: this.openRouterEnrichment(payload),
+      discarded,
+    };
+  }
 
+  private indexedRows(payload: CatalogPayload) {
     const models: IndexedModel[] = [];
     const discarded: string[] = [];
     for (const provider of MODELS_DEV_PROVIDERS) {
-      for (const entry of sectionEntries(payload, provider)) {
+      const section = providerSectionSchema.parse(payload[provider]);
+      for (const entry of entriesOf(section)) {
         const model = fromModelsDev(provider, entry);
         if (model === null) {
           discarded.push(`${provider}:${upstreamIdOf(entry)}`);
@@ -101,15 +107,6 @@ export class ModelsDevHttpClient implements ModelsDevClient {
         }
       }
     }
-
-    const openRouterEnrichment = new Map<string, ModelsDevEnrichment>();
-    for (const entry of sectionEntries(payload, OPENROUTER_SECTION)) {
-      const enrichment = enrichmentFromModelsDev(entry);
-      if (enrichment !== null) {
-        openRouterEnrichment.set(upstreamIdOf(entry), enrichment);
-      }
-    }
-
     if (discarded.length > 0) {
       this.logger.warn({
         event: 'ai.model_index.models_dev_discarded',
@@ -117,6 +114,41 @@ export class ModelsDevHttpClient implements ModelsDevClient {
         models: discarded.slice(0, DISCARD_LOG_SAMPLE_SIZE),
       });
     }
-    return { models, openRouterEnrichment, discarded };
+    return { models, discarded };
+  }
+
+  private openRouterEnrichment(
+    payload: CatalogPayload
+  ): Map<string, ModelsDevEnrichment> {
+    const enrichment = new Map<string, ModelsDevEnrichment>();
+    const section = providerSectionSchema.safeParse(
+      payload[OPENROUTER_SECTION]
+    );
+    if (!section.success) {
+      this.logger.warn({
+        event: 'ai.model_index.models_dev_enrichment_unreadable',
+        reason: section.error.issues
+          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+          .join('; '),
+      });
+      return enrichment;
+    }
+    const skipped: string[] = [];
+    for (const entry of entriesOf(section.data)) {
+      const facts = enrichmentFromModelsDev(entry);
+      if (facts === null) {
+        skipped.push(upstreamIdOf(entry));
+      } else {
+        enrichment.set(upstreamIdOf(entry), facts);
+      }
+    }
+    if (skipped.length > 0) {
+      this.logger.warn({
+        event: 'ai.model_index.models_dev_enrichment_skipped',
+        count: skipped.length,
+        models: skipped.slice(0, DISCARD_LOG_SAMPLE_SIZE),
+      });
+    }
+    return enrichment;
   }
 }

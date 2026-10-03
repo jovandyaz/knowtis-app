@@ -251,15 +251,18 @@ describe('OpenRouterModelsHttpClient', () => {
     });
   });
 
-  it('should discard a model whose cache price is unreadable instead of dropping the price', async () => {
+  it('should keep a model whose cache prices are unreadable, without those prices', async () => {
     fetchMock.mockResolvedValueOnce(
       okResponse(
         page([
           {
             ...CLAUDE_SONNET_45,
-            pricing: { ...CLAUDE_SONNET_45.pricing, input_cache_read: '' },
+            pricing: {
+              ...CLAUDE_SONNET_45.pricing,
+              input_cache_read: '',
+              input_cache_write: '-1',
+            },
           },
-          DEEPSEEK_V32,
         ])
       )
     );
@@ -267,8 +270,14 @@ describe('OpenRouterModelsHttpClient', () => {
     const { models, discarded } =
       await new OpenRouterModelsHttpClient().fetchModels();
 
-    expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
-    expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: 'anthropic/claude-sonnet-4.5',
+      promptCostPerToken: 0.000003,
+      cacheReadCostPerToken: null,
+      cacheWriteCostPerToken: null,
+    });
+    expect(discarded).toEqual([]);
   });
 
   it('should capture declared reasoning efforts, dropping unknown values', async () => {

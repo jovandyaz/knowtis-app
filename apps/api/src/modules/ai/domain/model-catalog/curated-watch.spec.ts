@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  UNPARSEABLE_MODEL_ID,
-  type UpstreamCatalog,
-  type UpstreamModel,
+import type {
+  UpstreamCatalog,
+  UpstreamModel,
 } from '../ports/openrouter-models.port';
 import {
   canConcludeAbsence,
@@ -16,6 +15,7 @@ import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
 } from './selectable-models.catalog';
+import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
 
 const SONNET_ID = 'anthropic:claude-sonnet-5';
 const SONNET_VENDORED_OUTPUT_COST = 0.00001;

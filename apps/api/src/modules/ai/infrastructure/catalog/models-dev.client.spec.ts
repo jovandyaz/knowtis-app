@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DISCARD_LOG_SAMPLE_SIZE } from '../../domain/model-catalog/upstream-discards';
 import {
   MAX_BODY_BYTES,
   MODELS_DEV_URL,
@@ -353,6 +354,81 @@ describe('ModelsDevHttpClient', () => {
 
     expect([...openRouterEnrichment.keys()]).toEqual(['moonshotai/kimi-k3']);
     expect(discarded).toEqual([]);
+  });
+
+  it('should log how many enrichment entries it skipped', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse({
+        openrouter: section('openrouter', {
+          'broken/model': { id: 'broken/model' },
+          nameless: { name: 'No id' },
+          [OPENROUTER_KIMI_K3.id]: OPENROUTER_KIMI_K3,
+        }),
+      })
+    );
+
+    await new ModelsDevHttpClient().fetchCatalog();
+
+    expect(warn).toHaveBeenCalledWith({
+      event: 'ai.model_index.models_dev_enrichment_skipped',
+      count: 2,
+      models: ['broken/model', '<unparseable>'],
+    });
+  });
+
+  it('should cap the skipped enrichment sample', async () => {
+    const broken = Object.fromEntries(
+      Array.from({ length: DISCARD_LOG_SAMPLE_SIZE + 1 }, (_, index) => [
+        `broken/model-${index}`,
+        { id: `broken/model-${index}` },
+      ])
+    );
+    fetchMock.mockResolvedValueOnce(
+      okResponse({ openrouter: section('openrouter', broken) })
+    );
+
+    await new ModelsDevHttpClient().fetchCatalog();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.model_index.models_dev_enrichment_skipped',
+        count: DISCARD_LOG_SAMPLE_SIZE + 1,
+        models: Object.keys(broken).slice(0, DISCARD_LOG_SAMPLE_SIZE),
+      })
+    );
+  });
+
+  it('should not warn about skipped enrichment when every entry reads', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(PAYLOAD));
+
+    await new ModelsDevHttpClient().fetchCatalog();
+
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.model_index.models_dev_enrichment_skipped',
+      })
+    );
+  });
+
+  it('should keep the indexed rows and drop the enrichment when the openrouter section is malformed', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse({
+        ...PAYLOAD,
+        openrouter: { id: 'openrouter', models: 'gone' },
+      })
+    );
+
+    const { models, openRouterEnrichment, discarded } =
+      await new ModelsDevHttpClient().fetchCatalog();
+
+    expect(models).toHaveLength(6);
+    expect(openRouterEnrichment.size).toBe(0);
+    expect(discarded).toEqual(['openai:gpt-5.4-broken']);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.model_index.models_dev_enrichment_unreadable',
+      })
+    );
   });
 
   it('should yield no rows for a provider section models.dev omits', async () => {

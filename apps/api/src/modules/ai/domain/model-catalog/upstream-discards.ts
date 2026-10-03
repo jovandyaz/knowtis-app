@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { UNPARSEABLE_MODEL_ID } from '../../domain/ports/openrouter-models.port';
+/** Discard entry for an upstream payload whose `id` itself failed to parse: the model's identity is unknown, so no absence may be concluded while one is present. */
+export const UNPARSEABLE_MODEL_ID = '<unparseable>';
 
 /** How many discarded ids one discard warning lists. */
 export const DISCARD_LOG_SAMPLE_SIZE = 10;

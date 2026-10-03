@@ -1,14 +1,12 @@
 import { toLiteLLMKey } from '@knowtis/ai-gateway';
 import type { CatalogAlertKind, ModelTier } from '@knowtis/shared-types';
 
-import {
-  UNPARSEABLE_MODEL_ID,
-  type UpstreamCatalog,
-} from '../ports/openrouter-models.port';
+import type { UpstreamCatalog } from '../ports/openrouter-models.port';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
 } from './selectable-models.catalog';
+import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
 
 export interface DriftFinding {
   modelId: string;

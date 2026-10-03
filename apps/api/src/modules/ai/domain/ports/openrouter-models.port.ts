@@ -24,9 +24,6 @@ export interface UpstreamModel {
   reasoning: ModelReasoning | null;
 }
 
-/** Discard entry for a payload whose `id` itself failed to parse: the model's identity is unknown, so no absence may be concluded while one is present. */
-export const UNPARSEABLE_MODEL_ID = '<unparseable>';
-
 /** One upstream read. A model missing from `models` is only known to be gone when `complete` is true and its id is not in `discarded`. */
 export interface UpstreamCatalog {
   models: readonly UpstreamModel[];
