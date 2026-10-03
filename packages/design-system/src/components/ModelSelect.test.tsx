@@ -891,6 +891,53 @@ describe('ModelSelect', () => {
       expect(onSelect).toHaveBeenCalledWith('a:fast');
     });
 
+    describe('when the query changes after the active row moved down', () => {
+      const deepOne = { id: 'a:deep', label: 'Deep One', tier: 'balanced' };
+      const SCROLLED_DOWN_PX = 120;
+
+      async function moveToLastRow() {
+        await openAndSearch('');
+        await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+        const last = screen.getByRole('option', { name: /Deep One/ });
+        expect(last).toHaveAttribute('aria-selected', 'true');
+        return last;
+      }
+
+      it('scrolls the list back to its top with the first match active', async () => {
+        renderSearchable({ models: [...models, deepOne] });
+        const previouslyActive = await moveToLastRow();
+        const list = screen.getByRole('listbox');
+        list.scrollTop = SCROLLED_DOWN_PX;
+        const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+        try {
+          await userEvent.type(screen.getByRole('combobox'), 'one');
+
+          expect(list.scrollTop).toBe(0);
+          expect(
+            screen.getByRole('option', { name: /Fast One/ })
+          ).toHaveAttribute('data-selected', 'true');
+          expect(previouslyActive).toHaveAttribute('aria-selected', 'false');
+          expect(scrolled.mock.contexts).not.toContain(previouslyActive);
+        } finally {
+          scrolled.mockRestore();
+        }
+      });
+
+      it('picks the first match on Enter', async () => {
+        const { onSelect } = renderSearchable({
+          models: [...models, deepOne],
+        });
+        await moveToLastRow();
+        await userEvent.type(screen.getByRole('combobox'), 'one{Enter}');
+
+        expect(onSelect).toHaveBeenCalledWith('a:fast');
+      });
+
+      it.todo(
+        'names the first match in aria-activedescendant (blocked upstream by dip/cmdk#413)'
+      );
+    });
+
     it('keeps the error and retry reachable while searching', async () => {
       const onRetry = vi.fn();
       renderSearchable({
