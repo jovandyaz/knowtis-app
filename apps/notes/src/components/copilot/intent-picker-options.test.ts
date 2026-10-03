@@ -174,12 +174,12 @@ describe('advancedOptionDescription', () => {
       advancedOptionDescription(
         {
           id: 'openrouter:anthropic/claude-haiku-4.5',
-          descriptionKey: 'aiModels.haiku45',
+          descriptionKey: 'aiModels.class.fast',
         },
         t
       )
     ).toBe(
-      'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.haiku45)'
+      'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.class.fast)'
     );
   });
 

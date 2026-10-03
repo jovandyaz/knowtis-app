@@ -14,6 +14,7 @@ import { AssignableModelsService } from './assignable-models.service';
 
 const SONNET_ID = 'anthropic:claude-sonnet-5-5';
 const SONNET_LABEL = 'Claude Sonnet 5.5';
+const HAIKU_ID = 'anthropic:claude-haiku-4-5';
 const GLM_ID = 'openrouter:z-ai/glm-5.2';
 const IMAGE_ID = 'google:gemini-3-pro-image';
 const ALIAS_ID = 'openrouter:~anthropic/claude-opus-latest';
@@ -67,6 +68,15 @@ describe('AssignableModelsService', () => {
       routableByServer: true,
       promoted: false,
     });
+  });
+
+  it('labels an index row without the trailing (latest) of its upstream name', async () => {
+    const rows = await makeService({
+      configuredProviders: ['anthropic'],
+    }).list();
+    expect(rows.find((row) => row.id === HAIKU_ID)?.label).toBe(
+      'Claude Haiku 4.5'
+    );
   });
 
   it('lists nothing from an unconfigured provider', async () => {

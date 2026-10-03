@@ -160,7 +160,7 @@
     },
     "primaryProvider": {
       "title": "Proveedor principal",
-      "description": "Cuando un modelo está disponible con varias de tus claves, se cobra a esta.",
+      "description": "Cuando un estilo del asistente está disponible con varias de tus claves, esta lo ejecuta. Un modelo que eliges en Avanzado se ejecuta con la clave que aparece junto a él.",
       "saveFailed": "No se pudo cambiar el proveedor principal. Revisa tus claves de API e inténtalo de nuevo."
     }
   },
@@ -169,20 +169,7 @@
       "fast": "Respuestas rápidas para tareas cotidianas",
       "balanced": "Balance entre calidad y velocidad",
       "powerful": "El más capaz para razonamiento complejo"
-    },
-    "haiku45": "Respuestas veloces para tareas simples",
-    "gpt56Luna": "Uso general rápido y económico",
-    "gemini35FlashLite": "Las respuestas más rápidas",
-    "sonnet5": "Balance entre calidad y velocidad",
-    "gpt56Terra": "Modelo sólido para todo uso",
-    "gemini37Flash": "Ayuda multimodal todoterreno",
-    "opus5": "El más capaz para razonamiento complejo",
-    "gpt56Sol": "El modelo más capaz de OpenAI",
-    "gemini31Pro": "Razonamiento avanzado, matemáticas y código",
-    "deepseekV32": "Insignia open-weight a una fracción del costo",
-    "glm52": "El modelo abierto más inteligente — rápido y con contexto largo",
-    "kimiK25": "Modelo abierto agéntico con contexto enorme",
-    "minimaxM25": "Modelo abierto eficiente para el día a día"
+    }
   },
   "integrations": {
     "title": "Integraciones",

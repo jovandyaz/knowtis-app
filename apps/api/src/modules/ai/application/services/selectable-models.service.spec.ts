@@ -10,14 +10,13 @@ import type { ModelIntent } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import { chooseModel } from '../../domain/model-catalog/model-choice';
 import { RETIREMENT_WINDOW_DAYS } from '../../domain/model-catalog/model-selectors';
 import { utcDayOf } from '../../domain/value-objects/utc-day';
-import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import type { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
-import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
+import type { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
-import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import {
@@ -28,12 +27,16 @@ import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
 const SONNET_5_5 = 'anthropic:claude-sonnet-5-5';
+const HAIKU_4_5 = 'anthropic:claude-haiku-4-5';
+const OPUS_5_5 = 'anthropic:claude-opus-5-5';
+const GPT_6_LUNA = 'openai:gpt-6-luna';
+const GPT_5_6_TERRA = 'openai:gpt-5.6-terra';
+const GLM = 'openrouter:z-ai/glm-5.2';
 const NO_BYOK: ReadonlySet<string> = new Set();
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PORT_CONTEXT_WINDOW = 262_144;
 const ROW_CONTEXT_WINDOW = 4_096;
-const SHADOWING_OUTPUT_COST = 0.0000001;
 const OPEN_TIER_OUTPUT_COST = 0.000001;
 const INTENTS = {
   fast: 'openrouter:minimax/minimax-m2.5',
@@ -145,24 +148,20 @@ function listed(
 
 describe('SelectableModelsService', () => {
   it('derives costClass from outputCostPerToken across tiers', () => {
-    const ids = [
-      'anthropic:claude-haiku-4-5',
-      'anthropic:claude-sonnet-5',
-      'anthropic:claude-opus-5',
-    ];
+    const ids = [HAIKU_4_5, SONNET_5_5, OPUS_5_5];
     const svc = makeService({
       supported: new Set(ids),
       available: new Set(ids),
       pricing: {
-        'anthropic:claude-haiku-4-5': {
+        [HAIKU_4_5]: {
           inputCostPerToken: 0.0000008,
           outputCostPerToken: 0.000005,
         },
-        'anthropic:claude-sonnet-5': {
+        [SONNET_5_5]: {
           inputCostPerToken: 0.000003,
           outputCostPerToken: 0.000015,
         },
-        'anthropic:claude-opus-5': {
+        [OPUS_5_5]: {
           inputCostPerToken: 0.000005,
           outputCostPerToken: 0.000025,
         },
@@ -171,35 +170,30 @@ describe('SelectableModelsService', () => {
     const byId = Object.fromEntries(
       listed(svc, ANTHROPIC_KEY).map((m) => [m.id, m.costClass])
     );
-    expect(byId['anthropic:claude-haiku-4-5']).toBe(1);
-    expect(byId['anthropic:claude-sonnet-5']).toBe(2);
-    expect(byId['anthropic:claude-opus-5']).toBe(3);
+    expect(byId[HAIKU_4_5]).toBe(1);
+    expect(byId[SONNET_5_5]).toBe(2);
+    expect(byId[OPUS_5_5]).toBe(3);
   });
 
   it('applies costClass thresholds at the boundary values', () => {
-    const ids = [
-      'openai:gpt-5.6-luna',
-      'anthropic:claude-sonnet-5',
-      'openai:gpt-5.6-terra',
-      'anthropic:claude-opus-5',
-    ];
+    const ids = [GPT_6_LUNA, SONNET_5_5, GPT_5_6_TERRA, OPUS_5_5];
     const svc = makeService({
       supported: new Set(ids),
       available: new Set(ids),
       pricing: {
-        'openai:gpt-5.6-luna': {
+        [GPT_6_LUNA]: {
           inputCostPerToken: 0,
           outputCostPerToken: 0.0000099,
         },
-        'anthropic:claude-sonnet-5': {
+        [SONNET_5_5]: {
           inputCostPerToken: 0,
           outputCostPerToken: 0.00001,
         },
-        'openai:gpt-5.6-terra': {
+        [GPT_5_6_TERRA]: {
           inputCostPerToken: 0,
           outputCostPerToken: 0.0000199,
         },
-        'anthropic:claude-opus-5': {
+        [OPUS_5_5]: {
           inputCostPerToken: 0,
           outputCostPerToken: 0.00002,
         },
@@ -214,28 +208,35 @@ describe('SelectableModelsService', () => {
         })
       ).map((m) => [m.id, m.costClass])
     );
-    expect(byId['openai:gpt-5.6-luna']).toBe(1);
-    expect(byId['anthropic:claude-sonnet-5']).toBe(2);
-    expect(byId['openai:gpt-5.6-terra']).toBe(2);
-    expect(byId['anthropic:claude-opus-5']).toBe(3);
+    expect(byId[GPT_6_LUNA]).toBe(1);
+    expect(byId[SONNET_5_5]).toBe(2);
+    expect(byId[GPT_5_6_TERRA]).toBe(2);
+    expect(byId[OPUS_5_5]).toBe(3);
+  });
+
+  it('lists an Anthropic-only key exactly the three intent resolutions', () => {
+    expect(
+      listed(makeOpenService(), ANTHROPIC_KEY).map((m) => [
+        m.id,
+        m.servesIntent,
+      ])
+    ).toEqual([
+      [HAIKU_4_5, 'fast'],
+      [SONNET_5_5, 'balanced'],
+      [OPUS_5_5, 'powerful'],
+    ]);
   });
 
   it('lists a key-billed model the server cannot route on its own keys', () => {
     const service = makeService({
-      supported: new Set([SONNET_5]),
+      supported: new Set([SONNET_5_5]),
       available: new Set(),
-      context: { [SONNET_5]: PORT_CONTEXT_WINDOW },
+      context: { [SONNET_5_5]: PORT_CONTEXT_WINDOW },
     });
 
-    const models = listed(service, ANTHROPIC_KEY);
-
-    expect(models.map((m) => m.id)).toEqual([
-      SONNET_5,
-      'anthropic:claude-haiku-4-5',
-      SONNET_5_5,
-      'anthropic:claude-opus-5-5',
-    ]);
-    expect(models[0]).toMatchObject({
+    expect(
+      listed(service, ANTHROPIC_KEY).find((m) => m.id === SONNET_5_5)
+    ).toMatchObject({
       routableByServer: false,
       billedToUser: true,
       contextWindow: PORT_CONTEXT_WINDOW,
@@ -397,44 +398,6 @@ describe('SelectableModelsService', () => {
       expect(promoted && 'description' in promoted).toBe(false);
     });
 
-    it('keeps the curated copy and the index facts when a promoted row repeats its id', async () => {
-      const index = createSnapshotIndex();
-      const promoted = new PromotedModelsCache(
-        createCatalogRepositoryStub(async () => [
-          createCatalogModel({
-            id: SONNET_5,
-            label: 'Shadowed',
-            description: PROMOTED_DESCRIPTION,
-            tier: 'open',
-            maxInputTokens: ROW_CONTEXT_WINDOW,
-            outputCostPerToken: SHADOWING_OUTPUT_COST,
-          }),
-        ])
-      );
-      await promoted.onModuleInit();
-      const service = makeSelectableModelsService(
-        new CompositeModelCatalog(promoted, index),
-        { isModelAvailable: () => true },
-        promoted,
-        index
-      );
-
-      const matches = listed(service, ANTHROPIC_KEY).filter(
-        (m) => m.id === SONNET_5
-      );
-
-      expect(matches).toHaveLength(1);
-      expect(matches[0]).toMatchObject({
-        label: 'Sonnet 5',
-        descriptionKey: 'aiModels.sonnet5',
-        tier: 'balanced',
-        contextWindow: index.getContextWindow(SONNET_5)?.maxInputTokens,
-        costClass: 2,
-      });
-      expect(matches[0]?.contextWindow).not.toBe(ROW_CONTEXT_WINDOW);
-      expect(matches[0]?.description).toBeUndefined();
-    });
-
     it('omits reasoning when nothing survives the platform-billed slice', () => {
       const service = makeOpenService(
         [createCatalogModel({ id: PROMOTED_ID })],
@@ -523,10 +486,9 @@ describe('SelectableModelsService', () => {
         )
       );
       expect(models.every((m) => m.billedToUser)).toBe(true);
-      expect(
-        models.find((m) => m.id === 'anthropic:claude-opus-5')?.reasoning
-          ?.levels
-      ).toEqual(FULL_LADDER);
+      expect(models.find((m) => m.id === OPUS_5_5)?.reasoning?.levels).toEqual(
+        FULL_LADDER
+      );
     });
   });
 
@@ -559,18 +521,6 @@ describe('SelectableModelsService', () => {
         modelId: SONNET_5_5,
         substituted: false,
       });
-    });
-
-    it('lets a curated id win over a promoted row with the same id', () => {
-      const offered = makeOpenService([
-        createCatalogModel({
-          id: 'anthropic:claude-sonnet-5',
-          label: 'Shadow',
-        }),
-      ]).offered();
-      expect(
-        offered.filter((m) => m.id === 'anthropic:claude-sonnet-5')
-      ).toEqual([expect.objectContaining({ label: 'Sonnet 5' })]);
     });
 
     it('reads the ladder of a chain model outside the tier, trimmed to the free slice', () => {
@@ -623,6 +573,79 @@ describe('SelectableModelsService', () => {
       expect(
         service.reasoningOf('openrouter:z-ai/glm-5.2', new Set(['openrouter']))
       ).toEqual({ levels: ['high', 'xhigh'], mandatory: false });
+    });
+  });
+
+  describe('factsFor', () => {
+    function pinnedTurn(
+      service: SelectableModelsService,
+      pinned: string,
+      intents: Readonly<Record<ModelIntent, string>>
+    ) {
+      return chooseModel(
+        service.catalogFor(FREE_CALLER, intents, null),
+        { pinned, preferredModel: null, preferredIntent: null },
+        service.factsFor(NO_BYOK, intents)
+      );
+    }
+
+    const PLATFORM_FALLBACK = {
+      kind: 'resolved',
+      model: INTENTS.balanced,
+      resolution: {
+        requested: INTENTS.fast,
+        resolved: INTENTS.balanced,
+        fallback: {
+          reason: 'not_in_tier',
+          from: INTENTS.fast,
+          to: INTENTS.balanced,
+        },
+      },
+    };
+
+    it('keeps a free caller pinned on a platform default the intents left platform-billed: not_in_tier, never key_removed', () => {
+      expect(
+        pinnedTurn(makeOpenService(), INTENTS.fast, PROMOTED_FAST_INTENTS)
+      ).toEqual(PLATFORM_FALLBACK);
+    });
+
+    it('keeps a promoted platform default of a non-open tier platform-billed once the intents point elsewhere', () => {
+      const service = makeOpenService([
+        createCatalogModel({ id: INTENTS.fast, tier: 'fast' }),
+      ]);
+
+      expect(
+        service
+          .factsFor(NO_BYOK, PROMOTED_FAST_INTENTS)
+          .isPlatformBilled(INTENTS.fast)
+      ).toBe(true);
+      expect(pinnedTurn(service, INTENTS.fast, PROMOTED_FAST_INTENTS)).toEqual(
+        PLATFORM_FALLBACK
+      );
+    });
+
+    it('bills a platform default to the platform only while the server routes it', () => {
+      const service = makeService({
+        supported: new Set([INTENTS.fast]),
+        available: new Set(),
+      });
+
+      expect(
+        service
+          .factsFor(NO_BYOK, PROMOTED_FAST_INTENTS)
+          .isPlatformBilled(INTENTS.fast)
+      ).toBe(false);
+    });
+
+    it('bills an open model that is no platform default to the platform only once promoted', () => {
+      expect(
+        makeOpenService().factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)
+      ).toBe(false);
+      expect(
+        makeOpenService([createCatalogModel({ id: GLM, tier: 'open' })])
+          .factsFor(NO_BYOK, INTENTS)
+          .isPlatformBilled(GLM)
+      ).toBe(true);
     });
   });
 });

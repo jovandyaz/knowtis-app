@@ -20,6 +20,7 @@ import {
   routeIntent,
   type ByokResolutions,
 } from './byok-intent-routes';
+import { toPickerLabel } from './index-label';
 import { toModelReasoning } from './index-reasoning';
 
 export interface OfferedModel {
@@ -93,7 +94,10 @@ function fromIndexRow(
   const reasoning = toModelReasoning(row?.reasoning ?? null);
   return {
     id: modelId,
-    label: row?.name ?? modelId.slice(modelId.indexOf(PROVIDER_SEPARATOR) + 1),
+    label:
+      row === undefined
+        ? modelId.slice(modelId.indexOf(PROVIDER_SEPARATOR) + 1)
+        : toPickerLabel(row.name),
     descriptionKey: intentDescriptionKey(intent),
     tier: intent,
     ...(reasoning ? { reasoning } : {}),
