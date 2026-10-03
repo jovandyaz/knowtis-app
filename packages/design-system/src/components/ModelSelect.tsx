@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { Check, ChevronDown, KeyRound, Loader2 } from 'lucide-react';
 
@@ -420,26 +420,50 @@ function ModelSearchList({
   onPick,
   onRetry,
 }: ModelSearchListProps) {
+  const visibleFor = (q: string) => {
+    const terms = queryTerms(q);
+    const leadingOptions =
+      leadingSection?.options.filter((option) => matchesQuery(option, terms)) ??
+      [];
+    const { groups, isFlat } = groupModels(
+      models.filter((m) => matchesQuery(m, terms)),
+      tierOrder,
+      modelsLabel
+    );
+    const firstMatch =
+      leadingOptions[0]?.id ??
+      groups.flatMap((g) => g.items).find((m) => !m.disabled)?.id ??
+      '';
+    return { terms, leadingOptions, groups, isFlat, firstMatch };
+  };
   const [query, setQuery] = useState('');
-  const terms = queryTerms(query);
-  const leadingOptions =
-    leadingSection?.options.filter((option) => matchesQuery(option, terms)) ??
-    [];
+  const [active, setActive] = useState(() => visibleFor('').firstMatch);
+  const listRef = useRef<HTMLDivElement>(null);
+  const { terms, leadingOptions, groups, isFlat } = visibleFor(query);
   const hasLeading = leadingOptions.length > 0;
-  const { groups, isFlat } = groupModels(
-    models.filter((m) => matchesQuery(m, terms)),
-    tierOrder,
-    modelsLabel
-  );
+  // cmdk re-scrolls the previously active row after a query change; owning the
+  // active row stops that stale scroll from undoing the reset.
+  const changeQuery = (next: string) => {
+    setQuery(next);
+    setActive(visibleFor(next).firstMatch);
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+  };
 
   return (
-    <Command shouldFilter={false} label={placeholder}>
+    <Command
+      shouldFilter={false}
+      label={placeholder}
+      value={active}
+      onValueChange={setActive}
+    >
       <CommandInput
         value={query}
-        onValueChange={setQuery}
+        onValueChange={changeQuery}
         placeholder={placeholder}
       />
-      <CommandList label={listLabel} className="p-1">
+      <CommandList ref={listRef} label={listLabel} className="p-1">
         {terms.length > 0 && <CommandEmpty>{noMatchesLabel}</CommandEmpty>}
         {hasLeading && leadingSection && (
           <SearchGroup heading={leadingSection.label} divided={false}>
