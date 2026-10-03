@@ -62,7 +62,6 @@ import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
-import { LiteLlmPricesHttpClient } from './infrastructure/catalog/litellm-prices.client';
 import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
 import { ModelIndexWriter } from './infrastructure/catalog/model-index.writer';
 import { ModelsDevHttpClient } from './infrastructure/catalog/models-dev.client';
@@ -155,7 +154,6 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       useClass: OpenRouterModelsHttpClient,
     },
     { provide: MODELS_DEV_CLIENT, useClass: ModelsDevHttpClient },
-    LiteLlmPricesHttpClient,
     ModelIndexWriter,
     CatalogSyncTask,
     AiCatalogAdminService,

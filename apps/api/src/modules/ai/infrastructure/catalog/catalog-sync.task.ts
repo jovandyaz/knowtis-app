@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   PROMOTED_STATUS,
   type CatalogSyncResultDto,
@@ -18,7 +17,6 @@ import {
 } from '../../domain/model-catalog/candidate-filter';
 import {
   canConcludeAbsence,
-  findLiteLlmDrift,
   findOpenRouterDrift,
   findPromotedDrift,
   type DriftFinding,
@@ -38,7 +36,6 @@ import {
   type UpstreamCatalog,
   type UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
-import { LiteLlmPricesHttpClient } from './litellm-prices.client';
 import { ModelIndexWriter } from './model-index.writer';
 
 const ADVISORY_LOCK_KEY = 778_493_003;
@@ -70,8 +67,6 @@ export class CatalogSyncTask {
     @Inject(AI_CATALOG_REPOSITORY) private readonly repo: AiCatalogRepository,
     @Inject(OPENROUTER_MODELS_CLIENT)
     private readonly openRouter: OpenRouterModelsClient,
-    private readonly liteLlm: LiteLlmPricesHttpClient,
-    @Inject(MODEL_CATALOG) private readonly catalog: ModelCatalog,
     @Inject(MODELS_DEV_CLIENT) private readonly modelsDev: ModelsDevClient,
     private readonly indexWriter: ModelIndexWriter
   ) {}
@@ -106,24 +101,6 @@ export class CatalogSyncTask {
       return skipped('locked');
     }
     return outcome.result;
-  }
-
-  private readonly vendoredOutputCost = (modelId: string): number | undefined =>
-    this.catalog.getPricing(modelId)?.outputCostPerToken;
-
-  private async liteLlmFindings(): Promise<DriftFinding[]> {
-    try {
-      return findLiteLlmDrift(
-        this.vendoredOutputCost,
-        await this.liteLlm.fetchPrices()
-      );
-    } catch (error) {
-      this.logger.warn({
-        event: 'ai.catalog.litellm_fetch_failed',
-        reason: reasonOf(error),
-      });
-      return [];
-    }
   }
 
   private async promotedFindings(
@@ -185,9 +162,8 @@ export class CatalogSyncTask {
     }
     const indexed = await this.writeIndex(catalog);
     const findings = [
-      ...findOpenRouterDrift(this.vendoredOutputCost, catalog),
+      ...findOpenRouterDrift(catalog),
       ...(await this.promotedFindings(catalog)),
-      ...(await this.liteLlmFindings()),
     ];
     return this.persist(catalog.models, findings, indexed);
   }

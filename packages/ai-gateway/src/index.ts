@@ -20,7 +20,6 @@ export {
   type ModelContextWindow,
   type ModelPricing,
 } from './catalog/model-catalog';
-export { LiteLLMCatalog, toLiteLLMKey } from './catalog/litellm-catalog';
 export {
   deriveCanonical,
   INDEX_PROVIDERS,
@@ -50,7 +49,6 @@ export {
   computeTokenCostUsd,
   type TokenCostInput,
 } from './catalog/compute-token-cost';
-export { MODEL_PRICES_SNAPSHOT } from './catalog/model-prices.snapshot';
 export {
   cooldownKeyOf,
   executeWithChain,
