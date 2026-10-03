@@ -51,6 +51,8 @@ import {
   MESSAGE_QUOTA_PORT,
   USER_MESSAGE_COUNT_PORT,
 } from './domain/ports/message-quota.port';
+import { MODEL_INDEX_REPOSITORY } from './domain/ports/model-index.repository';
+import { MODELS_DEV_CLIENT } from './domain/ports/models-dev.port';
 import { OPENROUTER_MODELS_CLIENT } from './domain/ports/openrouter-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
@@ -60,14 +62,16 @@ import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
-import { LiteLlmPricesHttpClient } from './infrastructure/catalog/litellm-prices.client';
-import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
+import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
+import { ModelIndexWriter } from './infrastructure/catalog/model-index.writer';
+import { ModelsDevHttpClient } from './infrastructure/catalog/models-dev.client';
 import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-models.client';
 import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
+import { DrizzleModelIndexRepository } from './infrastructure/persistence/drizzle-model-index.repository';
 import { DrizzleSystemProviderKeysRepository } from './infrastructure/persistence/drizzle-system-provider-keys.repository';
 import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
 import { DrizzleUserMessageCountRepository } from './infrastructure/persistence/drizzle-user-message-count.repository';
@@ -142,14 +146,15 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       provide: SYSTEM_PROVIDER_KEYS_SOURCE,
       useExisting: SystemProviderKeysService,
     },
-    ModelCatalogAdapter,
+    ModelIndexCache,
     PromotedModelsCache,
     { provide: MODEL_CATALOG, useClass: CompositeModelCatalog },
     {
       provide: OPENROUTER_MODELS_CLIENT,
       useClass: OpenRouterModelsHttpClient,
     },
-    LiteLlmPricesHttpClient,
+    { provide: MODELS_DEV_CLIENT, useClass: ModelsDevHttpClient },
+    ModelIndexWriter,
     CatalogSyncTask,
     AiCatalogAdminService,
     AssignableModelsService,
@@ -159,6 +164,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       useClass: AIStructuredOutputSDKProvider,
     },
     { provide: AI_CATALOG_REPOSITORY, useClass: DrizzleAiCatalogRepository },
+    { provide: MODEL_INDEX_REPOSITORY, useClass: DrizzleModelIndexRepository },
     { provide: AI_CONFIG_REPOSITORY, useClass: DrizzleAIConfigRepository },
     { provide: AI_USAGE_REPOSITORY, useClass: DrizzleAIUsageRepository },
     { provide: EMBEDDING_PORT, useClass: VoyageEmbeddingAdapter },

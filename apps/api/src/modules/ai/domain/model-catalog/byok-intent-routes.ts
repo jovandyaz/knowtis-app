@@ -15,7 +15,7 @@ export interface IntentRoute {
 
 const AGGREGATOR: ByokProvider = 'openrouter';
 
-/** Capability order per intent; a route runs only while the catalog prices its id, so a declared-but-unpriced route is inert. */
+/** Capability order per intent; a route runs only while the catalog supports its id, so a declared route the catalog does not list is inert. */
 export const BYOK_INTENT_CANDIDATES: Readonly<
   Record<ModelIntent, readonly CanonicalModel[]>
 > = {

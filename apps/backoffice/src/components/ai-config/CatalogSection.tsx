@@ -34,7 +34,9 @@ function syncSummary(result: CatalogSyncResult): string {
   }
   const failed =
     result.failures > 0 ? `, ${result.failures} write(s) failed` : '';
-  return `Synced ${result.upstream} upstream models: ${result.candidates} candidate(s), ${result.alerts} alert(s)${failed}.`;
+  const indexed =
+    result.indexed === undefined ? '' : ` Indexed ${result.indexed} model(s).`;
+  return `Synced ${result.upstream} upstream models: ${result.candidates} candidate(s), ${result.alerts} alert(s)${failed}.${indexed}`;
 }
 
 export function CatalogSection() {

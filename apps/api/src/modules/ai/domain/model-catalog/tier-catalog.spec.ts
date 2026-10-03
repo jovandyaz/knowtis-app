@@ -6,7 +6,7 @@ import {
   type ModelIntent,
 } from '@knowtis/shared-types';
 
-import { pricedAtSnapshot } from '../../testing/priced-at-snapshot';
+import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import {
   findInCatalog,
@@ -67,7 +67,7 @@ function catalogFor(
     storedPrimary: options.storedPrimary ?? null,
     platformIntents: options.platformIntents ?? PLATFORM_INTENTS,
     offered: options.offered ?? OFFERED,
-    isSupported: options.isSupported ?? pricedAtSnapshot,
+    isSupported: options.isSupported ?? supportedAtSnapshot,
     isPlatformRoutable:
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
   });
@@ -105,6 +105,7 @@ describe('tierCatalog', () => {
     const demoted = 'openrouter:vendor/demoted-model';
     const catalog = catalogFor('free', {
       platformIntents: { ...PLATFORM_INTENTS, fast: demoted },
+      isSupported: (id) => id === demoted || supportedAtSnapshot(id),
     });
     expect(findInCatalog(catalog, demoted)).toEqual({
       model: {
@@ -139,9 +140,10 @@ describe('tierCatalog', () => {
     });
   });
 
-  it('marks a platform intent unavailable when the catalog stops pricing its model', () => {
+  it('marks a platform intent unavailable when the catalog stops supporting its model', () => {
     const catalog = catalogFor('free', {
-      isSupported: (id) => pricedAtSnapshot(id) && id !== PLATFORM_INTENTS.fast,
+      isSupported: (id) =>
+        supportedAtSnapshot(id) && id !== PLATFORM_INTENTS.fast,
     });
     expect(intentModelOf(catalog, 'fast')).toBeNull();
     expect(ids(catalog)).not.toContain(PLATFORM_INTENTS.fast);
@@ -172,18 +174,19 @@ describe('tierCatalog', () => {
       expect.arrayContaining([
         'openrouter:z-ai/glm-5.2',
         'openrouter:anthropic/claude-haiku-4.5',
-        'openrouter:anthropic/claude-sonnet-4.6',
+        'openrouter:anthropic/claude-sonnet-5',
         'openrouter:anthropic/claude-opus-5',
       ])
     );
     expect(
-      findInCatalog(catalog, 'openrouter:anthropic/claude-sonnet-4.6')
+      findInCatalog(catalog, 'openrouter:anthropic/claude-sonnet-5')
     ).toEqual({
       model: {
-        id: 'openrouter:anthropic/claude-sonnet-4.6',
-        label: 'Sonnet 4.6',
+        id: 'openrouter:anthropic/claude-sonnet-5',
+        label: 'Sonnet 5',
         descriptionKey: '',
         tier: 'balanced',
+        reasoning: SONNET_LADDER,
       },
       servesIntent: 'balanced',
     });
@@ -201,7 +204,7 @@ describe('tierCatalog', () => {
   it('never falls back to a platform model when no held key serves an intent', () => {
     const catalog = catalogFor('byok', {
       heldProviders: ['openai'],
-      isSupported: (id) => pricedAtSnapshot(id) && !id.startsWith('openai:'),
+      isSupported: (id) => supportedAtSnapshot(id) && !id.startsWith('openai:'),
     });
     expect(catalog.intents).toEqual(
       MODEL_INTENTS.map((intent) => ({

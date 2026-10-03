@@ -407,6 +407,13 @@
       "when": 1791013451495,
       "tag": "0057_memory_extraction_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791049719141,
+      "tag": "0058_model_index",
+      "breakpoints": true
     }
   ]
 }

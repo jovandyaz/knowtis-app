@@ -23,11 +23,11 @@ import { DB_AVAILABLE } from '../../../../test-support/database';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
-import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { DrizzleAiCatalogRepository } from '../../infrastructure/persistence/drizzle-ai-catalog.repository';
 import { createExecutionContext } from '../../testing/create-execution-context';
-import { createMockConfig } from '../../testing/create-mock-config';
+import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import { AiCatalogAdminService } from './ai-catalog-admin.service';
 import { SelectableModelsService } from './selectable-models.service';
 
@@ -132,9 +132,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     selectable = new SelectableModelsService(
       new CompositeModelCatalog(
         promotedCache,
-        new ModelCatalogAdapter(
-          createMockConfig({ AI_PRICING_REFRESH_ENABLED: false })
-        )
+        new ModelIndexCache(createModelIndexRepositoryStub(async () => []))
       ),
       { isModelAvailable: () => true } as never,
       promotedCache

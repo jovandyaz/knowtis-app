@@ -12,16 +12,17 @@ export interface UpstreamModel {
   maxCompletionTokens: number | null;
   promptCostPerToken: number;
   completionCostPerToken: number;
+  cacheReadCostPerToken: number | null;
+  cacheWriteCostPerToken: number | null;
   /** Null when upstream publishes no date or a far-future sentinel meaning "never expires". */
   expirationDate: Date | null;
   intelligenceIndex: number | null;
+  inputModalities: readonly string[];
   outputModalities: readonly string[];
+  supportedParameters: readonly string[];
   /** Null when the model declares no recognized reasoning effort levels. */
   reasoning: ModelReasoning | null;
 }
-
-/** Discard entry for a payload whose `id` itself failed to parse: the model's identity is unknown, so no absence may be concluded while one is present. */
-export const UNPARSEABLE_MODEL_ID = '<unparseable>';
 
 /** One upstream read. A model missing from `models` is only known to be gone when `complete` is true and its id is not in `discarded`. */
 export interface UpstreamCatalog {

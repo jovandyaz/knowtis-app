@@ -52,6 +52,7 @@ describe('AiCatalogController', () => {
         skippedReason: null,
         upstream: 120,
         candidates: 97,
+        indexed: 640,
         alerts: 2,
         failures: 0,
       }),
@@ -175,6 +176,7 @@ describe('AiCatalogController', () => {
       skippedReason: null,
       upstream: 120,
       candidates: 97,
+      indexed: 640,
       alerts: 2,
       failures: 0,
     });
@@ -187,6 +189,7 @@ describe('AiCatalogController', () => {
       skippedReason: 'locked',
       upstream: 0,
       candidates: 0,
+      indexed: 0,
       alerts: 0,
       failures: 0,
     });
@@ -196,6 +199,7 @@ describe('AiCatalogController', () => {
       skippedReason: 'locked',
       upstream: 0,
       candidates: 0,
+      indexed: 0,
       alerts: 0,
       failures: 0,
     });

@@ -91,27 +91,29 @@ AIGateway / AIController
 
 Bindings from `apps/api/src/modules/ai/ai.module.ts`:
 
-| DI Symbol                         | Implementation                                                                |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `AI_COMPLETION_PROVIDER`          | `AISDKProvider`                                                               |
-| `AI_STRUCTURED_OUTPUT_PROVIDER`   | `AIStructuredOutputSDKProvider`                                               |
-| `AI_USAGE_REPOSITORY`             | `DrizzleAIUsageRepository`                                                    |
-| `AI_CONFIG_REPOSITORY`            | `DrizzleAIConfigRepository`                                                   |
-| `AI_CATALOG_REPOSITORY`           | `DrizzleAiCatalogRepository`                                                  |
-| `USER_AI_SETTINGS_REPOSITORY`     | `DrizzleUserAiSettingsRepository`                                             |
-| `USER_PROVIDER_KEYS_REPOSITORY`   | `DrizzleUserProviderKeysRepository`                                           |
-| `SYSTEM_PROVIDER_KEYS_REPOSITORY` | `DrizzleSystemProviderKeysRepository`                                         |
-| `SYSTEM_PROVIDER_KEYS_SOURCE`     | `SystemProviderKeysService` (`useExisting`)                                   |
-| `RATE_LIMIT_PROVIDER`             | `RedisRateLimitService`                                                       |
-| `AI_CACHE`                        | `ExactMatchCacheService`                                                      |
-| `AI_REDIS`                        | `AIRedisProvider`                                                             |
-| `MODEL_CATALOG`                   | `CompositeModelCatalog` (wraps `ModelCatalogAdapter` + `PromotedModelsCache`) |
-| `OPENROUTER_MODELS_CLIENT`        | `OpenRouterModelsHttpClient`                                                  |
-| `EMBEDDING_PORT`                  | `VoyageEmbeddingAdapter`                                                      |
-| `WEB_SEARCH_PORT`                 | `TavilyWebSearchAdapter`                                                      |
-| `FALLBACK_CHAIN_SOURCE`           | `AIConfigService` (`useExisting`)                                             |
-| `OPENROUTER_ROUTING_SOURCE`       | `AIConfigService` (`useExisting`)                                             |
-| `PROMPTS_DIR`                     | `join(__dirname, 'prompts')`                                                  |
+| DI Symbol                         | Implementation                                                            |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| `AI_COMPLETION_PROVIDER`          | `AISDKProvider`                                                           |
+| `AI_STRUCTURED_OUTPUT_PROVIDER`   | `AIStructuredOutputSDKProvider`                                           |
+| `AI_USAGE_REPOSITORY`             | `DrizzleAIUsageRepository`                                                |
+| `AI_CONFIG_REPOSITORY`            | `DrizzleAIConfigRepository`                                               |
+| `AI_CATALOG_REPOSITORY`           | `DrizzleAiCatalogRepository`                                              |
+| `USER_AI_SETTINGS_REPOSITORY`     | `DrizzleUserAiSettingsRepository`                                         |
+| `USER_PROVIDER_KEYS_REPOSITORY`   | `DrizzleUserProviderKeysRepository`                                       |
+| `SYSTEM_PROVIDER_KEYS_REPOSITORY` | `DrizzleSystemProviderKeysRepository`                                     |
+| `SYSTEM_PROVIDER_KEYS_SOURCE`     | `SystemProviderKeysService` (`useExisting`)                               |
+| `RATE_LIMIT_PROVIDER`             | `RedisRateLimitService`                                                   |
+| `AI_CACHE`                        | `ExactMatchCacheService`                                                  |
+| `AI_REDIS`                        | `AIRedisProvider`                                                         |
+| `MODEL_CATALOG`                   | `CompositeModelCatalog` (wraps `ModelIndexCache` + `PromotedModelsCache`) |
+| `MODEL_INDEX_REPOSITORY`          | `DrizzleModelIndexRepository`                                             |
+| `OPENROUTER_MODELS_CLIENT`        | `OpenRouterModelsHttpClient`                                              |
+| `MODELS_DEV_CLIENT`               | `ModelsDevHttpClient`                                                     |
+| `EMBEDDING_PORT`                  | `VoyageEmbeddingAdapter`                                                  |
+| `WEB_SEARCH_PORT`                 | `TavilyWebSearchAdapter`                                                  |
+| `FALLBACK_CHAIN_SOURCE`           | `AIConfigService` (`useExisting`)                                         |
+| `OPENROUTER_ROUTING_SOURCE`       | `AIConfigService` (`useExisting`)                                         |
+| `PROMPTS_DIR`                     | `join(__dirname, 'prompts')`                                              |
 
 ---
 
@@ -468,7 +470,7 @@ The backoffice **AI Config** page is the single AI-ops surface: a sticky status 
 - **Gateway mode** — when `AI_GATEWAY_API_KEY` is set, all provider traffic routes through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway). Colon-format ids (`anthropic:claude-sonnet-5`, a curated id in `selectable-models.catalog.ts`) are translated internally to the gateway's slash format (`anthropic/claude-sonnet-5`). Direct provider keys (`ANTHROPIC_API_KEY`, etc.) are not required — the gateway holds provider credentials. Streaming, tool calling, and `providerOptions` pass through unchanged.
 - **Direct mode** — when `AI_GATEWAY_API_KEY` is absent, the factory builds the direct-SDK registry (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`, `@openrouter/ai-sdk-provider`). This is the default for local development and the rollback path in production.
 
-**OpenRouter models** use the id shape `openrouter:vendor/model` (e.g. `openrouter:deepseek/deepseek-v3.2`) and power the curated **open** tier. They require direct mode plus `OPENROUTER_API_KEY`. In gateway mode they are **unavailable** — `isModelAvailable` returns false (the picker drops them) and `languageModel` throws — because OpenRouter's vendor slugs are a different catalog than the Vercel gateway's and slug equality is not guaranteed. Pricing resolves via LiteLLM's `openrouter/*` entries, which carry OpenRouter's own rates.
+**OpenRouter models** use the id shape `openrouter:vendor/model` (e.g. `openrouter:deepseek/deepseek-v3.2`) and power the curated **open** tier. They require direct mode plus `OPENROUTER_API_KEY`. In gateway mode they are **unavailable** — `isModelAvailable` returns false (the picker drops them) and `languageModel` throws — because OpenRouter's vendor slugs are a different catalog than the Vercel gateway's and slug equality is not guaranteed. Pricing resolves from the model index's `openrouter` rows, read from OpenRouter's own model listing (see [Model Catalog & Pricing](#model-catalog--pricing)).
 
 The rest of the system always uses colon-format model ids; the mode switch is invisible to callers. Malformed ids (missing the `provider:` prefix) throw `ProviderNotConfiguredError` in both modes.
 
@@ -554,11 +556,16 @@ Two levers were measured and rejected. A fixed `seed` did not stabilise output (
 
 ## Model Catalog & Pricing
 
-Pricing and context-window data come from [LiteLLM's public pricing JSON](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) via `LiteLLMCatalog` (`@knowtis/ai-gateway`):
+Prices, context windows and capabilities come from the **model index**: the `ai_model_index` table, one row per provider route (`provider:model`), each normalized into an `IndexedModel` (`@knowtis/ai-gateway`). Costs are USD per token, and a fact the source does not publish is `null`. `MODEL_CATALOG` serves it through `ModelIndexCatalog`: a model is supported while it is listed with text input and text output.
 
-- A vendored snapshot (`model-prices.snapshot.ts`, regenerated with `node tools/refresh-model-catalog.mjs`) ships with the package so the catalog works offline.
-- With `AI_PRICING_REFRESH_ENABLED=true`, `ModelCatalogAdapter` refreshes from the live JSON at boot (10s timeout, fail-soft to the snapshot). A refresh that parses but stops fully pricing any curated model is rejected (`ai.catalog.refresh_rejected`) and the previous catalog stays in place — an unpriced model would keep routing at `costUsd = 0`, invisible to the spend breaker.
-- `computeTokenCostUsd` prices each request from the served model's rates, including Anthropic cache read/write token rates. Voice transcription is priced per second of audio (`input_cost_per_second`, mode `audio_transcription`) using the real duration reported by the provider.
+- **Sources.** [models.dev](https://models.dev) (`https://models.dev/api.json`) feeds the `anthropic`, `openai` and `google` rows; OpenRouter's `/api/v1/models` feeds the `openrouter` rows, enriched with the metadata models.dev publishes for the same OpenRouter model.
+- **Daily sync.** The 03:00 catalog pass (see [The sync job](#the-sync-job)) reads both sources and writes the index through `ModelIndexWriter`: the rows it read are upserted, and the rows a provider no longer lists are marked absent, each newly retired id logged under `ai.model_index.marked_absent` (a sample per provider). An id upstream published but the read discarded (its payload failed validation) is never marked absent, and neither is a row skipped because a value does not fit its column (`ai.model_index.rows_skipped`): an `id`, `name`, `family` or `canonical` over its length, a token limit that is not an integer up to `MAX_INT32`, or a per-token cost of `AI_MODEL_INDEX_COST_CEILING` (1e5, from `numeric(20,15)`) or more. One bad value cannot fail the write. Both sources already reject a token limit that is not an integer up to `MAX_INT32`. A failed models.dev fetch logs `ai.model_index.models_dev_fetch_failed` and leaves the `anthropic`, `openai` and `google` rows untouched; a failed index write logs `ai.model_index.write_failed`, and the rest of the pass still runs.
+- **Shrink guard.** A provider retires the rows it no longer lists only when its read is conclusive and still carries at least half (`SYNC_MAX_SHRINK_RATIO`) of the rows it listed before. A fetch that drops more than half its rows, or one that cannot prove absence (an OpenRouter read that stopped paginating, a models.dev read that discarded entries), still upserts what it saw but retires nothing and logs `ai.model_index.sync_rejected` — a broken upstream response cannot empty the catalog.
+- **Floor guard.** A provider's batch that would leave a floor model (`FLOOR_MODEL_IDS`, below) its provider serves now — from its listed rows, or its snapshot rows while it lists none — unsupported, unpriced or without an input window, whether degraded or missing, is rejected whole. The batch is judged by what the write leaves served: its rows plus the listed rows of the ids it discarded or skipped, which the write keeps. None of a rejected batch's rows are written, nothing is retired, and `ai.model_index.sync_rejected` is logged at error level with `reason: 'floor'` and the models. A schema drift across a provider (say, OpenRouter renaming `input_modalities`) keeps the last good rows instead of unsupporting every model; a floor model that really left upstream keeps its provider's sync rejected until the curated list and default settings stop naming it.
+- **Serving.** `ModelIndexCache` re-reads the listed rows every 60s (`MODEL_INDEX_REFRESH_MS`) and answers synchronously, behind `CompositeModelCatalog`. A failed read keeps the catalog already served and logs `ai.model_index.cache_refresh_failed`.
+- **Vendored floor.** `MODEL_INDEX_SNAPSHOT` (`model-index.snapshot.ts`) ships with `@knowtis/ai-gateway`. Each provider is served from its snapshot rows until the index lists rows for it; from then on its index rows replace its snapshot rows entirely, so a model the sync retired stops being supported. A fresh database, or a provider whose sync never landed, still prices every model the platform serves.
+- **Refreshing the floor.** `pnpm catalog:refresh-snapshot` (`nx run api:refresh-model-index-snapshot`) reads both sources and rewrites the snapshot. It refuses to write when models.dev discarded an entry, when OpenRouter stopped paginating, or when a floor model (`FLOOR_MODEL_IDS`: every curated model, the default, fast and deep model settings, and the default fallback chain) would be unsupported, unpriced or without an input window. `curated-guard.spec.ts` runs the same `unservedFloorModels` check against the committed snapshot.
+- `computeTokenCostUsd` prices each request from the served model's rates, including cache read/write token rates. Voice transcription is priced per second of audio from `TRANSCRIPTION_PRICES` (`openai:whisper-1`), using the real duration reported by the provider; a transcription model is never a supported chat model.
 - Unknown models record `costUsd = 0` and log `ai.pricing.unknown_model` once per model. A model priced on only one side of a completion logs `ai.pricing.partial_model` once — the missing side is charged at $0.
 
 ---
@@ -573,7 +580,7 @@ The curated list is hand-maintained, so it goes stale silently: open-weight mode
 
 `ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`), a `reasoning` jsonb column (migration `0042`) holding `{ levels: ReasoningEffort[], mandatory }` — the sync maps OpenRouter's `reasoning.supported_efforts` (filtered to known `REASONING_EFFORTS`) and `reasoning.mandatory`, `null` when the upstream declares no usable levels — and a `status` of `candidate` or `promoted`. Promotion stamps `promoted_by` and `promoted_at`; retiring a promoted model sets it back to `candidate`, so it rejoins the promotion queue.
 
-`ai_catalog_alerts` records what needs a human: `deprecation`, `price_drift` and `unavailable` (a curated **or promoted** model upstream stopped listing), each with a free-text `detail`. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
+`ai_catalog_alerts` records what needs a human: `deprecation` and `unavailable` (a curated **or promoted** model upstream stopped listing), each with a free-text `detail`. The schema still accepts a `price_drift` kind for alerts already on file; the sync does not raise it, because the model index tracks upstream prices daily. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
 
 > `model_id` deliberately carries **no foreign key**. Alerts also cover the curated models, which live in code and never get an `ai_catalog_models` row — a constraint here would reject exactly the alerts that matter most.
 
@@ -583,7 +590,7 @@ The curated list is hand-maintained, so it goes stale silently: open-weight mode
 
 A model becomes a candidate when it clears every bar: an author in `OPEN_WEIGHT_AUTHORS`, no variant suffix (`:free`, `:batch`, `:thinking`), not already curated, at least 128k of context, text output only, and an output price at or under `CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN`. Upsert is per-model, so one malformed entry cannot lose the rest of the run.
 
-The same run watches the **curated and promoted** models for upstream drift and files alerts: a model that vanished upstream, one flagged deprecated, or a price that moved. Absence is only ever concluded from a complete read that still recognizes a curated model and carries no anonymous discard; when it cannot conclude, the run warns `ai.catalog.absence_watch_blind` instead of silently reporting a clean sync. Price alerts on the open tier fire **only upward** — the vendored open-tier costs are deliberate upper bounds over OpenRouter's routed providers, so a cheaper upstream is the expected state, not an incident.
+The same run writes the [model index](#model-catalog--pricing) and watches the **curated open-tier and promoted** models on OpenRouter, filing an alert for a model that vanished upstream or one OpenRouter dates for expiration. Absence is only ever concluded from a complete read that still recognizes a curated model and carries no anonymous discard; when it cannot conclude, the run warns `ai.catalog.absence_watch_blind` instead of silently reporting a clean sync. A price move raises nothing: the index already serves the new price.
 
 ### Catalog admission ceiling
 
@@ -630,7 +637,7 @@ Where the two sources disagree, **code wins**: a curated entry keeps its hand-wr
 | `free`      | `platform-intents` | The three models `ai_fast_model`, `ai_default_model` and `ai_deep_model` resolve to, each only while the catalog supports it and the server's keys can invoke it (`isModelAvailable`). | platform |
 | `byok`      | `own-keys`         | Every offered model (curated and promoted) whose provider the caller holds a key for, plus the routed model of each intent (below). Never a platform model.                            | key      |
 
-An intent with no servable model is reported `{ available: false, reason: 'no_route' }`. `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) supplies the offered pool and the availability facts: every entry is intersected with the LiteLLM pricing snapshot (context window + cost class), so a model missing from the snapshot is dropped.
+An intent with no servable model is reported `{ available: false, reason: 'no_route' }`. `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) supplies the offered pool and the availability facts: every entry is intersected with the model catalog (context window + cost class), so a model the catalog does not support is dropped.
 
 **BYOK intent candidates.** For a byok-tier caller each intent is routed from `BYOK_INTENT_CANDIDATES` (`byok-intent-routes.ts`): per intent, canonical models in capability order, each with the model id every provider serves it under. `routeIntent` picks the first candidate that any held key can serve and the catalog supports; the **primary provider** only orders the routes of that one candidate — it never changes which candidate wins, so the first servable candidate still does. The primary runs first, then the other held providers in the order their keys were added, with OpenRouter last. The primary is the stored `user_ai_settings.primary_provider` while the caller still holds a key for it, else the first key the caller added (see [Primary provider](#primary-provider)). An intent whose route runs on a provider other than the primary one is reported `substituted: true`. A model reached only over OpenRouter keeps the effort ladder its sibling routes declare (`routeReasoning`).
 
@@ -774,7 +781,6 @@ Names and defaults from `apps/api/src/config/env.config.ts` (Zod schema, validat
 | `AI_TRANSCRIPTION_MODEL`       | `openai:whisper-1`           | Voice transcription model (only `openai:` supported)                                                  |
 | `AI_COOLDOWN_ALLOWED_FAILS`    | `3`                          | Failures per 60s window that start a provider cooldown                                                |
 | `AI_COOLDOWN_SECONDS`          | `120`                        | Provider cooldown duration (seconds)                                                                  |
-| `AI_PRICING_REFRESH_ENABLED`   | `false`                      | Refresh model pricing from LiteLLM's JSON at boot                                                     |
 | `AI_MAX_RETRIES`               | `3`                          | AI SDK `maxRetries` for completions, voice structuring, and organization suggestions                  |
 | `AI_TIMEOUT_MS`                | `30000`                      | Total timeout (ms) for REST completions, Whisper transcription, Voyage embedding, and Tavily requests |
 | `AI_STREAM_MAX_MS`             | `180000`                     | Total streaming cap (ms) for `ai:complete`                                                            |

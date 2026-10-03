@@ -84,6 +84,7 @@ export class AiCatalogAdminService {
         targetType: CATALOG_SYNC_TARGET,
         after: {
           candidates: result.candidates,
+          indexed: result.indexed,
           alerts: result.alerts,
           failures: result.failures,
         },

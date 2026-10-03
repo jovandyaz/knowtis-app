@@ -33,6 +33,7 @@ export default defineConfig([
   globalIgnores([
     'dist',
     '**/routeTree.gen.ts',
+    'packages/ai-gateway/src/catalog/model-index.snapshot.ts',
     'coverage',
     'tmp',
     '.nx',

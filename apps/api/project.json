@@ -153,6 +153,13 @@
         "cwd": "apps/api"
       }
     },
+    "refresh-model-index-snapshot": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --tsconfig tsconfig.app.json src/scripts/refresh-model-index-snapshot.ts",
+        "cwd": "apps/api"
+      }
+    },
     "backfill-note-content": {
       "executor": "nx:run-commands",
       "options": {

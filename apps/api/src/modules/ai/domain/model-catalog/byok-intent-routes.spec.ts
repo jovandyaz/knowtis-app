@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MODEL_INTENTS, type ByokProvider } from '@knowtis/shared-types';
 
-import { pricedAtSnapshot } from '../../testing/priced-at-snapshot';
+import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
 import {
   BYOK_INTENT_CANDIDATES,
   canonicalOf,
@@ -13,7 +13,7 @@ import {
 function route(
   intent: 'fast' | 'balanced' | 'powerful',
   held: readonly ByokProvider[],
-  isSupported: (id: string) => boolean = pricedAtSnapshot
+  isSupported: (id: string) => boolean = supportedAtSnapshot
 ) {
   return routeIntent(
     BYOK_INTENT_CANDIDATES[intent],
@@ -56,7 +56,7 @@ describe('routeIntent', () => {
     ]);
   });
 
-  it('routes every intent over OpenRouter for an OpenRouter-only user, skipping unpriced routes', () => {
+  it('routes every intent over OpenRouter for an OpenRouter-only user', () => {
     expect(
       MODEL_INTENTS.map((intent) => route(intent, ['openrouter']))
     ).toEqual([
@@ -66,8 +66,8 @@ describe('routeIntent', () => {
         substituted: false,
       },
       {
-        modelId: 'openrouter:anthropic/claude-sonnet-4.6',
-        label: 'Sonnet 4.6',
+        modelId: 'openrouter:anthropic/claude-sonnet-5',
+        label: 'Sonnet 5',
         substituted: false,
       },
       {
@@ -104,7 +104,7 @@ describe('routeIntent', () => {
       route(
         'fast',
         ['google', 'openrouter', 'anthropic'],
-        (id) => pricedAtSnapshot(id) && !id.startsWith('google:')
+        (id) => supportedAtSnapshot(id) && !id.startsWith('google:')
       )
     ).toEqual({
       modelId: 'anthropic:claude-haiku-4-5',
@@ -144,9 +144,13 @@ describe('BYOK_INTENT_CANDIDATES', () => {
   });
 
   it('gates each declared route on the catalog at runtime', () => {
-    expect(route('balanced', ['openrouter'])?.modelId).toBe(
-      'openrouter:anthropic/claude-sonnet-4.6'
-    );
+    expect(
+      route(
+        'balanced',
+        ['openrouter'],
+        (id) => id !== 'openrouter:anthropic/claude-sonnet-5'
+      )?.modelId
+    ).toBe('openrouter:openai/gpt-5.6-terra');
     expect(route('balanced', ['openrouter'], () => true)?.modelId).toBe(
       'openrouter:anthropic/claude-sonnet-5'
     );

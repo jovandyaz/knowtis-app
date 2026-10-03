@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   PROMOTED_STATUS,
   type CatalogSyncResultDto,
@@ -18,7 +17,6 @@ import {
 } from '../../domain/model-catalog/candidate-filter';
 import {
   canConcludeAbsence,
-  findLiteLlmDrift,
   findOpenRouterDrift,
   findPromotedDrift,
   type DriftFinding,
@@ -28,12 +26,17 @@ import {
   type AiCatalogRepository,
 } from '../../domain/ports/ai-catalog.repository';
 import {
+  MODELS_DEV_CLIENT,
+  type ModelsDevCatalog,
+  type ModelsDevClient,
+} from '../../domain/ports/models-dev.port';
+import {
   OPENROUTER_MODELS_CLIENT,
   type OpenRouterModelsClient,
   type UpstreamCatalog,
   type UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
-import { LiteLlmPricesHttpClient } from './litellm-prices.client';
+import { ModelIndexWriter } from './model-index.writer';
 
 const ADVISORY_LOCK_KEY = 778_493_003;
 const FAILURE_LOG_SAMPLE_SIZE = 10;
@@ -49,6 +52,7 @@ function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {
     skippedReason: reason,
     upstream: 0,
     candidates: 0,
+    indexed: 0,
     alerts: 0,
     failures: 0,
   };
@@ -63,8 +67,8 @@ export class CatalogSyncTask {
     @Inject(AI_CATALOG_REPOSITORY) private readonly repo: AiCatalogRepository,
     @Inject(OPENROUTER_MODELS_CLIENT)
     private readonly openRouter: OpenRouterModelsClient,
-    private readonly liteLlm: LiteLlmPricesHttpClient,
-    @Inject(MODEL_CATALOG) private readonly catalog: ModelCatalog
+    @Inject(MODELS_DEV_CLIENT) private readonly modelsDev: ModelsDevClient,
+    private readonly indexWriter: ModelIndexWriter
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
@@ -99,24 +103,6 @@ export class CatalogSyncTask {
     return outcome.result;
   }
 
-  private readonly vendoredOutputCost = (modelId: string): number | undefined =>
-    this.catalog.getPricing(modelId)?.outputCostPerToken;
-
-  private async liteLlmFindings(): Promise<DriftFinding[]> {
-    try {
-      return findLiteLlmDrift(
-        this.vendoredOutputCost,
-        await this.liteLlm.fetchPrices()
-      );
-    } catch (error) {
-      this.logger.warn({
-        event: 'ai.catalog.litellm_fetch_failed',
-        reason: reasonOf(error),
-      });
-      return [];
-    }
-  }
-
   private async promotedFindings(
     catalog: UpstreamCatalog
   ): Promise<DriftFinding[]> {
@@ -135,6 +121,33 @@ export class CatalogSyncTask {
     }
   }
 
+  private async modelsDevCatalog(): Promise<ModelsDevCatalog | null> {
+    try {
+      return await this.modelsDev.fetchCatalog();
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.model_index.models_dev_fetch_failed',
+        reason: reasonOf(error),
+      });
+      return null;
+    }
+  }
+
+  private async writeIndex(catalog: UpstreamCatalog): Promise<number> {
+    const modelsDev = await this.modelsDevCatalog();
+    try {
+      const { indexed } = await this.indexWriter.write(catalog, modelsDev);
+      return indexed;
+    } catch (error) {
+      this.logger.error({
+        event: 'ai.model_index.write_failed',
+        reason: reasonOf(error),
+        stack: stackOf(error),
+      });
+      return 0;
+    }
+  }
+
   private async fetchAndPersist(): Promise<CatalogSyncResultDto> {
     const catalog = await this.openRouter.fetchModels();
     // A blind run logs the same `alerts: 0` as a healthy one, so the operator
@@ -147,17 +160,18 @@ export class CatalogSyncTask {
         discarded: catalog.discarded.length,
       });
     }
+    const indexed = await this.writeIndex(catalog);
     const findings = [
-      ...findOpenRouterDrift(this.vendoredOutputCost, catalog),
+      ...findOpenRouterDrift(catalog),
       ...(await this.promotedFindings(catalog)),
-      ...(await this.liteLlmFindings()),
     ];
-    return this.persist(catalog.models, findings);
+    return this.persist(catalog.models, findings, indexed);
   }
 
   private async persist(
     upstream: readonly UpstreamModel[],
-    findings: DriftFinding[]
+    findings: DriftFinding[],
+    indexed: number
   ): Promise<CatalogSyncResultDto> {
     const failures: WriteFailure[] = [];
     let candidates = 0;
@@ -210,6 +224,7 @@ export class CatalogSyncTask {
       skippedReason: null,
       upstream: upstream.length,
       candidates,
+      indexed,
       alerts,
       failures: failures.length,
     };

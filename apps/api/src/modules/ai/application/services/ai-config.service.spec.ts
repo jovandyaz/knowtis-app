@@ -6,11 +6,11 @@ import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
-import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
-import { createMockConfig } from '../../testing/create-mock-config';
+import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import { AIConfigService, InvalidAIConfigError } from './ai-config.service';
 
 const CUSTOM_MODEL = 'anthropic:claude-sonnet-5';
@@ -55,9 +55,7 @@ describe('AIConfigService', () => {
     await promoted.onModuleInit();
     const catalog = new CompositeModelCatalog(
       promoted,
-      new ModelCatalogAdapter(
-        createMockConfig({ AI_PRICING_REFRESH_ENABLED: false })
-      )
+      new ModelIndexCache(createModelIndexRepositoryStub(async () => []))
     );
     return new AIConfigService(
       mockRepo as never,

@@ -6,7 +6,8 @@ import { DATABASE_CONNECTION, featureFlags } from '../../../database';
 import type { FeatureFlagEntity } from '../domain/feature-flag.repository';
 import { DrizzleFeatureFlagRepository } from '../infrastructure/drizzle-feature-flag.repository';
 
-vi.mock('drizzle-orm', () => ({
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('drizzle-orm')>()),
   eq: vi.fn((...args: unknown[]) => ({ op: 'eq', args })),
 }));
 

@@ -24,9 +24,13 @@ function upstream(overrides: Partial<UpstreamModel> = {}): UpstreamModel {
     maxCompletionTokens: 98304,
     promptCostPerToken: 0.0000006,
     completionCostPerToken: 0.0000022,
+    cacheReadCostPerToken: null,
+    cacheWriteCostPerToken: null,
     expirationDate: null,
     intelligenceIndex: 42.3,
+    inputModalities: ['text'],
     outputModalities: ['text'],
+    supportedParameters: [],
     reasoning: null,
     ...overrides,
   };

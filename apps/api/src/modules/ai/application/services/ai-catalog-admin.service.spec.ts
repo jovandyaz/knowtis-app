@@ -18,6 +18,7 @@ const COMPLETED_SYNC = {
   skippedReason: null,
   upstream: 120,
   candidates: 97,
+  indexed: 640,
   alerts: 2,
   failures: 0,
 } as const;
@@ -323,7 +324,7 @@ describe('AiCatalogAdminService', () => {
         expect.objectContaining({
           actorId: ACTOR_ID,
           action: 'ai_catalog.synced',
-          after: { candidates: 97, alerts: 2, failures: 0 },
+          after: { candidates: 97, indexed: 640, alerts: 2, failures: 0 },
         })
       );
     });
@@ -340,6 +341,7 @@ describe('AiCatalogAdminService', () => {
         skippedReason: 'locked',
         upstream: 0,
         candidates: 0,
+        indexed: 0,
         alerts: 0,
         failures: 0,
       });
@@ -349,6 +351,7 @@ describe('AiCatalogAdminService', () => {
         skippedReason: 'locked',
         upstream: 0,
         candidates: 0,
+        indexed: 0,
         alerts: 0,
         failures: 0,
       });

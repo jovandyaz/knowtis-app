@@ -1112,6 +1112,51 @@ describe('useResolveCatalogAlert', () => {
   });
 });
 
+describe('useSyncCatalog', () => {
+  it('resolves every count the pass reported, the index included', async () => {
+    const reported = {
+      status: 'completed',
+      skippedReason: null,
+      upstream: 12,
+      candidates: 3,
+      indexed: 40,
+      alerts: 1,
+      failures: 0,
+    };
+    vi.mocked(httpClient.post).mockResolvedValue(reported);
+
+    const { result } = renderHook(() => useSyncCatalog(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.post).toHaveBeenCalledWith('/ai/catalog/sync');
+    expect(result.current.data).toEqual(reported);
+  });
+
+  it('resolves a pass from an API that predates the index with its index count unknown', async () => {
+    const reported = {
+      status: 'completed',
+      skippedReason: null,
+      upstream: 12,
+      candidates: 3,
+      alerts: 1,
+      failures: 0,
+    };
+    vi.mocked(httpClient.post).mockResolvedValue(reported);
+
+    const { result } = renderHook(() => useSyncCatalog(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toMatchObject(reported);
+    expect(result.current.data).not.toHaveProperty('indexed');
+  });
+});
+
 describe('catalog mutations and the cached candidates page', () => {
   const CANDIDATES_PARAMS = { page: 1, limit: 25 };
 
@@ -1162,6 +1207,7 @@ describe('catalog mutations and the cached candidates page', () => {
           skippedReason: null,
           upstream: 12,
           candidates: 3,
+          indexed: 40,
           alerts: 0,
           failures: 0,
         }),

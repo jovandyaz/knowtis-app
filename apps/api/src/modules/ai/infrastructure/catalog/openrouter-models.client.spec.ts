@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_INT32 } from '@knowtis/ai-gateway';
+
 import {
   MAX_MODEL_PAGES,
   OpenRouterModelsHttpClient,
@@ -105,6 +107,54 @@ const WHITESPACE_PRICED_MODEL = {
   pricing: { prompt: '   ', completion: '   ' },
 };
 
+const CLAUDE_SONNET_45 = {
+  id: 'anthropic/claude-sonnet-4.5',
+  canonical_slug: 'anthropic/claude-4.5-sonnet-20250929',
+  hugging_face_id: '',
+  name: 'Anthropic: Claude Sonnet 4.5',
+  created: 1759161676,
+  description:
+    'Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date...',
+  context_length: 1000000,
+  architecture: {
+    modality: 'text+image+file->text',
+    input_modalities: ['text', 'image', 'file'],
+    output_modalities: ['text'],
+    tokenizer: 'Claude',
+    instruct_type: null,
+  },
+  pricing: {
+    prompt: '0.000003',
+    completion: '0.000015',
+    web_search: '0.01',
+    input_cache_read: '0.0000003',
+    input_cache_write: '0.00000375',
+    input_cache_write_1h: '0.000006',
+  },
+  top_provider: {
+    context_length: 1000000,
+    max_completion_tokens: 64000,
+    is_moderated: true,
+  },
+  per_request_limits: null,
+  supported_parameters: [
+    'include_reasoning',
+    'max_completion_tokens',
+    'max_tokens',
+    'reasoning',
+    'response_format',
+    'stop',
+    'structured_outputs',
+    'temperature',
+    'tool_choice',
+    'tools',
+    'top_k',
+    'top_p',
+  ],
+  expiration_date: null,
+  reasoning: { mandatory: false },
+};
+
 const MINIMAL_MODEL = {
   id: 'qwen/qwen3.8-max',
   name: 'Qwen: Qwen3.8 Max',
@@ -166,8 +216,150 @@ describe('OpenRouterModelsHttpClient', () => {
       completionCostPerToken: 0.0000004,
       expirationDate: null,
       intelligenceIndex: 47.6,
+      inputModalities: ['text'],
       outputModalities: ['text'],
+      supportedParameters: [],
+      cacheReadCostPerToken: 0.0000001345,
+      cacheWriteCostPerToken: null,
       reasoning: null,
+    });
+  });
+
+  it('should read input modalities, supported parameters and cache prices', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(page([CLAUDE_SONNET_45])));
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model).toMatchObject({
+      inputModalities: ['text', 'image', 'file'],
+      supportedParameters: CLAUDE_SONNET_45.supported_parameters,
+      cacheReadCostPerToken: 0.0000003,
+      cacheWriteCostPerToken: 0.00000375,
+    });
+  });
+
+  it('should default the input modalities, supported parameters and cache prices when upstream omits them', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(page([MINIMAL_MODEL])));
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model).toMatchObject({
+      inputModalities: [],
+      supportedParameters: [],
+      cacheReadCostPerToken: null,
+      cacheWriteCostPerToken: null,
+    });
+  });
+
+  it('should keep a model whose cache prices are unreadable, without those prices', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...CLAUDE_SONNET_45,
+            pricing: {
+              ...CLAUDE_SONNET_45.pricing,
+              input_cache_read: '',
+              input_cache_write: '-1',
+            },
+          },
+        ])
+      )
+    );
+
+    const { models, discarded } =
+      await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: 'anthropic/claude-sonnet-4.5',
+      promptCostPerToken: 0.000003,
+      cacheReadCostPerToken: null,
+      cacheWriteCostPerToken: null,
+    });
+    expect(discarded).toEqual([]);
+  });
+
+  it.each([
+    {
+      field: 'input modalities',
+      model: {
+        ...CLAUDE_SONNET_45,
+        architecture: {
+          ...CLAUDE_SONNET_45.architecture,
+          input_modalities: ['text', { kind: 'image' }],
+        },
+      },
+    },
+    {
+      field: 'supported parameters',
+      model: { ...CLAUDE_SONNET_45, supported_parameters: 'tools' },
+    },
+  ])(
+    'should discard by id a model whose $field are unreadable, so its last-good row is kept',
+    async ({ model }) => {
+      fetchMock.mockResolvedValueOnce(okResponse(page([model])));
+
+      const { models, discarded } =
+        await new OpenRouterModelsHttpClient().fetchModels();
+
+      expect(models).toEqual([]);
+      expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
+    }
+  );
+
+  it.each([
+    {
+      field: 'context length',
+      model: { ...CLAUDE_SONNET_45, context_length: MAX_INT32 + 1 },
+    },
+    {
+      field: 'max completion tokens',
+      model: {
+        ...CLAUDE_SONNET_45,
+        top_provider: {
+          ...CLAUDE_SONNET_45.top_provider,
+          max_completion_tokens: MAX_INT32 + 1,
+        },
+      },
+    },
+  ])(
+    'should discard by id a model whose $field exceeds MAX_INT32',
+    async ({ model }) => {
+      fetchMock.mockResolvedValueOnce(okResponse(page([model])));
+
+      const { models, discarded } =
+        await new OpenRouterModelsHttpClient().fetchModels();
+
+      expect(models).toEqual([]);
+      expect(discarded).toEqual(['anthropic/claude-sonnet-4.5']);
+    }
+  );
+
+  it('should keep a model whose token limits are exactly MAX_INT32', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...CLAUDE_SONNET_45,
+            context_length: MAX_INT32,
+            top_provider: {
+              ...CLAUDE_SONNET_45.top_provider,
+              max_completion_tokens: MAX_INT32,
+            },
+          },
+        ])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model).toMatchObject({
+      contextLength: MAX_INT32,
+      maxCompletionTokens: MAX_INT32,
     });
   });
 
