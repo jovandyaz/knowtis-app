@@ -25,6 +25,7 @@ const COMPLETE_OPENROUTER: UpstreamCatalog = {
 };
 const DISCARDED_ENTRY = 'openai:<unparseable>';
 const MISSING_MODEL_ID = AI_SETTING_DEFAULTS.ai_deep_model;
+const UNPRICED_MODEL_ID = AI_SETTING_DEFAULTS.ai_fast_model;
 
 function refusalsFor(rows: readonly IndexedModel[]): string[] {
   return snapshotRefusals(
@@ -69,18 +70,43 @@ describe('snapshotRefusals', () => {
     expect(refusals).toHaveLength(1);
     expect(refusals[0]).toContain(MISSING_MODEL_ID);
   });
+
+  it('names a floor model whose input is unpriced', () => {
+    const refusals = refusalsFor(
+      createFloorRows((row) =>
+        row.id === UNPRICED_MODEL_ID ? { ...row, inputCostPerToken: null } : row
+      )
+    );
+
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toContain(UNPRICED_MODEL_ID);
+  });
+
+  it('reports every refusal cause at once', () => {
+    const refusals = snapshotRefusals(
+      { ...CLEAN_MODELS_DEV, discarded: [DISCARDED_ENTRY] },
+      { ...COMPLETE_OPENROUTER, complete: false },
+      new ModelIndexCatalog(
+        createFloorRows().filter((row) => row.id !== MISSING_MODEL_ID)
+      )
+    );
+
+    expect(refusals).toHaveLength(3);
+    expect(refusals[0]).toContain(DISCARDED_ENTRY);
+    expect(refusals[1]).toContain('OpenRouter');
+    expect(refusals[2]).toContain(MISSING_MODEL_ID);
+  });
 });
 
 describe('renderModelIndexSnapshot', () => {
-  const rows = [
-    createIndexedModel({ id: 'openrouter:vendor/zeta' }),
-    createIndexedModel({
-      id: 'anthropic:claude-alpha',
-      provider: 'anthropic',
-      source: 'models_dev',
-    }),
-    createIndexedModel({ id: 'openrouter:vendor/mid' }),
-  ];
+  const zeta = createIndexedModel({ id: 'openrouter:vendor/zeta' });
+  const alpha = createIndexedModel({
+    id: 'anthropic:claude-alpha',
+    provider: 'anthropic',
+    source: 'models_dev',
+  });
+  const mid = createIndexedModel({ id: 'openrouter:vendor/mid' });
+  const rows = [zeta, alpha, mid];
 
   it('opens with the generated-by header and the IndexedModel type import', () => {
     const lines = renderModelIndexSnapshot(rows).split('\n');
@@ -102,7 +128,7 @@ describe('renderModelIndexSnapshot', () => {
 
     expect(
       rowLines.map((line) => JSON.parse(line.trim().slice(0, -1)))
-    ).toEqual([...rows].sort((a, b) => (a.id < b.id ? -1 : 1)));
+    ).toEqual([alpha, mid, zeta]);
     expect(source.endsWith('];\n')).toBe(true);
   });
 });
