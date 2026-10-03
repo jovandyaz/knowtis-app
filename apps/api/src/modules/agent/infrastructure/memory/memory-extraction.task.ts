@@ -51,7 +51,7 @@ const MAX_OUTPUT_TOKENS = 1024;
 // retry of the same conversation state may charge again: the cap bounds that.
 const EXTRACTION_RETRY: ExtractionRetryPolicy = {
   maxAttempts: 3,
-  backoffBaseSeconds: 600,
+  backoffBaseSeconds: 1800,
 };
 
 /**
