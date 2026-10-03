@@ -103,7 +103,7 @@ export const aiCatalogAlerts = pgTable(
   'ai_catalog_alerts',
   {
     id: serial('id').primaryKey(),
-    /** No FK: alerts also cover the curated models, which live in code and never get a row here. */
+    /** No FK: alerts also cover the platform default models, which live in code and need no row here. */
     modelId: varchar('model_id', { length: MODEL_ID_MAX_LENGTH }).notNull(),
     kind: varchar('kind', { length: 24 }).$type<CatalogAlertKind>().notNull(),
     detail: varchar('detail', { length: 500 }).notNull(),

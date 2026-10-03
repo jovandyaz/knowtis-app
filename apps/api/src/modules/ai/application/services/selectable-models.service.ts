@@ -20,13 +20,10 @@ import {
   type ByokResolutions,
 } from '../../domain/model-catalog/byok-intent-routes';
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
+import { PLATFORM_FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
 import { toModelReasoning } from '../../domain/model-catalog/index-reasoning';
 import type { ModelFacts } from '../../domain/model-catalog/model-choice';
 import { plainRouteCanonical } from '../../domain/model-catalog/plain-route';
-import {
-  CURATED_MODEL_IDS,
-  CURATED_MODELS,
-} from '../../domain/model-catalog/selectable-models.catalog';
 import {
   CATALOG_BILLING,
   tierCatalog,
@@ -61,34 +58,6 @@ export class SelectableModelsService {
     private readonly promotedModels: PromotedModelsCache,
     private readonly index: ModelIndexCache
   ) {}
-
-  /** The curated and promoted models with their copy and tier; each ladder comes from the model's index row, never from the entry. */
-  offered(): readonly OfferedModel[] {
-    const listed: OfferedModel[] = [
-      ...CURATED_MODELS.map(({ id, label, descriptionKey, tier }) => ({
-        id,
-        label,
-        descriptionKey,
-        tier,
-      })),
-      // Code wins for a duplicate id: a promoted model can never rename,
-      // re-tier or re-describe a curated one.
-      ...this.promotedModels
-        .snapshot()
-        .filter((promoted) => !CURATED_MODEL_IDS.has(promoted.id))
-        .map((promoted) => ({
-          id: promoted.id,
-          label: promoted.label,
-          descriptionKey: '',
-          description: promoted.description,
-          tier: promoted.tier,
-        })),
-    ];
-    return listed.map((model) => {
-      const reasoning = this.indexReasoning(model.id);
-      return reasoning ? { ...model, reasoning } : model;
-    });
-  }
 
   catalogFor(
     execution: Pick<AiExecutionContext, 'tier' | 'policy' | 'byokProviders'>,
@@ -126,7 +95,8 @@ export class SelectableModelsService {
         plainRouteCanonical(id, this.index.catalog().get(id)?.canonical),
       isPlatformBilled: (id) =>
         platformIntentIds.has(id) ||
-        (openTier.has(id) && this.registry.isModelAvailable(id)),
+        ((openTier.has(id) || PLATFORM_FLOOR_MODEL_IDS.includes(id)) &&
+          this.registry.isModelAvailable(id)),
     };
   }
 
@@ -168,6 +138,22 @@ export class SelectableModelsService {
         ...(reasoning ? { reasoning } : {}),
         ...(servesIntent ? { servesIntent } : {}),
       };
+    });
+  }
+
+  // A promoted row's stored ladder is never served: the index row is the one
+  // source of reasoning levels.
+  private offered(): readonly OfferedModel[] {
+    return this.promotedModels.snapshot().map((promoted) => {
+      const model: OfferedModel = {
+        id: promoted.id,
+        label: promoted.label,
+        descriptionKey: '',
+        description: promoted.description,
+        tier: promoted.tier,
+      };
+      const reasoning = this.indexReasoning(promoted.id);
+      return reasoning ? { ...model, reasoning } : model;
     });
   }
 

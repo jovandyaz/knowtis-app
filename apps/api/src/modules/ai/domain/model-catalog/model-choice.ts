@@ -27,7 +27,7 @@ export interface ModelRequest {
 export interface ModelFacts {
   readonly heldProviders: ReadonlySet<string>;
   readonly isSupported: (modelId: string) => boolean;
-  /** Per model, never per provider: true only for a model the platform pays for, its configured intent models and the open-tier models it can route. */
+  /** Per model, never per provider: true only for a model the platform pays for, its configured intent models and the promoted open-tier and platform default models it can route. */
   readonly isPlatformBilled: (modelId: string) => boolean;
   /** The index identity shared by every route of one model; undefined for an id the index does not list. */
   readonly canonicalOf: (modelId: string) => string | undefined;

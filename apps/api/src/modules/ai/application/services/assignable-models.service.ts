@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { INDEX_PROVIDERS, providerOf } from '@knowtis/ai-gateway';
 import type { AssignableModelDto } from '@knowtis/shared-types';
 
+import { toPickerLabel } from '../../domain/model-catalog/index-label';
 import {
   ASSIGNABLE_RULE,
   intentOfFamily,
@@ -68,7 +69,7 @@ export class AssignableModelsService {
           releasedAt: row.releasedAt,
           dto: {
             id: row.id,
-            label: row.name,
+            label: toPickerLabel(row.name),
             description: '',
             tier: intentOfFamily(row.family) ?? DEFAULT_TIER,
             provider: row.provider,

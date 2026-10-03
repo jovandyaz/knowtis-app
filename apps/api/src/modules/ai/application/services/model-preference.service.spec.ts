@@ -9,14 +9,18 @@ import type {
 
 import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
+import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 const RETIRED_MODEL = 'anthropic:claude-retired';
+const SUPERSEDED_SONNET = 'anthropic:claude-sonnet-5';
 const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
+const GLM = 'openrouter:z-ai/glm-5.2';
 const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
 const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
 
@@ -25,7 +29,8 @@ function makeChooser(
     preferredModel?: string | null;
     preferredIntent?: ModelIntent | null;
     primaryProvider?: ByokProvider | null;
-  } = {}
+  } = {},
+  promoted: readonly CatalogModel[] = []
 ) {
   const selectable = new SelectableModelsService(
     {
@@ -39,7 +44,7 @@ function makeChooser(
     {
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
-    { snapshot: () => [] } as never,
+    { snapshot: () => promoted } as never,
     createSnapshotIndex()
   );
   const repo = {
@@ -323,7 +328,9 @@ describe('ModelPreferenceService', () => {
     });
 
     it('keeps a key-billed pick a model even when it serves an intent', async () => {
-      const { svc, repo } = makeChooser();
+      const { svc, repo } = makeChooser({}, [
+        createCatalogModel({ id: 'openrouter:deepseek/deepseek-v3.2' }),
+      ]);
       await writeAs(
         svc,
         createExecutionContext({ tier: 'byok', byokProviders: ['openrouter'] }),
@@ -745,7 +752,7 @@ describe('ModelPreferenceService', () => {
     it('keeps a stored intent when the stored platform model left the catalog', async () => {
       await expect(
         makeChooser({
-          preferredModel: 'openrouter:z-ai/glm-5.2',
+          preferredModel: GLM,
           preferredIntent: 'powerful',
         }).svc.chooseTurnModel(FREE_CALLER, {})
       ).resolves.toMatchObject({ model: 'openrouter:moonshotai/kimi-k2.5' });
@@ -757,6 +764,26 @@ describe('ModelPreferenceService', () => {
           preferredModel: DIRECT_OPUS,
         }).svc.chooseTurnModel(BYOK_ANTHROPIC, {})
       ).resolves.toMatchObject({ model: DIRECT_OPUS });
+    });
+
+    it('falls back a byok caller’s stored superseded model to the intent route and reports it retired', async () => {
+      await expect(
+        makeChooser({
+          preferredModel: SUPERSEDED_SONNET,
+        }).svc.chooseTurnModel(BYOK_ANTHROPIC, {})
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: DIRECT_SONNET,
+        resolution: {
+          requested: SUPERSEDED_SONNET,
+          resolved: DIRECT_SONNET,
+          fallback: {
+            reason: 'model_retired',
+            from: SUPERSEDED_SONNET,
+            to: DIRECT_SONNET,
+          },
+        },
+      });
     });
 
     it('refuses an explicit model outside the tier', async () => {
@@ -772,21 +799,22 @@ describe('ModelPreferenceService', () => {
       });
     });
 
-    it("falls back a free caller's pinned open model to the platform intent and reports it", async () => {
+    it("falls back a free caller's pinned promoted open model to the platform intent and reports it", async () => {
       await expect(
-        makeChooser().svc.chooseTurnModel(
-          createExecutionContext({ tier: 'free' }),
-          { pinned: 'openrouter:z-ai/glm-5.2' }
-        )
+        makeChooser({}, [
+          createCatalogModel({ id: GLM, tier: 'open' }),
+        ]).svc.chooseTurnModel(createExecutionContext({ tier: 'free' }), {
+          pinned: GLM,
+        })
       ).resolves.toEqual({
         kind: 'resolved',
         model: 'openrouter:deepseek/deepseek-v3.2',
         resolution: {
-          requested: 'openrouter:z-ai/glm-5.2',
+          requested: GLM,
           resolved: 'openrouter:deepseek/deepseek-v3.2',
           fallback: {
             reason: 'not_in_tier',
-            from: 'openrouter:z-ai/glm-5.2',
+            from: GLM,
             to: 'openrouter:deepseek/deepseek-v3.2',
           },
         },
