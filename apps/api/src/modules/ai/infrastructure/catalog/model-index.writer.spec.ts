@@ -321,6 +321,120 @@ describe('ModelIndexWriter', () => {
     );
   });
 
+  describe('OpenRouter enrichment carried forward', () => {
+    const CLAUDE_SLUG = 'anthropic/claude-sonnet-5.5';
+    const CLAUDE_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${CLAUDE_SLUG}`;
+    const SNAPSHOT_SLUG = 'amazon/nova-2-lite-v1';
+    const SNAPSHOT_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${SNAPSHOT_SLUG}`;
+
+    const listedClaude: IndexedModel = {
+      ...fromOpenRouter(upstreamModel(CLAUDE_SLUG), {
+        family: 'claude-sonnet',
+        canonical: 'anthropic/claude-sonnet-5-5',
+        openWeights: false,
+        status: 'active',
+      }),
+    };
+
+    function catalogWithClaude(): UpstreamCatalog {
+      return openRouterCatalog({
+        models: [
+          upstreamModel(CURATED_OPEN_SLUG),
+          upstreamModel(QWEN_SLUG),
+          upstreamModel(CLAUDE_SLUG),
+        ],
+      });
+    }
+
+    function upsertedRow(
+      repo: ReturnType<typeof make>['repo'],
+      id: string
+    ): IndexedModel | undefined {
+      const [rows] = repo.upsertMany.mock.calls[0] ?? [[]];
+      return rows.find((row) => row.id === id);
+    }
+
+    it('should keep the stored family and canonical when models.dev failed', async () => {
+      const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
+
+      await writer.write(catalogWithClaude(), null);
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)).toEqual(
+        expect.objectContaining({
+          family: 'claude-sonnet',
+          canonical: 'anthropic/claude-sonnet-5-5',
+        })
+      );
+    });
+
+    it('should keep the stored family when models.dev has no entry for the model', async () => {
+      const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
+
+      await writer.write(catalogWithClaude(), modelsDevCatalog());
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)).toEqual(
+        expect.objectContaining({
+          family: 'claude-sonnet',
+          canonical: 'anthropic/claude-sonnet-5-5',
+        })
+      );
+    });
+
+    it('should prefer the models.dev entry over the stored family', async () => {
+      const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
+      const enrichment: ModelsDevEnrichment = {
+        family: 'claude-sonnet-next',
+        canonical: 'anthropic/claude-sonnet-5-5',
+        openWeights: false,
+        status: 'active',
+      };
+
+      await writer.write(
+        catalogWithClaude(),
+        modelsDevCatalog({
+          openRouterEnrichment: new Map([[CLAUDE_SLUG, enrichment]]),
+        })
+      );
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)?.family).toBe(
+        'claude-sonnet-next'
+      );
+    });
+
+    it('should index a model with no stored row and no entry with a null family', async () => {
+      const { writer, repo } = make();
+
+      await writer.write(catalogWithClaude(), null);
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)?.family).toBeNull();
+    });
+
+    it('should carry the family from the snapshot row while OpenRouter lists none', async () => {
+      const snapshotFamily = MODEL_INDEX_SNAPSHOT.find(
+        (row) => row.id === SNAPSHOT_OPENROUTER_ID
+      )?.family;
+      const { writer, repo } = make(
+        LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
+      );
+
+      await writer.write(
+        openRouterCatalog({
+          models: MODEL_INDEX_SNAPSHOT.filter(
+            (row) => row.provider === 'openrouter'
+          ).map((row) =>
+            upstreamModel(row.id.slice(OPENROUTER_ID_PREFIX.length))
+          ),
+        }),
+        null
+      );
+
+      expect(snapshotFamily).toBeTruthy();
+      expect(upsertedRow(repo, SNAPSHOT_OPENROUTER_ID)?.family).toBe(
+        snapshotFamily
+      );
+    });
+  });
+
   it('should enrich an OpenRouter model models.dev describes', async () => {
     const { writer, repo } = make();
     const enrichment: ModelsDevEnrichment = {

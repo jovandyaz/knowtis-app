@@ -5,6 +5,7 @@ import {
   MAX_INT32,
   MODELS_DEV_PROVIDERS,
   type IndexedModel,
+  type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
 
 import {
@@ -36,17 +37,36 @@ export interface ModelIndexWriteResult {
   readonly rejected: IndexSyncPlan['rejected'];
 }
 
-/** The index rows one sync pass reads, per provider. A `null` models.dev read yields only the OpenRouter batch. */
+function carried(row: IndexedModel | undefined): ModelsDevEnrichment | null {
+  return row === undefined
+    ? null
+    : {
+        family: row.family,
+        canonical: row.canonical,
+        openWeights: row.openWeights,
+        status: row.status,
+      };
+}
+
+/**
+ * The index rows one sync pass reads, per provider. A `null` models.dev read
+ * yields only the OpenRouter batch. An OpenRouter model models.dev has no
+ * entry for keeps the family, canonical, open-weights and status of its
+ * `previous` row.
+ */
 export function providerBatches(
   openRouter: UpstreamCatalog,
-  modelsDev: ModelsDevCatalog | null
+  modelsDev: ModelsDevCatalog | null,
+  previous: readonly IndexedModel[] = []
 ): ProviderBatch[] {
+  const previousById = new Map(previous.map((row) => [row.id, row]));
   const openRouterBatch: ProviderBatch = {
     provider: 'openrouter',
     rows: openRouter.models.map((model) =>
       fromOpenRouter(
         model,
-        modelsDev?.openRouterEnrichment.get(model.id) ?? null
+        modelsDev?.openRouterEnrichment.get(model.id) ??
+          carried(previousById.get(`${OPENROUTER_ID_PREFIX}${model.id}`))
       )
     ),
     conclusive: canConcludeAbsence(openRouter),
@@ -115,11 +135,12 @@ export class ModelIndexWriter {
     openRouter: UpstreamCatalog,
     modelsDev: ModelsDevCatalog | null
   ): Promise<ModelIndexWriteResult> {
-    const batches = providerBatches(openRouter, modelsDev).map((batch) =>
-      this.withoutOverflowingRows(batch)
-    );
     const listed = await this.repo.listListed();
-    const plan = planIndexSync(batches, listed, servedIndexRows(listed));
+    const served = servedIndexRows(listed);
+    const batches = providerBatches(openRouter, modelsDev, served).map(
+      (batch) => this.withoutOverflowingRows(batch)
+    );
+    const plan = planIndexSync(batches, listed, served);
     const batchOf = new Map(batches.map((batch) => [batch.provider, batch]));
 
     for (const rejection of plan.rejected) {
