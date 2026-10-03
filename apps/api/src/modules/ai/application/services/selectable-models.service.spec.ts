@@ -224,7 +224,13 @@ describe('SelectableModelsService', () => {
 
     const models = listed(service, ANTHROPIC_KEY);
 
-    expect(models.find((m) => m.id === SONNET_5)).toMatchObject({
+    expect(models.map((m) => m.id)).toEqual([
+      SONNET_5,
+      'anthropic:claude-haiku-4-5',
+      SONNET_5_5,
+      'anthropic:claude-opus-5-5',
+    ]);
+    expect(models[0]).toMatchObject({
       routableByServer: false,
       billedToUser: true,
       contextWindow: PORT_CONTEXT_WINDOW,

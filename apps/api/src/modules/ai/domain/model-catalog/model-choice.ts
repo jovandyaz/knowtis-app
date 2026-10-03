@@ -71,19 +71,30 @@ function keyBilledPreference(
 
 // Plans never gate a model on the caller's own key, so a key catalog that no
 // longer lists one means its selector moved on, never that the plan excludes it.
+function isRetired(
+  modelId: string,
+  facts: ModelFacts,
+  billing: CatalogBilling
+): boolean {
+  return (
+    !facts.isSupported(modelId) ||
+    (billing === CATALOG_BILLING.KEY &&
+      facts.heldProviders.has(providerOf(modelId)))
+  );
+}
+
 function fallbackReason(
   modelId: string,
   facts: ModelFacts,
   billing: CatalogBilling
 ): ModelFallbackReason {
-  if (!facts.isSupported(modelId)) {
+  if (isRetired(modelId, facts, billing)) {
     return 'model_retired';
   }
-  const onHeldKey = facts.heldProviders.has(providerOf(modelId));
-  if (onHeldKey && billing === CATALOG_BILLING.KEY) {
-    return 'model_retired';
-  }
-  if (!facts.isPlatformBilled(modelId) && !onHeldKey) {
+  if (
+    !facts.isPlatformBilled(modelId) &&
+    !facts.heldProviders.has(providerOf(modelId))
+  ) {
     return 'key_removed';
   }
   return 'not_in_tier';
@@ -137,9 +148,9 @@ export function chooseModel(
       ? resolved(request.explicit, request.explicit)
       : {
           kind: MODEL_CHOICE.UNAVAILABLE,
-          reason: facts.isSupported(request.explicit)
-            ? 'not_in_tier'
-            : 'model_retired',
+          reason: isRetired(request.explicit, facts, catalog.billing)
+            ? 'model_retired'
+            : 'not_in_tier',
           suggestedModel: substitute,
         };
   }

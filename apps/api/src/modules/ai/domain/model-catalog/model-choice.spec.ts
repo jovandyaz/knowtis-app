@@ -157,6 +157,30 @@ describe('chooseModel', () => {
     });
   });
 
+  it('refuses an explicit superseded model on a held key as retired, never as outside the plan', () => {
+    expect(setup('byok', ['anthropic'])({ explicit: SUPERSEDED })).toEqual({
+      kind: 'unavailable',
+      reason: 'model_retired',
+      suggestedModel: DIRECT_SONNET,
+    });
+  });
+
+  it('refuses an explicit key model a platform catalog does not list as outside the tier', () => {
+    expect(setup('free', ['openrouter'])({ explicit: OPEN_MODEL })).toEqual({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: PLATFORM_INTENTS.balanced,
+    });
+  });
+
+  it('refuses an explicit model on a key a byok caller does not hold as outside the tier', () => {
+    expect(setup('byok', ['anthropic'])({ explicit: OPEN_MODEL })).toEqual({
+      kind: 'unavailable',
+      reason: 'not_in_tier',
+      suggestedModel: DIRECT_SONNET,
+    });
+  });
+
   it('honours a key-billed preference inside the byok catalog', () => {
     expect(
       setup('byok', ['anthropic'])({
