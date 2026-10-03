@@ -3,7 +3,18 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  ModelCatalogResponse,
+  SelectableModel,
+} from '@knowtis/shared-types';
+
 import { AIAssistantSection } from './AIAssistantSection';
+
+function catalogOf(
+  models: SelectableModel[] | undefined
+): ModelCatalogResponse | undefined {
+  return models && { tier: 'free', models, intents: [] };
+}
 
 const update = vi.fn();
 const modelsData = vi.fn();
@@ -11,7 +22,14 @@ const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts
+        ? `${key}(${Object.entries(opts)
+            .map(([name, value]) => `${name}=${String(value)}`)
+            .join(',')})`
+        : key,
+  }),
 }));
 vi.mock('./AIKeysManager', () => ({
   AIKeysManager: ({ focusFirstField }: { focusFirstField?: boolean }) => (
@@ -20,13 +38,18 @@ vi.mock('./AIKeysManager', () => ({
     </div>
   ),
 }));
-vi.mock('@/hooks', () => ({
+vi.mock('./PrimaryProviderPicker', () => ({
+  PrimaryProviderPicker: () => <div>primary-provider-picker</div>,
+}));
+vi.mock('@/hooks/useAvailableModels', () => ({
   useAvailableModels: () => ({
-    data: modelsData(),
+    data: catalogOf(modelsData()),
     isPending: false,
     isError: modelsError(),
     refetch: modelsRefetch,
   }),
+}));
+vi.mock('@/hooks/useAISettings', () => ({
   useAISettings: () => ({ data: prefsData() }),
   useUpdateAISettings: () => ({ mutate: update }),
 }));
@@ -101,17 +124,23 @@ describe('AIAssistantSection', () => {
     render(<AIAssistantSection />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+    ).toHaveAttribute(
       'title',
-      'aiAssistant.intent.fastHint'
+      'aiAssistant.intent.rowDetail(model=Fast One,hint=aiAssistant.intent.fastHint)'
     );
-    expect(screen.getByRole('radio', { name: 'Balanced One' })).toHaveAttribute(
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
+    ).toHaveAttribute(
       'title',
-      'aiAssistant.intent.balancedHint'
+      'aiAssistant.intent.rowDetail(model=Balanced One,hint=aiAssistant.intent.balancedHint)'
     );
-    expect(screen.getByRole('radio', { name: 'Premium One' })).toHaveAttribute(
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
+    ).toHaveAttribute(
       'title',
-      'aiAssistant.intent.powerfulHint'
+      'aiAssistant.intent.rowDetail(model=Premium One,hint=aiAssistant.intent.powerfulHint)'
     );
     expect(
       screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
@@ -135,10 +164,9 @@ describe('AIAssistantSection', () => {
   it('activates the default intent when the account has none stored', () => {
     render(<AIAssistantSection />);
 
-    expect(screen.getByRole('radio', { name: 'Balanced One' })).toHaveAttribute(
-      'data-state',
-      'on'
-    );
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
+    ).toHaveAttribute('data-state', 'on');
   });
 
   it('deactivates every chip while an advanced account override is in effect', () => {
@@ -175,10 +203,9 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
-      'data-state',
-      'on'
-    );
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+    ).toHaveAttribute('data-state', 'on');
   });
 
   it('renders no chips while the model list is unresolved', () => {
@@ -216,7 +243,9 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Premium One' }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
+    );
 
     expect(update).toHaveBeenCalledWith({
       preferredModel: null,
@@ -324,7 +353,7 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    const chip = screen.getByRole('radio', { name: 'Fast One' });
+    const chip = screen.getByRole('radio', { name: 'aiAssistant.intent.fast' });
     expect(chip).toBeEnabled();
     await userEvent.click(chip);
 
@@ -332,5 +361,51 @@ describe('AIAssistantSection', () => {
       preferredModel: null,
       preferredIntent: 'fast',
     });
+  });
+
+  it('offers the primary provider choice after the API keys', () => {
+    render(<AIAssistantSection />);
+
+    const keys = screen.getByText('byok-keys-manager');
+    const primary = screen.getByText('primary-provider-picker');
+    expect(
+      keys.compareDocumentPosition(primary) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('names the provider of each Advanced model, so one model on two keys reads as two routes', async () => {
+    const haiku = {
+      id: 'anthropic:claude-haiku-4-5',
+      label: 'Haiku 4.5',
+      descriptionKey: 'aiModels.haiku45',
+      tier: 'fast',
+      contextWindow: 200000,
+      costClass: 1,
+      isDefault: false,
+      billedToUser: true,
+    };
+    modelsData.mockReturnValue([
+      ...intentServingModels,
+      haiku,
+      { ...haiku, id: 'openrouter:anthropic/claude-haiku-4.5' },
+    ]);
+    render(<AIAssistantSection />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+    );
+
+    expect(
+      screen
+        .getAllByRole('menuitemradio', { name: /Haiku 4\.5/ })
+        .map((row) => row.textContent)
+    ).toEqual([
+      expect.stringContaining(
+        'aiAssistant.advanced.routeDetail(provider=Anthropic,detail=aiModels.haiku45)'
+      ),
+      expect.stringContaining(
+        'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.haiku45)'
+      ),
+    ]);
   });
 });

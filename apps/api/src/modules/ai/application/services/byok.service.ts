@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -137,6 +136,7 @@ export class ByokService {
       );
     }
     const secret = encryptSecret(apiKey, this.masterKey);
+    await this.settings.clearBoundToUnheldProvider(userId, provider);
     await this.repo.upsert(
       userId,
       provider,
@@ -147,18 +147,7 @@ export class ByokService {
 
   async deleteKey(userId: string, provider: ByokProvider): Promise<void> {
     await this.repo.remove(userId, provider);
-    const { preferredModel, primaryProvider } =
-      await this.settings.getSettings(userId);
-    // Settings honoured only on this key must not resurface the day it is added back.
-    const patch = {
-      ...(preferredModel && providerOf(preferredModel) === provider
-        ? { preferredModel: null }
-        : {}),
-      ...(primaryProvider === provider ? { primaryProvider: null } : {}),
-    };
-    if (Object.keys(patch).length > 0) {
-      await this.settings.patchSettings(userId, patch);
-    }
+    await this.settings.clearBoundToUnheldProvider(userId, provider);
   }
 
   async markUsed(userId: string, provider: ByokProvider): Promise<void> {

@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 
 import { aiKeysApi } from '@knowtis/api-client';
 import type { ByokProvider } from '@knowtis/shared-types';
@@ -10,6 +15,12 @@ export const providerKeysQueryKeys = {
   all: ['ai-provider-keys'] as const,
   list: () => [...providerKeysQueryKeys.all, 'list'] as const,
 } as const;
+
+/** Re-reads what the caller's tier shapes: the catalog, the preferences and the keys. */
+export function refreshModelChoice(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: aiModelsQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: providerKeysQueryKeys.all });
+}
 
 export function useProviderKeys(enabled: boolean) {
   return useQuery({
@@ -34,6 +45,7 @@ export function useSetProviderKey() {
       qc.setQueryData(providerKeysQueryKeys.list(), keys);
       // Which models a caller may run is derived from the keys they hold.
       void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.list() });
+      void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.preferences() });
       void qc.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
     },
   });

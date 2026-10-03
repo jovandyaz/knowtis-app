@@ -4,13 +4,20 @@ import { describe, expect, it } from 'vitest';
 import type { SelectableModel } from '@knowtis/shared-types';
 
 import {
+  advancedGroups,
   advancedModelOptions,
+  advancedOptionDescription,
   effortOptions,
-  moreModelGroups,
+  primaryRows,
   resolveSelectedModel,
 } from './intent-picker-options';
 
-const t = ((key: string) => key) as unknown as TFunction<'common'>;
+const t = ((key: string, opts?: Record<string, unknown>) =>
+  opts
+    ? `${key}(${Object.entries(opts)
+        .map(([name, value]) => `${name}=${String(value)}`)
+        .join(',')})`
+    : key) as unknown as TFunction<'common'>;
 
 const model = {
   id: 'openrouter:deepseek/deepseek-v4-flash',
@@ -48,25 +55,85 @@ describe('effortOptions', () => {
 describe('models outside an intent', () => {
   const listed = { ...model, id: 'anthropic:claude-opus-5' };
 
-  it('offers a key-billed model in Advanced', () => {
+  it('offers a key-billed model in the settings Advanced list', () => {
     expect(advancedModelOptions([listed])).toEqual([listed]);
   });
 
-  it('keeps a key-billed model in more models', () => {
-    expect(
-      moreModelGroups([listed], t).flatMap((group) => group.options)
-    ).toEqual([expect.objectContaining({ id: 'anthropic:claude-opus-5' })]);
+  it('lists a key-billed model under its provider in Avanzado', () => {
+    expect(advancedGroups([listed], t)).toEqual([
+      {
+        label: 'Anthropic',
+        options: [
+          expect.objectContaining({
+            id: 'anthropic:claude-opus-5',
+            billedBadge: 'aiAssistant.byok.billedBadge',
+          }),
+        ],
+      },
+    ]);
   });
 
-  it('keeps an intent-serving model out of more models and Advanced', () => {
-    const serving = {
-      ...model,
-      billedToUser: false,
-      servesIntent: 'fast' as const,
-    };
+  it('groups by provider in BYOK_PROVIDERS order, so one model on two keys reads as two routes', () => {
+    const haiku = { ...model, label: 'Haiku 4.5' };
+    const groups = advancedGroups(
+      [
+        { ...haiku, id: 'openrouter:anthropic/claude-haiku-4.5' },
+        { ...model, id: 'openai:gpt-6', label: 'GPT-6' },
+        { ...haiku, id: 'anthropic:claude-haiku-4-5' },
+      ],
+      t
+    );
 
-    expect(advancedModelOptions([serving])).toEqual([]);
-    expect(moreModelGroups([serving], t)).toEqual([]);
+    expect(
+      groups.map((group) => [
+        group.label,
+        group.options.map((option) => option.label),
+      ])
+    ).toEqual([
+      ['Anthropic', ['Haiku 4.5']],
+      ['OpenAI', ['GPT-6']],
+      ['OpenRouter', ['Haiku 4.5']],
+    ]);
+  });
+
+  it('keeps an intent-serving model out of Avanzado', () => {
+    expect(
+      advancedGroups([{ ...model, servesIntent: 'fast' as const }], t)
+    ).toEqual([]);
+  });
+
+  it('keeps a server-billed model out of Avanzado and of the settings Advanced list', () => {
+    const serverBilled = { ...model, billedToUser: false };
+
+    expect(advancedModelOptions([serverBilled])).toEqual([]);
+    expect(advancedGroups([serverBilled], t)).toEqual([]);
+  });
+});
+
+describe('primaryRows', () => {
+  it('names each row after its intent and details the model serving it today', () => {
+    const rows = primaryRows(
+      [
+        { ...model, id: 'a:deep', label: 'Opus 5', servesIntent: 'powerful' },
+        { ...model, id: 'a:fast', label: 'Haiku 4.5', servesIntent: 'fast' },
+      ],
+      t
+    );
+
+    expect(rows).toEqual([
+      {
+        id: 'fast',
+        label: 'aiAssistant.intent.fast',
+        description:
+          'aiAssistant.intent.rowDetail(model=Haiku 4.5,hint=aiAssistant.intent.fastHint)',
+      },
+      {
+        id: 'powerful',
+        label: 'aiAssistant.intent.powerful',
+        description:
+          'aiAssistant.intent.rowDetail(model=Opus 5,hint=aiAssistant.intent.powerfulHint)',
+      },
+    ]);
   });
 });
 
@@ -98,5 +165,39 @@ describe('resolveSelectedModel', () => {
         preferredIntent: 'fast',
       })
     ).toBe(fast);
+  });
+});
+
+describe('advancedOptionDescription', () => {
+  it('leads with the provider whose key serves the model', () => {
+    expect(
+      advancedOptionDescription(
+        {
+          id: 'openrouter:anthropic/claude-haiku-4.5',
+          descriptionKey: 'aiModels.haiku45',
+        },
+        t
+      )
+    ).toBe(
+      'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.haiku45)'
+    );
+  });
+
+  it('names only the provider of a model with no copy', () => {
+    expect(
+      advancedOptionDescription(
+        { id: 'anthropic:claude-haiku-4-5', descriptionKey: '' },
+        t
+      )
+    ).toBe('Anthropic');
+  });
+
+  it('keeps the copy alone for a model no BYOK key serves', () => {
+    expect(
+      advancedOptionDescription(
+        { id: 'z-ai:glm-5.3', descriptionKey: '', description: 'Open model' },
+        t
+      )
+    ).toBe('Open model');
   });
 });

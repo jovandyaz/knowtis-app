@@ -3,10 +3,13 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiModelsApi } from '@knowtis/api-client';
-import type { SelectableModel } from '@knowtis/shared-types';
+import type {
+  ModelCatalogResponse,
+  SelectableModel,
+} from '@knowtis/shared-types';
 
 import { useAvailableModels } from './useAvailableModels';
 
@@ -22,17 +25,30 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe('useAvailableModels', () => {
-  it('yields the catalog models whatever shape the server answered', async () => {
-    const model = { id: 'anthropic:claude-sonnet-5' } as SelectableModel;
-    vi.mocked(aiModelsApi.getModels).mockResolvedValue({
-      tier: 'byok',
-      models: [model],
-      intents: [],
-    });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    const { result } = renderHook(() => useAvailableModels(true), { wrapper });
+  it('yields the tier envelope the server answered', async () => {
+    const catalog: ModelCatalogResponse = {
+      tier: 'byok',
+      models: [{ id: 'anthropic:claude-sonnet-5' } as SelectableModel],
+      intents: [],
+    };
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(catalog);
+
+    const { result } = renderHook(() => useAvailableModels(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual([model]);
+    expect(result.current.data).toEqual(catalog);
+  });
+
+  it('requests nothing while disabled', () => {
+    const { result } = renderHook(() => useAvailableModels(false), {
+      wrapper,
+    });
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(aiModelsApi.getModels).not.toHaveBeenCalled();
   });
 });

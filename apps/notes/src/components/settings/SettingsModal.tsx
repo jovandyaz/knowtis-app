@@ -14,6 +14,7 @@ import { AppearanceSection } from './sections/AppearanceSection';
 import { ConnectedAppsSection } from './sections/ConnectedAppsSection';
 import { IntegrationsSection } from './sections/IntegrationsSection';
 import { LanguageSection } from './sections/LanguageSection';
+import { PlanSection } from './sections/PlanSection';
 import { ProfileSection } from './sections/ProfileSection';
 import { SettingsNav } from './SettingsNav';
 
@@ -40,6 +41,7 @@ const SECTION_COMPONENTS: Record<SettingsSection, ComponentType> = {
   language: LanguageSection,
   editor: () => <PlaceholderSection section="editor" />,
   aiAssistant: AIAssistantSection,
+  plan: PlanSection,
   notifications: () => <PlaceholderSection section="notifications" />,
   integrations: IntegrationsSection,
   connectedApps: ConnectedAppsSection,

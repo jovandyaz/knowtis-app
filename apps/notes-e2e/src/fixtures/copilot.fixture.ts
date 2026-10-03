@@ -76,6 +76,35 @@ export function corsHeaders(
   };
 }
 
+const JSON_CONTENT_TYPE = 'application/json';
+const ROUTED_API_HEADERS = 'accept-language, authorization, content-type';
+const ROUTED_API_METHODS = 'GET, PUT, OPTIONS';
+const HTTP_OK = 200;
+const HTTP_NO_CONTENT = 204;
+
+/** Answers an API endpoint from the test, its CORS preflight included; `answer` sees each request and returns the JSON body. */
+export async function routeApiJson(
+  page: Page,
+  url: RegExp,
+  answer: (request: Request) => unknown
+): Promise<void> {
+  await page.route(url, (route) => {
+    const request = route.request();
+    const headers = {
+      ...corsHeaders(request, JSON_CONTENT_TYPE),
+      'access-control-allow-headers': ROUTED_API_HEADERS,
+      'access-control-allow-methods': ROUTED_API_METHODS,
+    };
+    return request.method() === 'OPTIONS'
+      ? route.fulfill({ status: HTTP_NO_CONTENT, headers })
+      : route.fulfill({
+          status: HTTP_OK,
+          headers,
+          body: JSON.stringify(answer(request)),
+        });
+  });
+}
+
 /** Interception must not outlive the test that installed it: the `sharing` pages
  * are worker-scoped, so a handler left behind keeps answering every later socket
  * the page opens — including the editor's own — instead of the real server. */

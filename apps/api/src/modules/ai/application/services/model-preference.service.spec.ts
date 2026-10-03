@@ -464,16 +464,70 @@ describe('ModelPreferenceService', () => {
       });
     });
 
-    it('returns the stored primary provider without resolving the tier', async () => {
-      const tierOf = vi.fn();
+    it('answers a stored primary provider while the caller holds its key', async () => {
+      const tierOf = vi.fn(async () =>
+        createExecutionContext({
+          tier: 'byok',
+          byokProviders: ['anthropic', 'openai'],
+        })
+      );
+
+      expect(
+        await makeChooser({ primaryProvider: 'openai' }).svc.getUserPreferences(
+          'u1',
+          tierOf
+        )
+      ).toEqual({
+        preferredModel: null,
+        preferredIntent: null,
+        primaryProvider: 'openai',
+        ghostTextEnabled: true,
+      });
+      expect(tierOf).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers no primary provider once its key is gone', async () => {
+      expect(
+        await makeChooser({
+          preferredModel: 'anthropic:claude-sonnet-5',
+          primaryProvider: 'openai',
+        }).svc.getUserPreferences('u1', async () => BYOK_ANTHROPIC)
+      ).toEqual({
+        preferredModel: 'anthropic:claude-sonnet-5',
+        preferredIntent: null,
+        primaryProvider: null,
+        ghostTextEnabled: true,
+      });
+    });
+
+    it('answers the stored primary provider when the tier cannot be resolved', async () => {
       expect(
         (
           await makeChooser({
             primaryProvider: 'openai',
-          }).svc.getUserPreferences('u1', tierOf)
+          }).svc.getUserPreferences('u1', () =>
+            Promise.reject(new AiUnavailableError('tier', 'key store down'))
+          )
         ).primaryProvider
       ).toBe('openai');
-      expect(tierOf).not.toHaveBeenCalled();
+    });
+
+    it('reads the tier once for a row that needs it for its model and its primary', async () => {
+      const tierOf = vi.fn(async () => FREE_CALLER);
+
+      expect(
+        await makeChooser({
+          preferredModel: MINIMAX,
+          preferredIntent: 'powerful',
+          primaryProvider: 'openai',
+        }).svc.getUserPreferences('u1', tierOf)
+      ).toEqual({
+        preferredModel: null,
+        preferredIntent: 'fast',
+        primaryProvider: null,
+        ghostTextEnabled: true,
+      });
+      expect(tierOf).toHaveBeenCalledTimes(1);
     });
 
     it('surfaces a tier failure that is not an outage', async () => {

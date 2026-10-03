@@ -6,6 +6,7 @@ import { MESSAGE_KIND } from '@knowtis/shared-types';
 
 import { Message, MessageContent, Response } from '../ai-elements/message';
 import { AgentContinueChip } from './AgentContinueChip';
+import { AgentModelFallbackNotice } from './AgentModelFallbackNotice';
 import { AgentResolvedChip } from './AgentResolvedChip';
 import { AgentSourceChips } from './AgentSourceChips';
 import { AgentStopNotice } from './AgentStopNotice';
@@ -48,6 +49,9 @@ export function AgentMessage({
             >
               {message.content}
             </Response>
+            {message.modelFallback && (
+              <AgentModelFallbackNotice fallback={message.modelFallback} />
+            )}
             <AgentStopNotice
               reason={message.stopReason}
               interrupted={message.interrupted}

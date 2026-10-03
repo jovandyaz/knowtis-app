@@ -1,10 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
-import {
-  useAISettings,
-  useAvailableModels,
-  useUpdateAISettings,
-} from '@/hooks';
+import { useAISettings, useUpdateAISettings } from '@/hooks/useAISettings';
+import { useAvailableModels } from '@/hooks/useAvailableModels';
 import { useSettingsStore } from '@/stores/settings.store';
 
 import { Switch } from '@knowtis/design-system';
@@ -14,10 +11,12 @@ import { advancedOverride } from '../../copilot/intent-picker-options';
 import { IntentModelPicker } from '../../copilot/IntentModelPicker';
 import { SectionHeader } from '../SectionHeader';
 import { AIKeysManager } from './AIKeysManager';
+import { PrimaryProviderPicker } from './PrimaryProviderPicker';
 
 export function AIAssistantSection() {
   const { t } = useTranslation('common');
-  const { data: models, isError, refetch } = useAvailableModels();
+  const { data: catalog, isError, refetch } = useAvailableModels();
+  const models = catalog?.models;
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
   const focusTarget = useSettingsStore((s) => s.focusTarget);
@@ -60,6 +59,7 @@ export function AIAssistantSection() {
       </section>
 
       <AIKeysManager focusFirstField={focusTarget === 'aiKeys'} />
+      <PrimaryProviderPicker />
     </div>
   );
 }

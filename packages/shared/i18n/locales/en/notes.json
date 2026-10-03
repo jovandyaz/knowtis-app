@@ -451,7 +451,8 @@
       "quota": {
         "tier": {
           "anonymous": "Guest",
-          "free": "Free"
+          "free": "Free",
+          "byok": "Your key"
         },
         "badge": {
           "metered": "{{tier}} · {{used}}/{{limit}}",
@@ -517,6 +518,12 @@
         "marker": "Continue"
       },
       "interrupted": "This reply was interrupted.",
+      "modelFallback": {
+        "model_retired": "Answered by {{model}} because the model you picked is no longer available.",
+        "key_removed": "Answered by {{model}} because you removed the API key for the model you picked.",
+        "not_in_tier": "Answered by {{model}} because your plan doesn't include the model you picked.",
+        "other": "Answered by {{model}} instead of the model you picked."
+      },
       "empty": {
         "title": "Ask your notes",
         "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",
@@ -589,6 +596,18 @@
         }
       },
       "openSource": "Open note"
+    },
+    "plan": {
+      "current": "Your plan",
+      "includes": {
+        "anonymous": "No account. The Balanced model, with a few messages a day.",
+        "free": "With your account. The Fast, Balanced and Deep models, memory across conversations and more messages a day.",
+        "byok": "With your own API key. Only your keys' models, memory across conversations and no daily message limit."
+      },
+      "pays": {
+        "platform": "Knowtis pays.",
+        "key": "You pay: your provider bills each message to your key."
+      }
     },
     "groups": {
       "ai": "AI",

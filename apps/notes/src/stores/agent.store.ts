@@ -1,4 +1,5 @@
 import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
+import { refreshModelChoice } from '@/hooks/useProviderKeys';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -28,14 +29,18 @@ import {
   AGENT_TURN_NOT_CONTINUABLE_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_INVALID_INPUT_CODE,
+  AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
   deriveConversationTitle,
   isAgentStopReason,
   isContinuableStop,
+  isModelFallbackReason,
   MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
   type MessageKind,
+  type ModelFallbackReason,
+  type ModelResolution,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import {
@@ -99,6 +104,13 @@ export function isUpdateProposal(p: PendingProposal): p is UpdateProposal {
   return p.kind === 'update' && p.targetNoteId !== null;
 }
 
+/** The model that answered a reply in place of the one its turn asked for. */
+export interface ReplyModelFallback {
+  /** Absent when a newer server sent a reason this build does not know. */
+  reason?: ModelFallbackReason;
+  to: string;
+}
+
 export interface AgentChatMessage {
   id: string;
   /** Absent only on history written before turns had ids. */
@@ -115,6 +127,8 @@ export interface AgentChatMessage {
   discarded?: boolean;
   /** The stored leg this bubble shows was cut off by an abort or an error. */
   interrupted?: boolean;
+  /** Only the live `agent:done` reports it; the stored transcript does not, so a refetched thread drops it. */
+  modelFallback?: ReplyModelFallback;
 }
 
 export interface QueuedMessage {
@@ -286,7 +300,8 @@ function isUnresumedDecision(error: AgentErrorPayload): boolean {
 function refusedBeforeRun(error: AgentErrorPayload): boolean {
   return (
     error.code === AI_INVALID_INPUT_CODE ||
-    error.code === AI_QUOTA_EXHAUSTED_CODE
+    error.code === AI_QUOTA_EXHAUSTED_CODE ||
+    error.code === AI_MODEL_UNAVAILABLE_CODE
   );
 }
 
@@ -352,6 +367,17 @@ function queuedTexts(queue: readonly QueuedMessage[]): string[] {
 
 function invalidateQuota(): void {
   void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
+}
+
+function replyFallbackOf(
+  fallback: NonNullable<ModelResolution['fallback']>
+): ReplyModelFallback {
+  return {
+    to: fallback.to,
+    ...(isModelFallbackReason(fallback.reason)
+      ? { reason: fallback.reason }
+      : {}),
+  };
 }
 
 function isPersistedConversation(
@@ -642,12 +668,22 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             : {}),
         });
       },
-      onDone: ({ sources, webSources, stopReason, continuable }) => {
+      onDone: ({
+        sources,
+        webSources,
+        stopReason,
+        continuable,
+        modelResolution,
+      }) => {
         if (version !== streamVersion || get().status !== 'streaming') {
           return;
         }
         invalidateConversations(queryClient);
         invalidateQuota();
+        const fallback = modelResolution?.fallback;
+        if (fallback) {
+          refreshModelChoice(queryClient);
+        }
         buffer.clearInactivityTimer();
         buffer.flush();
         thinkingBuffer.discard();
@@ -668,6 +704,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
                     sources,
                     webSources,
                     ...(isAgentStopReason(stopReason) ? { stopReason } : {}),
+                    ...(fallback
+                      ? { modelFallback: replyFallbackOf(fallback) }
+                      : {}),
                   }
                 : m
             ),
@@ -685,6 +724,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         }
         invalidateConversations(queryClient);
         invalidateQuota();
+        if (error.code === AI_MODEL_UNAVAILABLE_CODE) {
+          refreshModelChoice(queryClient);
+        }
         buffer.clearInactivityTimer();
         buffer.flush();
         thinkingBuffer.discard();

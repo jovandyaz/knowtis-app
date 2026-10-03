@@ -86,6 +86,7 @@
       "language": "Idioma",
       "editor": "Editor",
       "aiAssistant": "Asistente IA",
+      "plan": "Plan",
       "notifications": "Notificaciones",
       "account": "Cuenta",
       "integrations": "Integraciones",
@@ -97,6 +98,7 @@
       "language": "Elige tu idioma preferido",
       "editor": "Configura tus preferencias del editor",
       "aiAssistant": "Configura las preferencias del modelo de IA",
+      "plan": "Qué incluye cada nivel de IA y quién lo paga",
       "notifications": "Administra tus notificaciones",
       "account": "Seguridad y configuración de la cuenta",
       "integrations": "Gestiona API keys para integraciones externas",
@@ -125,23 +127,23 @@
       "effortMax": "Máximo",
       "effortFootnote": "Más esfuerzo usa más tokens de tu clave y tarda más.",
       "effortFootnoteFree": "Más esfuerzo tarda más en responder.",
-      "moreModels": "Más modelos",
-      "groupOpen": "Modelos abiertos",
-      "groupByok": "Con tu clave",
-      "registerCta": "Crea tu cuenta para elegir modelo y esfuerzo",
+      "advanced": "Avanzado",
+      "byokCta": "Más modelos con tu API key →",
       "triggerLabel": "Modelo y esfuerzo"
     },
     "intent": {
       "label": "Estilo del asistente",
       "fast": "Rápido",
-      "balanced": "Equilibrado",
+      "balanced": "Balanceado",
       "powerful": "Profundo",
       "fastHint": "Respuestas al instante",
       "balancedHint": "El equilibrio ideal",
-      "powerfulHint": "Razonamiento a fondo"
+      "powerfulHint": "Razonamiento a fondo",
+      "rowDetail": "{{model}} · {{hint}}"
     },
     "advanced": {
-      "trigger": "Avanzado: elegir modelo"
+      "trigger": "Avanzado: elegir modelo",
+      "routeDetail": "{{provider}} · {{detail}}"
     },
     "byok": {
       "title": "Tus claves de API",
@@ -154,9 +156,12 @@
       "stored": "Clave guardada ({{prefix}}…)",
       "billedBadge": "Tu clave",
       "lastUsed": "Último uso {{when}}",
-      "neverUsed": "Sin usar todavía",
-      "bridge": "Agrega tu clave",
-      "bridgeHint": "Usa tu propia clave de API para ejecutar más modelos"
+      "neverUsed": "Sin usar todavía"
+    },
+    "primaryProvider": {
+      "title": "Proveedor principal",
+      "description": "Cuando un modelo está disponible con varias de tus claves, se cobra a esta.",
+      "saveFailed": "No se pudo cambiar el proveedor principal. Revisa tus claves de API e inténtalo de nuevo."
     }
   },
   "aiModels": {

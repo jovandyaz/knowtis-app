@@ -24,6 +24,15 @@ export const MODEL_FALLBACK_REASONS = [
 ] as const;
 export type ModelFallbackReason = (typeof MODEL_FALLBACK_REASONS)[number];
 
+const FALLBACK_REASONS: readonly string[] = MODEL_FALLBACK_REASONS;
+
+/** Narrows a fallback reason read off the wire: a newer server may send one this build does not know. */
+export function isModelFallbackReason(
+  value: string | null | undefined
+): value is ModelFallbackReason {
+  return typeof value === 'string' && FALLBACK_REASONS.includes(value);
+}
+
 export const MODEL_UNAVAILABLE_REASONS = [
   ...MODEL_FALLBACK_REASONS,
   'no_route',

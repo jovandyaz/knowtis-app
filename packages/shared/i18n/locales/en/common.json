@@ -86,6 +86,7 @@
       "language": "Language",
       "editor": "Editor",
       "aiAssistant": "AI Assistant",
+      "plan": "Plan",
       "notifications": "Notifications",
       "account": "Account",
       "integrations": "Integrations",
@@ -97,6 +98,7 @@
       "language": "Choose your preferred language",
       "editor": "Configure your editor preferences",
       "aiAssistant": "Configure AI model preferences",
+      "plan": "What each AI tier includes and who pays for it",
       "notifications": "Manage your notification settings",
       "account": "Account security and settings",
       "integrations": "Manage API keys for external integrations",
@@ -125,10 +127,8 @@
       "effortMax": "Max",
       "effortFootnote": "Higher effort uses more of your key's tokens and takes longer.",
       "effortFootnoteFree": "Higher effort takes longer to answer.",
-      "moreModels": "More models",
-      "groupOpen": "Open models",
-      "groupByok": "With your key",
-      "registerCta": "Create your account to choose model and effort",
+      "advanced": "Advanced",
+      "byokCta": "More models with your API key →",
       "triggerLabel": "Model and effort"
     },
     "intent": {
@@ -138,10 +138,12 @@
       "powerful": "Deep",
       "fastHint": "Instant answers",
       "balancedHint": "The sweet spot",
-      "powerfulHint": "Deep reasoning"
+      "powerfulHint": "Deep reasoning",
+      "rowDetail": "{{model}} · {{hint}}"
     },
     "advanced": {
-      "trigger": "Advanced: choose model"
+      "trigger": "Advanced: choose model",
+      "routeDetail": "{{provider}} · {{detail}}"
     },
     "byok": {
       "title": "Your API keys",
@@ -154,9 +156,12 @@
       "stored": "Key stored ({{prefix}}…)",
       "billedBadge": "Your key",
       "lastUsed": "Last used {{when}}",
-      "neverUsed": "Not used yet",
-      "bridge": "Add your API key",
-      "bridgeHint": "Run more models on your own provider key"
+      "neverUsed": "Not used yet"
+    },
+    "primaryProvider": {
+      "title": "Primary provider",
+      "description": "When a model is available through several of your keys, it is billed to this one.",
+      "saveFailed": "Couldn't change the primary provider. Check your API keys and try again."
     }
   },
   "aiModels": {

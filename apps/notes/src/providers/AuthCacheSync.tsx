@@ -10,7 +10,10 @@ export function AuthCacheSync() {
   useEffect(() => {
     return authStore.subscribe((state, prevState) => {
       const previousUserId = prevState.user?.id;
-      if (previousUserId && previousUserId !== state.user?.id) {
+      const userChanged =
+        Boolean(previousUserId) && previousUserId !== state.user?.id;
+      const sessionEnded = prevState.isAuthenticated && !state.isAuthenticated;
+      if (userChanged) {
         agentClient.disconnect();
         aiClient.disconnect();
         if (state.user) {
@@ -19,9 +22,11 @@ export function AuthCacheSync() {
           });
         }
       }
-      if (prevState.isAuthenticated && !state.isAuthenticated) {
+      if (userChanged || sessionEnded) {
         queryClient.cancelQueries();
         queryClient.clear();
+      }
+      if (sessionEnded) {
         useAgentStore.getState().newConversation();
       }
     });

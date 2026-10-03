@@ -38,7 +38,6 @@ interface MakeOverrides {
   validate?: (provider: ByokProvider, key: string) => Promise<ProbeResult>;
   realProbe?: boolean;
   repo?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
-  settings?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
 }
 
 function makeService(overrides: MakeOverrides) {
@@ -63,14 +62,7 @@ function makeService(overrides: MakeOverrides) {
   };
   const registry = { languageModel: vi.fn() };
   const settings = {
-    getSettings: vi.fn().mockResolvedValue({
-      preferredModel: null,
-      preferredIntent: null,
-      primaryProvider: null,
-      ghostTextEnabled: true,
-    }),
-    patchSettings: vi.fn().mockResolvedValue(undefined),
-    ...overrides.settings,
+    clearBoundToUnheldProvider: vi.fn().mockResolvedValue(undefined),
   };
   const service = new ByokService(
     repo as never,
@@ -254,15 +246,7 @@ describe('ByokService', () => {
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
-      {
-        getSettings: vi.fn().mockResolvedValue({
-          preferredModel: null,
-          preferredIntent: null,
-          primaryProvider: null,
-          ghostTextEnabled: true,
-        }),
-        patchSettings: vi.fn(),
-      } as never
+      { clearBoundToUnheldProvider: vi.fn() } as never
     );
 
     await expect(
@@ -290,15 +274,7 @@ describe('ByokService', () => {
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
-      {
-        getSettings: vi.fn().mockResolvedValue({
-          preferredModel: null,
-          preferredIntent: null,
-          primaryProvider: null,
-          ghostTextEnabled: true,
-        }),
-        patchSettings: vi.fn(),
-      } as never
+      { clearBoundToUnheldProvider: vi.fn() } as never
     );
 
     await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
@@ -380,96 +356,48 @@ describe('ByokService', () => {
   });
 
   describe('deleteKey', () => {
-    it('drops a preferred model billed to the deleted key', async () => {
-      const { service, repo, settings } = makeService({
-        settings: {
-          getSettings: vi.fn().mockResolvedValue({
-            preferredModel: 'openai:gpt-6',
-            preferredIntent: 'fast',
-            primaryProvider: null,
-            ghostTextEnabled: true,
-          }),
-        },
-      });
+    it('removes the key, then clears the settings bound to it only while no key is stored', async () => {
+      const { service, repo, settings } = makeService({});
 
       await service.deleteKey('u1', 'openai');
 
       expect(repo.remove).toHaveBeenCalledWith('u1', 'openai');
-      expect(settings.patchSettings).toHaveBeenCalledWith('u1', {
-        preferredModel: null,
-      });
-    });
-
-    it('leaves a preferred model on another provider alone', async () => {
-      const { service, settings } = makeService({
-        settings: {
-          getSettings: vi.fn().mockResolvedValue({
-            preferredModel: 'anthropic:claude-sonnet-5',
-            preferredIntent: null,
-            primaryProvider: null,
-            ghostTextEnabled: true,
-          }),
-        },
-      });
-
-      await service.deleteKey('u1', 'openai');
-
-      expect(settings.patchSettings).not.toHaveBeenCalled();
-    });
-
-    it('clears the primary provider when its key is deleted', async () => {
-      const { service, settings } = makeService({
-        settings: {
-          getSettings: vi.fn().mockResolvedValue({
-            preferredModel: null,
-            preferredIntent: null,
-            primaryProvider: 'openai',
-            ghostTextEnabled: true,
-          }),
-        },
-      });
-
-      await service.deleteKey('u1', 'openai');
-
-      expect(settings.patchSettings).toHaveBeenCalledWith('u1', {
-        primaryProvider: null,
-      });
-    });
-
-    it('clears both settings honoured only on the deleted key in one write', async () => {
-      const { service, settings } = makeService({
-        settings: {
-          getSettings: vi.fn().mockResolvedValue({
-            preferredModel: 'openai:gpt-6',
-            preferredIntent: null,
-            primaryProvider: 'openai',
-            ghostTextEnabled: true,
-          }),
-        },
-      });
-
-      await service.deleteKey('u1', 'openai');
-
-      expect(settings.patchSettings.mock.calls).toEqual([
-        ['u1', { preferredModel: null, primaryProvider: null }],
+      expect(settings.clearBoundToUnheldProvider.mock.calls).toEqual([
+        ['u1', 'openai'],
       ]);
+      expect(repo.remove.mock.invocationCallOrder[0]).toBeLessThan(
+        settings.clearBoundToUnheldProvider.mock.invocationCallOrder[0] ?? 0
+      );
+    });
+  });
+
+  describe('setKey and the settings bound to its provider', () => {
+    it('clears the settings bound to an unheld provider before storing its key', async () => {
+      const { service, repo, settings } = makeService({});
+
+      await service.setKey('u1', 'openai', 'sk-openai-key-123456');
+
+      expect(settings.clearBoundToUnheldProvider.mock.calls).toEqual([
+        ['u1', 'openai'],
+      ]);
+      expect(
+        settings.clearBoundToUnheldProvider.mock.invocationCallOrder[0]
+      ).toBeLessThan(repo.upsert.mock.invocationCallOrder[0] ?? 0);
     });
 
-    it('leaves a primary provider on another key alone', async () => {
+    it('touches no settings when the provider rejects the key', async () => {
       const { service, settings } = makeService({
-        settings: {
-          getSettings: vi.fn().mockResolvedValue({
-            preferredModel: null,
-            preferredIntent: null,
-            primaryProvider: 'anthropic',
-            ghostTextEnabled: true,
-          }),
-        },
+        validate: async () => ({
+          valid: false,
+          reason: 'rejected',
+          error: '401 unauthorized',
+        }),
       });
 
-      await service.deleteKey('u1', 'openai');
-
-      expect(settings.patchSettings).not.toHaveBeenCalled();
+      await expect(
+        service.setKey('u1', 'openai', 'sk-bad')
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(settings.clearBoundToUnheldProvider).not.toHaveBeenCalled();
     });
   });
 });

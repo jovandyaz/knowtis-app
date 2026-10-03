@@ -116,6 +116,7 @@ export {
   type ModelCatalogResponse,
   MODEL_FALLBACK_REASONS,
   type ModelFallbackReason,
+  isModelFallbackReason,
   MODEL_UNAVAILABLE_REASONS,
   type ModelUnavailableReason,
   type ModelResolution,

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { quotaStateOf, useAiQuota } from '@/hooks/useAiQuota';
 import { useAISettings } from '@/hooks/useAISettings';
 import { useProviderKeys } from '@/hooks/useProviderKeys';
+import { effectivePrimaryProvider } from '@/lib/ai/byok-providers';
 import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
 import { clockTimeOf } from '@/lib/format-date';
 
@@ -12,33 +13,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
-import type {
-  AIPreferences,
-  ByokProvider,
-  ProviderKeyInfo,
-} from '@knowtis/shared-types';
 
 interface BadgeContent {
   text: string;
   label: string;
   tooltip: string;
   warning: boolean;
-}
-
-function primaryProviderOf(
-  preferences: AIPreferences | undefined,
-  keys: readonly ProviderKeyInfo[]
-): ByokProvider | null {
-  const primary = preferences?.primaryProvider;
-  if (primary && keys.some((key) => key.provider === primary)) {
-    return primary;
-  }
-  const [first] = [...keys].sort(
-    (a, b) =>
-      a.createdAt.localeCompare(b.createdAt) ||
-      a.provider.localeCompare(b.provider)
-  );
-  return first?.provider ?? null;
 }
 
 export function TierBadge() {
@@ -61,7 +41,10 @@ export function TierBadge() {
       warning: quota.low,
     };
   } else if (byok && !preferences.isPending && !keys.isPending) {
-    const provider = primaryProviderOf(preferences.data, keys.data ?? []);
+    const provider = effectivePrimaryProvider(
+      preferences.data,
+      keys.data ?? []
+    );
     if (provider) {
       const name = PROVIDER_LABEL[provider];
       content = {
