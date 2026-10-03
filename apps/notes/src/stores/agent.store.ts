@@ -1,6 +1,5 @@
 import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
-import { aiModelsQueryKeys } from '@/hooks/useAvailableModels';
-import { providerKeysQueryKeys } from '@/hooks/useProviderKeys';
+import { refreshModelChoice } from '@/hooks/useProviderKeys';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
@@ -370,13 +369,6 @@ function invalidateQuota(): void {
   void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
 }
 
-// The caller's tier no longer runs a model this client last saw, so the
-// picker must re-read what it may offer.
-function refreshModelChoice(): void {
-  void queryClient.invalidateQueries({ queryKey: aiModelsQueryKeys.all });
-  void queryClient.invalidateQueries({ queryKey: providerKeysQueryKeys.all });
-}
-
 function replyFallbackOf(
   fallback: NonNullable<ModelResolution['fallback']>
 ): ReplyModelFallback {
@@ -690,7 +682,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         invalidateQuota();
         const fallback = modelResolution?.fallback;
         if (fallback) {
-          refreshModelChoice();
+          refreshModelChoice(queryClient);
         }
         buffer.clearInactivityTimer();
         buffer.flush();
@@ -733,7 +725,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         invalidateConversations(queryClient);
         invalidateQuota();
         if (error.code === AI_MODEL_UNAVAILABLE_CODE) {
-          refreshModelChoice();
+          refreshModelChoice(queryClient);
         }
         buffer.clearInactivityTimer();
         buffer.flush();

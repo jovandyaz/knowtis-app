@@ -1,8 +1,12 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useQueryClient } from '@tanstack/react-query';
+
+import { useAiQuota } from '@/hooks/useAiQuota';
 import { useAISettings, useUpdateAISettings } from '@/hooks/useAISettings';
 import { useAvailableModels } from '@/hooks/useAvailableModels';
+import { refreshModelChoice } from '@/hooks/useProviderKeys';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAgentStore } from '@/stores/agent.store';
 import { useSettingsStore } from '@/stores/settings.store';
@@ -52,13 +56,26 @@ function GuestModelLabel() {
 
 function AccountModelPicker() {
   const { t } = useTranslation('common');
+  const queryClient = useQueryClient();
   const { data: catalog, isPending, isError, refetch } = useAvailableModels();
+  const quotaTier = useAiQuota().data?.tier;
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
   const openSettings = useSettingsStore((s) => s.open);
   const canFlyOut = useMediaQuery(FLYOUT_MIN_WIDTH_QUERY);
   const effortValue = useAgentStore((s) => s.reasoningEffort);
   const setReasoningEffort = useAgentStore((s) => s.setReasoningEffort);
+
+  const catalogTier = catalog?.tier;
+  useEffect(() => {
+    if (
+      quotaTier !== undefined &&
+      catalogTier !== undefined &&
+      quotaTier !== catalogTier
+    ) {
+      refreshModelChoice(queryClient);
+    }
+  }, [quotaTier, catalogTier, queryClient]);
 
   const models = catalog?.models;
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;

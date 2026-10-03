@@ -1,3 +1,8 @@
+import type * as ReactQuery from '@tanstack/react-query';
+
+import type * as AvailableModels from '@/hooks/useAvailableModels';
+import { aiModelsQueryKeys } from '@/hooks/useAvailableModels';
+import { providerKeysQueryKeys } from '@/hooks/useProviderKeys';
 import { useAgentStore } from '@/stores/agent.store';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -5,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   AIPreferences,
+  AiQuota,
   ModelCatalogResponse,
   ModelIntent,
   SelectableModel,
@@ -12,8 +18,9 @@ import type {
 
 import { CopilotModelPicker } from './CopilotModelPicker';
 
-const { captureProductEvent } = vi.hoisted(() => ({
+const { captureProductEvent, invalidateQueries } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
+  invalidateQueries: vi.fn(),
 }));
 const updatePreferences = vi.fn();
 const catalogData = vi.fn<() => ModelCatalogResponse | undefined>();
@@ -24,6 +31,7 @@ const catalogRequested = vi.fn();
 const prefsData = vi.fn<() => Partial<AIPreferences> | undefined>();
 const prefsRequested = vi.fn();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
+const quotaData = vi.fn<() => AiQuota | undefined>();
 const openSettings = vi.fn();
 
 vi.mock('react-i18next', () => ({
@@ -58,7 +66,15 @@ vi.mock('@/stores/agent.store', async () => {
   }));
   return { useAgentStore };
 });
-vi.mock('@/hooks/useAvailableModels', () => ({
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactQuery>()),
+  useQueryClient: () => ({ invalidateQueries }),
+}));
+vi.mock('@/hooks/useAiQuota', () => ({
+  useAiQuota: () => ({ data: quotaData() }),
+}));
+vi.mock('@/hooks/useAvailableModels', async (importOriginal) => ({
+  ...(await importOriginal<typeof AvailableModels>()),
   useAvailableModels: () => {
     catalogRequested();
     return {
@@ -210,6 +226,7 @@ describe('CopilotModelPicker', () => {
     catalogError.mockReturnValue(false);
     prefsData.mockReturnValue({ preferredModel: null, preferredIntent: null });
     authUser.mockReturnValue({ isAnonymous: false });
+    quotaData.mockReturnValue(undefined);
   });
 
   it('renders nothing without a session', () => {
@@ -534,6 +551,43 @@ describe('CopilotModelPicker', () => {
     expect(
       screen.getByRole('menuitem', { name: 'aiAssistant.menu.byokCta' })
     ).toBeInTheDocument();
+  });
+
+  describe('when another tab changes the tier', () => {
+    const FREE_QUOTA: AiQuota = {
+      tier: 'free',
+      messages: { used: 1, limit: 30, resetsAt: '2026-10-03T00:00:00.000Z' },
+    };
+    const BYOK_QUOTA: AiQuota = { tier: 'byok', messages: null };
+
+    it.each([
+      ['byok to free', BYOK, FREE_QUOTA],
+      ['free to byok', FREE, BYOK_QUOTA],
+    ])(
+      're-reads the catalog and the keys when the quota moves %s',
+      (_move, cachedCatalog, quota) => {
+        catalogData.mockReturnValue(cachedCatalog);
+        quotaData.mockReturnValue(quota);
+
+        render(<CopilotModelPicker />);
+
+        expect(invalidateQueries.mock.calls).toEqual([
+          [{ queryKey: aiModelsQueryKeys.all }],
+          [{ queryKey: providerKeysQueryKeys.all }],
+        ]);
+      }
+    );
+
+    it.each([
+      ['agrees with the catalog', FREE_QUOTA],
+      ['is unknown', undefined],
+    ])('keeps the cached catalog while the quota %s', (_case, quota) => {
+      quotaData.mockReturnValue(quota);
+
+      render(<CopilotModelPicker />);
+
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
   });
 
   describe('while the catalog loads or fails', () => {
