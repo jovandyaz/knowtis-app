@@ -45,9 +45,9 @@ const TIER_ORDER = ['fast', 'balanced', 'powerful'];
 const STYLE_SECTION = {
   label: 'Estilo',
   options: [
-    { id: 'fast', label: 'Rápido', description: 'Respuestas instantáneas' },
-    { id: 'balanced', label: 'Equilibrado', description: 'El punto medio' },
-    { id: 'powerful', label: 'Profundo', description: 'Razonamiento extenso' },
+    { id: 'fast', label: 'Rápido', description: 'Respuestas al instante' },
+    { id: 'balanced', label: 'Balanceado', description: 'El equilibrio ideal' },
+    { id: 'powerful', label: 'Profundo', description: 'Razonamiento a fondo' },
   ],
 };
 

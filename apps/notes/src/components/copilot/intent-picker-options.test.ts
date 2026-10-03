@@ -96,16 +96,17 @@ describe('models outside an intent', () => {
     ]);
   });
 
-  it('keeps an intent-serving model out of Avanzado and of the settings Advanced list', () => {
-    const serving = {
-      ...model,
-      billedToUser: false,
-      servesIntent: 'fast' as const,
-    };
+  it('keeps an intent-serving model out of Avanzado', () => {
+    expect(
+      advancedGroups([{ ...model, servesIntent: 'fast' as const }], t)
+    ).toEqual([]);
+  });
 
-    expect(advancedModelOptions([serving])).toEqual([]);
-    expect(advancedGroups([serving], t)).toEqual([]);
-    expect(advancedGroups([{ ...serving, billedToUser: true }], t)).toEqual([]);
+  it('keeps a server-billed model out of Avanzado and of the settings Advanced list', () => {
+    const serverBilled = { ...model, billedToUser: false };
+
+    expect(advancedModelOptions([serverBilled])).toEqual([]);
+    expect(advancedGroups([serverBilled], t)).toEqual([]);
   });
 });
 

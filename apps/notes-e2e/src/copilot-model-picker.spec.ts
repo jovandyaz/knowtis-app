@@ -170,6 +170,13 @@ const KEYS: ProviderKeyInfo[] = [
   },
 ];
 
+const UNSET_PREFERENCES: AIPreferences = {
+  preferredModel: null,
+  preferredIntent: null,
+  primaryProvider: null,
+  ghostTextEnabled: true,
+};
+
 const FREE_QUOTA: AiQuota = {
   tier: 'free',
   messages: { used: 3, limit: 30, resetsAt: RESETS_AT },
@@ -204,6 +211,7 @@ test('a free account picks an intent, is offered more models with its own key, a
   const note = await owner.createNote('Picker gratis');
   await routeApiJson(owner.page, MODELS_ROUTE_RE, () => FREE_CATALOG);
   await routeApiJson(owner.page, QUOTA_ROUTE_RE, () => FREE_QUOTA);
+  await routeApiJson(owner.page, PREFERENCES_ROUTE_RE, () => UNSET_PREFERENCES);
 
   await owner.page.goto(`/notes/${note.id}`);
   await openCopilotDock(owner.page);
@@ -249,12 +257,7 @@ test('a byok account reads its own models by provider and picks its primary prov
 }) => {
   const { owner } = sharing;
   const note = await owner.createNote('Picker con keys');
-  let preferences: AIPreferences = {
-    preferredModel: null,
-    preferredIntent: null,
-    primaryProvider: null,
-    ghostTextEnabled: true,
-  };
+  let preferences: AIPreferences = UNSET_PREFERENCES;
   const writes: unknown[] = [];
   await routeApiJson(owner.page, MODELS_ROUTE_RE, () => BYOK_CATALOG);
   await routeApiJson(owner.page, QUOTA_ROUTE_RE, () => BYOK_QUOTA);
@@ -288,7 +291,6 @@ test('a byok account reads its own models by provider and picks its primary prov
   await expect(
     advanced.getByRole('menuitemradio', { name: /GPT-5\.6 Terra/ })
   ).toBeVisible();
-  await owner.page.keyboard.press('Escape');
   await owner.page.keyboard.press('Escape');
 
   await owner.page.getByRole('button', { name: ACCOUNT_RE }).click();

@@ -137,10 +137,15 @@ describe('browser product events', () => {
       cta: 'more_models',
     });
 
-    expect(posthog.capture).toHaveBeenCalledWith(
-      'ai upgrade cta clicked',
-      expect.objectContaining({ from_tier: 'free', cta: 'more_models' })
-    );
+    expect(posthog.capture).toHaveBeenCalledWith('ai upgrade cta clicked', {
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'en',
+      from_tier: 'free',
+      cta: 'more_models',
+    });
   });
 
   it('contains capture failures so analytics cannot interrupt product behavior', () => {

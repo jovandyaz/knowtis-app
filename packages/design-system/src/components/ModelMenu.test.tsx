@@ -5,13 +5,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { ModelMenu, type ModelMenuProps } from './ModelMenu';
 
 const PRIMARY = [
-  { id: 'fast', label: 'Haiku 4.5', description: 'Respuestas instantáneas' },
+  {
+    id: 'fast',
+    label: 'Rápido',
+    description: 'Haiku 4.5 · Respuestas al instante',
+  },
   {
     id: 'balanced',
-    label: 'Sonnet 5',
-    description: 'Balance entre calidad y velocidad',
+    label: 'Balanceado',
+    description: 'Sonnet 5 · El equilibrio ideal',
   },
-  { id: 'powerful', label: 'Opus 5', description: 'Razonamiento profundo' },
+  {
+    id: 'powerful',
+    label: 'Profundo',
+    description: 'Opus 5 · Razonamiento a fondo',
+  },
 ];
 
 const EFFORT_OPTIONS = [
@@ -21,16 +29,16 @@ const EFFORT_OPTIONS = [
 ];
 
 const MORE_MODELS = {
-  label: 'Más modelos',
+  label: 'Avanzado',
   groups: [
     {
-      label: 'Modelos abiertos',
+      label: 'OpenRouter',
       options: [
         { id: 'openrouter:deepseek/v4', label: 'DeepSeek V4', cost: '$' },
       ],
     },
     {
-      label: 'Con tu clave',
+      label: 'Anthropic',
       options: [
         {
           id: 'anthropic:claude-opus-5',
@@ -59,25 +67,25 @@ function baseProps(overrides: Partial<ModelMenuProps> = {}): ModelMenuProps {
     primary: PRIMARY,
     value: 'balanced',
     onSelect: vi.fn(),
-    triggerLabel: 'Sonnet 5',
+    triggerLabel: 'Balanceado',
     ...overrides,
   };
 }
 
 describe('ModelMenu', () => {
-  it('renders primary rows with model name and description and marks selection', async () => {
+  it('renders primary rows with their label and description and marks selection', async () => {
     const user = userEvent.setup();
     render(<ModelMenu {...baseProps()} />);
     await user.click(screen.getByRole('button'));
 
     expect(
-      screen.getByText('Balance entre calidad y velocidad')
+      screen.getByText('Sonnet 5 · El equilibrio ideal')
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+      screen.getByRole('menuitemradio', { name: /^Balanceado/ })
     ).toHaveAttribute('aria-checked', 'true');
     expect(
-      screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ })
+      screen.getByRole('menuitemradio', { name: /^Rápido/ })
     ).toHaveAttribute('aria-checked', 'false');
   });
 
@@ -86,7 +94,7 @@ describe('ModelMenu', () => {
     const onSelect = vi.fn();
     render(<ModelMenu {...baseProps({ onSelect })} />);
     await user.click(screen.getByRole('button'));
-    await user.click(screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ }));
+    await user.click(screen.getByRole('menuitemradio', { name: /^Rápido/ }));
 
     expect(onSelect).toHaveBeenCalledWith('fast');
   });
@@ -165,7 +173,7 @@ describe('ModelMenu', () => {
           value: 'gpt-6',
           onSelect,
           moreModels: {
-            label: 'Más modelos',
+            label: 'Avanzado',
             groups: [
               {
                 label: 'Anthropic',
@@ -195,7 +203,7 @@ describe('ModelMenu', () => {
       />
     );
     await user.click(screen.getByRole('button'));
-    await user.click(screen.getByRole('menuitem', { name: /Más modelos/ }));
+    await user.click(screen.getByRole('menuitem', { name: /Avanzado/ }));
 
     expect(await screen.findByText('Anthropic')).toBeInTheDocument();
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -240,7 +248,7 @@ describe('ModelMenu', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Modelo: Sonnet 5, Alto' })
+      screen.getByRole('button', { name: 'Modelo: Balanceado, Alto' })
     ).toBeInTheDocument();
     expect(screen.getByText('· Alto')).toHaveClass('text-(--muted-foreground)');
   });
@@ -314,10 +322,10 @@ describe('ModelMenu', () => {
 
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
     expect(
-      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+      screen.getByRole('menuitemradio', { name: /^Balanceado/ })
     ).toHaveAttribute('aria-checked', 'true');
     expect(
-      screen.getByRole('menuitem', { name: /Más modelos/ })
+      screen.getByRole('menuitem', { name: /Avanzado/ })
     ).toBeInTheDocument();
     expect(
       screen.getByText('No se pudieron cargar los modelos')
@@ -327,7 +335,7 @@ describe('ModelMenu', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole('button'));
-    await user.click(screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ }));
+    await user.click(screen.getByRole('menuitemradio', { name: /^Rápido/ }));
     expect(onSelect).toHaveBeenCalledWith('fast');
   });
 });
