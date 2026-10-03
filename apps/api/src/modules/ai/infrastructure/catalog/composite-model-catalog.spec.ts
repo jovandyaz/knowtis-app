@@ -22,6 +22,7 @@ const PARTIAL_EVENT = 'ai.pricing.partial_model';
 const INDEXED_MODEL_ID = 'openrouter:vendor/indexed';
 const PROMOTED_ONLY_MODEL_ID = 'openrouter:vendor/promoted-only';
 const PARTIAL_MODEL_ID = 'openrouter:vendor/half-priced';
+const UNPRICED_MODEL_ID = 'openrouter:vendor/unpriced';
 const UNKNOWN_MODEL_ID = 'openrouter:vendor/unknown';
 const CURATED_MODEL_ID = CURATED_MODELS[0].id;
 const TRANSCRIPTION_MODEL_ID = 'openai:whisper-1';
@@ -58,6 +59,11 @@ const INDEXED_ROWS: readonly IndexedModel[] = [
   indexedAt(INDEXED_MODEL_ID),
   indexedAt(CURATED_MODEL_ID),
   createIndexedModel({ id: PARTIAL_MODEL_ID, outputCostPerToken: null }),
+  createIndexedModel({
+    id: UNPRICED_MODEL_ID,
+    inputCostPerToken: null,
+    outputCostPerToken: null,
+  }),
 ];
 
 async function createComposite(promotedModels: readonly CatalogModel[]) {
@@ -163,6 +169,21 @@ describe('CompositeModelCatalog', () => {
     expect(warnSpy).toHaveBeenCalledWith({
       event: UNKNOWN_EVENT,
       model: UNKNOWN_MODEL_ID,
+      impact: 'usage recorded with costUsd=0',
+    });
+  });
+
+  it('warns once, as for an unknown model, when the index prices neither side of a completion', async () => {
+    const warnSpy = spyOnWarnings();
+    const { composite } = await createComposite([]);
+
+    composite.getPricing(UNPRICED_MODEL_ID);
+    composite.getPricing(UNPRICED_MODEL_ID);
+
+    expect(warnedEvents(warnSpy)).toEqual([UNKNOWN_EVENT]);
+    expect(warnSpy).toHaveBeenCalledWith({
+      event: UNKNOWN_EVENT,
+      model: UNPRICED_MODEL_ID,
       impact: 'usage recorded with costUsd=0',
     });
   });

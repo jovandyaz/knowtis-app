@@ -1,13 +1,19 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
+import {
+  INDEX_PROVIDERS,
+  MODEL_INDEX_SNAPSHOT,
+  ModelIndexCatalog,
+  type IndexedModel,
+} from '@knowtis/ai-gateway';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import { ModelIndexCache } from './model-index.cache';
 
 const SNAPSHOT_MODEL_ID = 'openrouter:deepseek/deepseek-v3.2';
+const SNAPSHOT_DIRECT_MODEL_ID = 'anthropic:claude-haiku-4-5';
 const DB_INPUT_COST = 2.5e-7;
 const DB_OUTPUT_COST = 1.25e-6;
 const DB_MAX_INPUT_TOKENS = 200_000;
@@ -21,6 +27,13 @@ const DB_MODEL = createIndexedModel({
   maxOutputTokens: DB_MAX_OUTPUT_TOKENS,
 });
 const NEWER_DB_MODEL = createIndexedModel({ id: 'openrouter:vendor/db-newer' });
+const EVERY_PROVIDER_ROWS: IndexedModel[] = INDEX_PROVIDERS.map((provider) =>
+  createIndexedModel({
+    id: `${provider}:db-${provider}`,
+    provider,
+    source: provider === 'openrouter' ? 'openrouter' : 'models_dev',
+  })
+);
 
 interface RepositoryScript {
   models: IndexedModel[];
@@ -72,14 +85,13 @@ describe('ModelIndexCache', () => {
     expect(cache.isSupported(DB_MODEL.id)).toBe(true);
   });
 
-  it('serves only the database rows once a refresh returns any', async () => {
+  it('serves a synced provider from its database rows only', async () => {
     const { cache } = createCache({ models: [DB_MODEL], failure: null });
 
     await cache.refresh();
 
     expect(cache.isSupported(SNAPSHOT_MODEL_ID)).toBe(false);
     expect(cache.getPricing(SNAPSHOT_MODEL_ID)).toBeUndefined();
-    expect(cache.catalog().all()).toEqual([DB_MODEL]);
     expect(cache.getPricing(DB_MODEL.id)).toMatchObject({
       inputCostPerToken: DB_INPUT_COST,
       outputCostPerToken: DB_OUTPUT_COST,
@@ -88,6 +100,33 @@ describe('ModelIndexCache', () => {
       maxInputTokens: DB_MAX_INPUT_TOKENS,
       maxOutputTokens: DB_MAX_OUTPUT_TOKENS,
     });
+  });
+
+  it('keeps the snapshot rows of a provider the index has never listed', async () => {
+    const { cache } = createCache({ models: [DB_MODEL], failure: null });
+
+    await cache.refresh();
+
+    expect(cache.isSupported(SNAPSHOT_DIRECT_MODEL_ID)).toBe(true);
+    expect(cache.getPricing(SNAPSHOT_DIRECT_MODEL_ID)).toEqual(
+      new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT).getPricing(
+        SNAPSHOT_DIRECT_MODEL_ID
+      )
+    );
+    expect(cache.isSupported(SNAPSHOT_MODEL_ID)).toBe(false);
+  });
+
+  it('ignores the snapshot once every provider has listed rows', async () => {
+    const { cache } = createCache({
+      models: EVERY_PROVIDER_ROWS,
+      failure: null,
+    });
+
+    await cache.refresh();
+
+    expect(cache.catalog().all()).toEqual(EVERY_PROVIDER_ROWS);
+    expect(cache.isSupported(SNAPSHOT_DIRECT_MODEL_ID)).toBe(false);
+    expect(cache.isSupported(SNAPSHOT_MODEL_ID)).toBe(false);
   });
 
   it('replaces the database rows on refresh', async () => {

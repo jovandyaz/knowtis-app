@@ -62,7 +62,7 @@ export class CompositeModelCatalog implements ModelCatalog {
     modelId: string,
     pricing: ModelPricing | undefined
   ): void {
-    if (pricing === undefined && !this.warnedModels.has(modelId)) {
+    if (isUnpriced(pricing) && !this.warnedModels.has(modelId)) {
       this.warnedModels.add(modelId);
       this.logger.warn({
         event: 'ai.pricing.unknown_model',
@@ -84,4 +84,13 @@ export class CompositeModelCatalog implements ModelCatalog {
       });
     }
   }
+}
+
+function isUnpriced(pricing: ModelPricing | undefined): boolean {
+  return (
+    pricing === undefined ||
+    (pricing.inputCostPerToken === undefined &&
+      pricing.outputCostPerToken === undefined &&
+      pricing.inputCostPerSecond === undefined)
+  );
 }
