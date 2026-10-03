@@ -156,7 +156,8 @@ export class ByokService {
 
   // Settings honoured only on a provider's key never outlive it: deleting the
   // key drops them, and a key added for a provider the caller did not hold
-  // starts clean, so a write that raced the delete cannot resurface.
+  // starts clean. A write validated before the delete can still land after a
+  // re-add, which is harmless because the key is held again.
   private async clearSettingsBoundTo(
     userId: string,
     provider: ByokProvider
