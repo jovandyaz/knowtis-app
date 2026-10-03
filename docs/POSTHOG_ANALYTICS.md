@@ -230,7 +230,7 @@ rename or delete historical assets.
 | `BYOK key failures`                           | Trends insight            | `12479829`                             |
 | `API operational alerts`                      | Trends insight            | `12479830`                             |
 | `API raised an operational alert`             | Insight alert             | `01a100b5-fa3c-0000-3140-0c6518b827f7` |
-| `Knowtis API alerts`                          | Incoming webhook source   | `01a100b4-bf2c-0000-a7b3-99b17ac9ec8f` |
+| `Knowtis API alerts`                          | Incoming webhook source   | not published                          |
 
 PostHog can create custom event definitions before first ingestion, but its
 property-definition endpoint can only update properties that already exist in
@@ -256,7 +256,7 @@ event (`alert`, `signal`, `rate`, `threshold`, `samples`, `window_hours`,
 `provider`, `failures`, `spent_usd`, `limit_usd`, `alerted_at`) and never maps
 user ids. The `API raised an operational alert` insight alert checks hourly and
 emails its subscribers when any alert other than `webhook.test` fires. Test the
-webhook only with `"event": "webhook.test"`.
+webhook only with `"event": "webhook.test"`. Its ID is the public ingestion URL, so it lives only in Railway's `AI_ALERT_WEBHOOK_URL` and in PostHog's data pipelines, never in the repository.
 
 When verifying these assets, confirm the dashboard contains the six saved
 insights listed above and that each remains attached to dashboard `2065684`.
