@@ -22,6 +22,30 @@ export {
 } from './catalog/model-catalog';
 export { LiteLLMCatalog, toLiteLLMKey } from './catalog/litellm-catalog';
 export {
+  deriveCanonical,
+  INDEX_PROVIDERS,
+  INDEX_SOURCES,
+  MODEL_STATUSES,
+  MODELS_DEV_PROVIDERS,
+  TOKENS_PER_MILLION,
+  type IndexedModel,
+  type IndexedReasoning,
+  type IndexProvider,
+  type IndexSource,
+  type ModelStatus,
+} from './catalog/indexed-model';
+export {
+  enrichmentFromModelsDev,
+  fromModelsDev,
+  type ModelsDevEnrichment,
+} from './catalog/normalize-models-dev';
+export {
+  fromOpenRouter,
+  type OpenRouterModelInput,
+} from './catalog/normalize-openrouter';
+export { ModelIndexCatalog } from './catalog/model-index-catalog';
+export { TRANSCRIPTION_PRICES } from './catalog/transcription-prices';
+export {
   computeTokenCostUsd,
   type TokenCostInput,
 } from './catalog/compute-token-cost';
