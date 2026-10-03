@@ -280,6 +280,35 @@ describe('OpenRouterModelsHttpClient', () => {
     expect(discarded).toEqual([]);
   });
 
+  it('should keep a model whose input modalities or supported parameters are unreadable, defaulting them', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...CLAUDE_SONNET_45,
+            architecture: {
+              ...CLAUDE_SONNET_45.architecture,
+              input_modalities: ['text', { kind: 'image' }],
+            },
+            supported_parameters: 'tools',
+          },
+        ])
+      )
+    );
+
+    const { models, discarded } =
+      await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: 'anthropic/claude-sonnet-4.5',
+      inputModalities: [],
+      outputModalities: ['text'],
+      supportedParameters: [],
+    });
+    expect(discarded).toEqual([]);
+  });
+
   it('should capture declared reasoning efforts, dropping unknown values', async () => {
     fetchMock.mockResolvedValueOnce(
       okResponse(
