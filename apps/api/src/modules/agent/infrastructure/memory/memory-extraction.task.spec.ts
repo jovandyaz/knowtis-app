@@ -12,8 +12,13 @@ const SERVED_MODEL = 'openrouter:fast';
 const EMBEDDING_MODEL = 'voyage-4';
 const INPUT_COST_PER_TOKEN = 0.000001;
 const OUTPUT_COST_PER_TOKEN = 0.000004;
+const QUIET_SECONDS = 180;
+const BATCH_SIZE = 20;
 const MAX_EXTRACTION_ATTEMPTS = 3;
+const BACKOFF_BASE_SECONDS = 600;
 const TICKS_PAST_THE_CAP = MAX_EXTRACTION_ATTEMPTS + 2;
+const C1 = { id: 'c1', userId: 'u1', version: '2026-10-03 10:00:00.123456+00' };
+const C2 = { id: 'c2', userId: 'u2', version: '2026-10-03 10:05:00.654321+00' };
 
 // Mirrors what the text-only SQL returns: no tool rows, but an assistant row
 // carrying tool-call parts beside its text still comes back whole.
@@ -66,8 +71,8 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
     get: (k: string) =>
       (
         ({
-          AI_MEMORY_QUIET_SECONDS: 180,
-          AI_MEMORY_BATCH_SIZE: 20,
+          AI_MEMORY_QUIET_SECONDS: QUIET_SECONDS,
+          AI_MEMORY_BATCH_SIZE: BATCH_SIZE,
           AI_MEMORY_MAX_PER_USER: 100,
           AI_EMBEDDING_MODEL: EMBEDDING_MODEL,
         }) as Record<string, unknown>
@@ -75,7 +80,7 @@ function make(opts: { embedConfigured?: boolean; lock?: boolean } = {}) {
   };
   const aiConfig = { getFastModel: vi.fn().mockResolvedValue('m') };
   const conversations = {
-    findExtractable: vi.fn().mockResolvedValue([{ id: 'c1', userId: 'u1' }]),
+    findExtractable: vi.fn().mockResolvedValue([C1]),
     loadMessages: vi.fn().mockResolvedValue([
       {
         role: 'user',
@@ -166,7 +171,25 @@ describe('MemoryExtractionTask', () => {
         inserts: [expect.objectContaining({ content: 'Is vegan' })],
       })
     );
-    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+    expect(conversations.markExtracted).toHaveBeenCalledWith(
+      'u1',
+      'c1',
+      C1.version
+    );
+  });
+
+  it('stamps a conversation with no text rows as the state it read, without extracting', async () => {
+    const { task, conversations, structured } = make();
+    conversations.loadMessages.mockResolvedValue([]);
+
+    await task.reconcile();
+
+    expect(structured.generateStructuredOutput).not.toHaveBeenCalled();
+    expect(conversations.markExtracted).toHaveBeenCalledWith(
+      'u1',
+      'c1',
+      C1.version
+    );
   });
 
   it('loads text-only rows for the transcript', async () => {
@@ -263,10 +286,7 @@ describe('MemoryExtractionTask', () => {
       .spyOn(Logger.prototype, 'debug')
       .mockImplementation(() => undefined);
     const { task, rateLimit, conversations, structured } = make();
-    conversations.findExtractable.mockResolvedValue([
-      { id: 'c1', userId: 'u1' },
-      { id: 'c2', userId: 'u2' },
-    ]);
+    conversations.findExtractable.mockResolvedValue([C1, C2]);
     rateLimit.isGlobalSpendExhausted.mockImplementation(
       async () => rateLimit.recordUsage.mock.calls.length > 0
     );
@@ -281,7 +301,11 @@ describe('MemoryExtractionTask', () => {
       expect.anything()
     );
     expect(conversations.markExtracted).toHaveBeenCalledTimes(1);
-    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+    expect(conversations.markExtracted).toHaveBeenCalledWith(
+      'u1',
+      'c1',
+      C1.version
+    );
     expect(debug).toHaveBeenCalledWith({
       event: 'agent.memory.extraction_skipped',
       reason: 'global_breaker',
@@ -360,7 +384,11 @@ describe('MemoryExtractionTask', () => {
       error: 'db down',
     });
     expect(memory.applyReconcile).toHaveBeenCalled();
-    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+    expect(conversations.markExtracted).toHaveBeenCalledWith(
+      'u1',
+      'c1',
+      C1.version
+    );
   });
 
   it('attributes the memory embedding cost to the user, not the global counter', async () => {
@@ -402,7 +430,8 @@ describe('MemoryExtractionTask', () => {
     expect(conversations.markExtracted).not.toHaveBeenCalled();
     expect(conversations.recordExtractionFailure).toHaveBeenCalledWith(
       'u1',
-      'c1'
+      'c1',
+      C1.version
     );
   });
 
@@ -411,10 +440,14 @@ describe('MemoryExtractionTask', () => {
 
     await task.reconcile();
 
-    expect(conversations.findExtractable).toHaveBeenCalledWith(180, 20, {
-      maxAttempts: MAX_EXTRACTION_ATTEMPTS,
-      backoffBaseSeconds: 600,
-    });
+    expect(conversations.findExtractable).toHaveBeenCalledWith(
+      QUIET_SECONDS,
+      BATCH_SIZE,
+      {
+        maxAttempts: MAX_EXTRACTION_ATTEMPTS,
+        backoffBaseSeconds: BACKOFF_BASE_SECONDS,
+      }
+    );
   });
 
   it('counts a failure that happens after the extraction was charged, and marks nothing', async () => {
@@ -427,7 +460,8 @@ describe('MemoryExtractionTask', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
     expect(conversations.recordExtractionFailure).toHaveBeenCalledWith(
       'u1',
-      'c1'
+      'c1',
+      C1.version
     );
     expect(conversations.markExtracted).not.toHaveBeenCalled();
   });
@@ -440,7 +474,7 @@ describe('MemoryExtractionTask', () => {
     let failures = 0;
     conversations.findExtractable.mockImplementation(
       async (_quiet: number, _limit: number, retry: { maxAttempts: number }) =>
-        failures < retry.maxAttempts ? [{ id: 'c1', userId: 'u1' }] : []
+        failures < retry.maxAttempts ? [C1] : []
     );
     conversations.recordExtractionFailure.mockImplementation(
       async () => ++failures
@@ -519,10 +553,7 @@ describe('MemoryExtractionTask', () => {
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
     const { task, structured, conversations } = make();
-    conversations.findExtractable.mockResolvedValue([
-      { id: 'c1', userId: 'u1' },
-      { id: 'c2', userId: 'u2' },
-    ]);
+    conversations.findExtractable.mockResolvedValue([C1, C2]);
     structured.generateStructuredOutput.mockRejectedValueOnce(
       new Error('provider down')
     );
@@ -539,7 +570,11 @@ describe('MemoryExtractionTask', () => {
         reason: 'db down',
       })
     );
-    expect(conversations.markExtracted).toHaveBeenCalledWith('u2', 'c2');
+    expect(conversations.markExtracted).toHaveBeenCalledWith(
+      'u2',
+      'c2',
+      C2.version
+    );
   });
 
   it('does nothing when embeddings are not configured', async () => {

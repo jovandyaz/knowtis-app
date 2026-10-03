@@ -40,6 +40,7 @@ import type {
   ConversationMessageRow,
   ConversationRepository,
   CreateConversationInput,
+  ExtractableConversation,
   ExtractionRetryPolicy,
   LastConversationMessage,
   LoadMessagesOptions,
@@ -84,6 +85,22 @@ const TURN_USER_ROW = sql`${conversationMessages.role} = 'user' AND ${conversati
 // Failures belong to the state they were recorded on: a new message moves
 // updated_at past them, so the next state starts with none.
 const FAILED_IN_CURRENT_STATE = sql`coalesce(${conversations.memoryExtractionFailedAt} >= ${conversations.updatedAt}, false)`;
+
+// Text keeps the microseconds a JS Date would drop, so a stamp can match the
+// state that was read exactly and skip one a new message has moved past.
+const STATE_VERSION = sql<string>`${conversations.updatedAt}::text`;
+
+function selectedState(
+  userId: string,
+  conversationId: string,
+  version: string
+): SQL | undefined {
+  return and(
+    eq(conversations.id, conversationId),
+    eq(conversations.userId, userId),
+    sql`${conversations.updatedAt} = ${version}::timestamptz`
+  );
+}
 
 function readableSources(userId: string): SQL<AgentSource[]> {
   return sql<AgentSource[]>`(
@@ -320,9 +337,13 @@ export class DrizzleConversationRepository implements ConversationRepository {
     quietSeconds: number,
     limit: number,
     retry: ExtractionRetryPolicy
-  ): Promise<{ id: string; userId: string }[]> {
+  ): Promise<ExtractableConversation[]> {
     return this.db
-      .select({ id: conversations.id, userId: conversations.userId })
+      .select({
+        id: conversations.id,
+        userId: conversations.userId,
+        version: STATE_VERSION,
+      })
       .from(conversations)
       .innerJoin(users, eq(users.id, conversations.userId))
       .where(
@@ -339,7 +360,11 @@ export class DrizzleConversationRepository implements ConversationRepository {
       .limit(limit);
   }
 
-  async markExtracted(userId: string, conversationId: string): Promise<void> {
+  async markExtracted(
+    userId: string,
+    conversationId: string,
+    version: string
+  ): Promise<void> {
     await this.db
       .update(conversations)
       .set({
@@ -347,18 +372,14 @@ export class DrizzleConversationRepository implements ConversationRepository {
         memoryExtractionAttempts: 0,
         memoryExtractionFailedAt: null,
       })
-      .where(
-        and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        )
-      )
+      .where(selectedState(userId, conversationId, version))
       .returning({ id: conversations.id });
   }
 
   async recordExtractionFailure(
     userId: string,
-    conversationId: string
+    conversationId: string,
+    version: string
   ): Promise<number | null> {
     const [row] = await this.db
       .update(conversations)
@@ -367,12 +388,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
           THEN ${conversations.memoryExtractionAttempts} + 1 ELSE 1 END`,
         memoryExtractionFailedAt: sql`now()`,
       })
-      .where(
-        and(
-          eq(conversations.id, conversationId),
-          eq(conversations.userId, userId)
-        )
-      )
+      .where(selectedState(userId, conversationId, version))
       .returning({ attempts: conversations.memoryExtractionAttempts });
     return row?.attempts ?? null;
   }

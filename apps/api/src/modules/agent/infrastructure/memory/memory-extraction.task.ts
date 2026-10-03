@@ -34,6 +34,7 @@ import {
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
+  type ExtractableConversation,
   type ExtractionRetryPolicy,
 } from '../../domain/ports/conversation.repository';
 import {
@@ -115,9 +116,9 @@ export class MemoryExtractionTask {
           break;
         }
         try {
-          await this.extractOne(conv.id, conv.userId);
+          await this.extractOne(conv);
         } catch (error) {
-          await this.recordFailure(conv.id, conv.userId, error);
+          await this.recordFailure(conv, error);
         }
         processed++;
       }
@@ -132,15 +133,15 @@ export class MemoryExtractionTask {
   }
 
   private async recordFailure(
-    conversationId: string,
-    userId: string,
+    { id: conversationId, userId, version }: ExtractableConversation,
     error: unknown
   ): Promise<void> {
     let attempts: number | null = null;
     try {
       attempts = await this.conversations.recordExtractionFailure(
         userId,
-        conversationId
+        conversationId,
+        version
       );
     } catch (recordError) {
       this.logger.warn({
@@ -173,10 +174,11 @@ export class MemoryExtractionTask {
     return true;
   }
 
-  private async extractOne(
-    conversationId: string,
-    userId: string
-  ): Promise<void> {
+  private async extractOne({
+    id: conversationId,
+    userId,
+    version,
+  }: ExtractableConversation): Promise<void> {
     const max = this.config.get('AI_MEMORY_MAX_PER_USER');
     const messages = await this.conversations.loadMessages(
       conversationId,
@@ -185,7 +187,7 @@ export class MemoryExtractionTask {
       { textOnly: true }
     );
     if (messages.length === 0) {
-      await this.conversations.markExtracted(userId, conversationId);
+      await this.conversations.markExtracted(userId, conversationId, version);
       return;
     }
     const transcript = messages
@@ -283,6 +285,6 @@ export class MemoryExtractionTask {
       inserts,
       updates: memoryUpdates,
     });
-    await this.conversations.markExtracted(userId, conversationId);
+    await this.conversations.markExtracted(userId, conversationId, version);
   }
 }

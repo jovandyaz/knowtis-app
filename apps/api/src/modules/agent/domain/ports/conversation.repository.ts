@@ -63,6 +63,13 @@ export interface ExtractionRetryPolicy {
   readonly backoffBaseSeconds: number;
 }
 
+export interface ExtractableConversation {
+  readonly id: string;
+  readonly userId: string;
+  /** The state that was read: `updated_at` as Postgres text, exact to the microsecond. */
+  readonly version: string;
+}
+
 export interface ConversationRepository {
   create(input: CreateConversationInput): Promise<{ id: string }>;
   findByIdForUser(
@@ -101,16 +108,21 @@ export interface ConversationRepository {
     quietSeconds: number,
     limit: number,
     retry: ExtractionRetryPolicy
-  ): Promise<{ id: string; userId: string }[]>;
-  /** Stamps the current state as extracted and clears its failures. */
-  markExtracted(userId: string, conversationId: string): Promise<void>;
+  ): Promise<ExtractableConversation[]>;
+  /** Stamps state `version` as extracted and clears its failures; writes nothing once a new message has moved the conversation past it. */
+  markExtracted(
+    userId: string,
+    conversationId: string,
+    version: string
+  ): Promise<void>;
   /**
-   * Counts one failed extraction of the conversation's current state and resolves how many it has had,
-   * or null when `userId` owns no such conversation. A new message starts a state with no failures.
+   * Counts one failed extraction of state `version` and resolves how many it has had, or null when nothing was
+   * counted: `userId` owns no such conversation, or a new message has moved it past `version` (a state that starts with no failures).
    */
   recordExtractionFailure(
     userId: string,
-    conversationId: string
+    conversationId: string,
+    version: string
   ): Promise<number | null>;
   listForUser(
     userId: string,
