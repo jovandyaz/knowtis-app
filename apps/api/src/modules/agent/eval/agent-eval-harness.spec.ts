@@ -126,7 +126,7 @@ describe('production parity of an eval turn', () => {
       settings: 'configured routing and effort',
       providerOrder: ['fireworks', 'baseten'],
       ignoredProviders: ['slowhost'],
-      effort: 'medium',
+      effort: { step: 'medium', toolFree: 'low' },
     },
     {
       settings: 'no routing preference and no effort',
@@ -177,7 +177,7 @@ describe('production parity of an eval turn', () => {
       expect(inputs[0]?.openrouterIgnoredProviders).toStrictEqual(
         ignoredProviders
       );
-      expect(await inputs[0]?.effortFor?.(MODEL)).toBe(effort);
+      expect(await inputs[0]?.effortFor?.(MODEL)).toEqual(effort);
       expect(effortFor).toHaveBeenCalledWith(MODEL);
     }
   );

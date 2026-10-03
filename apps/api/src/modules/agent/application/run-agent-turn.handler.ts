@@ -60,6 +60,7 @@ import {
   segmentLimits,
   type SegmentLimits,
 } from '../../ai/domain/execution-context/segment-policy';
+import type { TurnEffort } from '../../ai/domain/model-catalog/effort-policy';
 import {
   MODEL_CHOICE,
   type ModelChoice,
@@ -1489,14 +1490,14 @@ export class RunAgentTurnHandler {
   }
 
   /**
-   * The effort for one model this turn serves. Every model a turn serves shares
+   * The efforts for one model this turn serves. Every model a turn serves shares
    * the turn's billing — a BYOK turn never fails over — so the audience is the
    * turn's, not the candidate provider's. A failed lookup degrades to no
    * reasoning option: it must not fail the model the chain is about to try.
    */
   private async effortForModel(
     request: TurnEffortRequest
-  ): Promise<ReasoningEffort | undefined> {
+  ): Promise<TurnEffort | undefined> {
     try {
       return await this.turnEffort.resolve(request);
     } catch (error) {
