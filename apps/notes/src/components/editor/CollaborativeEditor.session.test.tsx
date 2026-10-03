@@ -50,6 +50,7 @@ vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
       isConnected: true,
       isSynced: true,
       readOnly: false,
+      awareness: null,
     };
   },
 }));
@@ -57,12 +58,10 @@ vi.mock('@/hooks', () => ({
   useCollaborativeEditor: () => ({
     yDoc: {},
     yXmlFragment: null,
-    awareness: null,
     currentUser: { name: 'Tester', color: '#000' },
     isReady: false,
   }),
   useActiveCollaborators: () => [],
-  usePresenceBroadcast: () => undefined,
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

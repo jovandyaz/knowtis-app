@@ -2,8 +2,6 @@ import type { Editor } from '@tiptap/react';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
-import type { CollaborativeUser } from '@knowtis/crdt';
-
 export type DocumentConnectionState =
   | 'connecting'
   | 'syncing'
@@ -44,8 +42,8 @@ export interface InternalEditorProps {
   noteId: string;
   yDoc: Y.Doc;
   yXmlFragment: Y.XmlFragment;
+  /** The open connection's presence; the editor follows it without being recreated. */
   awareness: Awareness | null;
-  currentUser: CollaborativeUser;
   initialContent: string;
   onUpdate: (content: string) => void;
   placeholder: string[];

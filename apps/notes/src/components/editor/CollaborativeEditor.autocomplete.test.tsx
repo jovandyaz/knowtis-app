@@ -49,18 +49,17 @@ vi.mock('@/collaboration/useHocuspocusCollaboration', () => ({
     isConnected: true,
     isSynced: true,
     readOnly: transportReadOnly,
+    awareness: null,
   }),
 }));
 vi.mock('@/hooks', () => ({
   useCollaborativeEditor: () => ({
     yDoc: doc,
     yXmlFragment: doc.getXmlFragment(YJS_XML_FRAGMENT_NAME),
-    awareness: null,
     currentUser: { name: 'Tester', color: '#000' },
     isReady: true,
   }),
   useActiveCollaborators: () => [],
-  usePresenceBroadcast: () => undefined,
   useAISettings: (enabled?: boolean) => {
     preferencesQueryEnabled = enabled;
     return { data: preferences, isError: preferencesFailed };

@@ -7,10 +7,7 @@ import {
   getInstanceId,
   getRandomCursorColor,
 } from './collaboration';
-import {
-  BROADCAST_MESSAGE_TYPES,
-  COLLAB_CONFIG,
-} from './collaboration.constants';
+import { BROADCAST_MESSAGE_TYPES } from './collaboration.constants';
 import type {
   BroadcastMessage,
   CollaborativeUser,
@@ -18,7 +15,7 @@ import type {
 import type { DocumentResources } from './YjsProvider.types';
 
 /**
- * Creates initial user state from localStorage or generates new one
+ * Creates this tab's collaborative identity
  */
 export function createInitialUser(): CollaborativeUser {
   const id = getInstanceId();
@@ -29,72 +26,34 @@ export function createInitialUser(): CollaborativeUser {
   };
 }
 
-/**
- * Generates a unique room name for a note
- */
-export function getRoomName(noteId: string): string {
-  return `${COLLAB_CONFIG.ROOM_PREFIX}-${noteId}`;
+function isBroadcastMessage(data: unknown): data is BroadcastMessage {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'type' in data &&
+    data.type === BROADCAST_MESSAGE_TYPES.UPDATE &&
+    'noteId' in data &&
+    typeof data.noteId === 'string' &&
+    'updates' in data &&
+    Array.isArray(data.updates)
+  );
 }
 
 /**
- * Handles incoming broadcast messages and updates state accordingly
+ * Applies the document updates other tabs post on the broadcast channel and
+ * ignores any other message, such as one from a tab on an older build
  */
-export function createMessageHandler(
-  resources: DocumentResources,
-  setActiveUsers: React.Dispatch<
-    React.SetStateAction<Map<string, CollaborativeUser[]>>
-  >
-) {
-  return (event: MessageEvent<BroadcastMessage>) => {
+export function createMessageHandler(resources: DocumentResources) {
+  return (event: MessageEvent<unknown>) => {
     try {
       const message = event.data;
-      const { type, noteId } = message;
+      if (!isBroadcastMessage(message)) {
+        return;
+      }
 
-      switch (type) {
-        case BROADCAST_MESSAGE_TYPES.PRESENCE: {
-          setActiveUsers((prev) => {
-            const newMap = new Map(prev);
-            const noteUsers = [...(newMap.get(noteId) || [])];
-            const existingIndex = noteUsers.findIndex(
-              (u) => u.id === message.user.id
-            );
-
-            const userWithTimestamp = {
-              ...message.user,
-              lastSeen: Date.now(),
-            };
-
-            if (existingIndex >= 0) {
-              noteUsers[existingIndex] = userWithTimestamp;
-            } else {
-              noteUsers.push(userWithTimestamp);
-            }
-
-            newMap.set(noteId, noteUsers);
-            return newMap;
-          });
-          break;
-        }
-
-        case BROADCAST_MESSAGE_TYPES.UPDATE: {
-          const doc = resources.docs.get(noteId);
-          if (doc && message.updates) {
-            Y.applyUpdate(doc, new Uint8Array(message.updates));
-          }
-          break;
-        }
-
-        case BROADCAST_MESSAGE_TYPES.LEAVE: {
-          setActiveUsers((prev) => {
-            const newMap = new Map(prev);
-            const noteUsers = (newMap.get(noteId) || []).filter(
-              (u) => u.id !== message.user.id
-            );
-            newMap.set(noteId, noteUsers);
-            return newMap;
-          });
-          break;
-        }
+      const doc = resources.docs.get(message.noteId);
+      if (doc) {
+        Y.applyUpdate(doc, new Uint8Array(message.updates));
       }
     } catch (error) {
       logger.error('Error handling collaboration message', {
@@ -106,7 +65,6 @@ export function createMessageHandler(
 }
 
 export function cleanupResources(resources: DocumentResources): void {
-  resources.awareness.forEach((awareness) => awareness.destroy());
   resources.docs.forEach((doc) => doc.destroy());
   resources.persistence.forEach((persistence) => persistence.destroy());
 }

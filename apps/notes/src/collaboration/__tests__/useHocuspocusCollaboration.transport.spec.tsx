@@ -4,7 +4,11 @@ import { act, renderHook } from '@testing-library/react';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Awareness } from 'y-protocols/awareness';
+import {
+  applyAwarenessUpdate,
+  Awareness,
+  encodeAwarenessUpdate,
+} from 'y-protocols/awareness';
 import { writeSyncStep2 } from 'y-protocols/sync';
 import * as Y from 'yjs';
 
@@ -17,6 +21,9 @@ import { setTokenStorage } from '../token-provider';
 import { useHocuspocusCollaboration } from '../useHocuspocusCollaboration';
 
 const NOTE_ID = 'transport-recovery';
+const USER = { name: 'Brave Otter', color: '#4ade80' };
+const COLLABORATOR = { name: 'Quiet Heron', color: '#22d3ee' };
+const CURSOR_MOVES = 20;
 
 /** Only the network boundary is controlled: the hook, provider, retry timers,
  *  authentication messages, and Yjs synchronization use their actual code. */
@@ -85,6 +92,34 @@ class ControlledWebSocket extends EventTarget {
   get authenticationAttempts() {
     return this.authenticationTokens.length;
   }
+
+  get awarenessUpdates() {
+    return this.sent.flatMap((data) => {
+      if (data.length === 1) {
+        return [];
+      }
+      const decoder = decoding.createDecoder(data);
+      decoding.readVarString(decoder);
+      if (decoding.readVarUint(decoder) !== MessageType.Awareness) {
+        return [];
+      }
+      return [decoding.readVarUint8Array(decoder)];
+    });
+  }
+}
+
+function presenceOnServer(clientId: number) {
+  const serverDoc = new Y.Doc();
+  const serverAwareness = new Awareness(serverDoc);
+  for (const socket of ControlledWebSocket.instances) {
+    for (const update of socket.awarenessUpdates) {
+      applyAwarenessUpdate(serverAwareness, update, socket);
+    }
+  }
+  const state = serverAwareness.getStates().get(clientId);
+  serverAwareness.destroy();
+  serverDoc.destroy();
+  return state;
 }
 
 function message(
@@ -126,7 +161,6 @@ function deny(socket: ControlledWebSocket, reason: string) {
 
 describe('useHocuspocusCollaboration — actual transport recovery', () => {
   let yDoc: Y.Doc;
-  let awareness: Awareness;
   let tokens: TokenStorage;
   let unmount: (() => void) | undefined;
 
@@ -138,14 +172,12 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
     ControlledWebSocket.instances = [];
     ControlledWebSocket.onOpen = () => undefined;
     yDoc = new Y.Doc();
-    awareness = new Awareness(yDoc);
     yDoc.getMap('draft').set('text', 'keep');
   });
 
   afterEach(() => {
     unmount?.();
     unmount = undefined;
-    awareness.destroy();
     yDoc.destroy();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -159,7 +191,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
       useHocuspocusCollaboration({
         noteId: NOTE_ID,
         yDoc,
-        awareness,
+        user: USER,
         serverUrl: 'ws://controlled',
         userId: 'user-1',
         onSessionExpired,
@@ -194,7 +226,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
         isSynced: false,
       });
       expect(yDoc.getMap('draft').get('text')).toBe('keep');
-      expect(awareness.doc).toBe(yDoc);
+      expect(result.current.awareness?.doc).toBe(yDoc);
       expect(onSessionExpired).not.toHaveBeenCalled();
       expect(onAuthRefresh).not.toHaveBeenCalled();
       await act(async () => vi.advanceTimersByTimeAsync(30000));
@@ -263,7 +295,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
           noteId: NOTE_ID,
           userId,
           yDoc,
-          awareness,
+          user: USER,
           serverUrl: 'ws://controlled',
         }),
       { initialProps: { userId: 'user-a' } }
@@ -311,7 +343,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
           noteId: NOTE_ID,
           userId,
           yDoc,
-          awareness,
+          user: USER,
           serverUrl: 'ws://controlled',
           onSessionExpired,
           onAuthRefresh,
@@ -334,6 +366,7 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
       isConnected: false,
       isSynced: false,
       readOnly: true,
+      awareness: null,
     });
   });
 
@@ -342,6 +375,10 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
       setTimeout(() => authenticateAndSync(socket), 1);
     };
     const { result } = mount();
+    const awareness = result.current.awareness;
+    if (!awareness) {
+      throw new Error('The connection opened without presence');
+    }
     const destroyAwareness = vi.spyOn(awareness, 'destroy');
     await act(async () => vi.advanceTimersByTimeAsync(20));
     const socket = ControlledWebSocket.instances[0];
@@ -370,5 +407,141 @@ describe('useHocuspocusCollaboration — actual transport recovery', () => {
     });
     expect(yDoc.getMap('draft').get('text')).toBe('keep');
     expect(destroyAwareness).not.toHaveBeenCalled();
+    expect(result.current.awareness).toBe(awareness);
+  });
+});
+
+describe('useHocuspocusCollaboration — presence on every connection', () => {
+  let yDoc: Y.Doc;
+  let tokens: TokenStorage;
+  const unmounts: Array<() => void> = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    tokens = createTokenStorage();
+    tokens.setAccessToken('token-a');
+    setTokenStorage(tokens);
+    vi.stubGlobal('WebSocket', ControlledWebSocket);
+    ControlledWebSocket.instances = [];
+    ControlledWebSocket.onOpen = (socket) => {
+      setTimeout(() => authenticateAndSync(socket), 1);
+    };
+    yDoc = new Y.Doc();
+  });
+
+  afterEach(() => {
+    unmounts.splice(0).forEach((unmount) => unmount());
+    yDoc.destroy();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    setTokenStorage(createTokenStorage());
+  });
+
+  function connect(
+    initialProps: { userId: string },
+    options: { reactStrictMode?: boolean } = {}
+  ) {
+    const hook = renderHook(
+      ({ userId }: { userId: string }) =>
+        useHocuspocusCollaboration({
+          noteId: NOTE_ID,
+          userId,
+          yDoc,
+          user: USER,
+          serverUrl: 'ws://controlled',
+        }),
+      { initialProps, ...options }
+    );
+    unmounts.push(hook.unmount);
+    return hook;
+  }
+
+  function lastSocket() {
+    const socket = ControlledWebSocket.instances.at(-1);
+    if (!socket) {
+      throw new Error('No connection was opened');
+    }
+    return socket;
+  }
+
+  it('broadcasts the local user on the connection opened for another user', async () => {
+    const hook = connect({ userId: 'user-a' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
+    act(() => {
+      for (let position = 1; position <= CURSOR_MOVES; position++) {
+        hook.result.current.awareness?.setLocalStateField('cursor', {
+          anchor: position,
+          head: position,
+        });
+      }
+    });
+
+    tokens.setAccessToken('token-b');
+    hook.rerender({ userId: 'user-b' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+
+    expect(ControlledWebSocket.instances).toHaveLength(2);
+    expect(hook.result.current.awareness?.getLocalState()?.['user']).toEqual(
+      USER
+    );
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
+  });
+
+  it('receives collaborators on the connection opened for another user', async () => {
+    const hook = connect({ userId: 'user-a' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+    tokens.setAccessToken('token-b');
+    hook.rerender({ userId: 'user-b' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+    const collaboratorDoc = new Y.Doc();
+    const collaborator = new Awareness(collaboratorDoc);
+    collaborator.setLocalStateField('user', COLLABORATOR);
+    const awareness = hook.result.current.awareness;
+    const changes = vi.fn();
+    awareness?.on('change', changes);
+
+    act(() =>
+      lastSocket().receive(
+        message(MessageType.Awareness, (encoder) =>
+          encoding.writeVarUint8Array(
+            encoder,
+            encodeAwarenessUpdate(collaborator, [collaborator.clientID])
+          )
+        )
+      )
+    );
+
+    expect(changes).toHaveBeenCalledOnce();
+    expect(awareness?.getStates().get(collaborator.clientID)).toEqual({
+      user: COLLABORATOR,
+    });
+    collaborator.destroy();
+    collaboratorDoc.destroy();
+  });
+
+  it('broadcasts the local user again when the same note is opened a second time', async () => {
+    const first = connect({ userId: 'user-a' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+    first.unmount();
+    unmounts.splice(unmounts.indexOf(first.unmount), 1);
+
+    const second = connect({ userId: 'user-a' });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+
+    expect(second.result.current.awareness?.getLocalState()?.['user']).toEqual(
+      USER
+    );
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
+  });
+
+  it('broadcasts the local user after a StrictMode double effect', async () => {
+    const hook = connect({ userId: 'user-a' }, { reactStrictMode: true });
+    await act(async () => vi.advanceTimersByTimeAsync(20));
+
+    expect(hook.result.current.awareness?.getLocalState()?.['user']).toEqual(
+      USER
+    );
+    expect(presenceOnServer(yDoc.clientID)?.['user']).toEqual(USER);
   });
 });

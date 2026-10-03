@@ -7,7 +7,7 @@ import {
   type onAuthenticatedParameters,
   type onStatusParameters,
 } from '@hocuspocus/provider';
-import type { Awareness } from 'y-protocols/awareness';
+import { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
 import {
@@ -15,6 +15,7 @@ import {
   deriveWsBaseUrl,
   type RefreshOutcome,
 } from '@knowtis/api-client';
+import type { CollaborativeUser } from '@knowtis/crdt';
 import {
   COLLABORATION_CLOSE_REASON,
   HANDSHAKE_FAILURE,
@@ -44,7 +45,8 @@ interface UseHocuspocusCollaborationOptions {
   /** The signed-in user the connection authenticates as: another user gets a new connection, no user gets none. */
   userId: string | undefined;
   yDoc: Y.Doc;
-  awareness: Awareness | null;
+  /** Who the local user appears as to collaborators on every connection. */
+  user: Pick<CollaborativeUser, 'name' | 'color'>;
   serverUrl: string;
   enabled?: boolean;
   shareToken?: string | undefined;
@@ -63,6 +65,9 @@ interface UseHocuspocusCollaborationReturn {
   isConnected: boolean;
   isSynced: boolean;
   readOnly: boolean;
+  /** The open connection's presence, `null` without one. Each connection owns
+   *  a fresh instance because tearing a provider down destroys its awareness. */
+  awareness: Awareness | null;
 }
 
 function mapStatus(status: WebSocketStatus): CollaborationStatus {
@@ -82,6 +87,23 @@ function mapStatus(status: WebSocketStatus): CollaborationStatus {
   }
 }
 
+// Peers keep a client's awareness clock after it leaves and every connection
+// reuses the doc's clientID, so a fresh clock at 0 would be ignored by them.
+const lastPresenceClocks = new WeakMap<Y.Doc, number>();
+
+function createConnectionAwareness(
+  yDoc: Y.Doc,
+  user: Pick<CollaborativeUser, 'name' | 'color'>
+): Awareness {
+  const awareness = new Awareness(yDoc);
+  const clock = lastPresenceClocks.get(yDoc);
+  if (clock !== undefined) {
+    awareness.meta.set(awareness.clientID, { clock, lastUpdated: Date.now() });
+  }
+  awareness.setLocalStateField('user', user);
+  return awareness;
+}
+
 function buildUrl(serverUrl: string, shareToken: string | undefined): string {
   if (!shareToken) {
     return serverUrl;
@@ -96,7 +118,7 @@ export function useHocuspocusCollaboration({
   noteId,
   userId,
   yDoc,
-  awareness,
+  user,
   serverUrl,
   enabled = true,
   shareToken,
@@ -108,6 +130,8 @@ export function useHocuspocusCollaboration({
   const [status, setStatus] = useState<CollaborationStatus>('connecting');
   const [isSynced, setIsSynced] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
+  const [awareness, setAwareness] = useState<Awareness | null>(null);
+  const { name: userName, color: userColor } = user;
   const onEditDeniedRef = useRef(onEditDenied);
   const onAccessChangedRef = useRef(onAccessChanged);
   useEffect(() => {
@@ -199,8 +223,8 @@ export function useHocuspocusCollaboration({
           clearRecovery();
           pauseEditing();
           setStatus('disconnected');
-          provider.destroy();
-          transport.destroy();
+          setAwareness(null);
+          closeConnection();
           onSessionExpiredRef.current?.();
         },
         onError: () =>
@@ -218,11 +242,25 @@ export function useHocuspocusCollaboration({
       maxAttempts: 1,
       onClose: () => transport.disconnect(),
     });
+    const connectionAwareness = createConnectionAwareness(yDoc, {
+      name: userName,
+      color: userColor,
+    });
+    const closeConnection = () => {
+      provider.destroy();
+      transport.destroy();
+      const presence = connectionAwareness.meta.get(
+        connectionAwareness.clientID
+      );
+      if (presence) {
+        lastPresenceClocks.set(yDoc, presence.clock);
+      }
+    };
     const provider = new HocuspocusProvider({
       websocketProvider: transport,
       name: noteId,
       document: yDoc,
-      awareness,
+      awareness: connectionAwareness,
       token: getCollaborationToken,
       onStatus: ({ status: wsStatus }: onStatusParameters) => {
         if (disposed || halted) {
@@ -313,20 +351,30 @@ export function useHocuspocusCollaboration({
       },
     });
     provider.attach();
+    setAwareness(connectionAwareness);
     void transport.connect().catch(() => scheduleRecovery(500));
 
     return () => {
       disposed = true;
       clearRecovery();
-      provider.destroy();
-      transport.destroy();
+      closeConnection();
       setStatus('connecting');
       setIsSynced(false);
       setReadOnly(false);
+      setAwareness(null);
     };
     // Keyed on the id, not just its presence: a live connection keeps the
     // identity it authenticated with, so each user needs a connection of their own.
-  }, [enabled, noteId, userId, yDoc, awareness, serverUrl, shareToken]);
+  }, [
+    enabled,
+    noteId,
+    userId,
+    yDoc,
+    userName,
+    userColor,
+    serverUrl,
+    shareToken,
+  ]);
 
   // Every handshake needs a JWT, share token or not, so without a user there
   // is nothing to connect as.
@@ -336,6 +384,7 @@ export function useHocuspocusCollaboration({
       isConnected: false,
       isSynced: false,
       readOnly: true,
+      awareness: null,
     };
   }
 
@@ -344,6 +393,7 @@ export function useHocuspocusCollaboration({
     isConnected: status === 'connected',
     isSynced,
     readOnly,
+    awareness,
   };
 }
 

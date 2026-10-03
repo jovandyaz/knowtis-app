@@ -71,8 +71,6 @@ function collaborativeEditorExtensions(): AnyExtension[] {
       NOTE_ID,
       doc,
       doc.getXmlFragment(YJS_XML_FRAGMENT_NAME),
-      null,
-      { id: 'user-1', name: 'Tester', color: '#000000' },
       true,
       true
     )

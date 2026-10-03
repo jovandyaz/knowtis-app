@@ -12,7 +12,6 @@ import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { useEditorExtensions } from './useEditorExtensions';
 
 const NOTE_ID = 'note-1';
-const USER = { id: 'user-1', name: 'Tester', color: '#000000' };
 const EXISTING_TAG = 'projects';
 const SLASH_COMMAND = { name: /ai\.slash\.heading1/ };
 const TAG_OPTION = { name: EXISTING_TAG };
@@ -37,8 +36,6 @@ function NoteEditor({ onCreate }: { onCreate: (created: Editor) => void }) {
     NOTE_ID,
     doc,
     doc.getXmlFragment(YJS_XML_FRAGMENT_NAME),
-    null,
-    USER,
     true,
     false
   );

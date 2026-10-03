@@ -1,62 +1,52 @@
 import { useEffect, useState } from 'react';
 
-import {
-  useYjs,
-  type AwarenessState,
-  type CollaborativeUser,
-} from '@knowtis/crdt';
+import type { Awareness } from 'y-protocols/awareness';
 
-interface UseActiveCollaboratorsOptions {
-  enabled?: boolean;
-}
+import type { AwarenessState, CollaborativeUser } from '@knowtis/crdt';
 
-export function useActiveCollaborators(
-  noteId: string,
-  { enabled = true }: UseActiveCollaboratorsOptions = {}
-): CollaborativeUser[] {
-  const { getAwareness } = useYjs();
-  const [collaborators, setCollaborators] = useState<CollaborativeUser[]>([]);
+function remoteCollaborators(awareness: Awareness): CollaborativeUser[] {
+  const states = awareness.getStates() as Map<number, AwarenessState>;
+  const users: CollaborativeUser[] = [];
 
-  useEffect(() => {
-    if (!enabled) {
+  states.forEach((state, clientId) => {
+    if (clientId === awareness.clientID) {
       return;
     }
 
-    const awareness = getAwareness(noteId);
+    if (state.user?.name && state.user?.color && state.cursor) {
+      users.push({
+        id: String(clientId),
+        name: state.user.name,
+        color: state.user.color,
+      });
+    }
+  });
+
+  return users;
+}
+
+/** Remote users present on `awareness` (the open connection's), none without one. */
+export function useActiveCollaborators(
+  awareness: Awareness | null
+): CollaborativeUser[] {
+  const [collaborators, setCollaborators] = useState<CollaborativeUser[]>([]);
+
+  useEffect(() => {
     if (!awareness) {
       return;
     }
 
-    const updateCollaborators = () => {
-      const states = awareness.getStates() as Map<number, AwarenessState>;
-      const localClientId = awareness.clientID;
-      const users: CollaborativeUser[] = [];
-
-      states.forEach((state, clientId) => {
-        if (clientId === localClientId) {
-          return;
-        }
-
-        if (state.user?.name && state.user?.color && state.cursor) {
-          users.push({
-            id: String(clientId),
-            name: state.user.name,
-            color: state.user.color,
-          });
-        }
-      });
-
-      setCollaborators(users);
-    };
+    const updateCollaborators = () =>
+      setCollaborators(remoteCollaborators(awareness));
 
     updateCollaborators();
-
     awareness.on('change', updateCollaborators);
 
     return () => {
       awareness.off('change', updateCollaborators);
+      setCollaborators([]);
     };
-  }, [noteId, getAwareness, enabled]);
+  }, [awareness]);
 
   return collaborators;
 }
