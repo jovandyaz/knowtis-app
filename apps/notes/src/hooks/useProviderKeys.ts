@@ -45,6 +45,7 @@ export function useSetProviderKey() {
       qc.setQueryData(providerKeysQueryKeys.list(), keys);
       // Which models a caller may run is derived from the keys they hold.
       void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.list() });
+      void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.preferences() });
       void qc.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
     },
   });

@@ -148,6 +148,20 @@ describe('provider key mutations and the model list', () => {
     });
   });
 
+  it('refreshes the preferences after a key is stored, since the server may clear the ones bound to its provider', async () => {
+    vi.mocked(aiKeysApi.set).mockResolvedValue(mockKeys);
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useSetProviderKey(), { wrapper });
+
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-test' });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.preferences(),
+    });
+  });
+
   // Deleting a key also clears a stored model override billed to it on the
   // server, so the cached preferences would otherwise keep naming a dead pick.
   it('refreshes the preferences after a key is removed', async () => {
