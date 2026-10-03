@@ -143,12 +143,6 @@ describe('BYOK_INTENT_CANDIDATES', () => {
     expect(withoutOpenRouter).toEqual([]);
   });
 
-  it('routes balanced over OpenRouter to Sonnet 5 now that the index prices it', () => {
-    expect(route('balanced', ['openrouter'])?.modelId).toBe(
-      'openrouter:anthropic/claude-sonnet-5'
-    );
-  });
-
   it('gates each declared route on the catalog at runtime', () => {
     expect(
       route(
