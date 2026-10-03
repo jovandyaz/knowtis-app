@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import type {
   ModelCatalog,
@@ -8,18 +8,22 @@ import type {
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODEL_IDS } from '../../domain/model-catalog/selectable-models.catalog';
-import { ModelCatalogAdapter } from './model-catalog.adapter';
+import { ModelIndexCache } from './model-index.cache';
 import { PromotedModelsCache } from './promoted-models.cache';
 
 @Injectable()
 export class CompositeModelCatalog implements ModelCatalog {
+  private readonly logger = new Logger(CompositeModelCatalog.name);
+  private readonly warnedModels = new Set<string>();
+  private readonly warnedPartialModels = new Set<string>();
+
   constructor(
     private readonly promoted: PromotedModelsCache,
-    private readonly inner: ModelCatalogAdapter
+    private readonly index: ModelIndexCache
   ) {}
 
   isSupported(modelId: string): boolean {
-    return this.find(modelId) !== undefined || this.inner.isSupported(modelId);
+    return this.find(modelId) !== undefined || this.index.isSupported(modelId);
   }
 
   getPricing(modelId: string): ModelPricing | undefined {
@@ -30,7 +34,9 @@ export class CompositeModelCatalog implements ModelCatalog {
         outputCostPerToken: model.outputCostPerToken,
       };
     }
-    return this.inner.getPricing(modelId);
+    const pricing = this.index.getPricing(modelId);
+    this.warnIfUnpriced(modelId, pricing);
+    return pricing;
   }
 
   getContextWindow(modelId: string): ModelContextWindow | undefined {
@@ -41,7 +47,7 @@ export class CompositeModelCatalog implements ModelCatalog {
         maxOutputTokens: model.maxOutputTokens ?? undefined,
       };
     }
-    return this.inner.getContextWindow(modelId);
+    return this.index.getContextWindow(modelId);
   }
 
   /** A curated id is never overridden by a promoted model — matches the exclusion in SelectableModelsService.offered(). */
@@ -50,5 +56,32 @@ export class CompositeModelCatalog implements ModelCatalog {
       return undefined;
     }
     return this.promoted.snapshot().find((model) => model.id === modelId);
+  }
+
+  private warnIfUnpriced(
+    modelId: string,
+    pricing: ModelPricing | undefined
+  ): void {
+    if (pricing === undefined && !this.warnedModels.has(modelId)) {
+      this.warnedModels.add(modelId);
+      this.logger.warn({
+        event: 'ai.pricing.unknown_model',
+        model: modelId,
+        impact: 'usage recorded with costUsd=0',
+      });
+    }
+    if (
+      pricing !== undefined &&
+      (pricing.inputCostPerToken === undefined) !==
+        (pricing.outputCostPerToken === undefined) &&
+      !this.warnedPartialModels.has(modelId)
+    ) {
+      this.warnedPartialModels.add(modelId);
+      this.logger.warn({
+        event: 'ai.pricing.partial_model',
+        model: modelId,
+        impact: 'the unpriced side of each completion is charged at $0',
+      });
+    }
   }
 }

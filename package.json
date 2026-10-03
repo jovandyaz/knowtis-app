@@ -21,7 +21,7 @@
     "setup": "node tools/setup.mjs",
     "setup:agents": "node tools/setup-agent-plugins.mjs",
     "skills:check": "node tools/verify-agent-skills.mjs",
-    "catalog:refresh-snapshot": "node tools/refresh-model-catalog.mjs",
+    "catalog:refresh-snapshot": "nx run api:refresh-model-index-snapshot",
     "lint": "nx run-many -t lint",
     "lint:config": "node --test 'tools/__tests__/*.test.mjs'",
     "lint:fix": "nx run-many -t lint -- --fix",

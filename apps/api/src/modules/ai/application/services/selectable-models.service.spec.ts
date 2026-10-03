@@ -6,7 +6,7 @@ import type { ModelIntent } from '@knowtis/shared-types';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
-import type { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
+import type { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
@@ -300,7 +300,7 @@ describe('SelectableModelsService', () => {
       );
       await promoted.onModuleInit();
       const service = makeSelectableModelsService(
-        new CompositeModelCatalog(promoted, curated as ModelCatalogAdapter),
+        new CompositeModelCatalog(promoted, curated as ModelIndexCache),
         { isModelAvailable: () => true },
         promoted
       );

@@ -23,7 +23,8 @@ export interface ModelIndexWriteResult {
   readonly rejected: IndexSyncPlan['rejected'];
 }
 
-function providerBatches(
+/** The index rows one sync pass reads, per provider. A `null` models.dev read yields only the OpenRouter batch. */
+export function providerBatches(
   openRouter: UpstreamCatalog,
   modelsDev: ModelsDevCatalog | null
 ): ProviderBatch[] {

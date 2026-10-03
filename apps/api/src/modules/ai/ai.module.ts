@@ -63,7 +63,7 @@ import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.ser
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
 import { LiteLlmPricesHttpClient } from './infrastructure/catalog/litellm-prices.client';
-import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
+import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
 import { ModelIndexWriter } from './infrastructure/catalog/model-index.writer';
 import { ModelsDevHttpClient } from './infrastructure/catalog/models-dev.client';
 import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-models.client';
@@ -147,7 +147,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       provide: SYSTEM_PROVIDER_KEYS_SOURCE,
       useExisting: SystemProviderKeysService,
     },
-    ModelCatalogAdapter,
+    ModelIndexCache,
     PromotedModelsCache,
     { provide: MODEL_CATALOG, useClass: CompositeModelCatalog },
     {
