@@ -88,6 +88,18 @@ describe('aiModelsApi', () => {
     await expect(aiModelsApi.getModels()).resolves.toEqual(CATALOG);
   });
 
+  it('getModels keeps an intent unavailable for a reason this build does not know', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...CATALOG,
+      intents: [
+        CATALOG.intents[0],
+        { intent: 'powerful', available: false, reason: 'quota_exhausted' },
+      ],
+    });
+
+    await expect(aiModelsApi.getModels()).resolves.toEqual(CATALOG);
+  });
+
   it('getModels keeps a model serving an intent this build does not know, as a plain model', async () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       ...CATALOG,

@@ -5,6 +5,7 @@ import {
   type AIPreferences,
   type IntentAvailability,
   type ModelCatalogResponse,
+  type ModelIntent,
   type SelectableModel,
   type UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
@@ -47,20 +48,24 @@ function withKnownIntent({
     : model;
 }
 
-function isIntentAvailability(
+function availabilityOf(
+  intent: ModelIntent,
   entry: Record<string, unknown>
-): entry is IntentAvailability {
-  if (entry['available'] === true) {
-    return (
-      typeof entry['modelId'] === 'string' &&
-      typeof entry['substituted'] === 'boolean'
-    );
+): IntentAvailability | null {
+  const { available, modelId, substituted, reason } = entry;
+  if (available === true) {
+    return typeof modelId === 'string' && typeof substituted === 'boolean'
+      ? { intent, available, modelId, substituted }
+      : null;
   }
-  return entry['available'] === false && entry['reason'] === NO_ROUTE;
+  return available === false && typeof reason === 'string'
+    ? { intent, available, reason: NO_ROUTE }
+    : null;
 }
 
-// A newer API may serve an intent this build has no row for: that entry is
-// dropped rather than failing the whole catalog.
+// A newer API may serve an intent this build has no row for, or name a reason
+// it does not know: the intent is dropped, the reason read as no route, rather
+// than failing the whole catalog.
 function knownIntents(entries: unknown[]): IntentAvailability[] | null {
   const known: IntentAvailability[] = [];
   for (const entry of entries) {
@@ -70,10 +75,11 @@ function knownIntents(entries: unknown[]): IntentAvailability[] | null {
     if (!isModelIntent(entry['intent'])) {
       continue;
     }
-    if (!isIntentAvailability(entry)) {
+    const availability = availabilityOf(entry['intent'], entry);
+    if (!availability) {
       return null;
     }
-    known.push(entry);
+    known.push(availability);
   }
   return known;
 }
