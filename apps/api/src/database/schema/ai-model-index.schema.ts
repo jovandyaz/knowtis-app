@@ -34,6 +34,14 @@ const COST_SCALE = 15;
 const ENUM_COLUMN_LENGTH = 16;
 const FAMILY_MAX_LENGTH = 64;
 
+/** Varchar lengths of the `ai_model_index` columns an upstream read fills with free text. */
+export const AI_MODEL_INDEX_MAX_LENGTHS = {
+  id: MODEL_ID_MAX_LENGTH,
+  name: CATALOG_LABEL_MAX_LENGTH,
+  family: FAMILY_MAX_LENGTH,
+  canonical: MODEL_ID_MAX_LENGTH,
+} as const;
+
 function costColumn(name: string) {
   return numeric(name, {
     precision: COST_PRECISION,
@@ -45,12 +53,14 @@ function costColumn(name: string) {
 export const aiModelIndex = pgTable(
   'ai_model_index',
   {
-    id: varchar('id', { length: MODEL_ID_MAX_LENGTH }).primaryKey(),
+    id: varchar('id', { length: AI_MODEL_INDEX_MAX_LENGTHS.id }).primaryKey(),
     provider: varchar('provider', { length: ENUM_COLUMN_LENGTH })
       .$type<IndexProvider>()
       .notNull(),
-    name: varchar('name', { length: CATALOG_LABEL_MAX_LENGTH }).notNull(),
-    family: varchar('family', { length: FAMILY_MAX_LENGTH }),
+    name: varchar('name', {
+      length: AI_MODEL_INDEX_MAX_LENGTHS.name,
+    }).notNull(),
+    family: varchar('family', { length: AI_MODEL_INDEX_MAX_LENGTHS.family }),
     releasedAt: date('released_at', { mode: 'string' }),
     status: varchar('status', { length: ENUM_COLUMN_LENGTH })
       .$type<ModelStatus>()
@@ -72,7 +82,9 @@ export const aiModelIndex = pgTable(
     maxInputTokens: integer('max_input_tokens'),
     maxOutputTokens: integer('max_output_tokens'),
     reasoning: jsonb('reasoning').$type<IndexedReasoning | null>(),
-    canonical: varchar('canonical', { length: MODEL_ID_MAX_LENGTH }).notNull(),
+    canonical: varchar('canonical', {
+      length: AI_MODEL_INDEX_MAX_LENGTHS.canonical,
+    }).notNull(),
     openWeights: boolean('open_weights'),
     retiresAt: date('retires_at', { mode: 'string' }),
     source: varchar('source', { length: ENUM_COLUMN_LENGTH })

@@ -1,7 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { fromOpenRouter, MODELS_DEV_PROVIDERS } from '@knowtis/ai-gateway';
+import {
+  fromOpenRouter,
+  MODELS_DEV_PROVIDERS,
+  type IndexedModel,
+  type IndexProvider,
+} from '@knowtis/ai-gateway';
 
+import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
 import { canConcludeAbsence } from '../../domain/model-catalog/curated-watch';
 import {
   planIndexSync,
@@ -60,6 +66,22 @@ export function providerBatches(
   ];
 }
 
+function fitsColumns(row: IndexedModel): boolean {
+  return (
+    row.id.length <= AI_MODEL_INDEX_MAX_LENGTHS.id &&
+    row.name.length <= AI_MODEL_INDEX_MAX_LENGTHS.name &&
+    (row.family?.length ?? 0) <= AI_MODEL_INDEX_MAX_LENGTHS.family &&
+    row.canonical.length <= AI_MODEL_INDEX_MAX_LENGTHS.canonical
+  );
+}
+
+function idsOf(
+  rows: readonly IndexedModel[],
+  provider: IndexProvider
+): string[] {
+  return rows.filter((row) => row.provider === provider).map((row) => row.id);
+}
+
 /** Writes one sync pass into the model index. */
 @Injectable()
 export class ModelIndexWriter {
@@ -74,7 +96,8 @@ export class ModelIndexWriter {
    * Upserts the rows both reads produced, then marks absent the rows of each
    * provider whose batch may conclude absence, except the ids upstream
    * published but the read discarded. A batch that would leave unserved a floor
-   * model its provider serves now is written not at all. A `null` models.dev
+   * model its provider serves now is written not at all, and a row a column
+   * cannot hold is skipped and kept from absence. A `null` models.dev
    * read (its fetch failed) leaves the providers it serves untouched. Rejects
    * when a repository call fails.
    */
@@ -96,15 +119,24 @@ export class ModelIndexWriter {
       );
     }
 
+    const upserts = plan.upserts.filter(fitsColumns);
+    const skipped = plan.upserts.filter((row) => !fitsColumns(row));
+    if (skipped.length > 0) {
+      this.logger.warn({
+        event: 'ai.model_index.rows_skipped',
+        count: skipped.length,
+        models: skipped.slice(0, DISCARD_LOG_SAMPLE_SIZE).map((row) => row.id),
+      });
+    }
+
     const seenAt = new Date();
-    const indexed = await this.repo.upsertMany(plan.upserts, seenAt);
+    const indexed = await this.repo.upsertMany(upserts, seenAt);
     let absent = 0;
     for (const provider of plan.concludeAbsence) {
-      const retired = await this.repo.markAbsent(
-        provider,
-        seenAt,
-        batchOf.get(provider)?.discarded ?? []
-      );
+      const retired = await this.repo.markAbsent(provider, seenAt, [
+        ...(batchOf.get(provider)?.discarded ?? []),
+        ...idsOf(skipped, provider),
+      ]);
       absent += retired.length;
       if (retired.length > 0) {
         this.logger.log({

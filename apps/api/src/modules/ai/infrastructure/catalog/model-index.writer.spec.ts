@@ -10,6 +10,7 @@ import {
   type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
 
+import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
 import { FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
@@ -529,6 +530,101 @@ describe('ModelIndexWriter', () => {
     );
     expect(absenceConcludedFor(repo)).toContain('anthropic');
     expect(result.rejected).toEqual([]);
+  });
+
+  it.each([
+    {
+      column: 'id',
+      row: {
+        ...GPT,
+        id: `openai:${'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.id)}`,
+      },
+    },
+    {
+      column: 'name',
+      row: { ...GPT, name: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.name + 1) },
+    },
+    {
+      column: 'family',
+      row: {
+        ...GPT,
+        family: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.family + 1),
+      },
+    },
+    {
+      column: 'canonical',
+      row: {
+        ...GPT,
+        canonical: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.canonical + 1),
+      },
+    },
+  ])(
+    'should skip a row whose $column overflows its column, write the rest and keep it from absence',
+    async ({ row }) => {
+      const { writer, repo } = make();
+
+      await writer.write(
+        openRouterCatalog(),
+        modelsDevCatalog({ models: [CLAUDE, row, GEMINI] })
+      );
+
+      expect(upsertedIds(repo)).not.toContain(row.id);
+      expect(upsertedIds(repo)).toEqual(
+        expect.arrayContaining([CLAUDE.id, GEMINI.id, CURATED_OPEN_ID])
+      );
+      expect(repo.markAbsent).toHaveBeenCalledWith('openai', expect.any(Date), [
+        row.id,
+      ]);
+      expect(warnLog).toHaveBeenCalledWith({
+        event: 'ai.model_index.rows_skipped',
+        count: 1,
+        models: [row.id],
+      });
+    }
+  );
+
+  it('should write a row whose values fill their columns exactly', async () => {
+    const { writer, repo } = make();
+    const filled: IndexedModel = {
+      ...GPT,
+      name: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.name),
+      family: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.family),
+      canonical: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.canonical),
+    };
+
+    await writer.write(
+      openRouterCatalog(),
+      modelsDevCatalog({ models: [CLAUDE, filled, GEMINI] })
+    );
+
+    expect(upsertedIds(repo)).toContain(filled.id);
+    expect(warnLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'ai.model_index.rows_skipped' })
+    );
+  });
+
+  it('should log a sample of the skipped ids', async () => {
+    const { writer } = make();
+    const overflowing = Array.from(
+      { length: DISCARD_LOG_SAMPLE_SIZE + 1 },
+      (_, index) => ({
+        ...directModel('openai', `overflowing-${index}`),
+        name: 'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.name + 1),
+      })
+    );
+
+    await writer.write(
+      openRouterCatalog(),
+      modelsDevCatalog({ models: [CLAUDE, GPT, GEMINI, ...overflowing] })
+    );
+
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.model_index.rows_skipped',
+      count: overflowing.length,
+      models: overflowing
+        .slice(0, DISCARD_LOG_SAMPLE_SIZE)
+        .map((row) => row.id),
+    });
   });
 
   it('should write nothing when the listed counts cannot be read', async () => {

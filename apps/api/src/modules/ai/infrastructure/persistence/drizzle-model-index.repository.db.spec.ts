@@ -12,6 +12,7 @@ import {
   DatabaseModule,
   type Database,
 } from '../../../../database';
+import { AI_MODEL_INDEX_MAX_LENGTHS } from '../../../../database/schema/ai-model-index.schema';
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleModelIndexRepository } from './drizzle-model-index.repository';
 
@@ -19,6 +20,7 @@ const FIRST_ID = 'openrouter:spec-index/first';
 const SECOND_ID = 'openrouter:spec-index/second';
 const THIRD_ID = 'openrouter:spec-index/third';
 const OTHER_PROVIDER_ID = 'anthropic:spec-index-claude';
+const OVERFLOWING_ID = `openrouter:${'x'.repeat(AI_MODEL_INDEX_MAX_LENGTHS.id)}`;
 const TEST_IDS = [FIRST_ID, SECOND_ID, THIRD_ID, OTHER_PROVIDER_ID];
 
 const FIRST_SEEN_AT = new Date('2000-01-01T00:00:00.000Z');
@@ -205,7 +207,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     ).resolves.toEqual([]);
   });
 
-  it('keeps an unseen row listed when its id is in keep', async () => {
+  it('keeps an unseen row listed when its id is in keep, even beside an id no row could hold', async () => {
     await repo.upsertMany(
       [indexed(FIRST_ID), indexed(SECOND_ID), indexed(THIRD_ID)],
       FIRST_SEEN_AT
@@ -214,6 +216,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
 
     const marked = await repo.markAbsent('openrouter', SECOND_SEEN_AT, [
       SECOND_ID,
+      OVERFLOWING_ID,
     ]);
 
     expect(marked).toEqual([THIRD_ID]);
