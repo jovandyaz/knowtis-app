@@ -324,6 +324,7 @@ test('a reply that fell back says which model answered', async ({
   const note = await owner.createNote('Respuesta con fallback');
   await routeApiJson(owner.page, MODELS_ROUTE_RE, () => FREE_CATALOG);
   await routeApiJson(owner.page, QUOTA_ROUTE_RE, () => FREE_QUOTA);
+  await routeApiJson(owner.page, PREFERENCES_ROUTE_RE, () => UNSET_PREFERENCES);
   const agent = await scriptAgent(owner.page, { onMessage: [] });
 
   await owner.page.goto(`/notes/${note.id}`);
