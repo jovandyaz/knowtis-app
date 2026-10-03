@@ -251,7 +251,9 @@ export const CatalogSyncResultSchema = z.object({
   skippedReason: z.string().nullable().default(null),
   upstream: z.number().int(),
   candidates: z.number().int(),
-  indexed: z.number().int(),
+  // The backoffice can ship before the API that reports this count, so a
+  // missing value means unknown, never zero.
+  indexed: z.number().int().optional(),
   alerts: z.number().int(),
   failures: z.number().int(),
 });

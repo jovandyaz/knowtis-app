@@ -395,6 +395,49 @@ describe('CatalogSection', () => {
     );
   });
 
+  it('reports an index write that stored nothing as zero indexed', () => {
+    syncStateMock.mockReturnValue({
+      ...IDLE_SYNC,
+      isSuccess: true,
+      data: {
+        status: 'completed',
+        skippedReason: null,
+        upstream: 120,
+        candidates: 97,
+        indexed: 0,
+        alerts: 2,
+        failures: 0,
+      },
+    });
+    renderSection();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Synced 120 upstream models: 97 candidate(s), 2 alert(s). Indexed 0 model(s).'
+    );
+  });
+
+  it('leaves the index out of the summary when the API did not report it', () => {
+    syncStateMock.mockReturnValue({
+      ...IDLE_SYNC,
+      isSuccess: true,
+      data: {
+        status: 'completed',
+        skippedReason: null,
+        upstream: 120,
+        candidates: 97,
+        alerts: 2,
+        failures: 0,
+      },
+    });
+    renderSection();
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent(
+      'Synced 120 upstream models: 97 candidate(s), 2 alert(s).'
+    );
+    expect(status).not.toHaveTextContent(/indexed/i);
+  });
+
   it('says another sync holds the lock when that is what stopped it', () => {
     syncStateMock.mockReturnValue({
       ...IDLE_SYNC,

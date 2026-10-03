@@ -75,14 +75,19 @@ export class ModelIndexWriter {
     const previousListed = await this.repo.countListedByProvider();
     const plan = planIndexSync(batches, previousListed);
 
-    for (const { provider, reason } of plan.rejected) {
+    const rejectionOf = new Map(
+      plan.rejected.map(({ provider, reason }) => [provider, reason])
+    );
+    for (const { provider, rows } of batches) {
+      const reason = rejectionOf.get(provider);
+      if (reason === undefined) {
+        continue;
+      }
       this.logger.warn({
         event: 'ai.model_index.sync_rejected',
         provider,
         reason,
-        rows:
-          batches.find((batch) => batch.provider === provider)?.rows.length ??
-          0,
+        rows: rows.length,
         previous: previousListed[provider],
       });
     }

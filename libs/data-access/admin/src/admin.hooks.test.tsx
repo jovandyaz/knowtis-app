@@ -1134,6 +1134,27 @@ describe('useSyncCatalog', () => {
     expect(httpClient.post).toHaveBeenCalledWith('/ai/catalog/sync');
     expect(result.current.data).toEqual(reported);
   });
+
+  it('resolves a pass from an API that predates the index with its index count unknown', async () => {
+    const reported = {
+      status: 'completed',
+      skippedReason: null,
+      upstream: 12,
+      candidates: 3,
+      alerts: 1,
+      failures: 0,
+    };
+    vi.mocked(httpClient.post).mockResolvedValue(reported);
+
+    const { result } = renderHook(() => useSyncCatalog(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toMatchObject(reported);
+    expect(result.current.data).not.toHaveProperty('indexed');
+  });
 });
 
 describe('catalog mutations and the cached candidates page', () => {
