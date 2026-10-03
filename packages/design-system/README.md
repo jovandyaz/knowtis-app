@@ -29,7 +29,11 @@ Stories are co-located with each component (`Button.stories.tsx` next to `Button
 
 Add a primitive with `pnpm ds:add <name>` from the workspace root. It runs the shadcn CLI in an isolated stage directory (the CLI needs tsconfig `paths`, and adding them here would shadow the inherited `@knowtis/*` aliases), then rewrites the output to this package's conventions: relative `cn` import, `bg-(--token)` form, a `motion-reduce:` guard on every transition, and removal of `tw-animate-css` utilities that this workspace cannot resolve. It refuses to write a file that still fails those checks. Afterwards you must add any reported dependency to the root `package.json`, replace stripped animations with a design-system one, and add the exports to `src/index.ts`.
 
-`command` is the one exception to a plain `pnpm ds:add`. shadcn ships it with a `CommandDialog` built on shadcn's own `dialog`, which the design system already owns as `Dialog`, and `ds:add` refuses the file because that sibling `@/components/ui/dialog` import survives normalization. It is vendored from the registry source through the same `normalize` and `assertClean` (exported by `tools/ds-add-shadcn.mjs`) with `CommandDialog` and its import removed; refresh it the same way.
+`command` is the one exception to a plain `pnpm ds:add`. shadcn ships it with a `CommandDialog` built on shadcn's own `dialog`, which the design system already owns as `Dialog`, and `ds:add` refuses the file because that sibling `@/components/ui/dialog` import survives normalization. It is vendored from the registry source through the same `normalize` and `assertClean` (exported by `tools/ds-add-shadcn.mjs`) with `CommandDialog` and its import removed. To refresh it:
+
+1. Fetch `https://ui.shadcn.com/r/styles/new-york-v4/command.json` and take `files[0].content`.
+2. Delete the `CommandDialog` function, its `dialog` import and its entry in the export list.
+3. Run `normalize(source)` from `tools/ds-add-shadcn.mjs`, then `assertClean('command.tsx', result.content)`, and write `result.content` to `packages/design-system/src/components/ui/command.tsx`.
 
 ## Design tokens & styles
 
