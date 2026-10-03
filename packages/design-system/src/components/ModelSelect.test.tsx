@@ -1,3 +1,5 @@
+import type { ComponentProps } from 'react';
+
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -672,5 +674,236 @@ describe('ModelSelect', () => {
     );
     await userEvent.click(screen.getByRole('button'));
     expect(screen.getAllByRole('separator')).toHaveLength(1);
+  });
+
+  it('renders no search input when no searchPlaceholder is given', async () => {
+    render(
+      <ModelSelect models={[...models]} value="a:fast" onSelect={vi.fn()} />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
+  });
+
+  describe('with searchPlaceholder', () => {
+    const SEARCH_PLACEHOLDER = 'Search models';
+
+    function renderSearchable(
+      props: Partial<ComponentProps<typeof ModelSelect>> = {}
+    ) {
+      const onSelect = vi.fn();
+      render(
+        <ModelSelect
+          models={[...models]}
+          value="a:fast"
+          onSelect={onSelect}
+          searchPlaceholder={SEARCH_PLACEHOLDER}
+          {...props}
+        />
+      );
+      return { onSelect };
+    }
+
+    async function openAndSearch(query: string) {
+      await userEvent.click(screen.getByRole('button'));
+      if (query) {
+        await userEvent.type(screen.getByRole('combobox'), query);
+      }
+    }
+
+    function optionLabels() {
+      return screen.getAllByRole('option').map((o) => o.textContent);
+    }
+
+    it('focuses the search input as soon as it opens', async () => {
+      renderSearchable();
+      await openAndSearch('');
+
+      const input = screen.getByRole('combobox', { name: SEARCH_PLACEHOLDER });
+      expect(input).toHaveFocus();
+      expect(input).toHaveAttribute('placeholder', SEARCH_PLACEHOLDER);
+      expect(optionLabels()).toEqual([
+        expect.stringContaining('Fast One'),
+        expect.stringContaining('Balanced One'),
+      ]);
+    });
+
+    it('filters the rows by label, ignoring case', async () => {
+      renderSearchable();
+      await openAndSearch('BALANCED');
+
+      expect(optionLabels()).toEqual([expect.stringContaining('Balanced One')]);
+    });
+
+    it('filters the rows by id', async () => {
+      renderSearchable();
+      await openAndSearch('a:fast');
+
+      expect(optionLabels()).toEqual([expect.stringContaining('Fast One')]);
+    });
+
+    it('matches every word of the query, in any order', async () => {
+      renderSearchable();
+      await openAndSearch('one fast');
+
+      expect(optionLabels()).toEqual([expect.stringContaining('Fast One')]);
+    });
+
+    it('hides a tier group once none of its rows match', async () => {
+      renderSearchable();
+      await openAndSearch('fast');
+
+      expect(screen.getByText('fast')).toBeInTheDocument();
+      expect(screen.queryByText('balanced')).not.toBeInTheDocument();
+    });
+
+    it('keeps the flattened heading while any row matches', async () => {
+      renderSearchable({ modelsLabel: 'MODELS' });
+      await openAndSearch('balanced');
+
+      expect(screen.getByText('MODELS')).toBeInTheDocument();
+      expect(optionLabels()).toEqual([expect.stringContaining('Balanced One')]);
+    });
+
+    it('filters the leading section with the same query', async () => {
+      renderSearchable({
+        value: 'balanced',
+        leadingSection: styleSection,
+      });
+      await openAndSearch('even');
+
+      expect(screen.getByText('STYLE')).toBeInTheDocument();
+      expect(optionLabels()).toEqual([expect.stringContaining('Even')]);
+    });
+
+    it('says no row matches with the no-matches label', async () => {
+      renderSearchable({
+        noMatchesLabel: 'No models match',
+        emptyLabel: 'No models available',
+      });
+      await openAndSearch('zzz');
+
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
+      expect(screen.getByText('No models match')).toBeInTheDocument();
+      expect(screen.queryByText('No models available')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the empty label when no no-matches label is given', async () => {
+      renderSearchable({ emptyLabel: 'No models available' });
+      await openAndSearch('zzz');
+
+      expect(screen.getByText('No models available')).toBeInTheDocument();
+    });
+
+    it('clears the query when it closes', async () => {
+      renderSearchable();
+      await openAndSearch('balanced');
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.getByRole('button')).toHaveFocus();
+
+      await userEvent.click(screen.getByRole('button'));
+      expect(screen.getByRole('combobox')).toHaveValue('');
+      expect(screen.getAllByRole('option')).toHaveLength(2);
+    });
+
+    it('moves the active row with the arrow keys and selects it with Enter', async () => {
+      const { onSelect } = renderSearchable();
+      await openAndSearch('one');
+
+      expect(screen.getByRole('option', { name: /Fast One/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      );
+      await userEvent.keyboard('{ArrowDown}');
+      const balanced = screen.getByRole('option', { name: /Balanced One/ });
+      expect(balanced).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('combobox')).toHaveFocus();
+      expect(screen.getByRole('combobox')).toHaveAttribute(
+        'aria-activedescendant',
+        balanced.id
+      );
+
+      await userEvent.keyboard('{Enter}');
+      expect(onSelect).toHaveBeenCalledWith('a:bal');
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    });
+
+    it('selects a row on click and closes', async () => {
+      const { onSelect } = renderSearchable();
+      await openAndSearch('');
+      await userEvent.click(
+        screen.getByRole('option', { name: /Balanced One/ })
+      );
+
+      expect(onSelect).toHaveBeenCalledWith('a:bal');
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    });
+
+    it('keeps a disabled row visible but out of reach', async () => {
+      const { onSelect } = renderSearchable({
+        models: [
+          { id: 'a:locked', label: 'Locked One', tier: 'fast', disabled: true },
+          ...models,
+        ],
+      });
+      await openAndSearch('one');
+
+      const locked = screen.getByRole('option', { name: /Locked One/ });
+      expect(locked).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.getByRole('option', { name: /Fast One/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      );
+
+      await userEvent.click(locked);
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('marks the current model with a glyph', async () => {
+      renderSearchable();
+      await openAndSearch('');
+
+      expect(
+        screen.getByRole('option', { name: /Fast One/ }).querySelector('svg')
+      ).toBeInTheDocument();
+      expect(
+        screen
+          .getByRole('option', { name: /Balanced One/ })
+          .querySelector('svg')
+      ).toBeNull();
+    });
+
+    it('leaves action rows unmarked and still runs them', async () => {
+      const { onSelect } = renderSearchable({
+        value: null,
+        rowsAreActions: true,
+        triggerLabel: 'Add model',
+      });
+      await openAndSearch('fast');
+
+      const row = screen.getByRole('option', { name: /Fast One/ });
+      expect(row.querySelector('svg')).toBeNull();
+      await userEvent.click(row);
+      expect(onSelect).toHaveBeenCalledWith('a:fast');
+    });
+
+    it('keeps the error and retry reachable while searching', async () => {
+      const onRetry = vi.fn();
+      renderSearchable({
+        status: 'error',
+        errorLabel: 'Could not load',
+        retryLabel: 'Retry',
+        onRetry,
+      });
+      await openAndSearch('fast');
+
+      expect(screen.getByText('Could not load')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('option', { name: 'Retry' }));
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    });
   });
 });

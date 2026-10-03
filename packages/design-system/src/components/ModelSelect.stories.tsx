@@ -42,6 +42,31 @@ const MODELS: ModelSelectOption[] = [
 
 const TIER_ORDER = ['fast', 'balanced', 'powerful'];
 
+const CATALOG_PROVIDERS = [
+  { slug: 'anthropic', name: 'Claude' },
+  { slug: 'openai', name: 'GPT' },
+  { slug: 'google', name: 'Gemini' },
+  { slug: 'mistralai', name: 'Mistral' },
+  { slug: 'meta-llama', name: 'Llama' },
+  { slug: 'qwen', name: 'Qwen' },
+  { slug: 'deepseek', name: 'DeepSeek' },
+  { slug: 'x-ai', name: 'Grok' },
+];
+const MODELS_PER_PROVIDER = 28;
+const MAX_COST_CLASS = 3;
+
+const CATALOG_MODELS: ModelSelectOption[] = CATALOG_PROVIDERS.flatMap(
+  ({ slug, name }, p) =>
+    Array.from({ length: MODELS_PER_PROVIDER }, (_, i) => ({
+      id: `openrouter:${slug}/${slug}-${i + 1}`,
+      label: `${name} ${i + 1}`,
+      tier: TIER_ORDER[(p + i) % TIER_ORDER.length],
+      description: `${name} vía OpenRouter`,
+      costClass: ((p + i) % MAX_COST_CLASS) + 1,
+      disabled: i === MODELS_PER_PROVIDER - 1,
+    }))
+);
+
 const STYLE_SECTION = {
   label: 'Estilo',
   options: [
@@ -141,6 +166,22 @@ export const RowsAreActions: Story = {
       triggerVariant="outline"
       triggerLabel="Añadir modelo"
       aria-label="Añadir modelo"
+    />
+  ),
+};
+
+export const SearchableLongList: Story = {
+  name: 'Searchable long list (searchPlaceholder)',
+  render: () => (
+    <Controlled
+      initial="openrouter:anthropic/anthropic-1"
+      models={CATALOG_MODELS}
+      tierOrder={TIER_ORDER}
+      renderDescription={(m) => m.description ?? ''}
+      searchPlaceholder="Buscar por nombre o ID"
+      noMatchesLabel="Ningún modelo coincide"
+      triggerVariant="outline"
+      aria-label="Modelo"
     />
   ),
 };

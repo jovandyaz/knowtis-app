@@ -222,5 +222,24 @@ export {
   HoverCardTrigger,
   HoverCardContent,
 } from './components/ui/hover-card';
+export {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+  CommandSeparator,
+} from './components/ui/command';
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverAnchor,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
+} from './components/ui/popover';
 
 export { cn } from './utils/cn';
