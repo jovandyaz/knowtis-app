@@ -80,7 +80,7 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
 
 ## Awareness (Presence)
 
-- Each connection owns its `Awareness`: `useHocuspocusCollaboration` creates one per `HocuspocusProvider`, sets the local `user` field from `currentUser`, and returns it (`null` without a connection). `provider.destroy()` destroys the awareness it holds, so never share one across connections — revisiting a note, switching accounts and StrictMode's double effect each open a new connection.
+- Each connection owns its `Awareness`: `useHocuspocusCollaboration` creates one per `HocuspocusProvider`, sets the local `user` field from `currentUser`, and returns it (`null` without a connection). `provider.destroy()` destroys the awareness it holds, so never share one across connections — revisiting a note, switching accounts and StrictMode's double effect each open a new connection. A new awareness continues the clock the previous connection on that doc ended on: it reuses the doc's `clientID`, and peers drop updates from a known client until its clock passes the one they last saw.
 - `useActiveCollaborators(awareness)` lists the remote users of the hook's awareness and re-subscribes when it changes.
 - `CollaborativeCursors` writes the local `cursor` field and renders remote carets; the editor follows a new awareness with `editor.commands.setCursorsAwareness(awareness)` instead of being recreated.
 - No manual encode/decode of awareness updates — Hocuspocus' protocol handles it.
