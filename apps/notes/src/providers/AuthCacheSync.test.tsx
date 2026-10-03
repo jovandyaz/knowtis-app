@@ -81,6 +81,34 @@ describe('AuthCacheSync', () => {
     ]).toEqual([1, 1]);
   });
 
+  it.each([
+    ['an account', profile('a')],
+    ['a guest', guest('g')],
+  ])(
+    'forgets the query cache when another user takes over from %s',
+    (_who, previous) => {
+      authStore.setState({ user: previous });
+      render(<AuthCacheSync />);
+
+      act(() => authStore.setState({ user: profile('b') }));
+
+      expect([
+        cancelQueries.mock.calls.length,
+        clear.mock.calls.length,
+      ]).toEqual([1, 1]);
+    }
+  );
+
+  it('forgets the query cache once when the session ends with its user', () => {
+    render(<AuthCacheSync />);
+
+    act(() => authStore.setState({ isAuthenticated: false, user: null }));
+
+    expect([cancelQueries.mock.calls.length, clear.mock.calls.length]).toEqual([
+      1, 1,
+    ]);
+  });
+
   it('drops both sockets and the thread when another user signs in', () => {
     render(<AuthCacheSync />);
 
@@ -128,13 +156,14 @@ describe('AuthCacheSync', () => {
     expect(newConversation.mock.calls).toEqual([[]]);
   });
 
-  it('keeps the sockets when a refresh keeps the same user', () => {
+  it('keeps the sockets and the cache when a refresh keeps the same user', () => {
     render(<AuthCacheSync />);
 
     act(() => authStore.setState({ user: profile('a') }));
 
     expect(agentClient.disconnect).not.toHaveBeenCalled();
     expect(aiClient.disconnect).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it('keeps the sockets on the first sign-in', () => {
