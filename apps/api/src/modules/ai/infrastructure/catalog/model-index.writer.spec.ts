@@ -16,16 +16,13 @@ import {
   AI_MODEL_INDEX_COST_CEILING,
   AI_MODEL_INDEX_MAX_LENGTHS,
 } from '../../../../database/schema/ai-model-index.schema';
-import { openTierSlug } from '../../domain/model-catalog/curated-watch';
+import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
 import {
   byokFloorKey,
   PLATFORM_FLOOR_MODEL_IDS,
 } from '../../domain/model-catalog/floor-models';
 import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
-import {
-  CURATED_MODELS,
-  OPENROUTER_ID_PREFIX,
-} from '../../domain/model-catalog/selectable-models.catalog';
+import { watchedSlug } from '../../domain/model-catalog/openrouter-watch';
 import {
   DISCARD_LOG_SAMPLE_SIZE,
   UNPARSEABLE_MODEL_ID,
@@ -44,18 +41,18 @@ const LARGEST_COST_BELOW_CEILING =
   AI_MODEL_INDEX_COST_CEILING * (1 - Number.EPSILON);
 const DEEPSEEK_SLUG = 'deepseek/deepseek-v4-flash';
 
-// OpenRouter only proves absence while it still lists a curated open-tier model.
-const CURATED_OPEN_SLUGS = CURATED_MODELS.flatMap((model) => {
-  const slug = openTierSlug(model.id);
+// OpenRouter only proves absence while it still lists a watched model.
+const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.flatMap((id) => {
+  const slug = watchedSlug(id);
   return slug === null ? [] : [slug];
 });
 
-if (CURATED_OPEN_SLUGS.length < 2) {
-  throw new Error('the writer spec needs two curated open-tier models');
+if (WATCHED_SLUGS.length < 2) {
+  throw new Error('the writer spec needs two watched OpenRouter models');
 }
 
-const [CURATED_OPEN_SLUG, OTHER_CURATED_OPEN_SLUG] = CURATED_OPEN_SLUGS;
-const CURATED_OPEN_ID = `openrouter:${CURATED_OPEN_SLUG}`;
+const [WATCHED_SLUG, OTHER_WATCHED_SLUG] = WATCHED_SLUGS;
+const WATCHED_ID = `openrouter:${WATCHED_SLUG}`;
 const OPENROUTER_FLOOR_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
   id.startsWith(OPENROUTER_ID_PREFIX)
 ).map((id) => id.slice(OPENROUTER_ID_PREFIX.length));
@@ -109,7 +106,7 @@ function openRouterCatalog(
   overrides: Partial<UpstreamCatalog> = {}
 ): UpstreamCatalog {
   return {
-    models: [upstreamModel(CURATED_OPEN_SLUG), upstreamModel(QWEN_SLUG)],
+    models: [upstreamModel(WATCHED_SLUG), upstreamModel(QWEN_SLUG)],
     complete: true,
     discarded: [],
     ...overrides,
@@ -238,7 +235,7 @@ describe('ModelIndexWriter', () => {
         CLAUDE.id,
         GPT.id,
         GEMINI.id,
-        `openrouter:${CURATED_OPEN_SLUG}`,
+        `openrouter:${WATCHED_SLUG}`,
         `openrouter:${QWEN_SLUG}`,
       ].sort()
     );
@@ -324,7 +321,7 @@ describe('ModelIndexWriter', () => {
     await writer.write(openRouterCatalog(), null);
 
     expect(upsertedIds(repo).sort()).toEqual(
-      [`openrouter:${CURATED_OPEN_SLUG}`, `openrouter:${QWEN_SLUG}`].sort()
+      [`openrouter:${WATCHED_SLUG}`, `openrouter:${QWEN_SLUG}`].sort()
     );
     expect(absenceConcludedFor(repo)).toEqual(['openrouter']);
     expect(warnLog).not.toHaveBeenCalledWith(
@@ -383,7 +380,7 @@ describe('ModelIndexWriter', () => {
     function catalogWithClaude(): UpstreamCatalog {
       return openRouterCatalog({
         models: [
-          upstreamModel(CURATED_OPEN_SLUG),
+          upstreamModel(WATCHED_SLUG),
           upstreamModel(QWEN_SLUG),
           upstreamModel(CLAUDE_SLUG),
         ],
@@ -482,10 +479,7 @@ describe('ModelIndexWriter', () => {
 
     await writer.write(
       openRouterCatalog({
-        models: [
-          upstreamModel(CURATED_OPEN_SLUG),
-          upstreamModel(DEEPSEEK_SLUG),
-        ],
+        models: [upstreamModel(WATCHED_SLUG), upstreamModel(DEEPSEEK_SLUG)],
       }),
       modelsDevCatalog({
         openRouterEnrichment: new Map([[DEEPSEEK_SLUG, enrichment]]),
@@ -528,7 +522,7 @@ describe('ModelIndexWriter', () => {
 
     await writer.write(
       openRouterCatalog({
-        models: [upstreamModel(CURATED_OPEN_SLUG)],
+        models: [upstreamModel(WATCHED_SLUG)],
         discarded: [QWEN_SLUG],
       }),
       modelsDevCatalog()
@@ -602,13 +596,13 @@ describe('ModelIndexWriter', () => {
     );
     expect(absenceConcludedFor(repo)).not.toContain('openrouter');
     expect(result.rejected).toEqual([
-      { provider: 'openrouter', reason: 'floor', models: [CURATED_OPEN_ID] },
+      { provider: 'openrouter', reason: 'floor', models: [WATCHED_ID] },
     ]);
     expect(errorLog).toHaveBeenCalledWith({
       event: 'ai.model_index.sync_rejected',
       provider: 'openrouter',
       reason: 'floor',
-      models: [CURATED_OPEN_ID],
+      models: [WATCHED_ID],
       rows: 2,
       previous: 2,
     });
@@ -642,7 +636,7 @@ describe('ModelIndexWriter', () => {
       modelsDevCatalog()
     );
 
-    expect(upsertedIds(repo)).toContain(CURATED_OPEN_ID);
+    expect(upsertedIds(repo)).toContain(WATCHED_ID);
     expect(absenceConcludedFor(repo)).toContain('openrouter');
     expect(result.rejected).toEqual([]);
     expect(errorLog).not.toHaveBeenCalled();
@@ -655,7 +649,7 @@ describe('ModelIndexWriter', () => {
 
     const result = await writer.write(openRouterCatalog(), modelsDevCatalog());
 
-    expect(upsertedIds(repo)).not.toContain(CURATED_OPEN_ID);
+    expect(upsertedIds(repo)).not.toContain(WATCHED_ID);
     expect(absenceConcludedFor(repo)).not.toContain('openrouter');
     expect(result.rejected).toEqual([
       {
@@ -663,8 +657,7 @@ describe('ModelIndexWriter', () => {
         reason: 'floor',
         models: [
           ...PLATFORM_FLOOR_MODEL_IDS.filter(
-            (id) =>
-              id.startsWith(OPENROUTER_ID_PREFIX) && id !== CURATED_OPEN_ID
+            (id) => id.startsWith(OPENROUTER_ID_PREFIX) && id !== WATCHED_ID
           ),
           ...OPENROUTER_ROUTE_KEYS,
         ],
@@ -746,7 +739,7 @@ describe('ModelIndexWriter', () => {
 
       expect(upsertedIds(repo)).not.toContain(row.id);
       expect(upsertedIds(repo)).toEqual(
-        expect.arrayContaining([CLAUDE.id, GEMINI.id, CURATED_OPEN_ID])
+        expect.arrayContaining([CLAUDE.id, GEMINI.id, WATCHED_ID])
       );
       expect(repo.markAbsent).toHaveBeenCalledWith('openai', expect.any(Date), [
         row.id,
@@ -842,23 +835,20 @@ describe('ModelIndexWriter', () => {
 
     const result = await writer.write(
       openRouterCatalog({
-        models: [
-          upstreamModel(OTHER_CURATED_OPEN_SLUG),
-          upstreamModel(QWEN_SLUG),
-        ],
-        discarded: [CURATED_OPEN_SLUG],
+        models: [upstreamModel(OTHER_WATCHED_SLUG), upstreamModel(QWEN_SLUG)],
+        discarded: [WATCHED_SLUG],
       }),
       modelsDevCatalog()
     );
 
     expect(result.rejected).toEqual([]);
     expect(upsertedIds(repo)).toEqual(
-      expect.arrayContaining([`openrouter:${OTHER_CURATED_OPEN_SLUG}`, QWEN_ID])
+      expect.arrayContaining([`openrouter:${OTHER_WATCHED_SLUG}`, QWEN_ID])
     );
     expect(repo.markAbsent).toHaveBeenCalledWith(
       'openrouter',
       expect.any(Date),
-      [CURATED_OPEN_ID]
+      [WATCHED_ID]
     );
   });
 
@@ -870,12 +860,12 @@ describe('ModelIndexWriter', () => {
     const result = await writer.write(
       openRouterCatalog({
         models: [
-          ...OPENROUTER_FLOOR_SLUGS.filter(
-            (slug) => slug !== CURATED_OPEN_SLUG
-          ).map(upstreamModel),
+          ...OPENROUTER_FLOOR_SLUGS.filter((slug) => slug !== WATCHED_SLUG).map(
+            upstreamModel
+          ),
           ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
         ],
-        discarded: [CURATED_OPEN_SLUG],
+        discarded: [WATCHED_SLUG],
       }),
       modelsDevCatalog()
     );
@@ -884,7 +874,7 @@ describe('ModelIndexWriter', () => {
       false
     );
     expect(result.rejected).toEqual([
-      { provider: 'openrouter', reason: 'floor', models: [CURATED_OPEN_ID] },
+      { provider: 'openrouter', reason: 'floor', models: [WATCHED_ID] },
     ]);
   });
 

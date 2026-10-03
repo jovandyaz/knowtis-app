@@ -12,14 +12,14 @@ import {
   AI_MODEL_INDEX_COST_CEILING,
   AI_MODEL_INDEX_MAX_LENGTHS,
 } from '../../../../database/schema/ai-model-index.schema';
-import { canConcludeAbsence } from '../../domain/model-catalog/curated-watch';
+import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
 import {
   planIndexSync,
   type IndexSyncPlan,
   type ProviderBatch,
   type SyncRejection,
 } from '../../domain/model-catalog/index-sync-plan';
-import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/selectable-models.catalog';
+import { canConcludeAbsence } from '../../domain/model-catalog/openrouter-watch';
 import { servedIndexRows } from '../../domain/model-catalog/served-index-rows';
 import { DISCARD_LOG_SAMPLE_SIZE } from '../../domain/model-catalog/upstream-discards';
 import {
