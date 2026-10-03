@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   INDEX_PROVIDERS,
+  MODEL_INDEX_SNAPSHOT,
   type IndexedModel,
   type IndexProvider,
 } from '@knowtis/ai-gateway';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
-import { FLOOR_MODEL_IDS } from './floor-models';
+import { byokFloorKey, PLATFORM_FLOOR_MODEL_IDS } from './floor-models';
 import {
   planIndexSync,
   SYNC_MAX_SHRINK_RATIO,
@@ -16,18 +17,26 @@ import {
 
 const NOTHING_SERVED: readonly IndexedModel[] = [];
 
-function floorIdOf(provider: IndexProvider): string {
-  const id = FLOOR_MODEL_IDS.find((floorId) =>
+function platformFloorIdOf(provider: IndexProvider): string {
+  const id = PLATFORM_FLOOR_MODEL_IDS.find((floorId) =>
     floorId.startsWith(`${provider}:`)
   );
   if (id === undefined) {
-    throw new Error(`the plan spec needs a ${provider} floor model`);
+    throw new Error(`the plan spec needs a ${provider} platform floor model`);
   }
   return id;
 }
 
-const OPENROUTER_FLOOR_ID = floorIdOf('openrouter');
-const ANTHROPIC_FLOOR_ID = floorIdOf('anthropic');
+function snapshotRow(id: string): IndexedModel {
+  const row = MODEL_INDEX_SNAPSHOT.find((snapshot) => snapshot.id === id);
+  if (row === undefined) {
+    throw new Error(`the plan spec needs the snapshot row ${id}`);
+  }
+  return row;
+}
+
+const OPENROUTER_FLOOR_ID = platformFloorIdOf('openrouter');
+const ANTHROPIC_FAST_ROUTE = snapshotRow('anthropic:claude-haiku-4-5');
 
 const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
   anthropic: 0,
@@ -240,19 +249,33 @@ describe('planIndexSync', () => {
     ]);
   });
 
+  it('should write none of a batch that would leave a BYOK intent its provider routes now without a route', () => {
+    const anthropic = batch('anthropic', 2);
+
+    const plan = planIndexSync(
+      [anthropic],
+      listedRows({ ...NOTHING_LISTED, anthropic: 2 }),
+      [ANTHROPIC_FAST_ROUTE]
+    );
+
+    expect(plan.upserts).toEqual([]);
+    expect(plan.concludeAbsence).toEqual([]);
+    expect(plan.rejected).toEqual([
+      {
+        provider: 'anthropic',
+        reason: 'floor',
+        models: [byokFloorKey('fast', 'anthropic')],
+      },
+    ]);
+  });
+
   it('should hold a batch only to the floor models its own provider serves', () => {
     const openrouter = batch('openrouter', 2);
 
     const plan = planIndexSync(
       [openrouter],
       listedRows({ ...NOTHING_LISTED, openrouter: 2 }),
-      [
-        createIndexedModel({
-          id: ANTHROPIC_FLOOR_ID,
-          provider: 'anthropic',
-          source: 'models_dev',
-        }),
-      ]
+      [ANTHROPIC_FAST_ROUTE]
     );
 
     expect(plan.upserts).toEqual(openrouter.rows);

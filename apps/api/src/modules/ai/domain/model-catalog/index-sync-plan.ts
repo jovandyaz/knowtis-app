@@ -11,7 +11,7 @@ export const SYNC_MAX_SHRINK_RATIO = 0.5;
 
 type AbsenceRejection = 'shrink' | 'inconclusive';
 
-/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the floor models the batch would leave unserved. */
+/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the floor models and BYOK route keys the batch would leave unserved. */
 export type SyncRejection =
   | { readonly provider: IndexProvider; readonly reason: AbsenceRejection }
   | {

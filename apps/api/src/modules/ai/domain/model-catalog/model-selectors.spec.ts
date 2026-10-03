@@ -13,6 +13,7 @@ import {
 } from '@knowtis/shared-types';
 
 import { createIndexedModel } from '../../testing/create-indexed-model';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   BYOK_SELECTORS,
   intentOfFamily,
@@ -22,8 +23,6 @@ import {
   type EligibilityRule,
   type ModelSelector,
 } from './model-selectors';
-
-const SNAPSHOT_DATE = new Date('2026-10-03T00:00:00Z');
 
 const BYOK_REQUIRES = ['tool_call', 'structured_output'] as const;
 const BYOK_RULE: EligibilityRule = { requires: BYOK_REQUIRES };
