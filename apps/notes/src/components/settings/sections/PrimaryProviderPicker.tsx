@@ -17,9 +17,12 @@ const MIN_KEYS_TO_CHOOSE = 2;
 export function PrimaryProviderPicker() {
   const { t } = useTranslation('common');
   const { data: keys } = useProviderKeys(true);
-  const { data: preferences } = useAISettings();
+  const { data: preferences, isPending: preferencesPending } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
 
+  if (preferencesPending) {
+    return null;
+  }
   const held = keys ?? [];
   const primary = effectivePrimaryProvider(preferences, held);
   if (held.length < MIN_KEYS_TO_CHOOSE || primary === null) {

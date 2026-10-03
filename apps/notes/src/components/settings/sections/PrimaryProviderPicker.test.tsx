@@ -12,6 +12,7 @@ import { PrimaryProviderPicker } from './PrimaryProviderPicker';
 
 const keysData = vi.fn<() => ProviderKeyInfo[] | undefined>();
 const prefsData = vi.fn<() => AIPreferences | undefined>();
+const prefsPending = vi.fn<() => boolean>();
 const update = vi.fn();
 
 vi.mock('react-i18next', () => ({
@@ -28,7 +29,7 @@ vi.mock('@/hooks/useProviderKeys', () => ({
   useProviderKeys: () => ({ data: keysData() }),
 }));
 vi.mock('@/hooks/useAISettings', () => ({
-  useAISettings: () => ({ data: prefsData() }),
+  useAISettings: () => ({ data: prefsData(), isPending: prefsPending() }),
   useUpdateAISettings: () => ({ mutate: update }),
 }));
 
@@ -57,6 +58,16 @@ describe('PrimaryProviderPicker', () => {
     vi.clearAllMocks();
     keysData.mockReturnValue([OPENROUTER, ANTHROPIC]);
     prefsData.mockReturnValue(preferences(null));
+    prefsPending.mockReturnValue(false);
+  });
+
+  it('offers no choice until the preferences load, so the default never flashes checked', () => {
+    prefsData.mockReturnValue(undefined);
+    prefsPending.mockReturnValue(true);
+
+    const { container } = render(<PrimaryProviderPicker />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it.each([[[]], [[ANTHROPIC]], [undefined]])(
