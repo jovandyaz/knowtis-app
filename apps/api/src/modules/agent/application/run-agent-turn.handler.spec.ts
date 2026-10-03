@@ -45,6 +45,7 @@ import {
   type AiCaller,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
+import type { TurnEffort } from '../../ai/domain/model-catalog/effort-policy';
 import type { ModelChoice } from '../../ai/domain/model-catalog/model-choice';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import type {
@@ -301,7 +302,10 @@ function makeGuard(safe = true) {
   } as unknown as InjectionGuardService;
 }
 
-function makeTurnEffort(effort: ReasoningEffort = 'medium') {
+const DEFAULT_TURN_EFFORT: TurnEffort = { step: 'medium', toolFree: 'low' };
+const MAX_TURN_EFFORT: TurnEffort = { step: 'max', toolFree: 'low' };
+
+function makeTurnEffort(effort: TurnEffort = DEFAULT_TURN_EFFORT) {
   return {
     resolve: vi.fn().mockResolvedValue(effort),
   } as unknown as TurnEffortResolver;
@@ -3101,7 +3105,7 @@ describe('RunAgentTurnHandler', () => {
 
   it('runs the turn at the effort the resolver returns', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const turnEffort = makeTurnEffort('max');
+    const turnEffort = makeTurnEffort(MAX_TURN_EFFORT);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3137,7 +3141,7 @@ describe('RunAgentTurnHandler', () => {
     );
 
     const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
-    await expect(effortFor?.(SERVED_MODEL)).resolves.toBe('max');
+    await expect(effortFor?.(SERVED_MODEL)).resolves.toEqual(MAX_TURN_EFFORT);
     expect(turnEffort.resolve).toHaveBeenCalledWith({
       execution: expect.objectContaining({
         tier: 'free',
@@ -3156,7 +3160,7 @@ describe('RunAgentTurnHandler', () => {
       kind: 'found',
       apiKey: 'user-key',
     });
-    const turnEffort = makeTurnEffort('max');
+    const turnEffort = makeTurnEffort(MAX_TURN_EFFORT);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3205,7 +3209,7 @@ describe('RunAgentTurnHandler', () => {
 
   it("resolves an anonymous turn's effort as an anonymous caller", async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const turnEffort = makeTurnEffort('low');
+    const turnEffort = makeTurnEffort({ step: 'low', toolFree: 'low' });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,

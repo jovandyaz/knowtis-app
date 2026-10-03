@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
+import {
+  REASONING_EFFORTS,
+  type ModelReasoning,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
 
-import { clampEffort, FREE_BOOST_CEILING, freeLevels } from './effort-policy';
+import {
+  clampEffort,
+  FREE_BOOST_CEILING,
+  freeLevels,
+  nearestEffort,
+  TOOL_FREE_REASONING_EFFORT,
+  toolFreeEffort,
+} from './effort-policy';
 
 function reasoning(levels: readonly ReasoningEffort[]): ModelReasoning {
   return { levels, mandatory: false };
@@ -84,5 +95,50 @@ describe('freeLevels', () => {
 
   it('is empty when nothing is within the ceiling', () => {
     expect(freeLevels(['xhigh', 'max'])).toEqual([]);
+  });
+});
+
+describe('nearestEffort', () => {
+  it('keeps a level the ladder lists', () => {
+    expect(nearestEffort('medium', ['low', 'medium', 'high'])).toBe('medium');
+  });
+
+  it('raises a level below the ladder to its lowest level', () => {
+    expect(nearestEffort('medium', ['xhigh', 'high'])).toBe('high');
+  });
+
+  it('lowers a level above the ladder to its highest level', () => {
+    expect(nearestEffort('high', ['medium', 'low'])).toBe('medium');
+  });
+
+  it('settles a tie on the lower level', () => {
+    expect(nearestEffort('medium', ['high', 'low'])).toBe('low');
+  });
+
+  it('is undefined for an empty ladder', () => {
+    expect(nearestEffort('medium', [])).toBeUndefined();
+  });
+});
+
+describe('TOOL_FREE_REASONING_EFFORT', () => {
+  it('is the lowest effort level, so lowering a turn to it never raises one', () => {
+    expect(TOOL_FREE_REASONING_EFFORT).toBe(REASONING_EFFORTS[0]);
+  });
+});
+
+describe('toolFreeEffort', () => {
+  it('lowers to the tool-free level when the ladder lists it', () => {
+    expect(toolFreeEffort(['high', 'low', 'max'])).toBe(
+      TOOL_FREE_REASONING_EFFORT
+    );
+  });
+
+  it('runs at the lowest listed level when the ladder lacks the tool-free level', () => {
+    expect(toolFreeEffort(['xhigh', 'high'])).toBe('high');
+  });
+
+  it('keeps the tool-free level for an unknown ladder', () => {
+    expect(toolFreeEffort(undefined)).toBe(TOOL_FREE_REASONING_EFFORT);
+    expect(toolFreeEffort([])).toBe(TOOL_FREE_REASONING_EFFORT);
   });
 });

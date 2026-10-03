@@ -364,7 +364,7 @@ function cappedTurn(model: string): AgentRunInput {
     messages: [{ role: 'user', content: 'Lee la nota n1 y resúmela.' }],
     maxSteps: 2,
     maxTurnTokens: 150_000,
-    effortFor: async () => 'medium',
+    effortFor: async () => ({ step: 'medium', toolFree: 'low' }),
   };
 }
 
@@ -587,6 +587,29 @@ describe('tool-free calls on the provider wire', () => {
     });
     expect(toolStep.reasoning).toEqual({ effort: 'medium' });
     expect(synthesis.reasoning).toEqual({ effort: 'low' });
+  });
+
+  it('sends an OpenRouter synthesis at the tool-free level its route lists when the ladder lacks low', async () => {
+    const { bodies, fetch } = capturingFetch([
+      openrouterReasoningToolCall,
+      openrouterText,
+    ]);
+    const model = createOpenRouter({ apiKey: 'test-key', fetch })(
+      'z-ai/glm-5.2'
+    );
+
+    await collect(
+      orchestratorServing(model).run({
+        ...cappedTurn('openrouter:z-ai/glm-5.2'),
+        effortFor: async () => ({ step: 'xhigh', toolFree: 'high' }),
+      })
+    );
+
+    expect(bodies).toHaveLength(2);
+    const [toolStep, synthesis] = bodies;
+    expect(synthesis).not.toHaveProperty('tools');
+    expect(toolStep.reasoning).toEqual({ effort: 'xhigh' });
+    expect(synthesis.reasoning).toEqual({ effort: 'high' });
   });
 
   it('keeps the tools, a native tool_choice none and the turn effort on an OpenAI synthesis', async () => {

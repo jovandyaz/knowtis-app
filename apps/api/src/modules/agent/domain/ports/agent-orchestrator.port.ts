@@ -1,6 +1,5 @@
-import type { ReasoningEffort } from '@knowtis/shared-types';
-
 import type { AiExecutionContext } from '../../../ai/domain/execution-context/ai-execution-context';
+import type { TurnEffort } from '../../../ai/domain/model-catalog/effort-policy';
 import type { AgentEvent, AgentSource } from '../agent-event';
 import type { AgentMessage } from '../agent-message';
 
@@ -21,8 +20,8 @@ export interface AgentRunInput {
   readonly knownNotes?: readonly AgentSource[];
   readonly userMemories?: readonly string[];
   readonly byokApiKey?: string;
-  /** Effort for the model about to be served; awaited again on every failover so a rescue model is never handed another model's level. */
-  readonly effortFor?: (model: string) => Promise<ReasoningEffort | undefined>;
+  /** Efforts for the model about to be served, within its own ladder; awaited again on every failover so a rescue model is never handed another model's levels. */
+  readonly effortFor?: (model: string) => Promise<TurnEffort | undefined>;
   readonly openrouterProviderOrder?: readonly string[];
   readonly openrouterIgnoredProviders?: readonly string[];
 }

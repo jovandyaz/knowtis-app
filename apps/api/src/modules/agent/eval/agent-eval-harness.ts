@@ -11,13 +11,13 @@ import {
   type AiInputDisposition,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import type { ReasoningEffort } from '@knowtis/shared-types';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
 import { DatabaseModule } from '../../../database';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
+import type { TurnEffort } from '../../ai/domain/model-catalog/effort-policy';
 import { FallbackChainService } from '../../ai/infrastructure/providers/fallback-chain.service';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
 import { AgentModule } from '../agent.module';
@@ -51,7 +51,7 @@ const EVAL_EXECUTION = createExecutionContext({ userId: EVAL_USER_ID });
 export interface EvalTurnSettings {
   openRouterProviderOrder(): Promise<readonly string[]>;
   openRouterIgnoredProviders(): Promise<readonly string[]>;
-  effortFor(model: string): Promise<ReasoningEffort | undefined>;
+  effortFor(model: string): Promise<TurnEffort | undefined>;
 }
 
 interface ReplayOutcomes {
