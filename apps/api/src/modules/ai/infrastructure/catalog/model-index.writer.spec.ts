@@ -10,7 +10,10 @@ import {
 
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
-import { UNPARSEABLE_MODEL_ID } from '../../domain/model-catalog/upstream-discards';
+import {
+  DISCARD_LOG_SAMPLE_SIZE,
+  UNPARSEABLE_MODEL_ID,
+} from '../../domain/model-catalog/upstream-discards';
 import type { ModelIndexRepository } from '../../domain/ports/model-index.repository';
 import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type {
@@ -126,7 +129,7 @@ function make(previousListed: Partial<Record<IndexProvider, number>> = {}) {
     ),
     markAbsent: vi
       .fn<ModelIndexRepository['markAbsent']>()
-      .mockResolvedValue(0),
+      .mockResolvedValue([]),
     listListed: vi.fn<ModelIndexRepository['listListed']>(),
   };
   return { writer: new ModelIndexWriter(repo), repo };
@@ -135,6 +138,13 @@ function make(previousListed: Partial<Record<IndexProvider, number>> = {}) {
 function upsertedIds(repo: ReturnType<typeof make>['repo']): string[] {
   const [rows] = repo.upsertMany.mock.calls[0] ?? [[]];
   return rows.map((row) => row.id);
+}
+
+function retiredIds(provider: IndexProvider, count: number): string[] {
+  return Array.from(
+    { length: count },
+    (_, index) => `${provider}:retired-${index}`
+  );
 }
 
 function absenceConcludedFor(
@@ -219,7 +229,7 @@ describe('ModelIndexWriter', () => {
   it('should report how many rows the absences retired', async () => {
     const { writer, repo } = make();
     repo.markAbsent.mockImplementation(async (provider: IndexProvider) =>
-      provider === 'openrouter' ? 3 : 1
+      retiredIds(provider, provider === 'openrouter' ? 3 : 1)
     );
 
     const result = await writer.write(openRouterCatalog(), modelsDevCatalog());
@@ -230,6 +240,24 @@ describe('ModelIndexWriter', () => {
       indexed: 5,
       absent: 6,
     });
+  });
+
+  it('should log a sample of the ids each provider newly retired', async () => {
+    const { writer, repo } = make();
+    const retired = retiredIds('openrouter', DISCARD_LOG_SAMPLE_SIZE + 1);
+    repo.markAbsent.mockImplementation(async (provider: IndexProvider) =>
+      provider === 'openrouter' ? retired : []
+    );
+
+    await writer.write(openRouterCatalog(), modelsDevCatalog());
+
+    expect(logLog).toHaveBeenCalledWith({
+      event: 'ai.model_index.marked_absent',
+      provider: 'openrouter',
+      count: retired.length,
+      models: retired.slice(0, DISCARD_LOG_SAMPLE_SIZE),
+    });
+    expect(logLog).toHaveBeenCalledTimes(2);
   });
 
   it('should index only OpenRouter and touch no direct provider when models.dev failed', async () => {

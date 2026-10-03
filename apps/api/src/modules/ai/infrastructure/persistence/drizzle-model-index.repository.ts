@@ -119,7 +119,7 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
     provider: IndexProvider,
     seenAt: Date,
     keep: readonly string[]
-  ): Promise<number> {
+  ): Promise<string[]> {
     const marked = await this.db
       .update(aiModelIndex)
       .set({ absentSince: sql`now()`, updatedAt: sql`now()` })
@@ -132,7 +132,7 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
         )
       )
       .returning({ id: aiModelIndex.id });
-    return marked.length;
+    return marked.map(({ id }) => id);
   }
 
   async listListed(): Promise<IndexedModel[]> {

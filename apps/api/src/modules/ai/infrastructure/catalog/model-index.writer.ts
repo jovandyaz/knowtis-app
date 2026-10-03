@@ -9,6 +9,7 @@ import {
   type ProviderBatch,
 } from '../../domain/model-catalog/index-sync-plan';
 import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/selectable-models.catalog';
+import { DISCARD_LOG_SAMPLE_SIZE } from '../../domain/model-catalog/upstream-discards';
 import {
   MODEL_INDEX_REPOSITORY,
   type ModelIndexRepository,
@@ -106,11 +107,20 @@ export class ModelIndexWriter {
     const indexed = await this.repo.upsertMany(plan.upserts, seenAt);
     let absent = 0;
     for (const provider of plan.concludeAbsence) {
-      absent += await this.repo.markAbsent(
+      const retired = await this.repo.markAbsent(
         provider,
         seenAt,
         discardedOf.get(provider) ?? []
       );
+      absent += retired.length;
+      if (retired.length > 0) {
+        this.logger.log({
+          event: 'ai.model_index.marked_absent',
+          provider,
+          count: retired.length,
+          models: retired.slice(0, DISCARD_LOG_SAMPLE_SIZE),
+        });
+      }
     }
 
     this.logger.log({ event: 'ai.model_index.sync', indexed, absent });

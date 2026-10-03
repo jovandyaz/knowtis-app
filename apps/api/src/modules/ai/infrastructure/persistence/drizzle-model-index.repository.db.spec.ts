@@ -193,7 +193,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
 
     const marked = await repo.markAbsent('openrouter', SECOND_SEEN_AT, []);
 
-    expect(marked).toBe(1);
+    expect(marked).toEqual([SECOND_ID]);
     expect(await absentSince(SECOND_ID)).toBeInstanceOf(Date);
     expect(await absentSince(FIRST_ID)).toBeNull();
     expect(await absentSince(OTHER_PROVIDER_ID)).toBeNull();
@@ -202,7 +202,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     );
     await expect(
       repo.markAbsent('openrouter', SECOND_SEEN_AT, [])
-    ).resolves.toBe(0);
+    ).resolves.toEqual([]);
   });
 
   it('keeps an unseen row listed when its id is in keep', async () => {
@@ -212,8 +212,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
     );
     await repo.upsertMany([indexed(FIRST_ID)], SECOND_SEEN_AT);
 
-    await repo.markAbsent('openrouter', SECOND_SEEN_AT, [SECOND_ID]);
+    const marked = await repo.markAbsent('openrouter', SECOND_SEEN_AT, [
+      SECOND_ID,
+    ]);
 
+    expect(marked).toEqual([THIRD_ID]);
     expect(await absentSince(SECOND_ID)).toBeNull();
     expect(await absentSince(THIRD_ID)).toBeInstanceOf(Date);
     expect((await ownListed()).map((model) => model.id).sort()).toEqual(
