@@ -518,6 +518,12 @@
         "marker": "Continuar"
       },
       "interrupted": "Esta respuesta se interrumpió.",
+      "modelFallback": {
+        "model_retired": "Respondió {{model}} porque el modelo que elegiste ya no está disponible.",
+        "key_removed": "Respondió {{model}} porque quitaste la API key del modelo que elegiste.",
+        "not_in_tier": "Respondió {{model}} porque tu plan no incluye el modelo que elegiste.",
+        "other": "Respondió {{model}} en lugar del modelo que elegiste."
+      },
       "empty": {
         "title": "Pregúntale a tus notas",
         "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",

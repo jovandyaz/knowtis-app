@@ -35,10 +35,13 @@ import {
   deriveConversationTitle,
   isAgentStopReason,
   isContinuableStop,
+  isModelFallbackReason,
   MESSAGE_KIND,
   type AgentStopReason,
   type AiQuota,
   type MessageKind,
+  type ModelFallbackReason,
+  type ModelResolution,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 import {
@@ -102,6 +105,13 @@ export function isUpdateProposal(p: PendingProposal): p is UpdateProposal {
   return p.kind === 'update' && p.targetNoteId !== null;
 }
 
+/** The model that answered a reply in place of the one its turn asked for. */
+export interface ReplyModelFallback {
+  /** Absent when a newer server sent a reason this build does not know. */
+  reason?: ModelFallbackReason;
+  to: string;
+}
+
 export interface AgentChatMessage {
   id: string;
   /** Absent only on history written before turns had ids. */
@@ -118,6 +128,8 @@ export interface AgentChatMessage {
   discarded?: boolean;
   /** The stored leg this bubble shows was cut off by an abort or an error. */
   interrupted?: boolean;
+  /** Only the live `agent:done` reports it; the stored transcript does not, so a refetched thread drops it. */
+  modelFallback?: ReplyModelFallback;
 }
 
 export interface QueuedMessage {
@@ -358,11 +370,22 @@ function invalidateQuota(): void {
   void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
 }
 
-// The caller's tier no longer runs the model this client last saw (a key
-// deleted elsewhere), so the picker must re-read what it may offer.
+// The caller's tier no longer runs a model this client last saw, so the
+// picker must re-read what it may offer.
 function refreshModelChoice(): void {
   void queryClient.invalidateQueries({ queryKey: aiModelsQueryKeys.all });
   void queryClient.invalidateQueries({ queryKey: providerKeysQueryKeys.all });
+}
+
+function replyFallbackOf(
+  fallback: NonNullable<ModelResolution['fallback']>
+): ReplyModelFallback {
+  return {
+    to: fallback.to,
+    ...(isModelFallbackReason(fallback.reason)
+      ? { reason: fallback.reason }
+      : {}),
+  };
 }
 
 function isPersistedConversation(
@@ -653,12 +676,22 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
             : {}),
         });
       },
-      onDone: ({ sources, webSources, stopReason, continuable }) => {
+      onDone: ({
+        sources,
+        webSources,
+        stopReason,
+        continuable,
+        modelResolution,
+      }) => {
         if (version !== streamVersion || get().status !== 'streaming') {
           return;
         }
         invalidateConversations(queryClient);
         invalidateQuota();
+        const fallback = modelResolution?.fallback;
+        if (fallback) {
+          refreshModelChoice();
+        }
         buffer.clearInactivityTimer();
         buffer.flush();
         thinkingBuffer.discard();
@@ -679,6 +712,9 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
                     sources,
                     webSources,
                     ...(isAgentStopReason(stopReason) ? { stopReason } : {}),
+                    ...(fallback
+                      ? { modelFallback: replyFallbackOf(fallback) }
+                      : {}),
                   }
                 : m
             ),

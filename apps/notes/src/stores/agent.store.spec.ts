@@ -2882,3 +2882,141 @@ describe('agent.store continuing a capped turn', () => {
     });
   });
 });
+
+describe('agent.store a reply served by a fallback model', () => {
+  const REQUESTED = 'anthropic:claude-opus-5';
+  const SUBSTITUTE = 'openai:gpt-5.6-terra';
+  const DONE: AgentDonePayload = {
+    usage: USAGE,
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'completed',
+  };
+  const FELL_BACK: AgentDonePayload = {
+    ...DONE,
+    modelResolution: {
+      requested: REQUESTED,
+      resolved: SUBSTITUTE,
+      fallback: { reason: 'key_removed', from: REQUESTED, to: SUBSTITUTE },
+    },
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    vi.mocked(agentClient.canResume).mockReturnValue(true);
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  function answer(done: AgentDonePayload, turnId = 'turn-1') {
+    const { get } = capture(turnId);
+    useAgentStore.getState().sendMessage('hola');
+    get().onChunk({ text: 'Listo.' });
+    get().onDone(done);
+  }
+
+  it('keeps which model answered and why on the reply', () => {
+    answer(FELL_BACK);
+
+    expect(useAgentStore.getState().messages.at(-1)?.modelFallback).toEqual({
+      reason: 'key_removed',
+      to: SUBSTITUTE,
+    });
+  });
+
+  it('leaves a reply its own model served without one', () => {
+    answer({
+      ...DONE,
+      modelResolution: { requested: SUBSTITUTE, resolved: SUBSTITUTE },
+    });
+
+    expect(useAgentStore.getState().messages.at(-1)).not.toHaveProperty(
+      'modelFallback'
+    );
+  });
+
+  it('keeps a reason this build does not know as a substitution without one', () => {
+    answer({
+      ...DONE,
+      modelResolution: {
+        requested: REQUESTED,
+        resolved: SUBSTITUTE,
+        fallback: {
+          reason: 'model_deprecated',
+          from: REQUESTED,
+          to: SUBSTITUTE,
+        },
+      },
+    } as unknown as AgentDonePayload);
+
+    expect(useAgentStore.getState().messages.at(-1)?.modelFallback).toEqual({
+      to: SUBSTITUTE,
+    });
+  });
+
+  it('marks only the reply of the turn that fell back', () => {
+    answer(FELL_BACK, 'turn-1');
+    answer(DONE, 'turn-2');
+
+    const replies = useAgentStore
+      .getState()
+      .messages.filter((m) => m.role === 'assistant');
+    expect(replies.map((m) => m.modelFallback?.to)).toEqual([
+      SUBSTITUTE,
+      undefined,
+    ]);
+  });
+
+  it('marks the reply after an approval, not the proposing one', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.({
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 'Create "My Note"',
+      payload: {},
+    });
+    useAgentStore.getState().approveProposal();
+    get().onChunk({ text: 'Creada.' });
+    get().onDone(FELL_BACK);
+
+    const replies = useAgentStore
+      .getState()
+      .messages.filter((m) => m.role === 'assistant');
+    expect(replies.map((m) => m.modelFallback?.to)).toEqual([
+      undefined,
+      SUBSTITUTE,
+    ]);
+  });
+
+  it('refreshes what the picker offers after a fallback', () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    answer(FELL_BACK);
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.all,
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: providerKeysQueryKeys.all,
+    });
+  });
+
+  it('leaves the model caches as they are when the turn ran on its own model', () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    answer(DONE);
+
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.all,
+    });
+  });
+});
