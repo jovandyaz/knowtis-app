@@ -50,7 +50,6 @@ vi.mock('@/hooks', () => ({
     isReady,
   }),
   useActiveCollaborators: () => [],
-  usePresenceBroadcast: () => undefined,
   useAISettings: () => ({ data: undefined }),
   useUpdateAISettings: () => ({ mutate: vi.fn() }),
 }));

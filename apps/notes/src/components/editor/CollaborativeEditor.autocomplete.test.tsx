@@ -60,7 +60,6 @@ vi.mock('@/hooks', () => ({
     isReady: true,
   }),
   useActiveCollaborators: () => [],
-  usePresenceBroadcast: () => undefined,
   useAISettings: (enabled?: boolean) => {
     preferencesQueryEnabled = enabled;
     return { data: preferences, isError: preferencesFailed };

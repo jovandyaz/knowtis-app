@@ -4,7 +4,6 @@ paths:
   - 'apps/notes/src/**/collaboration/**'
   - 'apps/notes/src/hooks/useCollaborativeEditor*'
   - 'apps/notes/src/hooks/useActiveCollaborators*'
-  - 'apps/notes/src/hooks/usePresenceBroadcast*'
   - 'apps/notes/src/components/editor/CollaborativeEditor*'
   - 'apps/notes/src/pages/SharedNotePage*'
   - 'libs/api-client/src/lib/collaboration*'
@@ -84,7 +83,6 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
 - Each connection owns its `Awareness`: `useHocuspocusCollaboration` creates one per `HocuspocusProvider`, sets the local `user` field from `currentUser`, and returns it (`null` without a connection). `provider.destroy()` destroys the awareness it holds, so never share one across connections — revisiting a note, switching accounts and StrictMode's double effect each open a new connection.
 - `useActiveCollaborators(awareness)` lists the remote users of the hook's awareness and re-subscribes when it changes.
 - `CollaborativeCursors` writes the local `cursor` field and renders remote carets; the editor follows a new awareness with `editor.commands.setCursorsAwareness(awareness)` instead of being recreated.
-- `usePresenceBroadcast(noteId)` posts cross-tab `presence`/`leave` messages over the `BroadcastChannel`; it does not touch awareness.
 - No manual encode/decode of awareness updates — Hocuspocus' protocol handles it.
 
 ## Resource Cleanup

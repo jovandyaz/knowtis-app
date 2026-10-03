@@ -8,19 +8,19 @@ The network transport (Hocuspocus over WebSocket) is not in this package; `apps/
 
 Exported from [`src/index.ts`](src/index.ts):
 
-| Export                                       | Purpose                                                                                                                                  |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `YjsProvider`                                | React provider owning docs, persistence and the broadcast channel                                                                        |
-| `useYjs()`                                   | Returns the `YjsContextValue`; throws outside `YjsProvider`                                                                              |
-| `COLLAB_CONFIG`                              | `CHANNEL_NAME`, `ROOM_PREFIX`, `PRESENCE_INTERVAL_MS` (5000), `STALE_USER_TIMEOUT_MS` (12000), `PROVIDER_INIT_DELAY_MS`, `CURSOR_COLORS` |
-| `getRemoteUserStates(states, localClientId)` | Filters awareness states to remote users that have a `user` and `cursor`                                                                 |
-| `createUserDecorations(userState, docSize)`  | ProseMirror caret + selection decorations for one remote user                                                                            |
-| `docStateToBase64(doc)`                      | Full CRDT state as a base64 update, for persisting through JSON transports                                                               |
-| Types                                        | `DocumentResources`, `YjsProviderProps`, `AwarenessState`, `CollaborativeUser`, `YjsContextValue`                                        |
+| Export                                       | Purpose                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `YjsProvider`                                | React provider owning docs, persistence and the broadcast channel                                 |
+| `useYjs()`                                   | Returns the `YjsContextValue`; throws outside `YjsProvider`                                       |
+| `COLLAB_CONFIG`                              | `CHANNEL_NAME`, `PROVIDER_INIT_DELAY_MS`, `CURSOR_COLORS`                                         |
+| `getRemoteUserStates(states, localClientId)` | Filters awareness states to remote users that have a `user` and `cursor`                          |
+| `createUserDecorations(userState, docSize)`  | ProseMirror caret + selection decorations for one remote user                                     |
+| `docStateToBase64(doc)`                      | Full CRDT state as a base64 update, for persisting through JSON transports                        |
+| Types                                        | `DocumentResources`, `YjsProviderProps`, `AwarenessState`, `CollaborativeUser`, `YjsContextValue` |
 
 ### `YjsContextValue`
 
-`getYDoc(noteId)`, `getYText(noteId)` (the `Y.XmlFragment` under `YJS_XML_FRAGMENT_NAME` from `@knowtis/editor-schema`), `currentUser`, `activeUsers`, `broadcastPresence(noteId)`, `broadcastLeave(noteId)`.
+`getYDoc(noteId)`, `getYText(noteId)` (the `Y.XmlFragment` under `YJS_XML_FRAGMENT_NAME` from `@knowtis/editor-schema`), `currentUser`.
 
 ## Mechanics
 
@@ -30,7 +30,7 @@ Exported from [`src/index.ts`](src/index.ts):
 
 ### Cross-tab sync
 
-The provider opens `new BroadcastChannel(COLLAB_CONFIG.CHANNEL_NAME)`. Each doc `update` is posted as an `update` message and applied with `Y.applyUpdate` in other tabs, so edits converge between tabs of the same browser without a server. `presence` and `leave` messages feed `activeUsers`; a timer running every `PRESENCE_INTERVAL_MS` drops users whose `lastSeen` is older than `STALE_USER_TIMEOUT_MS`.
+The provider opens `new BroadcastChannel(COLLAB_CONFIG.CHANNEL_NAME)`. Each doc `update` is posted as an `update` message and applied with `Y.applyUpdate` in other tabs, so edits converge between tabs of the same browser without a server. Any other message type, such as the `presence` and `leave` messages older builds still post, is ignored.
 
 ### Identity
 

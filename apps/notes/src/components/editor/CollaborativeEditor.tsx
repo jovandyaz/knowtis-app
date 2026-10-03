@@ -20,7 +20,6 @@ import {
   useActiveCollaborators,
   useAISettings,
   useCollaborativeEditor,
-  usePresenceBroadcast,
   useUpdateAISettings,
 } from '@/hooks';
 import { queryClient } from '@/lib/query-client';
@@ -333,12 +332,10 @@ export function CollaborativeEditor({
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
   const aiEnabled = useAIStore((s) => s.aiEnabled);
-  const collaborationEnabled = !localFirst;
   const userId = useAuthUser()?.id;
   const editorState = useCollaborativeEditor(noteId, {
     skipProviderDelay: localFirst,
   });
-  usePresenceBroadcast(noteId, { enabled: collaborationEnabled });
 
   const resolvedPlaceholder: string[] = placeholder
     ? [placeholder]
@@ -376,7 +373,7 @@ export function CollaborativeEditor({
     }
   }, [navigate, shareToken, onEditDenied]);
 
-  const wsEnabled = collaborationEnabled && isWebSocketEnabled();
+  const wsEnabled = !localFirst && isWebSocketEnabled();
   const reconcileAccess = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: notesQueryKeys.all });
   }, []);
