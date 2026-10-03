@@ -22,7 +22,6 @@ import {
   PLATFORM_FLOOR_MODEL_IDS,
 } from '../../domain/model-catalog/floor-models';
 import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
-import { watchedSlug } from '../../domain/model-catalog/openrouter-watch';
 import {
   DISCARD_LOG_SAMPLE_SIZE,
   UNPARSEABLE_MODEL_ID,
@@ -42,20 +41,18 @@ const LARGEST_COST_BELOW_CEILING =
 const DEEPSEEK_SLUG = 'deepseek/deepseek-v4-flash';
 
 // OpenRouter only proves absence while it still lists a watched model.
-const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.flatMap((id) => {
-  const slug = watchedSlug(id);
-  return slug === null ? [] : [slug];
-});
+const MIN_WATCHED_MODELS = 2;
 
-if (WATCHED_SLUGS.length < 2) {
+const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
+  id.startsWith(OPENROUTER_ID_PREFIX)
+).map((id) => id.slice(OPENROUTER_ID_PREFIX.length));
+
+if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
   throw new Error('the writer spec needs two watched OpenRouter models');
 }
 
 const [WATCHED_SLUG, OTHER_WATCHED_SLUG] = WATCHED_SLUGS;
 const WATCHED_ID = `openrouter:${WATCHED_SLUG}`;
-const OPENROUTER_FLOOR_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
-  id.startsWith(OPENROUTER_ID_PREFIX)
-).map((id) => id.slice(OPENROUTER_ID_PREFIX.length));
 const OPENROUTER_ROUTE_SLUGS = MODEL_INTENTS.flatMap((intent) => {
   const route = resolveByokIntent(
     intent,
@@ -667,7 +664,7 @@ describe('ModelIndexWriter', () => {
 
   it('should accept a provider with no listed rows whose batch serves what its snapshot rows serve', async () => {
     const models = [
-      ...OPENROUTER_FLOOR_SLUGS.map(upstreamModel),
+      ...WATCHED_SLUGS.map(upstreamModel),
       ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
     ];
     const { writer, repo } = make(
@@ -860,7 +857,7 @@ describe('ModelIndexWriter', () => {
     const result = await writer.write(
       openRouterCatalog({
         models: [
-          ...OPENROUTER_FLOOR_SLUGS.filter((slug) => slug !== WATCHED_SLUG).map(
+          ...WATCHED_SLUGS.filter((slug) => slug !== WATCHED_SLUG).map(
             upstreamModel
           ),
           ...OPENROUTER_ROUTE_SLUGS.map(routeModel),

@@ -10,14 +10,9 @@ import {
   canConcludeAbsence,
   findOpenRouterDrift,
   findPromotedDrift,
-  watchedSlug,
 } from './openrouter-watch';
 import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
 
-const SONNET_ID = 'anthropic:claude-sonnet-5';
-
-const WATCHED_ID = 'openrouter:deepseek/deepseek-v3.2';
-const WATCHED_SLUG = 'deepseek/deepseek-v3.2';
 const UPSTREAM_OUTPUT_COST = 0.0000044;
 const REPRICE_FACTOR = 3;
 
@@ -46,14 +41,18 @@ function upstreamModel(
   };
 }
 
-const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.flatMap((id) => {
-  const slug = watchedSlug(id);
-  return slug === null ? [] : [slug];
-});
+const MIN_WATCHED_MODELS = 2;
 
-if (WATCHED_SLUGS.length < 2) {
+const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
+  id.startsWith(OPENROUTER_ID_PREFIX)
+).map((id) => id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase());
+
+if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
   throw new Error('the watch spec needs two watched OpenRouter models');
 }
+
+const [WATCHED_SLUG] = WATCHED_SLUGS;
+const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
 function catalogOf(
   models: readonly UpstreamModel[],
@@ -72,30 +71,6 @@ function upstreamInSync(overrides: UpstreamModel[] = []): UpstreamCatalog {
     ...overrides,
   ]);
 }
-
-describe('watchedSlug', () => {
-  it('should map a platform default OpenRouter id onto its slug', () => {
-    expect(watchedSlug('openrouter:deepseek/deepseek-v3.2')).toBe(
-      'deepseek/deepseek-v3.2'
-    );
-    expect(watchedSlug('openrouter:moonshotai/kimi-k2.5')).toBe(
-      'moonshotai/kimi-k2.5'
-    );
-    expect(watchedSlug('openrouter:minimax/minimax-m2.5')).toBe(
-      'minimax/minimax-m2.5'
-    );
-  });
-
-  it('should return null for a platform default billed outside OpenRouter', () => {
-    expect(watchedSlug(SONNET_ID)).toBeNull();
-    expect(watchedSlug('google:gemini-3.7-flash')).toBeNull();
-  });
-
-  it('should return null for an id that is not a platform default', () => {
-    expect(watchedSlug('openrouter:z-ai/glm-5.2')).toBeNull();
-    expect(watchedSlug('openrouter:qwen/qwen3.8-max')).toBeNull();
-  });
-});
 
 describe('findOpenRouterDrift', () => {
   it('should report no finding when upstream reprices a watched model', () => {
@@ -256,6 +231,15 @@ describe('findPromotedDrift', () => {
     const listed = upstreamInSync([upstreamModel(PROMOTED_SLUG)]);
 
     expect(findPromotedDrift([storedWithCasing], listed)).toEqual([]);
+  });
+
+  it('should leave a promoted platform default to the drift watch', () => {
+    const vanished = catalogOf(
+      upstreamInSync().models.filter((model) => model.id !== WATCHED_SLUG)
+    );
+
+    expect(findPromotedDrift([WATCHED_ID], vanished)).toEqual([]);
+    expect(findOpenRouterDrift(vanished)).toHaveLength(1);
   });
 
   it('should skip promoted ids that OpenRouter does not bill', () => {
