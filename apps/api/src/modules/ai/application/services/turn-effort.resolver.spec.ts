@@ -8,6 +8,7 @@ import type {
 } from '@knowtis/shared-types';
 
 import { createExecutionContext } from '../../testing/create-execution-context';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import { createSnapshotIndex } from '../../testing/snapshot-index';
 import type { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
@@ -355,7 +356,8 @@ describe('TurnEffortResolver', () => {
         },
         { isModelAvailable } as never,
         promoted as never,
-        index
+        index,
+        createResolutionsStub()
       );
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),

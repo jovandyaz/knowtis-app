@@ -26,6 +26,7 @@ import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-mo
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { DrizzleAiCatalogRepository } from '../../infrastructure/persistence/drizzle-ai-catalog.repository';
 import { createExecutionContext } from '../../testing/create-execution-context';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { AiCatalogAdminService } from './ai-catalog-admin.service';
 import { SelectableModelsService } from './selectable-models.service';
@@ -133,7 +134,8 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
       new CompositeModelCatalog(promotedCache, index),
       { isModelAvailable: () => true } as never,
       promotedCache,
-      index
+      index,
+      createResolutionsStub()
     );
   });
 
