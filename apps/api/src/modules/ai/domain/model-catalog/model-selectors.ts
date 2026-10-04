@@ -23,7 +23,7 @@ const GOOGLE = 'google' satisfies DirectProvider;
 export type OpenWeightAuthor = (typeof OPEN_WEIGHT_AUTHORS)[number];
 export type SelectorCapability = 'tool_call' | 'structured_output';
 
-/** The part of eligibility a caller tunes; the rest is global (§2). */
+/** The part of eligibility a caller tunes; the rest applies to every row. */
 export interface EligibilityRule {
   readonly requires: readonly SelectorCapability[];
   readonly allowPreview?: true;
@@ -31,7 +31,7 @@ export interface EligibilityRule {
   readonly maxOutputCostPerMillion?: number;
 }
 
-/** Spec §2 shape. */
+/** A code-owned rule that resolves one intent on one provider. */
 export interface ModelSelector extends EligibilityRule {
   readonly author:
     | typeof ANTHROPIC
