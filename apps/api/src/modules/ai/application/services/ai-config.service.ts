@@ -224,16 +224,13 @@ export class AIConfigService implements PlatformModelsSource {
       this.getIntentModels(),
       this.getFallbackChain(),
     ]);
-    const actives = MODEL_INTENTS.map((intent) =>
-      this.resolutions.activeModelId(intent)
-    );
     return [
       ...new Set(
         [
           ...MODEL_INTENTS.map((intent) => intents[intent]),
           ...chain,
-          ...actives,
-        ].filter((id): id is string => id !== null && id !== '')
+          ...this.resolutions.activeModelIds(),
+        ].filter((id) => id !== '')
       ),
     ];
   }

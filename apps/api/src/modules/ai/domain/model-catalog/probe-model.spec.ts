@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { MODEL_INDEX_SNAPSHOT } from '@knowtis/ai-gateway';
-
 import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
@@ -61,21 +59,16 @@ describe('systemProbeModelId', () => {
       systemProbeModelId(
         'openrouter',
         [ANTHROPIC_PIN, FAST_PIN, BALANCED_PIN],
-        MODEL_INDEX_SNAPSHOT,
+        rows,
         SNAPSHOT_DATE
       )
     ).toBe(FAST_PIN);
   });
 
   it('probes the fast BYOK route of a provider no platform model uses', () => {
-    expect(
-      systemProbeModelId(
-        'openai',
-        [FAST_PIN],
-        MODEL_INDEX_SNAPSHOT,
-        SNAPSHOT_DATE
-      )
-    ).toBe('openai:gpt-6-luna');
+    expect(systemProbeModelId('openai', [FAST_PIN], rows, SNAPSHOT_DATE)).toBe(
+      'openai:gpt-6-luna'
+    );
   });
 
   it('probes nothing when neither exists', () => {
