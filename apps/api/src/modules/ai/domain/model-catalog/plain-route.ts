@@ -1,15 +1,13 @@
 import { deriveCanonical, providerOf } from '@knowtis/ai-gateway';
 
-import { OPENROUTER_ID_PREFIX } from './catalog-model';
+import { OPENROUTER_ID_PREFIX, slugOf } from './catalog-model';
 
 const VARIANT_SEPARATOR = ':';
 
 function authorSlugOf(modelId: string): string {
-  if (modelId.startsWith(OPENROUTER_ID_PREFIX)) {
-    return modelId.slice(OPENROUTER_ID_PREFIX.length);
-  }
-  const provider = providerOf(modelId);
-  return `${provider}/${modelId.slice(provider.length + VARIANT_SEPARATOR.length)}`;
+  return modelId.startsWith(OPENROUTER_ID_PREFIX)
+    ? slugOf(modelId)
+    : `${providerOf(modelId)}/${slugOf(modelId)}`;
 }
 
 /**

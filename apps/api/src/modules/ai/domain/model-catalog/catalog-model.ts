@@ -7,6 +7,13 @@ import type {
 /** Namespace every OpenRouter model id carries: this prefix followed by the upstream slug. */
 export const OPENROUTER_ID_PREFIX = 'openrouter:';
 
+const PROVIDER_SEPARATOR = ':';
+
+/** The model id without its provider: `vendor/model` on OpenRouter, the vendor's own id on a direct provider. */
+export function slugOf(modelId: string): string {
+  return modelId.slice(modelId.indexOf(PROVIDER_SEPARATOR) + 1);
+}
+
 /** A model tracked in the AI catalog: discovered upstream as a candidate, promoted by an admin, and back to candidate when retired. */
 export interface CatalogModel {
   readonly id: string;

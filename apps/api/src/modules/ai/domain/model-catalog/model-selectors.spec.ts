@@ -15,6 +15,7 @@ import {
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
+  byNewestRelease,
   BYOK_SELECTORS,
   intentOfFamily,
   isAssignableModel,
@@ -752,5 +753,26 @@ describe('intentOfFamily', () => {
 
   it.each(['glm', null])('gives null for %s', (family) => {
     expect(intentOfFamily(family)).toBeNull();
+  });
+});
+
+describe('byNewestRelease', () => {
+  const OLDER = { releasedAt: '2026-01-31' };
+  const NEWER = { releasedAt: '2026-02-01' };
+  const UNDATED = { releasedAt: null };
+
+  it('orders newer releases first and undated ones last', () => {
+    expect([UNDATED, OLDER, NEWER].toSorted(byNewestRelease)).toEqual([
+      NEWER,
+      OLDER,
+      UNDATED,
+    ]);
+  });
+
+  it.each([
+    ['the same date', OLDER, { releasedAt: OLDER.releasedAt }],
+    ['no date', UNDATED, { releasedAt: null }],
+  ])('ties two entries with %s', (_, a, b) => {
+    expect(byNewestRelease(a, b)).toBe(0);
   });
 });
