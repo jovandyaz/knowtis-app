@@ -39,8 +39,13 @@ function makeChooser(
     primaryProvider?: ByokProvider | null;
   } = {},
   promoted: readonly CatalogModel[] = [],
-  index = createSnapshotIndex()
+  index = createSnapshotIndex(),
+  promotedLoaded = true
 ) {
+  const promotedCache = {
+    snapshot: () => promoted,
+    hasLoaded: vi.fn(() => promotedLoaded),
+  };
   const selectable = new SelectableModelsService(
     {
       isSupported: (id: string) => id !== RETIRED_MODEL,
@@ -53,7 +58,7 @@ function makeChooser(
     {
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
-    { snapshot: () => promoted } as never,
+    promotedCache as never,
     index
   );
   const stored: UserAiSettings = {
@@ -82,9 +87,10 @@ function makeChooser(
     repo as never,
     selectable,
     aiConfig as never,
-    index
+    index,
+    promotedCache as never
   );
-  return { svc, repo, selectable };
+  return { svc, repo, selectable, promotedCache };
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -854,12 +860,14 @@ describe('ModelPreferenceService', () => {
       const USER_ID = BYOK_ANTHROPIC.subject.userId;
 
       async function retiringChooser(
-        preferredIntent: ModelIntent | null = null
+        preferredIntent: ModelIntent | null = null,
+        promotedLoaded = true
       ) {
         return makeChooser(
           { preferredModel: SUPERSEDED_SONNET, preferredIntent },
           [],
-          await createSyncedSnapshotIndex()
+          await createSyncedSnapshotIndex(),
+          promotedLoaded
         );
       }
 
@@ -901,6 +909,20 @@ describe('ModelPreferenceService', () => {
         await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
           RETIRED_PICK_FALLBACK
         );
+        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('names nothing until the promoted models have loaded, since a promoted pick would read as retired', async () => {
+        const { svc, repo, promotedCache } = await retiringChooser(null, false);
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
+          RETIRED_PICK_FALLBACK
+        );
+        promotedCache.hasLoaded.mockReturnValue(true);
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          ...RETIRED_PICK_FALLBACK,
+          retiredPick: SUPERSEDED_SONNET,
+        });
         expect(repo.clearPreferredModel).not.toHaveBeenCalled();
       });
 

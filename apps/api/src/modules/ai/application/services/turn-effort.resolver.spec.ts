@@ -346,6 +346,7 @@ describe('TurnEffortResolver', () => {
       isModelAvailable: (model: string) => boolean = () => false
     ) {
       const index = createSnapshotIndex();
+      const promoted = { snapshot: () => [], hasLoaded: () => true };
       const selectable = new SelectableModelsService(
         {
           isSupported: () => true,
@@ -353,7 +354,7 @@ describe('TurnEffortResolver', () => {
           getContextWindow: () => undefined,
         },
         { isModelAvailable } as never,
-        { snapshot: () => [] } as never,
+        promoted as never,
         index
       );
       const aiConfig = {
@@ -363,7 +364,8 @@ describe('TurnEffortResolver', () => {
         {} as never,
         selectable,
         aiConfig as never,
-        index
+        index,
+        promoted as never
       );
       return new TurnEffortResolver(aiConfig as never, modelPreference);
     }

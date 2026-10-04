@@ -49,6 +49,7 @@ function makeWired(
   } = { preferredModel: null, preferredIntent: null }
 ) {
   const index = createSnapshotIndex();
+  const promoted = { snapshot: () => [], hasLoaded: () => true };
   const selectable = new SelectableModelsService(
     {
       isSupported: () => true,
@@ -58,7 +59,7 @@ function makeWired(
     {
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
-    { snapshot: () => [] } as never,
+    promoted as never,
     index
   );
   const repo = {
@@ -84,7 +85,8 @@ function makeWired(
       repo as never,
       selectable,
       aiConfig as never,
-      index
+      index,
+      promoted as never
     ),
     tiers as never
   );

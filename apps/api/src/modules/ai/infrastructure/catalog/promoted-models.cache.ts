@@ -16,6 +16,7 @@ const PROMOTED_CACHE_REFRESH_MS = 60_000;
 export class PromotedModelsCache implements OnModuleInit {
   private readonly logger = new Logger(PromotedModelsCache.name);
   private promoted: readonly CatalogModel[] = [];
+  private loaded = false;
   private latestGeneration = 0;
 
   constructor(
@@ -32,6 +33,11 @@ export class PromotedModelsCache implements OnModuleInit {
     return this.promoted;
   }
 
+  /** Whether a read has succeeded yet. Until then `snapshot()` is empty because nothing was read, not because nothing is promoted. */
+  hasLoaded(): boolean {
+    return this.loaded;
+  }
+
   /** Never rejects: an unreachable database keeps the previous snapshot rather than dropping promoted models out of the catalog. */
   @Interval(PROMOTED_CACHE_REFRESH_MS)
   async refresh(): Promise<void> {
@@ -42,6 +48,7 @@ export class PromotedModelsCache implements OnModuleInit {
       // just-promoted model would vanish again until the next interval.
       if (generation === this.latestGeneration) {
         this.promoted = rows;
+        this.loaded = true;
       }
     } catch (error) {
       this.logger.warn(
