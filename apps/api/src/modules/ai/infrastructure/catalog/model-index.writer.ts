@@ -143,7 +143,7 @@ export class ModelIndexWriter {
    * provider whose batch may conclude absence, except the ids upstream
    * published but the read discarded. A row a column cannot hold is skipped
    * and kept from absence the same way. A batch that would leave unserved a
-   * floor model its provider serves now is written not at all, and raises a
+   * platform or BYOK intent route its provider serves now is written not at all, and raises a
    * `model_index.floor_rejected` alert naming what it would leave unserved. A
    * `null` read (its fetch failed) leaves the providers it serves untouched.
    * Rejects when a repository call fails.

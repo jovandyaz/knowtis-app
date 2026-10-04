@@ -210,7 +210,7 @@ export const AI_CONFIG_KEYS = {
 } as const;
 export type AIConfigKey = (typeof AI_CONFIG_KEYS)[keyof typeof AI_CONFIG_KEYS];
 
-/** Where an AI config key's served value comes from; `stale` means a row is stored but the runtime ignores it and serves the code default. */
+/** Where an AI config key's served value comes from; `stale` means a row is stored but the runtime cannot serve it: a model key then serves its active platform resolution, a chain its supported members or the derived chain, any other key its code default. */
 export const AI_CONFIG_SOURCES = ['custom', 'default', 'stale'] as const;
 export type AIConfigSource = (typeof AI_CONFIG_SOURCES)[number];
 
