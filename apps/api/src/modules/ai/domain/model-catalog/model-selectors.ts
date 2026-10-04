@@ -20,6 +20,8 @@ type DirectProvider = (typeof MODELS_DEV_PROVIDERS)[number];
 const ANTHROPIC = 'anthropic' satisfies DirectProvider;
 const OPENAI = 'openai' satisfies DirectProvider;
 const GOOGLE = 'google' satisfies DirectProvider;
+const DEEPSEEK = 'deepseek' satisfies OpenWeightAuthor;
+const Z_AI = 'z-ai' satisfies OpenWeightAuthor;
 
 export type OpenWeightAuthor = (typeof OPEN_WEIGHT_AUTHORS)[number];
 export type SelectorCapability = 'tool_call' | 'structured_output';
@@ -30,6 +32,8 @@ export interface EligibilityRule {
   readonly allowPreview?: true;
   /** USD per million output tokens; absent means no ceiling. */
   readonly maxOutputCostPerMillion?: number;
+  /** Id substrings this rule refuses on top of `EXCLUDED_ID_TOKENS`. */
+  readonly excludedIdTokens?: readonly string[];
 }
 
 /** A code-owned rule that resolves one intent on one provider. */
@@ -66,6 +70,10 @@ export const FAST_CEILING_PER_MILLION = 6;
 export const BALANCED_CEILING_PER_MILLION = 15;
 export const POWERFUL_CEILING_PER_MILLION = 30;
 
+export const PLATFORM_FAST_CEILING_PER_MILLION = 2;
+export const PLATFORM_BALANCED_CEILING_PER_MILLION = 5;
+export const PLATFORM_POWERFUL_CEILING_PER_MILLION = 5;
+
 const MS_PER_DAY = 86_400_000;
 const ALIAS_PREFIX = '~';
 const VARIANT_SEPARATOR = ':';
@@ -73,8 +81,10 @@ const PREVIEW_TOKEN = '-preview';
 const TEXT_MODALITY = 'text';
 const AUTHOR_SEPARATOR = '/';
 const START_OF_DAY_UTC = 'T00:00:00Z';
+/** models.dev files `glm-5.3-flashx` under `glm`; a powerful intent never serves a flash tier. */
+const FLASH_ID_TOKEN = '-flash';
 
-const BYOK_REQUIRES: readonly SelectorCapability[] = [
+const SELECTOR_REQUIRES: readonly SelectorCapability[] = [
   'tool_call',
   'structured_output',
 ];
@@ -99,19 +109,19 @@ export const BYOK_SELECTORS: Readonly<
       author: ANTHROPIC,
       families: ['claude-haiku'],
       maxOutputCostPerMillion: FAST_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
     {
       author: OPENAI,
       families: ['gpt-luna'],
       maxOutputCostPerMillion: FAST_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
     {
       author: GOOGLE,
       families: ['gemini-flash-lite'],
       maxOutputCostPerMillion: FAST_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
   ],
   balanced: [
@@ -119,19 +129,19 @@ export const BYOK_SELECTORS: Readonly<
       author: ANTHROPIC,
       families: ['claude-sonnet'],
       maxOutputCostPerMillion: BALANCED_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
     {
       author: OPENAI,
       families: ['gpt-terra'],
       maxOutputCostPerMillion: BALANCED_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
     {
       author: GOOGLE,
       families: ['gemini-flash'],
       maxOutputCostPerMillion: BALANCED_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
   ],
   powerful: [
@@ -139,19 +149,19 @@ export const BYOK_SELECTORS: Readonly<
       author: ANTHROPIC,
       families: ['claude-opus'],
       maxOutputCostPerMillion: POWERFUL_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
     {
       author: OPENAI,
       families: ['gpt-sol'],
       maxOutputCostPerMillion: POWERFUL_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
     },
     {
       author: GOOGLE,
       families: ['gemini-pro'],
       maxOutputCostPerMillion: POWERFUL_CEILING_PER_MILLION,
-      requires: BYOK_REQUIRES,
+      requires: SELECTOR_REQUIRES,
       allowPreview: true,
     },
   ],
@@ -173,12 +183,13 @@ function isTextModel(row: IndexedModel): boolean {
   );
 }
 
-function isConcreteId(slug: string, allowPreview: boolean): boolean {
+function isConcreteId(slug: string, rule: EligibilityRule): boolean {
+  const excluded = [...EXCLUDED_ID_TOKENS, ...(rule.excludedIdTokens ?? [])];
   return (
     !slug.startsWith(ALIAS_PREFIX) &&
     !slug.includes(VARIANT_SEPARATOR) &&
-    !EXCLUDED_ID_TOKENS.some((token) => slug.includes(token)) &&
-    (allowPreview || !slug.includes(PREVIEW_TOKEN))
+    !excluded.some((token) => slug.includes(token)) &&
+    (rule.allowPreview === true || !slug.includes(PREVIEW_TOKEN))
   );
 }
 
@@ -209,7 +220,7 @@ export function isEligible(
     !EXCLUDED_STATUSES.includes(row.status) &&
     isOutsideRetirementWindow(row, now) &&
     isTextModel(row) &&
-    isConcreteId(slugOf(row.id), rule.allowPreview === true) &&
+    isConcreteId(slugOf(row.id), rule) &&
     rule.requires.every(
       (capability) => row[CAPABILITY_FLAG[capability]] === true
     ) &&
@@ -306,6 +317,44 @@ export function resolveByokIntent(
     }
   }
   return null;
+}
+
+/** One OpenRouter selector per platform intent: what the intent serves while no admin pins it. */
+export const PLATFORM_SELECTORS: Readonly<Record<ModelIntent, ModelSelector>> =
+  {
+    fast: {
+      author: DEEPSEEK,
+      families: ['deepseek-flash'],
+      maxOutputCostPerMillion: PLATFORM_FAST_CEILING_PER_MILLION,
+      requires: SELECTOR_REQUIRES,
+    },
+    balanced: {
+      author: DEEPSEEK,
+      families: ['deepseek-thinking'],
+      maxOutputCostPerMillion: PLATFORM_BALANCED_CEILING_PER_MILLION,
+      requires: SELECTOR_REQUIRES,
+    },
+    powerful: {
+      author: Z_AI,
+      families: ['glm'],
+      maxOutputCostPerMillion: PLATFORM_POWERFUL_CEILING_PER_MILLION,
+      requires: SELECTOR_REQUIRES,
+      excludedIdTokens: [FLASH_ID_TOKEN],
+    },
+  };
+
+/** The platform selector's resolution for `intent` over OpenRouter rows at `now`, or null. */
+export function resolvePlatformIntent(
+  intent: ModelIntent,
+  rows: readonly IndexedModel[],
+  now: Date = new Date()
+): IndexedModel | null {
+  return resolveSelector(
+    PLATFORM_SELECTORS[intent],
+    OPENROUTER_PROVIDER,
+    rows,
+    now
+  );
 }
 
 /** The intent whose BYOK selector lists this family, or null. */
