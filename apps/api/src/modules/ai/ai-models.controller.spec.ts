@@ -48,6 +48,7 @@ function makeWired(
     preferredIntent: 'fast' | 'balanced' | 'powerful' | null;
   } = { preferredModel: null, preferredIntent: null }
 ) {
+  const index = createSnapshotIndex();
   const selectable = new SelectableModelsService(
     {
       isSupported: () => true,
@@ -58,7 +59,7 @@ function makeWired(
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
     { snapshot: () => [] } as never,
-    createSnapshotIndex()
+    index
   );
   const repo = {
     getSettings: vi.fn().mockResolvedValue({
@@ -79,7 +80,12 @@ function makeWired(
     resolve: vi.fn().mockResolvedValue(FREE_EXECUTION),
   } satisfies Partial<Record<keyof TierResolver, unknown>>;
   const ctrl = new AiModelsController(
-    new ModelPreferenceService(repo as never, selectable, aiConfig as never),
+    new ModelPreferenceService(
+      repo as never,
+      selectable,
+      aiConfig as never,
+      index
+    ),
     tiers as never
   );
   return { ctrl, repo, tiers };

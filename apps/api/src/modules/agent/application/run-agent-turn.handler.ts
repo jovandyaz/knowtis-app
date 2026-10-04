@@ -43,7 +43,10 @@ import {
   ByokService,
 } from '../../ai/application/services/byok.service';
 import { MessageQuotaService } from '../../ai/application/services/message-quota.service';
-import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import {
+  ModelPreferenceService,
+  type TurnModelChoice,
+} from '../../ai/application/services/model-preference.service';
 import { TierResolver } from '../../ai/application/services/tier-resolver.service';
 import {
   TurnEffortResolver,
@@ -61,10 +64,7 @@ import {
   type SegmentLimits,
 } from '../../ai/domain/execution-context/segment-policy';
 import type { TurnEffort } from '../../ai/domain/model-catalog/effort-policy';
-import {
-  MODEL_CHOICE,
-  type ModelChoice,
-} from '../../ai/domain/model-catalog/model-choice';
+import { MODEL_CHOICE } from '../../ai/domain/model-catalog/model-choice';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -208,6 +208,7 @@ type TurnEventOutcome = 'continue' | 'stop';
 interface ResolvedModel {
   readonly model: string;
   readonly resolution: ModelResolution;
+  readonly retiredPick: string | undefined;
 }
 
 interface TurnLoopContext {
@@ -215,6 +216,7 @@ interface TurnLoopContext {
   readonly reservation: Reservation;
   readonly model: string;
   readonly resolution: ModelResolution;
+  readonly retiredPick: string | undefined;
   reconciled: boolean;
 }
 
@@ -700,6 +702,7 @@ export class RunAgentTurnHandler {
           continuable: false,
           modelResolution: ctx.resolution,
         });
+        await this.forgetDeliveredRetiredPick(ctx);
         return 'stop';
       },
       consumesQuota: false,
@@ -994,6 +997,7 @@ export class RunAgentTurnHandler {
       reservation: prepared.reservation,
       model,
       resolution: resolved.resolution,
+      retiredPick: resolved.retiredPick,
       reconciled: false,
     };
     // Only an admitted turn may repin the conversation: a HITL resume serves
@@ -1183,6 +1187,7 @@ export class RunAgentTurnHandler {
                 : {}),
               modelResolution: ctx.resolution,
             });
+            await this.forgetDeliveredRetiredPick(ctx);
             return;
           }
           case 'proposal':
@@ -1549,7 +1554,22 @@ export class RunAgentTurnHandler {
         ...choice.resolution.fallback,
       });
     }
-    return { model: choice.model, resolution: choice.resolution };
+    return {
+      model: choice.model,
+      resolution: choice.resolution,
+      retiredPick: choice.retiredPick,
+    };
+  }
+
+  private async forgetDeliveredRetiredPick(
+    ctx: TurnLoopContext
+  ): Promise<void> {
+    if (ctx.retiredPick !== undefined) {
+      await this.modelPreference.forgetRetiredPick(
+        ctx.execution.subject.userId,
+        ctx.retiredPick
+      );
+    }
   }
 
   private async keptPriorModel(
@@ -1557,7 +1577,7 @@ export class RunAgentTurnHandler {
     droppedEvent:
       | 'agent.continuation.model_dropped'
       | 'agent.resume.model_dropped'
-  ): Promise<ModelChoice | null> {
+  ): Promise<TurnModelChoice | null> {
     if (input.model || !input.priorModel) {
       return null;
     }

@@ -206,12 +206,24 @@ describe('TurnEffortResolver', () => {
     );
   });
 
-  it('falls back onto the ladder when a free caller has no level at or under the ceiling', async () => {
-    const { resolver } = make({ levels: ['xhigh', 'max'], mandatory: true });
+  it('keeps a free caller on the global default when its trimmed ladder leaves no level at or under the ceiling', async () => {
+    const { resolver } = make(null);
 
     await expect(
       resolver.resolve({
         execution: FREE_CALLER,
+        model: MODEL,
+        requested: 'high',
+      })
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
+  });
+
+  it('falls back onto the nearest listed level when a byok caller asks for one the ladder lacks', async () => {
+    const { resolver } = make({ levels: ['xhigh', 'max'], mandatory: true });
+
+    await expect(
+      resolver.resolve({
+        execution: billedToKey(MODEL),
         model: MODEL,
         requested: 'high',
       })
@@ -333,6 +345,7 @@ describe('TurnEffortResolver', () => {
     function makeReal(
       isModelAvailable: (model: string) => boolean = () => false
     ) {
+      const index = createSnapshotIndex();
       const selectable = new SelectableModelsService(
         {
           isSupported: () => true,
@@ -341,7 +354,7 @@ describe('TurnEffortResolver', () => {
         },
         { isModelAvailable } as never,
         { snapshot: () => [] } as never,
-        createSnapshotIndex()
+        index
       );
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),
@@ -349,7 +362,8 @@ describe('TurnEffortResolver', () => {
       const modelPreference = new ModelPreferenceService(
         {} as never,
         selectable,
-        aiConfig as never
+        aiConfig as never,
+        index
       );
       return new TurnEffortResolver(aiConfig as never, modelPreference);
     }
