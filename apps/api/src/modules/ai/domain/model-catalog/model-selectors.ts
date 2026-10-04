@@ -91,7 +91,7 @@ const SELECTOR_REQUIRES: readonly SelectorCapability[] = [
 
 /** What an admin may pin as a platform default: any eligible row that can call tools and emit structured output. */
 const ASSIGNABLE_RULE: EligibilityRule = {
-  requires: ['tool_call', 'structured_output'],
+  requires: SELECTOR_REQUIRES,
   allowPreview: true,
 };
 

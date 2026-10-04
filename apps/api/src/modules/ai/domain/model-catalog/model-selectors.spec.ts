@@ -779,6 +779,8 @@ describe('byNewestRelease', () => {
   });
 });
 
+const ABOVE_PRIME_CEILING_PER_MILLION = 10;
+
 describe('PLATFORM_SELECTORS', () => {
   it.each([
     ['fast', 'openrouter:deepseek/deepseek-v4.1-flash'],
@@ -807,13 +809,21 @@ describe('PLATFORM_SELECTORS', () => {
   });
 
   it('skips a powerful row above its ceiling', () => {
+    const prime = row('openrouter:z-ai/glm-5.3-prime');
+
+    expect(isEligible(prime, PLATFORM_SELECTORS.powerful, SNAPSHOT_DATE)).toBe(
+      false
+    );
     expect(
       isEligible(
-        row('openrouter:z-ai/glm-5.3-prime'),
-        PLATFORM_SELECTORS.powerful,
+        prime,
+        {
+          ...PLATFORM_SELECTORS.powerful,
+          maxOutputCostPerMillion: ABOVE_PRIME_CEILING_PER_MILLION,
+        },
         SNAPSHOT_DATE
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('skips the newer vision-exp row of the fast family', () => {
@@ -836,7 +846,7 @@ describe('PLATFORM_SELECTORS', () => {
     );
   });
 
-  it('resolves nothing once a family has no eligible row', () => {
+  it('resolves nothing once the family leaves the index', () => {
     const rows = MODEL_INDEX_SNAPSHOT.filter(
       (model) => model.family !== 'deepseek-flash'
     );
@@ -844,14 +854,14 @@ describe('PLATFORM_SELECTORS', () => {
     expect(resolvePlatformIntent('fast', rows, SNAPSHOT_DATE)).toBeNull();
   });
 
-  it('resolves only on OpenRouter', () => {
+  it('resolves only the selector author on OpenRouter', () => {
+    const foreign = {
+      ...row('openrouter:z-ai/glm-5.3'),
+      id: 'openrouter:acme/glm-5.3',
+    };
+
     expect(
-      resolveSelector(
-        PLATFORM_SELECTORS.balanced,
-        'anthropic',
-        MODEL_INDEX_SNAPSHOT,
-        SNAPSHOT_DATE
-      )
+      resolvePlatformIntent('powerful', [foreign], SNAPSHOT_DATE)
     ).toBeNull();
   });
 
