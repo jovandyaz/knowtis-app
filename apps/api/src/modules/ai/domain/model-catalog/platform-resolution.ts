@@ -1,9 +1,12 @@
 import {
+  INTENT_FALLBACK_ORDER,
   MODEL_INTENTS,
   type ModelGateStatus,
   type ModelIntent,
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
+
+import { MS_PER_DAY } from '../value-objects/utc-day';
 
 /** One platform intent's resolution state. */
 export interface ModelResolution {
@@ -47,3 +50,90 @@ export const SEED_RESOLUTIONS: readonly ModelResolution[] = MODEL_INTENTS.map(
     gateStatus: null,
   })
 );
+
+const INTENT_BY_SELECTOR_KEY = {
+  'platform.fast': 'fast',
+  'platform.balanced': 'balanced',
+  'platform.powerful': 'powerful',
+} as const satisfies Record<PlatformSelectorKey, ModelIntent>;
+
+/** Days a model that stopped being served stays billed to the platform. */
+export const RESOLUTION_GRACE_DAYS = 7;
+
+export function intentOfSelectorKey(key: PlatformSelectorKey): ModelIntent {
+  return INTENT_BY_SELECTOR_KEY[key];
+}
+
+export function activeModelOf(
+  rows: readonly ModelResolution[],
+  intent: ModelIntent
+): string | null {
+  const key = SELECTOR_KEY_BY_INTENT[intent];
+  return rows.find((row) => row.selectorKey === key)?.activeModelId ?? null;
+}
+
+function withinGrace(at: Date | null, now: Date): boolean {
+  return (
+    at !== null &&
+    now.getTime() - at.getTime() <= RESOLUTION_GRACE_DAYS * MS_PER_DAY
+  );
+}
+
+/** Every active model, plus each previous or released model that left within `RESOLUTION_GRACE_DAYS` of `now` (inclusive). */
+export function platformBilledModelIds(
+  rows: readonly ModelResolution[],
+  now: Date
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    ids.add(row.activeModelId);
+    if (row.previousModelId && withinGrace(row.changedAt, now)) {
+      ids.add(row.previousModelId);
+    }
+    if (row.releasedModelId && withinGrace(row.releasedAt, now)) {
+      ids.add(row.releasedModelId);
+    }
+  }
+  return ids;
+}
+
+/** The served intents in `INTENT_FALLBACK_ORDER`, once each, without empty ones. */
+export function derivedChain(
+  intents: Readonly<Record<ModelIntent, string>>
+): string[] {
+  return [
+    ...new Set(INTENT_FALLBACK_ORDER.map((intent) => intents[intent])),
+  ].filter((modelId) => modelId !== '');
+}
+
+export type ResolutionChange =
+  | {
+      readonly kind: 'pend';
+      readonly selectorKey: PlatformSelectorKey;
+      readonly modelId: string;
+    }
+  | { readonly kind: 'clear'; readonly selectorKey: PlatformSelectorKey };
+
+/**
+ * What a sync's selector candidate changes. No candidate: nothing. The active model:
+ * clear a `pending` entry, but keep a `failed` one so a returning failed id is not
+ * re-queued. Already the pending model (pending or failed): nothing. Anything else
+ * becomes pending.
+ */
+export function resolutionChange(
+  row: ModelResolution,
+  candidateId: string | null
+): ResolutionChange | null {
+  if (candidateId === null) {
+    return null;
+  }
+  if (candidateId === row.activeModelId) {
+    return row.pendingModelId !== null && row.gateStatus === PENDING_GATE_STATUS
+      ? { kind: 'clear', selectorKey: row.selectorKey }
+      : null;
+  }
+  if (candidateId === row.pendingModelId) {
+    return null;
+  }
+  return { kind: 'pend', selectorKey: row.selectorKey, modelId: candidateId };
+}

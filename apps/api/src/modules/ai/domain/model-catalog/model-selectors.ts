@@ -12,6 +12,7 @@ import {
   type ModelIntent,
 } from '@knowtis/shared-types';
 
+import { MS_PER_DAY } from '../value-objects/utc-day';
 import type { OPEN_WEIGHT_AUTHORS } from './candidate-filter';
 import { slugOf } from './catalog-model';
 
@@ -74,7 +75,6 @@ export const PLATFORM_FAST_CEILING_PER_MILLION = 2;
 export const PLATFORM_BALANCED_CEILING_PER_MILLION = 5;
 export const PLATFORM_POWERFUL_CEILING_PER_MILLION = 5;
 
-const MS_PER_DAY = 86_400_000;
 const ALIAS_PREFIX = '~';
 const VARIANT_SEPARATOR = ':';
 const PREVIEW_TOKEN = '-preview';

@@ -13,6 +13,7 @@ import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
+import { MS_PER_DAY } from '../../domain/value-objects/utc-day';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const OPENROUTER_ORIGIN = new URL(OPENROUTER_MODELS_URL).origin;
@@ -20,7 +21,6 @@ const REQUEST_TIMEOUT_MS = 15_000;
 export const MAX_MODEL_PAGES = 20;
 
 const MS_PER_SECOND = 1_000;
-const MS_PER_DAY = 86_400_000;
 /** OpenRouter flags perpetual models with a far-future sentinel date (`2098-12-31`) instead of null. */
 const EXPIRATION_SENTINEL_HORIZON_MS = 10 * 365 * MS_PER_DAY;
 

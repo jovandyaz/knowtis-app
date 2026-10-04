@@ -3,11 +3,14 @@ import { vi } from 'vitest';
 import type { ModelIntent } from '@knowtis/shared-types';
 
 import {
+  activeModelOf,
+  platformBilledModelIds,
   SEED_RESOLUTIONS,
   SELECTOR_KEY_BY_INTENT,
   type ModelResolution,
 } from '../domain/model-catalog/platform-resolution';
 import type { ModelResolutionRepository } from '../domain/ports/model-resolution.repository';
+import type { PlatformResolutionCache } from '../infrastructure/catalog/platform-resolution.cache';
 
 /** The seed row of `intent` with `overrides` applied. */
 export function seededResolution(
@@ -34,4 +37,26 @@ export function createModelResolutionRepositoryStub(
     clearPending: vi.fn(),
     recordRelease: vi.fn(),
   };
+}
+
+/** A synchronous stand-in serving `rows`, typed against the real cache. */
+export function createResolutionsStub(
+  rows: readonly ModelResolution[] = SEED_RESOLUTIONS,
+  { readStore = true }: { readonly readStore?: boolean } = {}
+): PlatformResolutionCache {
+  const stub: Pick<
+    PlatformResolutionCache,
+    | 'activeModelId'
+    | 'activeModelIds'
+    | 'platformBilledModelIds'
+    | 'hasReadStore'
+    | 'refresh'
+  > = {
+    activeModelId: (intent) => activeModelOf(rows, intent),
+    activeModelIds: () => rows.map((row) => row.activeModelId),
+    platformBilledModelIds: (now) => platformBilledModelIds(rows, now),
+    hasReadStore: () => readStore,
+    refresh: async () => undefined,
+  };
+  return stub as PlatformResolutionCache;
 }

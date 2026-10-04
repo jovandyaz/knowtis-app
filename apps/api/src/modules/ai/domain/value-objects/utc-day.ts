@@ -1,4 +1,4 @@
-const MS_PER_DAY = 86_400_000;
+export const MS_PER_DAY = 86_400_000;
 const ISO_DATE_LENGTH = 10;
 
 /** One UTC calendar day, the bucket every daily AI counter resets on. */
