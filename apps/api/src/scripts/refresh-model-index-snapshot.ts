@@ -1,6 +1,5 @@
 /* eslint-disable no-console */
 import { rename, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 
 import { INDEX_PROVIDERS, ModelIndexCatalog } from '@knowtis/ai-gateway';
 
@@ -9,13 +8,10 @@ import { ModelsDevHttpClient } from '../modules/ai/infrastructure/catalog/models
 import { OpenRouterModelsHttpClient } from '../modules/ai/infrastructure/catalog/openrouter-models.client';
 import {
   renderModelIndexSnapshot,
+  SNAPSHOT_PATH,
   snapshotRefusals,
 } from './model-index-snapshot';
 
-const SNAPSHOT_PATH = resolve(
-  __dirname,
-  '../../../../packages/ai-gateway/src/catalog/model-index.snapshot.ts'
-);
 const SNAPSHOT_TEMP_PATH = `${SNAPSHOT_PATH}.tmp`;
 
 async function main(): Promise<void> {
@@ -37,7 +33,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  await writeFile(SNAPSHOT_TEMP_PATH, renderModelIndexSnapshot(catalog.all()));
+  await writeFile(
+    SNAPSHOT_TEMP_PATH,
+    renderModelIndexSnapshot(catalog.all(), new Date())
+  );
   await rename(SNAPSHOT_TEMP_PATH, SNAPSHOT_PATH);
   const perProvider = INDEX_PROVIDERS.map(
     (provider) =>
