@@ -96,6 +96,7 @@ export class ModelPreferenceService {
       this.aiConfig.getIntentModels(),
       this.settings.getSettings(execution.subject.userId),
     ]);
+    const servesSnapshot = this.index.servesSnapshot();
     const { catalog, facts } = this.scopeOf(
       execution,
       platformIntents,
@@ -107,7 +108,7 @@ export class ModelPreferenceService {
     });
     const modelRequest = { ...request, preferredModel, preferredIntent };
     const choice = chooseModel(catalog, modelRequest, facts);
-    const retiredPick = this.index.servesSnapshot()
+    const retiredPick = servesSnapshot
       ? null
       : retiredStoredPick(modelRequest, choice);
     return retiredPick === null ? choice : { ...choice, retiredPick };
