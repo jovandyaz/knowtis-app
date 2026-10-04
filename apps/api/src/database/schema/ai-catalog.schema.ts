@@ -67,7 +67,7 @@ export const aiCatalogModels = pgTable(
       scale: 1,
       mode: 'number',
     }),
-    /** Unread and unwritten: the model index serves effort ladders. Kept until no deployed instance selects it. */
+    /** Unread and unwritten: the model index serves effort ladders. Kept until no deployed instance names it (an INSERT lists every schema column). */
     reasoning: jsonb('reasoning').$type<ModelReasoning | null>(),
     upstreamCreatedAt: timestamp('upstream_created_at', { withTimezone: true }),
     upstreamExpirationDate: timestamp('upstream_expiration_date', {

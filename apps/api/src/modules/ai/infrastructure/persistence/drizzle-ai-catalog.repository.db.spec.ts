@@ -52,6 +52,7 @@ const FIRST_ALERT_DETAIL = 'upstream marked the model deprecated';
 const SECOND_ALERT_DETAIL = 'upstream still reports the model deprecated';
 const PRICE_DRIFT_DETAIL = 'input cost rose by 40%';
 
+const ROLLBACK = new Error('roll back the renamed column');
 const OLD_LADDER = { levels: ['low', 'high'], mandatory: true };
 
 const PROMOTE_OPEN: CatalogStatusChange = { status: 'promoted', tier: 'open' };
@@ -200,6 +201,49 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       sql`select reasoning from ai_catalog_models where id = ${PRIMARY_MODEL_ID}`
     );
     expect(row?.reasoning).toEqual(OLD_LADDER);
+  });
+
+  it('reads and updates catalog rows without naming the unread reasoning column', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+
+    const outcome: Record<string, unknown> = {};
+    await db
+      .transaction(async (tx) => {
+        await tx.execute(
+          sql`alter table ai_catalog_models rename column reasoning to reasoning_dropped`
+        );
+        const renamed = new DrizzleAiCatalogRepository(tx as never);
+        await renamed.listByStatus('candidate');
+        await renamed.listCandidates({ page: 1, limit: 5 });
+        outcome['setStatus'] = await renamed.setStatus(
+          PRIMARY_MODEL_ID,
+          PROMOTE_OPEN,
+          ACTOR_ID
+        );
+        outcome['updateCopy'] = await renamed.updateCopy(PRIMARY_MODEL_ID, {
+          label: ADMIN_LABEL,
+        });
+        outcome['upsert'] = await renamed
+          .upsertCandidate(candidate(SECONDARY_MODEL_ID))
+          .then(
+            () => 'resolved',
+            () => 'rejected'
+          );
+        throw ROLLBACK;
+      })
+      .catch((error: unknown) => {
+        if (error !== ROLLBACK) {
+          throw error;
+        }
+      });
+
+    expect(outcome['setStatus']).toMatchObject({ status: 'promoted' });
+    expect(outcome['updateCopy']).toMatchObject({ label: ADMIN_LABEL });
+    expect(outcome['upsert']).toBe('rejected');
+    const [column] = await db.execute<{ column_name: string }>(
+      sql`select column_name from information_schema.columns where table_name = 'ai_catalog_models' and column_name = 'reasoning'`
+    );
+    expect(column?.column_name).toBe('reasoning');
   });
 
   it('should list models ordered by id regardless of insertion order', async () => {
