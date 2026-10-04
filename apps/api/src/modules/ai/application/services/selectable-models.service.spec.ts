@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MODEL_INDEX_SNAPSHOT,
@@ -10,6 +10,8 @@ import type { ModelIntent } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import { RETIREMENT_WINDOW_DAYS } from '../../domain/model-catalog/model-selectors';
+import { utcDayOf } from '../../domain/value-objects/utc-day';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import type { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
@@ -18,7 +20,10 @@ import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createIndexedModel } from '../../testing/create-indexed-model';
-import { createSnapshotIndex } from '../../testing/snapshot-index';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
@@ -238,6 +243,15 @@ describe('SelectableModelsService', () => {
   });
 
   describe('BYOK routes', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(SNAPSHOT_DATE);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('lists each route a key reaches with its index name and the intent copy', () => {
       const route = listed(makeOpenService(), OPENROUTER_KEY).find(
         (m) => m.id === 'openrouter:anthropic/claude-sonnet-5.5'
@@ -276,6 +290,42 @@ describe('SelectableModelsService', () => {
       served = new ModelIndexCatalog(
         MODEL_INDEX_SNAPSHOT.filter((row) => row.id !== SONNET_5_5)
       );
+      expect(balancedOf()).toMatchObject({ modelId: SONNET_5 });
+    });
+
+    it('resolves the selectors again on the next UTC day for the same catalog', () => {
+      const catalog = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const all = vi.spyOn(catalog, 'all');
+      const service = makeOpenService([], { catalog: () => catalog });
+
+      listed(service, ANTHROPIC_KEY);
+      vi.setSystemTime(utcDayOf(SNAPSHOT_DATE).resetsAt);
+      listed(service, ANTHROPIC_KEY);
+
+      expect(all).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops a route from the same catalog once its retirement enters the window', () => {
+      const lastEligibleDay = utcDayOf(SNAPSHOT_DATE);
+      const retiresAt = new Date(lastEligibleDay.start);
+      retiresAt.setUTCDate(retiresAt.getUTCDate() + RETIREMENT_WINDOW_DAYS + 1);
+      const service = makeOpenService(
+        [],
+        indexOf(
+          MODEL_INDEX_SNAPSHOT.map((row) =>
+            row.id === SONNET_5_5
+              ? { ...row, retiresAt: utcDayOf(retiresAt).key }
+              : row
+          )
+        )
+      );
+      const balancedOf = () =>
+        service
+          .catalogFor(ANTHROPIC_KEY, INTENTS, null)
+          .intents.find((entry) => entry.intent === 'balanced');
+
+      expect(balancedOf()).toMatchObject({ modelId: SONNET_5_5 });
+      vi.setSystemTime(lastEligibleDay.resetsAt);
       expect(balancedOf()).toMatchObject({ modelId: SONNET_5 });
     });
   });

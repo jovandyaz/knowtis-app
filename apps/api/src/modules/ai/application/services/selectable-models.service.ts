@@ -33,6 +33,7 @@ import {
   type OfferedModel,
   type TierCatalog,
 } from '../../domain/model-catalog/tier-catalog';
+import { utcDayOf } from '../../domain/value-objects/utc-day';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
@@ -51,9 +52,14 @@ function offeredReasoning(
     : { levels, mandatory: reasoning.mandatory };
 }
 
+interface DayResolutions {
+  readonly day: string;
+  readonly resolutions: ByokResolutions;
+}
+
 @Injectable()
 export class SelectableModelsService {
-  private readonly byokMemo = new WeakMap<ModelIndexCatalog, ByokResolutions>();
+  private readonly byokMemo = new WeakMap<ModelIndexCatalog, DayResolutions>();
 
   constructor(
     @Inject(MODEL_CATALOG) private readonly catalog: ModelCatalog,
@@ -171,16 +177,18 @@ export class SelectableModelsService {
     });
   }
 
-  // Each index refresh serves a new catalog instance, so keying on it re-resolves
-  // the selectors once per refresh and never per request.
+  // A served floor or a failed refresh keeps one catalog instance for days while
+  // the retirement window moves with the UTC date, so the memo keys on both.
   private byokResolutions(): ByokResolutions {
     const catalog = this.index.catalog();
+    const now = new Date();
+    const day = utcDayOf(now).key;
     const memoized = this.byokMemo.get(catalog);
-    if (memoized) {
-      return memoized;
+    if (memoized?.day === day) {
+      return memoized.resolutions;
     }
-    const resolutions = resolveByokSelectors(catalog.all(), new Date());
-    this.byokMemo.set(catalog, resolutions);
+    const resolutions = resolveByokSelectors(catalog.all(), now);
+    this.byokMemo.set(catalog, { day, resolutions });
     return resolutions;
   }
 
