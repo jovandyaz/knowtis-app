@@ -33,6 +33,7 @@ import type {
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import type { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ModelIndexWriter } from './model-index.writer';
 
 const QWEN_SLUG = 'qwen/qwen3.8-max';
@@ -177,7 +178,15 @@ function make(listed: readonly IndexedModel[] = LISTED_ROWS) {
       .fn<ModelIndexRepository['listListed']>()
       .mockResolvedValue([...listed]),
   };
-  return { writer: new ModelIndexWriter(repo), repo };
+  const alerts = { notify: vi.fn<WebhookAlertService['notify']>() };
+  return {
+    writer: new ModelIndexWriter(
+      repo,
+      alerts as unknown as WebhookAlertService
+    ),
+    repo,
+    alerts,
+  };
 }
 
 function upsertedIds(repo: ReturnType<typeof make>['repo']): string[] {
@@ -618,6 +627,56 @@ describe('ModelIndexWriter', () => {
     expect(result.rejected).toEqual([
       { provider: 'anthropic', reason: 'floor', models: [CLAUDE_ROUTE_KEY] },
     ]);
+  });
+
+  it('should alert once per provider whose batch the floor rejects, naming what it would leave unserved', async () => {
+    const { writer, alerts } = make();
+    const textless = openRouterCatalog().models.map((model) => ({
+      ...model,
+      inputModalities: [],
+    }));
+
+    await writer.write(
+      openRouterCatalog({ models: textless }),
+      modelsDevCatalog({ models: [CLAUDE_NEXT, GPT, GEMINI] })
+    );
+
+    expect(alerts.notify).toHaveBeenCalledTimes(2);
+    expect(alerts.notify).toHaveBeenCalledWith('model_index.floor_rejected', {
+      provider: 'anthropic',
+      models: [CLAUDE_ROUTE_KEY],
+    });
+    expect(alerts.notify).toHaveBeenCalledWith('model_index.floor_rejected', {
+      provider: 'openrouter',
+      models: [WATCHED_ID],
+    });
+  });
+
+  it('should raise no alert for a rejection that only withholds absence', async () => {
+    const { writer, alerts } = make([
+      ...LISTED_ROWS,
+      directModel('anthropic', 'claude-earlier'),
+      directModel('anthropic', 'claude-earliest'),
+    ]);
+
+    const result = await writer.write(
+      openRouterCatalog({ discarded: [UNPARSEABLE_MODEL_ID] }),
+      modelsDevCatalog()
+    );
+
+    expect(result.rejected).toEqual([
+      { provider: 'anthropic', reason: 'shrink' },
+      { provider: 'openrouter', reason: 'inconclusive' },
+    ]);
+    expect(alerts.notify).not.toHaveBeenCalled();
+  });
+
+  it('should raise no alert on a clean read', async () => {
+    const { writer, alerts } = make();
+
+    await writer.write(openRouterCatalog(), modelsDevCatalog());
+
+    expect(alerts.notify).not.toHaveBeenCalled();
   });
 
   it('should accept a batch that still serves its provider floor models under new facts', async () => {
