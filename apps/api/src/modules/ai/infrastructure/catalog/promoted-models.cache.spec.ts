@@ -37,6 +37,38 @@ describe('PromotedModelsCache', () => {
     expect(cache.snapshot()).toEqual([]);
   });
 
+  it('has not loaded before its first read', () => {
+    const { cache } = createCache({ models: [PROMOTED_MODEL], failure: null });
+
+    expect(cache.hasLoaded()).toBe(false);
+  });
+
+  it('has loaded once a read succeeds, and stays loaded when a later one fails', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const script: RepositoryScript = { models: [], failure: null };
+    const { cache } = createCache(script);
+
+    await cache.onModuleInit();
+    expect(cache.hasLoaded()).toBe(true);
+
+    script.failure = new Error('database unreachable');
+    await cache.refresh();
+    expect(cache.hasLoaded()).toBe(true);
+  });
+
+  it('has not loaded while every read has failed', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { cache } = createCache({
+      models: [PROMOTED_MODEL],
+      failure: new Error('database unreachable'),
+    });
+
+    await cache.onModuleInit();
+    await cache.refresh();
+
+    expect(cache.hasLoaded()).toBe(false);
+  });
+
   it('warms the snapshot with promoted models on module init', async () => {
     const { cache, repository } = createCache({
       models: [PROMOTED_MODEL],

@@ -38,6 +38,7 @@ import {
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { AIConfigService } from './ai-config.service';
 import { SelectableModelsService } from './selectable-models.service';
@@ -54,7 +55,8 @@ export class ModelPreferenceService {
     private readonly settings: UserAiSettingsRepository,
     private readonly selectable: SelectableModelsService,
     private readonly aiConfig: AIConfigService,
-    private readonly index: ModelIndexCache
+    private readonly index: ModelIndexCache,
+    private readonly promoted: PromotedModelsCache
   ) {}
 
   async listModels(
@@ -86,7 +88,8 @@ export class ModelPreferenceService {
   /**
    * The model a turn runs on. A stored pick the synced index has retired is
    * named as `retiredPick`, for the turn to forget once it has delivered the
-   * report; never while the index still serves the vendored snapshot.
+   * report; never while the index still serves the vendored snapshot or the
+   * promoted models have not loaded.
    */
   async chooseTurnModel(
     execution: AiExecutionContext,
@@ -96,7 +99,7 @@ export class ModelPreferenceService {
       this.aiConfig.getIntentModels(),
       this.settings.getSettings(execution.subject.userId),
     ]);
-    const servesSnapshot = this.index.servesSnapshot();
+    const mayForget = !this.index.servesSnapshot() && this.promoted.hasLoaded();
     const { catalog, facts } = this.scopeOf(
       execution,
       platformIntents,
@@ -108,9 +111,9 @@ export class ModelPreferenceService {
     });
     const modelRequest = { ...request, preferredModel, preferredIntent };
     const choice = chooseModel(catalog, modelRequest, facts);
-    const retiredPick = servesSnapshot
-      ? null
-      : retiredStoredPick(modelRequest, choice);
+    const retiredPick = mayForget
+      ? retiredStoredPick(modelRequest, choice)
+      : null;
     return retiredPick === null ? choice : { ...choice, retiredPick };
   }
 
