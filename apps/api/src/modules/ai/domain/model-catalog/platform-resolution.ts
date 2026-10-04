@@ -1,7 +1,8 @@
-import type {
-  ModelGateStatus,
-  ModelIntent,
-  PlatformSelectorKey,
+import {
+  MODEL_INTENTS,
+  type ModelGateStatus,
+  type ModelIntent,
+  type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
 /** One platform intent's resolution state. */
@@ -26,7 +27,7 @@ export const SELECTOR_KEY_BY_INTENT = {
 
 export const PENDING_GATE_STATUS = 'pending' as const satisfies ModelGateStatus;
 
-/** The models migration 0060 seeds, and what the resolution cache serves until its first successful read: the code defaults `AI_SETTING_DEFAULTS` held before PR 3. */
+/** The models migration 0060 seeds, and what the resolution cache serves until its first successful read: the code defaults `AI_SETTING_DEFAULTS` held before platform resolutions were stored. */
 export const PLATFORM_SEED_MODELS = {
   fast: 'openrouter:minimax/minimax-m2.5',
   balanced: 'openrouter:deepseek/deepseek-v3.2',
@@ -34,15 +35,15 @@ export const PLATFORM_SEED_MODELS = {
 } as const satisfies Record<ModelIntent, string>;
 
 /** One seed row per intent, with no history, release or pending entry. */
-export const SEED_RESOLUTIONS: readonly ModelResolution[] = (
-  Object.keys(SELECTOR_KEY_BY_INTENT) as ModelIntent[]
-).map((intent) => ({
-  selectorKey: SELECTOR_KEY_BY_INTENT[intent],
-  activeModelId: PLATFORM_SEED_MODELS[intent],
-  previousModelId: null,
-  changedAt: null,
-  releasedModelId: null,
-  releasedAt: null,
-  pendingModelId: null,
-  gateStatus: null,
-}));
+export const SEED_RESOLUTIONS: readonly ModelResolution[] = MODEL_INTENTS.map(
+  (intent) => ({
+    selectorKey: SELECTOR_KEY_BY_INTENT[intent],
+    activeModelId: PLATFORM_SEED_MODELS[intent],
+    previousModelId: null,
+    changedAt: null,
+    releasedModelId: null,
+    releasedAt: null,
+    pendingModelId: null,
+    gateStatus: null,
+  })
+);

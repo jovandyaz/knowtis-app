@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq } from 'drizzle-orm';
+import { eq, notInArray } from 'drizzle-orm';
 import {
   afterAll,
   afterEach,
@@ -10,6 +10,8 @@ import {
   expect,
   it,
 } from 'vitest';
+
+import { PLATFORM_SELECTOR_KEYS } from '@knowtis/shared-types';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
@@ -24,6 +26,10 @@ import { PLATFORM_SEED_MODELS } from '../../domain/model-catalog/platform-resolu
 import { DrizzleModelResolutionRepository } from './drizzle-model-resolution.repository';
 
 const AT = new Date('2026-10-04T12:00:00.000Z');
+const LATER_AT = new Date('2026-10-04T13:00:00.000Z');
+const PREVIOUS = 'openrouter:z-ai/glm-5.1';
+const CHANGED_AT = new Date('2026-09-01T00:00:00.000Z');
+const RELEASED_AT = new Date('2026-09-15T00:00:00.000Z');
 const CHECK_VIOLATION = '23514';
 const OLD_PENDING = 'openrouter:z-ai/glm-5.2';
 const NEW_PENDING = 'openrouter:deepseek/deepseek-v4.1-flash';
@@ -64,6 +70,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
   });
 
   afterEach(async () => {
+    await db
+      .delete(aiModelResolutions)
+      .where(
+        notInArray(aiModelResolutions.selectorKey, [...PLATFORM_SELECTOR_KEYS])
+      );
     for (const row of snapshot) {
       await db
         .update(aiModelResolutions)
@@ -86,6 +97,37 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       'platform.fast': PLATFORM_SEED_MODELS.fast,
       'platform.balanced': PLATFORM_SEED_MODELS.balanced,
       'platform.powerful': PLATFORM_SEED_MODELS.powerful,
+    });
+  });
+
+  it('maps every column of a row to the resolution and drops the gate detail', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        releasedModelId: RELEASED,
+        releasedAt: RELEASED_AT,
+        pendingModelId: NEW_PENDING,
+        gateStatus: 'failed',
+        gateDetail: 'leaked a secret',
+        gateRunUrl: RUN_URL,
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const fast = (await repo.list()).find(
+      (row) => row.selectorKey === 'platform.fast'
+    );
+
+    expect(fast).toEqual({
+      selectorKey: 'platform.fast',
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      previousModelId: PREVIOUS,
+      changedAt: CHANGED_AT,
+      releasedModelId: RELEASED,
+      releasedAt: RELEASED_AT,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
     });
   });
 
@@ -114,25 +156,26 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
   it('clears a pending model with its gate status and detail', async () => {
     await repo.setPending('platform.balanced', NEW_PENDING, AT);
 
-    await repo.clearPending('platform.balanced', AT);
+    await repo.clearPending('platform.balanced', LATER_AT);
 
     expect(await rowOf('platform.balanced')).toMatchObject({
       pendingModelId: null,
       gateStatus: null,
       gateDetail: null,
       gateRunUrl: null,
+      updatedAt: LATER_AT,
     });
   });
 
   it('records the model a pin change released', async () => {
-    await repo.recordRelease('platform.powerful', RELEASED, AT);
+    await repo.setPending('platform.powerful', NEW_PENDING, AT);
 
-    const powerful = (await repo.list()).find(
-      (row) => row.selectorKey === 'platform.powerful'
-    );
-    expect(powerful).toMatchObject({
+    await repo.recordRelease('platform.powerful', RELEASED, LATER_AT);
+
+    expect(await rowOf('platform.powerful')).toMatchObject({
       releasedModelId: RELEASED,
-      releasedAt: AT,
+      releasedAt: LATER_AT,
+      updatedAt: LATER_AT,
     });
   });
 
