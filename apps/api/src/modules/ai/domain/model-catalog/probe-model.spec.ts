@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { MODEL_INDEX_SNAPSHOT } from '@knowtis/ai-gateway';
+
 import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
-import { byokProbeModelId, systemProbeModelId } from './probe-model';
+import { PlatformResolutionsUnreadError } from '../ports/platform-models.port';
+import {
+  byokProbeModelId,
+  probablePlatformModelIds,
+  systemProbeModelId,
+} from './probe-model';
 
 const rows = createSnapshotIndex().catalog().all();
+const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
+const BALANCED_PIN = 'openrouter:deepseek/deepseek-v4-pro-0813';
+const ANTHROPIC_PIN = 'anthropic:claude-haiku-4-5';
 
 describe('byokProbeModelId', () => {
   it.each([
@@ -23,20 +33,52 @@ describe('byokProbeModelId', () => {
   });
 });
 
+describe('probablePlatformModelIds', () => {
+  it('offers no platform model to a probe while the resolutions are unread', async () => {
+    await expect(
+      probablePlatformModelIds({
+        getPlatformModelIds: async () => {
+          throw new PlatformResolutionsUnreadError();
+        },
+      })
+    ).resolves.toEqual([]);
+  });
+
+  it('lets any other read failure reject', async () => {
+    await expect(
+      probablePlatformModelIds({
+        getPlatformModelIds: async () => {
+          throw new Error('db down');
+        },
+      })
+    ).rejects.toThrow('db down');
+  });
+});
+
 describe('systemProbeModelId', () => {
-  it('should probe the platform floor model of the provider', () => {
-    expect(systemProbeModelId('openrouter', rows, SNAPSHOT_DATE)).toBe(
-      'openrouter:deepseek/deepseek-v3.2'
-    );
+  it('probes the first platform model on the provider', () => {
+    expect(
+      systemProbeModelId(
+        'openrouter',
+        [ANTHROPIC_PIN, FAST_PIN, BALANCED_PIN],
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      )
+    ).toBe(FAST_PIN);
   });
 
-  it('should fall back to the fast BYOK route when the platform has no floor model there', () => {
-    expect(systemProbeModelId('openai', rows, SNAPSHOT_DATE)).toBe(
-      'openai:gpt-6-luna'
-    );
+  it('probes the fast BYOK route of a provider no platform model uses', () => {
+    expect(
+      systemProbeModelId(
+        'openai',
+        [FAST_PIN],
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      )
+    ).toBe('openai:gpt-6-luna');
   });
 
-  it('should be null when neither a floor model nor a route exists', () => {
-    expect(systemProbeModelId('openai', [], SNAPSHOT_DATE)).toBeNull();
+  it('probes nothing when neither exists', () => {
+    expect(systemProbeModelId('openai', [], [], SNAPSHOT_DATE)).toBeNull();
   });
 });

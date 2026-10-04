@@ -26,7 +26,12 @@ import {
   type AIConfigRepository,
   type AIConfigRow,
 } from '../../domain/ports/ai-config.repository';
+import {
+  PlatformResolutionsUnreadError,
+  type PlatformModelsSource,
+} from '../../domain/ports/platform-models.port';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
@@ -133,7 +138,7 @@ export interface AIConfigEntry {
 }
 
 @Injectable()
-export class AIConfigService {
+export class AIConfigService implements PlatformModelsSource {
   private readonly logger = new Logger(AIConfigService.name);
 
   constructor(
@@ -146,7 +151,8 @@ export class AIConfigService {
     @Inject(MODEL_CATALOG)
     private readonly modelCatalog: ModelCatalog,
     private readonly promotedModels: PromotedModelsCache,
-    private readonly index: ModelIndexCache
+    private readonly index: ModelIndexCache,
+    private readonly resolutions: PlatformResolutionCache
   ) {}
 
   async getDefaultModel(): Promise<string> {
@@ -208,6 +214,28 @@ export class AIConfigService {
       );
     }
     return supported;
+  }
+
+  async getPlatformModelIds(): Promise<string[]> {
+    if (!this.resolutions.hasReadStore()) {
+      throw new PlatformResolutionsUnreadError();
+    }
+    const [intents, chain] = await Promise.all([
+      this.getIntentModels(),
+      this.getFallbackChain(),
+    ]);
+    const actives = MODEL_INTENTS.map((intent) =>
+      this.resolutions.activeModelId(intent)
+    );
+    return [
+      ...new Set(
+        [
+          ...MODEL_INTENTS.map((intent) => intents[intent]),
+          ...chain,
+          ...actives,
+        ].filter((id): id is string => id !== null && id !== '')
+      ),
+    ];
   }
 
   async getReasoningEffort(): Promise<GlobalReasoningEffort> {

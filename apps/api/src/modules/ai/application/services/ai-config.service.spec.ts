@@ -4,12 +4,18 @@ import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import {
+  PLATFORM_SEED_MODELS,
+  SEED_RESOLUTIONS,
+} from '../../domain/model-catalog/platform-resolution';
+import { PlatformResolutionsUnreadError } from '../../domain/ports/platform-models.port';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
@@ -33,6 +39,10 @@ const PROD_PINS = [
   ['ai_default_model', 'openrouter:z-ai/glm-5.3'],
 ] as const;
 const UNKNOWN_ID = 'openrouter:vendor/unknown-one';
+const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
+const BALANCED_PIN = 'openrouter:deepseek/deepseek-v4-pro-0813';
+const DEEP_PIN = 'openrouter:qwen/qwen3.8-max-0902';
+const CHAIN_ONLY = 'openrouter:z-ai/glm-5.3';
 
 function deletedRow(value: string) {
   return {
@@ -77,7 +87,8 @@ describe('AIConfigService', () => {
       mockRegistry as never,
       catalog,
       promoted,
-      index
+      index,
+      createResolutionsStub()
     );
   }
 
@@ -109,7 +120,8 @@ describe('AIConfigService', () => {
       mockRegistry as never,
       mockCatalog as never,
       { snapshot: () => [] } as never,
-      createSnapshotIndex()
+      createSnapshotIndex(),
+      createResolutionsStub()
     );
   });
 
@@ -1007,6 +1019,47 @@ describe('AIConfigService', () => {
       expect(models.fast).toBe(PROMOTED_ID);
       expect(models.balanced).toBe(AI_SETTING_DEFAULTS.ai_default_model);
       expect(models.powerful).toBe(AI_SETTING_DEFAULTS.ai_deep_model);
+    });
+  });
+
+  describe('getPlatformModelIds', () => {
+    it('lists the intent models, the chain, then the active resolutions, once each', async () => {
+      const stored: Record<string, string> = {
+        ai_fast_model: FAST_PIN,
+        ai_default_model: BALANCED_PIN,
+        ai_deep_model: DEEP_PIN,
+        ai_fallback_chain: `${BALANCED_PIN},${CHAIN_ONLY}`,
+      };
+      mockRepo.get.mockImplementation(
+        async (key: string) => stored[key] ?? null
+      );
+
+      expect(await service.getPlatformModelIds()).toEqual([
+        FAST_PIN,
+        BALANCED_PIN,
+        DEEP_PIN,
+        CHAIN_ONLY,
+        PLATFORM_SEED_MODELS.fast,
+        PLATFORM_SEED_MODELS.balanced,
+        PLATFORM_SEED_MODELS.powerful,
+      ]);
+    });
+
+    it('refuses the platform models while only the seed floor is known', async () => {
+      const cold = new AIConfigService(
+        mockRepo as never,
+        mockCache as never,
+        mockAudit as never,
+        mockRegistry as never,
+        mockCatalog as never,
+        { snapshot: () => [] } as never,
+        createSnapshotIndex(),
+        createResolutionsStub(SEED_RESOLUTIONS, { readStore: false })
+      );
+
+      await expect(cold.getPlatformModelIds()).rejects.toBeInstanceOf(
+        PlatformResolutionsUnreadError
+      );
     });
   });
 

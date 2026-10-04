@@ -20,7 +20,14 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
-import { systemProbeModelId } from '../../domain/model-catalog/probe-model';
+import {
+  probablePlatformModelIds,
+  systemProbeModelId,
+} from '../../domain/model-catalog/probe-model';
+import {
+  PLATFORM_MODELS_SOURCE,
+  type PlatformModelsSource,
+} from '../../domain/ports/platform-models.port';
 import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
   type SystemProviderKeysRepository,
@@ -45,7 +52,9 @@ const MASTER_KEY_BYTES = 32;
  * Owns the server-side provider keys stored in the database. Deliberately does
  * not constructor-inject ProviderRegistryFactory — the registry consumes this
  * service as its key source, so injecting it back would close a DI cycle. The
- * probe in `setKey` resolves the registry lazily through ModuleRef instead.
+ * probe in `setKey` resolves the registry lazily through ModuleRef instead, and
+ * the `PLATFORM_MODELS_SOURCE` it picks the probe model from too: that source is
+ * AIConfigService, which injects the registry.
  */
 @Injectable()
 export class SystemProviderKeysService implements SystemProviderKeysSource {
@@ -116,11 +125,14 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
       );
     }
+    const platformModelIds = await probablePlatformModelIds(
+      this.moduleRef.get<PlatformModelsSource>(PLATFORM_MODELS_SOURCE)
+    );
     const probe = await probeProviderKey(
       this.moduleRef.get(ProviderRegistryFactory),
       provider,
       apiKey,
-      systemProbeModelId(provider, this.index.catalog().all())
+      systemProbeModelId(provider, platformModelIds, this.index.catalog().all())
     );
     if (!probe.valid) {
       this.logger.warn({

@@ -191,7 +191,8 @@ describe('a platform-keyed OpenAI model on the wire', () => {
     const controller = new AiProvidersController(
       {} as never,
       await platformFactory(),
-      createSnapshotIndex()
+      createSnapshotIndex(),
+      { getPlatformModelIds: async () => [] }
     );
 
     const result = await controller.test({ provider: 'openai' });

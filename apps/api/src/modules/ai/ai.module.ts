@@ -55,6 +55,7 @@ import { MODEL_INDEX_REPOSITORY } from './domain/ports/model-index.repository';
 import { MODEL_RESOLUTION_REPOSITORY } from './domain/ports/model-resolution.repository';
 import { MODELS_DEV_CLIENT } from './domain/ports/models-dev.port';
 import { OPENROUTER_MODELS_CLIENT } from './domain/ports/openrouter-models.port';
+import { PLATFORM_MODELS_SOURCE } from './domain/ports/platform-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
@@ -139,6 +140,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     WebhookAlertService,
     FallbackChainService,
     { provide: FALLBACK_CHAIN_SOURCE, useExisting: AIConfigService },
+    { provide: PLATFORM_MODELS_SOURCE, useExisting: AIConfigService },
     { provide: OPENROUTER_ROUTING_SOURCE, useExisting: AIConfigService },
     SystemProviderKeysService,
     {
