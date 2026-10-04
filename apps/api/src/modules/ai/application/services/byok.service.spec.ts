@@ -133,7 +133,24 @@ describe('ByokService', () => {
     }
   );
 
-  it.each(['rejected', 'unavailable', 'timeout'] as const)(
+  it('refuses a key no model can probe and stores nothing', async () => {
+    const { service, repo, settings } = makeService({
+      validate: async () => ({
+        valid: false,
+        reason: 'unconfigured',
+        error: "No model resolves for provider 'openai'",
+      }),
+    });
+    const failure = await service
+      .setKey('u1', 'openai', 'sk-untested-123456')
+      .catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+    expect((failure as Error).message).toMatch(/no openai model/i);
+    expect(repo.upsert).not.toHaveBeenCalled();
+    expect(settings.clearBoundToUnheldProvider).not.toHaveBeenCalled();
+  });
+
+  it.each(['rejected', 'unavailable', 'timeout', 'unconfigured'] as const)(
     'logs provider, reason and error when the probe is %s',
     async (reason) => {
       const warn = vi

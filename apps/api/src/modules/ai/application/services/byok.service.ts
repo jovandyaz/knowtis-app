@@ -134,6 +134,11 @@ export class ByokService {
           `The ${provider} key was rejected. Check it is valid and has quota.`
         );
       }
+      if (probe.reason === 'unconfigured') {
+        throw new ServiceUnavailableException(
+          `No ${provider} model is available to check the key. Try again later.`
+        );
+      }
       throw new ServiceUnavailableException(
         `${provider} could not be reached to check the key. Try again in a moment.`
       );

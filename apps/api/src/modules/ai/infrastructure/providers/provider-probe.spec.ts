@@ -163,12 +163,12 @@ describe('probeProviderKey', () => {
     });
   });
 
-  it('should report unavailable without calling the provider when no model resolves', async () => {
+  it('should report unconfigured without calling the provider when no model resolves', async () => {
     await expect(
       probeProviderKey(registry as never, 'openai', 'sk-openai-key', null)
     ).resolves.toEqual({
       valid: false,
-      reason: 'unavailable',
+      reason: 'unconfigured',
       error: "No model resolves for provider 'openai'",
     });
     expect(generateText).not.toHaveBeenCalled();

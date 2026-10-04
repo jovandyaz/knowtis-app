@@ -261,6 +261,28 @@ describe('SystemProviderKeysService', () => {
       expect(mockAudit.record).not.toHaveBeenCalled();
     });
 
+    it('should refuse a key no model can probe and store nothing', async () => {
+      vi.mocked(probeProviderKey).mockResolvedValue({
+        valid: false,
+        reason: 'unconfigured',
+        error: "No model resolves for provider 'anthropic'",
+      });
+
+      await expect(
+        service.setKey('anthropic', 'sk-ant-untested', ACTOR)
+      ).rejects.toMatchObject({
+        constructor: UnprocessableEntityException,
+        response: {
+          message:
+            "anthropic key cannot be probed: No model resolves for provider 'anthropic'",
+          code: 'unconfigured',
+        },
+      });
+
+      expect(mockRepo.setKey).not.toHaveBeenCalled();
+      expect(mockAudit.record).not.toHaveBeenCalled();
+    });
+
     it.each(['unavailable', 'timeout'] as const)(
       'should store the key when the probe ends in %s and report the failure',
       async (reason) => {

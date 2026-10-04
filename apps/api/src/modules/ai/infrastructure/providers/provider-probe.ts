@@ -18,9 +18,14 @@ const PROBE_TIMEOUT_MESSAGE = 'The probe timed out';
 
 /**
  * Why a probe failed. 'rejected' is definitive — the provider answered and
- * refused the key; 'unavailable' and 'timeout' say nothing about the key.
+ * refused the key; 'unconfigured' means no model resolves to probe on, so the
+ * key was never sent; 'unavailable' and 'timeout' say nothing about the key.
  */
-export type ProbeFailureReason = 'rejected' | 'unavailable' | 'timeout';
+export type ProbeFailureReason =
+  | 'rejected'
+  | 'unconfigured'
+  | 'unavailable'
+  | 'timeout';
 
 export type ProbeResult =
   | { valid: true }
@@ -55,7 +60,7 @@ export async function probeProviderKey(
   if (probeModelId === null) {
     return {
       valid: false,
-      reason: 'unavailable',
+      reason: 'unconfigured',
       error: `No model resolves for provider '${provider}'`,
     };
   }

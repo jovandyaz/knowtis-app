@@ -102,8 +102,9 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
   /**
    * Probes the key, then stores it. A definitive refusal vetoes the save — a
    * stored key shadows the env one, so a bad key must never displace a working
-   * one. An outage or timeout says nothing about the key, so it is kept and the
-   * failure rides along as information.
+   * one — and so does a probe that never ran for want of a model, which leaves
+   * the key wholly untested. An outage or timeout says nothing about the key,
+   * so it is kept and the failure rides along as information.
    */
   async setKey(
     provider: AIProvider,
@@ -131,6 +132,12 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
       if (probe.reason === 'rejected') {
         throw new UnprocessableEntityException({
           message: `${provider} refused the probe: ${probe.error}`,
+          code: probe.reason,
+        });
+      }
+      if (probe.reason === 'unconfigured') {
+        throw new UnprocessableEntityException({
+          message: `${provider} key cannot be probed: ${probe.error}`,
           code: probe.reason,
         });
       }
