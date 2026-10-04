@@ -7,6 +7,7 @@ import {
   eq,
   ilike,
   isNull,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -102,9 +103,10 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
     page: number;
     limit: number;
     search?: string | undefined;
+    excludeIds?: readonly string[] | undefined;
   }): Promise<{ items: CatalogModel[]; total: number }> {
     const term = params.search?.trim();
-    const predicate = term
+    const statusAndSearch = term
       ? and(
           eq(aiCatalogModels.status, CANDIDATE_STATUS),
           or(
@@ -113,6 +115,13 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
           )
         )
       : eq(aiCatalogModels.status, CANDIDATE_STATUS);
+    const predicate =
+      params.excludeIds && params.excludeIds.length > 0
+        ? and(
+            statusAndSearch,
+            notInArray(aiCatalogModels.id, [...params.excludeIds])
+          )
+        : statusAndSearch;
 
     const [rows, totals] = await Promise.all([
       this.db

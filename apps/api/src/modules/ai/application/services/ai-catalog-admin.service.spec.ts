@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CatalogAlert } from '../../domain/model-catalog/catalog-alert';
+import { PLATFORM_SEED_MODELS } from '../../domain/model-catalog/platform-resolution';
 import type {
   AiCatalogRepository,
   CatalogStatusChange,
 } from '../../domain/ports/ai-catalog.repository';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { createCatalogModel } from '../../testing/create-catalog-model';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import { AiCatalogAdminService } from './ai-catalog-admin.service';
 
 const ACTOR_ID = 'admin-user-id';
@@ -64,7 +66,8 @@ describe('AiCatalogAdminService', () => {
       repository as never,
       audit as never,
       promotedCache,
-      syncTask as never
+      syncTask as never,
+      createResolutionsStub()
     );
   });
 
@@ -139,11 +142,9 @@ describe('AiCatalogAdminService', () => {
 
       const result = await service.listCandidates({ page: 3, limit: 25 });
 
-      expect(repository.listCandidates).toHaveBeenCalledWith({
-        page: 3,
-        limit: 25,
-        search: undefined,
-      });
+      expect(repository.listCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 3, limit: 25 })
+      );
       expect(result).toMatchObject({ total: 97, page: 3, limit: 25 });
       expect(result.items).toHaveLength(1);
     });
@@ -151,11 +152,21 @@ describe('AiCatalogAdminService', () => {
     it('hands the search term to the repository instead of dropping it', async () => {
       await service.listCandidates({ page: 1, limit: 25, search: SEARCH_TERM });
 
-      expect(repository.listCandidates).toHaveBeenCalledWith({
-        page: 1,
-        limit: 25,
-        search: SEARCH_TERM,
-      });
+      expect(repository.listCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({ search: SEARCH_TERM })
+      );
+    });
+
+    it("hides the platform's active models from the candidates", async () => {
+      await service.listCandidates({ page: 1, limit: 25 });
+
+      expect(repository.listCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludeIds: expect.arrayContaining(
+            Object.values(PLATFORM_SEED_MODELS)
+          ),
+        })
+      );
     });
   });
 

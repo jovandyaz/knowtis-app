@@ -127,7 +127,8 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
       repo,
       { record: vi.fn().mockResolvedValue(undefined) } as never,
       promotedCache,
-      { run: vi.fn() } as never
+      { run: vi.fn() } as never,
+      createResolutionsStub()
     );
     const index = createSnapshotIndex();
     selectable = new SelectableModelsService(

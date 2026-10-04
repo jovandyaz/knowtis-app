@@ -582,6 +582,19 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       expect(byId.items.map((m) => m.id)).toContain(SCORED_LOW);
     });
 
+    it('leaves the excluded ids out of the page and the total', async () => {
+      const { items, total } = await repo.listCandidates({
+        page: 1,
+        limit: 100,
+        search: PAGING_SEARCH,
+        excludeIds: [SCORED_LOW],
+      });
+
+      expect(items.map((m) => m.id)).not.toContain(SCORED_LOW);
+      expect(items).toHaveLength(PAGING_MODEL_IDS.length - 1);
+      expect(total).toBe(PAGING_MODEL_IDS.length - 1);
+    });
+
     it('treats a wildcard in the search term as a literal', async () => {
       const { items } = await repo.listCandidates({
         page: 1,
