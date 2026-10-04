@@ -11,7 +11,7 @@ export const SYNC_MAX_SHRINK_RATIO = 0.5;
 
 type AbsenceRejection = 'shrink' | 'inconclusive';
 
-/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the floor models and BYOK route keys the batch would leave unserved. */
+/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the platform selector keys and BYOK route keys the batch would leave unserved. */
 export type SyncRejection =
   | { readonly provider: IndexProvider; readonly reason: AbsenceRejection }
   | {
@@ -86,8 +86,8 @@ function floorLost(
 }
 
 /**
- * Decides what one sync pass writes. A batch that would leave unserved a floor
- * model or BYOK intent route its provider serves now is rejected whole: none
+ * Decides what one sync pass writes. A batch that would leave unserved a
+ * platform or BYOK intent route its provider serves now is rejected whole: none
  * of its rows are written and it retires nothing. It is judged by what the
  * write leaves served: its rows plus the listed rows of its discarded ids,
  * which are kept. Every row of any other batch is upserted. A provider

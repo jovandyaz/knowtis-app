@@ -9,10 +9,13 @@ import {
   type IndexedModel,
 } from '@knowtis/ai-gateway';
 
-import { AI_SETTING_DEFAULTS } from '../modules/ai/domain/ai-settings';
+import { SELECTOR_KEY_BY_INTENT } from '../modules/ai/domain/model-catalog/platform-resolution';
 import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.port';
 import type { UpstreamCatalog } from '../modules/ai/domain/ports/openrouter-models.port';
-import { createFloorRows } from '../modules/ai/testing/create-floor-rows';
+import {
+  createFloorRows,
+  PLATFORM_FLOOR_ROWS,
+} from '../modules/ai/testing/create-floor-rows';
 import { createIndexedModel } from '../modules/ai/testing/create-indexed-model';
 import { SNAPSHOT_DATE } from '../modules/ai/testing/snapshot-index';
 import {
@@ -33,8 +36,9 @@ const COMPLETE_OPENROUTER: UpstreamCatalog = {
   discarded: [],
 };
 const DISCARDED_ENTRY = 'openai:<unparseable>';
-const MISSING_MODEL_ID = AI_SETTING_DEFAULTS.ai_deep_model;
-const UNPRICED_MODEL_ID = AI_SETTING_DEFAULTS.ai_fast_model;
+const [UNPRICED_FLOOR_ROW, , MISSING_FLOOR_ROW] = PLATFORM_FLOOR_ROWS;
+const MISSING_MODEL_ID = MISSING_FLOOR_ROW.id;
+const UNPRICED_MODEL_ID = UNPRICED_FLOOR_ROW.id;
 
 function refusalsFor(rows: readonly IndexedModel[]): string[] {
   return snapshotRefusals(
@@ -86,7 +90,7 @@ describe('snapshotRefusals', () => {
     );
 
     expect(refusals).toHaveLength(1);
-    expect(refusals[0]).toContain(MISSING_MODEL_ID);
+    expect(refusals[0]).toContain(SELECTOR_KEY_BY_INTENT.powerful);
   });
 
   it('names a floor model whose input is unpriced', () => {
@@ -97,7 +101,7 @@ describe('snapshotRefusals', () => {
     );
 
     expect(refusals).toHaveLength(1);
-    expect(refusals[0]).toContain(UNPRICED_MODEL_ID);
+    expect(refusals[0]).toContain(SELECTOR_KEY_BY_INTENT.fast);
   });
 
   it('reports every refusal cause at once', () => {
@@ -112,7 +116,7 @@ describe('snapshotRefusals', () => {
     expect(refusals).toHaveLength(3);
     expect(refusals[0]).toContain(DISCARDED_ENTRY);
     expect(refusals[1]).toContain('OpenRouter');
-    expect(refusals[2]).toContain(MISSING_MODEL_ID);
+    expect(refusals[2]).toContain(SELECTOR_KEY_BY_INTENT.powerful);
   });
 });
 

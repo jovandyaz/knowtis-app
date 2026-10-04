@@ -1,24 +1,13 @@
-import type { ModelIndexCatalog } from '@knowtis/ai-gateway';
+import type { IndexedModel, ModelIndexCatalog } from '@knowtis/ai-gateway';
 import {
   BYOK_PROVIDERS,
   MODEL_INTENTS,
-  parseChain,
   type ByokProvider,
   type ModelIntent,
 } from '@knowtis/shared-types';
 
-import { AI_SETTING_DEFAULTS } from '../ai-settings';
-import { resolveByokIntent } from './model-selectors';
-
-/** The platform's code-owned models: the default, fast and deep settings and the default fallback chain, once each. */
-export const PLATFORM_FLOOR_MODEL_IDS: readonly string[] = [
-  ...new Set([
-    AI_SETTING_DEFAULTS.ai_default_model,
-    AI_SETTING_DEFAULTS.ai_fast_model,
-    AI_SETTING_DEFAULTS.ai_deep_model,
-    ...parseChain(AI_SETTING_DEFAULTS.ai_fallback_chain),
-  ]),
-];
+import { resolveByokIntent, resolvePlatformIntent } from './model-selectors';
+import { SELECTOR_KEY_BY_INTENT } from './platform-resolution';
 
 /** `byok.<intent>@<provider>`: a caller holding only this provider's key has a served route for this intent. */
 export function byokFloorKey(
@@ -42,37 +31,59 @@ function isServed(catalog: ModelIndexCatalog, modelId: string): boolean {
   );
 }
 
-function routesIntent(
+function servesResolution(
+  catalog: ModelIndexCatalog,
+  resolution: IndexedModel | null
+): boolean {
+  return resolution !== null && isServed(catalog, resolution.id);
+}
+
+function platformRoutesIntent(
+  catalog: ModelIndexCatalog,
+  intent: ModelIntent,
+  now: Date
+): boolean {
+  return servesResolution(
+    catalog,
+    resolvePlatformIntent(intent, catalog.all(), now)
+  );
+}
+
+function byokRoutesIntent(
   catalog: ModelIndexCatalog,
   intent: ModelIntent,
   provider: ByokProvider,
   now: Date
 ): boolean {
-  const route = resolveByokIntent(intent, provider, catalog.all(), now);
-  return route !== null && isServed(catalog, route.id);
+  return servesResolution(
+    catalog,
+    resolveByokIntent(intent, provider, catalog.all(), now)
+  );
 }
 
 /**
- * What this catalog leaves unserved, platform models first: each platform floor
- * model it does not support, price above zero on both input and output, or give
- * an input window, then the `byokFloorKey` of each intent and provider whose
- * BYOK route at `now` resolves to no row it serves that way. Empty means the
- * platform's own spend is never recorded as `costUsd=0` and a holder of any one
- * provider key keeps a route for every intent.
+ * What this catalog leaves unserved: the selector key of each platform intent whose
+ * selector resolves to no row it serves (supported, priced above zero both ways, with
+ * an input window), then the `byokFloorKey` of each intent and provider whose BYOK
+ * route does not. Empty means every intent keeps a priced platform model to resolve
+ * to, and a holder of any one provider key keeps a route for every intent.
  */
 export function unservedFloorModels(
   catalog: ModelIndexCatalog,
   now: Date = new Date()
 ): string[] {
   return [
-    ...PLATFORM_FLOOR_MODEL_IDS.filter((id) => !isServed(catalog, id)),
+    ...MODEL_INTENTS.filter(
+      (intent) => !platformRoutesIntent(catalog, intent, now)
+    ).map((intent) => SELECTOR_KEY_BY_INTENT[intent]),
     ...BYOK_FLOOR_ROUTES.filter(
-      ({ intent, provider }) => !routesIntent(catalog, intent, provider, now)
+      ({ intent, provider }) =>
+        !byokRoutesIntent(catalog, intent, provider, now)
     ).map(({ intent, provider }) => byokFloorKey(intent, provider)),
   ];
 }
 
-/** Floor models and BYOK route keys `current` serves that `next` would not, whether `next` degrades or drops them. */
+/** Platform selector keys and BYOK route keys `current` serves that `next` would not, whether `next` degrades or drops them. */
 export function floorModelsLost(
   current: ModelIndexCatalog,
   next: ModelIndexCatalog,

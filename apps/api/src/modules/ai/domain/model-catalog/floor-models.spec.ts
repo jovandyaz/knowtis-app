@@ -8,19 +8,21 @@ import {
 
 import { createFloorRows } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
-import { AI_SETTING_DEFAULTS } from '../ai-settings';
 import {
   byokFloorKey,
   floorModelsLost,
-  PLATFORM_FLOOR_MODEL_IDS,
   unservedFloorModels,
 } from './floor-models';
 import { resolveByokIntent } from './model-selectors';
 
-const UNPRICED_OUTPUT_MODEL_ID = AI_SETTING_DEFAULTS.ai_fast_model;
-const WINDOWLESS_MODEL_ID = AI_SETTING_DEFAULTS.ai_deep_model;
-const MISSING_MODEL_ID = AI_SETTING_DEFAULTS.ai_deep_model;
-const UNSUPPORTED_MODEL_ID = AI_SETTING_DEFAULTS.ai_default_model;
+const FAST_RESOLUTION = 'openrouter:deepseek/deepseek-v4.1-flash';
+const BALANCED_RESOLUTION = 'openrouter:deepseek/deepseek-v4-pro-0813';
+const POWERFUL_RESOLUTION = 'openrouter:z-ai/glm-5.3';
+const RETIRED_DEFAULT_ID = 'openrouter:deepseek/deepseek-v3.2';
+const FAST_KEY = 'platform.fast';
+const BALANCED_KEY = 'platform.balanced';
+const POWERFUL_KEY = 'platform.powerful';
+const PLATFORM_KEYS = [FAST_KEY, BALANCED_KEY, POWERFUL_KEY];
 const IMAGE_ONLY = ['image'];
 
 const ANTHROPIC_FAST_ROUTE_ID = 'anthropic:claude-haiku-4-5';
@@ -46,19 +48,6 @@ function catalogWithout(...ids: string[]): ModelIndexCatalog {
   );
 }
 
-describe('PLATFORM_FLOOR_MODEL_IDS', () => {
-  it('holds the default, fast and deep model settings and the default fallback chain once each', () => {
-    const expected = [
-      'openrouter:deepseek/deepseek-v3.2',
-      'openrouter:minimax/minimax-m2.5',
-      'openrouter:moonshotai/kimi-k2.5',
-    ];
-
-    expect(new Set(PLATFORM_FLOOR_MODEL_IDS)).toEqual(new Set(expected));
-    expect(PLATFORM_FLOOR_MODEL_IDS).toHaveLength(expected.length);
-  });
-});
-
 describe('byokFloorKey', () => {
   it('names the intent and the provider of a BYOK route', () => {
     expect(byokFloorKey('fast', 'anthropic')).toBe(ANTHROPIC_FAST_KEY);
@@ -66,7 +55,7 @@ describe('byokFloorKey', () => {
 });
 
 describe('unservedFloorModels', () => {
-  it('names nothing when the catalog serves every platform model and BYOK route', () => {
+  it('serves every floor key on the floor rows', () => {
     expect(unservedFloorModels(catalogOf(), SNAPSHOT_DATE)).toEqual([]);
   });
 
@@ -91,58 +80,68 @@ describe('unservedFloorModels', () => {
     ]);
   });
 
-  it('names a platform model the catalog does not list', () => {
+  it('names the platform intent whose family lost its last served row', () => {
     expect(
-      unservedFloorModels(catalogWithout(MISSING_MODEL_ID), SNAPSHOT_DATE)
-    ).toEqual([MISSING_MODEL_ID]);
+      unservedFloorModels(catalogWithout(BALANCED_RESOLUTION), SNAPSHOT_DATE)
+    ).toEqual([BALANCED_KEY]);
   });
 
-  it('names platform models that are unsupported, unpriced or without an input window', () => {
+  it('names the platform intent whose resolution lost its price', () => {
+    const catalog = catalogOf((row) =>
+      row.id === BALANCED_RESOLUTION ? { ...row, inputCostPerToken: null } : row
+    );
+
+    expect(unservedFloorModels(catalog, SNAPSHOT_DATE)).toEqual([BALANCED_KEY]);
+  });
+
+  it('names the platform intents whose resolution is unpriced, without an input window or unsupported', () => {
     const catalog = catalogOf((row) => {
       switch (row.id) {
-        case UNPRICED_OUTPUT_MODEL_ID:
+        case FAST_RESOLUTION:
           return { ...row, outputCostPerToken: 0 };
-        case WINDOWLESS_MODEL_ID:
+        case BALANCED_RESOLUTION:
           return { ...row, maxInputTokens: null };
-        case UNSUPPORTED_MODEL_ID:
+        case POWERFUL_RESOLUTION:
           return { ...row, outputModalities: IMAGE_ONLY };
         default:
           return row;
       }
     });
 
-    expect(new Set(unservedFloorModels(catalog, SNAPSHOT_DATE))).toEqual(
-      new Set([
-        UNPRICED_OUTPUT_MODEL_ID,
-        WINDOWLESS_MODEL_ID,
-        UNSUPPORTED_MODEL_ID,
-      ])
-    );
+    expect(unservedFloorModels(catalog, SNAPSHOT_DATE)).toEqual(PLATFORM_KEYS);
   });
 
-  it('names the unserved platform models before the unserved BYOK routes', () => {
+  it('names the unserved platform intents before the unserved BYOK routes', () => {
     expect(
       unservedFloorModels(
-        catalogWithout(ANTHROPIC_FAST_ROUTE_ID, MISSING_MODEL_ID),
+        catalogWithout(ANTHROPIC_FAST_ROUTE_ID, BALANCED_RESOLUTION),
         SNAPSHOT_DATE
       )
-    ).toEqual([MISSING_MODEL_ID, ANTHROPIC_FAST_KEY]);
+    ).toEqual([BALANCED_KEY, ANTHROPIC_FAST_KEY]);
   });
 });
 
 describe('floorModelsLost', () => {
-  it('names the platform models the current catalog serves and the next one drops or degrades', () => {
+  it('names the platform intents the current catalog serves and the next one drops or degrades', () => {
     const next = createFloorRows((row) =>
-      row.id === UNSUPPORTED_MODEL_ID
+      row.id === POWERFUL_RESOLUTION
         ? { ...row, inputModalities: IMAGE_ONLY }
         : row
-    ).filter((row) => row.id !== MISSING_MODEL_ID);
+    ).filter((row) => row.id !== BALANCED_RESOLUTION);
 
     expect(
-      new Set(
-        floorModelsLost(catalogOf(), new ModelIndexCatalog(next), SNAPSHOT_DATE)
-      )
-    ).toEqual(new Set([UNSUPPORTED_MODEL_ID, MISSING_MODEL_ID]));
+      floorModelsLost(catalogOf(), new ModelIndexCatalog(next), SNAPSHOT_DATE)
+    ).toEqual([BALANCED_KEY, POWERFUL_KEY]);
+  });
+
+  it('never anchors the floor on a retired platform default', () => {
+    const current = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+    const next = new ModelIndexCatalog(
+      MODEL_INDEX_SNAPSHOT.filter((row) => row.id !== RETIRED_DEFAULT_ID)
+    );
+
+    expect(current.get(RETIRED_DEFAULT_ID)).toBeDefined();
+    expect(floorModelsLost(current, next, SNAPSHOT_DATE)).toEqual([]);
   });
 
   it('loses nothing when OpenRouter delists a resolved preview while another selector still routes its intent', () => {
@@ -187,13 +186,17 @@ describe('floorModelsLost', () => {
       row.provider === 'openrouter' ? { ...row, family: null } : row
     );
 
-    expect(floorModelsLost(catalogOf(), next, SNAPSHOT_DATE)).toEqual(
-      OPENROUTER_KEYS
-    );
+    expect(floorModelsLost(catalogOf(), next, SNAPSHOT_DATE)).toEqual([
+      ...PLATFORM_KEYS,
+      ...OPENROUTER_KEYS,
+    ]);
   });
 
-  it('ignores a platform model or BYOK route the current catalog does not serve', () => {
-    const current = catalogWithout(ANTHROPIC_FAST_ROUTE_ID, MISSING_MODEL_ID);
+  it('ignores a platform intent or BYOK route the current catalog does not serve', () => {
+    const current = catalogWithout(
+      ANTHROPIC_FAST_ROUTE_ID,
+      BALANCED_RESOLUTION
+    );
 
     expect(floorModelsLost(current, current, SNAPSHOT_DATE)).toEqual([]);
   });

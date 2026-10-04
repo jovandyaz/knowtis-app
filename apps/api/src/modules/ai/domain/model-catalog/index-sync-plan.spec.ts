@@ -7,26 +7,17 @@ import {
   type IndexProvider,
 } from '@knowtis/ai-gateway';
 
-import { createIndexedModel } from '../../testing/create-indexed-model';
+import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
-import { byokFloorKey, PLATFORM_FLOOR_MODEL_IDS } from './floor-models';
+import { byokFloorKey } from './floor-models';
 import {
   planIndexSync,
   SYNC_MAX_SHRINK_RATIO,
   type ProviderBatch,
 } from './index-sync-plan';
+import { SELECTOR_KEY_BY_INTENT } from './platform-resolution';
 
 const NOTHING_SERVED: readonly IndexedModel[] = [];
-
-function platformFloorIdOf(provider: IndexProvider): string {
-  const id = PLATFORM_FLOOR_MODEL_IDS.find((floorId) =>
-    floorId.startsWith(`${provider}:`)
-  );
-  if (id === undefined) {
-    throw new Error(`the plan spec needs a ${provider} platform floor model`);
-  }
-  return id;
-}
 
 function snapshotRow(id: string): IndexedModel {
   const row = MODEL_INDEX_SNAPSHOT.find((snapshot) => snapshot.id === id);
@@ -36,7 +27,8 @@ function snapshotRow(id: string): IndexedModel {
   return row;
 }
 
-const OPENROUTER_FLOOR_ID = platformFloorIdOf('openrouter');
+const [, BALANCED_FLOOR_ROW] = PLATFORM_FLOOR_ROWS;
+const RETIRED_DEFAULT_ID = 'openrouter:deepseek/deepseek-v3.2';
 const ANTHROPIC_FAST_ROUTE = snapshotRow('anthropic:claude-haiku-4-5');
 
 const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
@@ -277,21 +269,21 @@ describe('planIndexSync', () => {
     expect(plan.rejected).toEqual([]);
   });
 
-  it('should write none of a batch that would unserve a floor model its provider serves now', () => {
+  it('should write none of a batch that would unserve a platform intent its provider serves now', () => {
     const anthropic = batch('anthropic', 2);
     const openrouter: ProviderBatch = {
       ...batch('openrouter', 2),
       rows: [
         ...rows('openrouter', 2),
-        createIndexedModel({ id: OPENROUTER_FLOOR_ID, inputModalities: [] }),
+        ...PLATFORM_FLOOR_ROWS.filter((row) => row !== BALANCED_FLOOR_ROW),
       ],
     };
+    const listed = [
+      ...listedRows({ ...NOTHING_LISTED, anthropic: 2 }),
+      ...PLATFORM_FLOOR_ROWS,
+    ];
 
-    const plan = planIndexSync(
-      [anthropic, openrouter],
-      listedRows({ ...NOTHING_LISTED, anthropic: 2, openrouter: 3 }),
-      [createIndexedModel({ id: OPENROUTER_FLOOR_ID })]
-    );
+    const plan = planIndexSync([anthropic, openrouter], listed, listed);
 
     expect(plan.upserts).toEqual(anthropic.rows);
     expect(plan.concludeAbsence).toEqual(['anthropic']);
@@ -299,9 +291,28 @@ describe('planIndexSync', () => {
       {
         provider: 'openrouter',
         reason: 'floor',
-        models: [OPENROUTER_FLOOR_ID],
+        models: [SELECTOR_KEY_BY_INTENT.balanced],
       },
     ]);
+  });
+
+  it('accepts an OpenRouter batch that drops deepseek-v3.2', () => {
+    const listed = MODEL_INDEX_SNAPSHOT.filter(
+      (row) => row.provider === 'openrouter'
+    );
+    const openrouter: ProviderBatch = {
+      provider: 'openrouter',
+      rows: listed.filter((row) => row.id !== RETIRED_DEFAULT_ID),
+      conclusive: true,
+      discarded: [],
+    };
+
+    const plan = planIndexSync([openrouter], listed, listed);
+
+    expect(listed).toContain(snapshotRow(RETIRED_DEFAULT_ID));
+    expect(plan.upserts).toEqual(openrouter.rows);
+    expect(plan.concludeAbsence).toEqual(['openrouter']);
+    expect(plan.rejected).toEqual([]);
   });
 
   it('should write none of a batch that would leave a BYOK intent its provider routes now without a route', () => {
@@ -338,13 +349,10 @@ describe('planIndexSync', () => {
   });
 
   it('should count the listed row of a discarded id as still served', () => {
-    const listed = [
-      ...rows('openrouter', 2),
-      createIndexedModel({ id: OPENROUTER_FLOOR_ID }),
-    ];
+    const listed = [...rows('openrouter', 2), BALANCED_FLOOR_ROW];
     const openrouter: ProviderBatch = {
       ...batch('openrouter', 2),
-      discarded: [OPENROUTER_FLOOR_ID],
+      discarded: [BALANCED_FLOOR_ROW.id],
     };
 
     const plan = planIndexSync([openrouter], listed, listed);
@@ -357,21 +365,17 @@ describe('planIndexSync', () => {
   it('should not count a discarded id the index never listed as served', () => {
     const openrouter: ProviderBatch = {
       ...batch('openrouter', 2),
-      discarded: [OPENROUTER_FLOOR_ID],
+      discarded: [BALANCED_FLOOR_ROW.id],
     };
 
-    const plan = planIndexSync(
-      [openrouter],
-      [],
-      [createIndexedModel({ id: OPENROUTER_FLOOR_ID })]
-    );
+    const plan = planIndexSync([openrouter], [], [BALANCED_FLOOR_ROW]);
 
     expect(plan.upserts).toEqual([]);
     expect(plan.rejected).toEqual([
       {
         provider: 'openrouter',
         reason: 'floor',
-        models: [OPENROUTER_FLOOR_ID],
+        models: [SELECTOR_KEY_BY_INTENT.balanced],
       },
     ]);
   });
