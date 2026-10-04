@@ -1,10 +1,14 @@
 import { UnprocessableEntityException } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
 import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { SystemProviderKeysService } from './system-provider-keys.service';
 
 vi.mock('../../infrastructure/providers/provider-probe', () => ({
@@ -55,11 +59,18 @@ describe('SystemProviderKeysService', () => {
       mockRepo as never,
       configService as never,
       mockAudit as never,
-      moduleRef as never
+      moduleRef as never,
+      createSnapshotIndex()
     );
   }
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     env = {};
     mockRepo = {
       getAll: vi.fn().mockResolvedValue([]),
@@ -213,7 +224,19 @@ describe('SystemProviderKeysService', () => {
       expect(probeProviderKey).toHaveBeenCalledWith(
         registry,
         'anthropic',
-        'sk-ant-good-key'
+        'sk-ant-good-key',
+        'anthropic:claude-haiku-4-5'
+      );
+    });
+
+    it('should probe the platform floor model of the provider', async () => {
+      await service.setKey('openrouter', 'sk-or-good-key', ACTOR);
+
+      expect(probeProviderKey).toHaveBeenCalledWith(
+        registry,
+        'openrouter',
+        'sk-or-good-key',
+        'openrouter:deepseek/deepseek-v3.2'
       );
     });
 
@@ -231,6 +254,28 @@ describe('SystemProviderKeysService', () => {
         response: {
           message: 'anthropic refused the probe: invalid x-api-key',
           code: 'rejected',
+        },
+      });
+
+      expect(mockRepo.setKey).not.toHaveBeenCalled();
+      expect(mockAudit.record).not.toHaveBeenCalled();
+    });
+
+    it('should refuse a key no model can probe and store nothing', async () => {
+      vi.mocked(probeProviderKey).mockResolvedValue({
+        valid: false,
+        reason: 'unconfigured',
+        error: "No model resolves for provider 'anthropic'",
+      });
+
+      await expect(
+        service.setKey('anthropic', 'sk-ant-untested', ACTOR)
+      ).rejects.toMatchObject({
+        constructor: UnprocessableEntityException,
+        response: {
+          message:
+            "anthropic key cannot be probed: No model resolves for provider 'anthropic'",
+          code: 'unconfigured',
         },
       });
 

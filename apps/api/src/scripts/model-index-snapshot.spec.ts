@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ModelIndexCatalog, type IndexedModel } from '@knowtis/ai-gateway';
 
@@ -7,6 +7,7 @@ import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.por
 import type { UpstreamCatalog } from '../modules/ai/domain/ports/openrouter-models.port';
 import { createFloorRows } from '../modules/ai/testing/create-floor-rows';
 import { createIndexedModel } from '../modules/ai/testing/create-indexed-model';
+import { SNAPSHOT_DATE } from '../modules/ai/testing/snapshot-index';
 import {
   renderModelIndexSnapshot,
   SNAPSHOT_HEADER,
@@ -36,6 +37,15 @@ function refusalsFor(rows: readonly IndexedModel[]): string[] {
 }
 
 describe('snapshotRefusals', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('accepts clean reads that serve every floor model', () => {
     expect(refusalsFor(createFloorRows())).toEqual([]);
   });

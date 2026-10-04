@@ -20,12 +20,13 @@ import {
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { DailyMessageLimits } from '../../domain/execution-context/quota-policy';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import { isAssignableModel } from '../../domain/model-catalog/model-selectors';
 import {
   AI_CONFIG_REPOSITORY,
   type AIConfigRepository,
   type AIConfigRow,
 } from '../../domain/ports/ai-config.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
@@ -144,7 +145,8 @@ export class AIConfigService {
     private readonly registry: ProviderRegistryFactory,
     @Inject(MODEL_CATALOG)
     private readonly modelCatalog: ModelCatalog,
-    private readonly promotedModels: PromotedModelsCache
+    private readonly promotedModels: PromotedModelsCache,
+    private readonly index: ModelIndexCache
   ) {}
 
   async getDefaultModel(): Promise<string> {
@@ -365,11 +367,20 @@ export class AIConfigService {
   }
 
   private validateModel(value: string): void {
-    const offered =
-      CURATED_MODELS.some((m) => m.id === value) ||
-      this.promotedModels.snapshot().some((row) => row.id === value);
-    if (!offered) {
-      throw new InvalidAIConfigError(`'${value}' is not a selectable model id`);
+    if (!this.modelCatalog.isSupported(value)) {
+      throw new InvalidAIConfigError(
+        `'${value}' is not a model the catalog supports`
+      );
+    }
+    const promoted = this.promotedModels
+      .snapshot()
+      .some((model) => model.id === value);
+    if (
+      !isAssignableModel(this.index.catalog().get(value), promoted, new Date())
+    ) {
+      throw new InvalidAIConfigError(
+        `'${value}' is not an eligible platform model: it must be priced, support tools and structured output, and not be retired, an alias or a non-chat variant`
+      );
     }
     if (!this.registry.isModelAvailable(value)) {
       throw new InvalidAIConfigError(

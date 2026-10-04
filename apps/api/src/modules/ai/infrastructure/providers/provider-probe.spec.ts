@@ -14,6 +14,8 @@ vi.mock('ai', async (importOriginal) => ({
   generateText: vi.fn(),
 }));
 
+const PROBE_MODEL = 'anthropic:claude-haiku-4-5';
+
 const registry = { languageModel: vi.fn().mockReturnValue('probe-model') };
 
 function apiCallError(statusCode: number, message = 'nope') {
@@ -33,16 +35,17 @@ describe('probeProviderKey', () => {
     registry.languageModel.mockClear();
   });
 
-  it('should send one bounded turn through a curated model built from the candidate key', async () => {
+  it('should send one bounded turn through the given model built from the candidate key', async () => {
     const result = await probeProviderKey(
       registry as never,
       'anthropic',
-      'sk-ant-candidate'
+      'sk-ant-candidate',
+      PROBE_MODEL
     );
 
     expect(result).toEqual({ valid: true });
     expect(registry.languageModel).toHaveBeenCalledWith(
-      expect.stringContaining('anthropic:'),
+      PROBE_MODEL,
       'sk-ant-candidate'
     );
     expect(vi.mocked(generateText).mock.calls[0][0].maxOutputTokens).toBe(
@@ -58,7 +61,8 @@ describe('probeProviderKey', () => {
     const result = await probeProviderKey(
       registry as never,
       'anthropic',
-      'sk-ant-secret-value'
+      'sk-ant-secret-value',
+      PROBE_MODEL
     );
 
     expect(result).toEqual({
@@ -74,7 +78,12 @@ describe('probeProviderKey', () => {
       vi.mocked(generateText).mockRejectedValue(apiCallError(statusCode));
 
       await expect(
-        probeProviderKey(registry as never, 'anthropic', 'sk-ant-candidate')
+        probeProviderKey(
+          registry as never,
+          'anthropic',
+          'sk-ant-candidate',
+          PROBE_MODEL
+        )
       ).resolves.toMatchObject({ valid: false, reason: 'rejected' });
     }
   );
@@ -93,7 +102,12 @@ describe('probeProviderKey', () => {
       );
 
       await expect(
-        probeProviderKey(registry as never, 'anthropic', 'sk-ant-candidate')
+        probeProviderKey(
+          registry as never,
+          'anthropic',
+          'sk-ant-candidate',
+          PROBE_MODEL
+        )
       ).resolves.toMatchObject({ valid: false, reason: 'unavailable' });
     }
   );
@@ -112,7 +126,8 @@ describe('probeProviderKey', () => {
       const pending = probeProviderKey(
         registry as never,
         'anthropic',
-        'sk-ant-slow-provider'
+        'sk-ant-slow-provider',
+        PROBE_MODEL
       );
 
       await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS - 1);
@@ -135,11 +150,28 @@ describe('probeProviderKey', () => {
     vi.mocked(generateText).mockRejectedValue('boom');
 
     await expect(
-      probeProviderKey(registry as never, 'openai', 'sk-openai-key')
+      probeProviderKey(
+        registry as never,
+        'openai',
+        'sk-openai-key',
+        PROBE_MODEL
+      )
     ).resolves.toEqual({
       valid: false,
       reason: 'unavailable',
       error: 'unknown',
     });
+  });
+
+  it('should report unconfigured without calling the provider when no model resolves', async () => {
+    await expect(
+      probeProviderKey(registry as never, 'openai', 'sk-openai-key', null)
+    ).resolves.toEqual({
+      valid: false,
+      reason: 'unconfigured',
+      error: "No model resolves for provider 'openai'",
+    });
+    expect(generateText).not.toHaveBeenCalled();
+    expect(registry.languageModel).not.toHaveBeenCalled();
   });
 });

@@ -522,6 +522,7 @@
         "model_retired": "Answered by {{model}} because the model you picked is no longer available.",
         "key_removed": "Answered by {{model}} because you removed the API key for the model you picked.",
         "not_in_tier": "Answered by {{model}} because your plan doesn't include the model you picked.",
+        "intent_unavailable": "Answered by {{model}} because the selected option isn't available right now.",
         "other": "Answered by {{model}} instead of the model you picked."
       },
       "empty": {

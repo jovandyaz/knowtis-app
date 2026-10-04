@@ -20,10 +20,12 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
+import { systemProbeModelId } from '../../domain/model-catalog/probe-model';
 import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
   type SystemProviderKeysRepository,
 } from '../../domain/ports/system-provider-keys.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import {
   decryptSecret,
   encryptSecret,
@@ -55,7 +57,8 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     private readonly repo: SystemProviderKeysRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly adminAuditService: AdminAuditService,
-    private readonly moduleRef: ModuleRef
+    private readonly moduleRef: ModuleRef,
+    private readonly index: ModelIndexCache
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -99,8 +102,9 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
   /**
    * Probes the key, then stores it. A definitive refusal vetoes the save — a
    * stored key shadows the env one, so a bad key must never displace a working
-   * one. An outage or timeout says nothing about the key, so it is kept and the
-   * failure rides along as information.
+   * one — and so does a probe that never ran for want of a model, which leaves
+   * the key wholly untested. An outage or timeout says nothing about the key,
+   * so it is kept and the failure rides along as information.
    */
   async setKey(
     provider: AIProvider,
@@ -115,7 +119,8 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     const probe = await probeProviderKey(
       this.moduleRef.get(ProviderRegistryFactory),
       provider,
-      apiKey
+      apiKey,
+      systemProbeModelId(provider, this.index.catalog().all())
     );
     if (!probe.valid) {
       this.logger.warn({
@@ -127,6 +132,12 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
       if (probe.reason === 'rejected') {
         throw new UnprocessableEntityException({
           message: `${provider} refused the probe: ${probe.error}`,
+          code: probe.reason,
+        });
+      }
+      if (probe.reason === 'unconfigured') {
+        throw new UnprocessableEntityException({
+          message: `${provider} key cannot be probed: ${probe.error}`,
           code: probe.reason,
         });
       }

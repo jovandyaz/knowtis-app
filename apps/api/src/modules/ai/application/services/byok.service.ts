@@ -12,6 +12,7 @@ import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
+import { byokProbeModelId } from '../../domain/model-catalog/probe-model';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -20,6 +21,7 @@ import {
   USER_PROVIDER_KEYS_REPOSITORY,
   type UserProviderKeysRepository,
 } from '../../domain/ports/user-provider-keys.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import {
   decryptSecret,
   encryptSecret,
@@ -57,7 +59,8 @@ export class ByokService {
     private readonly registry: ProviderRegistryFactory,
     private readonly verifiedIdentity: VerifiedIdentityPolicy,
     @Inject(USER_AI_SETTINGS_REPOSITORY)
-    private readonly settings: UserAiSettingsRepository
+    private readonly settings: UserAiSettingsRepository,
+    private readonly index: ModelIndexCache
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -131,6 +134,11 @@ export class ByokService {
           `The ${provider} key was rejected. Check it is valid and has quota.`
         );
       }
+      if (probe.reason === 'unconfigured') {
+        throw new ServiceUnavailableException(
+          `No ${provider} model is available to check the key. Try again later.`
+        );
+      }
       throw new ServiceUnavailableException(
         `${provider} could not be reached to check the key. Try again in a moment.`
       );
@@ -162,6 +170,11 @@ export class ByokService {
     provider: ByokProvider,
     apiKey: string
   ): Promise<ProbeResult> {
-    return probeProviderKey(this.registry, provider, apiKey);
+    return probeProviderKey(
+      this.registry,
+      provider,
+      apiKey,
+      byokProbeModelId(provider, this.index.catalog().all())
+    );
   }
 }

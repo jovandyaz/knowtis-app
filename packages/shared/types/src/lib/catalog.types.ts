@@ -80,10 +80,9 @@ export interface CatalogSyncResultDto {
 }
 
 /**
- * One row of the backoffice assignable-models listing: every curated model
- * regardless of key state (unconfigured providers show `needsKey` instead of
- * disappearing), plus every promoted model. Curated descriptions live in
- * frontend i18n, so `description` is empty for them.
+ * One row of the backoffice assignable-models listing: an eligible model-index
+ * row of a provider the server holds a key for, or a promoted model (a promoted
+ * id replaces its index row). `description` is empty for index rows.
  */
 export interface AssignableModelDto {
   id: string;
@@ -92,7 +91,6 @@ export interface AssignableModelDto {
   tier: ModelTier;
   provider: string;
   routableByServer: boolean;
-  needsKey: boolean;
   promoted: boolean;
 }
 

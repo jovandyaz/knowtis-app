@@ -65,7 +65,6 @@ const MODELS = [
     tier: 'balanced',
     provider: 'anthropic',
     routableByServer: true,
-    needsKey: false,
     promoted: false,
   },
   {
@@ -75,7 +74,6 @@ const MODELS = [
     tier: 'fast',
     provider: 'anthropic',
     routableByServer: true,
-    needsKey: false,
     promoted: false,
   },
   {
@@ -85,7 +83,6 @@ const MODELS = [
     tier: 'fast',
     provider: 'openai',
     routableByServer: false,
-    needsKey: true,
     promoted: false,
   },
   {
@@ -95,7 +92,6 @@ const MODELS = [
     tier: 'open',
     provider: 'openrouter',
     routableByServer: false,
-    needsKey: false,
     promoted: true,
   },
 ];

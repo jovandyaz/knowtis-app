@@ -3,10 +3,11 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { APICallError, RetryError } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
 import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
+import { createSnapshotIndex, SNAPSHOT_DATE } from './testing/snapshot-index';
 
 // Only the call is stubbed; the error classes must stay real because the
 // classifier reads the SDK's own retryability verdict off them.
@@ -27,7 +28,7 @@ function apiCallError(statusCode: number, message = 'nope') {
 }
 const anthropic = { provider: 'anthropic' } as never;
 
-function make() {
+function make(index = createSnapshotIndex()) {
   const systemKeys = {
     list: vi.fn().mockResolvedValue([]),
     setKey: vi.fn().mockResolvedValue({ valid: true }),
@@ -42,7 +43,8 @@ function make() {
   return {
     controller: new AiProvidersController(
       systemKeys as never,
-      registry as never
+      registry as never,
+      index
     ),
     systemKeys,
     registry,
@@ -57,8 +59,14 @@ async function probeFailsWith(error: unknown) {
 describe('AiProvidersController', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockResolvedValue({} as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should reject a request that changes nothing', async () => {
@@ -159,13 +167,47 @@ describe('AiProvidersController', () => {
       const result = await controller.test(anthropic);
 
       expect(registry.languageModel).toHaveBeenCalledWith(
-        expect.stringContaining('anthropic:')
+        'anthropic:claude-haiku-4-5'
       );
       expect(generateText).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
         ok: true,
-        model: expect.stringContaining('anthropic:'),
+        model: 'anthropic:claude-haiku-4-5',
       });
+    });
+
+    it('should probe the platform floor model of the provider', async () => {
+      const { controller, registry } = make();
+
+      await controller.test({ provider: 'openrouter' } as never);
+
+      expect(registry.languageModel).toHaveBeenCalledWith(
+        'openrouter:deepseek/deepseek-v3.2'
+      );
+    });
+
+    it('should fall back to the fast BYOK route when the platform has no floor model there', async () => {
+      const { controller, registry } = make();
+
+      await controller.test({ provider: 'openai' } as never);
+
+      expect(registry.languageModel).toHaveBeenCalledWith('openai:gpt-6-luna');
+    });
+
+    it('should report unconfigured, without a request, when no model resolves', async () => {
+      const { generateText } = vi.mocked(await import('ai'));
+      const emptyIndex = { catalog: () => ({ all: () => [] }) };
+      const { controller, registry } = make(emptyIndex as never);
+
+      await expect(
+        controller.test({ provider: 'openai' } as never)
+      ).resolves.toEqual({
+        ok: false,
+        reason: 'unconfigured',
+        message: "No model resolves for provider 'openai'",
+      });
+      expect(registry.languageModel).not.toHaveBeenCalled();
+      expect(generateText).not.toHaveBeenCalled();
     });
 
     it('should report a refusal with the routing secret scrubbed from the provider echo', async () => {

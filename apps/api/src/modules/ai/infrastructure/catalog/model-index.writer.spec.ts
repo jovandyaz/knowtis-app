@@ -10,13 +10,18 @@ import {
   type IndexProvider,
   type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
+import { MODEL_INTENTS } from '@knowtis/shared-types';
 
 import {
   AI_MODEL_INDEX_COST_CEILING,
   AI_MODEL_INDEX_MAX_LENGTHS,
 } from '../../../../database/schema/ai-model-index.schema';
 import { openTierSlug } from '../../domain/model-catalog/curated-watch';
-import { FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
+import {
+  byokFloorKey,
+  PLATFORM_FLOOR_MODEL_IDS,
+} from '../../domain/model-catalog/floor-models';
+import { resolveByokIntent } from '../../domain/model-catalog/model-selectors';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
@@ -31,6 +36,7 @@ import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { ModelIndexWriter } from './model-index.writer';
 
 const QWEN_SLUG = 'qwen/qwen3.8-max';
@@ -50,9 +56,25 @@ if (CURATED_OPEN_SLUGS.length < 2) {
 
 const [CURATED_OPEN_SLUG, OTHER_CURATED_OPEN_SLUG] = CURATED_OPEN_SLUGS;
 const CURATED_OPEN_ID = `openrouter:${CURATED_OPEN_SLUG}`;
-const OPENROUTER_FLOOR_SLUGS = FLOOR_MODEL_IDS.filter((id) =>
+const OPENROUTER_FLOOR_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
   id.startsWith(OPENROUTER_ID_PREFIX)
 ).map((id) => id.slice(OPENROUTER_ID_PREFIX.length));
+const OPENROUTER_ROUTE_SLUGS = MODEL_INTENTS.flatMap((intent) => {
+  const route = resolveByokIntent(
+    intent,
+    'openrouter',
+    MODEL_INDEX_SNAPSHOT,
+    SNAPSHOT_DATE
+  );
+  return route === null ? [] : [route.id.slice(OPENROUTER_ID_PREFIX.length)];
+});
+
+if (OPENROUTER_ROUTE_SLUGS.length !== MODEL_INTENTS.length) {
+  throw new Error('the writer spec needs an OpenRouter route for every intent');
+}
+const OPENROUTER_ROUTE_KEYS = MODEL_INTENTS.map((intent) =>
+  byokFloorKey(intent, 'openrouter')
+);
 const QWEN_ID = `openrouter:${QWEN_SLUG}`;
 
 function upstreamModel(id: string): UpstreamModel {
@@ -76,6 +98,13 @@ function upstreamModel(id: string): UpstreamModel {
   };
 }
 
+function routeModel(id: string): UpstreamModel {
+  return {
+    ...upstreamModel(id),
+    supportedParameters: ['tools', 'structured_outputs'],
+  };
+}
+
 function openRouterCatalog(
   overrides: Partial<UpstreamCatalog> = {}
 ): UpstreamCatalog {
@@ -87,12 +116,16 @@ function openRouterCatalog(
   };
 }
 
-function directModel(provider: IndexProvider, slug: string): IndexedModel {
+function directModel(
+  provider: IndexProvider,
+  slug: string,
+  family = slug
+): IndexedModel {
   return {
     id: `${provider}:${slug}`,
     provider,
     name: slug,
-    family: slug,
+    family,
     releasedAt: '2026-01-01',
     status: 'active',
     toolCall: true,
@@ -113,7 +146,8 @@ function directModel(provider: IndexProvider, slug: string): IndexedModel {
   };
 }
 
-const CLAUDE = directModel('anthropic', 'claude-sonnet-5');
+const CLAUDE = directModel('anthropic', 'claude-sonnet-5', 'claude-sonnet');
+const CLAUDE_ROUTE_KEY = byokFloorKey('balanced', 'anthropic');
 const GPT = directModel('openai', 'gpt-5.4');
 const GEMINI = directModel('google', 'gemini-3-pro');
 const CLAUDE_NEXT = directModel('anthropic', 'claude-next');
@@ -176,6 +210,8 @@ describe('ModelIndexWriter', () => {
   let errorLog: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     logLog = vi
       .spyOn(Logger.prototype, 'log')
       .mockImplementation(() => undefined);
@@ -188,6 +224,7 @@ describe('ModelIndexWriter', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -319,6 +356,119 @@ describe('ModelIndexWriter', () => {
         outputCostPerToken: 0.000006,
       })
     );
+  });
+
+  describe('OpenRouter enrichment carried forward', () => {
+    const CLAUDE_SLUG = 'anthropic/claude-sonnet-5.5';
+    const CLAUDE_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${CLAUDE_SLUG}`;
+    const SNAPSHOT_SLUG = 'amazon/nova-2-lite-v1';
+    const SNAPSHOT_OPENROUTER_ID = `${OPENROUTER_ID_PREFIX}${SNAPSHOT_SLUG}`;
+
+    const listedClaude: IndexedModel = fromOpenRouter(
+      upstreamModel(CLAUDE_SLUG),
+      {
+        family: 'claude-sonnet',
+        canonical: 'anthropic/claude-sonnet-5',
+        openWeights: true,
+        status: 'deprecated',
+      }
+    );
+    const CARRIED_FIELDS = {
+      family: 'claude-sonnet',
+      canonical: 'anthropic/claude-sonnet-5',
+      openWeights: true,
+      status: 'deprecated',
+    };
+
+    function catalogWithClaude(): UpstreamCatalog {
+      return openRouterCatalog({
+        models: [
+          upstreamModel(CURATED_OPEN_SLUG),
+          upstreamModel(QWEN_SLUG),
+          upstreamModel(CLAUDE_SLUG),
+        ],
+      });
+    }
+
+    function upsertedRow(
+      repo: ReturnType<typeof make>['repo'],
+      id: string
+    ): IndexedModel | undefined {
+      const [rows] = repo.upsertMany.mock.calls[0] ?? [[]];
+      return rows.find((row) => row.id === id);
+    }
+
+    it('should keep every stored enrichment field when models.dev failed', async () => {
+      const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
+
+      await writer.write(catalogWithClaude(), null);
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)).toEqual(
+        expect.objectContaining(CARRIED_FIELDS)
+      );
+    });
+
+    it('should keep every stored enrichment field when models.dev has no entry for the model', async () => {
+      const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
+
+      await writer.write(catalogWithClaude(), modelsDevCatalog());
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)).toEqual(
+        expect.objectContaining(CARRIED_FIELDS)
+      );
+    });
+
+    it('should prefer the models.dev entry over the stored family', async () => {
+      const { writer, repo } = make([...LISTED_ROWS, listedClaude]);
+      const enrichment: ModelsDevEnrichment = {
+        family: 'claude-sonnet-next',
+        canonical: 'anthropic/claude-sonnet-5-5',
+        openWeights: false,
+        status: 'active',
+      };
+
+      await writer.write(
+        catalogWithClaude(),
+        modelsDevCatalog({
+          openRouterEnrichment: new Map([[CLAUDE_SLUG, enrichment]]),
+        })
+      );
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)?.family).toBe(
+        'claude-sonnet-next'
+      );
+    });
+
+    it('should index a model with no stored row and no entry with a null family', async () => {
+      const { writer, repo } = make();
+
+      await writer.write(catalogWithClaude(), null);
+
+      expect(upsertedRow(repo, CLAUDE_OPENROUTER_ID)?.family).toBeNull();
+    });
+
+    it('should carry the family from the snapshot row while OpenRouter lists none', async () => {
+      const snapshotFamily = MODEL_INDEX_SNAPSHOT.find(
+        (row) => row.id === SNAPSHOT_OPENROUTER_ID
+      )?.family;
+      const { writer, repo } = make(
+        LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
+      );
+
+      await writer.write(
+        openRouterCatalog({
+          models: MODEL_INDEX_SNAPSHOT.filter(
+            (row) => row.provider === 'openrouter'
+          ).map((row) => routeModel(row.id.slice(OPENROUTER_ID_PREFIX.length))),
+        }),
+        null
+      );
+
+      expect(snapshotFamily).toBeTruthy();
+      expect(upsertedRow(repo, SNAPSHOT_OPENROUTER_ID)?.family).toBe(
+        snapshotFamily
+      );
+    });
   });
 
   it('should enrich an OpenRouter model models.dev describes', async () => {
@@ -464,7 +614,7 @@ describe('ModelIndexWriter', () => {
     });
   });
 
-  it('should write none of a batch that drops a floor model its provider serves', async () => {
+  it('should write none of a batch that drops the only route its provider serves for a BYOK intent', async () => {
     const { writer, repo } = make();
 
     const result = await writer.write(
@@ -475,7 +625,7 @@ describe('ModelIndexWriter', () => {
     expect(upsertedIds(repo)).not.toContain(CLAUDE_NEXT.id);
     expect(absenceConcludedFor(repo)).not.toContain('anthropic');
     expect(result.rejected).toEqual([
-      { provider: 'anthropic', reason: 'floor', models: [CLAUDE.id] },
+      { provider: 'anthropic', reason: 'floor', models: [CLAUDE_ROUTE_KEY] },
     ]);
   });
 
@@ -500,41 +650,48 @@ describe('ModelIndexWriter', () => {
 
   it('should hold a provider with no listed rows to the floor models its snapshot rows serve', async () => {
     const { writer, repo } = make(
-      LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
+      LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
     );
 
     const result = await writer.write(openRouterCatalog(), modelsDevCatalog());
 
-    expect(upsertedIds(repo)).not.toContain(CLAUDE.id);
-    expect(absenceConcludedFor(repo)).not.toContain('anthropic');
+    expect(upsertedIds(repo)).not.toContain(CURATED_OPEN_ID);
+    expect(absenceConcludedFor(repo)).not.toContain('openrouter');
     expect(result.rejected).toEqual([
       {
-        provider: 'anthropic',
+        provider: 'openrouter',
         reason: 'floor',
-        models: FLOOR_MODEL_IDS.filter(
-          (id) => id.startsWith('anthropic:') && id !== CLAUDE.id
-        ),
+        models: [
+          ...PLATFORM_FLOOR_MODEL_IDS.filter(
+            (id) =>
+              id.startsWith(OPENROUTER_ID_PREFIX) && id !== CURATED_OPEN_ID
+          ),
+          ...OPENROUTER_ROUTE_KEYS,
+        ],
       },
     ]);
   });
 
   it('should accept a provider with no listed rows whose batch serves what its snapshot rows serve', async () => {
-    const snapshotRows = MODEL_INDEX_SNAPSHOT.filter(
-      (row) => row.provider === 'anthropic'
-    );
+    const models = [
+      ...OPENROUTER_FLOOR_SLUGS.map(upstreamModel),
+      ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
+    ];
     const { writer, repo } = make(
-      LISTED_ROWS.filter((row) => row.provider !== 'anthropic')
+      LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
     );
 
     const result = await writer.write(
-      openRouterCatalog(),
-      modelsDevCatalog({ models: [...snapshotRows, GPT, GEMINI] })
+      openRouterCatalog({ models }),
+      modelsDevCatalog()
     );
 
     expect(upsertedIds(repo)).toEqual(
-      expect.arrayContaining(snapshotRows.map((row) => row.id))
+      expect.arrayContaining(
+        models.map((model) => `${OPENROUTER_ID_PREFIX}${model.id}`)
+      )
     );
-    expect(absenceConcludedFor(repo)).toContain('anthropic');
+    expect(absenceConcludedFor(repo)).toContain('openrouter');
     expect(result.rejected).toEqual([]);
   });
 
@@ -712,9 +869,12 @@ describe('ModelIndexWriter', () => {
 
     const result = await writer.write(
       openRouterCatalog({
-        models: OPENROUTER_FLOOR_SLUGS.filter(
-          (slug) => slug !== CURATED_OPEN_SLUG
-        ).map(upstreamModel),
+        models: [
+          ...OPENROUTER_FLOOR_SLUGS.filter(
+            (slug) => slug !== CURATED_OPEN_SLUG
+          ).map(upstreamModel),
+          ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
+        ],
         discarded: [CURATED_OPEN_SLUG],
       }),
       modelsDevCatalog()
@@ -728,9 +888,9 @@ describe('ModelIndexWriter', () => {
     ]);
   });
 
-  it('should reject a batch whose overflowing floor row its snapshot rows still serve', async () => {
+  it('should reject a batch whose only route for a BYOK intent its snapshot rows serve overflows a column', async () => {
     const snapshotRows = MODEL_INDEX_SNAPSHOT.filter(
-      (row) => row.provider === 'anthropic' && row.id !== CLAUDE.id
+      (row) => row.provider === 'anthropic' && row.family !== CLAUDE.family
     );
     const overflowing = {
       ...CLAUDE,
@@ -751,7 +911,7 @@ describe('ModelIndexWriter', () => {
       false
     );
     expect(result.rejected).toEqual([
-      { provider: 'anthropic', reason: 'floor', models: [CLAUDE.id] },
+      { provider: 'anthropic', reason: 'floor', models: [CLAUDE_ROUTE_KEY] },
     ]);
   });
 

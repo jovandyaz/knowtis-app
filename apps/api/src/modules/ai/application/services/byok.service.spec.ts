@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { generateText } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   EMAIL_NOT_VERIFIED_CODE,
@@ -23,6 +23,10 @@ import {
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
 import type { ProbeResult } from '../../infrastructure/providers/provider-probe';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { ByokService } from './byok.service';
 
 vi.mock('ai', async (importOriginal) => ({
@@ -69,7 +73,8 @@ function makeService(overrides: MakeOverrides) {
     config as never,
     registry as never,
     policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED),
-    settings as never
+    settings as never,
+    createSnapshotIndex()
   );
   const validateKey = vi.fn(
     overrides.validate ?? (async () => ({ valid: true }) as ProbeResult)
@@ -81,7 +86,13 @@ function makeService(overrides: MakeOverrides) {
 }
 
 describe('ByokService', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     vi.clearAllMocks();
   });
 
@@ -122,7 +133,24 @@ describe('ByokService', () => {
     }
   );
 
-  it.each(['rejected', 'unavailable', 'timeout'] as const)(
+  it('refuses a key no model can probe and stores nothing', async () => {
+    const { service, repo, settings } = makeService({
+      validate: async () => ({
+        valid: false,
+        reason: 'unconfigured',
+        error: "No model resolves for provider 'openai'",
+      }),
+    });
+    const failure = await service
+      .setKey('u1', 'openai', 'sk-untested-123456')
+      .catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+    expect((failure as Error).message).toMatch(/no openai model/i);
+    expect(repo.upsert).not.toHaveBeenCalled();
+    expect(settings.clearBoundToUnheldProvider).not.toHaveBeenCalled();
+  });
+
+  it.each(['rejected', 'unavailable', 'timeout', 'unconfigured'] as const)(
     'logs provider, reason and error when the probe is %s',
     async (reason) => {
       const warn = vi
@@ -246,16 +274,21 @@ describe('ByokService', () => {
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
-      { clearBoundToUnheldProvider: vi.fn() } as never
+      { clearBoundToUnheldProvider: vi.fn() } as never,
+      createSnapshotIndex()
     );
 
     await expect(
       service.setKey('u1', 'openai', 'sk-valid-123456')
     ).resolves.toBeUndefined();
     expect(repo.upsert).toHaveBeenCalled();
+    expect(registry.languageModel).toHaveBeenCalledWith(
+      'openai:gpt-6-luna',
+      'sk-valid-123456'
+    );
   });
 
-  it('validates an openrouter key against the first open-tier model', async () => {
+  it('validates an openrouter key against its fast BYOK route', async () => {
     const registry = { languageModel: vi.fn().mockReturnValue({}) };
     const config = {
       get: (k: string) =>
@@ -274,13 +307,14 @@ describe('ByokService', () => {
       config as never,
       registry as never,
       policyFor(IDENTITY_STATE.VERIFIED),
-      { clearBoundToUnheldProvider: vi.fn() } as never
+      { clearBoundToUnheldProvider: vi.fn() } as never,
+      createSnapshotIndex()
     );
 
     await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
 
     expect(registry.languageModel).toHaveBeenCalledWith(
-      'openrouter:deepseek/deepseek-v3.2',
+      'openrouter:anthropic/claude-haiku-4.5',
       'sk-or-v1-valid-key-000'
     );
   });

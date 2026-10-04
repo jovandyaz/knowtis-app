@@ -1,117 +1,60 @@
-import type { ByokProvider, ModelIntent } from '@knowtis/shared-types';
+import type { IndexedModel } from '@knowtis/ai-gateway';
+import {
+  BYOK_PROVIDERS,
+  type ByokProvider,
+  type ModelIntent,
+} from '@knowtis/shared-types';
 
-/** One model as its creator names it, with the model id each provider serves it under. */
-export interface CanonicalModel {
-  readonly slug: string;
-  readonly label: string;
-  readonly routes: Readonly<Partial<Record<ByokProvider, string>>>;
+import {
+  BYOK_SELECTORS,
+  resolveSelector,
+  type ModelSelector,
+} from './model-selectors';
+
+/** One selector's resolution on each provider that serves its author: its direct provider and OpenRouter. */
+export interface SelectorRoutes {
+  readonly selector: ModelSelector;
+  readonly routes: Readonly<Partial<Record<ByokProvider, IndexedModel>>>;
 }
 
+export type ByokResolutions = Readonly<
+  Record<ModelIntent, readonly SelectorRoutes[]>
+>;
+
 export interface IntentRoute {
-  readonly modelId: string;
-  readonly label: string;
+  readonly row: IndexedModel;
   readonly substituted: boolean;
 }
 
 const AGGREGATOR: ByokProvider = 'openrouter';
 
-/** Capability order per intent; a route runs only while the catalog supports its id, so a declared route the catalog does not list is inert. */
-export const BYOK_INTENT_CANDIDATES: Readonly<
-  Record<ModelIntent, readonly CanonicalModel[]>
-> = {
-  fast: [
-    {
-      slug: 'anthropic/claude-haiku-4.5',
-      label: 'Haiku 4.5',
-      routes: {
-        anthropic: 'anthropic:claude-haiku-4-5',
-        openrouter: 'openrouter:anthropic/claude-haiku-4.5',
-      },
-    },
-    {
-      slug: 'openai/gpt-5.6-luna',
-      label: 'GPT-5.6 Luna',
-      routes: {
-        openai: 'openai:gpt-5.6-luna',
-        openrouter: 'openrouter:openai/gpt-5.6-luna',
-      },
-    },
-    {
-      slug: 'google/gemini-3.5-flash-lite',
-      label: 'Gemini 3.5 Flash Lite',
-      routes: {
-        google: 'google:gemini-3.5-flash-lite',
-        openrouter: 'openrouter:google/gemini-3.5-flash-lite',
-      },
-    },
-  ],
-  balanced: [
-    {
-      slug: 'anthropic/claude-sonnet-5',
-      label: 'Sonnet 5',
-      routes: {
-        anthropic: 'anthropic:claude-sonnet-5',
-        openrouter: 'openrouter:anthropic/claude-sonnet-5',
-      },
-    },
-    {
-      slug: 'openai/gpt-5.6-terra',
-      label: 'GPT-5.6 Terra',
-      routes: {
-        openai: 'openai:gpt-5.6-terra',
-        openrouter: 'openrouter:openai/gpt-5.6-terra',
-      },
-    },
-    {
-      slug: 'google/gemini-3.7-flash',
-      label: 'Gemini 3.7 Flash',
-      routes: {
-        google: 'google:gemini-3.7-flash',
-        openrouter: 'openrouter:google/gemini-3.7-flash',
-      },
-    },
-    {
-      slug: 'anthropic/claude-sonnet-4.6',
-      label: 'Sonnet 4.6',
-      routes: { openrouter: 'openrouter:anthropic/claude-sonnet-4.6' },
-    },
-  ],
-  powerful: [
-    {
-      slug: 'anthropic/claude-opus-5',
-      label: 'Opus 5',
-      routes: {
-        anthropic: 'anthropic:claude-opus-5',
-        openrouter: 'openrouter:anthropic/claude-opus-5',
-      },
-    },
-    {
-      slug: 'openai/gpt-5.6-sol',
-      label: 'GPT-5.6 Sol',
-      routes: {
-        openai: 'openai:gpt-5.6-sol',
-        openrouter: 'openrouter:openai/gpt-5.6-sol',
-      },
-    },
-    {
-      slug: 'google/gemini-3.1-pro-preview',
-      label: 'Gemini 3.1 Pro',
-      routes: {
-        google: 'google:gemini-3.1-pro-preview',
-        openrouter: 'openrouter:google/gemini-3.1-pro-preview',
-      },
-    },
-  ],
-};
+function resolveIntentSelectors(
+  intent: ModelIntent,
+  rows: readonly IndexedModel[],
+  now: Date
+): SelectorRoutes[] {
+  return BYOK_SELECTORS[intent].map((selector) => {
+    const routes: Partial<Record<ByokProvider, IndexedModel>> = {};
+    for (const provider of BYOK_PROVIDERS) {
+      const row = resolveSelector(selector, provider, rows, now);
+      if (row !== null) {
+        routes[provider] = row;
+      }
+    }
+    return { selector, routes };
+  });
+}
 
-const CANDIDATES: readonly CanonicalModel[] = Object.values(
-  BYOK_INTENT_CANDIDATES
-).flat();
-
-export function canonicalOf(modelId: string): CanonicalModel | undefined {
-  return CANDIDATES.find((candidate) =>
-    Object.values(candidate.routes).includes(modelId)
-  );
+/** Every BYOK selector of each intent, in selector order, resolved over `rows` at `now`. */
+export function resolveByokSelectors(
+  rows: readonly IndexedModel[],
+  now: Date
+): ByokResolutions {
+  return {
+    fast: resolveIntentSelectors('fast', rows, now),
+    balanced: resolveIntentSelectors('balanced', rows, now),
+    powerful: resolveIntentSelectors('powerful', rows, now),
+  };
 }
 
 /** The stored primary while its key is held, else the first key added. */
@@ -134,28 +77,29 @@ function routeOrder(
   ];
 }
 
+/** Every route the held keys reach: candidates in selector order, each candidate's routes in route order (primary, other direct keys in add order, OpenRouter last). */
+export function reachableRoutes(
+  candidates: readonly SelectorRoutes[],
+  held: readonly ByokProvider[],
+  primary: ByokProvider | null
+): IndexedModel[] {
+  const order = routeOrder(held, primary);
+  return candidates.flatMap((candidate) =>
+    order.flatMap((provider) => candidate.routes[provider] ?? [])
+  );
+}
+
 /**
  * The first candidate any held key can serve wins; the primary provider only
- * picks which of that candidate's routes runs. Never a platform model.
+ * picks which of its routes runs. Never a platform model.
  */
 export function routeIntent(
-  candidates: readonly CanonicalModel[],
+  candidates: readonly SelectorRoutes[],
   held: readonly ByokProvider[],
-  primary: ByokProvider | null,
-  isSupported: (modelId: string) => boolean
+  primary: ByokProvider | null
 ): IntentRoute | null {
-  const order = routeOrder(held, primary);
-  for (const candidate of candidates) {
-    for (const provider of order) {
-      const modelId = candidate.routes[provider];
-      if (modelId !== undefined && isSupported(modelId)) {
-        return {
-          modelId,
-          label: candidate.label,
-          substituted: provider !== primary,
-        };
-      }
-    }
-  }
-  return null;
+  const row = reachableRoutes(candidates, held, primary)[0];
+  return row === undefined
+    ? null
+    : { row, substituted: row.provider !== primary };
 }

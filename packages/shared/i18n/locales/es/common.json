@@ -165,6 +165,11 @@
     }
   },
   "aiModels": {
+    "class": {
+      "fast": "Respuestas rápidas para tareas cotidianas",
+      "balanced": "Balance entre calidad y velocidad",
+      "powerful": "El más capaz para razonamiento complejo"
+    },
     "haiku45": "Respuestas veloces para tareas simples",
     "gpt56Luna": "Uso general rápido y económico",
     "gemini35FlashLite": "Las respuestas más rápidas",

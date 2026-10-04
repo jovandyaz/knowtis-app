@@ -1,10 +1,8 @@
-import { APICallError, generateText } from 'ai';
+import { APICallError, generateText, type LanguageModel } from 'ai';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import type { AIProvider } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import type { ProviderRegistryFactory } from './provider-registry.factory';
 
 // OpenAI's Responses API rejects max_output_tokens < 16; Anthropic/Google accept it.
@@ -20,13 +18,32 @@ const PROBE_TIMEOUT_MESSAGE = 'The probe timed out';
 
 /**
  * Why a probe failed. 'rejected' is definitive — the provider answered and
- * refused the key; 'unavailable' and 'timeout' say nothing about the key.
+ * refused the key; 'unconfigured' means no model resolves to probe on, so the
+ * key was never sent; 'unavailable' and 'timeout' say nothing about the key.
  */
-export type ProbeFailureReason = 'rejected' | 'unavailable' | 'timeout';
+export type ProbeFailureReason =
+  | 'rejected'
+  | 'unconfigured'
+  | 'unavailable'
+  | 'timeout';
 
 export type ProbeResult =
   | { valid: true }
   | { valid: false; error: string; reason: ProbeFailureReason };
+
+/** One bounded `ping` turn: the single request every key probe sends. */
+export function sendProbeTurn(
+  model: LanguageModel,
+  abortSignal: AbortSignal
+): Promise<unknown> {
+  return generateText({
+    model,
+    prompt: 'ping',
+    maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
+    abortSignal,
+    telemetry: { isEnabled: false },
+  });
+}
 
 /**
  * Sends one cheap turn through the provider with the candidate key. A failure
@@ -37,17 +54,14 @@ export type ProbeResult =
 export async function probeProviderKey(
   registry: ProviderRegistryFactory,
   provider: AIProvider,
-  apiKey: string
+  apiKey: string,
+  probeModelId: string | null
 ): Promise<ProbeResult> {
-  const candidates = CURATED_MODELS.filter(
-    (m) => providerOf(m.id) === provider
-  );
-  const probe = candidates.find((m) => m.tier === 'fast') ?? candidates[0];
-  if (!probe) {
+  if (probeModelId === null) {
     return {
       valid: false,
-      reason: 'rejected',
-      error: `No curated model found for provider '${provider}'`,
+      reason: 'unconfigured',
+      error: `No model resolves for provider '${provider}'`,
     };
   }
   // A plain timer rather than AbortSignal.timeout: the bound is observable
@@ -58,13 +72,10 @@ export async function probeProviderKey(
     PROBE_TIMEOUT_MS
   );
   try {
-    await generateText({
-      model: registry.languageModel(probe.id, apiKey),
-      prompt: 'ping',
-      maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
-      abortSignal: bound.signal,
-      telemetry: { isEnabled: false },
-    });
+    await sendProbeTurn(
+      registry.languageModel(probeModelId, apiKey),
+      bound.signal
+    );
     return { valid: true };
   } catch (error) {
     return {

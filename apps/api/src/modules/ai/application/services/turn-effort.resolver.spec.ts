@@ -8,6 +8,7 @@ import type {
 } from '@knowtis/shared-types';
 
 import { createExecutionContext } from '../../testing/create-execution-context';
+import { createSnapshotIndex } from '../../testing/snapshot-index';
 import type { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
@@ -314,7 +315,8 @@ describe('TurnEffortResolver', () => {
           getContextWindow: () => undefined,
         },
         { isModelAvailable: () => false } as never,
-        { snapshot: () => [] } as never
+        { snapshot: () => [] } as never,
+        createSnapshotIndex()
       );
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),

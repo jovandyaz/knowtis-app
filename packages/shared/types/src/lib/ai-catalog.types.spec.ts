@@ -7,15 +7,16 @@ import {
 } from './ai-catalog.types';
 
 describe('model unavailable reasons', () => {
-  it('falls back only for a retired model, a removed key or a model outside the tier', () => {
+  it('falls back for a retired model, a removed key, a model outside the tier or an intent with no route', () => {
     expect(MODEL_FALLBACK_REASONS).toEqual([
       'model_retired',
       'key_removed',
       'not_in_tier',
+      'intent_unavailable',
     ]);
   });
 
-  it('refuses for those three reasons and for a tier with no route at all', () => {
+  it('refuses for the model reasons, never for a substituted intent, and for a tier with no route at all', () => {
     expect(MODEL_UNAVAILABLE_REASONS).toEqual([
       'model_retired',
       'key_removed',

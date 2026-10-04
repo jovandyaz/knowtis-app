@@ -7,7 +7,6 @@ import {
   type ModelUnavailableReason,
 } from '@knowtis/shared-types';
 
-import { canonicalOf } from './byok-intent-routes';
 import {
   CATALOG_BILLING,
   findInCatalog,
@@ -30,6 +29,8 @@ export interface ModelFacts {
   readonly isSupported: (modelId: string) => boolean;
   /** Per model, never per provider: true only for a model the platform pays for, its configured intent models and the open-tier models it can route. */
   readonly isPlatformBilled: (modelId: string) => boolean;
+  /** The index identity shared by every route of one model; undefined for an id the index does not list. */
+  readonly canonicalOf: (modelId: string) => string | undefined;
 }
 
 export const MODEL_CHOICE = {
@@ -48,6 +49,31 @@ export type ModelChoice =
       readonly reason: ModelUnavailableReason;
       readonly suggestedModel: string | null;
     };
+
+/** Order an unavailable intent is substituted in; the first one is the tier default. */
+export const INTENT_FALLBACK_ORDER = [
+  'balanced',
+  'fast',
+  'powerful',
+] as const satisfies readonly ModelIntent[];
+
+interface IntentPick {
+  readonly intent: ModelIntent;
+  readonly model: string;
+}
+
+function intentPick(
+  catalog: TierCatalog,
+  requested: ModelIntent
+): IntentPick | null {
+  for (const intent of [requested, ...INTENT_FALLBACK_ORDER]) {
+    const model = intentModelOf(catalog, intent);
+    if (model) {
+      return { intent, model };
+    }
+  }
+  return null;
+}
 
 function resolved(requested: string | null, model: string): ModelChoice {
   return {
@@ -68,11 +94,26 @@ function keyBilledPreference(
     : null;
 }
 
+// Plans never gate a model on the caller's own key, so a key catalog that no
+// longer lists one means its selector moved on, never that the plan excludes it.
+function isRetired(
+  modelId: string,
+  facts: ModelFacts,
+  billing: CatalogBilling
+): boolean {
+  return (
+    !facts.isSupported(modelId) ||
+    (billing === CATALOG_BILLING.KEY &&
+      facts.heldProviders.has(providerOf(modelId)))
+  );
+}
+
 function fallbackReason(
   modelId: string,
-  facts: ModelFacts
-): ModelFallbackReason {
-  if (!facts.isSupported(modelId)) {
+  facts: ModelFacts,
+  billing: CatalogBilling
+): Exclude<ModelFallbackReason, 'intent_unavailable'> {
+  if (isRetired(modelId, facts, billing)) {
     return 'model_retired';
   }
   if (
@@ -108,9 +149,14 @@ function sameModelRoute(
   ) {
     return undefined;
   }
-  return Object.values(canonicalOf(modelId)?.routes ?? {}).find(
-    (route) => findInCatalog(catalog, route) !== undefined
-  );
+  const canonical = facts.canonicalOf(modelId);
+  if (canonical === undefined) {
+    return undefined;
+  }
+  return catalog.models.find(
+    ({ model }) =>
+      model.id !== modelId && facts.canonicalOf(model.id) === canonical
+  )?.model.id;
 }
 
 /** The model a turn runs on: another model is substituted only inside the same billing class, and the substitution is reported, never silent; another held key's route of the same model is no substitution. */
@@ -119,30 +165,46 @@ export function chooseModel(
   request: ModelRequest,
   facts: ModelFacts
 ): ModelChoice {
-  const substitute =
-    intentModelOf(catalog, request.preferredIntent ?? DEFAULT_MODEL_INTENT) ??
-    intentModelOf(catalog, DEFAULT_MODEL_INTENT);
+  const requestedIntent = request.preferredIntent ?? DEFAULT_MODEL_INTENT;
+  const pick = intentPick(catalog, requestedIntent);
+  const substitute = pick?.model ?? null;
   if (request.explicit !== undefined) {
     return findInCatalog(catalog, request.explicit)
       ? resolved(request.explicit, request.explicit)
       : {
           kind: MODEL_CHOICE.UNAVAILABLE,
-          reason: facts.isSupported(request.explicit)
-            ? 'not_in_tier'
-            : 'model_retired',
+          reason: isRetired(request.explicit, facts, catalog.billing)
+            ? 'model_retired'
+            : 'not_in_tier',
           suggestedModel: substitute,
         };
   }
   const wanted =
     request.pinned ?? keyBilledPreference(request.preferredModel, facts);
   if (!wanted) {
-    return substitute
-      ? resolved(null, substitute)
-      : {
-          kind: MODEL_CHOICE.UNAVAILABLE,
-          reason: 'no_route',
-          suggestedModel: null,
-        };
+    if (!pick) {
+      return {
+        kind: MODEL_CHOICE.UNAVAILABLE,
+        reason: 'no_route',
+        suggestedModel: null,
+      };
+    }
+    if (pick.intent === requestedIntent) {
+      return resolved(null, pick.model);
+    }
+    return {
+      kind: MODEL_CHOICE.RESOLVED,
+      model: pick.model,
+      resolution: {
+        requested: null,
+        resolved: pick.model,
+        fallback: {
+          reason: 'intent_unavailable',
+          from: requestedIntent,
+          to: pick.model,
+        },
+      },
+    };
   }
   if (findInCatalog(catalog, wanted)) {
     return resolved(wanted, wanted);
@@ -151,7 +213,7 @@ export function chooseModel(
   if (route) {
     return resolved(wanted, route);
   }
-  const reason = fallbackReason(wanted, facts);
+  const reason = fallbackReason(wanted, facts, catalog.billing);
   if (substitute && billingOf(wanted, facts) === catalog.billing) {
     return {
       kind: MODEL_CHOICE.RESOLVED,
