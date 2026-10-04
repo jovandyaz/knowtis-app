@@ -155,6 +155,32 @@ const BYOK_CATALOG: ModelCatalogResponse = {
   ],
 };
 
+const ANTHROPIC_SONNET_ID = 'anthropic:claude-sonnet-5';
+
+function byokCatalogFor({
+  primaryProvider,
+}: AIPreferences): ModelCatalogResponse {
+  if (primaryProvider !== 'anthropic') {
+    return BYOK_CATALOG;
+  }
+  return {
+    ...BYOK_CATALOG,
+    models: [
+      ...BYOK_CATALOG.models.filter((m) => m.servesIntent !== 'balanced'),
+      model(ANTHROPIC_SONNET_ID, 'Sonnet 5', {
+        isDefault: true,
+        billedToUser: true,
+        servesIntent: 'balanced',
+      }),
+    ],
+    intents: BYOK_CATALOG.intents.map((entry) =>
+      entry.intent === 'balanced'
+        ? { ...entry, modelId: ANTHROPIC_SONNET_ID }
+        : entry
+    ),
+  };
+}
+
 const KEYS: ProviderKeyInfo[] = [
   {
     provider: 'openrouter',
@@ -259,7 +285,9 @@ test('a byok account reads its own models by provider and picks its primary prov
   const note = await owner.createNote('Picker con keys');
   let preferences: AIPreferences = UNSET_PREFERENCES;
   const writes: unknown[] = [];
-  await routeApiJson(owner.page, MODELS_ROUTE_RE, () => BYOK_CATALOG);
+  await routeApiJson(owner.page, MODELS_ROUTE_RE, () =>
+    byokCatalogFor(preferences)
+  );
   await routeApiJson(owner.page, QUOTA_ROUTE_RE, () => BYOK_QUOTA);
   await routeApiJson(owner.page, KEYS_ROUTE_RE, () => KEYS);
   await routeApiJson(owner.page, PREFERENCES_ROUTE_RE, (request) => {
