@@ -259,6 +259,7 @@ describe('ModelsSection', () => {
   it('offers Release pin on a stale row, which is the only way to clear the dead row', () => {
     renderSection('stale');
 
+    expect(screen.getByText('stale')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /^release pin: .+$/i })
     ).toBeInTheDocument();
