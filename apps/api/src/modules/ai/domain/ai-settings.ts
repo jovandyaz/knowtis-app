@@ -1,6 +1,6 @@
 import type { AIConfigKey } from '@knowtis/shared-types';
 
-/** Open-tier code defaults every AI setting resolves to when no DB override exists: the floor a fresh install lands on, so each one stays cheap enough for the platform to absorb. Guard-tested by snapshot-floor.spec.ts. */
+/** Open-tier code defaults every AI setting resolves to when no DB override exists: the floor a fresh install lands on, so each one stays cheap enough for the platform to absorb. Guard-tested by the vendored snapshot floor (`snapshot-floor.spec.ts`). */
 export const AI_SETTING_DEFAULTS = {
   ai_default_model: 'openrouter:deepseek/deepseek-v3.2',
   ai_fast_model: 'openrouter:minimax/minimax-m2.5',

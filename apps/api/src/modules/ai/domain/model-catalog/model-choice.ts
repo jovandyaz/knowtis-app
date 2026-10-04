@@ -1,6 +1,7 @@
 import { providerOf } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
+  INTENT_FALLBACK_ORDER,
   type ModelFallbackReason,
   type ModelIntent,
   type ModelResolution,
@@ -27,7 +28,7 @@ export interface ModelRequest {
 export interface ModelFacts {
   readonly heldProviders: ReadonlySet<string>;
   readonly isSupported: (modelId: string) => boolean;
-  /** Per model, never per provider: true only for a model the platform pays for, its configured intent models and the open-tier models it can route. */
+  /** Per model, never per provider: true only for a model the platform pays for, its configured intent models and the promoted open-tier and platform default models it can route. */
   readonly isPlatformBilled: (modelId: string) => boolean;
   /** The index identity shared by every route of one model; undefined for an id the index does not list. */
   readonly canonicalOf: (modelId: string) => string | undefined;
@@ -49,13 +50,6 @@ export type ModelChoice =
       readonly reason: ModelUnavailableReason;
       readonly suggestedModel: string | null;
     };
-
-/** Order an unavailable intent is substituted in; the first one is the tier default. */
-export const INTENT_FALLBACK_ORDER = [
-  'balanced',
-  'fast',
-  'powerful',
-] as const satisfies readonly ModelIntent[];
 
 interface IntentPick {
   readonly intent: ModelIntent;
@@ -226,4 +220,28 @@ export function chooseModel(
     };
   }
   return { kind: MODEL_CHOICE.UNAVAILABLE, reason, suggestedModel: substitute };
+}
+
+/**
+ * The stored model pick a turn's choice reports as retired, which the turn may
+ * forget once reported; null otherwise. An explicit or pinned model is not the
+ * stored pick, and a pick dropped for a removed key or the plan is kept, since
+ * either can come back.
+ */
+export function retiredStoredPick(
+  request: ModelRequest,
+  choice: ModelChoice
+): string | null {
+  if (
+    request.explicit !== undefined ||
+    request.pinned ||
+    choice.kind !== MODEL_CHOICE.RESOLVED
+  ) {
+    return null;
+  }
+  const fallback = choice.resolution.fallback;
+  return fallback?.reason === 'model_retired' &&
+    fallback.from === request.preferredModel
+    ? fallback.from
+    : null;
 }

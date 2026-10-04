@@ -45,6 +45,7 @@ import {
   type AiCaller,
   type AiExecutionContext,
 } from '../../ai/domain/execution-context/ai-execution-context';
+import type { TurnEffort } from '../../ai/domain/model-catalog/effort-policy';
 import type { ModelChoice } from '../../ai/domain/model-catalog/model-choice';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import type {
@@ -284,6 +285,7 @@ function makeModelPreference(
       }
     ),
     reasoningFor: vi.fn().mockResolvedValue(null),
+    forgetRetiredPick: vi.fn().mockResolvedValue(undefined),
   } as unknown as ModelPreferenceService;
 }
 
@@ -301,7 +303,10 @@ function makeGuard(safe = true) {
   } as unknown as InjectionGuardService;
 }
 
-function makeTurnEffort(effort: ReasoningEffort = 'medium') {
+const DEFAULT_TURN_EFFORT: TurnEffort = { step: 'medium', toolFree: 'low' };
+const MAX_TURN_EFFORT: TurnEffort = { step: 'max', toolFree: 'low' };
+
+function makeTurnEffort(effort: TurnEffort = DEFAULT_TURN_EFFORT) {
   return {
     resolve: vi.fn().mockResolvedValue(effort),
   } as unknown as TurnEffortResolver;
@@ -1752,6 +1757,73 @@ describe('RunAgentTurnHandler', () => {
     expect(onDone).toHaveBeenCalledWith(
       expect.objectContaining({ modelResolution: resolution })
     );
+    expect(modelPreference.forgetRetiredPick).not.toHaveBeenCalled();
+  });
+
+  it('forgets a retired stored pick once a resumed turn delivers its notice on a dropped proposal', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+        usage: { inputTokens: 7, outputTokens: 3, model: SERVED_MODEL },
+      },
+    ]);
+    const modelPreference = makeModelPreference();
+    const retiredPick = 'anthropic:claude-sonnet-3';
+    const resolution = {
+      requested: retiredPick,
+      resolved: SERVED_MODEL,
+      fallback: {
+        reason: 'model_retired',
+        from: retiredPick,
+        to: SERVED_MODEL,
+      },
+    } as const;
+    vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+      kind: 'resolved',
+      model: SERVED_MODEL,
+      resolution,
+      retiredPick,
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort(),
+      makeTierResolver(),
+      createMessageQuotaStub(),
+      makeEvents()
+    );
+    const onDone = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        turnId: TURN_ID,
+        conversationId: 'conv-1',
+        resume: { outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError: vi.fn() }
+    );
+
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ modelResolution: resolution })
+    );
+    expect(modelPreference.forgetRetiredPick).toHaveBeenCalledExactlyOnceWith(
+      USER,
+      retiredPick
+    );
   });
 
   it('resumeTurn calls onError when the orchestrator throws', async () => {
@@ -3101,7 +3173,7 @@ describe('RunAgentTurnHandler', () => {
 
   it('runs the turn at the effort the resolver returns', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const turnEffort = makeTurnEffort('max');
+    const turnEffort = makeTurnEffort(MAX_TURN_EFFORT);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3137,7 +3209,7 @@ describe('RunAgentTurnHandler', () => {
     );
 
     const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
-    await expect(effortFor?.(SERVED_MODEL)).resolves.toBe('max');
+    await expect(effortFor?.(SERVED_MODEL)).resolves.toEqual(MAX_TURN_EFFORT);
     expect(turnEffort.resolve).toHaveBeenCalledWith({
       execution: expect.objectContaining({
         tier: 'free',
@@ -3156,7 +3228,7 @@ describe('RunAgentTurnHandler', () => {
       kind: 'found',
       apiKey: 'user-key',
     });
-    const turnEffort = makeTurnEffort('max');
+    const turnEffort = makeTurnEffort(MAX_TURN_EFFORT);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3205,7 +3277,7 @@ describe('RunAgentTurnHandler', () => {
 
   it("resolves an anonymous turn's effort as an anonymous caller", async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const turnEffort = makeTurnEffort('low');
+    const turnEffort = makeTurnEffort({ step: 'low', toolFree: 'low' });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -7970,6 +8042,79 @@ describe('RunAgentTurnHandler daily message quota', () => {
     expect(cb.onDone).toHaveBeenCalledWith(
       expect.objectContaining({ modelResolution: resolution })
     );
+  });
+
+  describe('a stored pick the turn reports as retired', () => {
+    const RETIRED_PICK = 'anthropic:claude-sonnet-3';
+    const resolution = {
+      requested: RETIRED_PICK,
+      resolved: SERVED_MODEL,
+      fallback: {
+        reason: 'model_retired',
+        from: RETIRED_PICK,
+        to: SERVED_MODEL,
+      },
+    } as const;
+
+    function retiringPreference() {
+      const modelPreference = makeModelPreference();
+      vi.mocked(modelPreference.chooseTurnModel).mockResolvedValue({
+        kind: 'resolved',
+        model: SERVED_MODEL,
+        resolution,
+        retiredPick: RETIRED_PICK,
+      });
+      return modelPreference;
+    }
+
+    it('is forgotten once the turn has delivered its notice', async () => {
+      const modelPreference = retiringPreference();
+      const { handler } = build({ quota: consumedQuota(), modelPreference });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onDone).toHaveBeenCalledWith(
+        expect.objectContaining({ modelResolution: resolution })
+      );
+      expect(modelPreference.forgetRetiredPick).toHaveBeenCalledExactlyOnceWith(
+        USER,
+        RETIRED_PICK
+      );
+      const [doneAt] = cb.onDone.mock.invocationCallOrder;
+      const [forgottenAt] = vi.mocked(modelPreference.forgetRetiredPick).mock
+        .invocationCallOrder;
+      expect(forgottenAt).toBeGreaterThan(doneAt ?? Number.POSITIVE_INFINITY);
+    });
+
+    it.each([
+      ['the budget gate refuses the turn', { allowed: false }],
+      [
+        'the provider fails the turn',
+        {
+          events: [
+            {
+              type: 'error',
+              error: { code: 'AI_PROVIDER_ERROR', message: 'boom' },
+            },
+          ] satisfies AgentEvent[],
+        },
+      ],
+    ] as const)('is kept when %s', async (_case, over) => {
+      const modelPreference = retiringPreference();
+      const { handler } = build({
+        quota: consumedQuota(),
+        modelPreference,
+        ...over,
+      });
+      const cb = callbacks();
+
+      await handler.execute(turn, cb);
+
+      expect(cb.onError).toHaveBeenCalled();
+      expect(cb.onDone).not.toHaveBeenCalled();
+      expect(modelPreference.forgetRetiredPick).not.toHaveBeenCalled();
+    });
   });
 
   describe('with the real quota service', () => {

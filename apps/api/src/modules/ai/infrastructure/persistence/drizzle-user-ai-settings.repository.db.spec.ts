@@ -147,6 +147,53 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     expect((await repo.getSettings(USER_ID)).primaryProvider).toBe('openai');
   });
 
+  describe('clearPreferredModel', () => {
+    const RETIRED_PICK = {
+      preferredModel: 'anthropic:claude-sonnet-5',
+      preferredIntent: 'fast',
+      primaryProvider: 'anthropic',
+      ghostTextEnabled: false,
+    } as const satisfies UserAiSettings;
+
+    beforeEach(async () => {
+      await db.delete(userAiSettings).where(eq(userAiSettings.userId, USER_ID));
+    });
+
+    it('clears the named preferred model and keeps every other setting', async () => {
+      await repo.patchSettings(USER_ID, RETIRED_PICK);
+
+      await repo.clearPreferredModel(USER_ID, RETIRED_PICK.preferredModel);
+
+      expect(await repo.getSettings(USER_ID)).toEqual({
+        ...RETIRED_PICK,
+        preferredModel: null,
+      });
+    });
+
+    it('leaves a pick written after the one it names', async () => {
+      const repicked = {
+        ...RETIRED_PICK,
+        preferredModel: 'anthropic:claude-opus-5-5',
+      } as const satisfies UserAiSettings;
+      await repo.patchSettings(USER_ID, repicked);
+
+      await repo.clearPreferredModel(USER_ID, RETIRED_PICK.preferredModel);
+
+      expect(await repo.getSettings(USER_ID)).toEqual(repicked);
+    });
+
+    it('writes nothing for a caller with no stored settings', async () => {
+      await repo.clearPreferredModel(USER_ID, RETIRED_PICK.preferredModel);
+
+      expect(
+        await db
+          .select()
+          .from(userAiSettings)
+          .where(eq(userAiSettings.userId, USER_ID))
+      ).toEqual([]);
+    });
+  });
+
   describe('clearBoundToUnheldProvider', () => {
     const BOUND_TO_OPENAI = {
       preferredModel: 'openai:gpt-6',

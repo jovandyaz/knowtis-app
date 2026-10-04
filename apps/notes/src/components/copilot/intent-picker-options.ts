@@ -11,6 +11,7 @@ import type {
 import {
   BYOK_PROVIDERS,
   DEFAULT_MODEL_INTENT,
+  INTENT_FALLBACK_ORDER,
   MODEL_INTENTS,
   REASONING_EFFORTS,
   type ModelIntent,
@@ -24,7 +25,7 @@ export interface ModelPreference {
 }
 
 /**
- * The model a turn resolves to: the stored override while the list still
+ * The model the picker selects: the stored override while the list still
  * offers it — an Advanced pick may also serve an intent — else the model
  * serving the preferred intent. A stale override falls back rather than
  * resolving to nothing, so every surface agrees.
@@ -42,6 +43,20 @@ export function resolveSelectedModel(
   }
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
   return list.find((m) => m.servesIntent === intent);
+}
+
+/** The model a turn runs on: the selected model, else the first listed model serving an intent in the server's `INTENT_FALLBACK_ORDER`, as it substitutes a preferred intent that has no model. */
+export function resolveServingModel(
+  models: readonly SelectableModel[] | undefined,
+  prefs: ModelPreference | undefined
+): SelectableModel | undefined {
+  const list = models ?? [];
+  return (
+    resolveSelectedModel(list, prefs) ??
+    INTENT_FALLBACK_ORDER.flatMap(
+      (intent) => list.find((m) => m.servesIntent === intent) ?? []
+    )[0]
+  );
 }
 
 const EFFORT_LABEL_KEYS = {

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { utcDayOf } from './utc-day';
+import { isoDateOf, utcDayOf } from './utc-day';
 
 describe('utcDayOf', () => {
   beforeAll(() => {
@@ -44,5 +44,22 @@ describe('utcDayOf', () => {
       start: day.start.toISOString(),
       resetsAt: day.resetsAt.toISOString(),
     }).toEqual({ key, start, resetsAt });
+  });
+});
+
+describe('isoDateOf', () => {
+  beforeAll(() => {
+    vi.stubEnv('TZ', 'Pacific/Kiritimati');
+  });
+
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ['2026-09-27T23:59:59.999Z', '2026-09-27'],
+    ['2026-10-03T00:00:00.000Z', '2026-10-03'],
+  ])('names the UTC day of %s', (date, isoDate) => {
+    expect(isoDateOf(new Date(date))).toBe(isoDate);
   });
 });

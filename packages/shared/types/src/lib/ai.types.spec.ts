@@ -7,15 +7,30 @@ import {
   AI_CONFIG_KEYS,
   COMPLETION_AI_ACTIONS,
   CONTINUABLE_STOP_REASONS,
+  DEFAULT_MODEL_INTENT,
   GLOBAL_REASONING_EFFORTS,
+  INTENT_FALLBACK_ORDER,
   isAgentStopReason,
   isByokProvider,
   isContinuableStop,
   isGlobalReasoningEffort,
   isReasoningEffort,
   MESSAGE_STOP_REASON,
+  MODEL_INTENTS,
   REASONING_EFFORTS,
 } from './ai.types';
+
+describe('intent fallback order', () => {
+  it('covers every intent', () => {
+    expect([...INTENT_FALLBACK_ORDER].sort()).toEqual(
+      [...MODEL_INTENTS].sort()
+    );
+  });
+
+  it('substitutes intents starting from the default intent', () => {
+    expect(INTENT_FALLBACK_ORDER[0]).toBe(DEFAULT_MODEL_INTENT);
+  });
+});
 
 describe('reasoning efforts', () => {
   it('includes the per-model levels beyond the global range', () => {

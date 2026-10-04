@@ -3,17 +3,19 @@ import { Injectable } from '@nestjs/common';
 import { INDEX_PROVIDERS, providerOf } from '@knowtis/ai-gateway';
 import type { AssignableModelDto } from '@knowtis/shared-types';
 
+import { toPickerLabel } from '../../domain/model-catalog/index-label';
 import {
   ASSIGNABLE_RULE,
+  byNewestRelease,
   intentOfFamily,
   isEligible,
 } from '../../domain/model-catalog/model-selectors';
+import { isoDateOf } from '../../domain/value-objects/utc-day';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const DEFAULT_TIER = 'open';
-const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 
 interface AssignableEntry {
   readonly dto: AssignableModelDto;
@@ -30,14 +32,9 @@ function byDisplayOrder(a: AssignableEntry, b: AssignableEntry): number {
   if (rank !== 0) {
     return rank;
   }
-  if (a.releasedAt !== b.releasedAt) {
-    if (a.releasedAt === null) {
-      return 1;
-    }
-    if (b.releasedAt === null) {
-      return -1;
-    }
-    return a.releasedAt < b.releasedAt ? 1 : -1;
+  const release = byNewestRelease(a, b);
+  if (release !== 0) {
+    return release;
   }
   return a.dto.id < b.dto.id ? -1 : a.dto.id > b.dto.id ? 1 : 0;
 }
@@ -68,7 +65,7 @@ export class AssignableModelsService {
           releasedAt: row.releasedAt,
           dto: {
             id: row.id,
-            label: row.name,
+            label: toPickerLabel(row.name),
             description: '',
             tier: intentOfFamily(row.family) ?? DEFAULT_TIER,
             provider: row.provider,
@@ -83,8 +80,9 @@ export class AssignableModelsService {
       entries.set(model.id, {
         releasedAt:
           releasedAtById.get(model.id) ??
-          model.upstreamCreatedAt?.toISOString().slice(0, ISO_DATE_LENGTH) ??
-          null,
+          (model.upstreamCreatedAt === null
+            ? null
+            : isoDateOf(model.upstreamCreatedAt)),
         dto: {
           id: model.id,
           label: model.label,

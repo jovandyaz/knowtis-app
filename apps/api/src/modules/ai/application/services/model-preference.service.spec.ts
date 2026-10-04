@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -9,14 +13,22 @@ import type {
 
 import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import type { UserAiSettings } from '../../domain/ports/user-ai-settings.repository';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
+import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
-import { createSnapshotIndex } from '../../testing/snapshot-index';
+import {
+  createSnapshotIndex,
+  createSyncedSnapshotIndex,
+} from '../../testing/snapshot-index';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 const RETIRED_MODEL = 'anthropic:claude-retired';
+const SUPERSEDED_SONNET = 'anthropic:claude-sonnet-5';
 const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
+const GLM = 'openrouter:z-ai/glm-5.2';
 const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
 const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
 
@@ -25,8 +37,15 @@ function makeChooser(
     preferredModel?: string | null;
     preferredIntent?: ModelIntent | null;
     primaryProvider?: ByokProvider | null;
-  } = {}
+  } = {},
+  promoted: readonly CatalogModel[] = [],
+  index = createSnapshotIndex(),
+  promotedLoaded = true
 ) {
+  const promotedCache = {
+    snapshot: () => promoted,
+    hasLoaded: vi.fn(() => promotedLoaded),
+  };
   const selectable = new SelectableModelsService(
     {
       isSupported: (id: string) => id !== RETIRED_MODEL,
@@ -39,17 +58,23 @@ function makeChooser(
     {
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
-    { snapshot: () => [] } as never,
-    createSnapshotIndex()
+    promotedCache as never,
+    index
   );
+  const stored: UserAiSettings = {
+    preferredModel: settings.preferredModel ?? null,
+    preferredIntent: settings.preferredIntent ?? null,
+    primaryProvider: settings.primaryProvider ?? null,
+    ghostTextEnabled: true,
+  };
   const repo = {
-    getSettings: vi.fn().mockResolvedValue({
-      preferredModel: settings.preferredModel ?? null,
-      preferredIntent: settings.preferredIntent ?? null,
-      primaryProvider: settings.primaryProvider ?? null,
-      ghostTextEnabled: true,
-    }),
+    getSettings: vi.fn(async (_userId: string) => ({ ...stored })),
     patchSettings: vi.fn().mockResolvedValue(undefined),
+    clearPreferredModel: vi.fn(async (_userId: string, model: string) => {
+      if (stored.preferredModel === model) {
+        stored.preferredModel = null;
+      }
+    }),
   };
   const aiConfig = {
     getIntentModels: vi.fn().mockResolvedValue({
@@ -61,9 +86,11 @@ function makeChooser(
   const svc = new ModelPreferenceService(
     repo as never,
     selectable,
-    aiConfig as never
+    aiConfig as never,
+    index,
+    promotedCache as never
   );
-  return { svc, repo, selectable };
+  return { svc, repo, selectable, promotedCache };
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -323,7 +350,9 @@ describe('ModelPreferenceService', () => {
     });
 
     it('keeps a key-billed pick a model even when it serves an intent', async () => {
-      const { svc, repo } = makeChooser();
+      const { svc, repo } = makeChooser({}, [
+        createCatalogModel({ id: 'openrouter:deepseek/deepseek-v3.2' }),
+      ]);
       await writeAs(
         svc,
         createExecutionContext({ tier: 'byok', byokProviders: ['openrouter'] }),
@@ -745,7 +774,7 @@ describe('ModelPreferenceService', () => {
     it('keeps a stored intent when the stored platform model left the catalog', async () => {
       await expect(
         makeChooser({
-          preferredModel: 'openrouter:z-ai/glm-5.2',
+          preferredModel: GLM,
           preferredIntent: 'powerful',
         }).svc.chooseTurnModel(FREE_CALLER, {})
       ).resolves.toMatchObject({ model: 'openrouter:moonshotai/kimi-k2.5' });
@@ -757,6 +786,26 @@ describe('ModelPreferenceService', () => {
           preferredModel: DIRECT_OPUS,
         }).svc.chooseTurnModel(BYOK_ANTHROPIC, {})
       ).resolves.toMatchObject({ model: DIRECT_OPUS });
+    });
+
+    it('falls back a byok caller’s stored superseded model to the intent route and reports it retired', async () => {
+      await expect(
+        makeChooser({
+          preferredModel: SUPERSEDED_SONNET,
+        }).svc.chooseTurnModel(BYOK_ANTHROPIC, {})
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: DIRECT_SONNET,
+        resolution: {
+          requested: SUPERSEDED_SONNET,
+          resolved: DIRECT_SONNET,
+          fallback: {
+            reason: 'model_retired',
+            from: SUPERSEDED_SONNET,
+            to: DIRECT_SONNET,
+          },
+        },
+      });
     });
 
     it('refuses an explicit model outside the tier', async () => {
@@ -772,23 +821,170 @@ describe('ModelPreferenceService', () => {
       });
     });
 
-    it("falls back a free caller's pinned open model to the platform intent and reports it", async () => {
+    it("falls back a free caller's pinned promoted open model to the platform intent and reports it", async () => {
       await expect(
-        makeChooser().svc.chooseTurnModel(
-          createExecutionContext({ tier: 'free' }),
-          { pinned: 'openrouter:z-ai/glm-5.2' }
-        )
+        makeChooser({}, [
+          createCatalogModel({ id: GLM, tier: 'open' }),
+        ]).svc.chooseTurnModel(createExecutionContext({ tier: 'free' }), {
+          pinned: GLM,
+        })
       ).resolves.toEqual({
         kind: 'resolved',
         model: 'openrouter:deepseek/deepseek-v3.2',
         resolution: {
-          requested: 'openrouter:z-ai/glm-5.2',
+          requested: GLM,
           resolved: 'openrouter:deepseek/deepseek-v3.2',
           fallback: {
             reason: 'not_in_tier',
-            from: 'openrouter:z-ai/glm-5.2',
+            from: GLM,
             to: 'openrouter:deepseek/deepseek-v3.2',
           },
+        },
+      });
+    });
+
+    describe('a stored pick the index retired', () => {
+      const RETIRED_PICK_FALLBACK = {
+        kind: 'resolved',
+        model: DIRECT_SONNET,
+        resolution: {
+          requested: SUPERSEDED_SONNET,
+          resolved: DIRECT_SONNET,
+          fallback: {
+            reason: 'model_retired',
+            from: SUPERSEDED_SONNET,
+            to: DIRECT_SONNET,
+          },
+        },
+      } as const;
+      const USER_ID = BYOK_ANTHROPIC.subject.userId;
+
+      async function retiringChooser(
+        preferredIntent: ModelIntent | null = null,
+        promotedLoaded = true
+      ) {
+        return makeChooser(
+          { preferredModel: SUPERSEDED_SONNET, preferredIntent },
+          [],
+          await createSyncedSnapshotIndex(),
+          promotedLoaded
+        );
+      }
+
+      it('names it for the turn to forget, without clearing it before the turn delivers the notice', async () => {
+        const { svc, repo } = await retiringChooser();
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          ...RETIRED_PICK_FALLBACK,
+          retiredPick: SUPERSEDED_SONNET,
+        });
+        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('is reported once: forgetting it keeps the stored intent, so the next turn reports nothing', async () => {
+        const { svc, repo } = await retiringChooser('balanced');
+
+        await svc.forgetRetiredPick(USER_ID, SUPERSEDED_SONNET);
+
+        expect(repo.clearPreferredModel).toHaveBeenCalledWith(
+          USER_ID,
+          SUPERSEDED_SONNET
+        );
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          kind: 'resolved',
+          model: DIRECT_SONNET,
+          resolution: { requested: null, resolved: DIRECT_SONNET },
+        });
+        await expect(repo.getSettings(USER_ID)).resolves.toMatchObject({
+          preferredModel: null,
+          preferredIntent: 'balanced',
+        });
+      });
+
+      it('names nothing while the model index still serves the vendored snapshot', async () => {
+        const { svc, repo } = makeChooser({
+          preferredModel: SUPERSEDED_SONNET,
+        });
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
+          RETIRED_PICK_FALLBACK
+        );
+        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('names nothing until the promoted models have loaded, since a promoted pick would read as retired', async () => {
+        const { svc, repo, promotedCache } = await retiringChooser(null, false);
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
+          RETIRED_PICK_FALLBACK
+        );
+        promotedCache.hasLoaded.mockReturnValue(true);
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          ...RETIRED_PICK_FALLBACK,
+          retiredPick: SUPERSEDED_SONNET,
+        });
+        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('names nothing for a pinned prior model reporting the same retirement, so the turn that resolves the pick still reports it', async () => {
+        const { svc } = await retiringChooser();
+
+        await expect(
+          svc.chooseTurnModel(BYOK_ANTHROPIC, { pinned: SUPERSEDED_SONNET })
+        ).resolves.toEqual(RETIRED_PICK_FALLBACK);
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          ...RETIRED_PICK_FALLBACK,
+          retiredPick: SUPERSEDED_SONNET,
+        });
+      });
+
+      it('names nothing when the turn names the retired model explicitly', async () => {
+        const { svc } = await retiringChooser();
+
+        await expect(
+          svc.chooseTurnModel(BYOK_ANTHROPIC, { explicit: SUPERSEDED_SONNET })
+        ).resolves.toEqual({
+          kind: 'unavailable',
+          reason: 'model_retired',
+          suggestedModel: DIRECT_SONNET,
+        });
+      });
+
+      it('logs a failed clear and never rejects', async () => {
+        const { svc, repo } = await retiringChooser();
+        repo.clearPreferredModel.mockRejectedValueOnce(
+          new Error('settings store down')
+        );
+        const warn = vi
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+
+        await expect(
+          svc.forgetRetiredPick(USER_ID, SUPERSEDED_SONNET)
+        ).resolves.toBeUndefined();
+        expect(warn).toHaveBeenCalledWith({
+          event: 'ai.preferences.retired_pick_clear_failed',
+          userId: USER_ID,
+          model: SUPERSEDED_SONNET,
+          error: 'settings store down',
+        });
+        warn.mockRestore();
+      });
+    });
+
+    it('keeps a stored pick on a key the caller no longer holds, which a re-added key brings back', async () => {
+      const { svc } = makeChooser(
+        { preferredModel: DIRECT_OPUS },
+        [],
+        await createSyncedSnapshotIndex()
+      );
+
+      await expect(svc.chooseTurnModel(FREE_CALLER, {})).resolves.toEqual({
+        kind: 'resolved',
+        model: 'openrouter:deepseek/deepseek-v3.2',
+        resolution: {
+          requested: null,
+          resolved: 'openrouter:deepseek/deepseek-v3.2',
         },
       });
     });

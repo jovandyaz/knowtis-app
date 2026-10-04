@@ -300,11 +300,35 @@ describe('RoutingSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /add model/i }));
     await userEvent.click(
-      await screen.findByRole('menuitem', { name: /gemini/i })
+      await screen.findByRole('option', { name: /gemini/i })
     );
     await userEvent.click(screen.getByRole('button', { name: /save chain/i }));
 
     expect(savedValue()).toBe(`${CHAIN},google:gemini`);
+  });
+
+  it('appends the model picked by searching and pressing Enter', async () => {
+    renderChain();
+
+    await userEvent.click(screen.getByRole('button', { name: /add model/i }));
+    const search = await screen.findByRole('combobox', {
+      name: 'Search by name or ID',
+    });
+    expect(search).toHaveFocus();
+    await userEvent.type(search, 'google:{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: /save chain/i }));
+
+    expect(savedValue()).toBe(`${CHAIN},google:gemini`);
+  });
+
+  it('says so when no model it can add matches the search', async () => {
+    renderChain();
+
+    await userEvent.click(screen.getByRole('button', { name: /add model/i }));
+    await userEvent.type(await screen.findByRole('combobox'), 'sonnet');
+
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText('No models match your search')).toBeInTheDocument();
   });
 
   it('offers a needs-key model disabled instead of hiding it', async () => {
@@ -318,7 +342,7 @@ describe('RoutingSection', () => {
     renderChain();
     await userEvent.click(screen.getByRole('button', { name: /add model/i }));
 
-    const locked = await screen.findByRole('menuitem', { name: /gpt/i });
+    const locked = await screen.findByRole('option', { name: /gpt/i });
     expect(locked).toHaveAttribute('aria-disabled', 'true');
     expect(
       within(locked).getByTitle(
@@ -338,10 +362,10 @@ describe('RoutingSection', () => {
     await userEvent.click(screen.getByRole('button', { name: /add model/i }));
 
     expect(
-      await screen.findByRole('menuitem', { name: /gemini/i })
+      await screen.findByRole('option', { name: /gemini/i })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitem', { name: /sonnet/i })
+      screen.queryByRole('option', { name: /sonnet/i })
     ).not.toBeInTheDocument();
   });
 

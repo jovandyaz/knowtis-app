@@ -67,6 +67,42 @@ describe('ModelIndexCache', () => {
     expect(cache.catalog().size).toBe(MODEL_INDEX_SNAPSHOT.length);
   });
 
+  describe('servesSnapshot', () => {
+    it('is true before the first refresh', () => {
+      const { cache } = createCache({ models: [DB_MODEL], failure: null });
+
+      expect(cache.servesSnapshot()).toBe(true);
+    });
+
+    it('is false once a refresh reads listed rows', async () => {
+      const { cache } = createCache({ models: [DB_MODEL], failure: null });
+
+      await cache.refresh();
+
+      expect(cache.servesSnapshot()).toBe(false);
+    });
+
+    it('stays true while the index lists no rows', async () => {
+      const { cache } = createCache({ models: [], failure: null });
+
+      await cache.refresh();
+
+      expect(cache.servesSnapshot()).toBe(true);
+    });
+
+    it('stays true when the first refresh fails', async () => {
+      silenceWarnings();
+      const { cache } = createCache({
+        models: [DB_MODEL],
+        failure: new Error('database unreachable'),
+      });
+
+      await cache.refresh();
+
+      expect(cache.servesSnapshot()).toBe(true);
+    });
+  });
+
   it('builds the snapshot catalog once', () => {
     const { cache } = createCache({ models: [], failure: null });
 

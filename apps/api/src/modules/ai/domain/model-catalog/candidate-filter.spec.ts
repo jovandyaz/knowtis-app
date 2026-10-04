@@ -59,11 +59,11 @@ describe('isCatalogCandidate', () => {
     ).toBe(false);
   });
 
-  it('should reject a model already curated in code', () => {
-    expect(isCatalogCandidate(upstream({ id: 'z-ai/glm-5.2' }))).toBe(false);
+  it('should admit a platform default model as a candidate', () => {
     expect(isCatalogCandidate(upstream({ id: 'deepseek/deepseek-v3.2' }))).toBe(
-      false
+      true
     );
+    expect(isCatalogCandidate(upstream({ id: 'z-ai/glm-5.2' }))).toBe(true);
   });
 
   it('should reject a context window below the minimum', () => {

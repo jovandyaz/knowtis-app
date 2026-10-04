@@ -160,7 +160,7 @@
     },
     "primaryProvider": {
       "title": "Primary provider",
-      "description": "When a model is available through several of your keys, it is billed to this one.",
+      "description": "When the same model is available through several of your keys, for example directly and through OpenRouter, this key runs it. A model you pick under Advanced runs on the key shown with it.",
       "saveFailed": "Couldn't change the primary provider. Check your API keys and try again."
     }
   },
@@ -169,20 +169,7 @@
       "fast": "Quick answers for everyday tasks",
       "balanced": "Balanced quality and speed",
       "powerful": "Most capable for complex reasoning"
-    },
-    "haiku45": "Fast replies for simple tasks",
-    "gpt56Luna": "Quick, low-cost general use",
-    "gemini35FlashLite": "Fastest answers",
-    "sonnet5": "Balanced quality and speed",
-    "gpt56Terra": "Strong all-around model",
-    "gemini37Flash": "All-around multimodal help",
-    "opus5": "Most capable for complex reasoning",
-    "gpt56Sol": "OpenAI's most capable model",
-    "gemini31Pro": "Advanced reasoning, math and code",
-    "deepseekV32": "Open-weight flagship at a fraction of the cost",
-    "glm52": "Smartest open model — fast, with long context",
-    "kimiK25": "Open agentic model with huge context",
-    "minimaxM25": "Efficient open model for everyday work"
+    }
   },
   "integrations": {
     "title": "Integrations",

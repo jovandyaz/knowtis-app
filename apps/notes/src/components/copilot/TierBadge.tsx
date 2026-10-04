@@ -2,8 +2,12 @@ import { useTranslation } from 'react-i18next';
 
 import { quotaStateOf, useAiQuota } from '@/hooks/useAiQuota';
 import { useAISettings } from '@/hooks/useAISettings';
+import { useAvailableModels } from '@/hooks/useAvailableModels';
 import { useProviderKeys } from '@/hooks/useProviderKeys';
-import { effectivePrimaryProvider } from '@/lib/ai/byok-providers';
+import {
+  effectivePrimaryProvider,
+  providerOfModel,
+} from '@/lib/ai/byok-providers';
 import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
 import { clockTimeOf } from '@/lib/format-date';
 
@@ -13,6 +17,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
+
+import { resolveServingModel } from './intent-picker-options';
 
 interface BadgeContent {
   text: string;
@@ -27,6 +33,7 @@ export function TierBadge() {
   const byok = quota.kind === 'unmetered';
   const preferences = useAISettings(byok);
   const keys = useProviderKeys(byok);
+  const catalog = useAvailableModels(byok);
 
   let content: BadgeContent | null = null;
   if (quota.kind === 'metered') {
@@ -40,11 +47,16 @@ export function TierBadge() {
       }),
       warning: quota.low,
     };
-  } else if (byok && !preferences.isPending && !keys.isPending) {
-    const provider = effectivePrimaryProvider(
-      preferences.data,
-      keys.data ?? []
-    );
+  } else if (
+    byok &&
+    !preferences.isPending &&
+    !keys.isPending &&
+    !catalog.isPending
+  ) {
+    const serving = resolveServingModel(catalog.data?.models, preferences.data);
+    const provider =
+      (serving && providerOfModel(serving.id)) ??
+      effectivePrimaryProvider(preferences.data, keys.data ?? []);
     if (provider) {
       const name = PROVIDER_LABEL[provider];
       content = {

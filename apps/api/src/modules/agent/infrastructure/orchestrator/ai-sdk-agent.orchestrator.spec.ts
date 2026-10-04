@@ -8,6 +8,7 @@ import {
   failedQuery,
   postgresError,
 } from '../../../../test-support/database-errors';
+import type { TurnEffort } from '../../../ai/domain/model-catalog/effort-policy';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { estimateMessageTokens } from '../../domain/message-tokens';
@@ -78,6 +79,7 @@ vi.mock('ai', async (importOriginal) => {
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
 const FALLBACK = 'anthropic:claude-haiku-4-5';
 const STALL_MS = 60000;
+const LOW_EFFORT: TurnEffort = { step: 'low', toolFree: 'low' };
 const TTFT_MS = STALL_MS / 2;
 
 const streamTextMock = streamText as unknown as ReturnType<typeof vi.fn>;
@@ -219,7 +221,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        effortFor: async () => 'low',
+        effortFor: async () => LOW_EFFORT,
       })
     );
 
@@ -235,7 +237,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const orchestrator = makeOrchestrator();
 
     await collect(
-      orchestrator.run({ ...baseInput, effortFor: async () => 'low' })
+      orchestrator.run({ ...baseInput, effortFor: async () => LOW_EFFORT })
     );
 
     expect(streamTextMock).toHaveBeenCalledWith(
@@ -269,7 +271,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        effortFor: async () => 'low',
+        effortFor: async () => LOW_EFFORT,
         openrouterProviderOrder: ['fireworks', 'together'],
         openrouterIgnoredProviders: ['parasail'],
       })
@@ -322,7 +324,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        effortFor: async () => 'low',
+        effortFor: async () => LOW_EFFORT,
         openrouterProviderOrder: [],
       })
     );
@@ -378,7 +380,7 @@ describe('AiSdkAgentOrchestrator', () => {
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
         effortFor: async (model: string) =>
-          model === FALLBACK ? 'low' : 'high',
+          model === FALLBACK ? LOW_EFFORT : { step: 'high', toolFree: 'low' },
       })
     );
 
@@ -3015,7 +3017,7 @@ describe('AiSdkAgentOrchestrator', () => {
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
         effortFor: async (model: string) =>
-          model === FALLBACK ? undefined : 'low',
+          model === FALLBACK ? undefined : LOW_EFFORT,
       })
     );
     await vi.advanceTimersByTimeAsync(TTFT_MS);
@@ -3051,7 +3053,7 @@ describe('AiSdkAgentOrchestrator', () => {
         ...baseInput,
         effortFor: async (model: string) => {
           seen.push(model);
-          return 'low';
+          return LOW_EFFORT;
         },
       })
     );
@@ -3060,6 +3062,64 @@ describe('AiSdkAgentOrchestrator', () => {
     await consumed;
 
     expect(seen).toEqual([MODEL, FALLBACK]);
+  });
+
+  it('sends a tool-free call at the tool-free level of the model it runs on, and the rescue model at its own', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      FALLBACK
+    );
+
+    const consumed = collect(
+      orchestrator.run({
+        ...baseInput,
+        maxSteps: 2,
+        effortFor: async (model: string) =>
+          model === FALLBACK
+            ? { step: 'xhigh', toolFree: 'high' }
+            : { step: 'medium', toolFree: 'low' },
+      })
+    );
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    expect(
+      streamTextMock.mock.calls.map(([options]) => [
+        options.toolChoice,
+        options.providerOptions?.anthropic?.effort,
+      ])
+    ).toEqual([
+      [undefined, 'medium'],
+      ['none', 'low'],
+      ['none', 'low'],
+      ['none', 'high'],
+    ]);
+  });
+
+  it('sends an openrouter tool-free call at the tool-free level the route lists', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        maxSteps: 1,
+        effortFor: async () => ({ step: 'xhigh', toolFree: 'high' }),
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolChoice: 'none',
+        providerOptions: { openrouter: { reasoning: { effort: 'high' } } },
+      })
+    );
   });
 
   it('reports AI_TIMEOUT without advancing when a continuation stalls twice on the last candidate', async () => {

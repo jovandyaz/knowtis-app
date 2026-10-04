@@ -16,6 +16,11 @@ import { TurnEffortResolver } from './turn-effort.resolver';
 
 const USER = 'user-1';
 const MODEL = 'openrouter:z-ai/glm-5.3';
+const GLM_5_2 = 'openrouter:z-ai/glm-5.2';
+const GLM_5_2_LADDER: ModelReasoning = {
+  levels: ['high', 'xhigh'],
+  mandatory: false,
+};
 const DIRECT_MODEL = 'anthropic:claude-opus-5';
 const UNDECLARED_DIRECT_MODEL = 'anthropic:claude-haiku-4-5';
 const GLOBAL_DEFAULT: ReasoningEffort = 'medium';
@@ -48,16 +53,35 @@ function make(declared: ModelReasoning | null) {
 }
 
 describe('TurnEffortResolver', () => {
-  it('uses the global default without reading the declaration for an openrouter model', async () => {
-    const { resolver, modelPreference } = make({
-      levels: ['low', 'high'],
+  it('maps the global default to the nearest level of an openrouter ladder that lacks it', async () => {
+    const { resolver } = make(GLM_5_2_LADDER);
+
+    await expect(
+      resolver.resolve({ execution: billedToKey(GLM_5_2), model: GLM_5_2 })
+    ).resolves.toEqual({ step: 'high', toolFree: 'high' });
+  });
+
+  it('runs an openrouter model at the global default when its ladder lists it', async () => {
+    const { resolver } = make({
+      levels: ['low', 'medium', 'high'],
       mandatory: false,
     });
 
     await expect(
-      resolver.resolve({ execution: billedToKey(MODEL), model: MODEL })
-    ).resolves.toBe(GLOBAL_DEFAULT);
-    expect(modelPreference.reasoningFor).not.toHaveBeenCalled();
+      resolver.resolve({ execution: FREE_CALLER, model: MODEL })
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
+  });
+
+  it('lowers the tool-free call to the lowest listed level when the ladder lacks the tool-free level', async () => {
+    const { resolver } = make(GLM_5_2_LADDER);
+
+    await expect(
+      resolver.resolve({
+        execution: billedToKey(GLM_5_2),
+        model: GLM_5_2,
+        requested: 'xhigh',
+      })
+    ).resolves.toEqual({ step: 'xhigh', toolFree: 'high' });
   });
 
   it('grants a byok caller any level the model declares', async () => {
@@ -72,7 +96,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'max',
       })
-    ).resolves.toBe('max');
+    ).resolves.toEqual({ step: 'max', toolFree: 'low' });
   });
 
   it('lowers a free caller above the ceiling to the highest declared level within it', async () => {
@@ -87,7 +111,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'max',
       })
-    ).resolves.toBe('high');
+    ).resolves.toEqual({ step: 'high', toolFree: 'low' });
   });
 
   it('honours a free caller pick within the ceiling', async () => {
@@ -102,7 +126,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'low',
       })
-    ).resolves.toBe('low');
+    ).resolves.toEqual({ step: 'low', toolFree: 'low' });
   });
 
   it('sends no effort to a direct provider whose model declares no reasoning', async () => {
@@ -124,7 +148,7 @@ describe('TurnEffortResolver', () => {
 
     await expect(
       resolver.resolve({ execution: FREE_CALLER, model: DIRECT_MODEL })
-    ).resolves.toBe(GLOBAL_DEFAULT);
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
   });
 
   it('sends no effort to a direct-provider model whose ladder lacks the global default', async () => {
@@ -135,13 +159,12 @@ describe('TurnEffortResolver', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('keeps forwarding the global default to an openrouter model that declares nothing', async () => {
-    const { resolver, modelPreference } = make(null);
+  it('keeps forwarding the global default, and the tool-free level, to an openrouter model whose ladder is unknown', async () => {
+    const { resolver } = make(null);
 
     await expect(
       resolver.resolve({ execution: FREE_CALLER, model: MODEL })
-    ).resolves.toBe(GLOBAL_DEFAULT);
-    expect(modelPreference.reasoningFor).not.toHaveBeenCalled();
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
   });
 
   it('falls back through the same gate after a refused request on a direct provider', async () => {
@@ -176,15 +199,15 @@ describe('TurnEffortResolver', () => {
         execution: ANONYMOUS_CALLER,
         model: DIRECT_MODEL,
       })
-    ).resolves.toBe(GLOBAL_DEFAULT);
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
     expect(modelPreference.reasoningFor).toHaveBeenCalledWith(
       DIRECT_MODEL,
       new Set()
     );
   });
 
-  it('falls back when a free caller has no level at or under the ceiling', async () => {
-    const { resolver } = make({ levels: ['xhigh', 'max'], mandatory: true });
+  it('keeps a free caller on the global default when its trimmed ladder leaves no level at or under the ceiling', async () => {
+    const { resolver } = make(null);
 
     await expect(
       resolver.resolve({
@@ -192,10 +215,22 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'high',
       })
-    ).resolves.toBe(GLOBAL_DEFAULT);
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
   });
 
-  it('falls back on a level the model does not declare', async () => {
+  it('falls back onto the nearest listed level when a byok caller asks for one the ladder lacks', async () => {
+    const { resolver } = make({ levels: ['xhigh', 'max'], mandatory: true });
+
+    await expect(
+      resolver.resolve({
+        execution: billedToKey(MODEL),
+        model: MODEL,
+        requested: 'high',
+      })
+    ).resolves.toEqual({ step: 'xhigh', toolFree: 'xhigh' });
+  });
+
+  it('falls back on a level the model does not declare to the listed level nearest the global default', async () => {
     const { resolver } = make({ levels: ['low', 'high'], mandatory: false });
 
     await expect(
@@ -204,7 +239,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'xhigh',
       })
-    ).resolves.toBe(GLOBAL_DEFAULT);
+    ).resolves.toEqual({ step: 'low', toolFree: 'low' });
   });
 
   it('falls back for a reasoning model that enumerates no efforts', async () => {
@@ -216,7 +251,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'high',
       })
-    ).resolves.toBe(GLOBAL_DEFAULT);
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
   });
 
   it('falls back when the model declares no reasoning at all', async () => {
@@ -228,7 +263,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'high',
       })
-    ).resolves.toBe(GLOBAL_DEFAULT);
+    ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
   });
 
   it('warns rather than silently mismatching when a request is refused', async () => {
@@ -275,7 +310,7 @@ describe('TurnEffortResolver', () => {
         model: MODEL,
         requested: 'xhigh',
       })
-    ).resolves.toBe('high');
+    ).resolves.toEqual({ step: 'high', toolFree: 'low' });
     expect(warn).toHaveBeenCalledWith({
       event: 'agent.effort_clamped',
       model: MODEL,
@@ -307,16 +342,20 @@ describe('TurnEffortResolver', () => {
   });
 
   describe('with the real model preference service', () => {
-    function makeReal() {
+    function makeReal(
+      isModelAvailable: (model: string) => boolean = () => false
+    ) {
+      const index = createSnapshotIndex();
+      const promoted = { snapshot: () => [], hasLoaded: () => true };
       const selectable = new SelectableModelsService(
         {
           isSupported: () => true,
           getPricing: () => undefined,
           getContextWindow: () => undefined,
         },
-        { isModelAvailable: () => false } as never,
-        { snapshot: () => [] } as never,
-        createSnapshotIndex()
+        { isModelAvailable } as never,
+        promoted as never,
+        index
       );
       const aiConfig = {
         getReasoningEffort: vi.fn().mockResolvedValue(GLOBAL_DEFAULT),
@@ -324,7 +363,9 @@ describe('TurnEffortResolver', () => {
       const modelPreference = new ModelPreferenceService(
         {} as never,
         selectable,
-        aiConfig as never
+        aiConfig as never,
+        index,
+        promoted as never
       );
       return new TurnEffortResolver(aiConfig as never, modelPreference);
     }
@@ -335,11 +376,25 @@ describe('TurnEffortResolver', () => {
 
       await expect(
         resolver.resolve({ execution, model: DIRECT_MODEL, requested: 'high' })
-      ).resolves.toBe('high');
+      ).resolves.toEqual({ step: 'high', toolFree: 'low' });
       await expect(
         resolver.resolve({ execution, model: DIRECT_MODEL })
-      ).resolves.toBe(GLOBAL_DEFAULT);
+      ).resolves.toEqual({ step: GLOBAL_DEFAULT, toolFree: 'low' });
     });
+
+    it.each([
+      { caller: 'a free caller', execution: FREE_CALLER },
+      { caller: 'an openrouter key', execution: billedToKey(GLM_5_2) },
+    ])(
+      "keeps $caller's default turn on glm-5.2 inside its index ladder",
+      async ({ execution }) => {
+        const resolver = makeReal((model) => model === GLM_5_2);
+
+        await expect(
+          resolver.resolve({ execution, model: GLM_5_2 })
+        ).resolves.toEqual({ step: 'high', toolFree: 'high' });
+      }
+    );
 
     it('sends no effort to a model the turn holds no key for', async () => {
       const resolver = makeReal();

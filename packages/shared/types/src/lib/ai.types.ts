@@ -105,6 +105,13 @@ export type ModelIntent = (typeof MODEL_INTENTS)[number];
 
 export const DEFAULT_MODEL_INTENT: ModelIntent = 'balanced';
 
+/** Order an unavailable intent is substituted in; the first one is the tier default. */
+export const INTENT_FALLBACK_ORDER = [
+  'balanced',
+  'fast',
+  'powerful',
+] as const satisfies readonly ModelIntent[];
+
 export function isModelIntent(value: string): value is ModelIntent {
   return (MODEL_INTENTS as readonly string[]).includes(value);
 }

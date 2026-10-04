@@ -12,7 +12,10 @@ import type {
   AIPreferences,
   AiQuota,
   ByokProvider,
+  ModelCatalogResponse,
+  ModelIntent,
   ProviderKeyInfo,
+  SelectableModel,
 } from '@knowtis/shared-types';
 
 import { TierBadge } from './TierBadge';
@@ -33,7 +36,7 @@ vi.mock('@jovandyaz/auth-react', () => ({
 }));
 vi.mock('@knowtis/api-client', () => ({
   aiQuotaApi: { getQuota: vi.fn() },
-  aiModelsApi: { getPreferences: vi.fn() },
+  aiModelsApi: { getPreferences: vi.fn(), getModels: vi.fn() },
   aiKeysApi: { list: vi.fn() },
 }));
 
@@ -51,13 +54,38 @@ function metered(
 
 const BYOK: AiQuota = { tier: 'byok', messages: null };
 
-function preferences(primaryProvider: ByokProvider | null): AIPreferences {
+const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
+const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
+
+function preferences(
+  primaryProvider: ByokProvider | null,
+  preferredModel: string | null = null
+): AIPreferences {
   return {
-    preferredModel: null,
+    preferredModel,
     preferredIntent: null,
     primaryProvider,
     ghostTextEnabled: true,
   };
+}
+
+function model(id: string, servesIntent?: ModelIntent): SelectableModel {
+  return {
+    id,
+    label: id,
+    descriptionKey: '',
+    tier: servesIntent ?? 'balanced',
+    contextWindow: 1000,
+    costClass: 1,
+    isDefault: false,
+    billedToUser: true,
+    routableByServer: false,
+    ...(servesIntent && { servesIntent }),
+  };
+}
+
+function byokCatalog(models: SelectableModel[]): ModelCatalogResponse {
+  return { tier: 'byok', models, intents: [] };
 }
 
 function key(provider: ByokProvider, createdAt: string): ProviderKeyInfo {
@@ -80,6 +108,7 @@ describe('TierBadge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(preferences(null));
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(byokCatalog([]));
     vi.mocked(aiKeysApi.list).mockResolvedValue([]);
   });
 
@@ -99,6 +128,7 @@ describe('TierBadge', () => {
     expect(badge).not.toHaveClass('text-(--warning)');
     expect(aiKeysApi.list).not.toHaveBeenCalled();
     expect(aiModelsApi.getPreferences).not.toHaveBeenCalled();
+    expect(aiModelsApi.getModels).not.toHaveBeenCalled();
   });
 
   it('warns once the day runs low', async () => {
@@ -145,7 +175,7 @@ describe('TierBadge', () => {
     );
   });
 
-  it('names the primary provider a byok caller holds', async () => {
+  it('names the primary provider a byok caller holds while no model resolves', async () => {
     vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
     vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(
       preferences('anthropic')
@@ -181,6 +211,87 @@ describe('TierBadge', () => {
     expect(
       await screen.findByText('ai.copilot.quota.badge.byok(provider=Google)')
     ).toBeInTheDocument();
+  });
+
+  it('names the provider serving the selected intent, not the primary', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
+    vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(
+      preferences('openai')
+    );
+    vi.mocked(aiKeysApi.list).mockResolvedValue([
+      key('openai', '2026-01-01T00:00:00.000Z'),
+      key('anthropic', '2026-02-01T00:00:00.000Z'),
+    ]);
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(
+      byokCatalog([
+        model('openai:gpt-6-luna', 'fast'),
+        model(DIRECT_SONNET, 'balanced'),
+      ])
+    );
+    renderBadge();
+    const badge = await screen.findByLabelText(
+      'ai.copilot.quota.byokLabel(provider=Anthropic)'
+    );
+
+    act(() => badge.focus());
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'ai.copilot.quota.paysWithKey(provider=Anthropic)'
+    );
+  });
+
+  it('names the provider of the style the server substitutes when the preferred one has no route', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
+    vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(
+      preferences('anthropic')
+    );
+    vi.mocked(aiKeysApi.list).mockResolvedValue([
+      key('anthropic', '2026-01-01T00:00:00.000Z'),
+      key('openrouter', '2026-02-01T00:00:00.000Z'),
+    ]);
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(
+      byokCatalog([
+        model('openrouter:anthropic/claude-haiku-4.5', 'fast'),
+        model('anthropic:claude-opus-5-5', 'powerful'),
+      ])
+    );
+    renderBadge();
+    const badge = await screen.findByLabelText(
+      'ai.copilot.quota.byokLabel(provider=OpenRouter)'
+    );
+
+    act(() => badge.focus());
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'ai.copilot.quota.paysWithKey(provider=OpenRouter)'
+    );
+  });
+
+  it('names the provider of an Advanced pick, not the primary', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
+    vi.mocked(aiModelsApi.getPreferences).mockResolvedValue(
+      preferences('anthropic', ROUTED_SONNET)
+    );
+    vi.mocked(aiKeysApi.list).mockResolvedValue([
+      key('anthropic', '2026-01-01T00:00:00.000Z'),
+      key('openrouter', '2026-02-01T00:00:00.000Z'),
+    ]);
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue(
+      byokCatalog([model(DIRECT_SONNET, 'balanced'), model(ROUTED_SONNET)])
+    );
+    renderBadge();
+    const badge = await screen.findByLabelText(
+      'ai.copilot.quota.byokLabel(provider=OpenRouter)'
+    );
+
+    act(() => badge.focus());
+
+    expect(badge).toHaveTextContent(
+      'ai.copilot.quota.badge.byok(provider=OpenRouter)'
+    );
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'ai.copilot.quota.paysWithKey(provider=OpenRouter)'
+    );
   });
 
   it('tells a byok caller who pays', async () => {
@@ -227,6 +338,22 @@ describe('TierBadge', () => {
     const { container } = renderBadge();
 
     await vi.waitFor(() => expect(aiKeysApi.list).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows nothing for a byok caller until the model it runs is known', async () => {
+    vi.mocked(aiQuotaApi.getQuota).mockResolvedValue(BYOK);
+    vi.mocked(aiKeysApi.list).mockResolvedValue([
+      key('openai', '2026-01-01T00:00:00.000Z'),
+    ]);
+    vi.mocked(aiModelsApi.getModels).mockReturnValue(
+      new Promise(() => undefined)
+    );
+
+    const { container } = renderBadge();
+
+    await vi.waitFor(() => expect(aiModelsApi.getModels).toHaveBeenCalled());
+    await act(async () => undefined);
     expect(container).toBeEmptyDOMElement();
   });
 });
