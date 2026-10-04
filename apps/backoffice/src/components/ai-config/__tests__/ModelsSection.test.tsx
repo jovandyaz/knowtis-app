@@ -388,8 +388,20 @@ describe('ModelsSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
 
-    expect(await screen.findByText('other')).toBeInTheDocument();
-    expect(screen.getByText('Unclassified Model')).toBeInTheDocument();
+    const heading = await screen.findByText('other');
+    const group = heading.closest('[cmdk-group]') as HTMLElement;
+    expect(within(group).getByText('Unclassified Model')).toBeInTheDocument();
+    const headings = ['fast', 'balanced', 'open', 'other'].map((name) =>
+      screen.getByText(name)
+    );
+    headings.forEach((node, index) => {
+      const next = headings[index + 1];
+      if (next) {
+        expect(
+          node.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      }
+    });
   });
 
   it('says so when no model matches the search', async () => {

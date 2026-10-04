@@ -9,7 +9,7 @@ export const MODEL_SEARCH_PLACEHOLDER = 'Search by name or ID';
 export const NO_MATCHING_MODELS_LABEL = 'No models match your search';
 
 /** Where the picker groups a model no selector classifies. */
-export const UNCLASSIFIED_GROUP = 'other';
+const UNCLASSIFIED_GROUP = 'other';
 
 /**
  * Assignability keys off `routableByServer`: a promoted row whose provider lost

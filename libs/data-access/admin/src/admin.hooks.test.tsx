@@ -504,6 +504,19 @@ describe('useAssignableModels', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
+  it('accepts a row no selector classifies', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      { ...ASSIGNABLE[0], tier: null },
+    ]);
+
+    const { result } = renderHook(() => useAssignableModels(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.[0].tier).toBeNull();
+  });
+
   it('rejects a row whose tier this bundle does not know', async () => {
     vi.mocked(httpClient.get).mockResolvedValue([
       { ...ASSIGNABLE[0], tier: 'mystery' },

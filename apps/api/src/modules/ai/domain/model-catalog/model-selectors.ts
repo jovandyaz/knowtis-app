@@ -239,7 +239,7 @@ export function isAssignableModel(
 }
 
 function servesSelector(
-  row: IndexedModel,
+  row: Pick<IndexedModel, 'id' | 'provider'>,
   selector: ModelSelector,
   provider: IndexProvider
 ): boolean {
@@ -357,9 +357,9 @@ export function resolvePlatformIntent(
   );
 }
 
-/** The intent whose BYOK or platform selector would pick this row by family and id, or null. */
+/** The intent whose selector author, families and excluded tokens claim this row (ceiling and preview are not applied), or null. */
 export function intentOfRow(
-  row: Pick<IndexedModel, 'id' | 'family'>
+  row: Pick<IndexedModel, 'id' | 'family' | 'provider'>
 ): ModelIntent | null {
   const { family } = row;
   if (family === null) {
@@ -370,6 +370,7 @@ export function intentOfRow(
     MODEL_INTENTS.find((intent) =>
       [...BYOK_SELECTORS[intent], PLATFORM_SELECTORS[intent]].some(
         (selector) =>
+          servesSelector(row, selector, row.provider) &&
           selector.families.includes(family) &&
           !(selector.excludedIdTokens ?? []).some((token) =>
             slug.includes(token)

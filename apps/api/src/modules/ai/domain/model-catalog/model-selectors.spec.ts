@@ -755,6 +755,14 @@ describe('intentOfRow', () => {
   ])('classifies %s under no intent', (id) => {
     expect(intentOfRow(row(id))).toBeNull();
   });
+
+  it('gives null to an openrouter row of another author in a selector family', () => {
+    const foreign = {
+      ...row('openrouter:z-ai/glm-5.2'),
+      id: 'openrouter:vendor/glm-5.2',
+    };
+    expect(intentOfRow(foreign)).toBeNull();
+  });
 });
 
 describe('byNewestRelease', () => {
