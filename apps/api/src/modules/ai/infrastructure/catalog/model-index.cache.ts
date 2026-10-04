@@ -26,6 +26,7 @@ export class ModelIndexCache implements ModelCatalog, OnModuleInit {
   private readonly floor = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
   private current: ModelIndexCatalog = this.floor;
   private latestGeneration = 0;
+  private latestRefreshSucceeded = false;
 
   constructor(
     @Inject(MODEL_INDEX_REPOSITORY)
@@ -47,6 +48,15 @@ export class ModelIndexCache implements ModelCatalog, OnModuleInit {
     return this.current;
   }
 
+  /**
+   * True only when the latest refresh succeeded with listed rows: after a
+   * failed refresh, or while serving the vendored snapshot, the catalog may lag
+   * rows another instance serves, so nothing durable may be decided from what it lacks.
+   */
+  servesFreshIndex(): boolean {
+    return this.latestRefreshSucceeded && this.current !== this.floor;
+  }
+
   /** Never rejects: an unreachable database keeps the catalog it already serves. */
   @Interval(MODEL_INDEX_REFRESH_MS)
   async refresh(): Promise<void> {
@@ -56,8 +66,12 @@ export class ModelIndexCache implements ModelCatalog, OnModuleInit {
       // A slow read must not overwrite a newer one that already landed.
       if (generation === this.latestGeneration) {
         this.current = this.withFloor(rows);
+        this.latestRefreshSucceeded = true;
       }
     } catch (error) {
+      if (generation === this.latestGeneration) {
+        this.latestRefreshSucceeded = false;
+      }
       this.logger.warn({
         event: 'ai.model_index.cache_refresh_failed',
         reason: reasonOf(error),

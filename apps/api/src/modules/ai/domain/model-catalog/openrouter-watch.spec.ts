@@ -4,22 +4,15 @@ import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../ports/openrouter-models.port';
+import { OPENROUTER_ID_PREFIX } from './catalog-model';
+import { PLATFORM_FLOOR_MODEL_IDS } from './floor-models';
 import {
   canConcludeAbsence,
   findOpenRouterDrift,
   findPromotedDrift,
-  openTierSlug,
-} from './curated-watch';
-import {
-  CURATED_MODELS,
-  OPENROUTER_ID_PREFIX,
-} from './selectable-models.catalog';
+} from './openrouter-watch';
 import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
 
-const SONNET_ID = 'anthropic:claude-sonnet-5';
-
-const GLM_ID = 'openrouter:z-ai/glm-5.2';
-const GLM_SLUG = 'z-ai/glm-5.2';
 const UPSTREAM_OUTPUT_COST = 0.0000044;
 const REPRICE_FACTOR = 3;
 
@@ -48,9 +41,18 @@ function upstreamModel(
   };
 }
 
-const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
-  openTierSlug(model.id)
-).filter((slug): slug is string => slug !== null);
+const MIN_WATCHED_MODELS = 2;
+
+const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
+  id.startsWith(OPENROUTER_ID_PREFIX)
+).map((id) => id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase());
+
+if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
+  throw new Error('the watch spec needs two watched OpenRouter models');
+}
+
+const [WATCHED_SLUG] = WATCHED_SLUGS;
+const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
 function catalogOf(
   models: readonly UpstreamModel[],
@@ -59,45 +61,21 @@ function catalogOf(
   return { models, complete: true, discarded: [], ...overrides };
 }
 
-/** Every curated open-tier slug present and unremarkable: a fixture that omits one asserts that model vanished. */
+/** Every watched slug present and unremarkable: a fixture that omits one asserts that model vanished. */
 function upstreamInSync(overrides: UpstreamModel[] = []): UpstreamCatalog {
   const overridden = new Set(overrides.map((model) => model.id));
   return catalogOf([
-    ...CURATED_OPEN_SLUGS.filter((slug) => !overridden.has(slug)).map((slug) =>
+    ...WATCHED_SLUGS.filter((slug) => !overridden.has(slug)).map((slug) =>
       upstreamModel(slug)
     ),
     ...overrides,
   ]);
 }
 
-describe('openTierSlug', () => {
-  it('should map a curated open-tier id onto its OpenRouter slug', () => {
-    expect(openTierSlug('openrouter:z-ai/glm-5.2')).toBe('z-ai/glm-5.2');
-    expect(openTierSlug('openrouter:deepseek/deepseek-v3.2')).toBe(
-      'deepseek/deepseek-v3.2'
-    );
-    expect(openTierSlug('openrouter:moonshotai/kimi-k2.5')).toBe(
-      'moonshotai/kimi-k2.5'
-    );
-    expect(openTierSlug('openrouter:minimax/minimax-m2.5')).toBe(
-      'minimax/minimax-m2.5'
-    );
-  });
-
-  it('should return null for a curated model billed outside OpenRouter', () => {
-    expect(openTierSlug(SONNET_ID)).toBeNull();
-    expect(openTierSlug('google:gemini-3.7-flash')).toBeNull();
-  });
-
-  it('should return null for an id that is not curated at all', () => {
-    expect(openTierSlug('openrouter:qwen/qwen3.8-max')).toBeNull();
-  });
-});
-
 describe('findOpenRouterDrift', () => {
-  it('should report no finding when upstream reprices a curated model', () => {
+  it('should report no finding when upstream reprices a watched model', () => {
     const upstream = upstreamInSync([
-      upstreamModel(GLM_SLUG, {
+      upstreamModel(WATCHED_SLUG, {
         completionCostPerToken: UPSTREAM_OUTPUT_COST * REPRICE_FACTOR,
       }),
     ]);
@@ -107,7 +85,7 @@ describe('findOpenRouterDrift', () => {
 
   it('should report an upstream expiration date as a deprecation finding', () => {
     const upstream = upstreamInSync([
-      upstreamModel(GLM_SLUG, {
+      upstreamModel(WATCHED_SLUG, {
         expirationDate: new Date('2026-12-31T00:00:00.000Z'),
       }),
     ]);
@@ -115,7 +93,7 @@ describe('findOpenRouterDrift', () => {
     const findings = findOpenRouterDrift(upstream);
 
     expect(findings).toHaveLength(1);
-    expect(findings[0].modelId).toBe(GLM_ID);
+    expect(findings[0].modelId).toBe(WATCHED_ID);
     expect(findings[0].kind).toBe('deprecation');
     expect(findings[0].detail).toContain('2026-12-31');
   });
@@ -130,26 +108,28 @@ describe('findOpenRouterDrift', () => {
     expect(findOpenRouterDrift(upstream)).toEqual([]);
   });
 
-  it('should report a curated model that vanished from OpenRouter', () => {
+  it('should report a watched model that vanished from OpenRouter', () => {
     const upstream = catalogOf(
-      upstreamInSync().models.filter((model) => model.id !== GLM_SLUG)
+      upstreamInSync().models.filter((model) => model.id !== WATCHED_SLUG)
     );
 
     const findings = findOpenRouterDrift(upstream);
 
     expect(findings).toEqual([
       {
-        modelId: GLM_ID,
+        modelId: WATCHED_ID,
         kind: 'unavailable',
-        detail: expect.stringContaining(GLM_SLUG),
+        detail: expect.stringContaining(WATCHED_SLUG),
       },
     ]);
   });
 
-  it('should report every curated model that vanished, not just the first', () => {
-    const findings = findOpenRouterDrift(catalogOf([upstreamModel(GLM_SLUG)]));
+  it('should report every watched model that vanished, not just the first', () => {
+    const findings = findOpenRouterDrift(
+      catalogOf([upstreamModel(WATCHED_SLUG)])
+    );
 
-    expect(findings).toHaveLength(CURATED_OPEN_SLUGS.length - 1);
+    expect(findings).toHaveLength(WATCHED_SLUGS.length - 1);
     expect(findings.every((finding) => finding.kind === 'unavailable')).toBe(
       true
     );
@@ -161,7 +141,7 @@ describe('findOpenRouterDrift', () => {
 
   it('should conclude no absence from a catalog that stopped paginating early', () => {
     const truncated = catalogOf(
-      upstreamInSync().models.filter((model) => model.id !== GLM_SLUG),
+      upstreamInSync().models.filter((model) => model.id !== WATCHED_SLUG),
       { complete: false }
     );
 
@@ -170,14 +150,14 @@ describe('findOpenRouterDrift', () => {
 
   it('should not call a model gone when upstream published it unparseably', () => {
     const dropped = catalogOf(
-      upstreamInSync().models.filter((model) => model.id !== GLM_SLUG),
-      { discarded: [GLM_SLUG] }
+      upstreamInSync().models.filter((model) => model.id !== WATCHED_SLUG),
+      { discarded: [WATCHED_SLUG] }
     );
 
     expect(findOpenRouterDrift(dropped)).toEqual([]);
   });
 
-  it('should conclude no absence when no curated slug is recognizable', () => {
+  it('should conclude no absence when no watched slug is recognizable', () => {
     const unrecognizable = catalogOf([
       upstreamModel('some-vendor/other-model'),
     ]);
@@ -185,11 +165,11 @@ describe('findOpenRouterDrift', () => {
     expect(findOpenRouterDrift(unrecognizable)).toEqual([]);
   });
 
-  it('should match an upstream slug whose casing differs from the curated id', () => {
+  it('should match an upstream slug whose casing differs from the watched id', () => {
     const recased = catalogOf(
       upstreamInSync().models.map((model) =>
-        model.id === GLM_SLUG
-          ? upstreamModel(GLM_SLUG.toUpperCase())
+        model.id === WATCHED_SLUG
+          ? upstreamModel(WATCHED_SLUG.toUpperCase())
           : upstreamModel(model.id)
       )
     );
@@ -240,7 +220,7 @@ describe('findPromotedDrift', () => {
     expect(findPromotedDrift([PROMOTED_ID], discarded)).toEqual([]);
   });
 
-  it('should not conclude absence when no curated slug is recognizable', () => {
+  it('should not conclude absence when no watched slug is recognizable', () => {
     const unrecognizable = catalogOf([upstreamModel('some-vendor/other')]);
 
     expect(findPromotedDrift([PROMOTED_ID], unrecognizable)).toEqual([]);
@@ -251,6 +231,15 @@ describe('findPromotedDrift', () => {
     const listed = upstreamInSync([upstreamModel(PROMOTED_SLUG)]);
 
     expect(findPromotedDrift([storedWithCasing], listed)).toEqual([]);
+  });
+
+  it('should leave a promoted platform default to the drift watch', () => {
+    const vanished = catalogOf(
+      upstreamInSync().models.filter((model) => model.id !== WATCHED_SLUG)
+    );
+
+    expect(findPromotedDrift([WATCHED_ID], vanished)).toEqual([]);
+    expect(findOpenRouterDrift(vanished)).toHaveLength(1);
   });
 
   it('should skip promoted ids that OpenRouter does not bill', () => {
@@ -282,7 +271,7 @@ describe('canConcludeAbsence', () => {
     ).toBe(false);
   });
 
-  it('should be false when no curated slug is recognizable', () => {
+  it('should be false when no watched slug is recognizable', () => {
     expect(
       canConcludeAbsence(catalogOf([upstreamModel('some-vendor/other')]))
     ).toBe(false);

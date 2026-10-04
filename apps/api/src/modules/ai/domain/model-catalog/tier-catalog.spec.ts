@@ -34,21 +34,15 @@ const PLATFORM_INTENTS: Record<ModelIntent, string> = {
 const PLATFORM_INTENT_IDS: readonly string[] = Object.values(PLATFORM_INTENTS);
 const SNAPSHOT = createSnapshotIndex().catalog();
 const BYOK = resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE);
-const OPUS_LADDER = {
-  levels: ['low', 'medium', 'high', 'xhigh', 'max'],
-  mandatory: false,
-} as const;
 
-const offered = (
-  id: string,
-  tier: OfferedModel['tier'],
-  extra: Partial<OfferedModel> = {}
-): OfferedModel => ({ id, label: id, descriptionKey: '', tier, ...extra });
+const offered = (id: string, tier: OfferedModel['tier']): OfferedModel => ({
+  id,
+  label: id,
+  descriptionKey: '',
+  tier,
+});
 
 const OFFERED: OfferedModel[] = [
-  offered('anthropic:claude-haiku-4-5', 'fast'),
-  offered('anthropic:claude-sonnet-5', 'balanced'),
-  offered('anthropic:claude-opus-5', 'powerful', { reasoning: OPUS_LADDER }),
   offered('openrouter:minimax/minimax-m2.5', 'open'),
   offered('openrouter:deepseek/deepseek-v3.2', 'open'),
   offered('openrouter:moonshotai/kimi-k2.5', 'open'),
@@ -209,14 +203,12 @@ describe('tierCatalog', () => {
     });
   });
 
-  it('lists a key holder the offered models its keys serve, then every route they reach, billed to the key', () => {
+  it('lists an Anthropic key holder exactly the routes its key reaches, billed to the key', () => {
     const catalog = catalogFor('byok', { heldProviders: ['anthropic'] });
     expect(
       catalog.models.map(({ model, servesIntent }) => [model.id, servesIntent])
     ).toEqual([
       ['anthropic:claude-haiku-4-5', 'fast'],
-      ['anthropic:claude-sonnet-5', undefined],
-      ['anthropic:claude-opus-5', undefined],
       ['anthropic:claude-sonnet-5-5', 'balanced'],
       ['anthropic:claude-opus-5-5', 'powerful'],
     ]);
@@ -296,13 +288,14 @@ describe('tierCatalog', () => {
     const haiku = 'anthropic:claude-haiku-4-5';
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic'],
+      offered: [offered(haiku, 'fast')],
       isSupported: (id) => id !== haiku && supportedAtSnapshot(id),
     });
     expect(intentModelOf(catalog, 'fast')).toBe(haiku);
     expect(findInCatalog(catalog, haiku)).toEqual({
       model: {
         id: haiku,
-        label: 'Claude Haiku 4.5 (latest)',
+        label: 'Claude Haiku 4.5',
         descriptionKey: 'aiModels.class.fast',
         tier: 'fast',
       },

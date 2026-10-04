@@ -16,7 +16,11 @@ import {
   parseChain,
 } from '@knowtis/shared-types';
 
-import { toModelSelectOption } from './assignable-model-options';
+import {
+  MODEL_SEARCH_PLACEHOLDER,
+  NO_MATCHING_MODELS_LABEL,
+  toModelSelectOption,
+} from './assignable-model-options';
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 import { useResettableConfigMutations } from './useResettableConfigMutations';
@@ -168,6 +172,8 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
           }
           onRetry={() => void models.refetch()}
           renderDescription={(m) => m.description ?? ''}
+          searchPlaceholder={MODEL_SEARCH_PLACEHOLDER}
+          noMatchesLabel={NO_MATCHING_MODELS_LABEL}
           triggerVariant="outline"
           triggerLabel="Add model"
           disabled={mutating || available.length === 0}

@@ -12,14 +12,14 @@ import {
   AI_MODEL_INDEX_COST_CEILING,
   AI_MODEL_INDEX_MAX_LENGTHS,
 } from '../../../../database/schema/ai-model-index.schema';
-import { canConcludeAbsence } from '../../domain/model-catalog/curated-watch';
+import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
 import {
   planIndexSync,
   type IndexSyncPlan,
   type ProviderBatch,
   type SyncRejection,
 } from '../../domain/model-catalog/index-sync-plan';
-import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/selectable-models.catalog';
+import { canConcludeAbsence } from '../../domain/model-catalog/openrouter-watch';
 import { servedIndexRows } from '../../domain/model-catalog/served-index-rows';
 import { DISCARD_LOG_SAMPLE_SIZE } from '../../domain/model-catalog/upstream-discards';
 import {
@@ -28,6 +28,7 @@ import {
 } from '../../domain/ports/model-index.repository';
 import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type { UpstreamCatalog } from '../../domain/ports/openrouter-models.port';
+import { WebhookAlertService } from '../alerting/webhook-alert.service';
 
 export interface ModelIndexWriteResult {
   /** Distinct rows upserted. */
@@ -119,7 +120,8 @@ export class ModelIndexWriter {
 
   constructor(
     @Inject(MODEL_INDEX_REPOSITORY)
-    private readonly repo: ModelIndexRepository
+    private readonly repo: ModelIndexRepository,
+    private readonly alerts: WebhookAlertService
   ) {}
 
   /**
@@ -127,8 +129,9 @@ export class ModelIndexWriter {
    * provider whose batch may conclude absence, except the ids upstream
    * published but the read discarded. A row a column cannot hold is skipped
    * and kept from absence the same way. A batch that would leave unserved a
-   * floor model its provider serves now is written not at all. A `null`
-   * models.dev read (its fetch failed) leaves the providers it serves
+   * floor model its provider serves now is written not at all, and raises a
+   * `model_index.floor_rejected` alert naming what it would leave unserved. A
+   * `null` models.dev read (its fetch failed) leaves the providers it serves
    * untouched. Rejects when a repository call fails.
    */
   async write(
@@ -144,7 +147,7 @@ export class ModelIndexWriter {
     const batchOf = new Map(batches.map((batch) => [batch.provider, batch]));
 
     for (const rejection of plan.rejected) {
-      this.logRejection(
+      this.reportRejection(
         rejection,
         batchOf.get(rejection.provider)?.rows.length ?? 0,
         listed.filter((row) => row.provider === rejection.provider).length
@@ -196,7 +199,7 @@ export class ModelIndexWriter {
     };
   }
 
-  private logRejection(
+  private reportRejection(
     rejection: SyncRejection,
     rows: number,
     previous: number
@@ -210,6 +213,10 @@ export class ModelIndexWriter {
     };
     if (rejection.reason === 'floor') {
       this.logger.error({ ...entry, models: rejection.models });
+      this.alerts.notify('model_index.floor_rejected', {
+        provider: rejection.provider,
+        models: rejection.models,
+      });
       return;
     }
     this.logger.warn(entry);

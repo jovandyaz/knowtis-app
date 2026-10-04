@@ -17,7 +17,6 @@ import {
   AGENT_STOP_REASON,
   isByokProvider,
   type AgentStopReason,
-  type ReasoningEffort,
 } from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
@@ -70,13 +69,6 @@ const MAX_STEP_ATTEMPTS = 2;
 const FINISH_REASON_LENGTH = 'length';
 const FINISH_REASON_TOOL_CALLS = 'tool-calls';
 const FINISH_REASON_CONTENT_FILTER = 'content-filter';
-
-// Reasoning shares the output cap with the answer, which a synthesis may get
-// little of. Lowered, never turned off: Opus and Sonnet 5.5 reject disabled
-// thinking, and mandatory-reasoning OpenRouter models reject effort none. Only
-// on a call sent without its tools, which already misses the prompt cache; on
-// a native call a changed effort would cost the cached prefix too.
-export const TOOL_FREE_REASONING_EFFORT: ReasoningEffort = 'low';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -217,20 +209,17 @@ export async function* runAgentStepLoop(
   const byokProvider = byok && isByokProvider(keyProvider) ? keyProvider : null;
 
   const optionsFor = async (model: string) => {
-    const reasoningEffort = await input.effortFor?.(model);
+    const effort = await input.effortFor?.(model);
     const routing = {
       model,
       providerOrder: input.openrouterProviderOrder,
       ignoredProviders: input.openrouterIgnoredProviders,
     };
     return {
-      step: turnProviderOptions({ ...routing, reasoningEffort }),
+      step: turnProviderOptions({ ...routing, reasoningEffort: effort?.step }),
       withoutTools: turnProviderOptions({
         ...routing,
-        reasoningEffort:
-          reasoningEffort === undefined
-            ? undefined
-            : TOOL_FREE_REASONING_EFFORT,
+        reasoningEffort: effort?.toolFree,
       }),
     };
   };

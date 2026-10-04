@@ -2,10 +2,7 @@ import { CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
 
 import type { CandidateUpsert } from '../ports/ai-catalog.repository';
 import type { UpstreamModel } from '../ports/openrouter-models.port';
-import {
-  CURATED_MODEL_IDS,
-  OPENROUTER_ID_PREFIX,
-} from './selectable-models.catalog';
+import { OPENROUTER_ID_PREFIX } from './catalog-model';
 
 export const OPEN_WEIGHT_AUTHORS = [
   'deepseek',
@@ -41,15 +38,13 @@ function emitsTextOnly(model: UpstreamModel): boolean {
  * True when the model may be stored as a promotable catalog candidate.
  *
  * Variant suffixes are excluded outright: `:batch` cannot serve a streaming
- * turn, and a variant of a curated model would otherwise slip past the
- * curated-id exclusion, which matches on the exact id.
+ * turn.
  */
 export function isCatalogCandidate(model: UpstreamModel): boolean {
   const [author] = model.id.split(AUTHOR_SEPARATOR);
   return (
     OPEN_WEIGHT_AUTHOR_SET.has(author) &&
     !model.id.includes(VARIANT_SEPARATOR) &&
-    !CURATED_MODEL_IDS.has(catalogId(model.id)) &&
     model.contextLength >= MIN_CANDIDATE_CONTEXT_TOKENS &&
     emitsTextOnly(model) &&
     model.completionCostPerToken <= CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN

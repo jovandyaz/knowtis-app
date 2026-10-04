@@ -13,6 +13,7 @@ import {
 } from '@knowtis/shared-types';
 
 import type { OPEN_WEIGHT_AUTHORS } from './candidate-filter';
+import { slugOf } from './catalog-model';
 
 type DirectProvider = (typeof MODELS_DEV_PROVIDERS)[number];
 
@@ -23,7 +24,7 @@ const GOOGLE = 'google' satisfies DirectProvider;
 export type OpenWeightAuthor = (typeof OPEN_WEIGHT_AUTHORS)[number];
 export type SelectorCapability = 'tool_call' | 'structured_output';
 
-/** The part of eligibility a caller tunes; the rest is global (§2). */
+/** The part of eligibility a caller tunes; the rest applies to every row. */
 export interface EligibilityRule {
   readonly requires: readonly SelectorCapability[];
   readonly allowPreview?: true;
@@ -31,7 +32,7 @@ export interface EligibilityRule {
   readonly maxOutputCostPerMillion?: number;
 }
 
-/** Spec §2 shape. */
+/** A code-owned rule that resolves one intent on one provider. */
 export interface ModelSelector extends EligibilityRule {
   readonly author:
     | typeof ANTHROPIC
@@ -156,10 +157,6 @@ export const BYOK_SELECTORS: Readonly<
   ],
 };
 
-function slugOf(row: IndexedModel): string {
-  return row.id.slice(row.id.indexOf(VARIANT_SEPARATOR) + 1);
-}
-
 function isOutsideRetirementWindow(row: IndexedModel, now: Date): boolean {
   if (row.retiresAt === null) {
     return true;
@@ -212,7 +209,7 @@ export function isEligible(
     !EXCLUDED_STATUSES.includes(row.status) &&
     isOutsideRetirementWindow(row, now) &&
     isTextModel(row) &&
-    isConcreteId(slugOf(row), rule.allowPreview === true) &&
+    isConcreteId(slugOf(row.id), rule.allowPreview === true) &&
     rule.requires.every(
       (capability) => row[CAPABILITY_FLAG[capability]] === true
     ) &&
@@ -240,19 +237,31 @@ function servesSelector(
   }
   return (
     provider !== OPENROUTER_PROVIDER ||
-    slugOf(row).startsWith(`${selector.author}${AUTHOR_SEPARATOR}`)
+    slugOf(row.id).startsWith(`${selector.author}${AUTHOR_SEPARATOR}`)
   );
 }
 
+/** Newest `releasedAt` first and undated last; 0 when both carry the same date or none. */
+export function byNewestRelease(
+  a: Pick<IndexedModel, 'releasedAt'>,
+  b: Pick<IndexedModel, 'releasedAt'>
+): number {
+  if (a.releasedAt === b.releasedAt) {
+    return 0;
+  }
+  if (a.releasedAt === null) {
+    return 1;
+  }
+  if (b.releasedAt === null) {
+    return -1;
+  }
+  return a.releasedAt < b.releasedAt ? 1 : -1;
+}
+
 function byResolutionOrder(a: IndexedModel, b: IndexedModel): number {
-  if (a.releasedAt !== b.releasedAt) {
-    if (a.releasedAt === null) {
-      return 1;
-    }
-    if (b.releasedAt === null) {
-      return -1;
-    }
-    return a.releasedAt < b.releasedAt ? 1 : -1;
+  const release = byNewestRelease(a, b);
+  if (release !== 0) {
+    return release;
   }
   if (a.id.length !== b.id.length) {
     return a.id.length - b.id.length;

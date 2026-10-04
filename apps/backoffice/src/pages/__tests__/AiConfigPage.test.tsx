@@ -378,7 +378,7 @@ describe('AiConfigPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /sonnet 5/i }));
     await userEvent.click(
-      await screen.findByRole('menuitemradio', { name: /haiku 4\.5/i })
+      await screen.findByRole('option', { name: /haiku 4\.5/i })
     );
 
     expect(setConfigMutate).toHaveBeenCalledWith({

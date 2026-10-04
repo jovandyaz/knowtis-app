@@ -12,8 +12,7 @@ import { IsOptionalStrictBoolean } from '../../../core/validation/is-strict-bool
 
 export class UpdateAiPreferencesDto {
   @ApiPropertyOptional({
-    description:
-      'Curated model id to pin as the account default; null clears it',
+    description: 'Model id to pin as the account default; null clears it',
     maxLength: MODEL_ID_MAX_LENGTH,
     nullable: true,
   })

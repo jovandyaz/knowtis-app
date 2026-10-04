@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
-import { ChevronDown, KeyRound, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, KeyRound, Loader2 } from 'lucide-react';
 
 import { cn } from '../utils/cn';
 import { Button } from './Button';
@@ -14,6 +14,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './DropdownMenu';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 export interface ModelSelectOption {
   id: string;
@@ -47,6 +56,15 @@ const NO_COST_LEVEL = 0;
 const FALLBACK_LABEL = '—';
 const OPTION_ROW_CLASSES = 'flex-col items-start gap-0.5';
 const FLAT_GROUP_KEY = 'models';
+const COLLISION_PADDING_PX = 8;
+const GROUP_HEADING_CLASSES =
+  'flex items-center justify-between text-xs uppercase tracking-wide';
+const SEARCH_ROW_CLASSES =
+  'cursor-pointer data-[selected=true]:bg-(--muted) data-[selected=true]:text-(--foreground)';
+const SEARCH_GROUP_DIVIDER_CLASSES =
+  '-mx-1 mt-1 border-t border-(--border) px-1 pt-1';
+const RETRY_OPTION_VALUE = 'model-select:retry';
+const QUERY_TERM_SEPARATOR = /\s+/;
 
 function costGlyphs(level: number): string {
   const clamped = Math.min(
@@ -65,6 +83,56 @@ function costLevel(m: ModelSelectOption): number {
 
 function tierCostLevel(items: readonly ModelSelectOption[]): number {
   return items.reduce((max, m) => Math.max(max, costLevel(m)), NO_COST_LEVEL);
+}
+
+interface ModelGroup {
+  key: string;
+  label: string;
+  items: ModelSelectOption[];
+}
+
+function groupModels(
+  models: readonly ModelSelectOption[],
+  tierOrder: readonly string[] | undefined,
+  modelsLabel: string | undefined
+): { groups: ModelGroup[]; isFlat: boolean } {
+  const ordered = tierOrder ?? [];
+  const known = new Set<string>(ordered);
+  const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
+    (tier) => !known.has(tier)
+  );
+  const tierGroups = [...ordered, ...extraTiers]
+    .map((tier) => ({
+      key: tier,
+      label: tier,
+      items: models.filter((m) => m.tier === tier),
+    }))
+    .filter((g) => g.items.length > 0);
+  if (modelsLabel && tierGroups.length > 0) {
+    return {
+      groups: [
+        {
+          key: FLAT_GROUP_KEY,
+          label: modelsLabel,
+          items: tierGroups.flatMap((g) => g.items),
+        },
+      ],
+      isFlat: true,
+    };
+  }
+  return { groups: tierGroups, isFlat: false };
+}
+
+function queryTerms(query: string): string[] {
+  return query.toLowerCase().split(QUERY_TERM_SEPARATOR).filter(Boolean);
+}
+
+function matchesQuery(
+  option: { id: string; label: string },
+  terms: readonly string[]
+): boolean {
+  const fields = [option.label.toLowerCase(), option.id.toLowerCase()];
+  return terms.every((term) => fields.some((field) => field.includes(term)));
 }
 
 export interface ModelSelectProps {
@@ -92,6 +160,14 @@ export interface ModelSelectProps {
    * heading cannot speak for tiers that differ in cost.
    */
   modelsLabel?: string;
+  /**
+   * Opts into a text filter for long lists: the rows open as a searchable listbox
+   * under an input with this placeholder, matching every typed word against each
+   * row's label and id. Unset, the rows open as a plain menu.
+   */
+  searchPlaceholder?: string;
+  /** Shown when the filter matches no row; falls back to `emptyLabel`. */
+  noMatchesLabel?: string;
   triggerLabel?: string;
   loadingLabel?: string;
   errorLabel?: string;
@@ -134,6 +210,57 @@ function OptionRow({
           title={description}
         >
           {description}
+        </span>
+      )}
+    </>
+  );
+}
+
+function ModelOptionRow({
+  model,
+  isFlat,
+  renderDescription,
+  billedBadgeLabel,
+}: {
+  model: ModelSelectOption;
+  isFlat: boolean;
+  renderDescription: ((m: ModelSelectOption) => string) | undefined;
+  billedBadgeLabel: string | undefined;
+}) {
+  const rowLevel = costLevel(model);
+  return (
+    <OptionRow
+      label={model.label}
+      description={renderDescription?.(model)}
+      cost={
+        isFlat && rowLevel > NO_COST_LEVEL ? costGlyphs(rowLevel) : undefined
+      }
+      badge={
+        model.billedToUser && billedBadgeLabel ? (
+          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
+            <KeyRound className="size-2.5" />
+            {billedBadgeLabel}
+          </span>
+        ) : undefined
+      }
+    />
+  );
+}
+
+function GroupHeading({
+  group,
+  isFlat,
+}: {
+  group: ModelGroup;
+  isFlat: boolean;
+}) {
+  const level = tierCostLevel(group.items);
+  return (
+    <>
+      <span>{group.label}</span>
+      {!isFlat && level > NO_COST_LEVEL && (
+        <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
+          {costGlyphs(level)}
         </span>
       )}
     </>
@@ -199,6 +326,213 @@ function OptionItem({
   );
 }
 
+function SearchGroup({
+  heading,
+  divided,
+  children,
+}: {
+  heading: ReactNode;
+  divided: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <CommandGroup
+      heading={
+        <span className={cn(GROUP_HEADING_CLASSES, 'font-semibold')}>
+          {heading}
+        </span>
+      }
+      className={cn('p-0', divided && SEARCH_GROUP_DIVIDER_CLASSES)}
+    >
+      {children}
+    </CommandGroup>
+  );
+}
+
+function SearchOption({
+  id,
+  asAction,
+  isCurrent,
+  disabled = false,
+  onPick,
+  children,
+}: {
+  id: string;
+  asAction: boolean;
+  isCurrent: boolean;
+  disabled?: boolean;
+  onPick: (id: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <CommandItem
+      value={id}
+      disabled={disabled}
+      aria-checked={asAction ? undefined : isCurrent}
+      onSelect={() => onPick(id)}
+      className={cn(
+        OPTION_ROW_CLASSES,
+        SEARCH_ROW_CLASSES,
+        !asAction && 'pr-8'
+      )}
+    >
+      {children}
+      {!asAction && isCurrent && (
+        <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-current" />
+      )}
+    </CommandItem>
+  );
+}
+
+interface ModelSearchListProps {
+  models: readonly ModelSelectOption[];
+  leadingSection: ModelSelectSection | undefined;
+  tierOrder: readonly string[] | undefined;
+  modelsLabel: string | undefined;
+  value: string | null;
+  rowsAreActions: boolean;
+  renderDescription: ((m: ModelSelectOption) => string) | undefined;
+  billedBadgeLabel: string | undefined;
+  placeholder: string;
+  listLabel: string;
+  noMatchesLabel: string;
+  errorLabel: string | undefined;
+  retryLabel: string | undefined;
+  onPick: (id: string) => void;
+  onRetry: (() => void) | undefined;
+}
+
+// The query lives only while the popover is open: closing unmounts the list,
+// so every reopen starts from the full list.
+function ModelSearchList({
+  models,
+  leadingSection,
+  tierOrder,
+  modelsLabel,
+  value,
+  rowsAreActions,
+  renderDescription,
+  billedBadgeLabel,
+  placeholder,
+  listLabel,
+  noMatchesLabel,
+  errorLabel,
+  retryLabel,
+  onPick,
+  onRetry,
+}: ModelSearchListProps) {
+  const visibleFor = (q: string) => {
+    const terms = queryTerms(q);
+    const leadingOptions =
+      leadingSection?.options.filter((option) => matchesQuery(option, terms)) ??
+      [];
+    const { groups, isFlat } = groupModels(
+      models.filter((m) => matchesQuery(m, terms)),
+      tierOrder,
+      modelsLabel
+    );
+    const firstMatch =
+      leadingOptions[0]?.id ??
+      groups.flatMap((g) => g.items).find((m) => !m.disabled)?.id ??
+      '';
+    return { terms, leadingOptions, groups, isFlat, firstMatch };
+  };
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(() => visibleFor('').firstMatch);
+  const listRef = useRef<HTMLDivElement>(null);
+  const { terms, leadingOptions, groups, isFlat } = visibleFor(query);
+  const hasLeading = leadingOptions.length > 0;
+  // cmdk re-scrolls the previously active row after a query change; owning the
+  // active row stops that stale scroll from undoing the reset.
+  const changeQuery = (next: string) => {
+    setQuery(next);
+    setActive(visibleFor(next).firstMatch);
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+  };
+
+  return (
+    <Command
+      shouldFilter={false}
+      label={placeholder}
+      value={active}
+      onValueChange={setActive}
+    >
+      <CommandInput
+        value={query}
+        onValueChange={changeQuery}
+        placeholder={placeholder}
+      />
+      <CommandList ref={listRef} label={listLabel} className="p-1">
+        {terms.length > 0 && <CommandEmpty>{noMatchesLabel}</CommandEmpty>}
+        {hasLeading && leadingSection && (
+          <SearchGroup heading={leadingSection.label} divided={false}>
+            {leadingOptions.map((option) => (
+              <SearchOption
+                key={option.id}
+                id={option.id}
+                asAction={rowsAreActions}
+                isCurrent={option.id === value}
+                onPick={onPick}
+              >
+                <OptionRow
+                  label={option.label}
+                  description={option.description}
+                />
+              </SearchOption>
+            ))}
+          </SearchGroup>
+        )}
+        {groups.map((g, i) => (
+          <SearchGroup
+            key={g.key}
+            heading={<GroupHeading group={g} isFlat={isFlat} />}
+            divided={i > 0 || hasLeading}
+          >
+            {g.items.map((m) => (
+              <SearchOption
+                key={m.id}
+                id={m.id}
+                asAction={rowsAreActions}
+                isCurrent={m.id === value}
+                disabled={m.disabled ?? false}
+                onPick={onPick}
+              >
+                <ModelOptionRow
+                  model={m}
+                  isFlat={isFlat}
+                  renderDescription={renderDescription}
+                  billedBadgeLabel={billedBadgeLabel}
+                />
+              </SearchOption>
+            ))}
+          </SearchGroup>
+        ))}
+        {errorLabel !== undefined && (
+          <CommandGroup
+            heading={errorLabel}
+            className={cn(
+              'p-0',
+              (hasLeading || groups.length > 0) && SEARCH_GROUP_DIVIDER_CLASSES
+            )}
+          >
+            {onRetry && retryLabel && (
+              <CommandItem
+                value={RETRY_OPTION_VALUE}
+                onSelect={onRetry}
+                className={SEARCH_ROW_CLASSES}
+              >
+                {retryLabel}
+              </CommandItem>
+            )}
+          </CommandGroup>
+        )}
+      </CommandList>
+    </Command>
+  );
+}
+
 export function ModelSelect({
   models,
   value,
@@ -210,6 +544,8 @@ export function ModelSelect({
   leadingSection,
   rowsAreActions = false,
   modelsLabel,
+  searchPlaceholder,
+  noMatchesLabel,
   triggerLabel,
   loadingLabel,
   errorLabel,
@@ -221,6 +557,7 @@ export function ModelSelect({
   disabled = false,
   'aria-label': ariaLabel,
 }: ModelSelectProps) {
+  const [searchOpen, setSearchOpen] = useState(false);
   const isLoading = status === 'loading';
   const isError = status === 'error';
   const visibleLeadingSection =
@@ -236,27 +573,6 @@ export function ModelSelect({
   const active =
     models.find((m) => m.id === value) ??
     visibleLeadingSection?.options.find((o) => o.id === value);
-  const ordered = tierOrder ?? [];
-  const known = new Set<string>(ordered);
-  const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
-    (tier) => !known.has(tier)
-  );
-  const tierGroups = [...ordered, ...extraTiers]
-    .map((tier) => ({
-      key: tier,
-      label: tier,
-      items: models.filter((m) => m.tier === tier),
-    }))
-    .filter((g) => g.items.length > 0);
-  const flatGroup =
-    modelsLabel && tierGroups.length > 0
-      ? {
-          key: FLAT_GROUP_KEY,
-          label: modelsLabel,
-          items: tierGroups.flatMap((g) => g.items),
-        }
-      : undefined;
-  const groups = flatGroup ? [flatGroup] : tierGroups;
 
   const triggerText = ((): string => {
     if (active) {
@@ -274,27 +590,67 @@ export function ModelSelect({
     return triggerLabel ?? FALLBACK_LABEL;
   })();
 
+  const trigger = (
+    <Button
+      type="button"
+      variant={triggerVariant}
+      size="sm"
+      className={cn('gap-1.5', triggerClassName)}
+      disabled={triggerDisabled}
+      aria-label={ariaLabel ? `${ariaLabel}: ${triggerText}` : undefined}
+    >
+      {isLoading && (
+        <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />
+      )}
+      <span className="truncate">{triggerText}</span>
+      {!isLoading && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
+    </Button>
+  );
+
+  if (searchPlaceholder !== undefined) {
+    const closeAfter = (action: () => void) => {
+      action();
+      setSearchOpen(false);
+    };
+    return (
+      <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+        <PopoverContent
+          align="start"
+          collisionPadding={COLLISION_PADDING_PX}
+          aria-label={ariaLabel ?? searchPlaceholder}
+          className="flex max-h-(--radix-popover-content-available-height) flex-col p-0"
+        >
+          <ModelSearchList
+            models={models}
+            leadingSection={visibleLeadingSection}
+            tierOrder={tierOrder}
+            modelsLabel={modelsLabel}
+            value={value}
+            rowsAreActions={rowsAreActions}
+            renderDescription={renderDescription}
+            billedBadgeLabel={billedBadgeLabel}
+            placeholder={searchPlaceholder}
+            listLabel={ariaLabel ?? searchPlaceholder}
+            noMatchesLabel={noMatchesLabel ?? emptyLabel ?? FALLBACK_LABEL}
+            errorLabel={isError ? (errorLabel ?? FALLBACK_LABEL) : undefined}
+            retryLabel={retryLabel}
+            onPick={(id) => closeAfter(() => onSelect(id))}
+            onRetry={onRetry && (() => closeAfter(onRetry))}
+          />
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  const { groups, isFlat } = groupModels(models, tierOrder, modelsLabel);
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant={triggerVariant}
-          size="sm"
-          className={cn('gap-1.5', triggerClassName)}
-          disabled={triggerDisabled}
-          aria-label={ariaLabel ? `${ariaLabel}: ${triggerText}` : undefined}
-        >
-          {isLoading && (
-            <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />
-          )}
-          <span className="truncate">{triggerText}</span>
-          {!isLoading && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
-        </Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        collisionPadding={8}
+        collisionPadding={COLLISION_PADDING_PX}
         className="w-72 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto"
       >
         {visibleLeadingSection && (
@@ -321,58 +677,35 @@ export function ModelSelect({
             ))}
           </OptionGroup>
         )}
-        {groups.map((g, i) => {
-          const level = tierCostLevel(g.items);
-          return (
-            <OptionGroup
-              key={g.key}
-              asActions={rowsAreActions}
-              value={value}
-              onSelect={onSelect}
-            >
-              {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
-                <span>{g.label}</span>
-                {!flatGroup && level > NO_COST_LEVEL && (
-                  <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
-                    {costGlyphs(level)}
-                  </span>
-                )}
-              </DropdownMenuLabel>
-              {g.items.map((m) => {
-                const description = renderDescription?.(m);
-                const rowLevel = costLevel(m);
-                return (
-                  <OptionItem
-                    key={m.id}
-                    id={m.id}
-                    asAction={rowsAreActions}
-                    disabled={m.disabled ?? false}
-                    onSelect={onSelect}
-                  >
-                    <OptionRow
-                      label={m.label}
-                      description={description}
-                      cost={
-                        flatGroup && rowLevel > NO_COST_LEVEL
-                          ? costGlyphs(rowLevel)
-                          : undefined
-                      }
-                      badge={
-                        m.billedToUser && billedBadgeLabel ? (
-                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
-                            <KeyRound className="h-2.5 w-2.5" />
-                            {billedBadgeLabel}
-                          </span>
-                        ) : undefined
-                      }
-                    />
-                  </OptionItem>
-                );
-              })}
-            </OptionGroup>
-          );
-        })}
+        {groups.map((g, i) => (
+          <OptionGroup
+            key={g.key}
+            asActions={rowsAreActions}
+            value={value}
+            onSelect={onSelect}
+          >
+            {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
+            <DropdownMenuLabel className={GROUP_HEADING_CLASSES}>
+              <GroupHeading group={g} isFlat={isFlat} />
+            </DropdownMenuLabel>
+            {g.items.map((m) => (
+              <OptionItem
+                key={m.id}
+                id={m.id}
+                asAction={rowsAreActions}
+                disabled={m.disabled ?? false}
+                onSelect={onSelect}
+              >
+                <ModelOptionRow
+                  model={m}
+                  isFlat={isFlat}
+                  renderDescription={renderDescription}
+                  billedBadgeLabel={billedBadgeLabel}
+                />
+              </OptionItem>
+            ))}
+          </OptionGroup>
+        ))}
         {isError && (
           <>
             {(hasLeadingSection || groups.length > 0) && (

@@ -67,6 +67,91 @@ describe('ModelIndexCache', () => {
     expect(cache.catalog().size).toBe(MODEL_INDEX_SNAPSHOT.length);
   });
 
+  describe('servesFreshIndex', () => {
+    it('is false before the first refresh', () => {
+      const { cache } = createCache({ models: [DB_MODEL], failure: null });
+
+      expect(cache.servesFreshIndex()).toBe(false);
+    });
+
+    it('is true once a refresh reads listed rows', async () => {
+      const { cache } = createCache({ models: [DB_MODEL], failure: null });
+
+      await cache.refresh();
+
+      expect(cache.servesFreshIndex()).toBe(true);
+    });
+
+    it('is false while the index lists no rows', async () => {
+      const { cache } = createCache({ models: [], failure: null });
+
+      await cache.refresh();
+
+      expect(cache.servesFreshIndex()).toBe(false);
+    });
+
+    it('is false when the first refresh fails', async () => {
+      silenceWarnings();
+      const { cache } = createCache({
+        models: [DB_MODEL],
+        failure: new Error('database unreachable'),
+      });
+
+      await cache.refresh();
+
+      expect(cache.servesFreshIndex()).toBe(false);
+    });
+
+    it('is false after a refresh fails, though the catalog it keeps still lists rows', async () => {
+      silenceWarnings();
+      const script: RepositoryScript = { models: [DB_MODEL], failure: null };
+      const { cache } = createCache(script);
+      await cache.refresh();
+
+      script.failure = new Error('database unreachable');
+      await cache.refresh();
+
+      expect(cache.isSupported(DB_MODEL.id)).toBe(true);
+      expect(cache.servesFreshIndex()).toBe(false);
+    });
+
+    it('is true again once a refresh succeeds after a failure', async () => {
+      silenceWarnings();
+      const script: RepositoryScript = { models: [DB_MODEL], failure: null };
+      const { cache } = createCache(script);
+      script.failure = new Error('database unreachable');
+      await cache.refresh();
+
+      script.failure = null;
+      await cache.refresh();
+
+      expect(cache.servesFreshIndex()).toBe(true);
+    });
+
+    it('is not flipped by a slow read that fails after a newer success', async () => {
+      silenceWarnings();
+      const gates: Array<{
+        resolve: (models: IndexedModel[]) => void;
+        reject: (error: Error) => void;
+      }> = [];
+      const repository = createModelIndexRepositoryStub(
+        () =>
+          new Promise<IndexedModel[]>((resolve, reject) => {
+            gates.push({ resolve, reject });
+          })
+      );
+      const cache = new ModelIndexCache(repository);
+
+      const slow = cache.refresh();
+      const fresh = cache.refresh();
+      gates[1].resolve([DB_MODEL]);
+      gates[0].reject(new Error('database unreachable'));
+      await Promise.all([slow, fresh]);
+
+      expect(cache.servesFreshIndex()).toBe(true);
+    });
+  });
+
   it('builds the snapshot catalog once', () => {
     const { cache } = createCache({ models: [], failure: null });
 

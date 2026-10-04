@@ -4,6 +4,10 @@ import type { AssignableModelDto } from '@knowtis/shared-types';
 export const NEEDS_KEY_HINT =
   'Needs a provider key — configure it in Providers';
 
+export const MODEL_SEARCH_PLACEHOLDER = 'Search by name or ID';
+
+export const NO_MATCHING_MODELS_LABEL = 'No models match your search';
+
 /**
  * Assignability keys off `routableByServer`: a promoted row whose provider lost
  * its key would otherwise render assignable while the server cannot route it.

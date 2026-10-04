@@ -58,7 +58,7 @@ const intentServingModels = [
   {
     id: 'a:bal',
     label: 'Balanced One',
-    descriptionKey: 'aiModels.sonnet4',
+    descriptionKey: 'aiModels.class.balanced',
     tier: 'balanced',
     contextWindow: 1000000,
     costClass: 2,
@@ -69,7 +69,7 @@ const intentServingModels = [
   {
     id: 'a:fast',
     label: 'Fast One',
-    descriptionKey: 'aiModels.haiku45',
+    descriptionKey: 'aiModels.class.fast',
     tier: 'fast',
     contextWindow: 200000,
     costClass: 1,
@@ -82,7 +82,7 @@ const intentServingModels = [
 const powerfulModel = {
   id: 'x:premium',
   label: 'Premium One',
-  descriptionKey: 'aiModels.gpt56Sol',
+  descriptionKey: 'aiModels.class.powerful',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,
@@ -94,7 +94,7 @@ const powerfulModel = {
 const byokModel = {
   id: 'o:byok',
   label: 'Byok One',
-  descriptionKey: 'aiModels.gpt56Sol',
+  descriptionKey: 'aiModels.class.powerful',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,
@@ -377,7 +377,7 @@ describe('AIAssistantSection', () => {
     const haiku = {
       id: 'anthropic:claude-haiku-4-5',
       label: 'Haiku 4.5',
-      descriptionKey: 'aiModels.haiku45',
+      descriptionKey: 'aiModels.class.fast',
       tier: 'fast',
       contextWindow: 200000,
       costClass: 1,
@@ -401,10 +401,10 @@ describe('AIAssistantSection', () => {
         .map((row) => row.textContent)
     ).toEqual([
       expect.stringContaining(
-        'aiAssistant.advanced.routeDetail(provider=Anthropic,detail=aiModels.haiku45)'
+        'aiAssistant.advanced.routeDetail(provider=Anthropic,detail=aiModels.class.fast)'
       ),
       expect.stringContaining(
-        'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.haiku45)'
+        'aiAssistant.advanced.routeDetail(provider=OpenRouter,detail=aiModels.class.fast)'
       ),
     ]);
   });
