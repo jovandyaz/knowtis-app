@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MODELS_DEV_PROVIDERS, OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import { INTENT_FALLBACK_ORDER } from '@knowtis/shared-types';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
@@ -14,6 +15,7 @@ import type {
 import { PlatformResolutionsUnreadError } from '../../domain/ports/platform-models.port';
 import { CatalogSyncTask } from './catalog-sync.task';
 import type { ModelIndexWriter } from './model-index.writer';
+import type { PlatformCandidatesWriter } from './platform-candidates.writer';
 
 const WATCHED_OUTPUT_COST = 0.0000044;
 const REPRICE_FACTOR = 2;
@@ -131,13 +133,17 @@ function make(
       .fn()
       .mockResolvedValue(options.platformModels ?? WATCHED_IDS),
   };
+  const candidates = {
+    write: vi.fn<PlatformCandidatesWriter['write']>().mockResolvedValue(0),
+  };
   const task = new CatalogSyncTask(
     lock.client,
     repo as never,
     openRouter as never,
     modelsDev as never,
     indexWriter as never,
-    platformModels
+    platformModels,
+    candidates as never
   );
   return {
     task,
@@ -147,6 +153,7 @@ function make(
     modelsDev,
     indexWriter,
     platformModels,
+    candidates,
   };
 }
 
@@ -633,6 +640,69 @@ describe('CatalogSyncTask', () => {
         reason: 'model index locked',
       })
     );
+  });
+
+  it('pends platform candidates after a concluded OpenRouter batch', async () => {
+    const { task, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [OPENROUTER_PROVIDER],
+    });
+
+    await task.run();
+
+    expect(candidates.write).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks nothing when the OpenRouter batch did not conclude', async () => {
+    const { task, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: ['anthropic'],
+    });
+
+    await task.run();
+
+    expect(candidates.write).not.toHaveBeenCalled();
+  });
+
+  it('keeps syncing when pending the candidates fails', async () => {
+    const { task, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [OPENROUTER_PROVIDER],
+    });
+    candidates.write.mockRejectedValue(new Error('resolutions table locked'));
+
+    const result = await task.run();
+
+    expect(result).toEqual(
+      expect.objectContaining({ status: 'completed', indexed: INDEXED_ROWS })
+    );
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.model_resolution.pending_failed',
+      reason: 'resolutions table locked',
+    });
+  });
+
+  it('marks nothing when the OpenRouter fetch fails', async () => {
+    const { task, openRouter, indexWriter, candidates } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [...MODELS_DEV_PROVIDERS],
+    });
+
+    await expect(task.run()).rejects.toThrow('openrouter down');
+    expect(candidates.write).not.toHaveBeenCalled();
   });
 
   it('should release the lock when the upstream fetch fails inside it', async () => {

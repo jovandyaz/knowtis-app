@@ -68,6 +68,7 @@ import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
 import { ModelIndexWriter } from './infrastructure/catalog/model-index.writer';
 import { ModelsDevHttpClient } from './infrastructure/catalog/models-dev.client';
 import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-models.client';
+import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
@@ -161,6 +162,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     },
     { provide: MODELS_DEV_CLIENT, useClass: ModelsDevHttpClient },
     ModelIndexWriter,
+    PlatformCandidatesWriter,
     CatalogSyncTask,
     AiCatalogAdminService,
     AssignableModelsService,

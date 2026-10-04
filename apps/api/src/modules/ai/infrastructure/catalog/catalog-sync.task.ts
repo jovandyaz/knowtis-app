@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
+import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import {
   PROMOTED_STATUS,
   type CatalogSyncResultDto,
@@ -41,6 +42,7 @@ import {
   type PlatformModelsSource,
 } from '../../domain/ports/platform-models.port';
 import { ModelIndexWriter } from './model-index.writer';
+import { PlatformCandidatesWriter } from './platform-candidates.writer';
 
 const ADVISORY_LOCK_KEY = 778_493_003;
 const FAILURE_LOG_SAMPLE_SIZE = 10;
@@ -78,7 +80,8 @@ export class CatalogSyncTask {
     @Inject(MODELS_DEV_CLIENT) private readonly modelsDev: ModelsDevClient,
     private readonly indexWriter: ModelIndexWriter,
     @Inject(PLATFORM_MODELS_SOURCE)
-    private readonly platformModels: PlatformModelsSource
+    private readonly platformModels: PlatformModelsSource,
+    private readonly candidates: PlatformCandidatesWriter
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
@@ -174,7 +177,13 @@ export class CatalogSyncTask {
       return 0;
     }
     try {
-      const { indexed } = await this.indexWriter.write(openRouter, modelsDev);
+      const { indexed, concluded } = await this.indexWriter.write(
+        openRouter,
+        modelsDev
+      );
+      if (concluded.includes(OPENROUTER_PROVIDER)) {
+        await this.pendCandidates();
+      }
       return indexed;
     } catch (error) {
       this.logger.error({
@@ -183,6 +192,18 @@ export class CatalogSyncTask {
         stack: stackOf(error),
       });
       return 0;
+    }
+  }
+
+  /** Never rejects: a failed write leaves the resolutions as they were until the next sync. */
+  private async pendCandidates(): Promise<void> {
+    try {
+      await this.candidates.write(new Date());
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.model_resolution.pending_failed',
+        reason: reasonOf(error),
+      });
     }
   }
 
