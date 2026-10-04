@@ -27,6 +27,7 @@ import type { DailyMessageLimits } from '../../domain/execution-context/quota-po
 import { isAssignableModel } from '../../domain/model-catalog/model-selectors';
 import {
   derivedChain,
+  NO_SERVED_MODEL,
   SELECTOR_KEY_BY_INTENT,
 } from '../../domain/model-catalog/platform-resolution';
 import {
@@ -221,7 +222,7 @@ export class AIConfigService implements PlatformModelsSource {
     if (pin !== AUTO_MODEL_SETTING && this.modelCatalog.isSupported(pin)) {
       return pin;
     }
-    return this.resolutions.activeModelId(intent) ?? AUTO_MODEL_SETTING;
+    return this.resolutions.activeModelId(intent) ?? NO_SERVED_MODEL;
   }
 
   private async getIntentModel(intent: ModelIntent): Promise<string> {
@@ -257,7 +258,10 @@ export class AIConfigService implements PlatformModelsSource {
   }
 
   async getFallbackChain(): Promise<string[]> {
-    const pinned = await this.getConfigValue('ai_fallback_chain');
+    const [pinned, intents] = await Promise.all([
+      this.getConfigValue('ai_fallback_chain'),
+      this.getIntentModels(),
+    ]);
     const dead = parseChain(pinned).filter(
       (m) => !this.modelCatalog.isSupported(m)
     );
@@ -266,7 +270,7 @@ export class AIConfigService implements PlatformModelsSource {
         `Ignoring fallback chain models missing from the catalog: ${dead.join(', ')}`
       );
     }
-    return this.servedChain(pinned, await this.getIntentModels());
+    return this.servedChain(pinned, intents);
   }
 
   async getPlatformModelIds(): Promise<string[]> {
@@ -283,7 +287,7 @@ export class AIConfigService implements PlatformModelsSource {
           ...MODEL_INTENTS.map((intent) => intents[intent]),
           ...chain,
           ...this.resolutions.activeModelIds(),
-        ].filter((id) => id !== '')
+        ].filter((id) => id !== NO_SERVED_MODEL)
       ),
     ];
   }
@@ -357,10 +361,6 @@ export class AIConfigService implements PlatformModelsSource {
     }
     this.validateValue(CONFIG_KEYS[key], value);
     await this.assertIntentModelsStayDistinct(key, value);
-    const intent = intentOfConfigKey(key);
-    const servedBefore = intent
-      ? await this.getIntentModel(intent)
-      : AUTO_MODEL_SETTING;
     const previous = await this.repository.get(key);
     await this.repository.set(key, value, description);
     try {
@@ -380,15 +380,21 @@ export class AIConfigService implements PlatformModelsSource {
       ...(previous !== null ? { before: { value: previous } } : {}),
       after: { value },
     });
-    // An active model is platform-billed anyway, so recording it would only cut
-    // short the grace of the model an earlier release recorded.
-    if (
-      intent &&
-      servedBefore !== AUTO_MODEL_SETTING &&
-      servedBefore !== value &&
-      servedBefore !== this.resolutions.activeModelId(intent)
-    ) {
-      await this.recordRelease(intent, servedBefore);
+    const intent = intentOfConfigKey(key);
+    if (intent) {
+      const servedBefore = this.servedIntentModel(
+        intent,
+        previous ?? AUTO_MODEL_SETTING
+      );
+      // An active model is platform-billed anyway, so recording it would only cut
+      // short the grace of the model an earlier release recorded.
+      if (
+        servedBefore !== NO_SERVED_MODEL &&
+        servedBefore !== value &&
+        servedBefore !== this.resolutions.activeModelId(intent)
+      ) {
+        await this.recordRelease(intent, servedBefore);
+      }
     }
     this.logger.log(`AI config '${key}' updated to '${value}'`);
   }
@@ -397,10 +403,6 @@ export class AIConfigService implements PlatformModelsSource {
     if (!isConfigKey(key)) {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
-    const intent = intentOfConfigKey(key);
-    const servedBefore = intent
-      ? await this.getIntentModel(intent)
-      : AUTO_MODEL_SETTING;
     const deleted = await this.repository.delete(key);
     if (!deleted) {
       return;
@@ -421,12 +423,15 @@ export class AIConfigService implements PlatformModelsSource {
       targetId: key,
       before: { value: deleted.value },
     });
-    if (
-      intent &&
-      servedBefore !==
-        (this.resolutions.activeModelId(intent) ?? AUTO_MODEL_SETTING)
-    ) {
-      await this.recordRelease(intent, servedBefore);
+    const intent = intentOfConfigKey(key);
+    if (intent) {
+      const servedBefore = this.servedIntentModel(intent, deleted.value);
+      if (
+        servedBefore !==
+        (this.resolutions.activeModelId(intent) ?? NO_SERVED_MODEL)
+      ) {
+        await this.recordRelease(intent, servedBefore);
+      }
     }
     this.logger.log(`Reset AI config '${key}'`);
   }

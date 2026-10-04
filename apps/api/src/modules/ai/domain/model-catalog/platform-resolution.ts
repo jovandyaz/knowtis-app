@@ -30,7 +30,7 @@ export const SELECTOR_KEY_BY_INTENT = {
 
 export const PENDING_GATE_STATUS = 'pending' as const satisfies ModelGateStatus;
 
-/** The models migration 0060 seeds, and what the resolution cache serves until its first successful read: the code defaults `AI_SETTING_DEFAULTS` held before platform resolutions were stored. */
+/** The models migration 0060 seeds, and what the resolution cache serves until its first successful read. Each is what a dead prod pin of its intent fell back to before resolutions were stored, so a dead pin keeps its fallback. */
 export const PLATFORM_SEED_MODELS = {
   fast: 'openrouter:minimax/minimax-m2.5',
   balanced: 'openrouter:deepseek/deepseek-v3.2',
@@ -56,6 +56,9 @@ const INTENT_BY_SELECTOR_KEY = {
   'platform.balanced': 'balanced',
   'platform.powerful': 'powerful',
 } as const satisfies Record<PlatformSelectorKey, ModelIntent>;
+
+/** What an intent serves with neither a supported pin nor an active resolution: no model, so the intent is unavailable. */
+export const NO_SERVED_MODEL = '';
 
 /** Days a model that stopped being served stays billed to the platform. */
 export const RESOLUTION_GRACE_DAYS = 7;
@@ -111,7 +114,7 @@ export function derivedChain(
 ): string[] {
   return [
     ...new Set(INTENT_FALLBACK_ORDER.map((intent) => intents[intent])),
-  ].filter((modelId) => modelId !== '');
+  ].filter((modelId) => modelId !== NO_SERVED_MODEL);
 }
 
 export type ResolutionChange =
