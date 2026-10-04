@@ -148,7 +148,8 @@ function harness(failPrimary = false, toolStep = false) {
     {} as never,
     {} as never,
     {} as never,
-    createResolutionsStub()
+    createResolutionsStub(),
+    {} as never
   );
   return { requests, config, registry, chain, routing };
 }

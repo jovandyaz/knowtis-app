@@ -25,8 +25,9 @@ jobs:
       # Each leg is evidence about a different model; one red leg must not hide the rest.
       fail-fast: false
       matrix:
-        # The production legs fall back to AI_SETTING_DEFAULTS; set the
-        # AI_EVAL_*_MODEL repository variables to whatever ai_config serves.
+        # The production legs fall back to the seeded platform resolutions
+        # (migration 0060); set the AI_EVAL_*_MODEL repository variables to
+        # whatever the intents serve.
         include:
           - leg: reference
             model: anthropic:claude-sonnet-5

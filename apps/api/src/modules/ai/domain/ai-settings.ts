@@ -1,12 +1,14 @@
 import type { AIConfigKey } from '@knowtis/shared-types';
 
-/** Open-tier code defaults every AI setting resolves to when no DB override exists: the floor a fresh install lands on, so each one stays cheap enough for the platform to absorb. Guard-tested by the vendored snapshot floor (`snapshot-floor.spec.ts`). */
+/** Auto: an intent model key holding it serves the intent's active platform resolution, and a fallback chain holding it derives from the served intents. Any other value of those keys is an admin pin. */
+export const AUTO_MODEL_SETTING = '';
+
+/** Code defaults every AI setting resolves to when no DB row exists. The three intent model keys and the fallback chain ship empty: auto (`AUTO_MODEL_SETTING`). */
 export const AI_SETTING_DEFAULTS = {
-  ai_default_model: 'openrouter:deepseek/deepseek-v3.2',
-  ai_fast_model: 'openrouter:minimax/minimax-m2.5',
-  ai_deep_model: 'openrouter:moonshotai/kimi-k2.5',
-  ai_fallback_chain:
-    'openrouter:deepseek/deepseek-v3.2,openrouter:minimax/minimax-m2.5,openrouter:moonshotai/kimi-k2.5',
+  ai_default_model: AUTO_MODEL_SETTING,
+  ai_fast_model: AUTO_MODEL_SETTING,
+  ai_deep_model: AUTO_MODEL_SETTING,
+  ai_fallback_chain: AUTO_MODEL_SETTING,
   ai_reasoning_effort: 'medium',
   ai_openrouter_providers: 'fireworks,baseten',
   ai_openrouter_ignored_providers: '',

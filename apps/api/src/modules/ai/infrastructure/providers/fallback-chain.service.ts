@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
@@ -7,16 +13,14 @@ import {
   resolveChainCandidates,
   type ChainScope,
 } from '@knowtis/ai-gateway';
-import { parseChain } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
 export const FALLBACK_CHAIN_SOURCE = Symbol('FALLBACK_CHAIN_SOURCE');
 
-/** Supplies the effective cross-provider fallback chain (DB row over env default). */
+/** Supplies the effective cross-provider fallback chain: the pinned chain, else the one derived from the served intents. */
 export interface FallbackChainSource {
   getFallbackChain(): Promise<string[]>;
 }
@@ -39,7 +43,9 @@ export interface ProviderHealth {
  * override applies within one TTL without a redeploy.
  */
 @Injectable()
-export class FallbackChainService implements OnModuleInit {
+export class FallbackChainService
+  implements OnModuleInit, OnApplicationBootstrap
+{
   private readonly logger = new Logger(FallbackChainService.name);
   private chain: string[] = [];
   private chainRefreshedAt = 0;
@@ -71,15 +77,13 @@ export class FallbackChainService implements OnModuleInit {
     );
   }
 
-  /**
-   * Seeds the chain so cross-provider fallback works before the first async
-   * refresh from the source (guard-tested against the catalog). The optional
-   * arg is a test seam; production seeds the code default.
-   */
-  onModuleInit(
-    seedChain: string[] = parseChain(AI_SETTING_DEFAULTS.ai_fallback_chain)
-  ): void {
+  /** Starts from `seedChain`, a test seam; production starts empty and loads the chain in `onApplicationBootstrap`, after every module's init, so the platform resolutions are warm. */
+  onModuleInit(seedChain: string[] = []): void {
     this.chain = seedChain;
+  }
+
+  async onApplicationBootstrap(): Promise<void> {
+    await this.refreshChain();
   }
 
   candidatesFor(primaryModel: string, scope?: ChainScope): string[] {
@@ -95,25 +99,26 @@ export class FallbackChainService implements OnModuleInit {
   }
 
   private refreshChainIfStale(): void {
-    const now = Date.now();
-    if (now - this.chainRefreshedAt < CHAIN_TTL_MS) {
+    if (Date.now() - this.chainRefreshedAt < CHAIN_TTL_MS) {
       return;
     }
+    void this.refreshChain();
+  }
+
+  private async refreshChain(): Promise<void> {
     // Claim the window before the read so a hung read can't pin the snapshot:
     // after the TTL a new refresh starts even if this one never settles.
-    this.chainRefreshedAt = now;
+    this.chainRefreshedAt = Date.now();
     const generation = ++this.chainGeneration;
-    void this.chainSource
-      .getFallbackChain()
-      .then((chain) => {
-        // A slow earlier read must not clobber a newer one.
-        if (generation === this.chainGeneration && chain.length > 0) {
-          this.chain = chain;
-        }
-      })
-      .catch((error) =>
-        this.logger.warn('Failed to refresh fallback chain from config', error)
-      );
+    try {
+      const chain = await this.chainSource.getFallbackChain();
+      // A slow earlier read must not clobber a newer one.
+      if (generation === this.chainGeneration && chain.length > 0) {
+        this.chain = chain;
+      }
+    } catch (error) {
+      this.logger.warn('Failed to refresh fallback chain from config', error);
+    }
   }
 
   /** Passive per-provider health from the cooldown tracker — no probes, no token spend. */

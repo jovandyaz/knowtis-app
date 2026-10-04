@@ -17,15 +17,27 @@ import {
   type ModelIntent,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
-import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import {
+  AI_SETTING_DEFAULTS,
+  AUTO_MODEL_SETTING,
+} from '../../domain/ai-settings';
 import type { DailyMessageLimits } from '../../domain/execution-context/quota-policy';
 import { isAssignableModel } from '../../domain/model-catalog/model-selectors';
+import {
+  derivedChain,
+  SELECTOR_KEY_BY_INTENT,
+} from '../../domain/model-catalog/platform-resolution';
 import {
   AI_CONFIG_REPOSITORY,
   type AIConfigRepository,
   type AIConfigRow,
 } from '../../domain/ports/ai-config.repository';
+import {
+  MODEL_RESOLUTION_REPOSITORY,
+  type ModelResolutionRepository,
+} from '../../domain/ports/model-resolution.repository';
 import {
   PlatformResolutionsUnreadError,
   type PlatformModelsSource,
@@ -52,7 +64,8 @@ export const AI_CONFIG_KINDS = [
 export type AIConfigKind = (typeof AI_CONFIG_KINDS)[number];
 
 type ConfigKeyDef =
-  | { default: string; kind: Exclude<AIConfigKind, 'choice'> }
+  | { default: string; kind: 'model'; intent: ModelIntent }
+  | { default: string; kind: Exclude<AIConfigKind, 'model' | 'choice'> }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
 
 type DailyMessageLimitKey = 'ai_anon_daily_messages' | 'ai_free_daily_messages';
@@ -78,9 +91,18 @@ const CONFIG_KEYS = {
   ai_default_model: {
     default: AI_SETTING_DEFAULTS.ai_default_model,
     kind: 'model',
+    intent: 'balanced',
   },
-  ai_fast_model: { default: AI_SETTING_DEFAULTS.ai_fast_model, kind: 'model' },
-  ai_deep_model: { default: AI_SETTING_DEFAULTS.ai_deep_model, kind: 'model' },
+  ai_fast_model: {
+    default: AI_SETTING_DEFAULTS.ai_fast_model,
+    kind: 'model',
+    intent: 'fast',
+  },
+  ai_deep_model: {
+    default: AI_SETTING_DEFAULTS.ai_deep_model,
+    kind: 'model',
+    intent: 'powerful',
+  },
   ai_fallback_chain: {
     default: AI_SETTING_DEFAULTS.ai_fallback_chain,
     kind: 'chain',
@@ -118,6 +140,11 @@ function isConfigKey(key: string): key is AIConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
 }
 
+function intentOfConfigKey(key: AIConfigKey): ModelIntent | undefined {
+  const def = CONFIG_KEYS[key];
+  return def.kind === 'model' ? def.intent : undefined;
+}
+
 /** Rejected input (unknown key or invalid value) — maps to a 400 at the controller. */
 export class InvalidAIConfigError extends Error {
   constructor(message: string) {
@@ -152,15 +179,17 @@ export class AIConfigService implements PlatformModelsSource {
     private readonly modelCatalog: ModelCatalog,
     private readonly promotedModels: PromotedModelsCache,
     private readonly index: ModelIndexCache,
-    private readonly resolutions: PlatformResolutionCache
+    private readonly resolutions: PlatformResolutionCache,
+    @Inject(MODEL_RESOLUTION_REPOSITORY)
+    private readonly resolutionRepo: ModelResolutionRepository
   ) {}
 
   async getDefaultModel(): Promise<string> {
-    return this.getSupportedModel('ai_default_model');
+    return this.getIntentModel('balanced');
   }
 
   async getFastModel(): Promise<string> {
-    return this.getSupportedModel('ai_fast_model');
+    return this.getIntentModel('fast');
   }
 
   /**
@@ -168,12 +197,10 @@ export class AIConfigService implements PlatformModelsSource {
    * renders one row per intent, and a shared id would silently drop a row.
    */
   private async assertIntentModelsStayDistinct(
-    key: string,
+    key: AIConfigKey,
     value: string
   ): Promise<void> {
-    const changed = MODEL_INTENTS.find(
-      (intent) => INTENT_CONFIG_KEYS[intent] === key
-    );
+    const changed = intentOfConfigKey(key);
     if (!changed) {
       return;
     }
@@ -188,8 +215,24 @@ export class AIConfigService implements PlatformModelsSource {
     }
   }
 
+  // The active resolution serves even when the catalog no longer supports it: the
+  // tier catalog then marks the intent unavailable, so its substitute is visible.
+  private servedIntentModel(intent: ModelIntent, pin: string): string {
+    if (pin !== AUTO_MODEL_SETTING && this.modelCatalog.isSupported(pin)) {
+      return pin;
+    }
+    return this.resolutions.activeModelId(intent) ?? AUTO_MODEL_SETTING;
+  }
+
   private async getIntentModel(intent: ModelIntent): Promise<string> {
-    return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
+    const key = INTENT_CONFIG_KEYS[intent];
+    const pin = await this.getConfigValue(key);
+    if (pin !== AUTO_MODEL_SETTING && !this.modelCatalog.isSupported(pin)) {
+      this.logger.warn(
+        `Ignoring AI config '${key}' model '${pin}' missing from the catalog, serving its active resolution`
+      );
+    }
+    return this.servedIntentModel(intent, pin);
   }
 
   async getIntentModels(): Promise<Readonly<Record<ModelIntent, string>>> {
@@ -201,19 +244,29 @@ export class AIConfigService implements PlatformModelsSource {
     return { fast, balanced, powerful };
   }
 
+  private servedChain(
+    pinned: string,
+    intents: Readonly<Record<ModelIntent, string>>
+  ): string[] {
+    const supported = parseChain(pinned).filter((m) =>
+      this.modelCatalog.isSupported(m)
+    );
+    return supported.length > 0
+      ? supported
+      : derivedChain(intents).filter((m) => this.modelCatalog.isSupported(m));
+  }
+
   async getFallbackChain(): Promise<string[]> {
-    const entries = parseChain(await this.getConfigValue('ai_fallback_chain'));
-    const supported = entries.filter((m) => this.modelCatalog.isSupported(m));
-    if (supported.length < entries.length) {
-      // Writes are validated, but a row written out of band can name a model the
-      // catalog dropped; routing it burns an attempt and trips its provider's cooldown.
+    const pinned = await this.getConfigValue('ai_fallback_chain');
+    const dead = parseChain(pinned).filter(
+      (m) => !this.modelCatalog.isSupported(m)
+    );
+    if (dead.length > 0) {
       this.logger.warn(
-        `Ignoring fallback chain models missing from the catalog: ${entries
-          .filter((m) => !supported.includes(m))
-          .join(', ')}`
+        `Ignoring fallback chain models missing from the catalog: ${dead.join(', ')}`
       );
     }
-    return supported;
+    return this.servedChain(pinned, await this.getIntentModels());
   }
 
   async getPlatformModelIds(): Promise<string[]> {
@@ -304,6 +357,10 @@ export class AIConfigService implements PlatformModelsSource {
     }
     this.validateValue(CONFIG_KEYS[key], value);
     await this.assertIntentModelsStayDistinct(key, value);
+    const intent = intentOfConfigKey(key);
+    const servedBefore = intent
+      ? await this.getIntentModel(intent)
+      : AUTO_MODEL_SETTING;
     const previous = await this.repository.get(key);
     await this.repository.set(key, value, description);
     try {
@@ -323,6 +380,16 @@ export class AIConfigService implements PlatformModelsSource {
       ...(previous !== null ? { before: { value: previous } } : {}),
       after: { value },
     });
+    // An active model is platform-billed anyway, so recording it would only cut
+    // short the grace of the model an earlier release recorded.
+    if (
+      intent &&
+      servedBefore !== AUTO_MODEL_SETTING &&
+      servedBefore !== value &&
+      servedBefore !== this.resolutions.activeModelId(intent)
+    ) {
+      await this.recordRelease(intent, servedBefore);
+    }
     this.logger.log(`AI config '${key}' updated to '${value}'`);
   }
 
@@ -330,6 +397,10 @@ export class AIConfigService implements PlatformModelsSource {
     if (!isConfigKey(key)) {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
+    const intent = intentOfConfigKey(key);
+    const servedBefore = intent
+      ? await this.getIntentModel(intent)
+      : AUTO_MODEL_SETTING;
     const deleted = await this.repository.delete(key);
     if (!deleted) {
       return;
@@ -350,7 +421,36 @@ export class AIConfigService implements PlatformModelsSource {
       targetId: key,
       before: { value: deleted.value },
     });
-    this.logger.log(`Reset AI config ${key} to its code default`);
+    if (
+      intent &&
+      servedBefore !==
+        (this.resolutions.activeModelId(intent) ?? AUTO_MODEL_SETTING)
+    ) {
+      await this.recordRelease(intent, servedBefore);
+    }
+    this.logger.log(`Reset AI config '${key}'`);
+  }
+
+  /** Best-effort: the config change is already stored; a lost record only shortens that model's billing grace. */
+  private async recordRelease(
+    intent: ModelIntent,
+    modelId: string
+  ): Promise<void> {
+    try {
+      await this.resolutionRepo.recordRelease(
+        SELECTOR_KEY_BY_INTENT[intent],
+        modelId,
+        new Date()
+      );
+      await this.resolutions.refresh();
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.config.release_record_failed',
+        intent,
+        modelId,
+        reason: reasonOf(error),
+      });
+    }
   }
 
   private validateValue(def: ConfigKeyDef, value: string): void {
@@ -442,12 +542,22 @@ export class AIConfigService implements PlatformModelsSource {
     }
   }
 
-  /** Resolves every config key to the value the runtime actually serves: the DB row when present and still servable, the code default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from the code defaults, mirroring the runtime fallback in getConfigValue. */
+  /** Resolves every config key to the value the runtime actually serves: the DB row when present and still servable; otherwise an intent model key serves its active platform resolution, the fallback chain derives from the served intents, and any other key its code default (no cache — intentional for admin freshness). A DB failure resolves every key as if it had no row, mirroring the runtime fallback in getConfigValue. */
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
+    const servedFor = (intent: ModelIntent) =>
+      this.servedIntentModel(
+        intent,
+        rows.get(INTENT_CONFIG_KEYS[intent])?.value ?? AUTO_MODEL_SETTING
+      );
+    const intents = {
+      fast: servedFor('fast'),
+      balanced: servedFor('balanced'),
+      powerful: servedFor('powerful'),
+    };
     return (Object.keys(CONFIG_KEYS) as AIConfigKey[]).map((key) => {
       const stored = rows.get(key);
-      const value = this.servedValue(key, stored);
+      const value = this.servedValue(key, stored, intents);
       const diverged =
         stored !== undefined && this.canonical(key, stored.value) !== value;
       return {
@@ -473,27 +583,24 @@ export class AIConfigService implements PlatformModelsSource {
   }
 
   /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
-  private servedValue(key: AIConfigKey, row: AIConfigRow | undefined): string {
+  private servedValue(
+    key: AIConfigKey,
+    row: AIConfigRow | undefined,
+    intents: Readonly<Record<ModelIntent, string>>
+  ): string {
     const def = CONFIG_KEYS[key];
+    if (def.kind === 'model') {
+      return intents[def.intent];
+    }
+    if (def.kind === 'chain') {
+      return this.servedChain(row?.value ?? AUTO_MODEL_SETTING, intents).join(
+        CHAIN_SEPARATOR
+      );
+    }
     if (!row) {
       return def.default;
     }
     switch (def.kind) {
-      case 'model':
-        return this.modelCatalog.isSupported(row.value)
-          ? row.value
-          : def.default;
-      case 'chain': {
-        const supported = parseChain(row.value).filter((model) =>
-          this.modelCatalog.isSupported(model)
-        );
-        // All-dead diverges from getFallbackChain(), which returns [] here:
-        // FallbackChainService ignores empty refreshes, so the code default is
-        // what actually routes from the next boot on.
-        return supported.length > 0
-          ? supported.join(CHAIN_SEPARATOR)
-          : def.default;
-      }
       case 'choice':
         return def.allowed.some((allowed) => allowed === row.value)
           ? row.value
@@ -516,23 +623,11 @@ export class AIConfigService implements PlatformModelsSource {
       return await this.repository.getAllRows();
     } catch (error) {
       this.logger.warn(
-        'Failed to read AI config rows from DB, resolving all keys from the code defaults',
+        'Failed to read AI config rows from DB, resolving every key as if it had no row',
         error
       );
       return [];
     }
-  }
-
-  /** Mirrors the catalog filter getFallbackChain applies: a model retired out of band must never be served as a single-value default either. */
-  private async getSupportedModel(dbKey: AIConfigKey): Promise<string> {
-    const value = await this.getConfigValue(dbKey);
-    if (this.modelCatalog.isSupported(value)) {
-      return value;
-    }
-    this.logger.warn(
-      `Ignoring AI config '${dbKey}' model '${value}' missing from the catalog, using the code default`
-    );
-    return CONFIG_KEYS[dbKey].default;
   }
 
   private async getConfigValue(dbKey: AIConfigKey): Promise<string> {
