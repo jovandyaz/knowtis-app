@@ -37,9 +37,13 @@ import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { AIConfigService } from './ai-config.service';
 import { SelectableModelsService } from './selectable-models.service';
+
+/** A turn's model choice; `retiredPick` names the stored pick the turn reports as retired, to forget once that report reaches the caller. */
+export type TurnModelChoice = ModelChoice & { readonly retiredPick?: string };
 
 @Injectable()
 export class ModelPreferenceService {
@@ -49,7 +53,8 @@ export class ModelPreferenceService {
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
     private readonly selectable: SelectableModelsService,
-    private readonly aiConfig: AIConfigService
+    private readonly aiConfig: AIConfigService,
+    private readonly index: ModelIndexCache
   ) {}
 
   async listModels(
@@ -79,19 +84,17 @@ export class ModelPreferenceService {
   }
 
   /**
-   * The model a turn runs on. A stored pick the index has retired is reported
-   * by the turn that resolves it and then cleared, keeping the stored intent,
-   * so the notice shows once; the clear is best-effort and never fails the
-   * turn.
+   * The model a turn runs on. A stored pick the synced index has retired is
+   * named as `retiredPick`, for the turn to forget once it has delivered the
+   * report; never while the index still serves the vendored snapshot.
    */
   async chooseTurnModel(
     execution: AiExecutionContext,
     request: { explicit?: string; pinned?: string | null }
-  ): Promise<ModelChoice> {
-    const { userId } = execution.subject;
+  ): Promise<TurnModelChoice> {
     const [platformIntents, settings] = await Promise.all([
       this.aiConfig.getIntentModels(),
-      this.settings.getSettings(userId),
+      this.settings.getSettings(execution.subject.userId),
     ]);
     const { catalog, facts } = this.scopeOf(
       execution,
@@ -104,11 +107,28 @@ export class ModelPreferenceService {
     });
     const modelRequest = { ...request, preferredModel, preferredIntent };
     const choice = chooseModel(catalog, modelRequest, facts);
-    const retired = retiredStoredPick(modelRequest, choice);
-    if (retired !== null) {
-      await this.forgetRetiredPick(userId, retired);
+    const retiredPick = this.index.servesSnapshot()
+      ? null
+      : retiredStoredPick(modelRequest, choice);
+    return retiredPick === null ? choice : { ...choice, retiredPick };
+  }
+
+  /**
+   * Clears a retired stored pick, keeping the stored intent, once the turn that
+   * reported it has delivered the report, so the notice shows once. Best-effort:
+   * a failed write is logged and never rejects.
+   */
+  async forgetRetiredPick(userId: string, model: string): Promise<void> {
+    try {
+      await this.settings.clearPreferredModel(userId, model);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.preferences.retired_pick_clear_failed',
+        userId,
+        model,
+        error: reasonOf(error),
+      });
     }
-    return choice;
   }
 
   /**
@@ -245,22 +265,6 @@ export class ModelPreferenceService {
       caller.userId,
       servedPreference(catalog, patch)
     );
-  }
-
-  private async forgetRetiredPick(
-    userId: string,
-    model: string
-  ): Promise<void> {
-    try {
-      await this.settings.clearPreferredModel(userId, model);
-    } catch (error) {
-      this.logger.warn({
-        event: 'ai.preferences.retired_pick_clear_failed',
-        userId,
-        model,
-        error: reasonOf(error),
-      });
-    }
   }
 
   // The primary provider only orders routes over the caller's own keys, so no

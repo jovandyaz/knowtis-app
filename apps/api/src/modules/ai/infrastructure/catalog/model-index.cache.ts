@@ -47,6 +47,15 @@ export class ModelIndexCache implements ModelCatalog, OnModuleInit {
     return this.current;
   }
 
+  /**
+   * True while the last refresh read no listed rows, or none has landed: every
+   * provider is served from the vendored snapshot, where a model newer than it
+   * reads as unsupported, so nothing durable may be decided from what it lacks.
+   */
+  servesSnapshot(): boolean {
+    return this.current === this.floor;
+  }
+
   /** Never rejects: an unreachable database keeps the catalog it already serves. */
   @Interval(MODEL_INDEX_REFRESH_MS)
   async refresh(): Promise<void> {

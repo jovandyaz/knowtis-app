@@ -18,7 +18,10 @@ import type { UserAiSettings } from '../../domain/ports/user-ai-settings.reposit
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
-import { createSnapshotIndex } from '../../testing/snapshot-index';
+import {
+  createSnapshotIndex,
+  createSyncedSnapshotIndex,
+} from '../../testing/snapshot-index';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
@@ -35,7 +38,8 @@ function makeChooser(
     preferredIntent?: ModelIntent | null;
     primaryProvider?: ByokProvider | null;
   } = {},
-  promoted: readonly CatalogModel[] = []
+  promoted: readonly CatalogModel[] = [],
+  index = createSnapshotIndex()
 ) {
   const selectable = new SelectableModelsService(
     {
@@ -50,7 +54,7 @@ function makeChooser(
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
     { snapshot: () => promoted } as never,
-    createSnapshotIndex()
+    index
   );
   const stored: UserAiSettings = {
     preferredModel: settings.preferredModel ?? null,
@@ -77,7 +81,8 @@ function makeChooser(
   const svc = new ModelPreferenceService(
     repo as never,
     selectable,
-    aiConfig as never
+    aiConfig as never,
+    index
   );
   return { svc, repo, selectable };
 }
@@ -846,18 +851,35 @@ describe('ModelPreferenceService', () => {
           },
         },
       } as const;
+      const USER_ID = BYOK_ANTHROPIC.subject.userId;
 
-      it('is reported once: the turn that reports it clears the pick and keeps the stored intent', async () => {
-        const { svc, repo } = makeChooser({
-          preferredModel: SUPERSEDED_SONNET,
-          preferredIntent: 'balanced',
-        });
-
-        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
-          RETIRED_PICK_FALLBACK
+      async function retiringChooser(
+        preferredIntent: ModelIntent | null = null
+      ) {
+        return makeChooser(
+          { preferredModel: SUPERSEDED_SONNET, preferredIntent },
+          [],
+          await createSyncedSnapshotIndex()
         );
+      }
+
+      it('names it for the turn to forget, without clearing it before the turn delivers the notice', async () => {
+        const { svc, repo } = await retiringChooser();
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          ...RETIRED_PICK_FALLBACK,
+          retiredPick: SUPERSEDED_SONNET,
+        });
+        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('is reported once: forgetting it keeps the stored intent, so the next turn reports nothing', async () => {
+        const { svc, repo } = await retiringChooser('balanced');
+
+        await svc.forgetRetiredPick(USER_ID, SUPERSEDED_SONNET);
+
         expect(repo.clearPreferredModel).toHaveBeenCalledWith(
-          BYOK_ANTHROPIC.subject.userId,
+          USER_ID,
           SUPERSEDED_SONNET
         );
         await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
@@ -865,33 +887,37 @@ describe('ModelPreferenceService', () => {
           model: DIRECT_SONNET,
           resolution: { requested: null, resolved: DIRECT_SONNET },
         });
-        await expect(
-          repo.getSettings(BYOK_ANTHROPIC.subject.userId)
-        ).resolves.toMatchObject({
+        await expect(repo.getSettings(USER_ID)).resolves.toMatchObject({
           preferredModel: null,
           preferredIntent: 'balanced',
         });
       });
 
-      it('keeps it while a pinned prior model reports the same retirement, so the turn that resolves the pick still reports it', async () => {
+      it('names nothing while the model index still serves the vendored snapshot', async () => {
         const { svc, repo } = makeChooser({
           preferredModel: SUPERSEDED_SONNET,
         });
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
+          RETIRED_PICK_FALLBACK
+        );
+        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('names nothing for a pinned prior model reporting the same retirement, so the turn that resolves the pick still reports it', async () => {
+        const { svc } = await retiringChooser();
 
         await expect(
           svc.chooseTurnModel(BYOK_ANTHROPIC, { pinned: SUPERSEDED_SONNET })
         ).resolves.toEqual(RETIRED_PICK_FALLBACK);
-        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
-        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
-          RETIRED_PICK_FALLBACK
-        );
-        expect(repo.clearPreferredModel).toHaveBeenCalledTimes(1);
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
+          ...RETIRED_PICK_FALLBACK,
+          retiredPick: SUPERSEDED_SONNET,
+        });
       });
 
-      it('keeps it when the turn names the retired model explicitly', async () => {
-        const { svc, repo } = makeChooser({
-          preferredModel: SUPERSEDED_SONNET,
-        });
+      it('names nothing when the turn names the retired model explicitly', async () => {
+        const { svc } = await retiringChooser();
 
         await expect(
           svc.chooseTurnModel(BYOK_ANTHROPIC, { explicit: SUPERSEDED_SONNET })
@@ -900,13 +926,10 @@ describe('ModelPreferenceService', () => {
           reason: 'model_retired',
           suggestedModel: DIRECT_SONNET,
         });
-        expect(repo.clearPreferredModel).not.toHaveBeenCalled();
       });
 
-      it('still runs the turn on the fallback when the clear fails, and logs it', async () => {
-        const { svc, repo } = makeChooser({
-          preferredModel: SUPERSEDED_SONNET,
-        });
+      it('logs a failed clear and never rejects', async () => {
+        const { svc, repo } = await retiringChooser();
         repo.clearPreferredModel.mockRejectedValueOnce(
           new Error('settings store down')
         );
@@ -914,12 +937,12 @@ describe('ModelPreferenceService', () => {
           .spyOn(Logger.prototype, 'warn')
           .mockImplementation(() => undefined);
 
-        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
-          RETIRED_PICK_FALLBACK
-        );
+        await expect(
+          svc.forgetRetiredPick(USER_ID, SUPERSEDED_SONNET)
+        ).resolves.toBeUndefined();
         expect(warn).toHaveBeenCalledWith({
           event: 'ai.preferences.retired_pick_clear_failed',
-          userId: BYOK_ANTHROPIC.subject.userId,
+          userId: USER_ID,
           model: SUPERSEDED_SONNET,
           error: 'settings store down',
         });
@@ -928,7 +951,11 @@ describe('ModelPreferenceService', () => {
     });
 
     it('keeps a stored pick on a key the caller no longer holds, which a re-added key brings back', async () => {
-      const { svc, repo } = makeChooser({ preferredModel: DIRECT_OPUS });
+      const { svc } = makeChooser(
+        { preferredModel: DIRECT_OPUS },
+        [],
+        await createSyncedSnapshotIndex()
+      );
 
       await expect(svc.chooseTurnModel(FREE_CALLER, {})).resolves.toEqual({
         kind: 'resolved',
@@ -938,7 +965,6 @@ describe('ModelPreferenceService', () => {
           resolved: 'openrouter:deepseek/deepseek-v3.2',
         },
       });
-      expect(repo.clearPreferredModel).not.toHaveBeenCalled();
     });
 
     it("refuses a free caller's pinned key-billed model rather than moving it onto the platform", async () => {
