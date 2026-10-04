@@ -718,6 +718,11 @@ describe('SelectableModelsService', () => {
       expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
         false
       );
+      expect(pinnedTurn(service, GLM, INTENTS)).toEqual({
+        kind: 'unavailable',
+        reason: 'key_removed',
+        suggestedModel: INTENTS.balanced,
+      });
     });
   });
 });
