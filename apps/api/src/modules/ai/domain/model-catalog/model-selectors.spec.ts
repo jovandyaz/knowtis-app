@@ -156,7 +156,7 @@ function expectIdRuleExcludes(
 }
 
 describe('BYOK_SELECTORS', () => {
-  it('lists the spec §2 selectors per intent, in route order', () => {
+  it('lists the BYOK selectors per intent, in route order', () => {
     expect(BYOK_SELECTORS).toStrictEqual({
       fast: [
         {
