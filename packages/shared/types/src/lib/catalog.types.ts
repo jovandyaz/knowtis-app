@@ -17,6 +17,18 @@ export const CATALOG_ALERT_KINDS = [
 ] as const;
 export type CatalogAlertKind = (typeof CATALOG_ALERT_KINDS)[number];
 
+/** One row of `ai_model_resolutions` per platform intent. */
+export const PLATFORM_SELECTOR_KEYS = [
+  'platform.fast',
+  'platform.balanced',
+  'platform.powerful',
+] as const;
+export type PlatformSelectorKey = (typeof PLATFORM_SELECTOR_KEYS)[number];
+
+/** Where a pending platform model stands in the eval gate. */
+export const MODEL_GATE_STATUSES = ['pending', 'passed', 'failed'] as const;
+export type ModelGateStatus = (typeof MODEL_GATE_STATUSES)[number];
+
 export const CATALOG_LABEL_MAX_LENGTH = 100;
 export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
 
