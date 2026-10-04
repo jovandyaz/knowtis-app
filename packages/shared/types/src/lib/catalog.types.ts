@@ -94,13 +94,14 @@ export interface CatalogSyncResultDto {
 /**
  * One row of the backoffice assignable-models listing: an eligible model-index
  * row of a provider the server holds a key for, or a promoted model (a promoted
- * id replaces its index row). `description` is empty for index rows.
+ * id replaces its index row). `description` is empty for index rows. `tier` is
+ * null when no selector picks the row and it is not open-weight.
  */
 export interface AssignableModelDto {
   id: string;
   label: string;
   description: string;
-  tier: ModelTier;
+  tier: ModelTier | null;
   provider: string;
   routableByServer: boolean;
   promoted: boolean;

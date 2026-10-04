@@ -357,15 +357,23 @@ export function resolvePlatformIntent(
   );
 }
 
-/** The intent whose BYOK selector lists this family, or null. */
-export function intentOfFamily(family: string | null): ModelIntent | null {
+/** The intent whose BYOK or platform selector would pick this row by family and id, or null. */
+export function intentOfRow(
+  row: Pick<IndexedModel, 'id' | 'family'>
+): ModelIntent | null {
+  const { family } = row;
   if (family === null) {
     return null;
   }
+  const slug = slugOf(row.id);
   return (
     MODEL_INTENTS.find((intent) =>
-      BYOK_SELECTORS[intent].some((selector) =>
-        selector.families.includes(family)
+      [...BYOK_SELECTORS[intent], PLATFORM_SELECTORS[intent]].some(
+        (selector) =>
+          selector.families.includes(family) &&
+          !(selector.excludedIdTokens ?? []).some((token) =>
+            slug.includes(token)
+          )
       )
     ) ?? null
   );

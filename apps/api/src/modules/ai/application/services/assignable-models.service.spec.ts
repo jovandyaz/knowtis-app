@@ -16,6 +16,8 @@ const SONNET_ID = 'anthropic:claude-sonnet-5-5';
 const SONNET_LABEL = 'Claude Sonnet 5.5';
 const HAIKU_ID = 'anthropic:claude-haiku-4-5';
 const GLM_ID = 'openrouter:z-ai/glm-5.2';
+const KIMI_ID = 'openrouter:moonshotai/kimi-k2.5';
+const FABLE_ID = 'anthropic:claude-fable-5-1';
 const IMAGE_ID = 'google:gemini-3-pro-image';
 const ALIAS_ID = 'openrouter:~anthropic/claude-opus-latest';
 const PROMOTED_ONLY_ID = 'openrouter:vendor/promoted-one';
@@ -97,14 +99,14 @@ describe('AssignableModelsService', () => {
     expect(ids).not.toContain(ALIAS_ID);
   });
 
-  it('gives an openrouter glm row the open tier', async () => {
+  it('groups a platform selector family under its intent, open weights under open, and the rest under none', async () => {
     const rows = await makeService({
-      configuredProviders: ['openrouter'],
+      configuredProviders: ['anthropic', 'openrouter'],
     }).list();
-    expect(rows.find((row) => row.id === GLM_ID)).toMatchObject({
-      tier: 'open',
-      provider: 'openrouter',
-    });
+    const tierOf = (id: string) => rows.find((row) => row.id === id)?.tier;
+    expect(tierOf(GLM_ID)).toBe('powerful');
+    expect(tierOf(KIMI_ID)).toBe('open');
+    expect(tierOf(FABLE_ID)).toBeNull();
   });
 
   it('lists a promoted id once, promoted, with its stored copy', async () => {

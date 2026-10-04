@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 
 import { INDEX_PROVIDERS, providerOf } from '@knowtis/ai-gateway';
-import type { AssignableModelDto } from '@knowtis/shared-types';
+import type { AssignableModelDto, ModelTier } from '@knowtis/shared-types';
 
 import { toPickerLabel } from '../../domain/model-catalog/index-label';
 import {
   byNewestRelease,
-  intentOfFamily,
+  intentOfRow,
   isAssignableModel,
 } from '../../domain/model-catalog/model-selectors';
 import { isoDateOf } from '../../domain/value-objects/utc-day';
@@ -14,7 +14,7 @@ import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache'
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
-const DEFAULT_TIER = 'open';
+const OPEN_TIER = 'open' as const satisfies ModelTier;
 
 interface AssignableEntry {
   readonly dto: AssignableModelDto;
@@ -68,7 +68,8 @@ export class AssignableModelsService {
             id: row.id,
             label: toPickerLabel(row.name),
             description: '',
-            tier: intentOfFamily(row.family) ?? DEFAULT_TIER,
+            tier:
+              intentOfRow(row) ?? (row.openWeights === true ? OPEN_TIER : null),
             provider: row.provider,
             routableByServer: true,
             promoted: false,

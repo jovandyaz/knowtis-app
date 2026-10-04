@@ -94,6 +94,15 @@ const MODELS = [
     routableByServer: false,
     promoted: true,
   },
+  {
+    id: 'anthropic:unclassified',
+    label: 'Unclassified Model',
+    description: '',
+    tier: null,
+    provider: 'anthropic',
+    routableByServer: true,
+    promoted: false,
+  },
 ];
 
 const NEEDS_KEY_HINT = 'Needs a provider key — configure it in Providers';
@@ -372,6 +381,15 @@ describe('ModelsSection', () => {
     const rows = screen.getAllByRole('option');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('GPT');
+  });
+
+  it('groups an unclassified model under other', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+
+    expect(await screen.findByText('other')).toBeInTheDocument();
+    expect(screen.getByText('Unclassified Model')).toBeInTheDocument();
   });
 
   it('says so when no model matches the search', async () => {

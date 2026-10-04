@@ -17,7 +17,7 @@ import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   byNewestRelease,
   BYOK_SELECTORS,
-  intentOfFamily,
+  intentOfRow,
   isAssignableModel,
   isEligible,
   PLATFORM_SELECTORS,
@@ -738,23 +738,22 @@ describe('isAssignableModel', () => {
   });
 });
 
-describe('intentOfFamily', () => {
+describe('intentOfRow', () => {
   it.each([
-    ['claude-haiku', 'fast'],
-    ['gpt-luna', 'fast'],
-    ['gemini-flash-lite', 'fast'],
-    ['claude-sonnet', 'balanced'],
-    ['gpt-terra', 'balanced'],
-    ['gemini-flash', 'balanced'],
-    ['claude-opus', 'powerful'],
-    ['gpt-sol', 'powerful'],
-    ['gemini-pro', 'powerful'],
-  ])('maps %s to %s', (family, intent) => {
-    expect(intentOfFamily(family)).toBe(intent);
+    ['anthropic:claude-sonnet-5-5', 'balanced'],
+    ['openrouter:deepseek/deepseek-v4-pro-0813', 'balanced'],
+    ['openrouter:deepseek/deepseek-v4.1-flash', 'fast'],
+    ['openrouter:z-ai/glm-5.2', 'powerful'],
+  ] as const)('classifies %s as %s', (id, intent) => {
+    expect(intentOfRow(row(id))).toBe(intent);
   });
 
-  it.each(['glm', null])('gives null for %s', (family) => {
-    expect(intentOfFamily(family)).toBeNull();
+  it.each([
+    'openrouter:z-ai/glm-5.3-flashx',
+    'anthropic:claude-fable-5-1',
+    'openrouter:moonshotai/kimi-k2.5',
+  ])('classifies %s under no intent', (id) => {
+    expect(intentOfRow(row(id))).toBeNull();
   });
 });
 

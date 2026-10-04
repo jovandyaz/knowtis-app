@@ -136,7 +136,7 @@ export const AssignableModelSchema = z.object({
   id: z.string(),
   label: z.string(),
   description: z.string(),
-  tier: z.enum(MODEL_TIERS),
+  tier: z.enum(MODEL_TIERS).nullable(),
   provider: z.string(),
   routableByServer: z.boolean(),
   promoted: z.boolean(),
