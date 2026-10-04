@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 
-import { MODEL_INTENTS, type ModelIntent } from '@knowtis/shared-types';
+import type { ModelIntent } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import {
+  activeModelIdsOf,
   activeModelOf,
   platformBilledModelIds,
   SEED_RESOLUTIONS,
@@ -61,10 +62,7 @@ export class PlatformResolutionCache implements OnModuleInit {
   }
 
   activeModelIds(): string[] {
-    return MODEL_INTENTS.flatMap((intent) => {
-      const modelId = this.activeModelId(intent);
-      return modelId === null ? [] : [modelId];
-    });
+    return activeModelIdsOf(this.rows);
   }
 
   platformBilledModelIds(now: Date): ReadonlySet<string> {

@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import type { ModelIntent } from '@knowtis/shared-types';
 
 import {
+  activeModelIdsOf,
   activeModelOf,
   platformBilledModelIds,
   SEED_RESOLUTIONS,
@@ -53,7 +54,7 @@ export function createResolutionsStub(
     | 'refresh'
   > = {
     activeModelId: (intent) => activeModelOf(rows, intent),
-    activeModelIds: () => rows.map((row) => row.activeModelId),
+    activeModelIds: () => activeModelIdsOf(rows),
     platformBilledModelIds: (now) => platformBilledModelIds(rows, now),
     hasReadStore: () => readStore,
     refresh: async () => undefined,

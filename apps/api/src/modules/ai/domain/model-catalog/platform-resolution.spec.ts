@@ -8,6 +8,7 @@ import { MODEL_INTENTS } from '@knowtis/shared-types';
 import { seededResolution } from '../../testing/platform-resolutions';
 import { MS_PER_DAY } from '../value-objects/utc-day';
 import {
+  activeModelIdsOf,
   derivedChain,
   intentOfSelectorKey,
   PLATFORM_SEED_MODELS,
@@ -183,3 +184,18 @@ it.each([
     ).toEqual(expected);
   }
 );
+
+describe('activeModelIdsOf', () => {
+  it('lists active models in MODEL_INTENTS order whatever the row order', () => {
+    const rows = [...SEED_RESOLUTIONS].reverse();
+    expect(activeModelIdsOf(rows)).toEqual(
+      MODEL_INTENTS.map((intent) => PLATFORM_SEED_MODELS[intent])
+    );
+  });
+
+  it('skips an intent that has no row', () => {
+    expect(activeModelIdsOf([seededResolution('powerful')])).toEqual([
+      PLATFORM_SEED_MODELS.powerful,
+    ]);
+  });
+});

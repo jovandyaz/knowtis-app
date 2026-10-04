@@ -72,6 +72,14 @@ export function activeModelOf(
   return rows.find((row) => row.selectorKey === key)?.activeModelId ?? null;
 }
 
+/** The active model of each intent in `MODEL_INTENTS` order; an intent with no row is skipped. */
+export function activeModelIdsOf(rows: readonly ModelResolution[]): string[] {
+  return MODEL_INTENTS.flatMap((intent) => {
+    const modelId = activeModelOf(rows, intent);
+    return modelId === null ? [] : [modelId];
+  });
+}
+
 function withinGrace(at: Date | null, now: Date): boolean {
   return (
     at !== null &&

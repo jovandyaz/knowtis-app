@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
 
+import { MODEL_INTENTS } from '@knowtis/shared-types';
+
 import {
   PLATFORM_SEED_MODELS,
   SEED_RESOLUTIONS,
@@ -32,6 +34,9 @@ it('serves the seed floor until its first successful read', () => {
   expect(cache.hasReadStore()).toBe(false);
   expect(cache.activeModelId('balanced')).toBe(PLATFORM_SEED_MODELS.balanced);
   expect(cache.activeModelId('powerful')).toBe(PLATFORM_SEED_MODELS.powerful);
+  expect(cache.activeModelIds()).toEqual(
+    MODEL_INTENTS.map((intent) => PLATFORM_SEED_MODELS[intent])
+  );
 });
 
 it('keeps the seed floor on a cold boot whose read fails', async () => {
@@ -61,6 +66,7 @@ it('replaces the floor with the stored rows once a read succeeds', async () => {
   expect(cache.hasReadStore()).toBe(true);
   expect(cache.activeModelId('balanced')).toBe(STORED_BALANCED);
   expect(cache.activeModelId('fast')).toBeNull();
+  expect(cache.activeModelIds()).toEqual([STORED_BALANCED]);
 });
 
 it('keeps the last good rows when a later refresh fails', async () => {
