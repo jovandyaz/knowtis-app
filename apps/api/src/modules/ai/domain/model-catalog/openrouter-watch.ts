@@ -1,6 +1,7 @@
 import type { CatalogAlertKind } from '@knowtis/shared-types';
 
 import type { UpstreamCatalog } from '../ports/openrouter-models.port';
+import { isoDateOf } from '../value-objects/utc-day';
 import { OPENROUTER_ID_PREFIX } from './catalog-model';
 import { PLATFORM_FLOOR_MODEL_IDS } from './floor-models';
 import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
@@ -10,8 +11,6 @@ export interface DriftFinding {
   kind: CatalogAlertKind;
   detail: string;
 }
-
-const ISO_DATE_LENGTH = 10;
 
 const WATCHED_SLUGS: ReadonlyMap<string, string> = new Map(
   PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
@@ -76,7 +75,7 @@ export function findOpenRouterDrift(catalog: UpstreamCatalog): DriftFinding[] {
       findings.push({
         modelId,
         kind: 'deprecation',
-        detail: `OpenRouter lists expiration ${live.expirationDate.toISOString().slice(0, ISO_DATE_LENGTH)}`,
+        detail: `OpenRouter lists expiration ${isoDateOf(live.expirationDate)}`,
       });
     }
   }

@@ -20,6 +20,7 @@ import {
   routeIntent,
   type ByokResolutions,
 } from './byok-intent-routes';
+import { slugOf } from './catalog-model';
 import { toPickerLabel } from './index-label';
 import { toModelReasoning } from './index-reasoning';
 
@@ -63,7 +64,6 @@ export interface TierCatalogInput {
 }
 
 const NO_ROUTE = 'no_route';
-const PROVIDER_SEPARATOR = ':';
 
 /** The picker copy shared by every model listed for an intent. */
 export function intentDescriptionKey(intent: ModelIntent): string {
@@ -94,10 +94,7 @@ function fromIndexRow(
   const reasoning = toModelReasoning(row?.reasoning ?? null);
   return {
     id: modelId,
-    label:
-      row === undefined
-        ? modelId.slice(modelId.indexOf(PROVIDER_SEPARATOR) + 1)
-        : toPickerLabel(row.name),
+    label: row === undefined ? slugOf(modelId) : toPickerLabel(row.name),
     descriptionKey: intentDescriptionKey(intent),
     tier: intent,
     ...(reasoning ? { reasoning } : {}),

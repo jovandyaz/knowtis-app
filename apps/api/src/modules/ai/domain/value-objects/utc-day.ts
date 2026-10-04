@@ -10,6 +10,11 @@ export interface UtcDay {
   readonly resetsAt: Date;
 }
 
+/** `YYYY-MM-DD` of the UTC calendar day `date` falls on. */
+export function isoDateOf(date: Date): string {
+  return date.toISOString().slice(0, ISO_DATE_LENGTH);
+}
+
 export function utcDayOf(now: Date): UtcDay {
   const startMs = Date.UTC(
     now.getUTCFullYear(),
@@ -18,7 +23,7 @@ export function utcDayOf(now: Date): UtcDay {
   );
   const start = new Date(startMs);
   return {
-    key: start.toISOString().slice(0, ISO_DATE_LENGTH),
+    key: isoDateOf(start),
     start,
     resetsAt: new Date(startMs + MS_PER_DAY),
   };
