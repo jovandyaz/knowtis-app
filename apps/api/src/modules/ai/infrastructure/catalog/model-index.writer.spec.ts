@@ -6,6 +6,7 @@ import {
   INDEX_PROVIDERS,
   MAX_INT32,
   MODEL_INDEX_SNAPSHOT,
+  MODELS_DEV_PROVIDERS,
   type IndexedModel,
   type IndexProvider,
   type ModelsDevEnrichment,
@@ -162,11 +163,12 @@ const LISTED_ROWS: readonly IndexedModel[] = [
 ];
 const OPENROUTER_ROWS = openRouterCatalog().models.length;
 
-const FRESH_OPENROUTER_MODELS = [
-  ...WATCHED_SLUGS.map(upstreamModel),
-  ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
-  upstreamModel(DEEPSEEK_SLUG),
-];
+const SNAPSHOT_OPENROUTER_SLUGS = MODEL_INDEX_SNAPSHOT.filter(
+  (row) => row.provider === 'openrouter'
+).map((row) => row.id.slice(OPENROUTER_ID_PREFIX.length));
+
+/** A first OpenRouter read as large as the snapshot rows it replaces. */
+const FRESH_OPENROUTER_MODELS = SNAPSHOT_OPENROUTER_SLUGS.map(routeModel);
 
 function modelsDevCatalog(
   overrides: Partial<ModelsDevCatalog> = {}
@@ -262,12 +264,9 @@ describe('ModelIndexWriter', () => {
     expect(absenceConcludedFor(repo).sort()).toEqual(
       [...INDEX_PROVIDERS].sort()
     );
-    expect(result).toEqual({
-      indexed: 6,
-      absent: 0,
-      rejected: [],
-      concluded: expect.arrayContaining([...INDEX_PROVIDERS]),
-    });
+    const { concluded, ...counts } = result;
+    expect(counts).toEqual({ indexed: 6, absent: 0, rejected: [] });
+    expect([...concluded].sort()).toEqual([...INDEX_PROVIDERS].sort());
   });
 
   it('should stamp the upserts and every absence with one seenAt', async () => {
@@ -361,18 +360,16 @@ describe('ModelIndexWriter', () => {
   it('writes the models.dev batches alone when the OpenRouter read is missing', async () => {
     const { writer, repo } = make(LISTED_ROWS);
     const result = await writer.write(null, modelsDevCatalog());
-    expect(upsertedIds(repo).some((id) => id.startsWith('openrouter:'))).toBe(
-      false
+    expect(upsertedIds(repo).sort()).toEqual(
+      modelsDevCatalog()
+        .models.map((row) => row.id)
+        .sort()
     );
-    expect(absenceConcludedFor(repo)).not.toContain('openrouter');
-    expect(result.concluded).not.toContain('openrouter');
-  });
-
-  it('names the providers whose batch concluded absence', async () => {
-    const { writer } = make(LISTED_ROWS);
-    const result = await writer.write(openRouterCatalog(), modelsDevCatalog());
-    expect(result.concluded).toEqual(
-      expect.arrayContaining(['anthropic', 'openai', 'google', 'openrouter'])
+    expect(absenceConcludedFor(repo).sort()).toEqual(
+      [...MODELS_DEV_PROVIDERS].sort()
+    );
+    expect([...result.concluded].sort()).toEqual(
+      [...MODELS_DEV_PROVIDERS].sort()
     );
   });
 
@@ -496,11 +493,7 @@ describe('ModelIndexWriter', () => {
       );
 
       await writer.write(
-        openRouterCatalog({
-          models: MODEL_INDEX_SNAPSHOT.filter(
-            (row) => row.provider === 'openrouter'
-          ).map((row) => routeModel(row.id.slice(OPENROUTER_ID_PREFIX.length))),
-        }),
+        openRouterCatalog({ models: FRESH_OPENROUTER_MODELS }),
         null
       );
 
@@ -779,9 +772,37 @@ describe('ModelIndexWriter', () => {
     );
     expect(absenceConcludedFor(repo)).toContain('openrouter');
     expect(result.rejected).toEqual([]);
+    expect(result.concluded).toContain('openrouter');
   });
 
-  it('names no provider whose first batch was inconclusive, though absence is concluded for it', async () => {
+  it('should hold a first OpenRouter batch to the snapshot rows it replaces, so a tiny read concludes nothing', async () => {
+    const tiny = [
+      ...WATCHED_SLUGS.map(upstreamModel),
+      ...OPENROUTER_ROUTE_SLUGS.map(routeModel),
+      upstreamModel(DEEPSEEK_SLUG),
+    ];
+    const { writer, repo } = make([]);
+
+    const result = await writer.write(
+      openRouterCatalog({ models: tiny }),
+      null
+    );
+
+    expect(result.rejected).toEqual([
+      { provider: 'openrouter', reason: 'shrink' },
+    ]);
+    expect(absenceConcludedFor(repo)).toEqual([]);
+    expect(result.concluded).toEqual([]);
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.model_index.sync_rejected',
+      provider: 'openrouter',
+      reason: 'shrink',
+      rows: tiny.length,
+      previous: SNAPSHOT_OPENROUTER_SLUGS.length,
+    });
+  });
+
+  it('names no provider whose first batch was inconclusive', async () => {
     const { writer, repo } = make(
       LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
     );
@@ -789,8 +810,10 @@ describe('ModelIndexWriter', () => {
       openRouterCatalog({ models: FRESH_OPENROUTER_MODELS, complete: false }),
       modelsDevCatalog()
     );
-    expect(result.rejected).toEqual([]);
-    expect(absenceConcludedFor(repo)).toContain('openrouter');
+    expect(result.rejected).toEqual([
+      { provider: 'openrouter', reason: 'inconclusive' },
+    ]);
+    expect(absenceConcludedFor(repo)).not.toContain('openrouter');
     expect(result.concluded).not.toContain('openrouter');
   });
 

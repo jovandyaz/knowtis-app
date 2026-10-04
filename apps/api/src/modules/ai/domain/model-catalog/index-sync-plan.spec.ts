@@ -185,7 +185,7 @@ describe('planIndexSync', () => {
     ]);
   });
 
-  it('should always conclude absence for a provider with nothing listed before', () => {
+  it('should always conclude absence for a provider with nothing listed or served before', () => {
     const plan = planIndexSync(
       [batch('anthropic', 0), batch('openrouter', 3, false)],
       listedRows(NOTHING_LISTED),
@@ -194,6 +194,51 @@ describe('planIndexSync', () => {
 
     expect(plan.concludeAbsence).toEqual(['anthropic', 'openrouter']);
     expect(plan.rejected).toEqual([]);
+  });
+
+  it('should hold a first batch to the rows the index serves in place of its listed rows', () => {
+    const served = 10;
+    const openrouter = batch('openrouter', served * SYNC_MAX_SHRINK_RATIO - 1);
+
+    const plan = planIndexSync(
+      [openrouter],
+      listedRows(NOTHING_LISTED),
+      rows('openrouter', served)
+    );
+
+    expect(plan.upserts).toEqual(openrouter.rows);
+    expect(plan.concludeAbsence).toEqual([]);
+    expect(plan.rejected).toEqual([
+      { provider: 'openrouter', reason: 'shrink' },
+    ]);
+  });
+
+  it('should conclude absence for a first batch that kept the size of the rows it replaces', () => {
+    const served = 10;
+
+    const plan = planIndexSync(
+      [batch('openrouter', served * SYNC_MAX_SHRINK_RATIO)],
+      listedRows(NOTHING_LISTED),
+      rows('openrouter', served)
+    );
+
+    expect(plan.concludeAbsence).toEqual(['openrouter']);
+    expect(plan.rejected).toEqual([]);
+  });
+
+  it('should reject absence for an inconclusive first batch while its provider serves rows', () => {
+    const served = 10;
+
+    const plan = planIndexSync(
+      [batch('openrouter', served, false)],
+      listedRows(NOTHING_LISTED),
+      rows('openrouter', served)
+    );
+
+    expect(plan.concludeAbsence).toEqual([]);
+    expect(plan.rejected).toEqual([
+      { provider: 'openrouter', reason: 'inconclusive' },
+    ]);
   });
 
   it('should judge each provider on its own batch and upsert every batch', () => {

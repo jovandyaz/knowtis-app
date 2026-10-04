@@ -16,6 +16,7 @@ import {
 import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
 import {
   planIndexSync,
+  previousRowCount,
   type IndexSyncPlan,
   type ProviderBatch,
   type SyncRejection,
@@ -37,7 +38,7 @@ export interface ModelIndexWriteResult {
   /** Rows newly marked absent. */
   readonly absent: number;
   readonly rejected: IndexSyncPlan['rejected'];
-  /** Providers whose batch was written and concluded absence. */
+  /** Providers whose conclusive batch was accepted and concluded absence; a first batch that concludes only because nothing was listed or served is left out. */
   readonly concluded: readonly IndexProvider[];
 }
 
@@ -163,7 +164,7 @@ export class ModelIndexWriter {
       this.reportRejection(
         rejection,
         batchOf.get(rejection.provider)?.rows.length ?? 0,
-        listed.filter((row) => row.provider === rejection.provider).length
+        previousRowCount(rejection.provider, listed, served)
       );
     }
 
