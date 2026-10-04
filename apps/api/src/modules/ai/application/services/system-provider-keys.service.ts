@@ -21,7 +21,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import {
-  probablePlatformModelIds,
+  probeCandidateModelIds,
   systemProbeModelId,
 } from '../../domain/model-catalog/probe-model';
 import {
@@ -125,7 +125,7 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
       );
     }
-    const platformModelIds = await probablePlatformModelIds(
+    const platformModelIds = await probeCandidateModelIds(
       this.moduleRef.get<PlatformModelsSource>(PLATFORM_MODELS_SOURCE)
     );
     const probe = await probeProviderKey(

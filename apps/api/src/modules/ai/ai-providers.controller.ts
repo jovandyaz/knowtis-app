@@ -35,7 +35,7 @@ import {
 } from '../feature-flags/feature-flag.guard';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import {
-  probablePlatformModelIds,
+  probeCandidateModelIds,
   systemProbeModelId,
 } from './domain/model-catalog/probe-model';
 import {
@@ -140,7 +140,7 @@ export class AiProvidersController {
   private async probe(provider: AIProvider): Promise<ProviderTestResult> {
     const modelId = systemProbeModelId(
       provider,
-      await probablePlatformModelIds(this.platformModels),
+      await probeCandidateModelIds(this.platformModels),
       this.index.catalog().all()
     );
     if (modelId === null) {

@@ -7,7 +7,7 @@ import {
 import { PlatformResolutionsUnreadError } from '../ports/platform-models.port';
 import {
   byokProbeModelId,
-  probablePlatformModelIds,
+  probeCandidateModelIds,
   systemProbeModelId,
 } from './probe-model';
 
@@ -31,10 +31,10 @@ describe('byokProbeModelId', () => {
   });
 });
 
-describe('probablePlatformModelIds', () => {
+describe('probeCandidateModelIds', () => {
   it('offers no platform model to a probe while the resolutions are unread', async () => {
     await expect(
-      probablePlatformModelIds({
+      probeCandidateModelIds({
         getPlatformModelIds: async () => {
           throw new PlatformResolutionsUnreadError();
         },
@@ -44,7 +44,7 @@ describe('probablePlatformModelIds', () => {
 
   it('lets any other read failure reject', async () => {
     await expect(
-      probablePlatformModelIds({
+      probeCandidateModelIds({
         getPlatformModelIds: async () => {
           throw new Error('db down');
         },
@@ -63,6 +63,21 @@ describe('systemProbeModelId', () => {
         SNAPSHOT_DATE
       )
     ).toBe(FAST_PIN);
+  });
+
+  it('skips a platform model the index does not serve', () => {
+    const delisted = 'openrouter:vendor/delisted-model';
+    expect(
+      systemProbeModelId(
+        'openrouter',
+        [delisted, FAST_PIN],
+        rows,
+        SNAPSHOT_DATE
+      )
+    ).toBe(FAST_PIN);
+    expect(
+      systemProbeModelId('openrouter', [delisted], rows, SNAPSHOT_DATE)
+    ).toBe('openrouter:anthropic/claude-haiku-4.5');
   });
 
   it('probes the fast BYOK route of a provider no platform model uses', () => {
