@@ -35,6 +35,8 @@ const OLD_PENDING = 'openrouter:z-ai/glm-5.2';
 const NEW_PENDING = 'openrouter:deepseek/deepseek-v4.1-flash';
 const RELEASED = 'openrouter:qwen/qwen3.8-max-0902';
 const RUN_URL = 'https://github.com/jovandyaz/knowtis-app/actions/runs/1';
+const VERDICT_DETAIL = 'leaked a secret';
+const NOTHING_PENDING = { pendingModelId: null, gateStatus: null };
 
 describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
   let moduleRef: TestingModule;
@@ -110,7 +112,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
         releasedAt: RELEASED_AT,
         pendingModelId: NEW_PENDING,
         gateStatus: 'failed',
-        gateDetail: 'leaked a secret',
+        gateDetail: VERDICT_DETAIL,
         gateRunUrl: RUN_URL,
       })
       .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
@@ -137,13 +139,19 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       .set({
         pendingModelId: OLD_PENDING,
         gateStatus: 'failed',
-        gateDetail: 'leaked a secret',
+        gateDetail: VERDICT_DETAIL,
         gateRunUrl: RUN_URL,
       })
       .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
 
-    await repo.setPending('platform.fast', NEW_PENDING, AT);
+    const pended = await repo.setPending(
+      'platform.fast',
+      NEW_PENDING,
+      { pendingModelId: OLD_PENDING, gateStatus: 'failed' },
+      AT
+    );
 
+    expect(pended).toBe(true);
     expect(await rowOf('platform.fast')).toMatchObject({
       pendingModelId: NEW_PENDING,
       gateStatus: 'pending',
@@ -154,10 +162,20 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
   });
 
   it('clears a pending model with its gate status and detail', async () => {
-    await repo.setPending('platform.balanced', NEW_PENDING, AT);
+    await repo.setPending(
+      'platform.balanced',
+      NEW_PENDING,
+      NOTHING_PENDING,
+      AT
+    );
 
-    await repo.clearPending('platform.balanced', LATER_AT);
+    const cleared = await repo.clearPending(
+      'platform.balanced',
+      NEW_PENDING,
+      LATER_AT
+    );
 
+    expect(cleared).toBe(true);
     expect(await rowOf('platform.balanced')).toMatchObject({
       pendingModelId: null,
       gateStatus: null,
@@ -167,8 +185,86 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
+  it('leaves a model that is no longer the pending one', async () => {
+    await repo.setPending(
+      'platform.balanced',
+      NEW_PENDING,
+      NOTHING_PENDING,
+      AT
+    );
+
+    const cleared = await repo.clearPending(
+      'platform.balanced',
+      OLD_PENDING,
+      LATER_AT
+    );
+
+    expect(cleared).toBe(false);
+    expect(await rowOf('platform.balanced')).toMatchObject({
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'pending',
+      updatedAt: AT,
+    });
+  });
+
+  it('never clears a failed verdict', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        pendingModelId: NEW_PENDING,
+        gateStatus: 'failed',
+        gateDetail: VERDICT_DETAIL,
+        gateRunUrl: RUN_URL,
+        updatedAt: AT,
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const cleared = await repo.clearPending(
+      'platform.fast',
+      NEW_PENDING,
+      LATER_AT
+    );
+
+    expect(cleared).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+      updatedAt: AT,
+    });
+  });
+
+  it('keeps a verdict that landed after the pending entry was read', async () => {
+    await repo.setPending('platform.fast', OLD_PENDING, NOTHING_PENDING, AT);
+    await db
+      .update(aiModelResolutions)
+      .set({ gateStatus: 'failed', gateDetail: VERDICT_DETAIL })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const pended = await repo.setPending(
+      'platform.fast',
+      NEW_PENDING,
+      { pendingModelId: OLD_PENDING, gateStatus: 'pending' },
+      LATER_AT
+    );
+
+    expect(pended).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      pendingModelId: OLD_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      updatedAt: AT,
+    });
+  });
+
   it('records the model a pin change released', async () => {
-    await repo.setPending('platform.powerful', NEW_PENDING, AT);
+    await repo.setPending(
+      'platform.powerful',
+      NEW_PENDING,
+      NOTHING_PENDING,
+      AT
+    );
 
     await repo.recordRelease('platform.powerful', RELEASED, LATER_AT);
 

@@ -656,6 +656,27 @@ describe('CatalogSyncTask', () => {
     expect(candidates.write).toHaveBeenCalledTimes(1);
   });
 
+  it('pends the candidates while it still holds the advisory lock', async () => {
+    const { task, lock, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [OPENROUTER_PROVIDER],
+    });
+    let queriesAtWrite: string[] = [];
+    candidates.write.mockImplementation(async () => {
+      queriesAtWrite = [...lock.queries];
+      return 0;
+    });
+
+    await task.run();
+
+    expect(queriesAtWrite).toEqual([
+      expect.stringContaining('pg_try_advisory_lock'),
+    ]);
+  });
+
   it('marks nothing when the OpenRouter batch did not conclude', async () => {
     const { task, indexWriter, candidates } = make();
     indexWriter.write.mockResolvedValueOnce({

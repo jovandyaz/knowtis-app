@@ -134,7 +134,11 @@ const PEND = {
   selectorKey: 'platform.fast',
   modelId: CANDIDATE,
 } as const;
-const CLEAR = { kind: 'clear', selectorKey: 'platform.fast' } as const;
+const CLEAR = {
+  kind: 'clear',
+  selectorKey: 'platform.fast',
+  pendingModelId: CANDIDATE,
+} as const;
 
 it.each([
   ['no candidate', {}, null, null],

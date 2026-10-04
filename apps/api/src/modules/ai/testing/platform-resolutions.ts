@@ -27,15 +27,19 @@ export function seededResolution(
   return { ...seed, ...overrides };
 }
 
-/** Every method a `vi.fn`; `list` resolves `SEED_RESOLUTIONS` unless given. */
+/** Every method a `vi.fn`; `list` resolves `SEED_RESOLUTIONS` unless given, and every compare-and-set write wins. */
 export function createModelResolutionRepositoryStub(
   list: ModelResolutionRepository['list'] = () =>
     Promise.resolve([...SEED_RESOLUTIONS])
 ): ModelResolutionRepository {
   return {
     list: vi.fn(list),
-    setPending: vi.fn(),
-    clearPending: vi.fn(),
+    setPending: vi
+      .fn<ModelResolutionRepository['setPending']>()
+      .mockResolvedValue(true),
+    clearPending: vi
+      .fn<ModelResolutionRepository['clearPending']>()
+      .mockResolvedValue(true),
     recordRelease: vi.fn(),
   };
 }

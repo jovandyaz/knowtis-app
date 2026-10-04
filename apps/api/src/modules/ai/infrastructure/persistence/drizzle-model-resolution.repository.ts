@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { PlatformSelectorKey } from '@knowtis/shared-types';
 
@@ -13,7 +14,10 @@ import {
   PENDING_GATE_STATUS,
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
-import type { ModelResolutionRepository } from '../../domain/ports/model-resolution.repository';
+import type {
+  ModelResolutionRepository,
+  PendingSlot,
+} from '../../domain/ports/model-resolution.repository';
 
 function toResolution(row: AiModelResolutionRow): ModelResolution {
   return {
@@ -28,6 +32,11 @@ function toResolution(row: AiModelResolutionRow): ModelResolution {
   };
 }
 
+// IS NOT DISTINCT FROM: `= NULL` is never true, so an expected null needs IS NULL.
+function sameAs(column: AnyPgColumn, value: string | null): SQL {
+  return value === null ? isNull(column) : eq(column, value);
+}
+
 @Injectable()
 export class DrizzleModelResolutionRepository implements ModelResolutionRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
@@ -40,9 +49,10 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
   async setPending(
     selectorKey: PlatformSelectorKey,
     modelId: string,
+    expected: PendingSlot,
     at: Date
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const updated = await this.db
       .update(aiModelResolutions)
       .set({
         pendingModelId: modelId,
@@ -51,14 +61,23 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
         gateRunUrl: null,
         updatedAt: at,
       })
-      .where(eq(aiModelResolutions.selectorKey, selectorKey));
+      .where(
+        and(
+          eq(aiModelResolutions.selectorKey, selectorKey),
+          sameAs(aiModelResolutions.pendingModelId, expected.pendingModelId),
+          sameAs(aiModelResolutions.gateStatus, expected.gateStatus)
+        )
+      )
+      .returning({ selectorKey: aiModelResolutions.selectorKey });
+    return updated.length > 0;
   }
 
   async clearPending(
     selectorKey: PlatformSelectorKey,
+    expectedPendingModelId: string,
     at: Date
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const updated = await this.db
       .update(aiModelResolutions)
       .set({
         pendingModelId: null,
@@ -67,7 +86,15 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
         gateRunUrl: null,
         updatedAt: at,
       })
-      .where(eq(aiModelResolutions.selectorKey, selectorKey));
+      .where(
+        and(
+          eq(aiModelResolutions.selectorKey, selectorKey),
+          eq(aiModelResolutions.pendingModelId, expectedPendingModelId),
+          eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS)
+        )
+      )
+      .returning({ selectorKey: aiModelResolutions.selectorKey });
+    return updated.length > 0;
   }
 
   async recordRelease(

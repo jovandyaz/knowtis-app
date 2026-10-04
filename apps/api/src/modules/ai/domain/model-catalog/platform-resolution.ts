@@ -120,7 +120,11 @@ export type ResolutionChange =
       readonly selectorKey: PlatformSelectorKey;
       readonly modelId: string;
     }
-  | { readonly kind: 'clear'; readonly selectorKey: PlatformSelectorKey };
+  | {
+      readonly kind: 'clear';
+      readonly selectorKey: PlatformSelectorKey;
+      readonly pendingModelId: string;
+    };
 
 /**
  * What a sync's selector candidate changes. No candidate: nothing. The active model:
@@ -137,7 +141,11 @@ export function resolutionChange(
   }
   if (candidateId === row.activeModelId) {
     return row.pendingModelId !== null && row.gateStatus === PENDING_GATE_STATUS
-      ? { kind: 'clear', selectorKey: row.selectorKey }
+      ? {
+          kind: 'clear',
+          selectorKey: row.selectorKey,
+          pendingModelId: row.pendingModelId,
+        }
       : null;
   }
   if (candidateId === row.pendingModelId) {
