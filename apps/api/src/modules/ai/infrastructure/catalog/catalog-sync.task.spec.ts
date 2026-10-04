@@ -204,7 +204,7 @@ describe('CatalogSyncTask', () => {
     );
   });
 
-  it('should persist declared reasoning support on the candidate', async () => {
+  it('should persist no reasoning on the candidate', async () => {
     const { task, repo } = make({
       upstream: [
         upstreamModel('qwen/qwen3.8-max', {
@@ -215,27 +215,11 @@ describe('CatalogSyncTask', () => {
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reasoning: { levels: ['low', 'high'], mandatory: true },
-      })
-    );
-  });
-
-  it('should persist a reasoning model that enumerates no efforts', async () => {
-    const { task, repo } = make({
-      upstream: [
-        upstreamModel('qwen/qwen3.8-max', {
-          reasoning: { levels: [], mandatory: true },
-        }),
-      ],
-    });
-
-    await task.sync();
-
-    expect(repo.upsertCandidate).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoning: { levels: [], mandatory: true } })
-    );
+    const [candidate] = repo.upsertCandidate.mock.calls.find(
+      ([model]) => model.id === 'openrouter:qwen/qwen3.8-max'
+    ) ?? [undefined];
+    expect(candidate).toBeDefined();
+    expect(candidate).not.toHaveProperty('reasoning');
   });
 
   it('should raise a deprecation alert when OpenRouter dates a watched model', async () => {

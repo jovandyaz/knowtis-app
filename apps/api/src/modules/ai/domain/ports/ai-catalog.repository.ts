@@ -1,7 +1,6 @@
 import type {
   CatalogAlertKind,
   CatalogModelStatus,
-  ModelReasoning,
   ModelTier,
 } from '@knowtis/shared-types';
 
@@ -19,7 +18,6 @@ export interface CandidateUpsert {
   maxInputTokens: number;
   maxOutputTokens: number | null;
   intelligenceIndex: number | null;
-  reasoning: ModelReasoning | null;
   upstreamCreatedAt: Date | null;
   upstreamExpirationDate: Date | null;
 }

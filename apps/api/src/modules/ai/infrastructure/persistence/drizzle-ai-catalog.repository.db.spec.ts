@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { CATALOG_ALERT_KINDS } from '@knowtis/shared-types';
@@ -52,6 +52,8 @@ const FIRST_ALERT_DETAIL = 'upstream marked the model deprecated';
 const SECOND_ALERT_DETAIL = 'upstream still reports the model deprecated';
 const PRICE_DRIFT_DETAIL = 'input cost rose by 40%';
 
+const OLD_LADDER = { levels: ['low', 'high'], mandatory: true };
+
 const PROMOTE_OPEN: CatalogStatusChange = { status: 'promoted', tier: 'open' };
 const PROMOTE_FAST: CatalogStatusChange = { status: 'promoted', tier: 'fast' };
 const RETIRE: CatalogStatusChange = { status: 'candidate' };
@@ -69,7 +71,6 @@ function candidate(
     maxInputTokens: SYNCED_MAX_INPUT_TOKENS,
     maxOutputTokens: SYNCED_MAX_OUTPUT_TOKENS,
     intelligenceIndex: SYNCED_INTELLIGENCE_INDEX,
-    reasoning: null,
     upstreamCreatedAt: UPSTREAM_CREATED_AT,
     upstreamExpirationDate: null,
     ...overrides,
@@ -168,6 +169,37 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
     const candidates = await repo.listByStatus('candidate');
     expect(candidates.map((model) => model.id)).toContain(PRIMARY_MODEL_ID);
+  });
+
+  it('inserts a candidate with the unread reasoning column left null', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+
+    const [row] = await db.execute<{ reasoning: unknown }>(
+      sql`select reasoning from ai_catalog_models where id = ${PRIMARY_MODEL_ID}`
+    );
+    expect(row?.reasoning).toBeNull();
+  });
+
+  it('neither reads nor overwrites a reasoning value an older instance wrote', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+    await db.execute(
+      sql`update ai_catalog_models set reasoning = ${JSON.stringify(OLD_LADDER)}::jsonb where id = ${PRIMARY_MODEL_ID}`
+    );
+
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+    const { items } = await repo.listCandidates({
+      page: 1,
+      limit: 50,
+      search: PRIMARY_MODEL_ID,
+    });
+
+    expect(
+      items.find((model) => model.id === PRIMARY_MODEL_ID)
+    ).not.toHaveProperty('reasoning');
+    const [row] = await db.execute<{ reasoning: unknown }>(
+      sql`select reasoning from ai_catalog_models where id = ${PRIMARY_MODEL_ID}`
+    );
+    expect(row?.reasoning).toEqual(OLD_LADDER);
   });
 
   it('should list models ordered by id regardless of insertion order', async () => {

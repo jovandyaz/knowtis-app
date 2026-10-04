@@ -455,14 +455,9 @@ describe('SelectableModelsService', () => {
       ).toEqual({ levels: ['low', 'high', 'max'], mandatory: true });
     });
 
-    it('serves a promoted model the index ladder, never the ladder its row stored', () => {
+    it('serves a promoted model the index ladder', () => {
       const id = 'openrouter:openai/gpt-6-luna';
-      const service = makeOpenService([
-        createCatalogModel({
-          id,
-          reasoning: { levels: ['low'], mandatory: true },
-        }),
-      ]);
+      const service = makeOpenService([createCatalogModel({ id })]);
 
       expect(
         listed(service, OPENROUTER_KEY).find((m) => m.id === id)?.reasoning

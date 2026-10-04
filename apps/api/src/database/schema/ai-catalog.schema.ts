@@ -67,6 +67,7 @@ export const aiCatalogModels = pgTable(
       scale: 1,
       mode: 'number',
     }),
+    /** Unread and unwritten: the model index serves effort ladders. Kept until no deployed instance selects it. */
     reasoning: jsonb('reasoning').$type<ModelReasoning | null>(),
     upstreamCreatedAt: timestamp('upstream_created_at', { withTimezone: true }),
     upstreamExpirationDate: timestamp('upstream_expiration_date', {

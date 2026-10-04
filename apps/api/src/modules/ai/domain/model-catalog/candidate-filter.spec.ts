@@ -137,26 +137,17 @@ describe('toCandidateUpsert', () => {
       maxInputTokens: 131072,
       maxOutputTokens: 98304,
       intelligenceIndex: 42.3,
-      reasoning: null,
       upstreamCreatedAt: GLM_45_CREATED_AT,
       upstreamExpirationDate: new Date('2026-12-31T00:00:00.000Z'),
     });
   });
 
-  it('should forward the reasoning values', () => {
-    const reasoning = { levels: ['low', 'high'], mandatory: true } as const;
-
-    expect(toCandidateUpsert(upstream({ reasoning })).reasoning).toEqual(
-      reasoning
-    );
-  });
-
-  it('should forward a reasoning model that enumerates no efforts', () => {
-    const reasoning = { levels: [], mandatory: true } as const;
-
-    expect(toCandidateUpsert(upstream({ reasoning })).reasoning).toEqual(
-      reasoning
-    );
+  it('stores no reasoning on a candidate', () => {
+    expect(
+      toCandidateUpsert(
+        upstream({ reasoning: { levels: ['low'], mandatory: true } })
+      )
+    ).not.toHaveProperty('reasoning');
   });
 
   it('should keep a missing max output window and benchmark as null', () => {
