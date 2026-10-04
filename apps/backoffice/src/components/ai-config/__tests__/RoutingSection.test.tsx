@@ -462,44 +462,44 @@ describe('RoutingSection', () => {
     ).toBeDisabled();
   });
 
-  it('marks a stored override with a filled custom badge', () => {
+  it('marks a pin with a filled pinned badge', () => {
     renderChain();
 
-    expect(screen.getByText('custom')).toHaveClass('bg-(--foreground)');
+    expect(screen.getByText('pinned')).toHaveClass('bg-(--foreground)');
   });
 
-  it('marks the code default with an outline badge', () => {
+  it('marks an auto setting with an outline auto badge', () => {
     render(<RoutingSection entry={entryWith(CHAIN, 'default')} />);
 
-    expect(screen.getByText('default')).not.toHaveClass('bg-(--foreground)');
+    expect(screen.getByText('auto')).not.toHaveClass('bg-(--foreground)');
   });
 
-  it('offers Reset to default when the chain is a stored override', () => {
+  it('offers Release pin when the chain is pinned', () => {
     renderChain();
 
     expect(
       screen.getByRole('button', {
-        name: /^reset to default: fallback chain$/i,
+        name: /^release pin: fallback chain$/i,
       })
     ).toBeInTheDocument();
   });
 
-  it('hides Reset when the chain already matches the code default', () => {
+  it('hides Release pin while the chain is auto', () => {
     render(<RoutingSection entry={entryWith(CHAIN, 'default')} />);
 
     expect(
       screen.queryByRole('button', {
-        name: /^reset to default: fallback chain$/i,
+        name: /^release pin: fallback chain$/i,
       })
     ).not.toBeInTheDocument();
   });
 
-  it('resets the chain key to its code default on click', async () => {
+  it('releases the chain pin on click', async () => {
     renderChain();
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: /^reset to default: fallback chain$/i,
+        name: /^release pin: fallback chain$/i,
       })
     );
 
@@ -508,14 +508,14 @@ describe('RoutingSection', () => {
     });
   });
 
-  it('disables Reset while the reset is in flight', () => {
+  it('disables Release pin while the reset is in flight', () => {
     resetConfigState.isPending = true;
 
     renderChain();
 
     expect(
       screen.getByRole('button', {
-        name: /^reset to default: fallback chain$/i,
+        name: /^release pin: fallback chain$/i,
       })
     ).toBeDisabled();
   });

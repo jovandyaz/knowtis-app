@@ -189,8 +189,8 @@ describe('AiConfigPage', () => {
     expect(
       screen.getByText('Default model for AI completions')
     ).toBeInTheDocument();
-    expect(screen.getByText('custom')).toBeInTheDocument();
-    expect(screen.getByText('default')).toBeInTheDocument();
+    expect(screen.getByText('pinned')).toBeInTheDocument();
+    expect(screen.getByText('auto')).toBeInTheDocument();
   });
 
   it('routes each config entry to the editor for its kind', () => {

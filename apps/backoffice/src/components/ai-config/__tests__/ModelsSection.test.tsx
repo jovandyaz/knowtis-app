@@ -162,51 +162,51 @@ describe('ModelsSection', () => {
     ).toBeInTheDocument();
   });
 
-  it('marks a stored override with a filled custom badge', () => {
+  it('marks a pin with a filled pinned badge', () => {
     renderSection('custom');
 
-    expect(screen.getByText('custom')).toHaveClass('bg-(--foreground)');
+    expect(screen.getByText('pinned')).toHaveClass('bg-(--foreground)');
   });
 
-  it('marks the code default with an outline badge', () => {
+  it('marks an auto setting with an outline auto badge', () => {
     renderSection('default');
 
-    expect(screen.getByText('default')).not.toHaveClass('bg-(--foreground)');
+    expect(screen.getByText('auto')).not.toHaveClass('bg-(--foreground)');
   });
 
-  it('offers Reset to default only when the model is a stored override', () => {
+  it('offers Release pin only for a pin', () => {
     renderSection('custom');
 
     expect(
-      screen.getByRole('button', { name: /^reset to default: .+$/i })
+      screen.getByRole('button', { name: /^release pin: .+$/i })
     ).toBeInTheDocument();
   });
 
-  it('hides Reset when the model already runs the code default', () => {
+  it('hides Release pin while the model is auto', () => {
     renderSection('default');
 
     expect(
-      screen.queryByRole('button', { name: /^reset to default: .+$/i })
+      screen.queryByRole('button', { name: /^release pin: .+$/i })
     ).not.toBeInTheDocument();
   });
 
-  it('resets the model key to its code default on click', async () => {
+  it('releases the pin on click', async () => {
     renderSection('custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /^reset to default: .+$/i })
+      screen.getByRole('button', { name: /^release pin: .+$/i })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({ key: 'ai_default_model' });
   });
 
-  it('disables Reset while the reset is in flight', () => {
+  it('disables Release pin while the reset is in flight', () => {
     resetConfigState.isPending = true;
 
     renderSection('custom');
 
     expect(
-      screen.getByRole('button', { name: /^reset to default: .+$/i })
+      screen.getByRole('button', { name: /^release pin: .+$/i })
     ).toBeDisabled();
   });
   it('clears a stale reset error once a save succeeds', async () => {
@@ -256,15 +256,15 @@ describe('ModelsSection', () => {
     expect(screen.getByText(RETIRED_MODEL_ID)).toBeInTheDocument();
   });
 
-  it('offers Reset on a stale row, which is the only way to clear the dead row', () => {
+  it('offers Release pin on a stale row, which is the only way to clear the dead row', () => {
     renderSection('stale');
 
     expect(
-      screen.getByRole('button', { name: /^reset to default: .+$/i })
+      screen.getByRole('button', { name: /^release pin: .+$/i })
     ).toBeInTheDocument();
   });
 
-  it('gives every row its own Reset name so they are distinguishable', () => {
+  it('gives every row its own Release pin name so they are distinguishable', () => {
     render(
       <ModelsSection
         entries={[
@@ -277,13 +277,13 @@ describe('ModelsSection', () => {
     );
 
     const names = screen
-      .getAllByRole('button', { name: /^reset to default: .+$/i })
+      .getAllByRole('button', { name: /^release pin: .+$/i })
       .map((button) => button.getAttribute('aria-label'));
 
     expect(names).toEqual([
-      'Reset to default: Default model',
-      'Reset to default: Fast model',
-      'Reset to default: Deep model',
+      'Release pin: Default model',
+      'Release pin: Fast model',
+      'Release pin: Deep model',
     ]);
   });
 
