@@ -79,7 +79,7 @@ const BYOK_REQUIRES: readonly SelectorCapability[] = [
 ];
 
 /** What an admin may pin as a platform default: any eligible row that can call tools and emit structured output. */
-export const ASSIGNABLE_RULE: EligibilityRule = {
+const ASSIGNABLE_RULE: EligibilityRule = {
   requires: ['tool_call', 'structured_output'],
   allowPreview: true,
 };
@@ -219,6 +219,15 @@ export function isEligible(
     isPriced(row) &&
     isWithinCeiling(row, rule.maxOutputCostPerMillion)
   );
+}
+
+/** Whether an admin may pin the model as a platform default at `now`: a promoted id may by promotion, an indexed one only when its row passes `ASSIGNABLE_RULE`; an id the index lacks is left to the catalog and registry checks. */
+export function isAssignableModel(
+  row: IndexedModel | undefined,
+  promoted: boolean,
+  now: Date
+): boolean {
+  return promoted || row === undefined || isEligible(row, ASSIGNABLE_RULE, now);
 }
 
 function servesSelector(

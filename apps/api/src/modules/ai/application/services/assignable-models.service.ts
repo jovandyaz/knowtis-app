@@ -4,9 +4,8 @@ import { INDEX_PROVIDERS, providerOf } from '@knowtis/ai-gateway';
 import type { AssignableModelDto } from '@knowtis/shared-types';
 
 import {
-  ASSIGNABLE_RULE,
   intentOfFamily,
-  isEligible,
+  isAssignableModel,
 } from '../../domain/model-catalog/model-selectors';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
@@ -59,10 +58,12 @@ export class AssignableModelsService {
     const now = new Date();
     const entries = new Map<string, AssignableEntry>();
     const rows = this.index.catalog().all();
+    const promoted = this.promotedModels.snapshot();
+    const promotedIds = new Set(promoted.map((model) => model.id));
     for (const row of rows) {
       if (
         this.registry.isModelAvailable(row.id) &&
-        isEligible(row, ASSIGNABLE_RULE, now)
+        isAssignableModel(row, promotedIds.has(row.id), now)
       ) {
         entries.set(row.id, {
           releasedAt: row.releasedAt,
@@ -79,7 +80,7 @@ export class AssignableModelsService {
       }
     }
     const releasedAtById = new Map(rows.map((row) => [row.id, row.releasedAt]));
-    for (const model of this.promotedModels.snapshot()) {
+    for (const model of promoted) {
       entries.set(model.id, {
         releasedAt:
           releasedAtById.get(model.id) ??

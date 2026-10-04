@@ -20,10 +20,7 @@ import {
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { DailyMessageLimits } from '../../domain/execution-context/quota-policy';
-import {
-  ASSIGNABLE_RULE,
-  isEligible,
-} from '../../domain/model-catalog/model-selectors';
+import { isAssignableModel } from '../../domain/model-catalog/model-selectors';
 import {
   AI_CONFIG_REPOSITORY,
   type AIConfigRepository,
@@ -375,7 +372,12 @@ export class AIConfigService {
         `'${value}' is not a model the catalog supports`
       );
     }
-    if (!this.isAssignable(value)) {
+    const promoted = this.promotedModels
+      .snapshot()
+      .some((model) => model.id === value);
+    if (
+      !isAssignableModel(this.index.catalog().get(value), promoted, new Date())
+    ) {
       throw new InvalidAIConfigError(
         `'${value}' is not an eligible platform model: it must be priced, support tools and structured output, and not be retired, an alias or a non-chat variant`
       );
@@ -385,15 +387,6 @@ export class AIConfigService {
         `'${value}' is not invocable with the server's provider keys — a global default must not depend on a personal BYOK key`
       );
     }
-  }
-
-  /** A promoted id is assignable by promotion; otherwise an indexed row must pass the same rule the backoffice list applies. */
-  private isAssignable(value: string): boolean {
-    if (this.promotedModels.snapshot().some((model) => model.id === value)) {
-      return true;
-    }
-    const row = this.index.catalog().get(value);
-    return row === undefined || isEligible(row, ASSIGNABLE_RULE, new Date());
   }
 
   private validateChain(value: string): void {

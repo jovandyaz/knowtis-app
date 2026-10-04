@@ -17,6 +17,7 @@ import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   BYOK_SELECTORS,
   intentOfFamily,
+  isAssignableModel,
   isEligible,
   resolveByokIntent,
   resolveSelector,
@@ -697,6 +698,40 @@ describe('isEligible', () => {
       isEligible(haiku, selectorOf('fast', 'anthropic'), SNAPSHOT_DATE)
     ).toBe(false);
     expect(isEligible(haiku, BYOK_RULE, SNAPSHOT_DATE)).toBe(false);
+  });
+});
+
+describe('isAssignableModel', () => {
+  const IMAGE_ROW = row('google:gemini-3-pro-image');
+
+  it('assigns an eligible index row', () => {
+    expect(
+      isAssignableModel(row('anthropic:claude-haiku-4-5'), false, SNAPSHOT_DATE)
+    ).toBe(true);
+  });
+
+  it('refuses an ineligible index row', () => {
+    expect(isAssignableModel(IMAGE_ROW, false, SNAPSHOT_DATE)).toBe(false);
+  });
+
+  it('judges the retirement window at the given date', () => {
+    const retiring = createIndexedModel({
+      id: 'openrouter:vendor/retiring',
+      retiresAt: '2026-10-20',
+    });
+
+    expect(
+      isAssignableModel(retiring, false, new Date('2026-09-01T00:00:00Z'))
+    ).toBe(true);
+    expect(isAssignableModel(retiring, false, SNAPSHOT_DATE)).toBe(false);
+  });
+
+  it('lets a promoted id bypass an ineligible index row', () => {
+    expect(isAssignableModel(IMAGE_ROW, true, SNAPSHOT_DATE)).toBe(true);
+  });
+
+  it('assigns an id with no index row', () => {
+    expect(isAssignableModel(undefined, false, SNAPSHOT_DATE)).toBe(true);
   });
 });
 
