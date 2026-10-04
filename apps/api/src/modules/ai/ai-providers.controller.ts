@@ -15,9 +15,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { APICallError, generateText } from 'ai';
+import { APICallError } from 'ai';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import {
   FEATURE_FLAG_KEYS,
   type AIProvider,
@@ -34,16 +33,19 @@ import {
   RequireFeatureFlag,
 } from '../feature-flags/feature-flag.guard';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
-import { CURATED_MODELS } from './domain/model-catalog/selectable-models.catalog';
+import { systemProbeModelId } from './domain/model-catalog/probe-model';
 import { SetSystemProviderDto } from './dto/set-system-provider.dto';
 import { SystemProviderParamDto } from './dto/system-provider-param.dto';
+import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
+import {
+  PROBE_TIMEOUT_MS,
+  sendProbeTurn,
+} from './infrastructure/providers/provider-probe';
 import {
   ProviderNotConfiguredError,
   ProviderRegistryFactory,
 } from './infrastructure/providers/provider-registry.factory';
 
-const PROBE_MAX_OUTPUT_TOKENS = 16;
-const PROBE_TIMEOUT_MS = 10_000;
 // Below this a "key" is too short to match anything but itself in prose.
 const REDACTABLE_KEY_MIN_LENGTH = 8;
 
@@ -56,7 +58,8 @@ export class AiProvidersController {
 
   constructor(
     private readonly systemKeys: SystemProviderKeysService,
-    private readonly registry: ProviderRegistryFactory
+    private readonly registry: ProviderRegistryFactory,
+    private readonly index: ModelIndexCache
   ) {}
 
   @Get()
@@ -125,33 +128,24 @@ export class AiProvidersController {
 
   /** Sends one cheap turn through whatever key currently routes for the provider. */
   private async probe(provider: AIProvider): Promise<ProviderTestResult> {
-    const candidates = CURATED_MODELS.filter(
-      (m) => providerOf(m.id) === provider
-    );
-    const model = candidates.find((m) => m.tier === 'fast') ?? candidates[0];
-    if (!model) {
+    const modelId = systemProbeModelId(provider, this.index.catalog().all());
+    if (modelId === null) {
       return {
         ok: false,
         reason: 'unconfigured',
-        message: `No curated model found for provider '${provider}'`,
+        message: `No model resolves for provider '${provider}'`,
       };
     }
     let secrets: string[] = [];
     try {
-      const languageModel = this.registry.languageModel(model.id);
+      const languageModel = this.registry.languageModel(modelId);
       // Snapshot before the await: an admin rotating the key mid-probe would
       // otherwise leave the error quoting a secret no longer here to scrub.
       secrets = this.registry.routingSecrets(provider);
-      await generateText({
-        model: languageModel,
-        prompt: 'ping',
-        maxOutputTokens: PROBE_MAX_OUTPUT_TOKENS,
-        abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-        telemetry: { isEnabled: false },
-      });
-      return { ok: true, model: model.id };
+      await sendProbeTurn(languageModel, AbortSignal.timeout(PROBE_TIMEOUT_MS));
+      return { ok: true, model: modelId };
     } catch (error) {
-      return this.classifyProbeFailure(provider, model.id, error, secrets);
+      return this.classifyProbeFailure(provider, modelId, error, secrets);
     }
   }
 

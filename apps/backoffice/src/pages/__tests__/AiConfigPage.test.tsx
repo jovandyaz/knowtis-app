@@ -90,7 +90,6 @@ const MODELS = [
     tier: 'balanced',
     provider: 'anthropic',
     routableByServer: true,
-    needsKey: false,
     promoted: false,
   },
   {
@@ -100,7 +99,6 @@ const MODELS = [
     tier: 'fast',
     provider: 'anthropic',
     routableByServer: true,
-    needsKey: false,
     promoted: false,
   },
 ];

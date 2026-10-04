@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { ModelCatalog } from '@knowtis/ai-gateway';
+import {
+  MODEL_INDEX_SNAPSHOT,
+  ModelIndexCatalog,
+  type IndexedModel,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 import type { ModelIntent } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
@@ -12,15 +17,17 @@ import type { ProviderRegistryFactory } from '../../infrastructure/providers/pro
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createExecutionContext } from '../../testing/create-execution-context';
+import { createIndexedModel } from '../../testing/create-indexed-model';
+import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
+const SONNET_5_5 = 'anthropic:claude-sonnet-5-5';
 const NO_BYOK: ReadonlySet<string> = new Set();
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PORT_CONTEXT_WINDOW = 262_144;
 const ROW_CONTEXT_WINDOW = 4_096;
-const CURATED_OUTPUT_COST = 0.000015;
 const SHADOWING_OUTPUT_COST = 0.0000001;
 const OPEN_TIER_OUTPUT_COST = 0.000001;
 const INTENTS = {
@@ -29,6 +36,8 @@ const INTENTS = {
   powerful: 'openrouter:moonshotai/kimi-k2.5',
 } as const;
 const PROMOTED_FAST_INTENTS = { ...INTENTS, fast: PROMOTED_ID } as const;
+const FULL_LADDER = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const FREE_LADDER = ['low', 'medium', 'high'] as const;
 
 const FREE_CALLER = createExecutionContext({ tier: 'free' });
 const ANTHROPIC_KEY = createExecutionContext({
@@ -42,17 +51,20 @@ const OPENROUTER_KEY = createExecutionContext({
 
 type RegistryStub = Pick<ProviderRegistryFactory, 'isModelAvailable'>;
 type PromotedCacheStub = Pick<PromotedModelsCache, 'snapshot'>;
+type IndexStub = Pick<ModelIndexCache, 'catalog'>;
 
 /** Typed against the real ports so a shape change breaks compilation here instead of at runtime. */
 function makeSelectableModelsService(
   catalog: ModelCatalog,
   registry: RegistryStub,
-  promoted: PromotedCacheStub
+  promoted: PromotedCacheStub,
+  index: IndexStub = createSnapshotIndex()
 ) {
   return new SelectableModelsService(
     catalog,
     registry as ProviderRegistryFactory,
-    promoted as PromotedModelsCache
+    promoted as PromotedModelsCache,
+    index as ModelIndexCache
   );
 }
 
@@ -60,7 +72,15 @@ function promotedCache(models: readonly CatalogModel[]): PromotedCacheStub {
   return { snapshot: () => models };
 }
 
-function makeOpenService(promoted: readonly CatalogModel[] = []) {
+function indexOf(rows: readonly IndexedModel[]): IndexStub {
+  const catalog = new ModelIndexCatalog(rows);
+  return { catalog: () => catalog };
+}
+
+function makeOpenService(
+  promoted: readonly CatalogModel[] = [],
+  index?: IndexStub
+) {
   const catalog: ModelCatalog = {
     isSupported: () => true,
     getPricing: () => ({ outputCostPerToken: OPEN_TIER_OUTPUT_COST }),
@@ -70,7 +90,8 @@ function makeOpenService(promoted: readonly CatalogModel[] = []) {
   return makeSelectableModelsService(
     catalog,
     registry,
-    promotedCache(promoted)
+    promotedCache(promoted),
+    index
   );
 }
 
@@ -203,11 +224,59 @@ describe('SelectableModelsService', () => {
 
     const models = listed(service, ANTHROPIC_KEY);
 
-    expect(models.map((m) => m.id)).toEqual([SONNET_5]);
+    expect(models.map((m) => m.id)).toEqual([
+      SONNET_5,
+      'anthropic:claude-haiku-4-5',
+      SONNET_5_5,
+      'anthropic:claude-opus-5-5',
+    ]);
     expect(models[0]).toMatchObject({
       routableByServer: false,
       billedToUser: true,
       contextWindow: PORT_CONTEXT_WINDOW,
+    });
+  });
+
+  describe('BYOK routes', () => {
+    it('lists each route a key reaches with its index name and the intent copy', () => {
+      const route = listed(makeOpenService(), OPENROUTER_KEY).find(
+        (m) => m.id === 'openrouter:anthropic/claude-sonnet-5.5'
+      );
+
+      expect(route).toMatchObject({
+        label: 'Anthropic: Claude Sonnet 5.5',
+        descriptionKey: 'aiModels.class.balanced',
+        tier: 'balanced',
+        servesIntent: 'balanced',
+        isDefault: true,
+        billedToUser: true,
+      });
+    });
+
+    it('resolves the selectors once per served index catalog', () => {
+      const catalog = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const all = vi.spyOn(catalog, 'all');
+      const service = makeOpenService([], { catalog: () => catalog });
+
+      listed(service, ANTHROPIC_KEY);
+      listed(service, OPENROUTER_KEY);
+
+      expect(all).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves the selectors again once the index serves a new catalog', () => {
+      let served = new ModelIndexCatalog(MODEL_INDEX_SNAPSHOT);
+      const service = makeOpenService([], { catalog: () => served });
+      const balancedOf = () =>
+        service
+          .catalogFor(ANTHROPIC_KEY, INTENTS, null)
+          .intents.find((entry) => entry.intent === 'balanced');
+
+      expect(balancedOf()).toMatchObject({ modelId: SONNET_5_5 });
+      served = new ModelIndexCatalog(
+        MODEL_INDEX_SNAPSHOT.filter((row) => row.id !== SONNET_5_5)
+      );
+      expect(balancedOf()).toMatchObject({ modelId: SONNET_5 });
     });
   });
 
@@ -278,14 +347,8 @@ describe('SelectableModelsService', () => {
       expect(promoted && 'description' in promoted).toBe(false);
     });
 
-    it('keeps the curated entry when a promoted row repeats its id', async () => {
-      // Real composite catalog: pricing and context must resolve to the curated
-      // model even though a promoted row of the same id carries other numbers.
-      const curated: ModelCatalog = {
-        isSupported: () => true,
-        getPricing: () => ({ outputCostPerToken: CURATED_OUTPUT_COST }),
-        getContextWindow: () => ({ maxInputTokens: PORT_CONTEXT_WINDOW }),
-      };
+    it('keeps the curated copy and the index facts when a promoted row repeats its id', async () => {
+      const index = createSnapshotIndex();
       const promoted = new PromotedModelsCache(
         createCatalogRepositoryStub(async () => [
           createCatalogModel({
@@ -300,9 +363,10 @@ describe('SelectableModelsService', () => {
       );
       await promoted.onModuleInit();
       const service = makeSelectableModelsService(
-        new CompositeModelCatalog(promoted, curated as ModelIndexCache),
+        new CompositeModelCatalog(promoted, index),
         { isModelAvailable: () => true },
-        promoted
+        promoted,
+        index
       );
 
       const matches = listed(service, ANTHROPIC_KEY).filter(
@@ -314,19 +378,23 @@ describe('SelectableModelsService', () => {
         label: 'Sonnet 5',
         descriptionKey: 'aiModels.sonnet5',
         tier: 'balanced',
-        contextWindow: PORT_CONTEXT_WINDOW,
+        contextWindow: index.getContextWindow(SONNET_5)?.maxInputTokens,
         costClass: 2,
       });
+      expect(matches[0]?.contextWindow).not.toBe(ROW_CONTEXT_WINDOW);
       expect(matches[0]?.description).toBeUndefined();
     });
 
     it('omits reasoning when nothing survives the platform-billed slice', () => {
-      const service = makeOpenService([
-        createCatalogModel({
-          id: PROMOTED_ID,
-          reasoning: { levels: ['xhigh', 'max'], mandatory: false },
-        }),
-      ]);
+      const service = makeOpenService(
+        [createCatalogModel({ id: PROMOTED_ID })],
+        indexOf([
+          createIndexedModel({
+            id: PROMOTED_ID,
+            reasoning: { levels: ['xhigh', 'max'], mandatory: false },
+          }),
+        ])
+      );
 
       const promoted = listed(service, FREE_CALLER, PROMOTED_FAST_INTENTS).find(
         (m) => m.id === PROMOTED_ID
@@ -336,13 +404,16 @@ describe('SelectableModelsService', () => {
       expect(promoted && 'reasoning' in promoted).toBe(false);
     });
 
-    it('trims promoted reasoning to the platform-billed slice unless the caller’s key bills it', () => {
-      const service = makeOpenService([
-        createCatalogModel({
-          id: PROMOTED_ID,
-          reasoning: { levels: ['low', 'high', 'max'], mandatory: true },
-        }),
-      ]);
+    it('trims a promoted model’s index ladder to the platform-billed slice unless the caller’s key bills it', () => {
+      const service = makeOpenService(
+        [createCatalogModel({ id: PROMOTED_ID })],
+        indexOf([
+          createIndexedModel({
+            id: PROMOTED_ID,
+            reasoning: { levels: ['low', 'high', 'max'], mandatory: true },
+          }),
+        ])
+      );
 
       expect(
         listed(service, FREE_CALLER, PROMOTED_FAST_INTENTS).find(
@@ -353,6 +424,24 @@ describe('SelectableModelsService', () => {
         listed(service, OPENROUTER_KEY).find((m) => m.id === PROMOTED_ID)
           ?.reasoning
       ).toEqual({ levels: ['low', 'high', 'max'], mandatory: true });
+    });
+
+    it('serves a promoted model the index ladder, never the ladder its row stored', () => {
+      const id = 'openrouter:openai/gpt-6-luna';
+      const service = makeOpenService([
+        createCatalogModel({
+          id,
+          reasoning: { levels: ['low'], mandatory: true },
+        }),
+      ]);
+
+      expect(
+        listed(service, OPENROUTER_KEY).find((m) => m.id === id)?.reasoning
+      ).toEqual({ levels: FULL_LADDER, mandatory: false });
+      expect(service.reasoningOf(id, new Set(['openrouter']))).toEqual({
+        levels: FULL_LADDER,
+        mandatory: false,
+      });
     });
   });
 
@@ -387,7 +476,7 @@ describe('SelectableModelsService', () => {
       expect(
         models.find((m) => m.id === 'anthropic:claude-opus-5')?.reasoning
           ?.levels
-      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+      ).toEqual(FULL_LADDER);
     });
   });
 
@@ -417,7 +506,7 @@ describe('SelectableModelsService', () => {
       expect(catalog.intents).toContainEqual({
         intent: 'balanced',
         available: true,
-        modelId: 'anthropic:claude-sonnet-5',
+        modelId: SONNET_5_5,
         substituted: false,
       });
     });
@@ -447,23 +536,43 @@ describe('SelectableModelsService', () => {
       );
       expect(
         service.reasoningOf('openai:gpt-5.6-sol', NO_BYOK)?.levels
-      ).toEqual(['low', 'medium', 'high']);
+      ).toEqual(FREE_LADDER);
     });
 
     it('reads the full ladder of a model on the caller key', () => {
       expect(
         makeOpenService().reasoningOf('openai:gpt-5.6-sol', new Set(['openai']))
           ?.levels
-      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+      ).toEqual(FULL_LADDER);
     });
 
-    it('gives a model reached only over an OpenRouter key the curated ladder of the same model', () => {
+    it('reads the full index ladder of a model on the caller key, a listed none making it optional', () => {
       expect(
-        makeOpenService().reasoningOf(
+        makeOpenService().reasoningOf('openai:gpt-6-luna', new Set(['openai']))
+      ).toEqual({ levels: FULL_LADDER, mandatory: false });
+    });
+
+    it('trims the index ladder to the free slice when the caller key does not bill the model', () => {
+      expect(
+        makeOpenService().reasoningOf('openai:gpt-6-luna', NO_BYOK)
+      ).toEqual({ levels: FREE_LADDER, mandatory: false });
+    });
+
+    it('reads each route’s own index ladder', () => {
+      const service = makeOpenService();
+
+      expect(
+        service.reasoningOf('anthropic:claude-opus-5', new Set(['anthropic']))
+      ).toEqual({ levels: FULL_LADDER, mandatory: true });
+      expect(
+        service.reasoningOf(
           'openrouter:anthropic/claude-opus-5',
           new Set(['openrouter'])
-        )?.levels
-      ).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+        )
+      ).toEqual({ levels: FULL_LADDER, mandatory: false });
+      expect(
+        service.reasoningOf('openrouter:z-ai/glm-5.2', new Set(['openrouter']))
+      ).toEqual({ levels: ['high', 'xhigh'], mandatory: false });
     });
   });
 });

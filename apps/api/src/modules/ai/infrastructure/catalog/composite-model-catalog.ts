@@ -7,10 +7,10 @@ import type {
 } from '@knowtis/ai-gateway';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
-import { CURATED_MODEL_IDS } from '../../domain/model-catalog/selectable-models.catalog';
 import { ModelIndexCache } from './model-index.cache';
 import { PromotedModelsCache } from './promoted-models.cache';
 
+/** Promoted rows and the model index as one catalog: the index wins for facts, so a promoted row supplies pricing and context only for a model the index does not carry. */
 @Injectable()
 export class CompositeModelCatalog implements ModelCatalog {
   private readonly logger = new Logger(CompositeModelCatalog.name);
@@ -23,11 +23,13 @@ export class CompositeModelCatalog implements ModelCatalog {
   ) {}
 
   isSupported(modelId: string): boolean {
-    return this.find(modelId) !== undefined || this.index.isSupported(modelId);
+    return (
+      this.promotedRow(modelId) !== undefined || this.index.isSupported(modelId)
+    );
   }
 
   getPricing(modelId: string): ModelPricing | undefined {
-    const model = this.find(modelId);
+    const model = this.unindexedPromotedRow(modelId);
     if (model) {
       return {
         inputCostPerToken: model.inputCostPerToken,
@@ -40,7 +42,7 @@ export class CompositeModelCatalog implements ModelCatalog {
   }
 
   getContextWindow(modelId: string): ModelContextWindow | undefined {
-    const model = this.find(modelId);
+    const model = this.unindexedPromotedRow(modelId);
     if (model) {
       return {
         maxInputTokens: model.maxInputTokens,
@@ -50,11 +52,13 @@ export class CompositeModelCatalog implements ModelCatalog {
     return this.index.getContextWindow(modelId);
   }
 
-  /** A curated id is never overridden by a promoted model — matches the exclusion in SelectableModelsService.offered(). */
-  private find(modelId: string): CatalogModel | undefined {
-    if (CURATED_MODEL_IDS.has(modelId)) {
-      return undefined;
-    }
+  private unindexedPromotedRow(modelId: string): CatalogModel | undefined {
+    return this.index.catalog().get(modelId)
+      ? undefined
+      : this.promotedRow(modelId);
+  }
+
+  private promotedRow(modelId: string): CatalogModel | undefined {
     return this.promoted.snapshot().find((model) => model.id === modelId);
   }
 

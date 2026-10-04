@@ -66,6 +66,10 @@ describe('AgentModelFallbackNotice', () => {
       'not_in_tier',
       "Answered by Claude Sonnet 5 because your plan doesn't include the model you picked.",
     ],
+    [
+      'intent_unavailable',
+      "Answered by Claude Sonnet 5 because the selected option isn't available right now.",
+    ],
   ])('names the model that answered and why for %s', (reason, notice) => {
     render(<AgentModelFallbackNotice fallback={{ reason, to: SUBSTITUTE }} />);
 

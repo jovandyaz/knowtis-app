@@ -462,7 +462,6 @@ const ASSIGNABLE = [
     tier: 'balanced',
     provider: 'anthropic',
     routableByServer: true,
-    needsKey: false,
     promoted: false,
   },
   {
@@ -472,7 +471,6 @@ const ASSIGNABLE = [
     tier: 'open',
     provider: 'openrouter',
     routableByServer: false,
-    needsKey: false,
     promoted: true,
   },
 ];
@@ -491,7 +489,6 @@ describe('useAssignableModels', () => {
     expect(result.current.data?.[1]).toMatchObject({
       promoted: true,
       routableByServer: false,
-      needsKey: false,
     });
   });
 

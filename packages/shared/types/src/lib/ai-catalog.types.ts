@@ -21,6 +21,7 @@ export const MODEL_FALLBACK_REASONS = [
   'model_retired',
   'key_removed',
   'not_in_tier',
+  'intent_unavailable',
 ] as const;
 export type ModelFallbackReason = (typeof MODEL_FALLBACK_REASONS)[number];
 
@@ -34,12 +35,14 @@ export function isModelFallbackReason(
 }
 
 export const MODEL_UNAVAILABLE_REASONS = [
-  ...MODEL_FALLBACK_REASONS,
+  'model_retired',
+  'key_removed',
+  'not_in_tier',
   'no_route',
 ] as const;
 export type ModelUnavailableReason = (typeof MODEL_UNAVAILABLE_REASONS)[number];
 
-/** Which model a turn asked for and which one served it; `fallback` is set only when the server substituted it. */
+/** Which model a turn asked for and which one served it; `fallback` is set only when the server substituted it, and `from` is the model asked for, or the intent when `reason` is `intent_unavailable`. */
 export interface ModelResolution {
   requested: string | null;
   resolved: string;

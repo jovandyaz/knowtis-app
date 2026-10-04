@@ -1,10 +1,22 @@
 import { generateText, streamText, type LanguageModel } from 'ai';
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 import { executeWithChain } from '@knowtis/ai-gateway';
 
 import { AiProvidersController } from '../../ai-providers.controller';
 import { createMockConfig } from '../../testing/create-mock-config';
+import {
+  createSnapshotIndex,
+  SNAPSHOT_DATE,
+} from '../../testing/snapshot-index';
 import { classifyByokKeyFailure } from './byok-key-failure';
 import { probeProviderKey } from './provider-probe';
 import { ProviderRegistryFactory } from './provider-registry.factory';
@@ -108,7 +120,8 @@ describe('a caller-keyed OpenAI model on the wire', () => {
     const probe = await probeProviderKey(
       new ProviderRegistryFactory(createMockConfig()),
       'openai',
-      USER_KEY
+      USER_KEY,
+      'openai:gpt-6-luna'
     );
 
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -117,7 +130,14 @@ describe('a caller-keyed OpenAI model on the wire', () => {
 });
 
 describe('a platform-keyed OpenAI model on the wire', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it('asks the provider once for a server key out of quota', async () => {
     const fetch = openaiAnswering('insufficient_quota');
@@ -170,7 +190,8 @@ describe('a platform-keyed OpenAI model on the wire', () => {
     vi.stubGlobal('fetch', fetch);
     const controller = new AiProvidersController(
       {} as never,
-      await platformFactory()
+      await platformFactory(),
+      createSnapshotIndex()
     );
 
     const result = await controller.test({ provider: 'openai' });

@@ -23,11 +23,10 @@ import { DB_AVAILABLE } from '../../../../test-support/database';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
-import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { DrizzleAiCatalogRepository } from '../../infrastructure/persistence/drizzle-ai-catalog.repository';
 import { createExecutionContext } from '../../testing/create-execution-context';
-import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import { createSnapshotIndex } from '../../testing/snapshot-index';
 import { AiCatalogAdminService } from './ai-catalog-admin.service';
 import { SelectableModelsService } from './selectable-models.service';
 
@@ -129,13 +128,12 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
       promotedCache,
       { run: vi.fn() } as never
     );
+    const index = createSnapshotIndex();
     selectable = new SelectableModelsService(
-      new CompositeModelCatalog(
-        promotedCache,
-        new ModelIndexCache(createModelIndexRepositoryStub(async () => []))
-      ),
+      new CompositeModelCatalog(promotedCache, index),
       { isModelAvailable: () => true } as never,
-      promotedCache
+      promotedCache,
+      index
     );
   });
 

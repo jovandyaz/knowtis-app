@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CATALOG, type IndexedModel } from '@knowtis/ai-gateway';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { AI_CATALOG_REPOSITORY } from '../../domain/ports/ai-catalog.repository';
 import { MODEL_INDEX_REPOSITORY } from '../../domain/ports/model-index.repository';
 import { createCatalogModel } from '../../testing/create-catalog-model';
@@ -24,11 +23,12 @@ const PROMOTED_ONLY_MODEL_ID = 'openrouter:vendor/promoted-only';
 const PARTIAL_MODEL_ID = 'openrouter:vendor/half-priced';
 const UNPRICED_MODEL_ID = 'openrouter:vendor/unpriced';
 const UNKNOWN_MODEL_ID = 'openrouter:vendor/unknown';
-const CURATED_MODEL_ID = CURATED_MODELS[0].id;
 const TRANSCRIPTION_MODEL_ID = 'openai:whisper-1';
 
 const INDEX_INPUT_COST = 3e-6;
 const INDEX_OUTPUT_COST = 1.5e-5;
+const INDEX_CACHE_READ_COST = 3e-7;
+const INDEX_CACHE_WRITE_COST = 3.75e-6;
 const INDEX_MAX_INPUT_TOKENS = 200_000;
 const INDEX_MAX_OUTPUT_TOKENS = 64_000;
 const PROMOTED_INPUT_COST = 1.1e-7;
@@ -40,6 +40,8 @@ function indexedAt(id: string): IndexedModel {
     id,
     inputCostPerToken: INDEX_INPUT_COST,
     outputCostPerToken: INDEX_OUTPUT_COST,
+    cacheReadCostPerToken: INDEX_CACHE_READ_COST,
+    cacheWriteCostPerToken: INDEX_CACHE_WRITE_COST,
     maxInputTokens: INDEX_MAX_INPUT_TOKENS,
     maxOutputTokens: INDEX_MAX_OUTPUT_TOKENS,
   });
@@ -57,7 +59,6 @@ function promotedAt(id: string): CatalogModel {
 
 const INDEXED_ROWS: readonly IndexedModel[] = [
   indexedAt(INDEXED_MODEL_ID),
-  indexedAt(CURATED_MODEL_ID),
   createIndexedModel({ id: PARTIAL_MODEL_ID, outputCostPerToken: null }),
   createIndexedModel({
     id: UNPRICED_MODEL_ID,
@@ -112,34 +113,35 @@ describe('CompositeModelCatalog', () => {
     });
   });
 
-  it('prefers a promoted row over the index entry of a non-curated model', async () => {
+  it('serves the index row’s pricing, including cache rates, and its context window over a promoted row with the same id', async () => {
     const { composite } = await createComposite([promotedAt(INDEXED_MODEL_ID)]);
 
+    expect(composite.isSupported(INDEXED_MODEL_ID)).toBe(true);
     expect(composite.getPricing(INDEXED_MODEL_ID)).toEqual({
-      inputCostPerToken: PROMOTED_INPUT_COST,
-      outputCostPerToken: PROMOTED_OUTPUT_COST,
+      inputCostPerToken: INDEX_INPUT_COST,
+      outputCostPerToken: INDEX_OUTPUT_COST,
+      cacheReadInputTokenCost: INDEX_CACHE_READ_COST,
+      cacheCreationInputTokenCost: INDEX_CACHE_WRITE_COST,
     });
     expect(composite.getContextWindow(INDEXED_MODEL_ID)).toEqual({
-      maxInputTokens: PROMOTED_MAX_INPUT_TOKENS,
-      maxOutputTokens: undefined,
-    });
-  });
-
-  it('never lets a promoted row override a curated model pricing or context window', async () => {
-    const { composite, index } = await createComposite([
-      promotedAt(CURATED_MODEL_ID),
-    ]);
-
-    expect(composite.getPricing(CURATED_MODEL_ID)).toEqual(
-      index.getPricing(CURATED_MODEL_ID)
-    );
-    expect(composite.getPricing(CURATED_MODEL_ID)?.inputCostPerToken).toBe(
-      INDEX_INPUT_COST
-    );
-    expect(composite.getContextWindow(CURATED_MODEL_ID)).toEqual({
       maxInputTokens: INDEX_MAX_INPUT_TOKENS,
       maxOutputTokens: INDEX_MAX_OUTPUT_TOKENS,
     });
+  });
+
+  it('warns about an unpriced index row even when a promoted row prices it', async () => {
+    const warnSpy = spyOnWarnings();
+    const { composite } = await createComposite([
+      promotedAt(UNPRICED_MODEL_ID),
+    ]);
+
+    expect(composite.getPricing(UNPRICED_MODEL_ID)).toEqual({
+      inputCostPerToken: undefined,
+      outputCostPerToken: undefined,
+      cacheReadInputTokenCost: undefined,
+      cacheCreationInputTokenCost: undefined,
+    });
+    expect(warnedEvents(warnSpy)).toEqual([UNKNOWN_EVENT]);
   });
 
   it('serves every model absent from the promoted rows from the index', async () => {

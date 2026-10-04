@@ -1,4 +1,4 @@
-import type { IndexedModel, ModelCatalog } from '@knowtis/ai-gateway';
+import type { IndexedModel, ModelIndexCatalog } from '@knowtis/ai-gateway';
 
 import { unservedFloorModels } from '../modules/ai/domain/model-catalog/floor-models';
 import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.port';
@@ -10,12 +10,13 @@ export const SNAPSHOT_HEADER =
 /**
  * Why these reads must not become the snapshot; empty when they may. A partial
  * read, or one that cannot support and fully price every floor model, would
- * ship a floor that records `costUsd=0` for the platform's own spend.
+ * ship a floor that records `costUsd=0` for the platform's own spend; one that
+ * leaves a BYOK intent route unserved would ship a floor with no route for it.
  */
 export function snapshotRefusals(
   modelsDev: ModelsDevCatalog,
   openRouter: UpstreamCatalog,
-  catalog: ModelCatalog
+  catalog: ModelIndexCatalog
 ): string[] {
   const refusals: string[] = [];
   if (modelsDev.discarded.length > 0) {
@@ -29,7 +30,7 @@ export function snapshotRefusals(
   const unserved = unservedFloorModels(catalog);
   if (unserved.length > 0) {
     refusals.push(
-      `unsupported, unpriced or without an input window: ${unserved.join(', ')}`
+      `unsupported, unpriced, without an input window or unrouted: ${unserved.join(', ')}`
     );
   }
   return refusals;

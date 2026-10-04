@@ -83,8 +83,6 @@ export const CURATED_MODELS: readonly CuratedModel[] = [
     tier: 'powerful',
     reasoning: { levels: ['low', 'medium', 'high'], mandatory: true },
   },
-  // The openrouter-curated entries carry no reasoning until their levels are
-  // verified against provider docs — absent means the UI offers no effort knob.
   {
     id: 'openrouter:deepseek/deepseek-v3.2',
     label: 'DeepSeek V3.2',

@@ -4,6 +4,7 @@ import {
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
+  type ModelIndexCatalog,
 } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
@@ -14,19 +15,25 @@ import {
 } from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import {
+  resolveByokSelectors,
+  type ByokResolutions,
+} from '../../domain/model-catalog/byok-intent-routes';
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
+import { toModelReasoning } from '../../domain/model-catalog/index-reasoning';
 import type { ModelFacts } from '../../domain/model-catalog/model-choice';
+import { plainRouteCanonical } from '../../domain/model-catalog/plain-route';
 import {
   CURATED_MODEL_IDS,
   CURATED_MODELS,
 } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   CATALOG_BILLING,
-  routeReasoning,
   tierCatalog,
   type OfferedModel,
   type TierCatalog,
 } from '../../domain/model-catalog/tier-catalog';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
@@ -46,18 +53,26 @@ function offeredReasoning(
 
 @Injectable()
 export class SelectableModelsService {
+  private readonly byokMemo = new WeakMap<ModelIndexCatalog, ByokResolutions>();
+
   constructor(
     @Inject(MODEL_CATALOG) private readonly catalog: ModelCatalog,
     private readonly registry: ProviderRegistryFactory,
-    private readonly promotedModels: PromotedModelsCache
+    private readonly promotedModels: PromotedModelsCache,
+    private readonly index: ModelIndexCache
   ) {}
 
+  /** The curated and promoted models with their copy and tier; each ladder comes from the model's index row, never from the entry. */
   offered(): readonly OfferedModel[] {
-    return [
-      ...CURATED_MODELS,
-      // Code wins entirely for a duplicate id: a promoted model can never
-      // rename, re-tier, re-describe, re-price or resize a curated one —
-      // CompositeModelCatalog.find() applies the same exclusion.
+    const listed: OfferedModel[] = [
+      ...CURATED_MODELS.map(({ id, label, descriptionKey, tier }) => ({
+        id,
+        label,
+        descriptionKey,
+        tier,
+      })),
+      // Code wins for a duplicate id: a promoted model can never rename,
+      // re-tier or re-describe a curated one.
       ...this.promotedModels
         .snapshot()
         .filter((promoted) => !CURATED_MODEL_IDS.has(promoted.id))
@@ -67,9 +82,12 @@ export class SelectableModelsService {
           descriptionKey: '',
           description: promoted.description,
           tier: promoted.tier,
-          ...(promoted.reasoning ? { reasoning: promoted.reasoning } : {}),
         })),
     ];
+    return listed.map((model) => {
+      const reasoning = this.indexReasoning(model.id);
+      return reasoning ? { ...model, reasoning } : model;
+    });
   }
 
   catalogFor(
@@ -86,6 +104,8 @@ export class SelectableModelsService {
       offered: this.offered(),
       isSupported: (id) => this.catalog.isSupported(id),
       isPlatformRoutable: (id) => this.registry.isModelAvailable(id),
+      indexRow: (id) => this.index.catalog().get(id),
+      byok: this.byokResolutions(),
     });
   }
 
@@ -102,6 +122,8 @@ export class SelectableModelsService {
     return {
       heldProviders: byokProviders,
       isSupported: (id) => this.catalog.isSupported(id),
+      canonicalOf: (id) =>
+        plainRouteCanonical(id, this.index.catalog().get(id)?.canonical),
       isPlatformBilled: (id) =>
         platformIntentIds.has(id) ||
         (openTier.has(id) && this.registry.isModelAvailable(id)),
@@ -109,16 +131,14 @@ export class SelectableModelsService {
   }
 
   /**
-   * A capability statement, so it reads every offered model, not the caller's
-   * tier view: a failover candidate outside the tier still declares its ladder,
-   * and a model reached only through a BYOK route reads the curated ladder of
-   * the same canonical model.
+   * A capability statement, so it reads the model's own index row, not the
+   * caller's tier view: a failover candidate outside the tier still declares
+   * its ladder, and each route of a model declares the ladder it accepts.
    */
   reasoningOf(
     modelId: string,
     byokProviders: ReadonlySet<string>
   ): ModelReasoning | null {
-    const offered = this.offered();
     const billedToUser = byokProviders.has(providerOf(modelId));
     if (
       !this.catalog.isSupported(modelId) ||
@@ -126,11 +146,7 @@ export class SelectableModelsService {
     ) {
       return null;
     }
-    const listed = offered.find((m) => m.id === modelId);
-    const reasoning = listed
-      ? listed.reasoning
-      : routeReasoning(modelId, offered);
-    return offeredReasoning(reasoning, billedToUser) ?? null;
+    return offeredReasoning(this.indexReasoning(modelId), billedToUser) ?? null;
   }
 
   toSelectable(catalog: TierCatalog): SelectableModel[] {
@@ -153,6 +169,25 @@ export class SelectableModelsService {
         ...(servesIntent ? { servesIntent } : {}),
       };
     });
+  }
+
+  // Each index refresh serves a new catalog instance, so keying on it re-resolves
+  // the selectors once per refresh and never per request.
+  private byokResolutions(): ByokResolutions {
+    const catalog = this.index.catalog();
+    const memoized = this.byokMemo.get(catalog);
+    if (memoized) {
+      return memoized;
+    }
+    const resolutions = resolveByokSelectors(catalog.all(), new Date());
+    this.byokMemo.set(catalog, resolutions);
+    return resolutions;
+  }
+
+  private indexReasoning(modelId: string): ModelReasoning | undefined {
+    return toModelReasoning(
+      this.index.catalog().get(modelId)?.reasoning ?? null
+    );
   }
 
   private costClass(id: string): 1 | 2 | 3 {

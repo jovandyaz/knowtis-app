@@ -1,4 +1,4 @@
-import { providerOf } from '@knowtis/ai-gateway';
+import { providerOf, type IndexedModel } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
   MODEL_INTENTS,
@@ -15,11 +15,12 @@ import {
   type CatalogScope,
 } from '../execution-context/tier-policy';
 import {
-  BYOK_INTENT_CANDIDATES,
-  canonicalOf,
   effectivePrimary,
+  reachableRoutes,
   routeIntent,
+  type ByokResolutions,
 } from './byok-intent-routes';
+import { toModelReasoning } from './index-reasoning';
 
 export interface OfferedModel {
   readonly id: string;
@@ -56,9 +57,17 @@ export interface TierCatalogInput {
   readonly offered: readonly OfferedModel[];
   readonly isSupported: (modelId: string) => boolean;
   readonly isPlatformRoutable: (modelId: string) => boolean;
+  readonly indexRow: (modelId: string) => IndexedModel | undefined;
+  readonly byok: ByokResolutions;
 }
 
 const NO_ROUTE = 'no_route';
+const PROVIDER_SEPARATOR = ':';
+
+/** The picker copy shared by every model listed for an intent. */
+export function intentDescriptionKey(intent: ModelIntent): string {
+  return `aiModels.class.${intent}`;
+}
 
 /** Every model a tier may run and which intent each serves: the one scope that listing, turns and preference writes share. */
 export function tierCatalog(input: TierCatalogInput): TierCatalog {
@@ -76,28 +85,18 @@ export function tierCatalog(input: TierCatalogInput): TierCatalog {
   }
 }
 
-/** The effort ladder another route of the same canonical model declares, so a model reached only over OpenRouter keeps its effort control. */
-export function routeReasoning(
+function fromIndexRow(
   modelId: string,
-  offered: readonly OfferedModel[]
-): ModelReasoning | undefined {
-  const siblings: readonly string[] = Object.values(
-    canonicalOf(modelId)?.routes ?? {}
-  );
-  return offered.find(
-    (model) =>
-      model.id !== modelId && siblings.includes(model.id) && model.reasoning
-  )?.reasoning;
-}
-
-// An operator-configured intent stays servable when the offered list lacks it
-// (its promotion was withdrawn, or the promoted cache is still cold).
-function configuredModel(modelId: string, intent: ModelIntent): OfferedModel {
+  intent: ModelIntent,
+  row: IndexedModel | undefined
+): OfferedModel {
+  const reasoning = toModelReasoning(row?.reasoning ?? null);
   return {
     id: modelId,
-    label: modelId.slice(modelId.indexOf(':') + 1),
-    descriptionKey: '',
+    label: row?.name ?? modelId.slice(modelId.indexOf(PROVIDER_SEPARATOR) + 1),
+    descriptionKey: intentDescriptionKey(intent),
     tier: intent,
+    ...(reasoning ? { reasoning } : {}),
   };
 }
 
@@ -111,8 +110,12 @@ function platformCatalog(
   for (const intent of intents) {
     const modelId = input.platformIntents[intent];
     if (input.isSupported(modelId) && input.isPlatformRoutable(modelId)) {
+      // An operator-configured intent stays servable when the offered list lacks
+      // it (its promotion was withdrawn, or the promoted cache is still cold).
       models.push({
-        model: byId.get(modelId) ?? configuredModel(modelId, intent),
+        model:
+          byId.get(modelId) ??
+          fromIndexRow(modelId, intent, input.indexRow(modelId)),
         servesIntent: intent,
       });
       availability.push({
@@ -136,46 +139,42 @@ function platformCatalog(
 function keyCatalog(input: TierCatalogInput): TierCatalog {
   const held = new Set<string>(input.heldProviders);
   const primary = effectivePrimary(input.heldProviders, input.storedPrimary);
+  const listed = input.offered.filter(
+    (model) => held.has(providerOf(model.id)) && input.isSupported(model.id)
+  );
+  const listedIds = new Set(listed.map((model) => model.id));
   const intentOf = new Map<string, ModelIntent>();
   const availability: IntentAvailability[] = [];
   const routed: OfferedModel[] = [];
   for (const intent of MODEL_INTENTS) {
-    const route = routeIntent(
-      BYOK_INTENT_CANDIDATES[intent],
-      input.heldProviders,
-      primary,
-      input.isSupported
-    );
+    const candidates = input.byok[intent];
+    const route = routeIntent(candidates, input.heldProviders, primary);
     if (route === null) {
       availability.push({ intent, available: false, reason: NO_ROUTE });
       continue;
     }
-    intentOf.set(route.modelId, intent);
+    intentOf.set(route.row.id, intent);
     availability.push({
       intent,
       available: true,
-      modelId: route.modelId,
+      modelId: route.row.id,
       substituted: route.substituted,
     });
-    if (!input.offered.some((model) => model.id === route.modelId)) {
-      const reasoning = routeReasoning(route.modelId, input.offered);
-      routed.push({
-        id: route.modelId,
-        label: route.label,
-        descriptionKey: '',
-        tier: intent,
-        ...(reasoning ? { reasoning } : {}),
-      });
+    for (const row of reachableRoutes(
+      candidates,
+      input.heldProviders,
+      primary
+    )) {
+      if (!listedIds.has(row.id)) {
+        listedIds.add(row.id);
+        routed.push(fromIndexRow(row.id, intent, row));
+      }
     }
   }
-  const models = [...input.offered, ...routed]
-    .filter(
-      (model) => held.has(providerOf(model.id)) && input.isSupported(model.id)
-    )
-    .map((model) => {
-      const servesIntent = intentOf.get(model.id);
-      return servesIntent ? { model, servesIntent } : { model };
-    });
+  const models = [...listed, ...routed].map((model) => {
+    const servesIntent = intentOf.get(model.id);
+    return servesIntent ? { model, servesIntent } : { model };
+  });
   return {
     tier: input.tier,
     billing: CATALOG_BILLING.KEY,

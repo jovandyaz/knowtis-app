@@ -139,7 +139,6 @@ export const AssignableModelSchema = z.object({
   tier: z.enum(MODEL_TIERS),
   provider: z.string(),
   routableByServer: z.boolean(),
-  needsKey: z.boolean(),
   promoted: z.boolean(),
 });
 
