@@ -37,26 +37,37 @@ describe('PromotedModelsCache', () => {
     expect(cache.snapshot()).toEqual([]);
   });
 
-  it('has not loaded before its first read', () => {
+  it('is not fresh before its first read', () => {
     const { cache } = createCache({ models: [PROMOTED_MODEL], failure: null });
 
-    expect(cache.hasLoaded()).toBe(false);
+    expect(cache.isFresh()).toBe(false);
   });
 
-  it('has loaded once a read succeeds, and stays loaded when a later one fails', async () => {
-    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-    const script: RepositoryScript = { models: [], failure: null };
-    const { cache } = createCache(script);
+  it('is fresh once a read succeeds', async () => {
+    const { cache } = createCache({ models: [], failure: null });
 
     await cache.onModuleInit();
-    expect(cache.hasLoaded()).toBe(true);
+
+    expect(cache.isFresh()).toBe(true);
+  });
+
+  it('is not fresh after a later read fails, though the snapshot keeps the previous rows', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const script: RepositoryScript = {
+      models: [PROMOTED_MODEL],
+      failure: null,
+    };
+    const { cache } = createCache(script);
+    await cache.onModuleInit();
 
     script.failure = new Error('database unreachable');
     await cache.refresh();
-    expect(cache.hasLoaded()).toBe(true);
+
+    expect(cache.isFresh()).toBe(false);
+    expect(cache.snapshot()).toEqual([PROMOTED_MODEL]);
   });
 
-  it('has not loaded while every read has failed', async () => {
+  it('is not fresh while every read has failed', async () => {
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const { cache } = createCache({
       models: [PROMOTED_MODEL],
@@ -66,7 +77,30 @@ describe('PromotedModelsCache', () => {
     await cache.onModuleInit();
     await cache.refresh();
 
-    expect(cache.hasLoaded()).toBe(false);
+    expect(cache.isFresh()).toBe(false);
+  });
+
+  it('is not flipped by a slow read that fails after a newer success', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const gates: Array<{
+      resolve: (models: CatalogModel[]) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    const repository = createCatalogRepositoryStub(
+      () =>
+        new Promise<CatalogModel[]>((resolve, reject) => {
+          gates.push({ resolve, reject });
+        })
+    );
+    const cache = new PromotedModelsCache(repository);
+
+    const slow = cache.refresh();
+    const fresh = cache.refresh();
+    gates[1].resolve([PROMOTED_MODEL]);
+    gates[0].reject(new Error('database unreachable'));
+    await Promise.all([slow, fresh]);
+
+    expect(cache.isFresh()).toBe(true);
   });
 
   it('warms the snapshot with promoted models on module init', async () => {

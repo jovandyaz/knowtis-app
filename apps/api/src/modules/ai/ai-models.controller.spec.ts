@@ -49,7 +49,7 @@ function makeWired(
   } = { preferredModel: null, preferredIntent: null }
 ) {
   const index = createSnapshotIndex();
-  const promoted = { snapshot: () => [], hasLoaded: () => true };
+  const promoted = { snapshot: () => [], isFresh: () => true };
   const selectable = new SelectableModelsService(
     {
       isSupported: () => true,

@@ -88,8 +88,8 @@ export class ModelPreferenceService {
   /**
    * The model a turn runs on. A stored pick the synced index has retired is
    * named as `retiredPick`, for the turn to forget once it has delivered the
-   * report; never while the index still serves the vendored snapshot or the
-   * promoted models have not loaded.
+   * report; never unless the latest refresh of both caches succeeded (the
+   * index with listed rows).
    */
   async chooseTurnModel(
     execution: AiExecutionContext,
@@ -99,7 +99,7 @@ export class ModelPreferenceService {
       this.aiConfig.getIntentModels(),
       this.settings.getSettings(execution.subject.userId),
     ]);
-    const mayForget = !this.index.servesSnapshot() && this.promoted.hasLoaded();
+    const mayForget = this.index.servesFreshIndex() && this.promoted.isFresh();
     const { catalog, facts } = this.scopeOf(
       execution,
       platformIntents,

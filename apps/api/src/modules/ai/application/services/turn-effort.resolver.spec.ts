@@ -346,7 +346,7 @@ describe('TurnEffortResolver', () => {
       isModelAvailable: (model: string) => boolean = () => false
     ) {
       const index = createSnapshotIndex();
-      const promoted = { snapshot: () => [], hasLoaded: () => true };
+      const promoted = { snapshot: () => [], isFresh: () => true };
       const selectable = new SelectableModelsService(
         {
           isSupported: () => true,

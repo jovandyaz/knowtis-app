@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
+import { MODEL_INDEX_SNAPSHOT } from '@knowtis/ai-gateway';
 import type {
   ByokProvider,
   ModelIntent,
@@ -15,9 +16,11 @@ import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import type { UserAiSettings } from '../../domain/ports/user-ai-settings.repository';
+import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
+import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import {
   createSnapshotIndex,
   createSyncedSnapshotIndex,
@@ -40,11 +43,11 @@ function makeChooser(
   } = {},
   promoted: readonly CatalogModel[] = [],
   index = createSnapshotIndex(),
-  promotedLoaded = true
+  promotedFresh = true
 ) {
   const promotedCache = {
     snapshot: () => promoted,
-    hasLoaded: vi.fn(() => promotedLoaded),
+    isFresh: vi.fn(() => promotedFresh),
   };
   const selectable = new SelectableModelsService(
     {
@@ -861,13 +864,13 @@ describe('ModelPreferenceService', () => {
 
       async function retiringChooser(
         preferredIntent: ModelIntent | null = null,
-        promotedLoaded = true
+        promotedFresh = true
       ) {
         return makeChooser(
           { preferredModel: SUPERSEDED_SONNET, preferredIntent },
           [],
           await createSyncedSnapshotIndex(),
-          promotedLoaded
+          promotedFresh
         );
       }
 
@@ -912,18 +915,43 @@ describe('ModelPreferenceService', () => {
         expect(repo.clearPreferredModel).not.toHaveBeenCalled();
       });
 
-      it('names nothing until the promoted models have loaded, since a promoted pick would read as retired', async () => {
+      it('names nothing while the latest promoted models refresh failed, since a promoted pick would read as retired', async () => {
         const { svc, repo, promotedCache } = await retiringChooser(null, false);
 
         await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
           RETIRED_PICK_FALLBACK
         );
-        promotedCache.hasLoaded.mockReturnValue(true);
+        promotedCache.isFresh.mockReturnValue(true);
         await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual({
           ...RETIRED_PICK_FALLBACK,
           retiredPick: SUPERSEDED_SONNET,
         });
         expect(repo.clearPreferredModel).not.toHaveBeenCalled();
+      });
+
+      it('names nothing once the index refresh failed, though the catalog it keeps still lists rows', async () => {
+        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+        let failing = false;
+        const index = new ModelIndexCache(
+          createModelIndexRepositoryStub(async () => {
+            if (failing) {
+              throw new Error('database unreachable');
+            }
+            return [...MODEL_INDEX_SNAPSHOT];
+          })
+        );
+        await index.refresh();
+        failing = true;
+        await index.refresh();
+        const { svc } = makeChooser(
+          { preferredModel: SUPERSEDED_SONNET },
+          [],
+          index
+        );
+
+        await expect(svc.chooseTurnModel(BYOK_ANTHROPIC, {})).resolves.toEqual(
+          RETIRED_PICK_FALLBACK
+        );
       });
 
       it('names nothing for a pinned prior model reporting the same retirement, so the turn that resolves the pick still reports it', async () => {
