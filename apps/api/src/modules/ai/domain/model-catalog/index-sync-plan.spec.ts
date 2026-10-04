@@ -9,12 +9,17 @@ import {
 
 import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import { isoDateOf, MS_PER_DAY } from '../value-objects/utc-day';
 import { byokFloorKey } from './floor-models';
 import {
   planIndexSync,
   SYNC_MAX_SHRINK_RATIO,
   type ProviderBatch,
 } from './index-sync-plan';
+import {
+  resolvePlatformIntent,
+  RETIREMENT_WINDOW_DAYS,
+} from './model-selectors';
 import { SELECTOR_KEY_BY_INTENT } from './platform-resolution';
 
 const NOTHING_SERVED: readonly IndexedModel[] = [];
@@ -29,6 +34,7 @@ function snapshotRow(id: string): IndexedModel {
 
 const [, BALANCED_FLOOR_ROW] = PLATFORM_FLOOR_ROWS;
 const RETIRED_DEFAULT_ID = 'openrouter:deepseek/deepseek-v3.2';
+const OLDER_BALANCED_ID = 'openrouter:deepseek/deepseek-v4-pro';
 const ANTHROPIC_FAST_ROUTE = snapshotRow('anthropic:claude-haiku-4-5');
 
 const NOTHING_LISTED: Readonly<Record<IndexProvider, number>> = {
@@ -310,6 +316,34 @@ describe('planIndexSync', () => {
     const plan = planIndexSync([openrouter], listed, listed);
 
     expect(listed).toContain(snapshotRow(RETIRED_DEFAULT_ID));
+    expect(plan.upserts).toEqual(openrouter.rows);
+    expect(plan.concludeAbsence).toEqual(['openrouter']);
+    expect(plan.rejected).toEqual([]);
+  });
+
+  it('accepts an OpenRouter batch whose balanced resolution enters its retirement window', () => {
+    const listed = MODEL_INDEX_SNAPSHOT.filter(
+      (row) => row.provider === 'openrouter'
+    );
+    const retiresAt = isoDateOf(
+      new Date(
+        SNAPSHOT_DATE.getTime() + (RETIREMENT_WINDOW_DAYS - 1) * MS_PER_DAY
+      )
+    );
+    const openrouter: ProviderBatch = {
+      provider: 'openrouter',
+      rows: listed.map((row) =>
+        row.id === BALANCED_FLOOR_ROW.id ? { ...row, retiresAt } : row
+      ),
+      conclusive: true,
+      discarded: [],
+    };
+
+    const plan = planIndexSync([openrouter], listed, listed);
+
+    expect(
+      resolvePlatformIntent('balanced', openrouter.rows, SNAPSHOT_DATE)?.id
+    ).toBe(OLDER_BALANCED_ID);
     expect(plan.upserts).toEqual(openrouter.rows);
     expect(plan.concludeAbsence).toEqual(['openrouter']);
     expect(plan.rejected).toEqual([]);

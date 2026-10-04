@@ -359,7 +359,8 @@ describe('ModelIndexWriter', () => {
     expect(result.absent).toBe(6);
     expect(logLog).toHaveBeenCalledWith({
       event: 'ai.model_index.sync',
-      indexed: LISTED_ROWS.length,
+      indexed:
+        openRouterCatalog().models.length + modelsDevCatalog().models.length,
       absent: 6,
     });
   });
@@ -691,6 +692,27 @@ describe('ModelIndexWriter', () => {
       rows: OPENROUTER_ROWS,
       previous: OPENROUTER_ROWS,
     });
+  });
+
+  it('should write none of an OpenRouter batch whose platform rows lost tool calling and structured output', async () => {
+    const { writer, repo } = make();
+    const toolless = openRouterCatalog().models.map((model) =>
+      PLATFORM_SLUGS.includes(model.id)
+        ? { ...model, supportedParameters: [] }
+        : model
+    );
+
+    const result = await writer.write(
+      openRouterCatalog({ models: toolless }),
+      modelsDevCatalog()
+    );
+
+    expect(upsertedIds(repo).sort()).toEqual(
+      [CLAUDE.id, GPT.id, GEMINI.id].sort()
+    );
+    expect(result.rejected).toEqual([
+      { provider: 'openrouter', reason: 'floor', models: PLATFORM_FLOOR_KEYS },
+    ]);
   });
 
   it('should write none of a batch that drops the only route its provider serves for a BYOK intent', async () => {
@@ -1036,6 +1058,11 @@ describe('ModelIndexWriter', () => {
   });
 
   it('should reject a batch whose discarded floor model has no listed row to keep', async () => {
+    const balancedFamilySlugs = MODEL_INDEX_SNAPSHOT.filter(
+      (row) =>
+        row.provider === 'openrouter' &&
+        row.family === BALANCED_PLATFORM_ROW.family
+    ).map((row) => row.id.slice(OPENROUTER_ID_PREFIX.length));
     const { writer, repo } = make(
       LISTED_ROWS.filter((row) => row.provider !== 'openrouter')
     );
@@ -1043,7 +1070,7 @@ describe('ModelIndexWriter', () => {
     const result = await writer.write(
       openRouterCatalog({
         models: FRESH_OPENROUTER_MODELS.filter(
-          (model) => model.id !== BALANCED_PLATFORM_SLUG
+          (model) => !balancedFamilySlugs.includes(model.id)
         ),
         discarded: [BALANCED_PLATFORM_SLUG],
       }),

@@ -93,7 +93,7 @@ describe('snapshotRefusals', () => {
     expect(refusals[0]).toContain(SELECTOR_KEY_BY_INTENT.powerful);
   });
 
-  it('names a floor model whose input is unpriced', () => {
+  it("names the platform intent whose resolution's input is unpriced", () => {
     const refusals = refusalsFor(
       createFloorRows((row) =>
         row.id === UNPRICED_MODEL_ID ? { ...row, inputCostPerToken: null } : row

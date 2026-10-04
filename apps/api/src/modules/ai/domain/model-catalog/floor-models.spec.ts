@@ -111,6 +111,24 @@ describe('unservedFloorModels', () => {
     expect(unservedFloorModels(catalog, SNAPSHOT_DATE)).toEqual(PLATFORM_KEYS);
   });
 
+  it('names the platform intents whose resolution lost tool calling or structured output', () => {
+    const catalog = catalogOf((row) => {
+      switch (row.id) {
+        case FAST_RESOLUTION:
+          return { ...row, toolCall: false };
+        case BALANCED_RESOLUTION:
+          return { ...row, structuredOutput: false };
+        default:
+          return row;
+      }
+    });
+
+    expect(unservedFloorModels(catalog, SNAPSHOT_DATE)).toEqual([
+      FAST_KEY,
+      BALANCED_KEY,
+    ]);
+  });
+
   it('names the unserved platform intents before the unserved BYOK routes', () => {
     expect(
       unservedFloorModels(
