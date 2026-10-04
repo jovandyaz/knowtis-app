@@ -362,6 +362,10 @@ export class AIConfigService implements PlatformModelsSource {
     this.validateValue(CONFIG_KEYS[key], value);
     await this.assertIntentModelsStayDistinct(key, value);
     const previous = await this.repository.get(key);
+    const intent = intentOfConfigKey(key);
+    const servedBefore = intent
+      ? this.servedIntentModel(intent, previous ?? AUTO_MODEL_SETTING)
+      : NO_SERVED_MODEL;
     await this.repository.set(key, value, description);
     try {
       await this.cache.del(`${CACHE_PREFIX}${key}`);
@@ -380,21 +384,8 @@ export class AIConfigService implements PlatformModelsSource {
       ...(previous !== null ? { before: { value: previous } } : {}),
       after: { value },
     });
-    const intent = intentOfConfigKey(key);
     if (intent) {
-      const servedBefore = this.servedIntentModel(
-        intent,
-        previous ?? AUTO_MODEL_SETTING
-      );
-      // An active model is platform-billed anyway, so recording it would only cut
-      // short the grace of the model an earlier release recorded.
-      if (
-        servedBefore !== NO_SERVED_MODEL &&
-        servedBefore !== value &&
-        servedBefore !== this.resolutions.activeModelId(intent)
-      ) {
-        await this.recordRelease(intent, servedBefore);
-      }
+      await this.recordReleaseIfLeft(intent, servedBefore, value);
     }
     this.logger.log(`AI config '${key}' updated to '${value}'`);
   }
@@ -407,6 +398,10 @@ export class AIConfigService implements PlatformModelsSource {
     if (!deleted) {
       return;
     }
+    const intent = intentOfConfigKey(key);
+    const servedBefore = intent
+      ? this.servedIntentModel(intent, deleted.value)
+      : NO_SERVED_MODEL;
     try {
       await this.cache.del(`${CACHE_PREFIX}${key}`);
     } catch (error) {
@@ -423,17 +418,27 @@ export class AIConfigService implements PlatformModelsSource {
       targetId: key,
       before: { value: deleted.value },
     });
-    const intent = intentOfConfigKey(key);
     if (intent) {
-      const servedBefore = this.servedIntentModel(intent, deleted.value);
-      if (
-        servedBefore !==
-        (this.resolutions.activeModelId(intent) ?? NO_SERVED_MODEL)
-      ) {
-        await this.recordRelease(intent, servedBefore);
-      }
+      await this.recordReleaseIfLeft(intent, servedBefore, AUTO_MODEL_SETTING);
     }
     this.logger.log(`Reset AI config '${key}'`);
+  }
+
+  // An active model is platform-billed anyway, so recording it would only cut
+  // short the grace of the model an earlier release recorded.
+  private async recordReleaseIfLeft(
+    intent: ModelIntent,
+    servedBefore: string,
+    newValue: string
+  ): Promise<void> {
+    const active = this.resolutions.activeModelId(intent);
+    if (
+      servedBefore !== NO_SERVED_MODEL &&
+      servedBefore !== newValue &&
+      servedBefore !== active
+    ) {
+      await this.recordRelease(intent, servedBefore);
+    }
   }
 
   /** Best-effort: the config change is already stored; a lost record only shortens that model's billing grace. */

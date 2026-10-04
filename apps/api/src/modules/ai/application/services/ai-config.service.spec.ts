@@ -808,6 +808,38 @@ describe('AIConfigService', () => {
       expect(refreshed).toBeGreaterThan(recorded ?? Infinity);
     });
 
+    it('records the pin served before the write even if the catalog drops it meanwhile', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      mockRepo.set.mockImplementation(async () => {
+        mockCatalog.isSupported.mockImplementation(
+          (id: string) => id !== DEAD_PIN_SUPPORTED
+        );
+      });
+      await service.setConfig('ai_deep_model', DEEP_PIN, ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.powerful',
+        DEAD_PIN_SUPPORTED,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('records the pin a release deleted even if the catalog drops it meanwhile', async () => {
+      mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
+      mockCache.del.mockImplementation(async () => {
+        mockCatalog.isSupported.mockImplementation(
+          (id: string) => id !== FAST_PIN
+        );
+      });
+      await service.resetConfig('ai_fast_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.fast',
+        FAST_PIN,
+        SNAPSHOT_DATE
+      );
+    });
+
     it('records nothing when re-pinning the model the intent already serves', async () => {
       mockRepo.get.mockImplementation(async (key: string) =>
         key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
