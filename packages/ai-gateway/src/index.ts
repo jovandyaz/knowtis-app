@@ -44,7 +44,10 @@ export {
   type OpenRouterModelInput,
 } from './catalog/normalize-openrouter';
 export { ModelIndexCatalog } from './catalog/model-index-catalog';
-export { MODEL_INDEX_SNAPSHOT } from './catalog/model-index.snapshot';
+export {
+  MODEL_INDEX_SNAPSHOT,
+  MODEL_INDEX_SNAPSHOT_DATE,
+} from './catalog/model-index.snapshot';
 export { TRANSCRIPTION_PRICES } from './catalog/transcription-prices';
 export {
   computeTokenCostUsd,

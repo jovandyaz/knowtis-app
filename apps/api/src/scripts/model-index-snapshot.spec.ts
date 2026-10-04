@@ -1,6 +1,13 @@
+import { readFileSync } from 'node:fs';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ModelIndexCatalog, type IndexedModel } from '@knowtis/ai-gateway';
+import {
+  MODEL_INDEX_SNAPSHOT,
+  MODEL_INDEX_SNAPSHOT_DATE,
+  ModelIndexCatalog,
+  type IndexedModel,
+} from '@knowtis/ai-gateway';
 
 import { AI_SETTING_DEFAULTS } from '../modules/ai/domain/ai-settings';
 import type { ModelsDevCatalog } from '../modules/ai/domain/ports/models-dev.port';
@@ -11,6 +18,7 @@ import { SNAPSHOT_DATE } from '../modules/ai/testing/snapshot-index';
 import {
   renderModelIndexSnapshot,
   SNAPSHOT_HEADER,
+  SNAPSHOT_PATH,
   snapshotRefusals,
 } from './model-index-snapshot';
 
@@ -117,9 +125,10 @@ describe('renderModelIndexSnapshot', () => {
   });
   const mid = createIndexedModel({ id: 'openrouter:vendor/mid' });
   const rows = [zeta, alpha, mid];
+  const GENERATED_AT = new Date('2026-10-03T23:59:59.999Z');
 
   it('opens with the generated-by header and the IndexedModel type import', () => {
-    const lines = renderModelIndexSnapshot(rows).split('\n');
+    const lines = renderModelIndexSnapshot(rows, GENERATED_AT).split('\n');
 
     expect(lines[0]).toBe(SNAPSHOT_HEADER);
     expect(lines).toContain(
@@ -130,8 +139,16 @@ describe('renderModelIndexSnapshot', () => {
     );
   });
 
+  it('dates the snapshot with the UTC day it was generated', () => {
+    const lines = renderModelIndexSnapshot(rows, GENERATED_AT).split('\n');
+
+    expect(lines).toContain(
+      "export const MODEL_INDEX_SNAPSHOT_DATE = '2026-10-03';"
+    );
+  });
+
   it('writes one JSON row per line, sorted by id', () => {
-    const source = renderModelIndexSnapshot(rows);
+    const source = renderModelIndexSnapshot(rows, GENERATED_AT);
     const rowLines = source
       .split('\n')
       .filter((line) => line.trimStart().startsWith('{'));
@@ -140,5 +157,14 @@ describe('renderModelIndexSnapshot', () => {
       rowLines.map((line) => JSON.parse(line.trim().slice(0, -1)))
     ).toEqual([alpha, mid, zeta]);
     expect(source.endsWith('];\n')).toBe(true);
+  });
+
+  it('reproduces the committed snapshot from its own rows and date', () => {
+    expect(
+      renderModelIndexSnapshot(
+        MODEL_INDEX_SNAPSHOT,
+        new Date(MODEL_INDEX_SNAPSHOT_DATE)
+      )
+    ).toBe(readFileSync(SNAPSHOT_PATH, 'utf8'));
   });
 });
