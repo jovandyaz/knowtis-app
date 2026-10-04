@@ -38,7 +38,7 @@ export interface ModelIndexWriteResult {
   /** Rows newly marked absent. */
   readonly absent: number;
   readonly rejected: IndexSyncPlan['rejected'];
-  /** Providers whose conclusive batch was accepted and concluded absence; a first batch that concludes only because nothing was listed or served is left out. */
+  /** Providers whose batch concluded absence. */
   readonly concluded: readonly IndexProvider[];
 }
 
@@ -193,9 +193,7 @@ export class ModelIndexWriter {
       indexed,
       absent,
       rejected: plan.rejected,
-      concluded: plan.concludeAbsence.filter(
-        (provider) => batchOf.get(provider)?.conclusive === true
-      ),
+      concluded: plan.concludeAbsence,
     };
   }
 
