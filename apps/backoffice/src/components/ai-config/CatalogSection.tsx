@@ -1,6 +1,7 @@
 import {
   useAiCatalog,
   useAiConfig,
+  usePlatformResolutions,
   useResolveCatalogAlert,
   useRetireCatalogModel,
   useSyncCatalog,
@@ -14,12 +15,15 @@ import {
   MutationErrorAlert,
 } from '@knowtis/design-system';
 import type { CatalogSyncSkipReason } from '@knowtis/shared-types';
+import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { CandidatesTable } from './CandidatesTable';
 import { CatalogAlerts } from './CatalogAlerts';
 import { ConfigSection } from './ConfigSection';
 import { PromotedTable } from './PromotedTable';
 import { servingRolesFrom } from './serving-roles';
+
+const LAST_SYNC_LOCALE = 'en';
 
 const SYNC_SKIP_MESSAGES: Record<string, string> = {
   locked: 'Skipped: another sync is already running.',
@@ -46,6 +50,7 @@ export function CatalogSection() {
   const updateCopy = useUpdateCatalogCopy();
   const resolveAlert = useResolveCatalogAlert();
   const sync = useSyncCatalog();
+  const lastSyncAt = usePlatformResolutions().data?.lastSyncAt ?? null;
 
   const mutations = [retire, updateCopy, resolveAlert, sync];
   const mutating = mutations.some((mutation) => mutation.isPending);
@@ -59,14 +64,27 @@ export function CatalogSection() {
       title="Model catalog"
       description="Open-weight models the sync found upstream. Promoting one publishes it to the model list; its stored price still decides who may run it."
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => sync.mutate()}
-          disabled={mutating}
-        >
-          {sync.isPending ? 'Syncing…' : 'Sync now'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {lastSyncAt ? (
+            <span className="text-xs text-(--muted-foreground)">
+              Last sync{' '}
+              <time
+                dateTime={lastSyncAt.toISOString()}
+                title={lastSyncAt.toLocaleString()}
+              >
+                {formatRelativeTime(lastSyncAt, LAST_SYNC_LOCALE)}
+              </time>
+            </span>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => sync.mutate()}
+            disabled={mutating}
+          >
+            {sync.isPending ? 'Syncing…' : 'Sync now'}
+          </Button>
+        </div>
       }
     >
       {catalog.isError ? (

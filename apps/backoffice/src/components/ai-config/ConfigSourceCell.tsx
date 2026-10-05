@@ -17,7 +17,24 @@ const PIN_SOURCE_LABELS = {
 } as const satisfies Record<AIConfigSource, string>;
 
 const RESET_LABEL = 'Reset to default';
-const RELEASE_LABEL = 'Release pin';
+export const RELEASE_LABEL = 'Release pin';
+
+interface ConfigSourceBadgeProps {
+  source: AIConfigSource;
+  /** A model or chain setting, whose sources read as auto, pinned or stale. */
+  pinnable?: boolean;
+}
+
+export function ConfigSourceBadge({
+  source,
+  pinnable = false,
+}: ConfigSourceBadgeProps) {
+  return (
+    <Badge variant={SOURCE_BADGE_VARIANTS[source]}>
+      {pinnable ? PIN_SOURCE_LABELS[source] : source}
+    </Badge>
+  );
+}
 
 interface ConfigSourceCellProps {
   entry: AiConfigEntry;
@@ -42,9 +59,7 @@ export function ConfigSourceCell({
 
   return (
     <div className="flex items-center gap-2">
-      <Badge variant={SOURCE_BADGE_VARIANTS[entry.source]}>
-        {pinnable ? PIN_SOURCE_LABELS[entry.source] : entry.source}
-      </Badge>
+      <ConfigSourceBadge source={entry.source} pinnable={pinnable} />
       {entry.source === 'stale' ? (
         <span className="text-xs text-(--muted-foreground)">
           stored <span className="font-mono">{entry.storedValue}</span> is no
