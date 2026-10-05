@@ -73,7 +73,8 @@ export class OpenRouterKeyModelsClient implements ProviderModelsClient {
           headers,
           signal
         ),
-      parsePage
+      parsePage,
+      keyAccepted
     ).catch(() => UNKNOWN_LISTING);
     return listing.kind === PROVIDER_LISTING_KIND.LISTED
       ? listing

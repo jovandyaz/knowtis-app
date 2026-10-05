@@ -43,14 +43,19 @@ function parsePage(body: unknown): ListingPage | null {
 
 /** Lists what an Anthropic key can call: `GET /v1/models`, following `has_more` through `last_id`. */
 export class AnthropicModelsClient implements ProviderModelsClient {
-  list(apiKey: string, signal: AbortSignal): Promise<ProviderListing> {
+  list(
+    apiKey: string,
+    signal: AbortSignal,
+    keyAccepted: () => void
+  ): Promise<ProviderListing> {
     const headers = {
       'x-api-key': apiKey,
       'anthropic-version': ANTHROPIC_API_VERSION,
     };
     return paginatedListing(
       (afterId) => getListingJson(pageUrl(afterId), headers, signal),
-      parsePage
+      parsePage,
+      keyAccepted
     );
   }
 }

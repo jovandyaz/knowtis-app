@@ -5,6 +5,7 @@ import type { ProviderListing } from '../../../domain/ports/provider-models.port
 import {
   listingCall,
   stubListingFetch,
+  stubListingFetchThenHang,
   type ListingFetch,
 } from '../../../testing/stub-listing-fetch';
 import { HttpProviderModelsLister } from './http-provider-models.lister';
@@ -173,12 +174,7 @@ describe('OpenRouterKeyModelsClient', () => {
 
   it('lists null when the user models read hangs after the key was accepted', async () => {
     vi.useFakeTimers();
-    const fetchMock = vi.fn<ListingFetch>(async (url) =>
-      String(url) === KEY_URL
-        ? new Response(JSON.stringify(OPENROUTER_KEY))
-        : new Promise<never>(() => undefined)
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubListingFetchThenHang({ body: OPENROUTER_KEY });
 
     const pending = new HttpProviderModelsLister().list('openrouter', API_KEY);
     await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
@@ -190,10 +186,7 @@ describe('OpenRouterKeyModelsClient', () => {
 
   it('answers unavailable when /key hangs past the bound', async () => {
     vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn<ListingFetch>(() => new Promise<never>(() => undefined))
-    );
+    stubListingFetchThenHang();
 
     const pending = new HttpProviderModelsLister().list('openrouter', API_KEY);
     await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);

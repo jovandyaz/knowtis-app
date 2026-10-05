@@ -118,12 +118,14 @@ export function entryIds(entries: readonly unknown[]): string[] {
 /**
  * Follows a cursor-paginated listing for at most MAX_LISTING_PAGES pages. The
  * first page decides the key: its non-2xx is `refusalOf`, its unreadable body
- * (`parsePage` returns null) MALFORMED_LISTING. After it, a failed or
- * unreadable page, a repeated cursor or the page cap leave the list unknown.
+ * (`parsePage` returns null) MALFORMED_LISTING, and a readable page calls
+ * `keyAccepted`. After it, a failed or unreadable page, a repeated cursor or
+ * the page cap leave the list unknown.
  */
 export async function paginatedListing(
   readPage: (cursor: string | null) => Promise<ListingResponse>,
   parsePage: (body: unknown) => ListingPage | null,
+  keyAccepted: () => void,
   isKeyRefusal?: (response: ListingRefusal) => boolean
 ): Promise<ProviderListing> {
   const ids: string[] = [];
@@ -139,6 +141,7 @@ export async function paginatedListing(
     if (page === null) {
       return isFirstPage ? MALFORMED_LISTING : UNKNOWN_LISTING;
     }
+    keyAccepted();
     ids.push(...page.ids);
     if (page.next === null) {
       return listedOf(ids);

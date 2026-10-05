@@ -77,11 +77,16 @@ function isGoogleKeyRefusal(response: ListingRefusal): boolean {
 
 /** Lists what a Gemini key can call: `GET /v1beta/models`, following `nextPageToken`, with the key in a header so it never lands in a URL. */
 export class GoogleModelsClient implements ProviderModelsClient {
-  list(apiKey: string, signal: AbortSignal): Promise<ProviderListing> {
+  list(
+    apiKey: string,
+    signal: AbortSignal,
+    keyAccepted: () => void
+  ): Promise<ProviderListing> {
     const headers = { 'x-goog-api-key': apiKey };
     return paginatedListing(
       (pageToken) => getListingJson(pageUrl(pageToken), headers, signal),
       parsePage,
+      keyAccepted,
       isGoogleKeyRefusal
     );
   }

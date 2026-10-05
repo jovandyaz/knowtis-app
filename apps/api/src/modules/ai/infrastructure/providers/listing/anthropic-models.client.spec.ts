@@ -5,12 +5,15 @@ import type { ProviderListing } from '../../../domain/ports/provider-models.port
 import {
   listingCall,
   stubListingFetch,
+  stubListingFetchThenHang,
 } from '../../../testing/stub-listing-fetch';
 import {
   ANTHROPIC_API_VERSION,
   AnthropicModelsClient,
 } from './anthropic-models.client';
+import { HttpProviderModelsLister } from './http-provider-models.lister';
 import {
+  LISTING_TIMEOUT_MS,
   MALFORMED_LISTING,
   MAX_LISTING_PAGES,
   UNKNOWN_LISTING,
@@ -31,7 +34,8 @@ const RECORDED_IDS = [
 function list(): Promise<ProviderListing> {
   return new AnthropicModelsClient().list(
     API_KEY,
-    new AbortController().signal
+    new AbortController().signal,
+    () => undefined
   );
 }
 
@@ -44,7 +48,35 @@ function listedIds(listing: ProviderListing): readonly string[] {
 
 describe('AnthropicModelsClient', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('lists null when a later page hangs after the first page answered', async () => {
+    vi.useFakeTimers();
+    const fetchMock = stubListingFetchThenHang({
+      body: ANTHROPIC_MODELS_PAGE_1,
+    });
+
+    const pending = new HttpProviderModelsLister().list('anthropic', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(listingCall(fetchMock, 1).init.signal?.aborted).toBe(true);
+  });
+
+  it('stays unavailable when the first page hangs', async () => {
+    vi.useFakeTimers();
+    stubListingFetchThenHang();
+
+    const pending = new HttpProviderModelsLister().list('anthropic', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({
+      kind: 'unavailable',
+      error: 'The listing timed out',
+    });
   });
 
   it('follows has_more across pages and lists every id', async () => {
@@ -90,7 +122,7 @@ describe('AnthropicModelsClient', () => {
     const fetchMock = stubListingFetch({ body: ANTHROPIC_MODELS_PAGE_2 });
     const signal = new AbortController().signal;
 
-    await new AnthropicModelsClient().list(API_KEY, signal);
+    await new AnthropicModelsClient().list(API_KEY, signal, () => undefined);
 
     const { url, init } = listingCall(fetchMock, 0);
     expect(init.headers).toEqual({

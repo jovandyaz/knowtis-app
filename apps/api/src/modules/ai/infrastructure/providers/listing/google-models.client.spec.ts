@@ -5,12 +5,18 @@ import type { ProviderListing } from '../../../domain/ports/provider-models.port
 import {
   listingCall,
   stubListingFetch,
+  stubListingFetchThenHang,
 } from '../../../testing/stub-listing-fetch';
 import {
   GOOGLE_MODEL_PREFIX,
   GoogleModelsClient,
 } from './google-models.client';
-import { MALFORMED_LISTING, UNKNOWN_LISTING } from './listing-http';
+import { HttpProviderModelsLister } from './http-provider-models.lister';
+import {
+  LISTING_TIMEOUT_MS,
+  MALFORMED_LISTING,
+  UNKNOWN_LISTING,
+} from './listing-http';
 import {
   GOOGLE_INVALID_KEY_BODY,
   GOOGLE_MODELS_PAGE_1,
@@ -26,12 +32,42 @@ const GOOGLE_BAD_REQUEST_BODY = {
 };
 
 function list(): Promise<ProviderListing> {
-  return new GoogleModelsClient().list(API_KEY, new AbortController().signal);
+  return new GoogleModelsClient().list(
+    API_KEY,
+    new AbortController().signal,
+    () => undefined
+  );
 }
 
 describe('GoogleModelsClient', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('lists null when a later page hangs after the first page answered', async () => {
+    vi.useFakeTimers();
+    const fetchMock = stubListingFetchThenHang({ body: GOOGLE_MODELS_PAGE_1 });
+
+    const pending = new HttpProviderModelsLister().list('google', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(listingCall(fetchMock, 1).init.signal?.aborted).toBe(true);
+  });
+
+  it('stays unavailable when the first page hangs', async () => {
+    vi.useFakeTimers();
+    stubListingFetchThenHang();
+
+    const pending = new HttpProviderModelsLister().list('google', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({
+      kind: 'unavailable',
+      error: 'The listing timed out',
+    });
   });
 
   it('strips the models/ prefix and follows nextPageToken', async () => {
