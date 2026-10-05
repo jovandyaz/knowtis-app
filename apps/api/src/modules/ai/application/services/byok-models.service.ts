@@ -82,6 +82,7 @@ export class ByokModelsService {
         event: 'byok.relist_failed',
         userId,
         provider,
+        reason: 'error',
         error: reasonOf(error),
       });
     }

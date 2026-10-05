@@ -394,6 +394,7 @@ describe('ByokModelsService.reportModelNotFound', () => {
           event: 'byok.relist_failed',
           userId: USER_ID,
           provider: 'anthropic',
+          reason: 'error',
           error: reason,
         },
       ]);
