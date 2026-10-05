@@ -136,7 +136,9 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 
       {testProvider.data?.ok ? (
         <p role="status" className="text-xs text-(--muted-foreground)">
-          {label} answered via {testProvider.data.model}.
+          {testProvider.data.modelCount === null
+            ? `${label} accepted the key.`
+            : `${label} accepted the key and lists ${testProvider.data.modelCount} models.`}
         </p>
       ) : testProvider.data ? (
         <p

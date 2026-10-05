@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 
-import { ModuleRef } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +9,7 @@ import {
 } from '../../test-support/module-boot';
 import { AIModule } from './ai.module';
 import { AIConfigService } from './application/services/ai-config.service';
+import { ByokService } from './application/services/byok.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import {
@@ -65,24 +65,20 @@ describe('AIModule wiring', () => {
       .compile();
 
   it(
-    "resolves the key service's lazy platform models source to the AI config service",
+    'gives the BYOK and system key services one model lister',
     async () => {
       const moduleRef = await compileAIModule();
 
       try {
-        const keysModuleRef = Object.values(
-          moduleRef.get(SystemProviderKeysService)
-        ).find(
-          (dependency): dependency is ModuleRef =>
-            dependency instanceof ModuleRef
-        );
-        const source = keysModuleRef?.get(PLATFORM_MODELS_SOURCE);
+        const lister = moduleRef.get(PROVIDER_MODELS_LISTER);
 
         // A failing toBe deep-compares and prints both container instances,
         // which runs the worker out of memory; a boolean fails readably.
         expect(
-          source === moduleRef.get(AIConfigService),
-          "PLATFORM_MODELS_SOURCE is not the module's AIConfigService instance"
+          [ByokService, SystemProviderKeysService].every((token) =>
+            Object.values(moduleRef.get(token)).includes(lister)
+          ),
+          "the key services do not share the module's PROVIDER_MODELS_LISTER"
         ).toBe(true);
       } finally {
         await moduleRef.close();

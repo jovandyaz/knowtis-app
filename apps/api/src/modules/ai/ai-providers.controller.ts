@@ -16,18 +16,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { APICallError } from 'ai';
 
 import {
   FEATURE_FLAG_KEYS,
-  type AIProvider,
   type ProviderKeyProbeResult,
   type ProviderTestResult,
   type SetSystemProviderResult,
   type SystemProviderInfo,
 } from '@knowtis/shared-types';
 
-import { reasonOf } from '../../core/errors/reason-of';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import {
   FeatureFlagGuard,
@@ -35,27 +32,13 @@ import {
 } from '../feature-flags/feature-flag.guard';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import {
-  probeCandidateModelIds,
-  systemProbeModelId,
-} from './domain/model-catalog/probe-model';
-import {
-  PLATFORM_MODELS_SOURCE,
-  type PlatformModelsSource,
-} from './domain/ports/platform-models.port';
+  PROVIDER_LISTING_KIND,
+  PROVIDER_MODELS_LISTER,
+  type ProviderModelsLister,
+} from './domain/ports/provider-models.port';
 import { SetSystemProviderDto } from './dto/set-system-provider.dto';
 import { SystemProviderParamDto } from './dto/system-provider-param.dto';
-import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
-import {
-  PROBE_TIMEOUT_MS,
-  sendProbeTurn,
-} from './infrastructure/providers/provider-probe';
-import {
-  ProviderNotConfiguredError,
-  ProviderRegistryFactory,
-} from './infrastructure/providers/provider-registry.factory';
-
-// Below this a "key" is too short to match anything but itself in prose.
-const REDACTABLE_KEY_MIN_LENGTH = 8;
+import { ProviderRegistryFactory } from './infrastructure/providers/provider-registry.factory';
 
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
@@ -67,9 +50,8 @@ export class AiProvidersController {
   constructor(
     private readonly systemKeys: SystemProviderKeysService,
     private readonly registry: ProviderRegistryFactory,
-    private readonly index: ModelIndexCache,
-    @Inject(PLATFORM_MODELS_SOURCE)
-    private readonly platformModels: PlatformModelsSource
+    @Inject(PROVIDER_MODELS_LISTER)
+    private readonly lister: ProviderModelsLister
   ) {}
 
   @Get()
@@ -79,10 +61,10 @@ export class AiProvidersController {
   }
 
   /**
-   * A candidate key is probed before it is stored. A definitive refusal
-   * surfaces as 422 and stores nothing; an outage or timeout keeps the key and
-   * rides along as `probe` — the admin may be keying a provider that is
-   * briefly down.
+   * A candidate key's models are listed before it is stored. A refusal
+   * surfaces as 422 and stores nothing; a provider that cannot be reached keeps
+   * the key and rides along as `probe` — the admin may be keying a provider
+   * that is briefly down.
    */
   @Put(':provider')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -109,15 +91,47 @@ export class AiProvidersController {
   }
 
   /**
-   * Probes whatever key currently routes for the provider. A refusal is the
-   * answer the caller asked for, so it resolves 200 with `ok: false` — the
-   * global filter masks 5xx bodies, which would throw the diagnosis away.
+   * Lists the models of whatever key currently routes the provider directly. A
+   * refusal is the answer the caller asked for, so it resolves 200 with
+   * `ok: false` — the global filter masks 5xx bodies, which would throw the
+   * diagnosis away.
    */
   @Post(':provider/test')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  test(@Param() params: SystemProviderParamDto): Promise<ProviderTestResult> {
-    return this.probe(params.provider);
+  async test(
+    @Param() params: SystemProviderParamDto
+  ): Promise<ProviderTestResult> {
+    const { provider } = params;
+    const apiKey = this.registry.routingKey(provider);
+    if (apiKey === null) {
+      return {
+        ok: false,
+        reason: 'unconfigured',
+        message: `No ${provider} key routes directly: store one or enable the provider`,
+      };
+    }
+    const listing = await this.lister.list(provider, apiKey);
+    if (listing.kind === PROVIDER_LISTING_KIND.LISTED) {
+      return { ok: true, modelCount: listing.modelIds?.length ?? null };
+    }
+    this.logger.warn({
+      event: 'system_provider_key.test_failed',
+      provider,
+      reason: listing.kind,
+      error: listing.error,
+    });
+    return listing.kind === PROVIDER_LISTING_KIND.REJECTED
+      ? {
+          ok: false,
+          reason: 'rejected',
+          message: `${provider} refused the key: ${listing.error}`,
+        }
+      : {
+          ok: false,
+          reason: 'unavailable',
+          message: `${provider} is unavailable right now. Retry shortly.`,
+        };
   }
 
   @Delete(':provider/key')
@@ -135,76 +149,4 @@ export class AiProvidersController {
     await this.registry.refreshSystemConfigs();
     return this.systemKeys.list();
   }
-
-  /** Sends one cheap turn through whatever key currently routes for the provider. */
-  private async probe(provider: AIProvider): Promise<ProviderTestResult> {
-    const modelId = systemProbeModelId(
-      provider,
-      await probeCandidateModelIds(this.platformModels),
-      this.index.catalog().all()
-    );
-    if (modelId === null) {
-      return {
-        ok: false,
-        reason: 'unconfigured',
-        message: `No model resolves for provider '${provider}'`,
-      };
-    }
-    let secrets: string[] = [];
-    try {
-      const languageModel = this.registry.languageModel(modelId);
-      // Snapshot before the await: an admin rotating the key mid-probe would
-      // otherwise leave the error quoting a secret no longer here to scrub.
-      secrets = this.registry.routingSecrets(provider);
-      await sendProbeTurn(languageModel, AbortSignal.timeout(PROBE_TIMEOUT_MS));
-      return { ok: true, model: modelId };
-    } catch (error) {
-      return this.classifyProbeFailure(provider, modelId, error, secrets);
-    }
-  }
-
-  private classifyProbeFailure(
-    provider: AIProvider,
-    model: string,
-    error: unknown,
-    secrets: string[]
-  ): ProviderTestResult {
-    if (error instanceof ProviderNotConfiguredError) {
-      return { ok: false, reason: 'unconfigured', message: error.message };
-    }
-    // The SDK already classifies which statuses deserve a retry and exhausts
-    // them before rethrowing, so a non-retryable APICallError is the only shape
-    // that proves the provider answered and refused.
-    const refused = APICallError.isInstance(error) && !error.isRetryable;
-    const detail = redact(reasonOf(error), secrets);
-    this.logger.warn({
-      event: 'system_provider_key.probe_failed',
-      provider,
-      model,
-      reason: refused ? 'rejected' : 'unavailable',
-      error: detail,
-    });
-    return refused
-      ? {
-          ok: false,
-          reason: 'rejected',
-          message: `${provider} refused the probe: ${detail}`,
-        }
-      : {
-          ok: false,
-          reason: 'unavailable',
-          message: `${provider} is unavailable right now. Retry shortly.`,
-        };
-  }
-}
-
-/** Providers echo a rejected credential back in their error text; it must not reach a log or a response. */
-function redact(message: string, secrets: string[]): string {
-  return secrets.reduce(
-    (text, secret) =>
-      secret.length < REDACTABLE_KEY_MIN_LENGTH
-        ? text
-        : text.split(secret).join('[redacted]'),
-    message
-  );
 }

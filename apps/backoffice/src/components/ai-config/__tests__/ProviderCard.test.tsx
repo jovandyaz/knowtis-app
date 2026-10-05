@@ -31,7 +31,7 @@ const { setMutate, setReset, clearMutate, testMutate, testReset, state } =
         isError: false,
         error: null as Error | null,
         data: undefined as
-          | { ok: true; model: string }
+          | { ok: true; modelCount: number | null }
           | { ok: false; reason: string; message: string }
           | undefined,
       },
@@ -60,6 +60,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     }),
   };
 });
+
+const LISTED_MODEL_COUNT = 12;
 
 function providerWith(overrides: Partial<SystemProvider> = {}): SystemProvider {
   return {
@@ -190,20 +192,34 @@ describe('ProviderCard', () => {
     expect(screen.getByRole('button', { name: /save key/i })).toBeDisabled();
   });
 
-  it('probes the provider and reports which model answered', async () => {
+  it('tests the connection of its own provider', async () => {
     render(<ProviderCard provider={providerWith()} />);
 
     await userEvent.click(
       screen.getByRole('button', { name: /test connection/i })
     );
-    expect(testMutate).toHaveBeenCalledWith('anthropic');
 
-    state.test.data = { ok: true, model: 'anthropic:haiku' };
+    expect(testMutate).toHaveBeenCalledWith('anthropic');
+  });
+
+  it('says how many models the key lists', () => {
+    state.test.data = { ok: true, modelCount: LISTED_MODEL_COUNT };
+
     render(<ProviderCard provider={providerWith()} />);
 
-    expect(
-      screen.getByText(/anthropic answered via anthropic:haiku/i)
-    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Anthropic accepted the key and lists ${LISTED_MODEL_COUNT} models.`
+    );
+  });
+
+  it('says the key was accepted when the count is unknown', () => {
+    state.test.data = { ok: true, modelCount: null };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /^Anthropic accepted the key\.$/
+    );
   });
 
   it('drops a probe verdict about a key that is no longer there', () => {
@@ -219,11 +235,9 @@ describe('ProviderCard', () => {
     });
     const { rerender } = render(<ProviderCard provider={routing} />);
 
-    state.test.data = { ok: true, model: 'anthropic:haiku' };
+    state.test.data = { ok: true, modelCount: LISTED_MODEL_COUNT };
     rerender(<ProviderCard provider={routing} />);
-    expect(
-      screen.getByText(/anthropic answered via anthropic:haiku/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/anthropic accepted the key/i)).toBeInTheDocument();
 
     const replaced = {
       ...routing,
@@ -232,7 +246,7 @@ describe('ProviderCard', () => {
     rerender(<ProviderCard provider={replaced} />);
     rerender(<ProviderCard provider={replaced} />);
 
-    expect(screen.queryByText(/answered via/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/accepted the key/i)).not.toBeInTheDocument();
   });
 
   it('keeps a probe verdict when a refetch re-parses the same row', () => {
@@ -246,7 +260,7 @@ describe('ProviderCard', () => {
     });
     const { rerender } = render(<ProviderCard provider={routing} />);
 
-    state.test.data = { ok: true, model: 'anthropic:haiku' };
+    state.test.data = { ok: true, modelCount: LISTED_MODEL_COUNT };
     rerender(<ProviderCard provider={routing} />);
 
     // Same instant, new object — what a refetch hands back.
@@ -257,22 +271,20 @@ describe('ProviderCard', () => {
     );
     rerender(<ProviderCard provider={routing} />);
 
-    expect(
-      screen.getByText(/anthropic answered via anthropic:haiku/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/anthropic accepted the key/i)).toBeInTheDocument();
   });
 
-  it('shows why a probe failed — a refusal resolves, it does not throw', () => {
+  it('shows why a connection test failed — a refusal resolves, it does not throw', () => {
     state.test.data = {
       ok: false,
       reason: 'rejected',
-      message: 'anthropic refused the probe: Your credit balance is too low',
+      message: 'anthropic refused the key: HTTP 401: invalid x-api-key',
     };
 
     render(<ProviderCard provider={providerWith()} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /credit balance is too low/i
+      'anthropic refused the key: HTTP 401: invalid x-api-key'
     );
   });
 

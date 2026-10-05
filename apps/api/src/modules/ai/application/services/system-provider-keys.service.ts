@@ -6,7 +6,6 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ModuleRef } from '@nestjs/core';
 
 import {
   AI_PROVIDERS,
@@ -21,26 +20,20 @@ import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import {
-  probeCandidateModelIds,
-  systemProbeModelId,
-} from '../../domain/model-catalog/probe-model';
-import {
-  PLATFORM_MODELS_SOURCE,
-  type PlatformModelsSource,
-} from '../../domain/ports/platform-models.port';
+  PROVIDER_LISTING_KIND,
+  PROVIDER_MODELS_LISTER,
+  type ProviderModelsLister,
+} from '../../domain/ports/provider-models.port';
 import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
   type SystemProviderKeysRepository,
 } from '../../domain/ports/system-provider-keys.repository';
-import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
-import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
 import {
   PROVIDER_ENV_KEYS,
-  ProviderRegistryFactory,
   type SystemProviderConfig,
   type SystemProviderKeysSource,
 } from '../../infrastructure/providers/provider-registry.factory';
@@ -48,14 +41,7 @@ import {
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
 
-/**
- * Owns the server-side provider keys stored in the database. Deliberately does
- * not constructor-inject ProviderRegistryFactory — the registry consumes this
- * service as its key source, so injecting it back would close a DI cycle. The
- * probe in `setKey` resolves the registry lazily through ModuleRef instead, and
- * the `PLATFORM_MODELS_SOURCE` it picks the probe model from too: that source is
- * AIConfigService, which injects the registry.
- */
+/** Owns the server-side provider keys stored in the database. */
 @Injectable()
 export class SystemProviderKeysService implements SystemProviderKeysSource {
   private readonly logger = new Logger(SystemProviderKeysService.name);
@@ -66,8 +52,8 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     private readonly repo: SystemProviderKeysRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly adminAuditService: AdminAuditService,
-    private readonly moduleRef: ModuleRef,
-    private readonly index: ModelIndexCache
+    @Inject(PROVIDER_MODELS_LISTER)
+    private readonly lister: ProviderModelsLister
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -109,11 +95,10 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
   }
 
   /**
-   * Probes the key, then stores it. A definitive refusal vetoes the save — a
+   * Lists the key's models, then stores it. A refusal vetoes the save — a
    * stored key shadows the env one, so a bad key must never displace a working
-   * one — and so does a probe that never ran for want of a model, which leaves
-   * the key wholly untested. An outage or timeout says nothing about the key,
-   * so it is kept and the failure rides along as information.
+   * one. A provider that cannot be reached says nothing about the key, so it is
+   * kept and the failure rides along as information.
    */
   async setKey(
     provider: AIProvider,
@@ -125,32 +110,19 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
       );
     }
-    const platformModelIds = await probeCandidateModelIds(
-      this.moduleRef.get<PlatformModelsSource>(PLATFORM_MODELS_SOURCE)
-    );
-    const probe = await probeProviderKey(
-      this.moduleRef.get(ProviderRegistryFactory),
-      provider,
-      apiKey,
-      systemProbeModelId(provider, platformModelIds, this.index.catalog().all())
-    );
-    if (!probe.valid) {
+    const listing = await this.lister.list(provider, apiKey);
+    const listed = listing.kind === PROVIDER_LISTING_KIND.LISTED;
+    if (!listed) {
       this.logger.warn({
         event: 'system_provider_key.probe_failed',
         provider,
-        reason: probe.reason,
-        error: probe.error,
+        reason: listing.kind,
+        error: listing.error,
       });
-      if (probe.reason === 'rejected') {
+      if (listing.kind === PROVIDER_LISTING_KIND.REJECTED) {
         throw new UnprocessableEntityException({
-          message: `${provider} refused the probe: ${probe.error}`,
-          code: probe.reason,
-        });
-      }
-      if (probe.reason === 'unconfigured') {
-        throw new UnprocessableEntityException({
-          message: `${provider} key cannot be probed: ${probe.error}`,
-          code: probe.reason,
+          message: `${provider} refused the key: ${listing.error}`,
+          code: listing.kind,
         });
       }
     }
@@ -163,9 +135,9 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     );
     await this.audit(actorId, provider, 'ai_provider.key_set', {
       keyPrefix,
-      probe: probe.valid ? 'passed' : probe.reason,
+      probe: listed ? 'passed' : listing.kind,
     });
-    return probe.valid ? { valid: true } : { valid: false, error: probe.error };
+    return listed ? { valid: true } : { valid: false, error: listing.error };
   }
 
   async setEnabled(

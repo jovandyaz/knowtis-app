@@ -644,7 +644,7 @@ describe('useSetSystemProvider', () => {
   it('hands the probe verdict of a saved key to the caller', async () => {
     vi.mocked(httpClient.put).mockResolvedValue({
       providers: PROVIDERS,
-      probe: { valid: false, error: 'anthropic refused the probe' },
+      probe: { valid: false, error: 'The listing timed out' },
     });
 
     const { result } = renderHook(() => useSetSystemProvider(), {
@@ -655,7 +655,7 @@ describe('useSetSystemProvider', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.probe).toEqual({
       valid: false,
-      error: 'anthropic refused the probe',
+      error: 'The listing timed out',
     });
   });
 });
@@ -676,11 +676,13 @@ describe('useClearSystemProviderKey', () => {
   });
 });
 
+const LISTED_MODEL_COUNT = 12;
+
 describe('useTestSystemProvider', () => {
-  it('reports the model that answered the probe', async () => {
+  it('reports how many models the routing key lists', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ok: true,
-      model: 'anthropic:haiku',
+      modelCount: LISTED_MODEL_COUNT,
     });
 
     const { result } = renderHook(() => useTestSystemProvider(), {
@@ -695,15 +697,30 @@ describe('useTestSystemProvider', () => {
     );
     expect(result.current.data).toEqual({
       ok: true,
-      model: 'anthropic:haiku',
+      modelCount: LISTED_MODEL_COUNT,
     });
   });
 
-  it('resolves a refused probe rather than surfacing it as an error', async () => {
+  it('accepts a valid key whose list is unknown', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ok: true,
+      modelCount: null,
+    });
+
+    const { result } = renderHook(() => useTestSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate('anthropic');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ ok: true, modelCount: null });
+  });
+
+  it('resolves a refused key rather than surfacing it as an error', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ok: false,
       reason: 'rejected',
-      message: 'anthropic refused the probe: bad key',
+      message: 'anthropic refused the key: HTTP 401: invalid x-api-key',
     });
 
     const { result } = renderHook(() => useTestSystemProvider(), {
