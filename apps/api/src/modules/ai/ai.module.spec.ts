@@ -16,11 +16,13 @@ import {
   PINNED_MODELS_SOURCE,
   PLATFORM_MODELS_SOURCE,
 } from './domain/ports/platform-models.port';
+import { PROVIDER_MODELS_LISTER } from './domain/ports/provider-models.port';
 import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { SyncStalenessTask } from './infrastructure/catalog/sync-staleness.task';
+import { HttpProviderModelsLister } from './infrastructure/providers/listing/http-provider-models.lister';
 import { AI_REDIS } from './infrastructure/redis/ai-redis.provider';
 import { ModelGateController } from './model-gate.controller';
 
@@ -36,6 +38,7 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   CatalogSyncTask,
   PlatformCandidatesWriter,
   SyncStalenessTask,
+  PROVIDER_MODELS_LISTER,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -123,6 +126,24 @@ describe('AIModule wiring', () => {
           moduleRef.get(PINNED_MODELS_SOURCE) ===
             moduleRef.get(AIConfigService),
           "PINNED_MODELS_SOURCE is not the module's AIConfigService instance"
+        ).toBe(true);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'provides the HTTP model lister',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        expect(
+          moduleRef.get(PROVIDER_MODELS_LISTER) instanceof
+            HttpProviderModelsLister,
+          'PROVIDER_MODELS_LISTER is not an HttpProviderModelsLister'
         ).toBe(true);
       } finally {
         await moduleRef.close();

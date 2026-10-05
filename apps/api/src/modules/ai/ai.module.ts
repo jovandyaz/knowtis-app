@@ -61,6 +61,7 @@ import {
   PINNED_MODELS_SOURCE,
   PLATFORM_MODELS_SOURCE,
 } from './domain/ports/platform-models.port';
+import { PROVIDER_MODELS_LISTER } from './domain/ports/provider-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
@@ -94,6 +95,7 @@ import {
   FALLBACK_CHAIN_SOURCE,
   FallbackChainService,
 } from './infrastructure/providers/fallback-chain.service';
+import { HttpProviderModelsLister } from './infrastructure/providers/listing/http-provider-models.lister';
 import {
   ProviderRegistryFactory,
   SYSTEM_PROVIDER_KEYS_SOURCE,
@@ -171,6 +173,7 @@ import { ModelGateController } from './model-gate.controller';
       useClass: OpenRouterModelsHttpClient,
     },
     { provide: MODELS_DEV_CLIENT, useClass: ModelsDevHttpClient },
+    { provide: PROVIDER_MODELS_LISTER, useClass: HttpProviderModelsLister },
     ModelIndexWriter,
     CatalogAlertsWriter,
     PlatformCandidatesWriter,
