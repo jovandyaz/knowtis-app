@@ -26,6 +26,7 @@ import { plainRouteCanonical } from '../../domain/model-catalog/plain-route';
 import {
   CATALOG_BILLING,
   tierCatalog,
+  type CatalogBilling,
   type OfferedModel,
   type TierCatalog,
 } from '../../domain/model-catalog/tier-catalog';
@@ -87,7 +88,8 @@ export class SelectableModelsService {
 
   factsFor(
     byokProviders: ReadonlySet<string>,
-    platformIntents: Readonly<Record<ModelIntent, string>>
+    platformIntents: Readonly<Record<ModelIntent, string>>,
+    billing: CatalogBilling
   ): ModelFacts {
     const platformIntentIds = new Set(Object.values(platformIntents));
     const openTier = new Set(
@@ -95,7 +97,7 @@ export class SelectableModelsService {
         .filter((model) => model.tier === 'open')
         .map((model) => model.id)
     );
-    const platformModels = this.resolutions.platformBilledModelIds(new Date());
+    const platformModels = this.platformModelIds(billing);
     return {
       heldProviders: byokProviders,
       isSupported: (id) => this.catalog.isSupported(id),
@@ -147,6 +149,12 @@ export class SelectableModelsService {
         ...(servesIntent ? { servesIntent } : {}),
       };
     });
+  }
+
+  private platformModelIds(billing: CatalogBilling): ReadonlySet<string> {
+    return billing === CATALOG_BILLING.PLATFORM
+      ? this.resolutions.platformBilledModelIds(new Date())
+      : new Set(this.resolutions.activeModelIds());
   }
 
   private offered(): readonly OfferedModel[] {

@@ -290,13 +290,18 @@ export class ModelPreferenceService {
     platformIntents: Readonly<Record<ModelIntent, string>>,
     primaryProvider: ByokProvider | null
   ): { catalog: TierCatalog; facts: ModelFacts } {
+    const catalog = this.selectable.catalogFor(
+      execution,
+      platformIntents,
+      primaryProvider
+    );
     return {
-      catalog: this.selectable.catalogFor(
-        execution,
+      catalog,
+      facts: this.selectable.factsFor(
+        execution.byokProviders,
         platformIntents,
-        primaryProvider
+        catalog.billing
       ),
-      facts: this.selectable.factsFor(execution.byokProviders, platformIntents),
     };
   }
 }
