@@ -960,6 +960,20 @@ describe('CatalogSyncTask', () => {
     );
   });
 
+  it('raises no family_drift while the resolutions are unreadable', async () => {
+    const { task, repo, indexWriter, resolutions } = make({
+      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+    });
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({ concluded: [OPENROUTER_PROVIDER] })
+    );
+    vi.mocked(resolutions.list).mockRejectedValue(DB_DOWN);
+
+    await task.run();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
   it('raises no family_drift when the OpenRouter batch did not conclude', async () => {
     const { task, repo } = make({
       listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
