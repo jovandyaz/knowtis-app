@@ -95,8 +95,9 @@ export function AiConfigPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">AI Config</h1>
         <p className="text-sm text-(--muted-foreground)">
-          Effective runtime configuration. Stored values override the code
-          defaults and apply within a minute — no redeploy.
+          Effective runtime configuration. Model settings follow the platform
+          resolution until pinned; every change applies within a minute — no
+          redeploy.
         </p>
       </div>
       <AiConfigStatusHeader defaultModel={defaultModel} />

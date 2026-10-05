@@ -54,7 +54,7 @@ export function ModelsSection({
   return (
     <ConfigSection
       title="Models"
-      description="Which model each kind of turn runs on. The default model is what every free-tier client gets."
+      description="Which model each kind of turn runs on. Auto follows the platform's active model; a pin overrides it until released. The default model is what every free-tier client gets."
     >
       <MutationErrorAlert
         error={setConfig.error ?? resetConfig.error}
@@ -115,6 +115,7 @@ export function ModelsSection({
                   entry={entry}
                   label={KEY_LABELS[entry.key] ?? entry.key}
                   disabled={mutating}
+                  pinnable
                   onReset={() => resetConfig.mutate({ key: entry.key })}
                 />
               </TableCell>

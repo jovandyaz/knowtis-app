@@ -8,6 +8,9 @@ export const MODEL_SEARCH_PLACEHOLDER = 'Search by name or ID';
 
 export const NO_MATCHING_MODELS_LABEL = 'No models match your search';
 
+/** Where the picker groups a model no selector classifies. */
+const UNCLASSIFIED_GROUP = 'other';
+
 /**
  * Assignability keys off `routableByServer`: a promoted row whose provider lost
  * its key would otherwise render assignable while the server cannot route it.
@@ -20,7 +23,7 @@ export function toModelSelectOption(
   return {
     id: model.id,
     label: model.label,
-    tier: model.tier,
+    tier: model.tier ?? UNCLASSIFIED_GROUP,
     disabled,
     ...(description && { description }),
   };

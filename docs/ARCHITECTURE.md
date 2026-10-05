@@ -531,7 +531,7 @@ See [AI Module → Conversation memory (A6a)](./AI.md#conversation-memory-a6a) a
 
 ### Model selection & billing (BYOK)
 
-The copilot model is resolved per turn through a cascade (conversation model → user preferred model → user intent → system default) over a catalog of admin-promoted models and the models selectors resolve over the synced model index; BYOK keys unlock a provider's models and bill the user directly. Details: [AI.md → Copilot Model Selection](./AI.md#copilot-model-selection), [Reasoning effort](./AI.md#reasoning-effort), and [Bring-your-own-key (BYOK)](./AI.md#bring-your-own-key-byok).
+The copilot model is resolved per turn through a cascade (conversation model → user preferred model → user intent → the intent's pin, else its active platform resolution) over a catalog of admin-promoted models and the models selectors resolve over the synced model index; BYOK keys unlock a provider's models and bill the user directly. Details: [AI.md → Copilot Model Selection](./AI.md#copilot-model-selection), [Reasoning effort](./AI.md#reasoning-effort), and [Bring-your-own-key (BYOK)](./AI.md#bring-your-own-key-byok).
 
 ---
 

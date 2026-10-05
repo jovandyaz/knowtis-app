@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Sql } from 'postgres';
 
+import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import {
   PROMOTED_STATUS,
   type CatalogSyncResultDto,
@@ -36,7 +37,12 @@ import {
   type UpstreamCatalog,
   type UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
+import {
+  PLATFORM_MODELS_SOURCE,
+  type PlatformModelsSource,
+} from '../../domain/ports/platform-models.port';
 import { ModelIndexWriter } from './model-index.writer';
+import { PlatformCandidatesWriter } from './platform-candidates.writer';
 
 const ADVISORY_LOCK_KEY = 778_493_003;
 const FAILURE_LOG_SAMPLE_SIZE = 10;
@@ -45,6 +51,10 @@ interface WriteFailure {
   target: string;
   reason: string;
 }
+
+type OpenRouterRead =
+  | { ok: true; catalog: UpstreamCatalog }
+  | { ok: false; error: unknown };
 
 function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {
   return {
@@ -68,7 +78,10 @@ export class CatalogSyncTask {
     @Inject(OPENROUTER_MODELS_CLIENT)
     private readonly openRouter: OpenRouterModelsClient,
     @Inject(MODELS_DEV_CLIENT) private readonly modelsDev: ModelsDevClient,
-    private readonly indexWriter: ModelIndexWriter
+    private readonly indexWriter: ModelIndexWriter,
+    @Inject(PLATFORM_MODELS_SOURCE)
+    private readonly platformModels: PlatformModelsSource,
+    private readonly candidates: PlatformCandidatesWriter
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
@@ -85,7 +98,7 @@ export class CatalogSyncTask {
   }
 
   /**
-   * Runs one pass and resolves what it did. Rejects when the upstream fetch fails — the cron swallows that, an on-demand caller surfaces it.
+   * Runs one pass and resolves what it did. Rejects when the OpenRouter fetch fails, after indexing the models.dev read alone — the cron swallows that, an on-demand caller surfaces it.
    */
   async run(): Promise<CatalogSyncResultDto> {
     const outcome = await runWithAdvisoryLock(
@@ -104,17 +117,40 @@ export class CatalogSyncTask {
   }
 
   private async promotedFindings(
-    catalog: UpstreamCatalog
+    catalog: UpstreamCatalog,
+    watched: readonly string[]
   ): Promise<DriftFinding[]> {
     try {
       const promoted = await this.repo.listByStatus(PROMOTED_STATUS);
       return findPromotedDrift(
         promoted.map((model) => model.id),
-        catalog
+        catalog,
+        watched
       );
     } catch (error) {
       this.logger.warn({
         event: 'ai.catalog.promoted_read_failed',
+        reason: reasonOf(error),
+      });
+      return [];
+    }
+  }
+
+  private async openRouterCatalog(): Promise<OpenRouterRead> {
+    try {
+      return { ok: true, catalog: await this.openRouter.fetchModels() };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  /** Never rejects: an unreadable config watches no platform model this pass. */
+  private async watchedModelIds(): Promise<string[]> {
+    try {
+      return await this.platformModels.getPlatformModelIds();
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.catalog.platform_models_read_failed',
         reason: reasonOf(error),
       });
       return [];
@@ -133,10 +169,21 @@ export class CatalogSyncTask {
     }
   }
 
-  private async writeIndex(catalog: UpstreamCatalog): Promise<number> {
-    const modelsDev = await this.modelsDevCatalog();
+  private async writeIndex(
+    openRouter: UpstreamCatalog | null,
+    modelsDev: ModelsDevCatalog | null
+  ): Promise<number> {
+    if (openRouter === null && modelsDev === null) {
+      return 0;
+    }
     try {
-      const { indexed } = await this.indexWriter.write(catalog, modelsDev);
+      const { indexed, concluded } = await this.indexWriter.write(
+        openRouter,
+        modelsDev
+      );
+      if (concluded.includes(OPENROUTER_PROVIDER)) {
+        await this.pendCandidates();
+      }
       return indexed;
     } catch (error) {
       this.logger.error({
@@ -148,8 +195,28 @@ export class CatalogSyncTask {
     }
   }
 
+  /** Never rejects: a failed write leaves the resolutions as they were until the next sync. */
+  private async pendCandidates(): Promise<void> {
+    try {
+      await this.candidates.write(new Date());
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.model_resolution.pending_failed',
+        reason: reasonOf(error),
+      });
+    }
+  }
+
   private async fetchAndPersist(): Promise<CatalogSyncResultDto> {
-    const catalog = await this.openRouter.fetchModels();
+    const [openRouter, modelsDev] = await Promise.all([
+      this.openRouterCatalog(),
+      this.modelsDevCatalog(),
+    ]);
+    if (!openRouter.ok) {
+      await this.writeIndex(null, modelsDev);
+      throw openRouter.error;
+    }
+    const catalog = openRouter.catalog;
     // A blind run logs the same `alerts: 0` as a healthy one, so the operator
     // must be told the vanish watch concluded nothing this pass.
     if (!canConcludeAbsence(catalog)) {
@@ -160,10 +227,11 @@ export class CatalogSyncTask {
         discarded: catalog.discarded.length,
       });
     }
-    const indexed = await this.writeIndex(catalog);
+    const indexed = await this.writeIndex(catalog, modelsDev);
+    const watched = await this.watchedModelIds();
     const findings = [
-      ...findOpenRouterDrift(catalog),
-      ...(await this.promotedFindings(catalog)),
+      ...findOpenRouterDrift(catalog, watched),
+      ...(await this.promotedFindings(catalog, watched)),
     ];
     return this.persist(catalog.models, findings, indexed);
   }

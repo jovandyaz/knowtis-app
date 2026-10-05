@@ -1,8 +1,4 @@
-import type {
-  CatalogModelStatus,
-  ModelReasoning,
-  ModelTier,
-} from '@knowtis/shared-types';
+import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
 
 /** Namespace every OpenRouter model id carries: this prefix followed by the upstream slug. */
 export const OPENROUTER_ID_PREFIX = 'openrouter:';
@@ -26,7 +22,6 @@ export interface CatalogModel {
   readonly maxInputTokens: number;
   readonly maxOutputTokens: number | null;
   readonly intelligenceIndex: number | null;
-  readonly reasoning: ModelReasoning | null;
   readonly upstreamCreatedAt: Date | null;
   readonly upstreamExpirationDate: Date | null;
   readonly lastSeenAt: Date;

@@ -84,6 +84,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         entry={entry}
         label="fallback chain"
         disabled={mutating}
+        pinnable
         onReset={() => resetConfig.mutate({ key: entry.key })}
         meta={
           <span className="text-xs text-(--muted-foreground)">

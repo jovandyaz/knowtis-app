@@ -20,6 +20,7 @@ import {
   type AiCatalogRepository,
 } from '../../domain/ports/ai-catalog.repository';
 import { CatalogSyncTask } from '../../infrastructure/catalog/catalog-sync.task';
+import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 
 const OPEN_ALERTS_ONLY = true;
@@ -68,7 +69,8 @@ export class AiCatalogAdminService {
     private readonly repository: AiCatalogRepository,
     private readonly audit: AdminAuditService,
     private readonly promotedModels: PromotedModelsCache,
-    private readonly syncTask: CatalogSyncTask
+    private readonly syncTask: CatalogSyncTask,
+    private readonly resolutions: PlatformResolutionCache
   ) {}
 
   /** Runs the sync the cron would run at 03:00 UTC, and resolves what it did. Rejects when the upstream fetch fails. */
@@ -111,7 +113,10 @@ export class AiCatalogAdminService {
     limit: number;
     search?: string | undefined;
   }): Promise<PaginatedCandidatesDto> {
-    const { items, total } = await this.repository.listCandidates(params);
+    const { items, total } = await this.repository.listCandidates({
+      ...params,
+      excludeIds: this.resolutions.activeModelIds(),
+    });
     return {
       items: items.map(toCatalogModelDto),
       total,

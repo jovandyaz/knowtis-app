@@ -6,12 +6,12 @@ import {
 
 import { floorModelsLost } from './floor-models';
 
-/** Fewest rows a provider's batch may carry, as a share of its previously listed rows, and still retire the rows it no longer lists. */
+/** Fewest rows a provider's batch may carry, as a share of its `previousRowCount`, and still retire the rows it no longer lists. */
 export const SYNC_MAX_SHRINK_RATIO = 0.5;
 
 type AbsenceRejection = 'shrink' | 'inconclusive';
 
-/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the floor models and BYOK route keys the batch would leave unserved. */
+/** Why a provider's batch retires nothing. A `floor` rejection also writes none of its rows, and names the platform selector keys and BYOK route keys the batch would leave unserved. */
 export type SyncRejection =
   | { readonly provider: IndexProvider; readonly reason: AbsenceRejection }
   | {
@@ -34,6 +34,23 @@ export interface IndexSyncPlan {
   /** Providers whose missing rows may be marked absent. */
   readonly concludeAbsence: readonly IndexProvider[];
   readonly rejected: readonly SyncRejection[];
+}
+
+/**
+ * The rows a provider's batch is held to: its listed rows, or, while it lists
+ * none, the rows the index serves in their place (its vendored snapshot rows),
+ * so a first sync never concludes absence from a read far smaller than the
+ * catalog.
+ */
+export function previousRowCount(
+  provider: IndexProvider,
+  listed: readonly IndexedModel[],
+  served: readonly IndexedModel[]
+): number {
+  const listedCount = listed.filter((row) => row.provider === provider).length;
+  return listedCount > 0
+    ? listedCount
+    : served.filter((row) => row.provider === provider).length;
 }
 
 function absenceRejection(
@@ -69,14 +86,14 @@ function floorLost(
 }
 
 /**
- * Decides what one sync pass writes. A batch that would leave unserved a floor
- * model or BYOK intent route its provider serves now is rejected whole: none
+ * Decides what one sync pass writes. A batch that would leave unserved a
+ * platform or BYOK intent route its provider serves now is rejected whole: none
  * of its rows are written and it retires nothing. It is judged by what the
  * write leaves served: its rows plus the listed rows of its discarded ids,
  * which are kept. Every row of any other batch is upserted. A provider
  * retires its missing rows only when its batch is conclusive and did not
- * shrink past `SYNC_MAX_SHRINK_RATIO`, or when none of its rows were listed
- * before; a provider without a batch is left untouched.
+ * shrink past `SYNC_MAX_SHRINK_RATIO` of its `previousRowCount`, or when that
+ * count is zero; a provider without a batch is left untouched.
  *
  * `listed` holds the index's listed rows before this pass, and `served` the
  * rows it serves before it (`servedIndexRows(listed)`).
@@ -102,7 +119,10 @@ export function planIndexSync(
       continue;
     }
     upserts.push(...batch.rows);
-    const reason = absenceRejection(batch, listedRows.length);
+    const reason = absenceRejection(
+      batch,
+      previousRowCount(batch.provider, listedRows, served)
+    );
     if (reason === null) {
       concludeAbsence.push(batch.provider);
     } else {

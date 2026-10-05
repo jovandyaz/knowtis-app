@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
+import {
+  PLATFORM_MODELS_SOURCE,
+  PlatformResolutionsUnreadError,
+  type PlatformModelsSource,
+} from '../../domain/ports/platform-models.port';
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
 import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
 import {
@@ -18,6 +23,7 @@ vi.mock('../../infrastructure/providers/provider-probe', () => ({
 const MASTER_KEY = Buffer.alloc(32, 7);
 const MASTER_KEY_B64 = MASTER_KEY.toString('base64');
 const ACTOR = 'admin-user-id';
+const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
 
 function rowFor(provider: AIProvider, apiKey: string | null, enabled = true) {
   return {
@@ -47,7 +53,12 @@ describe('SystemProviderKeysService', () => {
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let env: Record<string, string>;
   const registry = { languageModel: vi.fn() };
-  const moduleRef = { get: vi.fn().mockReturnValue(registry) };
+  let platformModels: PlatformModelsSource;
+  const moduleRef = {
+    get: vi.fn((token: unknown) =>
+      token === PLATFORM_MODELS_SOURCE ? platformModels : registry
+    ),
+  };
 
   function build(masterKey: string | null = MASTER_KEY_B64) {
     const configService = {
@@ -80,7 +91,8 @@ describe('SystemProviderKeysService', () => {
     };
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
     vi.mocked(probeProviderKey).mockReset().mockResolvedValue({ valid: true });
-    moduleRef.get.mockClear().mockReturnValue(registry);
+    platformModels = { getPlatformModelIds: async () => [FAST_PIN] };
+    moduleRef.get.mockClear();
     service = build();
   });
 
@@ -229,14 +241,31 @@ describe('SystemProviderKeysService', () => {
       );
     });
 
-    it('should probe the platform floor model of the provider', async () => {
+    it('should probe the first platform model on the provider', async () => {
       await service.setKey('openrouter', 'sk-or-good-key', ACTOR);
 
       expect(probeProviderKey).toHaveBeenCalledWith(
         registry,
         'openrouter',
         'sk-or-good-key',
-        'openrouter:deepseek/deepseek-v3.2'
+        FAST_PIN
+      );
+    });
+
+    it('probes the fast BYOK route while the resolutions are unread', async () => {
+      platformModels = {
+        getPlatformModelIds: async () => {
+          throw new PlatformResolutionsUnreadError();
+        },
+      };
+
+      await service.setKey('openrouter', 'sk-or-good-key', ACTOR);
+
+      expect(probeProviderKey).toHaveBeenCalledWith(
+        registry,
+        'openrouter',
+        'sk-or-good-key',
+        'openrouter:anthropic/claude-haiku-4.5'
       );
     });
 

@@ -6,6 +6,10 @@ import { APICallError, RetryError } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
+import {
+  PlatformResolutionsUnreadError,
+  type PlatformModelsSource,
+} from './domain/ports/platform-models.port';
 import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
 import { createSnapshotIndex, SNAPSHOT_DATE } from './testing/snapshot-index';
 
@@ -17,6 +21,7 @@ vi.mock('ai', async (importOriginal) => ({
 }));
 
 const user = { id: 'admin-1' } as never;
+const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
 
 function apiCallError(statusCode: number, message = 'nope') {
   return new APICallError({
@@ -28,7 +33,12 @@ function apiCallError(statusCode: number, message = 'nope') {
 }
 const anthropic = { provider: 'anthropic' } as never;
 
-function make(index = createSnapshotIndex()) {
+function make(
+  index = createSnapshotIndex(),
+  platformModels: PlatformModelsSource = {
+    getPlatformModelIds: async () => [FAST_PIN],
+  }
+) {
   const systemKeys = {
     list: vi.fn().mockResolvedValue([]),
     setKey: vi.fn().mockResolvedValue({ valid: true }),
@@ -44,7 +54,8 @@ function make(index = createSnapshotIndex()) {
     controller: new AiProvidersController(
       systemKeys as never,
       registry as never,
-      index
+      index,
+      platformModels
     ),
     systemKeys,
     registry,
@@ -176,17 +187,30 @@ describe('AiProvidersController', () => {
       });
     });
 
-    it('should probe the platform floor model of the provider', async () => {
+    it('should probe the first platform model on the provider', async () => {
       const { controller, registry } = make();
 
       await controller.test({ provider: 'openrouter' } as never);
 
-      expect(registry.languageModel).toHaveBeenCalledWith(
-        'openrouter:deepseek/deepseek-v3.2'
-      );
+      expect(registry.languageModel).toHaveBeenCalledWith(FAST_PIN);
     });
 
-    it('should fall back to the fast BYOK route when the platform has no floor model there', async () => {
+    it('should probe the fast BYOK route while the resolutions are unread', async () => {
+      const { controller } = make(createSnapshotIndex(), {
+        getPlatformModelIds: async () => {
+          throw new PlatformResolutionsUnreadError();
+        },
+      });
+
+      await expect(
+        controller.test({ provider: 'openrouter' } as never)
+      ).resolves.toEqual({
+        ok: true,
+        model: 'openrouter:anthropic/claude-haiku-4.5',
+      });
+    });
+
+    it('should fall back to the fast BYOK route when no platform model uses the provider', async () => {
       const { controller, registry } = make();
 
       await controller.test({ provider: 'openai' } as never);

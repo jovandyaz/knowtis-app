@@ -10,13 +10,24 @@ const SOURCE_BADGE_VARIANTS = {
   stale: 'destructive',
 } as const satisfies Record<AIConfigSource, string>;
 
+const PIN_SOURCE_LABELS = {
+  custom: 'pinned',
+  default: 'auto',
+  stale: 'stale',
+} as const satisfies Record<AIConfigSource, string>;
+
+const RESET_LABEL = 'Reset to default';
+const RELEASE_LABEL = 'Release pin';
+
 interface ConfigSourceCellProps {
   entry: AiConfigEntry;
-  /** Human name of the setting, spoken as part of the Reset button's accessible name. */
+  /** Human name of the setting, spoken as part of the action button's accessible name. */
   label: string;
   disabled: boolean;
   onReset: () => void;
   meta?: ReactNode;
+  /** A model or chain setting: no row means auto, a row is a pin, and resetting releases it. */
+  pinnable?: boolean;
 }
 
 export function ConfigSourceCell({
@@ -25,11 +36,14 @@ export function ConfigSourceCell({
   disabled,
   onReset,
   meta,
+  pinnable = false,
 }: ConfigSourceCellProps) {
+  const actionLabel = pinnable ? RELEASE_LABEL : RESET_LABEL;
+
   return (
     <div className="flex items-center gap-2">
       <Badge variant={SOURCE_BADGE_VARIANTS[entry.source]}>
-        {entry.source}
+        {pinnable ? PIN_SOURCE_LABELS[entry.source] : entry.source}
       </Badge>
       {entry.source === 'stale' ? (
         <span className="text-xs text-(--muted-foreground)">
@@ -43,10 +57,10 @@ export function ConfigSourceCell({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          aria-label={`Reset to default: ${label}`}
+          aria-label={`${actionLabel}: ${label}`}
           onClick={onReset}
         >
-          Reset to default
+          {actionLabel}
         </Button>
       )}
     </div>

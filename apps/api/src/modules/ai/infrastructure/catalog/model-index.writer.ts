@@ -5,6 +5,7 @@ import {
   MAX_INT32,
   MODELS_DEV_PROVIDERS,
   type IndexedModel,
+  type IndexProvider,
   type ModelsDevEnrichment,
 } from '@knowtis/ai-gateway';
 
@@ -15,6 +16,7 @@ import {
 import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
 import {
   planIndexSync,
+  previousRowCount,
   type IndexSyncPlan,
   type ProviderBatch,
   type SyncRejection,
@@ -36,6 +38,8 @@ export interface ModelIndexWriteResult {
   /** Rows newly marked absent. */
   readonly absent: number;
   readonly rejected: IndexSyncPlan['rejected'];
+  /** Providers whose batch concluded absence. */
+  readonly concluded: readonly IndexProvider[];
 }
 
 function carried(row: IndexedModel | undefined): ModelsDevEnrichment | null {
@@ -49,19 +53,13 @@ function carried(row: IndexedModel | undefined): ModelsDevEnrichment | null {
       };
 }
 
-/**
- * The index rows one sync pass reads, per provider. A `null` models.dev read
- * yields only the OpenRouter batch. An OpenRouter model models.dev has no
- * entry for keeps the family, canonical, open-weights and status of its
- * `previous` row.
- */
-export function providerBatches(
+function openRouterBatch(
   openRouter: UpstreamCatalog,
   modelsDev: ModelsDevCatalog | null,
-  previous: readonly IndexedModel[] = []
-): ProviderBatch[] {
+  previous: readonly IndexedModel[]
+): ProviderBatch {
   const previousById = new Map(previous.map((row) => [row.id, row]));
-  const openRouterBatch: ProviderBatch = {
+  return {
     provider: 'openrouter',
     rows: openRouter.models.map((model) =>
       fromOpenRouter(
@@ -73,20 +71,36 @@ export function providerBatches(
     conclusive: canConcludeAbsence(openRouter),
     discarded: openRouter.discarded.map((id) => `${OPENROUTER_ID_PREFIX}${id}`),
   };
-  if (modelsDev === null) {
-    return [openRouterBatch];
-  }
+}
+
+function modelsDevBatches(modelsDev: ModelsDevCatalog): ProviderBatch[] {
   const conclusive = modelsDev.discarded.length === 0;
+  return MODELS_DEV_PROVIDERS.map((provider) => ({
+    provider,
+    rows: modelsDev.models.filter((model) => model.provider === provider),
+    conclusive,
+    discarded: modelsDev.discarded.filter((id) =>
+      id.startsWith(`${provider}:`)
+    ),
+  }));
+}
+
+/**
+ * The index rows one sync pass reads, per provider. A `null` read (its fetch
+ * failed) yields no batch for the providers it serves. An OpenRouter model
+ * models.dev has no entry for keeps the family, canonical, open-weights and
+ * status of its `previous` row.
+ */
+export function providerBatches(
+  openRouter: UpstreamCatalog | null,
+  modelsDev: ModelsDevCatalog | null,
+  previous: readonly IndexedModel[] = []
+): ProviderBatch[] {
   return [
-    ...MODELS_DEV_PROVIDERS.map((provider) => ({
-      provider,
-      rows: modelsDev.models.filter((model) => model.provider === provider),
-      conclusive,
-      discarded: modelsDev.discarded.filter((id) =>
-        id.startsWith(`${provider}:`)
-      ),
-    })),
-    openRouterBatch,
+    ...(modelsDev === null ? [] : modelsDevBatches(modelsDev)),
+    ...(openRouter === null
+      ? []
+      : [openRouterBatch(openRouter, modelsDev, previous)]),
   ];
 }
 
@@ -129,13 +143,13 @@ export class ModelIndexWriter {
    * provider whose batch may conclude absence, except the ids upstream
    * published but the read discarded. A row a column cannot hold is skipped
    * and kept from absence the same way. A batch that would leave unserved a
-   * floor model its provider serves now is written not at all, and raises a
+   * platform or BYOK intent route its provider serves now is written not at all, and raises a
    * `model_index.floor_rejected` alert naming what it would leave unserved. A
-   * `null` models.dev read (its fetch failed) leaves the providers it serves
-   * untouched. Rejects when a repository call fails.
+   * `null` read (its fetch failed) leaves the providers it serves untouched.
+   * Rejects when a repository call fails.
    */
   async write(
-    openRouter: UpstreamCatalog,
+    openRouter: UpstreamCatalog | null,
     modelsDev: ModelsDevCatalog | null
   ): Promise<ModelIndexWriteResult> {
     const listed = await this.repo.listListed();
@@ -150,7 +164,7 @@ export class ModelIndexWriter {
       this.reportRejection(
         rejection,
         batchOf.get(rejection.provider)?.rows.length ?? 0,
-        listed.filter((row) => row.provider === rejection.provider).length
+        previousRowCount(rejection.provider, listed, served)
       );
     }
 
@@ -175,7 +189,12 @@ export class ModelIndexWriter {
     }
 
     this.logger.log({ event: 'ai.model_index.sync', indexed, absent });
-    return { indexed, absent, rejected: plan.rejected };
+    return {
+      indexed,
+      absent,
+      rejected: plan.rejected,
+      concluded: plan.concludeAbsence,
+    };
   }
 
   /** Moves the rows a column cannot hold from `rows` to `discarded`, so they are neither written nor concluded absent. */

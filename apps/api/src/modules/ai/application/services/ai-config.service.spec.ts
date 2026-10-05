@@ -1,15 +1,30 @@
+import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
-import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import {
+  AI_SETTING_DEFAULTS,
+  AUTO_MODEL_SETTING,
+} from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import {
+  PLATFORM_SEED_MODELS,
+  SEED_RESOLUTIONS,
+} from '../../domain/model-catalog/platform-resolution';
+import type { ModelResolutionRepository } from '../../domain/ports/model-resolution.repository';
+import { PlatformResolutionsUnreadError } from '../../domain/ports/platform-models.port';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import type { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import {
+  createModelResolutionRepositoryStub,
+  createResolutionsStub,
+} from '../../testing/platform-resolutions';
 import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
@@ -33,6 +48,17 @@ const PROD_PINS = [
   ['ai_default_model', 'openrouter:z-ai/glm-5.3'],
 ] as const;
 const UNKNOWN_ID = 'openrouter:vendor/unknown-one';
+const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
+const BALANCED_PIN = 'openrouter:deepseek/deepseek-v4-pro-0813';
+const DEEP_PIN = 'openrouter:qwen/qwen3.8-max-0902';
+const DEAD_PIN = 'openrouter:qwen/qwen3.8-max';
+const DEAD_PIN_SUPPORTED = 'openrouter:z-ai/glm-5.2';
+const CHAIN_ONLY = 'openrouter:z-ai/glm-5.3';
+const SEEDED_CHAIN = [
+  PLATFORM_SEED_MODELS.balanced,
+  PLATFORM_SEED_MODELS.fast,
+  PLATFORM_SEED_MODELS.powerful,
+];
 
 function deletedRow(value: string) {
   return {
@@ -59,6 +85,8 @@ describe('AIConfigService', () => {
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let mockRegistry: { isModelAvailable: ReturnType<typeof vi.fn> };
   let mockCatalog: { isSupported: ReturnType<typeof vi.fn> };
+  let mockResolutionRepo: ModelResolutionRepository;
+  let resolutions: PlatformResolutionCache;
 
   /** Wires the real promoted cache and composite catalog so promoted models reach validation exactly as they do at runtime. */
   async function serviceWith(models: readonly CatalogModel[]) {
@@ -77,12 +105,15 @@ describe('AIConfigService', () => {
       mockRegistry as never,
       catalog,
       promoted,
-      index
+      index,
+      createResolutionsStub(),
+      mockResolutionRepo
     );
   }
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
@@ -102,6 +133,8 @@ describe('AIConfigService', () => {
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
     mockRegistry = { isModelAvailable: vi.fn().mockReturnValue(true) };
     mockCatalog = { isSupported: vi.fn().mockReturnValue(true) };
+    mockResolutionRepo = createModelResolutionRepositoryStub();
+    resolutions = createResolutionsStub();
     service = new AIConfigService(
       mockRepo as never,
       mockCache as never,
@@ -109,7 +142,9 @@ describe('AIConfigService', () => {
       mockRegistry as never,
       mockCatalog as never,
       { snapshot: () => [] } as never,
-      createSnapshotIndex()
+      createSnapshotIndex(),
+      resolutions,
+      mockResolutionRepo
     );
   });
 
@@ -117,13 +152,6 @@ describe('AIConfigService', () => {
     mockRepo.get.mockResolvedValue(CUSTOM_MODEL);
     const model = await service.getDefaultModel();
     expect(model).toBe(CUSTOM_MODEL);
-  });
-
-  it('should fall back to the code default when no row exists', async () => {
-    mockRepo.get.mockResolvedValue(null);
-    expect(await service.getDefaultModel()).toBe(
-      AI_SETTING_DEFAULTS.ai_default_model
-    );
   });
 
   it('should use cache on second call', async () => {
@@ -140,13 +168,6 @@ describe('AIConfigService', () => {
     await service.setConfig('ai_default_model', CUSTOM_MODEL, ACTOR);
     expect(mockCache.del).toHaveBeenCalled();
     expect(mockRepo.set).toHaveBeenCalled();
-  });
-
-  it('should fall back to the code default on DB error', async () => {
-    mockRepo.get.mockRejectedValue(new Error('DB down'));
-    expect(await service.getDefaultModel()).toBe(
-      AI_SETTING_DEFAULTS.ai_default_model
-    );
   });
 
   it('should throw on unknown config key', async () => {
@@ -305,33 +326,7 @@ describe('AIConfigService', () => {
     );
   });
 
-  it('should report a stored model the catalog dropped as the code default the runtime serves', async () => {
-    mockRepo.getAllRows.mockResolvedValue([
-      {
-        key: 'ai_default_model',
-        value: UNKNOWN_ID,
-        description: 'promoted then retired',
-        updatedAt: new Date('2026-07-15T00:00:00Z'),
-      },
-    ]);
-    mockCatalog.isSupported.mockImplementation(
-      (id: string) => id !== UNKNOWN_ID
-    );
-
-    const entries = await service.getEffectiveConfig();
-
-    expect(entries.find((e) => e.key === 'ai_default_model')).toEqual({
-      key: 'ai_default_model',
-      value: AI_SETTING_DEFAULTS.ai_default_model,
-      kind: 'model',
-      source: 'stale',
-      storedValue: UNKNOWN_ID,
-      description: 'promoted then retired',
-      updatedAt: new Date('2026-07-15T00:00:00Z'),
-    });
-  });
-
-  it('should mark a chain whose members the catalog dropped as stale', async () => {
+  it('should mark a chain whose members the catalog dropped as stale while the derived chain serves', async () => {
     const row = {
       key: 'ai_fallback_chain',
       value: UNKNOWN_ID,
@@ -350,10 +345,10 @@ describe('AIConfigService', () => {
 
     expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
       source: 'stale',
-      value: AI_SETTING_DEFAULTS.ai_fallback_chain,
+      value: SEEDED_CHAIN.join(','),
       storedValue: UNKNOWN_ID,
     });
-    expect(await service.getFallbackChain()).toEqual([]);
+    expect(await service.getFallbackChain()).toEqual(SEEDED_CHAIN);
   });
 
   it('should report the members that still route when only some survived the catalog', async () => {
@@ -454,7 +449,7 @@ describe('AIConfigService', () => {
     ).toMatchObject({ source: 'custom', value: '', storedValue: null });
   });
 
-  it('should resolve effective config from DB rows and code defaults', async () => {
+  it('should resolve effective config from DB rows, active resolutions and code defaults', async () => {
     const updatedAt = new Date('2026-07-15T00:00:00Z');
     mockRepo.getAllRows.mockResolvedValue([
       {
@@ -477,7 +472,7 @@ describe('AIConfigService', () => {
       },
       {
         key: 'ai_fast_model',
-        value: AI_SETTING_DEFAULTS.ai_fast_model,
+        value: PLATFORM_SEED_MODELS.fast,
         kind: 'model',
         source: 'default',
         storedValue: null,
@@ -486,7 +481,7 @@ describe('AIConfigService', () => {
       },
       {
         key: 'ai_deep_model',
-        value: AI_SETTING_DEFAULTS.ai_deep_model,
+        value: PLATFORM_SEED_MODELS.powerful,
         kind: 'model',
         source: 'default',
         storedValue: null,
@@ -495,7 +490,11 @@ describe('AIConfigService', () => {
       },
       {
         key: 'ai_fallback_chain',
-        value: AI_SETTING_DEFAULTS.ai_fallback_chain,
+        value: [
+          CUSTOM_MODEL,
+          PLATFORM_SEED_MODELS.fast,
+          PLATFORM_SEED_MODELS.powerful,
+        ].join(','),
         kind: 'chain',
         source: 'default',
         storedValue: null,
@@ -550,13 +549,13 @@ describe('AIConfigService', () => {
     ]);
   });
 
-  it('should resolve every key from the code defaults when the DB is unavailable', async () => {
+  it('should resolve every key from the active resolutions and code defaults when the DB is unavailable', async () => {
     mockRepo.getAllRows.mockRejectedValue(new Error('DB down'));
     const entries = await service.getEffectiveConfig();
     expect(entries).toEqual([
       {
         key: 'ai_default_model',
-        value: AI_SETTING_DEFAULTS.ai_default_model,
+        value: PLATFORM_SEED_MODELS.balanced,
         kind: 'model',
         source: 'default',
         storedValue: null,
@@ -565,7 +564,7 @@ describe('AIConfigService', () => {
       },
       {
         key: 'ai_fast_model',
-        value: AI_SETTING_DEFAULTS.ai_fast_model,
+        value: PLATFORM_SEED_MODELS.fast,
         kind: 'model',
         source: 'default',
         storedValue: null,
@@ -574,7 +573,7 @@ describe('AIConfigService', () => {
       },
       {
         key: 'ai_deep_model',
-        value: AI_SETTING_DEFAULTS.ai_deep_model,
+        value: PLATFORM_SEED_MODELS.powerful,
         kind: 'model',
         source: 'default',
         storedValue: null,
@@ -583,7 +582,7 @@ describe('AIConfigService', () => {
       },
       {
         key: 'ai_fallback_chain',
-        value: AI_SETTING_DEFAULTS.ai_fallback_chain,
+        value: SEEDED_CHAIN.join(','),
         kind: 'chain',
         source: 'default',
         storedValue: null,
@@ -648,13 +647,286 @@ describe('AIConfigService', () => {
     ).rejects.toThrow("Unknown AI config key: 'ai_free_tier_ceiling'");
   });
 
-  describe('fallback chain', () => {
-    it('should parse the code-default chain into a trimmed list of model ids', async () => {
-      const chain = await service.getFallbackChain();
-      expect(chain).toEqual(AI_SETTING_DEFAULTS.ai_fallback_chain.split(','));
+  describe('auto and pins', () => {
+    it('serves the seeded actives and the derived chain with no rows', async () => {
+      expect(await service.getIntentModels()).toEqual(PLATFORM_SEED_MODELS);
+      expect(await service.getFallbackChain()).toEqual(SEEDED_CHAIN);
     });
 
-    it('should return the DB chain over the code default', async () => {
+    it("keeps prod's pins and their dead-pin fallback", async () => {
+      const stored: Record<string, string> = {
+        ai_default_model: BALANCED_PIN,
+        ai_fast_model: FAST_PIN,
+        ai_deep_model: DEAD_PIN,
+        ai_fallback_chain: `${BALANCED_PIN},${CHAIN_ONLY}`,
+      };
+      mockRepo.get.mockImplementation(
+        async (key: string) => stored[key] ?? null
+      );
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== DEAD_PIN
+      );
+
+      expect(await service.getIntentModels()).toEqual({
+        fast: FAST_PIN,
+        balanced: BALANCED_PIN,
+        powerful: PLATFORM_SEED_MODELS.powerful,
+      });
+      expect(await service.getFallbackChain()).toEqual([
+        BALANCED_PIN,
+        CHAIN_ONLY,
+      ]);
+    });
+
+    it('derives the chain from the served intents, pins included', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_fast_model' ? FAST_PIN : null
+      );
+      expect(await service.getFallbackChain()).toEqual([
+        PLATFORM_SEED_MODELS.balanced,
+        FAST_PIN,
+        PLATFORM_SEED_MODELS.powerful,
+      ]);
+    });
+
+    it('serves the derived chain when every pinned chain model is gone', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_fallback_chain' ? DEAD_PIN : null
+      );
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== DEAD_PIN
+      );
+      expect(await service.getFallbackChain()).toEqual(SEEDED_CHAIN);
+    });
+
+    it('serves the seeded models on a cold boot with the DB down', async () => {
+      mockRepo.get.mockRejectedValue(new Error('db down'));
+      mockRepo.getAllRows.mockRejectedValue(new Error('db down'));
+      const cold = new AIConfigService(
+        mockRepo as never,
+        mockCache as never,
+        mockAudit as never,
+        mockRegistry as never,
+        mockCatalog as never,
+        { snapshot: () => [] } as never,
+        createSnapshotIndex(),
+        createResolutionsStub(SEED_RESOLUTIONS, { readStore: false }),
+        mockResolutionRepo
+      );
+
+      expect(await cold.getIntentModels()).toEqual(PLATFORM_SEED_MODELS);
+      expect(await cold.getFallbackChain()).toEqual(SEEDED_CHAIN);
+      expect(
+        (await cold.getEffectiveConfig()).find(
+          (e) => e.key === 'ai_default_model'
+        )
+      ).toMatchObject({
+        value: PLATFORM_SEED_MODELS.balanced,
+        source: 'default',
+      });
+    });
+
+    it('serves no model for an intent a successful read left without a row or a pin', async () => {
+      const empty = new AIConfigService(
+        mockRepo as never,
+        mockCache as never,
+        mockAudit as never,
+        mockRegistry as never,
+        mockCatalog as never,
+        { snapshot: () => [] } as never,
+        createSnapshotIndex(),
+        createResolutionsStub([]),
+        mockResolutionRepo
+      );
+      expect(await empty.getDefaultModel()).toBe('');
+    });
+
+    it('reports auto keys as default with the value they serve', async () => {
+      const entries = await service.getEffectiveConfig();
+      expect(entries.find((e) => e.key === 'ai_deep_model')).toMatchObject({
+        value: PLATFORM_SEED_MODELS.powerful,
+        source: 'default',
+      });
+      expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
+        value: SEEDED_CHAIN.join(','),
+        source: 'default',
+      });
+    });
+
+    it('reports a dead pin as stale while its active resolution serves', async () => {
+      mockRepo.getAllRows.mockResolvedValue([
+        {
+          key: 'ai_deep_model',
+          value: DEAD_PIN,
+          description: null,
+          updatedAt: new Date(),
+        },
+      ]);
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== DEAD_PIN
+      );
+      expect(
+        (await service.getEffectiveConfig()).find(
+          (e) => e.key === 'ai_deep_model'
+        )
+      ).toMatchObject({
+        value: PLATFORM_SEED_MODELS.powerful,
+        source: 'stale',
+        storedValue: DEAD_PIN,
+      });
+    });
+  });
+
+  describe('released pins', () => {
+    it('records nothing when a pin replaces the active resolution', async () => {
+      await service.setConfig('ai_deep_model', DEEP_PIN, ACTOR);
+      expect(mockResolutionRepo.recordRelease).not.toHaveBeenCalled();
+    });
+
+    it('records the pin a re-pin stops serving', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      await service.setConfig('ai_deep_model', DEEP_PIN, ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.powerful',
+        DEAD_PIN_SUPPORTED,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('refreshes the resolutions after recording a release', async () => {
+      const refresh = vi.spyOn(resolutions, 'refresh');
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      await service.setConfig('ai_deep_model', DEEP_PIN, ACTOR);
+      const [recorded] = vi.mocked(mockResolutionRepo.recordRelease).mock
+        .invocationCallOrder;
+      const [refreshed] = refresh.mock.invocationCallOrder;
+      expect(refresh).toHaveBeenCalledOnce();
+      expect(refreshed).toBeGreaterThan(recorded ?? Infinity);
+    });
+
+    it('records the pin served before the write even if the catalog drops it meanwhile', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      mockRepo.set.mockImplementation(async () => {
+        mockCatalog.isSupported.mockImplementation(
+          (id: string) => id !== DEAD_PIN_SUPPORTED
+        );
+      });
+      await service.setConfig('ai_deep_model', DEEP_PIN, ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.powerful',
+        DEAD_PIN_SUPPORTED,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('records the pin a release deleted even if the catalog drops it meanwhile', async () => {
+      mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
+      mockCache.del.mockImplementation(async () => {
+        mockCatalog.isSupported.mockImplementation(
+          (id: string) => id !== FAST_PIN
+        );
+      });
+      await service.resetConfig('ai_fast_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.fast',
+        FAST_PIN,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('records nothing when re-pinning the model the intent already serves', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      await service.setConfig('ai_deep_model', DEAD_PIN_SUPPORTED, ACTOR);
+      expect(mockRepo.set).toHaveBeenCalledOnce();
+      expect(mockResolutionRepo.recordRelease).not.toHaveBeenCalled();
+    });
+
+    it('records the pin a release stops serving', async () => {
+      mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
+      await service.resetConfig('ai_fast_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.fast',
+        FAST_PIN,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('records nothing when a release drops a pin the catalog no longer serves', async () => {
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== DEAD_PIN
+      );
+      mockRepo.delete.mockResolvedValue(deletedRow(DEAD_PIN));
+      await service.resetConfig('ai_deep_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).not.toHaveBeenCalled();
+    });
+
+    it('records the pin a re-pin replaced in the store, not a stale cached one', async () => {
+      mockCache.get.mockImplementation(async (key: string) =>
+        key === 'ai:config:ai_deep_model' ? CUSTOM_MODEL : null
+      );
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      await service.setConfig('ai_deep_model', DEEP_PIN, ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.powerful',
+        DEAD_PIN_SUPPORTED,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('records the pin a release deleted, not a stale cached one', async () => {
+      mockCache.get.mockImplementation(async (key: string) =>
+        key === 'ai:config:ai_fast_model' ? CUSTOM_MODEL : null
+      );
+      mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
+      await service.resetConfig('ai_fast_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.fast',
+        FAST_PIN,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('records nothing for a chain change or a release with no row', async () => {
+      await service.setConfig('ai_fallback_chain', A_VALID_CHAIN, ACTOR);
+      await service.resetConfig('ai_deep_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).not.toHaveBeenCalled();
+    });
+
+    it('keeps the pin and warns when the release record fails', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEAD_PIN_SUPPORTED : null
+      );
+      vi.mocked(mockResolutionRepo.recordRelease).mockRejectedValue(
+        new Error('db down')
+      );
+      await expect(
+        service.setConfig('ai_deep_model', DEEP_PIN, ACTOR)
+      ).resolves.toBeUndefined();
+      expect(mockRepo.set).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith({
+        event: 'ai.config.release_record_failed',
+        intent: 'powerful',
+        modelId: DEAD_PIN_SUPPORTED,
+        reason: 'db down',
+      });
+    });
+  });
+
+  describe('fallback chain', () => {
+    it('should return the DB chain over the derived chain', async () => {
       mockRepo.get.mockResolvedValue('google:gemini-2.0-flash');
       const chain = await service.getFallbackChain();
       expect(chain).toEqual(['google:gemini-2.0-flash']);
@@ -974,15 +1246,7 @@ describe('AIConfigService', () => {
   });
 
   describe('getIntentModels', () => {
-    it('resolves every intent to its served model in one map', async () => {
-      expect(await service.getIntentModels()).toEqual({
-        fast: AI_SETTING_DEFAULTS.ai_fast_model,
-        balanced: AI_SETTING_DEFAULTS.ai_default_model,
-        powerful: AI_SETTING_DEFAULTS.ai_deep_model,
-      });
-    });
-
-    it('falls back only for the intent whose stored model left the catalog', async () => {
+    it('serves the active resolution only for the intent whose pin left the catalog', async () => {
       mockRepo.get.mockImplementation(async (key: string) =>
         key === 'ai_fast_model' ? PROMOTED_ID : null
       );
@@ -990,11 +1254,7 @@ describe('AIConfigService', () => {
         (id: string) => id !== PROMOTED_ID
       );
 
-      expect(await service.getIntentModels()).toEqual({
-        fast: AI_SETTING_DEFAULTS.ai_fast_model,
-        balanced: AI_SETTING_DEFAULTS.ai_default_model,
-        powerful: AI_SETTING_DEFAULTS.ai_deep_model,
-      });
+      expect(await service.getIntentModels()).toEqual(PLATFORM_SEED_MODELS);
     });
 
     it('keeps a stored intent model the catalog still serves', async () => {
@@ -1005,8 +1265,50 @@ describe('AIConfigService', () => {
       const models = await service.getIntentModels();
 
       expect(models.fast).toBe(PROMOTED_ID);
-      expect(models.balanced).toBe(AI_SETTING_DEFAULTS.ai_default_model);
-      expect(models.powerful).toBe(AI_SETTING_DEFAULTS.ai_deep_model);
+      expect(models.balanced).toBe(PLATFORM_SEED_MODELS.balanced);
+      expect(models.powerful).toBe(PLATFORM_SEED_MODELS.powerful);
+    });
+  });
+
+  describe('getPlatformModelIds', () => {
+    it('lists the intent models, the chain, then the active resolutions, once each', async () => {
+      const stored: Record<string, string> = {
+        ai_fast_model: FAST_PIN,
+        ai_default_model: BALANCED_PIN,
+        ai_deep_model: DEEP_PIN,
+        ai_fallback_chain: `${BALANCED_PIN},${CHAIN_ONLY}`,
+      };
+      mockRepo.get.mockImplementation(
+        async (key: string) => stored[key] ?? null
+      );
+
+      expect(await service.getPlatformModelIds()).toEqual([
+        FAST_PIN,
+        BALANCED_PIN,
+        DEEP_PIN,
+        CHAIN_ONLY,
+        PLATFORM_SEED_MODELS.fast,
+        PLATFORM_SEED_MODELS.balanced,
+        PLATFORM_SEED_MODELS.powerful,
+      ]);
+    });
+
+    it('refuses the platform models while only the seed floor is known', async () => {
+      const cold = new AIConfigService(
+        mockRepo as never,
+        mockCache as never,
+        mockAudit as never,
+        mockRegistry as never,
+        mockCatalog as never,
+        { snapshot: () => [] } as never,
+        createSnapshotIndex(),
+        createResolutionsStub(SEED_RESOLUTIONS, { readStore: false }),
+        mockResolutionRepo
+      );
+
+      await expect(cold.getPlatformModelIds()).rejects.toBeInstanceOf(
+        PlatformResolutionsUnreadError
+      );
     });
   });
 
@@ -1049,29 +1351,27 @@ describe('AIConfigService', () => {
   });
 
   describe('models that left the catalog', () => {
-    it('should fall back to the code default when the stored default model is gone', async () => {
+    it('should serve the active resolution when the stored default model is gone', async () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
       mockCatalog.isSupported.mockImplementation(
         (id: string) => id !== PROMOTED_ID
       );
 
       expect(await service.getDefaultModel()).toBe(
-        AI_SETTING_DEFAULTS.ai_default_model
+        PLATFORM_SEED_MODELS.balanced
       );
     });
 
-    it('should fall back to the code default when a stored intent model is gone', async () => {
+    it('should serve the active resolution when a stored intent model is gone', async () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
       mockCatalog.isSupported.mockImplementation(
         (id: string) => id !== PROMOTED_ID
       );
 
       expect((await service.getIntentModels()).powerful).toBe(
-        AI_SETTING_DEFAULTS.ai_deep_model
+        PLATFORM_SEED_MODELS.powerful
       );
-      expect(await service.getFastModel()).toBe(
-        AI_SETTING_DEFAULTS.ai_fast_model
-      );
+      expect(await service.getFastModel()).toBe(PLATFORM_SEED_MODELS.fast);
     });
 
     it('should serve a stored model the catalog still supports', async () => {
@@ -1081,12 +1381,12 @@ describe('AIConfigService', () => {
       expect((await service.getIntentModels()).fast).toBe(PROMOTED_ID);
     });
 
-    it('should serve a retired promoted default from the code default through the real catalog', async () => {
+    it('should serve a retired promoted default from its active resolution through the real catalog', async () => {
       const retired = await serviceWith([]);
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
 
       expect(await retired.getDefaultModel()).toBe(
-        AI_SETTING_DEFAULTS.ai_default_model
+        PLATFORM_SEED_MODELS.balanced
       );
     });
 
@@ -1170,5 +1470,19 @@ describe('AI_SETTING_DEFAULTS', () => {
     expect(GLOBAL_REASONING_EFFORTS).toContain(
       AI_SETTING_DEFAULTS.ai_reasoning_effort
     );
+  });
+
+  it('ships every model setting and the chain on auto', () => {
+    expect([
+      AI_SETTING_DEFAULTS.ai_default_model,
+      AI_SETTING_DEFAULTS.ai_fast_model,
+      AI_SETTING_DEFAULTS.ai_deep_model,
+      AI_SETTING_DEFAULTS.ai_fallback_chain,
+    ]).toEqual([
+      AUTO_MODEL_SETTING,
+      AUTO_MODEL_SETTING,
+      AUTO_MODEL_SETTING,
+      AUTO_MODEL_SETTING,
+    ]);
   });
 });

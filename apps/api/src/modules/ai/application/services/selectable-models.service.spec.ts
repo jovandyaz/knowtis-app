@@ -12,13 +12,22 @@ import type { AiExecutionContext } from '../../domain/execution-context/ai-execu
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { chooseModel } from '../../domain/model-catalog/model-choice';
 import { RETIREMENT_WINDOW_DAYS } from '../../domain/model-catalog/model-selectors';
-import { utcDayOf } from '../../domain/value-objects/utc-day';
+import {
+  RESOLUTION_GRACE_DAYS,
+  type ModelResolution,
+} from '../../domain/model-catalog/platform-resolution';
+import { MS_PER_DAY, utcDayOf } from '../../domain/value-objects/utc-day';
 import type { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import type { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import type { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createIndexedModel } from '../../testing/create-indexed-model';
+import {
+  createResolutionsStub,
+  seededResolution,
+} from '../../testing/platform-resolutions';
 import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
@@ -66,13 +75,18 @@ function makeSelectableModelsService(
   catalog: ModelCatalog,
   registry: RegistryStub,
   promoted: PromotedCacheStub,
-  index: IndexStub = createSnapshotIndex()
+  index: IndexStub = createSnapshotIndex(),
+  resolutions: Pick<
+    PlatformResolutionCache,
+    'platformBilledModelIds'
+  > = createResolutionsStub()
 ) {
   return new SelectableModelsService(
     catalog,
     registry as ProviderRegistryFactory,
     promoted as PromotedModelsCache,
-    index as ModelIndexCache
+    index as ModelIndexCache,
+    resolutions as PlatformResolutionCache
   );
 }
 
@@ -87,7 +101,8 @@ function indexOf(rows: readonly IndexedModel[]): IndexStub {
 
 function makeOpenService(
   promoted: readonly CatalogModel[] = [],
-  index?: IndexStub
+  index?: IndexStub,
+  resolutions?: Pick<PlatformResolutionCache, 'platformBilledModelIds'>
 ) {
   const catalog: ModelCatalog = {
     isSupported: () => true,
@@ -99,7 +114,8 @@ function makeOpenService(
     catalog,
     registry,
     promotedCache(promoted),
-    index
+    index,
+    resolutions
   );
 }
 
@@ -439,14 +455,9 @@ describe('SelectableModelsService', () => {
       ).toEqual({ levels: ['low', 'high', 'max'], mandatory: true });
     });
 
-    it('serves a promoted model the index ladder, never the ladder its row stored', () => {
+    it('serves a promoted model the index ladder', () => {
       const id = 'openrouter:openai/gpt-6-luna';
-      const service = makeOpenService([
-        createCatalogModel({
-          id,
-          reasoning: { levels: ['low'], mandatory: true },
-        }),
-      ]);
+      const service = makeOpenService([createCatalogModel({ id })]);
 
       expect(
         listed(service, OPENROUTER_KEY).find((m) => m.id === id)?.reasoning
@@ -577,6 +588,25 @@ describe('SelectableModelsService', () => {
   });
 
   describe('factsFor', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(SNAPSHOT_DATE);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const GRACE_MS = RESOLUTION_GRACE_DAYS * MS_PER_DAY;
+
+    function graceService(overrides: Partial<ModelResolution>) {
+      return makeOpenService(
+        [],
+        undefined,
+        createResolutionsStub([seededResolution('powerful', overrides)])
+      );
+    }
+
     function pinnedTurn(
       service: SelectableModelsService,
       pinned: string,
@@ -603,7 +633,7 @@ describe('SelectableModelsService', () => {
       },
     };
 
-    it('keeps a free caller pinned on a platform default the intents left platform-billed: not_in_tier, never key_removed', () => {
+    it('keeps a free caller pinned on an active resolution the intents left platform-billed: not_in_tier, never key_removed', () => {
       expect(
         pinnedTurn(makeOpenService(), INTENTS.fast, PROMOTED_FAST_INTENTS)
       ).toEqual(PLATFORM_FALLBACK);
@@ -624,7 +654,7 @@ describe('SelectableModelsService', () => {
       );
     });
 
-    it('bills a platform default to the platform only while the server routes it', () => {
+    it('bills an active resolution to the platform only while the server routes it', () => {
       const service = makeService({
         supported: new Set([INTENTS.fast]),
         available: new Set(),
@@ -646,6 +676,48 @@ describe('SelectableModelsService', () => {
           .factsFor(NO_BYOK, INTENTS)
           .isPlatformBilled(GLM)
       ).toBe(true);
+    });
+
+    it('keeps a model the admin re-pinned away from platform-billed for the grace window: not_in_tier, never key_removed', () => {
+      const service = graceService({
+        releasedModelId: GLM,
+        releasedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
+      });
+
+      expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
+        true
+      );
+      expect(pinnedTurn(service, GLM, INTENTS)).toMatchObject({
+        kind: 'resolved',
+        resolution: { fallback: { reason: 'not_in_tier', from: GLM } },
+      });
+    });
+
+    it('keeps a model an activation replaced platform-billed for the grace window', () => {
+      const service = graceService({
+        previousModelId: GLM,
+        changedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
+      });
+
+      expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
+        true
+      );
+    });
+
+    it('stops billing a released model to the platform once the grace ends', () => {
+      const service = graceService({
+        releasedModelId: GLM,
+        releasedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS - 1),
+      });
+
+      expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
+        false
+      );
+      expect(pinnedTurn(service, GLM, INTENTS)).toEqual({
+        kind: 'unavailable',
+        reason: 'key_removed',
+        suggestedModel: INTENTS.balanced,
+      });
     });
   });
 });

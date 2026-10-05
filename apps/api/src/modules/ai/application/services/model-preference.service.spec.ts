@@ -21,6 +21,7 @@ import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import {
   createSnapshotIndex,
   createSyncedSnapshotIndex,
@@ -62,7 +63,8 @@ function makeChooser(
       isModelAvailable: (id: string) => id.startsWith('openrouter:'),
     } as never,
     promotedCache as never,
-    index
+    index,
+    createResolutionsStub()
   );
   const stored: UserAiSettings = {
     preferredModel: settings.preferredModel ?? null,

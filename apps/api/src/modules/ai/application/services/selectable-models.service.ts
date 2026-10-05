@@ -20,7 +20,6 @@ import {
   type ByokResolutions,
 } from '../../domain/model-catalog/byok-intent-routes';
 import { freeLevels } from '../../domain/model-catalog/effort-policy';
-import { PLATFORM_FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
 import { toModelReasoning } from '../../domain/model-catalog/index-reasoning';
 import type { ModelFacts } from '../../domain/model-catalog/model-choice';
 import { plainRouteCanonical } from '../../domain/model-catalog/plain-route';
@@ -32,6 +31,7 @@ import {
 } from '../../domain/model-catalog/tier-catalog';
 import { utcDayOf } from '../../domain/value-objects/utc-day';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
@@ -62,7 +62,8 @@ export class SelectableModelsService {
     @Inject(MODEL_CATALOG) private readonly catalog: ModelCatalog,
     private readonly registry: ProviderRegistryFactory,
     private readonly promotedModels: PromotedModelsCache,
-    private readonly index: ModelIndexCache
+    private readonly index: ModelIndexCache,
+    private readonly resolutions: PlatformResolutionCache
   ) {}
 
   catalogFor(
@@ -94,6 +95,7 @@ export class SelectableModelsService {
         .filter((model) => model.tier === 'open')
         .map((model) => model.id)
     );
+    const platformModels = this.resolutions.platformBilledModelIds(new Date());
     return {
       heldProviders: byokProviders,
       isSupported: (id) => this.catalog.isSupported(id),
@@ -101,7 +103,7 @@ export class SelectableModelsService {
         plainRouteCanonical(id, this.index.catalog().get(id)?.canonical),
       isPlatformBilled: (id) =>
         platformIntentIds.has(id) ||
-        ((openTier.has(id) || PLATFORM_FLOOR_MODEL_IDS.includes(id)) &&
+        ((openTier.has(id) || platformModels.has(id)) &&
           this.registry.isModelAvailable(id)),
     };
   }

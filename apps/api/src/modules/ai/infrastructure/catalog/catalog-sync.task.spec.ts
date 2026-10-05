@@ -1,21 +1,28 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MODELS_DEV_PROVIDERS, OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
+import { INTENT_FALLBACK_ORDER } from '@knowtis/shared-types';
+
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
-import { PLATFORM_FLOOR_MODEL_IDS } from '../../domain/model-catalog/floor-models';
+import { PLATFORM_SEED_MODELS } from '../../domain/model-catalog/platform-resolution';
 import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
+import { PlatformResolutionsUnreadError } from '../../domain/ports/platform-models.port';
 import { CatalogSyncTask } from './catalog-sync.task';
 import type { ModelIndexWriter } from './model-index.writer';
+import type { PlatformCandidatesWriter } from './platform-candidates.writer';
 
 const WATCHED_OUTPUT_COST = 0.0000044;
 const REPRICE_FACTOR = 2;
 const PROMOTED_SLUG = 'qwen/qwen3-max';
 const PROMOTED_ID = `openrouter:${PROMOTED_SLUG}`;
+const PINNED_SLUG = 'qwen/qwen3.8-max';
+const PINNED_ID = 'openrouter:qwen/qwen3.8-max';
 const EXPIRATION_DATE = new Date('2026-12-31T00:00:00.000Z');
 
 function upstreamModel(
@@ -56,9 +63,13 @@ const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
 const MIN_WATCHED_MODELS = 2;
 
-const WATCHED_SLUGS = PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
-  id.startsWith(OPENROUTER_ID_PREFIX)
-).map((id) => id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase());
+const WATCHED_IDS = INTENT_FALLBACK_ORDER.map(
+  (intent) => PLATFORM_SEED_MODELS[intent]
+).filter((id) => id.startsWith(OPENROUTER_ID_PREFIX));
+
+const WATCHED_SLUGS = WATCHED_IDS.map((id) =>
+  id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase()
+);
 
 if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
   throw new Error('the sync spec needs two watched OpenRouter models');
@@ -67,9 +78,7 @@ if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
 const [WATCHED_SLUG] = WATCHED_SLUGS;
 const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
-const WATCHED_COUNT = WATCHED_SLUGS.length;
-
-/** Watched models present and undated, so they raise nothing: a fixture that omits one asserts it vanished upstream. */
+/** Watched models present and undated, so they raise nothing, plus `DEEPSEEK_CANDIDATE`, an unwatched platform-author row that keeps the read recognizable: a fixture that omits a watched model asserts it vanished upstream. */
 function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
   const provided = new Set(models.map((model) => model.id));
   return {
@@ -77,6 +86,7 @@ function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
       ...WATCHED_SLUGS.filter((slug) => !provided.has(slug)).map((slug) =>
         upstreamModel(slug)
       ),
+      ...(provided.has(DEEPSEEK_CANDIDATE.id) ? [] : [DEEPSEEK_CANDIDATE]),
       ...models,
     ],
     complete: true,
@@ -84,11 +94,14 @@ function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
   };
 }
 
+const IN_SYNC_COUNT = withWatchedInSync().models.length;
+
 function make(
   options: {
     upstream?: UpstreamModel[];
     locked?: boolean;
     promoted?: string[];
+    platformModels?: string[];
   } = {}
 ) {
   const lock = createAdvisoryLockClient(options.locked ?? true);
@@ -112,14 +125,25 @@ function make(
       indexed: INDEXED_ROWS,
       absent: 0,
       rejected: [],
+      concluded: [],
     }),
+  };
+  const platformModels = {
+    getPlatformModelIds: vi
+      .fn()
+      .mockResolvedValue(options.platformModels ?? WATCHED_IDS),
+  };
+  const candidates = {
+    write: vi.fn<PlatformCandidatesWriter['write']>().mockResolvedValue(0),
   };
   const task = new CatalogSyncTask(
     lock.client,
     repo as never,
     openRouter as never,
     modelsDev as never,
-    indexWriter as never
+    indexWriter as never,
+    platformModels,
+    candidates as never
   );
   return {
     task,
@@ -128,6 +152,8 @@ function make(
     openRouter,
     modelsDev,
     indexWriter,
+    platformModels,
+    candidates,
   };
 }
 
@@ -150,13 +176,11 @@ describe('CatalogSyncTask', () => {
   });
 
   it('should store every upstream model that passes the candidate filter', async () => {
-    const { task, repo } = make({
-      upstream: [QWEN_CANDIDATE, DEEPSEEK_CANDIDATE],
-    });
+    const { task, repo } = make({ upstream: [QWEN_CANDIDATE] });
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(2 + WATCHED_COUNT);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + IN_SYNC_COUNT);
     expect(repo.upsertCandidate).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'openrouter:qwen/qwen3.8-max',
@@ -174,13 +198,13 @@ describe('CatalogSyncTask', () => {
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + WATCHED_COUNT);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + IN_SYNC_COUNT);
     expect(repo.upsertCandidate).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'openrouter:qwen/qwen3.8-max' })
     );
   });
 
-  it('should persist declared reasoning support on the candidate', async () => {
+  it('should persist no reasoning on the candidate', async () => {
     const { task, repo } = make({
       upstream: [
         upstreamModel('qwen/qwen3.8-max', {
@@ -191,27 +215,11 @@ describe('CatalogSyncTask', () => {
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reasoning: { levels: ['low', 'high'], mandatory: true },
-      })
-    );
-  });
-
-  it('should persist a reasoning model that enumerates no efforts', async () => {
-    const { task, repo } = make({
-      upstream: [
-        upstreamModel('qwen/qwen3.8-max', {
-          reasoning: { levels: [], mandatory: true },
-        }),
-      ],
-    });
-
-    await task.sync();
-
-    expect(repo.upsertCandidate).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoning: { levels: [], mandatory: true } })
-    );
+    const [candidate] = repo.upsertCandidate.mock.calls.find(
+      ([model]) => model.id === 'openrouter:qwen/qwen3.8-max'
+    ) ?? [undefined];
+    expect(candidate).toBeDefined();
+    expect(candidate).not.toHaveProperty('reasoning');
   });
 
   it('should raise a deprecation alert when OpenRouter dates a watched model', async () => {
@@ -343,14 +351,12 @@ describe('CatalogSyncTask', () => {
   });
 
   it('should keep syncing the other models when one upsert fails', async () => {
-    const { task, repo } = make({
-      upstream: [QWEN_CANDIDATE, DEEPSEEK_CANDIDATE],
-    });
+    const { task, repo } = make({ upstream: [QWEN_CANDIDATE] });
     repo.upsertCandidate.mockRejectedValueOnce(new Error('value too long'));
 
     await task.sync();
 
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(2 + WATCHED_COUNT);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + IN_SYNC_COUNT);
     expect(warnLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.sync_write_failed',
@@ -386,14 +392,14 @@ describe('CatalogSyncTask', () => {
   });
   it('should report what an on-demand run wrote', async () => {
     const { task } = make({
-      upstream: [QWEN_CANDIDATE, DEEPSEEK_CANDIDATE, CLOSED_WEIGHT_MODEL],
+      upstream: [QWEN_CANDIDATE, CLOSED_WEIGHT_MODEL],
     });
 
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 3 + WATCHED_COUNT,
-      candidates: 2 + WATCHED_COUNT,
+      upstream: 2 + IN_SYNC_COUNT,
+      candidates: 1 + IN_SYNC_COUNT,
       indexed: INDEXED_ROWS,
       alerts: 0,
       failures: 0,
@@ -401,16 +407,14 @@ describe('CatalogSyncTask', () => {
   });
 
   it('should count the writes that failed rather than hide them behind a success', async () => {
-    const { task, repo } = make({
-      upstream: [QWEN_CANDIDATE, DEEPSEEK_CANDIDATE],
-    });
+    const { task, repo } = make({ upstream: [QWEN_CANDIDATE] });
     repo.upsertCandidate.mockRejectedValueOnce(new Error('value too long'));
 
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 2 + WATCHED_COUNT,
-      candidates: 1 + WATCHED_COUNT,
+      upstream: 1 + IN_SYNC_COUNT,
+      candidates: IN_SYNC_COUNT,
       indexed: INDEXED_ROWS,
       alerts: 0,
       failures: 1,
@@ -504,6 +508,53 @@ describe('CatalogSyncTask', () => {
     expect(errorLog).not.toHaveBeenCalled();
   });
 
+  it('writes the models.dev read alone when the OpenRouter fetch fails, then rejects', async () => {
+    const { task, openRouter, indexWriter } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+
+    await expect(task.run()).rejects.toThrow('openrouter down');
+    expect(indexWriter.write).toHaveBeenCalledWith(null, MODELS_DEV_CATALOG);
+  });
+
+  it('writes nothing when both fetches fail', async () => {
+    const { task, openRouter, modelsDev, indexWriter } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+    modelsDev.fetchCatalog.mockRejectedValue(new Error('models.dev down'));
+
+    await expect(task.run()).rejects.toThrow('openrouter down');
+    expect(indexWriter.write).not.toHaveBeenCalled();
+  });
+
+  it('watches the models the platform serves', async () => {
+    const { task, repo } = make({ platformModels: [PINNED_ID] });
+    await task.run();
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      PINNED_ID,
+      'unavailable',
+      expect.stringContaining(PINNED_SLUG)
+    );
+  });
+
+  it.each([
+    ['unread resolutions', new PlatformResolutionsUnreadError()],
+    ['a failed read', new Error('db down')],
+  ])('watches nothing, and still syncs, given %s', async (_, error) => {
+    const { task, repo, platformModels } = make({
+      platformModels: [PINNED_ID],
+    });
+    platformModels.getPlatformModelIds.mockRejectedValue(error);
+
+    const result = await task.run();
+
+    expect(result.status).toBe('completed');
+    expect(repo.createAlert).not.toHaveBeenCalled();
+    expect(warnLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.platform_models_read_failed',
+      })
+    );
+  });
+
   it('should index the OpenRouter read together with the models.dev read', async () => {
     const { task, openRouter, indexWriter } = make({
       upstream: [QWEN_CANDIDATE],
@@ -530,11 +581,11 @@ describe('CatalogSyncTask', () => {
     expect(result).toEqual(
       expect.objectContaining({
         status: 'completed',
-        candidates: 1 + WATCHED_COUNT,
+        candidates: 1 + IN_SYNC_COUNT,
         indexed: INDEXED_ROWS,
       })
     );
-    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + WATCHED_COUNT);
+    expect(repo.upsertCandidate).toHaveBeenCalledTimes(1 + IN_SYNC_COUNT);
     expect(warnLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.model_index.models_dev_fetch_failed',
@@ -557,7 +608,7 @@ describe('CatalogSyncTask', () => {
     expect(result).toEqual(
       expect.objectContaining({
         status: 'completed',
-        candidates: 1 + WATCHED_COUNT,
+        candidates: 1 + IN_SYNC_COUNT,
         indexed: 0,
         alerts: 1,
       })
@@ -573,6 +624,90 @@ describe('CatalogSyncTask', () => {
         reason: 'model index locked',
       })
     );
+  });
+
+  it('pends platform candidates after a concluded OpenRouter batch', async () => {
+    const { task, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [OPENROUTER_PROVIDER],
+    });
+
+    await task.run();
+
+    expect(candidates.write).toHaveBeenCalledTimes(1);
+  });
+
+  it('pends the candidates while it still holds the advisory lock', async () => {
+    const { task, lock, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [OPENROUTER_PROVIDER],
+    });
+    let queriesAtWrite: string[] = [];
+    candidates.write.mockImplementation(async () => {
+      queriesAtWrite = [...lock.queries];
+      return 0;
+    });
+
+    await task.run();
+
+    expect(queriesAtWrite).toEqual([
+      expect.stringContaining('pg_try_advisory_lock'),
+    ]);
+  });
+
+  it('marks nothing when the OpenRouter batch did not conclude', async () => {
+    const { task, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: ['anthropic'],
+    });
+
+    await task.run();
+
+    expect(candidates.write).not.toHaveBeenCalled();
+  });
+
+  it('keeps syncing when pending the candidates fails', async () => {
+    const { task, indexWriter, candidates } = make();
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [OPENROUTER_PROVIDER],
+    });
+    candidates.write.mockRejectedValue(new Error('resolutions table locked'));
+
+    const result = await task.run();
+
+    expect(result).toEqual(
+      expect.objectContaining({ status: 'completed', indexed: INDEXED_ROWS })
+    );
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.model_resolution.pending_failed',
+      reason: 'resolutions table locked',
+    });
+  });
+
+  it('marks nothing when the OpenRouter fetch fails', async () => {
+    const { task, openRouter, indexWriter, candidates } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+    indexWriter.write.mockResolvedValueOnce({
+      indexed: INDEXED_ROWS,
+      absent: 0,
+      rejected: [],
+      concluded: [...MODELS_DEV_PROVIDERS],
+    });
+
+    await expect(task.run()).rejects.toThrow('openrouter down');
+    expect(candidates.write).not.toHaveBeenCalled();
   });
 
   it('should release the lock when the upstream fetch fails inside it', async () => {

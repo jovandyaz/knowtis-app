@@ -7,6 +7,7 @@ import { AIConfigService } from '../../application/services/ai-config.service';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { createTestChain } from '../../testing/create-test-chain';
+import { createResolutionsStub } from '../../testing/platform-resolutions';
 import { AISDKProvider } from './ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './ai-structured-output-sdk.provider';
 
@@ -146,6 +147,8 @@ function harness(failPrimary = false, toolStep = false) {
     registry,
     {} as never,
     {} as never,
+    {} as never,
+    createResolutionsStub(),
     {} as never
   );
   return { requests, config, registry, chain, routing };

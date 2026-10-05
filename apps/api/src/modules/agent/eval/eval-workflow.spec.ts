@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { AI_SETTING_DEFAULTS } from '../../ai/domain/ai-settings';
+import { PLATFORM_SEED_MODELS } from '../../ai/domain/model-catalog/platform-resolution';
 import { EVAL_CATEGORIES } from './cases';
 
 const REPO_ROOT = join(__dirname, '../../../../../..');
@@ -21,15 +21,15 @@ const REFERENCE_MODEL = 'anthropic:claude-sonnet-5';
 const BEHAVIOR_TRIALS = '3';
 const SECURITY_TRIALS = '10';
 
-function overridable(repositoryVariable: string, codeDefault: string): string {
-  return `\${{ vars.${repositoryVariable} || '${codeDefault}' }}`;
+function overridable(repositoryVariable: string, seededModel: string): string {
+  return `\${{ vars.${repositoryVariable} || '${seededModel}' }}`;
 }
 
 describe('weekly eval workflow', () => {
-  it('runs exactly these legs, each production model falling back to its code default', () => {
+  it('runs exactly these legs, each production model falling back to its seeded platform resolution', () => {
     const defaultModel = overridable(
       'AI_EVAL_DEFAULT_MODEL',
-      AI_SETTING_DEFAULTS.ai_default_model
+      PLATFORM_SEED_MODELS.balanced
     );
     const legs = [...WORKFLOW.matchAll(LEG_RE)].map(
       ([, leg, model, target, trials]) => ({ leg, model, target, trials })
@@ -56,19 +56,13 @@ describe('weekly eval workflow', () => {
       },
       {
         leg: 'fast-model-security',
-        model: overridable(
-          'AI_EVAL_FAST_MODEL',
-          AI_SETTING_DEFAULTS.ai_fast_model
-        ),
+        model: overridable('AI_EVAL_FAST_MODEL', PLATFORM_SEED_MODELS.fast),
         target: 'eval-security',
         trials: SECURITY_TRIALS,
       },
       {
         leg: 'deep-model-security',
-        model: overridable(
-          'AI_EVAL_DEEP_MODEL',
-          AI_SETTING_DEFAULTS.ai_deep_model
-        ),
+        model: overridable('AI_EVAL_DEEP_MODEL', PLATFORM_SEED_MODELS.powerful),
         target: 'eval-security',
         trials: SECURITY_TRIALS,
       },

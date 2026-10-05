@@ -17,10 +17,12 @@ import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   byNewestRelease,
   BYOK_SELECTORS,
-  intentOfFamily,
+  intentOfRow,
   isAssignableModel,
   isEligible,
+  PLATFORM_SELECTORS,
   resolveByokIntent,
+  resolvePlatformIntent,
   resolveSelector,
   type EligibilityRule,
   type ModelSelector,
@@ -736,23 +738,30 @@ describe('isAssignableModel', () => {
   });
 });
 
-describe('intentOfFamily', () => {
+describe('intentOfRow', () => {
   it.each([
-    ['claude-haiku', 'fast'],
-    ['gpt-luna', 'fast'],
-    ['gemini-flash-lite', 'fast'],
-    ['claude-sonnet', 'balanced'],
-    ['gpt-terra', 'balanced'],
-    ['gemini-flash', 'balanced'],
-    ['claude-opus', 'powerful'],
-    ['gpt-sol', 'powerful'],
-    ['gemini-pro', 'powerful'],
-  ])('maps %s to %s', (family, intent) => {
-    expect(intentOfFamily(family)).toBe(intent);
+    ['anthropic:claude-sonnet-5-5', 'balanced'],
+    ['openrouter:deepseek/deepseek-v4-pro-0813', 'balanced'],
+    ['openrouter:deepseek/deepseek-v4.1-flash', 'fast'],
+    ['openrouter:z-ai/glm-5.2', 'powerful'],
+  ] as const)('classifies %s as %s', (id, intent) => {
+    expect(intentOfRow(row(id))).toBe(intent);
   });
 
-  it.each(['glm', null])('gives null for %s', (family) => {
-    expect(intentOfFamily(family)).toBeNull();
+  it.each([
+    'openrouter:z-ai/glm-5.3-flashx',
+    'anthropic:claude-fable-5-1',
+    'openrouter:moonshotai/kimi-k2.5',
+  ])('classifies %s under no intent', (id) => {
+    expect(intentOfRow(row(id))).toBeNull();
+  });
+
+  it('gives null to an openrouter row of another author in a selector family', () => {
+    const foreign = {
+      ...row('openrouter:z-ai/glm-5.2'),
+      id: 'openrouter:vendor/glm-5.2',
+    };
+    expect(intentOfRow(foreign)).toBeNull();
   });
 });
 
@@ -774,5 +783,99 @@ describe('byNewestRelease', () => {
     ['no date', UNDATED, { releasedAt: null }],
   ])('ties two entries with %s', (_, a, b) => {
     expect(byNewestRelease(a, b)).toBe(0);
+  });
+});
+
+const ABOVE_PRIME_CEILING_PER_MILLION = 10;
+
+describe('PLATFORM_SELECTORS', () => {
+  it.each([
+    ['fast', 'openrouter:deepseek/deepseek-v4.1-flash'],
+    ['balanced', 'openrouter:deepseek/deepseek-v4-pro-0813'],
+    ['powerful', 'openrouter:z-ai/glm-5.3'],
+  ] as const)('resolves the %s intent on the snapshot to %s', (intent, id) => {
+    expect(
+      resolvePlatformIntent(intent, MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)?.id
+    ).toBe(id);
+  });
+
+  it('never picks a flash-tier id its powerful family lists, however new', () => {
+    const flashx = row('openrouter:z-ai/glm-5.3-flashx');
+
+    expect(flashx.family).toBe('glm');
+    expect(isEligible(flashx, PLATFORM_SELECTORS.powerful, SNAPSHOT_DATE)).toBe(
+      false
+    );
+    expect(
+      isEligible(
+        flashx,
+        { ...PLATFORM_SELECTORS.powerful, excludedIdTokens: [] },
+        SNAPSHOT_DATE
+      )
+    ).toBe(true);
+  });
+
+  it('skips a powerful row above its ceiling', () => {
+    const prime = row('openrouter:z-ai/glm-5.3-prime');
+
+    expect(isEligible(prime, PLATFORM_SELECTORS.powerful, SNAPSHOT_DATE)).toBe(
+      false
+    );
+    expect(
+      isEligible(
+        prime,
+        {
+          ...PLATFORM_SELECTORS.powerful,
+          maxOutputCostPerMillion: ABOVE_PRIME_CEILING_PER_MILLION,
+        },
+        SNAPSHOT_DATE
+      )
+    ).toBe(true);
+  });
+
+  it('skips the newer vision-exp row of the fast family', () => {
+    expect(
+      isEligible(
+        row('openrouter:deepseek/deepseek-v4-flash-vision-exp'),
+        PLATFORM_SELECTORS.fast,
+        SNAPSHOT_DATE
+      )
+    ).toBe(false);
+  });
+
+  it('falls back to the next row of the family when the newest leaves the index', () => {
+    const rows = MODEL_INDEX_SNAPSHOT.filter(
+      (model) => model.id !== 'openrouter:deepseek/deepseek-v4-pro-0813'
+    );
+
+    expect(resolvePlatformIntent('balanced', rows, SNAPSHOT_DATE)?.id).toBe(
+      'openrouter:deepseek/deepseek-v4-pro'
+    );
+  });
+
+  it('resolves nothing once the family leaves the index', () => {
+    const rows = MODEL_INDEX_SNAPSHOT.filter(
+      (model) => model.family !== 'deepseek-flash'
+    );
+
+    expect(resolvePlatformIntent('fast', rows, SNAPSHOT_DATE)).toBeNull();
+  });
+
+  it('resolves only the selector author on OpenRouter', () => {
+    const foreign = {
+      ...row('openrouter:z-ai/glm-5.3'),
+      id: 'openrouter:acme/glm-5.3',
+    };
+
+    expect(
+      resolvePlatformIntent('powerful', [foreign], SNAPSHOT_DATE)
+    ).toBeNull();
+  });
+
+  it('keeps the BYOK-only rule free of the flash exclusion', () => {
+    expect(
+      resolveByokIntent('fast', 'google', MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
+        ?.id
+    ).toBe('google:gemini-3.5-flash-lite');
   });
 });

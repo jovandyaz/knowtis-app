@@ -429,7 +429,7 @@ export class AIController {
   @ApiOperation({
     summary: 'Get the effective AI configuration',
     description:
-      'Returns every AI config key resolved to its effective value: the database row when present, the code default otherwise.',
+      'Returns every AI config key resolved to its effective value: the database row when present; model keys without a row serve their active platform resolution, the chain derives from the intents, and other keys resolve to their code default.',
   })
   @ApiResponse({
     status: 200,
@@ -512,9 +512,9 @@ export class AIController {
   }
 
   @ApiOperation({
-    summary: 'Reset an AI configuration value to its code default',
+    summary: 'Release a pin or reset a value',
     description:
-      'Deletes the database override for a dynamic AI configuration key so it resolves to its code default. Idempotent when no override exists.',
+      'Deletes the database row so a model key serves its active platform resolution and the chain derives from the intents; other keys resolve to their code default. Idempotent when no row exists.',
   })
   @ApiResponse({
     status: 200,

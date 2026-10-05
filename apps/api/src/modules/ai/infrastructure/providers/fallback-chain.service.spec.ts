@@ -150,7 +150,8 @@ describe('FallbackChainService', () => {
   describe('candidatesFor', () => {
     function buildWithSource(
       getFallbackChain: () => Promise<string[]>,
-      configOverrides: Record<string, unknown> = {}
+      configOverrides: Record<string, unknown> = {},
+      seed: string[] = TEST_CHAIN_MODELS
     ) {
       const config = createMockConfig(configOverrides);
       const registry = new ProviderRegistryFactory(config);
@@ -165,7 +166,7 @@ describe('FallbackChainService', () => {
         registry,
         alerts
       );
-      service.onModuleInit(TEST_CHAIN_MODELS);
+      service.onModuleInit(seed);
       return { service, chainSource };
     }
 
@@ -286,6 +287,35 @@ describe('FallbackChainService', () => {
       service.candidatesFor('anthropic:claude-sonnet-5');
 
       expect(chainSource.getFallbackChain).toHaveBeenCalledTimes(1);
+    });
+
+    it('loads the chain on application bootstrap', async () => {
+      const { service } = buildWithSource(
+        async () => ['anthropic:claude-haiku-4-5'],
+        { ANTHROPIC_API_KEY: 'k' },
+        []
+      );
+
+      await service.onApplicationBootstrap();
+
+      expect(service.candidatesFor('anthropic:claude-sonnet-5')).toContain(
+        'anthropic:claude-haiku-4-5'
+      );
+    });
+
+    it('keeps an empty chain when the bootstrap read fails', async () => {
+      const { service } = buildWithSource(
+        async () => {
+          throw new Error('db down');
+        },
+        { ANTHROPIC_API_KEY: 'k' },
+        []
+      );
+
+      await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
+      expect(service.candidatesFor('anthropic:claude-sonnet-5')).toEqual([
+        'anthropic:claude-sonnet-5',
+      ]);
     });
   });
 });

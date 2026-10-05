@@ -20,3 +20,4 @@ export * from './oauth-payloads.schema';
 export * from './admin-audit-log.schema';
 export * from './ai-catalog.schema';
 export * from './ai-model-index.schema';
+export * from './ai-model-resolutions.schema';

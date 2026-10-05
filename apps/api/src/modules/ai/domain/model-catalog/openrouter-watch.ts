@@ -1,9 +1,9 @@
-import type { CatalogAlertKind } from '@knowtis/shared-types';
+import { MODEL_INTENTS, type CatalogAlertKind } from '@knowtis/shared-types';
 
 import type { UpstreamCatalog } from '../ports/openrouter-models.port';
 import { isoDateOf } from '../value-objects/utc-day';
 import { OPENROUTER_ID_PREFIX } from './catalog-model';
-import { PLATFORM_FLOOR_MODEL_IDS } from './floor-models';
+import { PLATFORM_SELECTORS } from './model-selectors';
 import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
 
 export interface DriftFinding {
@@ -12,11 +12,20 @@ export interface DriftFinding {
   detail: string;
 }
 
-const WATCHED_SLUGS: ReadonlyMap<string, string> = new Map(
-  PLATFORM_FLOOR_MODEL_IDS.filter((id) =>
-    id.startsWith(OPENROUTER_ID_PREFIX)
-  ).map((id) => [id, id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase()])
-);
+/** OpenRouter authors the platform selectors pick from; a read listing none of them is not the catalog we know. */
+const PLATFORM_AUTHOR_PREFIXES = [
+  ...new Set(
+    MODEL_INTENTS.map((intent) => `${PLATFORM_SELECTORS[intent].author}/`)
+  ),
+];
+
+function watchedSlugs(ids: readonly string[]): ReadonlyMap<string, string> {
+  return new Map(
+    ids
+      .filter((id) => id.startsWith(OPENROUTER_ID_PREFIX))
+      .map((id) => [id, id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase()])
+  );
+}
 
 function unavailableDetail(slug: string): string {
   return `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`;
@@ -24,18 +33,20 @@ function unavailableDetail(slug: string): string {
 
 /**
  * Slug lookup for one upstream read, plus the guard that decides whether it may
- * retire anything: only a catalog that reached the last page, still lists a
- * watched model, and carries no anonymous discard can prove absence — a
- * discarded entry whose id failed to parse could be any model, including the
- * one about to be declared gone.
+ * retire anything: only a catalog that reached the last page, lists a model by
+ * an author the platform selectors pick from, and carries no anonymous discard
+ * can prove absence — a discarded entry whose id failed to parse could be any
+ * model, including the one about to be declared gone.
  */
 function absenceCheck(catalog: UpstreamCatalog) {
   const bySlug = new Map(
     catalog.models.map((model) => [model.id.toLowerCase(), model])
   );
   const unparseable = new Set(catalog.discarded.map((id) => id.toLowerCase()));
-  const recognizable = [...WATCHED_SLUGS.values()].some((slug) =>
-    bySlug.has(slug)
+  const recognizable = catalog.models.some((model) =>
+    PLATFORM_AUTHOR_PREFIXES.some((prefix) =>
+      model.id.toLowerCase().startsWith(prefix)
+    )
   );
   const conclusive =
     catalog.complete && recognizable && !unparseable.has(UNPARSEABLE_MODEL_ID);
@@ -53,12 +64,15 @@ export function canConcludeAbsence(catalog: UpstreamCatalog): boolean {
   return absenceCheck(catalog).conclusive;
 }
 
-/** Upstream changes on the platform default models OpenRouter bills, matched by slug: a model it stopped listing or dates for expiration. */
-export function findOpenRouterDrift(catalog: UpstreamCatalog): DriftFinding[] {
+/** Upstream changes on the platform's OpenRouter models, matched by slug: one it stopped listing or dates for expiration. */
+export function findOpenRouterDrift(
+  catalog: UpstreamCatalog,
+  watchedIds: readonly string[]
+): DriftFinding[] {
   const { bySlug, isGone } = absenceCheck(catalog);
   const findings: DriftFinding[] = [];
 
-  for (const [modelId, slug] of WATCHED_SLUGS) {
+  for (const [modelId, slug] of watchedSlugs(watchedIds)) {
     const live = bySlug.get(slug);
     if (live === undefined) {
       if (isGone(slug)) {
@@ -84,22 +98,22 @@ export function findOpenRouterDrift(catalog: UpstreamCatalog): DriftFinding[] {
 }
 
 /**
- * Promoted models OpenRouter stopped listing, except platform defaults, which
- * `findOpenRouterDrift` already reports. Absence is read from the payload
- * rather than from `lastSeenAt`, which only refreshes for rows still passing the
- * candidate filter — a promoted model whose price outgrew that ceiling is still
- * listed, and reporting it as vanished would be wrong.
+ * Promoted models OpenRouter stopped listing, except watched ones, which
+ * `findOpenRouterDrift` reports. Absence is read from the payload rather than
+ * from `lastSeenAt`, which only refreshes for rows still passing the candidate
+ * filter — a promoted model whose price outgrew that ceiling is still listed,
+ * and reporting it as vanished would be wrong.
  */
 export function findPromotedDrift(
   promotedIds: readonly string[],
-  catalog: UpstreamCatalog
+  catalog: UpstreamCatalog,
+  watchedIds: readonly string[]
 ): DriftFinding[] {
   const { isGone } = absenceCheck(catalog);
+  const watched = watchedSlugs(watchedIds);
 
   return promotedIds
-    .filter(
-      (id) => id.startsWith(OPENROUTER_ID_PREFIX) && !WATCHED_SLUGS.has(id)
-    )
+    .filter((id) => id.startsWith(OPENROUTER_ID_PREFIX) && !watched.has(id))
     .flatMap((id) => {
       const slug = id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase();
       return isGone(slug)

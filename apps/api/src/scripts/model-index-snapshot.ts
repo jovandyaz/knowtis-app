@@ -18,9 +18,9 @@ export const SNAPSHOT_PATH = resolve(
 
 /**
  * Why these reads must not become the snapshot; empty when they may. A partial
- * read, or one that cannot support and fully price every floor model, would
- * ship a floor that records `costUsd=0` for the platform's own spend; one that
- * leaves a BYOK intent route unserved would ship a floor with no route for it.
+ * read, or one that leaves a platform or BYOK intent route resolving to no
+ * supported, fully priced row with an input window, would ship a floor with no
+ * served model for that intent.
  */
 export function snapshotRefusals(
   modelsDev: ModelsDevCatalog,

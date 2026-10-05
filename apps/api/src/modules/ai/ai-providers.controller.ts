@@ -8,6 +8,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Logger,
   Param,
   Post,
@@ -33,7 +34,14 @@ import {
   RequireFeatureFlag,
 } from '../feature-flags/feature-flag.guard';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
-import { systemProbeModelId } from './domain/model-catalog/probe-model';
+import {
+  probeCandidateModelIds,
+  systemProbeModelId,
+} from './domain/model-catalog/probe-model';
+import {
+  PLATFORM_MODELS_SOURCE,
+  type PlatformModelsSource,
+} from './domain/ports/platform-models.port';
 import { SetSystemProviderDto } from './dto/set-system-provider.dto';
 import { SystemProviderParamDto } from './dto/system-provider-param.dto';
 import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
@@ -59,7 +67,9 @@ export class AiProvidersController {
   constructor(
     private readonly systemKeys: SystemProviderKeysService,
     private readonly registry: ProviderRegistryFactory,
-    private readonly index: ModelIndexCache
+    private readonly index: ModelIndexCache,
+    @Inject(PLATFORM_MODELS_SOURCE)
+    private readonly platformModels: PlatformModelsSource
   ) {}
 
   @Get()
@@ -128,7 +138,11 @@ export class AiProvidersController {
 
   /** Sends one cheap turn through whatever key currently routes for the provider. */
   private async probe(provider: AIProvider): Promise<ProviderTestResult> {
-    const modelId = systemProbeModelId(provider, this.index.catalog().all());
+    const modelId = systemProbeModelId(
+      provider,
+      await probeCandidateModelIds(this.platformModels),
+      this.index.catalog().all()
+    );
     if (modelId === null) {
       return {
         ok: false,

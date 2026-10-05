@@ -1,17 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CatalogAlert } from '../../domain/model-catalog/catalog-alert';
+import { PLATFORM_SEED_MODELS } from '../../domain/model-catalog/platform-resolution';
 import type {
   AiCatalogRepository,
   CatalogStatusChange,
 } from '../../domain/ports/ai-catalog.repository';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { createCatalogModel } from '../../testing/create-catalog-model';
+import {
+  createResolutionsStub,
+  seededResolution,
+} from '../../testing/platform-resolutions';
 import { AiCatalogAdminService } from './ai-catalog-admin.service';
 
 const ACTOR_ID = 'admin-user-id';
 const MODEL_ID = 'openrouter:vendor/promoted-one';
 const ALERT_ID = 7;
+const PENDING_ID = 'openrouter:vendor/pending-candidate';
+const PREVIOUS_ID = 'openrouter:vendor/just-replaced';
+const ACTIVE_IDS = [
+  PLATFORM_SEED_MODELS.fast,
+  PLATFORM_SEED_MODELS.balanced,
+  PLATFORM_SEED_MODELS.powerful,
+];
 
 const COMPLETED_SYNC = {
   status: 'completed',
@@ -64,7 +76,17 @@ describe('AiCatalogAdminService', () => {
       repository as never,
       audit as never,
       promotedCache,
-      syncTask as never
+      syncTask as never,
+      createResolutionsStub([
+        seededResolution('fast'),
+        seededResolution('balanced', {
+          pendingModelId: PENDING_ID,
+          gateStatus: 'pending',
+          previousModelId: PREVIOUS_ID,
+          changedAt: new Date(),
+        }),
+        seededResolution('powerful'),
+      ])
     );
   });
 
@@ -143,6 +165,7 @@ describe('AiCatalogAdminService', () => {
         page: 3,
         limit: 25,
         search: undefined,
+        excludeIds: ACTIVE_IDS,
       });
       expect(result).toMatchObject({ total: 97, page: 3, limit: 25 });
       expect(result.items).toHaveLength(1);
@@ -155,6 +178,18 @@ describe('AiCatalogAdminService', () => {
         page: 1,
         limit: 25,
         search: SEARCH_TERM,
+        excludeIds: ACTIVE_IDS,
+      });
+    });
+
+    it('hides the active models but keeps a pending candidate listed', async () => {
+      await service.listCandidates({ page: 1, limit: 25 });
+
+      expect(repository.listCandidates).toHaveBeenCalledWith({
+        page: 1,
+        limit: 25,
+        search: undefined,
+        excludeIds: ACTIVE_IDS,
       });
     });
   });
