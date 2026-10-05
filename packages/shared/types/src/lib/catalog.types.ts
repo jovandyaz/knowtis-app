@@ -26,7 +26,7 @@ export const PLATFORM_SELECTOR_KEYS = [
 export type PlatformSelectorKey = (typeof PLATFORM_SELECTOR_KEYS)[number];
 
 /** Where a pending platform model stands in the eval gate. */
-export const MODEL_GATE_STATUSES = ['pending', 'passed', 'failed'] as const;
+export const MODEL_GATE_STATUSES = ['pending', 'failed'] as const;
 export type ModelGateStatus = (typeof MODEL_GATE_STATUSES)[number];
 
 export const CATALOG_LABEL_MAX_LENGTH = 100;

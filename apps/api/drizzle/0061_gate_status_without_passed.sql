@@ -1,0 +1,2 @@
+ALTER TABLE "ai_model_resolutions" DROP CONSTRAINT "ai_model_resolutions_gate_status_check";--> statement-breakpoint
+ALTER TABLE "ai_model_resolutions" ADD CONSTRAINT "ai_model_resolutions_gate_status_check" CHECK ("ai_model_resolutions"."gate_status" in ('pending', 'failed'));

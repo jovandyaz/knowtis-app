@@ -950,7 +950,7 @@ Used by `AIConfigService` for dynamic model configuration (see [Dynamic Model Co
 | `released_model_id` | varchar(120)   | The model an admin pin change last stopped serving                                |
 | `released_at`       | timestamptz    | When that release happened                                                        |
 | `pending_model_id`  | varchar(120)   | The selector's candidate awaiting the eval gate                                   |
-| `gate_status`       | varchar(16)    | `pending` \| `passed` \| `failed` (CHECK-constrained)                             |
+| `gate_status`       | varchar(16)    | `pending` \| `failed` (CHECK-constrained)                                         |
 | `gate_detail`       | varchar(500)   | Gate failure summary                                                              |
 | `gate_run_url`      | varchar(500)   | Link to the gate run                                                              |
 | `updated_at`        | timestamptz    | Default `now()`; set by every write                                               |
