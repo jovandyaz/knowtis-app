@@ -17,6 +17,7 @@ export interface UserProviderModelsRepository {
     userId: string,
     provider: ByokProvider
   ): Promise<ProviderModelListing | null>;
+  listForUser(userId: string): Promise<ProviderModelListing[]>;
   /** The listing of the key just stored, replacing whatever the row held. */
   save(
     userId: string,

@@ -111,6 +111,7 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
     repo: DrizzleUserProviderModelsRepository
   ): UserProviderModelsRepository => ({
     get: (userId, provider) => repo.get(userId, provider),
+    listForUser: (userId) => repo.listForUser(userId),
     save: (userId, listing) => repo.save(userId, listing),
     replace: (userId, listing, expectedFingerprint) =>
       repo.replace(userId, listing, expectedFingerprint),

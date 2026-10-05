@@ -15,6 +15,7 @@ import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleUserProviderKeysRepository } from './drizzle-user-provider-keys.repository';
 
 const USER_ID = '00000000-0000-4000-8000-0000000000c4';
+const KEYLESS_USER_ID = '00000000-0000-4000-8000-0000000000ce';
 
 describe.runIf(DB_AVAILABLE)('DrizzleUserProviderKeysRepository', () => {
   let moduleRef: TestingModule;
@@ -77,6 +78,34 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderKeysRepository', () => {
       iv: 'iv',
       authTag: 'tag',
     });
+  });
+
+  it('lists every stored key of a user encrypted', async () => {
+    await seedAnthropic();
+    await repo.upsert(
+      USER_ID,
+      'openai',
+      { ciphertext: 'ct-o', iv: 'iv-o', authTag: 'tag-o' },
+      'sk-proj-'
+    );
+
+    expect(await repo.listEncrypted(USER_ID)).toEqual([
+      {
+        provider: 'anthropic',
+        ciphertext: 'ct',
+        iv: 'iv',
+        authTag: 'tag',
+        keyPrefix: 'sk-ant-x',
+      },
+      {
+        provider: 'openai',
+        ciphertext: 'ct-o',
+        iv: 'iv-o',
+        authTag: 'tag-o',
+        keyPrefix: 'sk-proj-',
+      },
+    ]);
+    expect(await repo.listEncrypted(KEYLESS_USER_ID)).toEqual([]);
   });
 
   it('lists providers oldest key first', async () => {

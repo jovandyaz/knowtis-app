@@ -22,7 +22,10 @@ import type {
   AiExecutionContext,
 } from '../../domain/execution-context/ai-execution-context';
 import { CATALOG_SCOPE } from '../../domain/execution-context/tier-policy';
-import { NO_ENTITLEMENTS } from '../../domain/model-catalog/byok-entitlement';
+import {
+  NO_ENTITLEMENTS,
+  type ByokEntitlements,
+} from '../../domain/model-catalog/byok-entitlement';
 import {
   chooseModel,
   MODEL_CHOICE,
@@ -42,6 +45,7 @@ import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache'
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
 import { AIConfigService } from './ai-config.service';
+import { ByokModelsService } from './byok-models.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 /** A turn's model choice; `retiredPick` names the stored pick the turn reports as retired, to forget once that report reaches the caller. */
@@ -57,21 +61,23 @@ export class ModelPreferenceService {
     private readonly selectable: SelectableModelsService,
     private readonly aiConfig: AIConfigService,
     private readonly index: ModelIndexCache,
-    private readonly promoted: PromotedModelsCache
+    private readonly promoted: PromotedModelsCache,
+    private readonly byokModels: ByokModelsService
   ) {}
 
   async listModels(
     execution: AiExecutionContext
   ): Promise<ModelCatalogResponse> {
-    const [platformIntents, primaryProvider] = await Promise.all([
+    const [platformIntents, primaryProvider, entitlements] = await Promise.all([
       this.aiConfig.getIntentModels(),
       this.storedPrimaryOf(execution),
+      this.entitlementsOf(execution),
     ]);
     const catalog = this.selectable.catalogFor(
       execution,
       platformIntents,
       primaryProvider,
-      NO_ENTITLEMENTS
+      entitlements
     );
     return {
       tier: catalog.tier,
@@ -102,7 +108,7 @@ export class ModelPreferenceService {
       this.settings.getSettings(execution.subject.userId),
     ]);
     const mayForget = this.index.servesFreshIndex() && this.promoted.isFresh();
-    const { catalog, facts } = this.scopeOf(
+    const { catalog, facts } = await this.scopeOf(
       execution,
       platformIntents,
       settings.primaryProvider
@@ -195,12 +201,15 @@ export class ModelPreferenceService {
           ? primaryProvider
           : null,
     };
-    return intentModels === null
-      ? held
-      : servedPreference(
-          this.scopeOf(execution, intentModels, held.primaryProvider).catalog,
-          held
-        );
+    if (intentModels === null) {
+      return held;
+    }
+    const { catalog } = await this.scopeOf(
+      execution,
+      intentModels,
+      held.primaryProvider
+    );
+    return servedPreference(catalog, held);
   }
 
   /**
@@ -250,7 +259,7 @@ export class ModelPreferenceService {
         ? this.storedPrimaryOf(execution)
         : patch.primaryProvider,
     ]);
-    const { catalog, facts } = this.scopeOf(
+    const { catalog, facts } = await this.scopeOf(
       execution,
       platformIntents,
       primaryProvider
@@ -287,16 +296,25 @@ export class ModelPreferenceService {
     return primaryProvider;
   }
 
-  private scopeOf(
+  private async entitlementsOf(
+    execution: AiExecutionContext
+  ): Promise<ByokEntitlements> {
+    if (execution.policy.catalog !== CATALOG_SCOPE.OWN_KEYS) {
+      return NO_ENTITLEMENTS;
+    }
+    return this.byokModels.entitlementsFor(execution.subject.userId);
+  }
+
+  private async scopeOf(
     execution: AiExecutionContext,
     platformIntents: Readonly<Record<ModelIntent, string>>,
     primaryProvider: ByokProvider | null
-  ): { catalog: TierCatalog; facts: ModelFacts } {
+  ): Promise<{ catalog: TierCatalog; facts: ModelFacts }> {
     const catalog = this.selectable.catalogFor(
       execution,
       platformIntents,
       primaryProvider,
-      NO_ENTITLEMENTS
+      await this.entitlementsOf(execution)
     );
     return {
       catalog,

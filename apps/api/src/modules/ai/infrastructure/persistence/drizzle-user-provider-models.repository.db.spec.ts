@@ -105,6 +105,31 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
     expect(await repo.get(USER_ID, 'openai')).toBeNull();
   });
 
+  it('lists every listing of a user', async () => {
+    await seedKey('anthropic');
+    await seedKey('openai');
+    await seedKey('anthropic', OTHER_USER_ID);
+    const anthropic = listing('anthropic', OLD_FP, ['m1']);
+    const openai = listing('openai', NEW_FP, ['m2', 'm3']);
+    await repo.save(USER_ID, openai);
+    await repo.save(USER_ID, anthropic);
+    await repo.save(OTHER_USER_ID, listing('anthropic', NEW_FP, ['m4']));
+    await db
+      .update(userProviderModels)
+      .set({ syncedAt: null })
+      .where(
+        and(
+          eq(userProviderModels.userId, USER_ID),
+          eq(userProviderModels.provider, 'openai')
+        )
+      );
+
+    expect(await repo.listForUser(USER_ID)).toEqual([
+      anthropic,
+      { ...openai, syncedAt: null },
+    ]);
+  });
+
   it('save replaces the listing of a previous key', async () => {
     await seedKey('anthropic');
     await repo.save(USER_ID, listing('anthropic', OLD_FP, ['m1']));

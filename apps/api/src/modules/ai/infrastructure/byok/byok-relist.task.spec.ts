@@ -35,6 +35,7 @@ function makeTask(locked = true) {
   const lock = createAdvisoryLockClient(locked);
   const models = {
     get: vi.fn(),
+    listForUser: vi.fn(),
     save: vi.fn(),
     replace: vi.fn(),
     findDue: vi.fn().mockResolvedValue([]),

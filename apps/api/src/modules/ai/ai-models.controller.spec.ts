@@ -7,6 +7,7 @@ import { SelectableModelsService } from './application/services/selectable-model
 import type { TierResolver } from './application/services/tier-resolver.service';
 import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
 import { ModelUnavailableException } from './model-unavailable.exception';
+import { createByokModelsStub } from './testing/create-byok-models-stub';
 import { createExecutionContext } from './testing/create-execution-context';
 import { createResolutionsStub } from './testing/platform-resolutions';
 import { createSnapshotIndex } from './testing/snapshot-index';
@@ -88,7 +89,8 @@ function makeWired(
       selectable,
       aiConfig as never,
       index,
-      promoted as never
+      promoted as never,
+      createByokModelsStub() as never
     ),
     tiers as never
   );

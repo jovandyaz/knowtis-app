@@ -7,6 +7,7 @@ import type {
   ReasoningEffort,
 } from '@knowtis/shared-types';
 
+import { createByokModelsStub } from '../../testing/create-byok-models-stub';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createResolutionsStub } from '../../testing/platform-resolutions';
 import { createSnapshotIndex } from '../../testing/snapshot-index';
@@ -367,7 +368,8 @@ describe('TurnEffortResolver', () => {
         selectable,
         aiConfig as never,
         index,
-        promoted as never
+        promoted as never,
+        createByokModelsStub() as never
       );
       return new TurnEffortResolver(aiConfig as never, modelPreference);
     }

@@ -18,6 +18,17 @@ import { toByokProvider } from './byok-provider-column';
 
 type StoredListing = ProviderModelListing & { readonly syncedAt: Date };
 
+function toListing(
+  row: typeof userProviderModels.$inferSelect
+): ProviderModelListing {
+  return {
+    provider: toByokProvider(row.provider),
+    keyFingerprint: row.keyFingerprint,
+    modelIds: row.modelIds,
+    syncedAt: row.syncedAt,
+  };
+}
+
 @Injectable()
 export class DrizzleUserProviderModelsRepository implements UserProviderModelsRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
@@ -36,15 +47,16 @@ export class DrizzleUserProviderModelsRepository implements UserProviderModelsRe
         )
       )
       .limit(1);
-    if (!row) {
-      return null;
-    }
-    return {
-      provider: toByokProvider(row.provider),
-      keyFingerprint: row.keyFingerprint,
-      modelIds: row.modelIds,
-      syncedAt: row.syncedAt,
-    };
+    return row ? toListing(row) : null;
+  }
+
+  async listForUser(userId: string): Promise<ProviderModelListing[]> {
+    const rows = await this.db
+      .select()
+      .from(userProviderModels)
+      .where(eq(userProviderModels.userId, userId))
+      .orderBy(asc(userProviderModels.provider));
+    return rows.map(toListing);
   }
 
   async save(userId: string, listing: StoredListing): Promise<void> {

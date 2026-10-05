@@ -10,6 +10,9 @@ import {
   type MockInstance,
 } from 'vitest';
 
+import type { ByokProvider } from '@knowtis/shared-types';
+
+import { entitledIdsOf } from '../../domain/model-catalog/byok-entitlement';
 import {
   PROVIDER_LISTING_KIND,
   type ProviderListing,
@@ -32,6 +35,7 @@ const OLD_FINGERPRINT = 'fp:old';
 const LISTED_MODEL_IDS = ['claude-haiku-4-5-20251001', 'claude-sonnet-5'];
 const KEY_READ_DELAY_MS = 1_500;
 const FOREIGN_KEY_VIOLATION = 'insert violates user_provider_models_key_fk';
+const READ_FAILURE = 'connection terminated unexpectedly';
 
 const fingerprintOf = (apiKey: string) => `fp:${apiKey.length}`;
 
@@ -58,7 +62,14 @@ interface MakeOverrides {
   listing?: ProviderListing;
   written?: boolean | Error;
   resolveKey?: Mock<ByokService['resolveKey']>;
+  listings?: readonly ProviderModelListing[] | Error;
+  keyFingerprints?: ReadonlyMap<ByokProvider, string> | Error;
 }
+
+const settle = <T>(value: T | Error) =>
+  value instanceof Error
+    ? vi.fn().mockRejectedValue(value)
+    : vi.fn().mockResolvedValue(value);
 
 function makeService(overrides: MakeOverrides = {}) {
   const rows = overrides.rows ?? [STORED_ROW];
@@ -72,10 +83,17 @@ function makeService(overrides: MakeOverrides = {}) {
   } else {
     replace.mockResolvedValue(overrides.written ?? true);
   }
-  const models = { get, save: vi.fn(), replace, findDue: vi.fn() };
+  const models = {
+    get,
+    save: vi.fn(),
+    replace,
+    findDue: vi.fn(),
+    listForUser: settle(overrides.listings ?? []),
+  };
   const byok = {
     resolveKey:
       overrides.resolveKey ?? vi.fn().mockResolvedValue(overrides.key ?? FOUND),
+    keyFingerprints: settle(overrides.keyFingerprints ?? new Map()),
     deleteKey: vi.fn(),
   };
   const lister = {
@@ -238,6 +256,77 @@ describe('ByokModelsService.relist', () => {
       );
       expect(lister.list).not.toHaveBeenCalled();
       expect(models.replace).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe('ByokModelsService.entitlementsFor', () => {
+  let warn: MockInstance<Logger['warn']>;
+
+  beforeEach(() => {
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  const listingOf = (
+    provider: ByokProvider,
+    keyFingerprint: string,
+    modelIds: readonly string[]
+  ): ProviderModelListing => ({
+    provider,
+    keyFingerprint,
+    modelIds,
+    syncedAt: SNAPSHOT_DATE,
+  });
+
+  it('entitles only listings of the keys held now', async () => {
+    const { service, models, byok } = makeService({
+      listings: [
+        listingOf('anthropic', fingerprintOf(API_KEY), LISTED_MODEL_IDS),
+        listingOf('openai', OLD_FINGERPRINT, ['gpt-6-luna']),
+        listingOf('google', OLD_FINGERPRINT, ['gemini-3-flash']),
+      ],
+      keyFingerprints: new Map([
+        ['anthropic', fingerprintOf(API_KEY)],
+        ['openai', 'fp:replaced'],
+      ]),
+    });
+
+    expect(await service.entitlementsFor(USER_ID)).toEqual(
+      new Map([['anthropic', entitledIdsOf(LISTED_MODEL_IDS)]])
+    );
+    expect(models.listForUser.mock.calls).toEqual([[USER_ID]]);
+    expect(byok.keyFingerprints.mock.calls).toEqual([[USER_ID]]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the listings', { listings: new Error(READ_FAILURE) }],
+    ['the held keys', { keyFingerprints: new Error(READ_FAILURE) }],
+  ] as const)(
+    'fails open when %s cannot be read',
+    async (_source, overrides) => {
+      const { service } = makeService({
+        listings: [listingOf('anthropic', fingerprintOf(API_KEY), ['m1'])],
+        keyFingerprints: new Map([['anthropic', fingerprintOf(API_KEY)]]),
+        ...overrides,
+      });
+
+      await expect(service.entitlementsFor(USER_ID)).resolves.toEqual(
+        new Map()
+      );
+      expect(warn.mock.calls.map((call) => call[0])).toEqual([
+        {
+          event: 'byok.entitlement.read_failed',
+          userId: USER_ID,
+          error: READ_FAILURE,
+        },
+      ]);
     }
   );
 });
