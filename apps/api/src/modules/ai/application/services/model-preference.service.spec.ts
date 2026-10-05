@@ -48,6 +48,11 @@ const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
 const GLM = 'openrouter:z-ai/glm-5.2';
 const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
 const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
+const PLATFORM_INTENTS: Readonly<Record<ModelIntent, string>> = {
+  fast: 'openrouter:minimax/minimax-m2.5',
+  balanced: 'openrouter:deepseek/deepseek-v3.2',
+  powerful: 'openrouter:moonshotai/kimi-k2.5',
+};
 
 function makeChooser(
   settings: {
@@ -95,11 +100,9 @@ function makeChooser(
     }),
   };
   const aiConfig = {
-    getIntentModels: vi.fn().mockResolvedValue({
-      fast: 'openrouter:minimax/minimax-m2.5',
-      balanced: 'openrouter:deepseek/deepseek-v3.2',
-      powerful: 'openrouter:moonshotai/kimi-k2.5',
-    }),
+    getIntentModels: vi
+      .fn<() => Promise<Record<ModelIntent, string>>>()
+      .mockResolvedValue(PLATFORM_INTENTS),
   };
   const byokModels = createByokModelsStub();
   const svc = new ModelPreferenceService(
@@ -110,7 +113,7 @@ function makeChooser(
     promotedCache as never,
     byokModels as never
   );
-  return { svc, repo, selectable, promotedCache, byokModels };
+  return { svc, repo, selectable, promotedCache, byokModels, aiConfig };
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -743,6 +746,42 @@ describe('ModelPreferenceService', () => {
         ['anthropic', entitledIdsOf(listed)],
       ]);
     }
+
+    it.each([
+      [
+        'choosing a turn model',
+        (svc: ModelPreferenceService) =>
+          svc.chooseTurnModel(BYOK_ANTHROPIC, {}),
+      ],
+      [
+        'writing a model preference',
+        (svc: ModelPreferenceService) =>
+          writeAs(svc, BYOK_ANTHROPIC, {
+            preferredModel: snapshotRouteId('fast', 'anthropic'),
+          }),
+      ],
+    ])(
+      'reads entitlements alongside the platform intents when %s',
+      async (_, act) => {
+        const { svc, aiConfig, byokModels } = makeChooser();
+        let releaseIntents: () => void = () => undefined;
+        aiConfig.getIntentModels.mockReturnValueOnce(
+          new Promise((resolve) => {
+            releaseIntents = () => resolve(PLATFORM_INTENTS);
+          })
+        );
+
+        const acting = act(svc);
+
+        await vi.waitFor(() =>
+          expect(byokModels.entitlementsFor.mock.calls).toEqual([
+            [BYOK_ANTHROPIC.subject.userId],
+          ])
+        );
+        releaseIntents();
+        await acting;
+      }
+    );
 
     it("lists an own-keys catalog filtered by the caller's entitlements", async () => {
       const balanced = snapshotRouteId('balanced', 'anthropic');

@@ -103,15 +103,17 @@ export class ModelPreferenceService {
     execution: AiExecutionContext,
     request: { explicit?: string; pinned?: string | null }
   ): Promise<TurnModelChoice> {
-    const [platformIntents, settings] = await Promise.all([
+    const [platformIntents, settings, entitlements] = await Promise.all([
       this.aiConfig.getIntentModels(),
       this.settings.getSettings(execution.subject.userId),
+      this.entitlementsOf(execution),
     ]);
     const mayForget = this.index.servesFreshIndex() && this.promoted.isFresh();
-    const { catalog, facts } = await this.scopeOf(
+    const { catalog, facts } = this.scopeOf(
       execution,
       platformIntents,
-      settings.primaryProvider
+      settings.primaryProvider,
+      entitlements
     );
     const { preferredModel, preferredIntent } = servedPreference(catalog, {
       preferredModel: settings.preferredModel,
@@ -204,10 +206,11 @@ export class ModelPreferenceService {
     if (intentModels === null) {
       return held;
     }
-    const { catalog } = await this.scopeOf(
+    const { catalog } = this.scopeOf(
       execution,
       intentModels,
-      held.primaryProvider
+      held.primaryProvider,
+      await this.entitlementsOf(execution)
     );
     return servedPreference(catalog, held);
   }
@@ -253,16 +256,18 @@ export class ModelPreferenceService {
       await this.settings.patchSettings(caller.userId, patch);
       return;
     }
-    const [platformIntents, primaryProvider] = await Promise.all([
+    const [platformIntents, primaryProvider, entitlements] = await Promise.all([
       this.aiConfig.getIntentModels(),
       patch.primaryProvider === undefined
         ? this.storedPrimaryOf(execution)
         : patch.primaryProvider,
+      this.entitlementsOf(execution),
     ]);
-    const { catalog, facts } = await this.scopeOf(
+    const { catalog, facts } = this.scopeOf(
       execution,
       platformIntents,
-      primaryProvider
+      primaryProvider,
+      entitlements
     );
     const choice = chooseModel(
       catalog,
@@ -305,16 +310,17 @@ export class ModelPreferenceService {
     return this.byokModels.entitlementsFor(execution.subject.userId);
   }
 
-  private async scopeOf(
+  private scopeOf(
     execution: AiExecutionContext,
     platformIntents: Readonly<Record<ModelIntent, string>>,
-    primaryProvider: ByokProvider | null
-  ): Promise<{ catalog: TierCatalog; facts: ModelFacts }> {
+    primaryProvider: ByokProvider | null,
+    entitlements: ByokEntitlements
+  ): { catalog: TierCatalog; facts: ModelFacts } {
     const catalog = this.selectable.catalogFor(
       execution,
       platformIntents,
       primaryProvider,
-      await this.entitlementsOf(execution)
+      entitlements
     );
     return {
       catalog,
