@@ -22,6 +22,10 @@ const ACTOR = { id: 'admin-user-id' } as never;
 const MODEL_ID = 'openrouter:vendor/promoted-one';
 const ALERT_ID = 7;
 const NO_RESOLUTIONS = { intents: [], lastSyncAt: null };
+const FAST_PAIR = {
+  activeModelId: 'openrouter:z-ai/glm-5.3',
+  previousModelId: 'openrouter:moonshotai/kimi-k2.5',
+};
 
 const model: CatalogModelDto = {
   id: MODEL_ID,
@@ -100,25 +104,32 @@ describe('AiCatalogController', () => {
     });
   });
 
-  it('rolls a platform intent back on behalf of the admin who asked', async () => {
+  it('rolls back the pair the admin confirmed, on their behalf', async () => {
     expect(
-      await controller.rollbackResolution(ACTOR, {
-        selectorKey: 'platform.fast',
-      })
+      await controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
     ).toEqual(NO_RESOLUTIONS);
     expect(resolutions.rollback).toHaveBeenCalledWith(
       'platform.fast',
+      FAST_PAIR,
       'admin-user-id'
     );
   });
 
-  it('answers 409 when the intent has nothing to roll back to', async () => {
+  it('answers 409 when the intent no longer holds the confirmed pair', async () => {
     resolutions.rollback.mockRejectedValue(
-      new ResolutionRollbackUnavailableError('nothing to roll back to')
+      new ResolutionRollbackUnavailableError('changed since it was loaded')
     );
 
     await expect(
-      controller.rollbackResolution(ACTOR, { selectorKey: 'platform.fast' })
+      controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
     ).rejects.toThrow(ConflictException);
   });
 
@@ -126,7 +137,11 @@ describe('AiCatalogController', () => {
     resolutions.rollback.mockRejectedValue(new InvalidAIConfigError('clash'));
 
     await expect(
-      controller.rollbackResolution(ACTOR, { selectorKey: 'platform.fast' })
+      controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -135,7 +150,11 @@ describe('AiCatalogController', () => {
     resolutions.rollback.mockRejectedValue(failure);
 
     await expect(
-      controller.rollbackResolution(ACTOR, { selectorKey: 'platform.fast' })
+      controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
     ).rejects.toBe(failure);
   });
 

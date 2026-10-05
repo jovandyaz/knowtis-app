@@ -227,6 +227,7 @@ export {
   type CatalogSyncResultDto,
   type AssignableModelDto,
   type PromoteCatalogModelInput,
+  type RollbackResolutionInput,
   type UpdateCatalogCopyInput,
 } from './lib/catalog.types';
 

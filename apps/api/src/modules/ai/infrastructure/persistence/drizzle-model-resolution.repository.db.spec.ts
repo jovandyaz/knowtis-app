@@ -37,6 +37,10 @@ const RELEASED = 'openrouter:qwen/qwen3.8-max-0902';
 const RUN_URL = 'https://github.com/jovandyaz/knowtis-app/actions/runs/1';
 const VERDICT_DETAIL = 'leaked a secret';
 const NOTHING_PENDING = { pendingModelId: null, gateStatus: null };
+const FAST_PAIR = {
+  activeModelId: PLATFORM_SEED_MODELS.fast,
+  previousModelId: PREVIOUS,
+};
 
 describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
   let moduleRef: TestingModule;
@@ -362,7 +366,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
 
     const rolledBack = await repo.rollback(
       'platform.fast',
-      PLATFORM_SEED_MODELS.fast,
+      FAST_PAIR,
       LATER_AT
     );
 
@@ -384,7 +388,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
 
     const rolledBack = await repo.rollback(
       'platform.fast',
-      PLATFORM_SEED_MODELS.fast,
+      FAST_PAIR,
       LATER_AT
     );
 
@@ -398,7 +402,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       .set({ previousModelId: PREVIOUS, changedAt: CHANGED_AT, updatedAt: AT })
       .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
 
-    const rolledBack = await repo.rollback('platform.fast', RELEASED, LATER_AT);
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      { ...FAST_PAIR, activeModelId: RELEASED },
+      LATER_AT
+    );
 
     expect(rolledBack).toBe(false);
     expect(await rowOf('platform.fast')).toMatchObject({
@@ -407,6 +415,23 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       changedAt: CHANGED_AT,
       updatedAt: AT,
     });
+  });
+
+  it('refuses when the previous model changed meanwhile', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({ previousModelId: PREVIOUS, changedAt: CHANGED_AT, updatedAt: AT })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+    const before = await rowOf('platform.fast');
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      { ...FAST_PAIR, previousModelId: OLD_PENDING },
+      LATER_AT
+    );
+
+    expect(rolledBack).toBe(false);
+    expect(await rowOf('platform.fast')).toEqual(before);
   });
 
   it('records the model a pin change released', async () => {

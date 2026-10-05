@@ -212,7 +212,7 @@ describe('PlatformResolutionsSection', () => {
     }
   });
 
-  it('rolls back after confirming', async () => {
+  it('rolls back the pair its confirmation names', async () => {
     renderSection([resolution({ previousModelId: PREVIOUS })]);
 
     await userEvent.click(
@@ -232,7 +232,11 @@ describe('PlatformResolutionsSection', () => {
       within(dialog).getByRole('button', { name: 'Roll back' })
     );
 
-    expect(rollbackMutate).toHaveBeenCalledWith('platform.balanced');
+    expect(rollbackMutate).toHaveBeenCalledWith({
+      selectorKey: 'platform.balanced',
+      activeModelId: ACTIVE,
+      previousModelId: PREVIOUS,
+    });
   });
 
   it('hides Roll back without a previous model', () => {

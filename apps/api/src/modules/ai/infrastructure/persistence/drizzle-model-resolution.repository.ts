@@ -1,8 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import type { PlatformSelectorKey } from '@knowtis/shared-types';
+import type {
+  PlatformSelectorKey,
+  RollbackResolutionInput,
+} from '@knowtis/shared-types';
 
 import {
   aiModelResolutions,
@@ -135,7 +138,7 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
   // columns swap without a temporary.
   async rollback(
     selectorKey: PlatformSelectorKey,
-    expectedActiveModelId: string,
+    expected: RollbackResolutionInput,
     at: Date
   ): Promise<boolean> {
     const updated = await this.db
@@ -149,8 +152,8 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
       .where(
         and(
           eq(aiModelResolutions.selectorKey, selectorKey),
-          eq(aiModelResolutions.activeModelId, expectedActiveModelId),
-          isNotNull(aiModelResolutions.previousModelId)
+          eq(aiModelResolutions.activeModelId, expected.activeModelId),
+          eq(aiModelResolutions.previousModelId, expected.previousModelId)
         )
       )
       .returning({ selectorKey: aiModelResolutions.selectorKey });

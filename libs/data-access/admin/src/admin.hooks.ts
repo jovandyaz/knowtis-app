@@ -13,6 +13,7 @@ import type {
   AIProvider,
   AssignableModelDto,
   ModelTier,
+  RollbackResolutionInput,
   UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
 
@@ -434,10 +435,15 @@ export function usePlatformResolutions() {
 export function useRollbackResolution() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (selectorKey: string) =>
+    mutationFn: async ({
+      selectorKey,
+      activeModelId,
+      previousModelId,
+    }: RollbackResolutionInput & { selectorKey: string }) =>
       PlatformResolutionsSchema.parse(
         await httpClient.post(
-          `/ai/catalog/resolutions/${encodeURIComponent(selectorKey)}/rollback`
+          `/ai/catalog/resolutions/${encodeURIComponent(selectorKey)}/rollback`,
+          { activeModelId, previousModelId }
         )
       ),
     onSuccess: (resolutions) => {

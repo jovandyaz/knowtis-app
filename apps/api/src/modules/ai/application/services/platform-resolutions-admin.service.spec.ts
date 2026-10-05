@@ -29,6 +29,10 @@ const RUN_URL = 'https://ci.example/runs/9';
 const LAST_SEEN = new Date('2026-10-03T06:00:00.000Z');
 const PREVIOUS_FAST = 'openrouter:vendor/old';
 const ACTOR_ID = 'admin-user-id';
+const FAST_PAIR = {
+  activeModelId: SERVED_FAST,
+  previousModelId: PREVIOUS_FAST,
+};
 const FAST_WITH_PREVIOUS = seededResolution('fast', {
   previousModelId: PREVIOUS_FAST,
   changedAt: new Date('2026-09-01T00:00:00.000Z'),
@@ -246,22 +250,40 @@ describe('PlatformResolutionsAdminService', () => {
   });
 
   describe('rollback', () => {
-    it('rolls the intent back to its previous model', async () => {
-      const { service, resolutions } = withPreviousFast();
+    it('rolls back the pair the admin confirmed, not the row it reads', async () => {
+      const { service, resolutions } = make({
+        resolutions: [
+          seededResolution('fast', {
+            activeModelId: PREVIOUS_FAST,
+            previousModelId: SERVED_FAST,
+          }),
+          seededResolution('balanced'),
+          seededResolution('powerful'),
+        ],
+      });
 
-      await service.rollback('platform.fast', ACTOR_ID);
+      await service.rollback('platform.fast', FAST_PAIR, ACTOR_ID);
 
       expect(resolutions.rollback).toHaveBeenCalledWith(
         'platform.fast',
-        SERVED_FAST,
+        FAST_PAIR,
         SNAPSHOT_DATE
+      );
+      expect(
+        vi.mocked(resolutions.list).mock.invocationCallOrder[0]
+      ).toBeGreaterThan(
+        vi.mocked(resolutions.rollback).mock.invocationCallOrder[0]
       );
     });
 
     it('answers the overview read after the roll back', async () => {
       const { service, resolutions, refresh, config } = withPreviousFast();
 
-      const overview = await service.rollback('platform.fast', ACTOR_ID);
+      const overview = await service.rollback(
+        'platform.fast',
+        FAST_PAIR,
+        ACTOR_ID
+      );
 
       expect(overview.intents.map((row) => row.intent)).toEqual([
         'fast',
@@ -278,10 +300,10 @@ describe('PlatformResolutionsAdminService', () => {
       ).toBeGreaterThan(Math.max(...refresh.mock.invocationCallOrder));
     });
 
-    it('audits ai_resolution.rolled_back with the swapped models', async () => {
+    it('audits ai_resolution.rolled_back with the confirmed models', async () => {
       const { service, audit } = withPreviousFast();
 
-      await service.rollback('platform.fast', ACTOR_ID);
+      await service.rollback('platform.fast', FAST_PAIR, ACTOR_ID);
 
       expect(audit.record).toHaveBeenCalledWith({
         actorId: ACTOR_ID,
@@ -293,22 +315,12 @@ describe('PlatformResolutionsAdminService', () => {
       });
     });
 
-    it('refuses without a previous model', async () => {
-      const { service, resolutions, audit } = make();
-
-      await expect(
-        service.rollback('platform.fast', ACTOR_ID)
-      ).rejects.toBeInstanceOf(ResolutionRollbackUnavailableError);
-      expect(resolutions.rollback).not.toHaveBeenCalled();
-      expect(audit.record).not.toHaveBeenCalled();
-    });
-
-    it('refuses when the active model changed meanwhile', async () => {
+    it('refuses a roll back whose confirmed pair is no longer current', async () => {
       const { service, resolutions, audit } = withPreviousFast();
       vi.mocked(resolutions.rollback).mockResolvedValue(false);
 
       await expect(
-        service.rollback('platform.fast', ACTOR_ID)
+        service.rollback('platform.fast', FAST_PAIR, ACTOR_ID)
       ).rejects.toBeInstanceOf(ResolutionRollbackUnavailableError);
       expect(audit.record).not.toHaveBeenCalled();
     });
@@ -320,7 +332,7 @@ describe('PlatformResolutionsAdminService', () => {
       );
 
       await expect(
-        service.rollback('platform.fast', ACTOR_ID)
+        service.rollback('platform.fast', FAST_PAIR, ACTOR_ID)
       ).rejects.toBeInstanceOf(InvalidAIConfigError);
       expect(config.assertNotServedByAnotherIntent).toHaveBeenCalledWith(
         PREVIOUS_FAST,
@@ -333,7 +345,7 @@ describe('PlatformResolutionsAdminService', () => {
     it('checks the clash against resolutions refreshed from the store', async () => {
       const { service, refresh, config } = withPreviousFast();
 
-      await service.rollback('platform.fast', ACTOR_ID);
+      await service.rollback('platform.fast', FAST_PAIR, ACTOR_ID);
 
       expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(
         config.assertNotServedByAnotherIntent.mock.invocationCallOrder[0]

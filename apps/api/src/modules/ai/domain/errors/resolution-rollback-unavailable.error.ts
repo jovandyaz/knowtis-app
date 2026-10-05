@@ -1,4 +1,4 @@
-/** A platform intent cannot roll back: it has no previous model, or its active model changed since it was read. */
+/** A platform intent no longer holds the active and previous models a roll back confirmed. */
 export class ResolutionRollbackUnavailableError extends Error {
   constructor(message: string) {
     super(message);

@@ -30,6 +30,7 @@ import type {
   AIConfigSource,
   ModelGateStatus,
   ModelIntent,
+  RollbackResolutionInput,
 } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
@@ -76,7 +77,7 @@ interface ResolutionRowProps {
   resolution: PlatformResolution;
   disabled: boolean;
   onReleasePin: () => void;
-  onRollBack: () => void;
+  onRollBack: (confirmed: RollbackResolutionInput) => void;
 }
 
 function ResolutionRow({
@@ -226,7 +227,7 @@ function ResolutionRow({
                       disabled={disabled}
                       onClick={() => {
                         setConfirmingRollBack(false);
-                        onRollBack();
+                        onRollBack({ activeModelId, previousModelId });
                       }}
                     >
                       {ROLL_BACK_LABEL}
@@ -290,9 +291,12 @@ export function PlatformResolutionsSection() {
                     rollback.reset();
                     resetConfig.mutate({ key: resolution.configKey });
                   }}
-                  onRollBack={() => {
+                  onRollBack={(confirmed) => {
                     resetConfig.reset();
-                    rollback.mutate(resolution.selectorKey);
+                    rollback.mutate({
+                      selectorKey: resolution.selectorKey,
+                      ...confirmed,
+                    });
                   }}
                 />
               ))}

@@ -1238,7 +1238,7 @@ describe('usePlatformResolutions', () => {
 });
 
 describe('useRollbackResolution', () => {
-  it('posts the rollback, caches the refreshed resolutions and invalidates the dependents', async () => {
+  it('posts the confirmed pair, caches the refreshed resolutions and invalidates the dependents', async () => {
     const refreshed = {
       ...PLATFORM_RESOLUTIONS,
       intents: [{ ...PLATFORM_RESOLUTION, previousModelId: null }],
@@ -1254,11 +1254,19 @@ describe('useRollbackResolution', () => {
         <QueryClientProvider client={client}>{children}</QueryClientProvider>
       ),
     });
-    result.current.mutate('platform.balanced');
+    result.current.mutate({
+      selectorKey: 'platform.balanced',
+      activeModelId: 'openrouter:z-ai/glm-5.2',
+      previousModelId: 'openrouter:z-ai/glm-5.1',
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(httpClient.post).toHaveBeenCalledWith(
-      '/ai/catalog/resolutions/platform.balanced/rollback'
+      '/ai/catalog/resolutions/platform.balanced/rollback',
+      {
+        activeModelId: 'openrouter:z-ai/glm-5.2',
+        previousModelId: 'openrouter:z-ai/glm-5.1',
+      }
     );
     expect(
       client.getQueryData(adminQueryKeys.platformResolutions())

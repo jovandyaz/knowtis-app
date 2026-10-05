@@ -56,6 +56,7 @@ import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
 import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
 import { PlatformSelectorParamDto } from './dto/platform-selector-param.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
+import { RollbackResolutionDto } from './dto/rollback-resolution.dto';
 import { UpdateCatalogCopyDto } from './dto/update-catalog-copy.dto';
 
 const AI_DISABLED = 'AI feature is disabled';
@@ -140,15 +141,16 @@ export class AiCatalogController {
   @ApiOperation({
     summary: 'Roll a platform intent back to its previous model',
     description:
-      'Swaps the active and previous resolution of the intent, leaving its pending model alone, and answers the refreshed platform resolutions. A pin keeps serving until it is released.',
+      'Swaps the active and previous resolution of the intent while they are still the two models the admin confirmed, leaving its pending model alone, and answers the refreshed platform resolutions. A supported pin keeps serving until it is released.',
   })
   @ApiResponse({ status: 200, description: 'Platform resolutions' })
   @ApiResponse({
     status: 409,
-    description: 'No previous model, or the active model changed meanwhile',
+    description:
+      'The intent no longer holds the confirmed active and previous models',
   })
   @ApiBadRequest(
-    'unknown selector, or another intent serves the previous model'
+    'unknown selector, invalid model ids, or another intent serves the previous model'
   )
   @ApiAuthErrors(AI_DISABLED)
   @Throttle(MUTATION_THROTTLE)
@@ -156,10 +158,15 @@ export class AiCatalogController {
   @Post('resolutions/:selectorKey/rollback')
   async rollbackResolution(
     @CurrentUser() user: RequestUser,
-    @Param() params: PlatformSelectorParamDto
+    @Param() params: PlatformSelectorParamDto,
+    @Body() confirmed: RollbackResolutionDto
   ): Promise<PlatformResolutionsDto> {
     try {
-      return await this.resolutions.rollback(params.selectorKey, user.id);
+      return await this.resolutions.rollback(
+        params.selectorKey,
+        confirmed,
+        user.id
+      );
     } catch (error) {
       if (error instanceof ResolutionRollbackUnavailableError) {
         throw new ConflictException(error.message);

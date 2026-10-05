@@ -1,4 +1,7 @@
-import type { PlatformSelectorKey } from '@knowtis/shared-types';
+import type {
+  PlatformSelectorKey,
+  RollbackResolutionInput,
+} from '@knowtis/shared-types';
 
 import type { ModelResolution } from '../model-catalog/platform-resolution';
 
@@ -42,10 +45,10 @@ export interface ModelResolutionRepository {
     verdict: GateVerdict,
     at: Date
   ): Promise<boolean>;
-  /** Swaps the selector's active and previous models in one write, stamping `changedAt`, only while `expectedActiveModelId` is still active and a previous model exists. Leaves the pending entry alone. Resolves whether a row changed. */
+  /** Swaps the selector's active and previous models in one write, stamping `changedAt`, only while they still equal `expected`. Leaves the pending entry alone. Resolves whether a row changed. */
   rollback(
     selectorKey: PlatformSelectorKey,
-    expectedActiveModelId: string,
+    expected: RollbackResolutionInput,
     at: Date
   ): Promise<boolean>;
   /** Records the model an admin pin change stopped serving. */

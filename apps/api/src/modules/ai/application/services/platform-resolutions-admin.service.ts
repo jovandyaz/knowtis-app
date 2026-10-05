@@ -6,6 +6,7 @@ import {
   type PlatformResolutionDto,
   type PlatformResolutionsDto,
   type PlatformSelectorKey,
+  type RollbackResolutionInput,
 } from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
@@ -73,41 +74,32 @@ export class PlatformResolutionsAdminService {
   }
 
   /**
-   * Makes the intent's previous model active again and the active one previous,
-   * leaving its pending entry alone, then answers the refreshed overview.
-   * Rejects with `ResolutionRollbackUnavailableError` when there is no previous
-   * model or the active one changed since it was read, and with
-   * `InvalidAIConfigError` when another intent serves the previous model.
+   * Makes the confirmed previous model active again and the confirmed active one
+   * previous, leaving the pending entry alone, then answers the refreshed
+   * overview. Rejects with `ResolutionRollbackUnavailableError` unless the intent
+   * still holds both confirmed models, and with `InvalidAIConfigError` when
+   * another intent serves the previous one.
    */
   async rollback(
     selectorKey: PlatformSelectorKey,
+    confirmed: RollbackResolutionInput,
     actorId: string
   ): Promise<PlatformResolutionsDto> {
     // Refreshed before the clash check: a sibling intent activated on another
     // instance would otherwise stay invisible until the cache's next interval.
-    const [rows] = await Promise.all([
-      this.resolutions.list(),
-      this.resolutionCache.refresh(),
-    ]);
-    const row = rows.find((read) => read.selectorKey === selectorKey);
-    const previous = row?.previousModelId ?? null;
-    if (!row || previous === null) {
-      throw new ResolutionRollbackUnavailableError(
-        `'${selectorKey}' has no previous model to roll back to`
-      );
-    }
+    await this.resolutionCache.refresh();
     await this.config.assertNotServedByAnotherIntent(
-      previous,
+      confirmed.previousModelId,
       intentOfSelectorKey(selectorKey)
     );
     const rolledBack = await this.resolutions.rollback(
       selectorKey,
-      row.activeModelId,
+      confirmed,
       new Date()
     );
     if (!rolledBack) {
       throw new ResolutionRollbackUnavailableError(
-        `'${selectorKey}' changed while rolling back; reload and try again`
+        `'${selectorKey}' changed since it was loaded; reload and try again`
       );
     }
     await this.audit.record({
@@ -115,8 +107,8 @@ export class PlatformResolutionsAdminService {
       action: 'ai_resolution.rolled_back',
       targetType: 'ai_model_resolution',
       targetId: selectorKey,
-      before: { active: row.activeModelId },
-      after: { active: previous },
+      before: { active: confirmed.activeModelId },
+      after: { active: confirmed.previousModelId },
     });
     await this.resolutionCache.refresh();
     return this.overview();

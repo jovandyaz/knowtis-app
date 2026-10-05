@@ -178,6 +178,12 @@ export interface PromoteCatalogModelInput {
   tier: ModelTier;
 }
 
+/** The active and previous models a roll back confirmed: it applies only while the intent still holds both. */
+export interface RollbackResolutionInput {
+  activeModelId: string;
+  previousModelId: string;
+}
+
 export interface UpdateCatalogCopyInput {
   label?: string;
   description?: string;
