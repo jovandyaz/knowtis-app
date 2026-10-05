@@ -14,6 +14,7 @@ import {
 
 import {
   CANDIDATE_STATUS,
+  CATALOG_ALERT_DETAIL_MAX_LENGTH,
   CATALOG_ALERT_KINDS,
   CATALOG_DESCRIPTION_MAX_LENGTH,
   CATALOG_LABEL_MAX_LENGTH,
@@ -103,7 +104,9 @@ export const aiCatalogAlerts = pgTable(
     /** No FK: alerts also cover the platform default models, which live in code and need no row here. */
     modelId: varchar('model_id', { length: MODEL_ID_MAX_LENGTH }).notNull(),
     kind: varchar('kind', { length: 24 }).$type<CatalogAlertKind>().notNull(),
-    detail: varchar('detail', { length: 500 }).notNull(),
+    detail: varchar('detail', {
+      length: CATALOG_ALERT_DETAIL_MAX_LENGTH,
+    }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

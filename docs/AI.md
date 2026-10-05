@@ -1444,16 +1444,19 @@ other (`concurrency: model-gate`).
   **activation clash**: nothing is written, the row stays pending, the endpoint answers
   `{ applied: false, reason: 'conflict' }`, and the service warns
   `ai.model_resolution.activation_conflict` (`selectorKey`, `modelId`, `servedBy`) and raises a
-  `gate_failed` [alert](#the-tables) on the model with the detail `serves <intent> already`. The
-  candidate stays listed, so the gate evaluates it again every day and activates it once the other
-  intent stops serving it, unless the selector has moved on; the open alert dedupes those daily
-  clashes into one. Otherwise `recordVerdict` activates it (see
-  [`ai_model_resolutions`](#ai_model_resolutions)), the cache is refreshed again, and the service
-  logs `ai.model.resolution_activated` (`selectorKey`, `modelId`, `previousModelId`).
+  `gate_failed` [alert](#the-tables) on the model with the detail
+  `<selectorKey> (<runUrl>): serves <intent> already`. The candidate stays listed, so the gate
+  evaluates it again every day and activates it once the other intent stops serving it, unless
+  the selector has moved on; the open alert dedupes those daily clashes into one. Otherwise
+  `recordVerdict` activates it (see [`ai_model_resolutions`](#ai_model_resolutions)), the cache
+  is refreshed again, and the service logs `ai.model.resolution_activated` (`selectorKey`,
+  `modelId`, `previousModelId`).
 - **Fail.** `recordVerdict` stores `failed` with the detail (trimmed, a blank one replaced by
   `eval gate failed`, cut at 500 characters) and the run link, and raises a `gate_failed` alert on
-  the model with the stored detail. `/pending` stops listing the row, and the sync does not pend
-  the same id again; a different selector result replaces it.
+  the model with the detail `<selectorKey> (<runUrl>): <stored detail>`. An alert detail is cut at
+  500 characters (`CATALOG_ALERT_DETAIL_MAX_LENGTH`), and the reason goes last, so a long one
+  loses only its tail. `/pending` stops listing the row, and the sync does not pend the same id
+  again; a different selector result replaces it.
 - **No longer pending.** A verdict for a model that is not the row's gate-pending model —
   already activated, already failed, or replaced by a newer candidate — writes nothing and
   answers 200 with `{ applied: false, reason: 'not_pending' }`, so a replayed or late verdict is

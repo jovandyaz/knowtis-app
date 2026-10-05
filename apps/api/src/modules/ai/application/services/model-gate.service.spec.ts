@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
+  CATALOG_ALERT_DETAIL_MAX_LENGTH,
   type ModelIntent,
 } from '@knowtis/shared-types';
 
@@ -25,6 +26,7 @@ const NEWER_CANDIDATE = 'openrouter:z-ai/glm-5.3';
 const FAILED_CANDIDATE = 'openrouter:deepseek/deepseek-v4-pro-0813';
 const RUN_URL = 'https://github.com/jovandyaz/knowtis-app/actions/runs/1';
 const VERDICT_DETAIL = 'leaked a secret';
+const ALERT_PREFIX = `platform.fast (${RUN_URL}): `;
 const SERVED = {
   fast: 'openrouter:minimax/minimax-m2.5',
   balanced: 'openrouter:deepseek/deepseek-v4-pro-0813',
@@ -175,7 +177,33 @@ describe('ModelGateService', () => {
     });
 
     expect(alerts.raise).toHaveBeenCalledWith([
-      { subject: CANDIDATE, kind: 'gate_failed', detail: VERDICT_DETAIL },
+      {
+        subject: CANDIDATE,
+        kind: 'gate_failed',
+        detail: `${ALERT_PREFIX}${VERDICT_DETAIL}`,
+      },
+    ]);
+  });
+
+  it('cuts a long failure from the gate_failed detail, keeping the selector and the run', async () => {
+    const { service, alerts } = make();
+
+    await service.verdict({
+      selectorKey: 'platform.fast',
+      modelId: CANDIDATE,
+      passed: false,
+      runUrl: RUN_URL,
+      detail: 'x'.repeat(AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH),
+    });
+
+    expect(alerts.raise).toHaveBeenCalledWith([
+      {
+        subject: CANDIDATE,
+        kind: 'gate_failed',
+        detail: `${ALERT_PREFIX}${'x'.repeat(
+          CATALOG_ALERT_DETAIL_MAX_LENGTH - ALERT_PREFIX.length
+        )}`,
+      },
     ]);
   });
 
@@ -193,7 +221,7 @@ describe('ModelGateService', () => {
       {
         subject: CANDIDATE,
         kind: 'gate_failed',
-        detail: 'serves balanced already',
+        detail: `${ALERT_PREFIX}serves balanced already`,
       },
     ]);
   });

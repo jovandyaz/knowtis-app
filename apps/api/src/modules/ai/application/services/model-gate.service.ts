@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
+  CATALOG_ALERT_DETAIL_MAX_LENGTH,
   type ModelGatePendingDto,
   type ModelGateVerdictResultDto,
   type ModelIntent,
@@ -53,8 +54,19 @@ function failureDetail(detail: string | undefined): string {
   );
 }
 
-function gateFailed(modelId: string, detail: string): WatchFinding {
-  return { subject: modelId, kind: 'gate_failed', detail };
+// The reason goes last, so a detail cut to fit loses only its tail.
+function gateFailed(
+  { selectorKey, modelId, runUrl }: VerdictInput,
+  reason: string
+): WatchFinding {
+  return {
+    subject: modelId,
+    kind: 'gate_failed',
+    detail: `${selectorKey} (${runUrl}): ${reason}`.slice(
+      0,
+      CATALOG_ALERT_DETAIL_MAX_LENGTH
+    ),
+  };
 }
 
 /** The eval gate's side of the platform resolutions: what awaits a verdict, what production serves, and applying a verdict. */
@@ -93,11 +105,10 @@ export class ModelGateService {
 
   // Refreshed before the clash check: a sibling intent activated on another
   // instance would otherwise stay invisible until the cache's next interval.
-  private async onPassed({
-    selectorKey,
-    modelId,
-    runUrl,
-  }: VerdictInput): Promise<ModelGateVerdictResultDto> {
+  private async onPassed(
+    input: VerdictInput
+  ): Promise<ModelGateVerdictResultDto> {
+    const { selectorKey, modelId, runUrl } = input;
     const [rows] = await Promise.all([
       this.repository.list(),
       this.resolutions.refresh(),
@@ -111,7 +122,7 @@ export class ModelGateService {
       intentOfSelectorKey(selectorKey)
     );
     if (servedBy !== null) {
-      return this.onConflict(selectorKey, modelId, servedBy);
+      return this.onConflict(input, servedBy);
     }
     const applied = await this.repository.recordVerdict(
       selectorKey,
@@ -132,12 +143,10 @@ export class ModelGateService {
     return APPLIED;
   }
 
-  private async onFailed({
-    selectorKey,
-    modelId,
-    runUrl,
-    detail,
-  }: VerdictInput): Promise<ModelGateVerdictResultDto> {
+  private async onFailed(
+    input: VerdictInput
+  ): Promise<ModelGateVerdictResultDto> {
+    const { selectorKey, modelId, runUrl, detail } = input;
     const failure = failureDetail(detail);
     const applied = await this.repository.recordVerdict(
       selectorKey,
@@ -148,24 +157,21 @@ export class ModelGateService {
     if (!applied) {
       return NOT_PENDING;
     }
-    await this.alerts.raise([gateFailed(modelId, failure)]);
+    await this.alerts.raise([gateFailed(input, failure)]);
     return APPLIED;
   }
 
   private async onConflict(
-    selectorKey: PlatformSelectorKey,
-    modelId: string,
+    input: VerdictInput,
     servedBy: ModelIntent
   ): Promise<ModelGateVerdictResultDto> {
     this.logger.warn({
       event: 'ai.model_resolution.activation_conflict',
-      selectorKey,
-      modelId,
+      selectorKey: input.selectorKey,
+      modelId: input.modelId,
       servedBy,
     });
-    await this.alerts.raise([
-      gateFailed(modelId, `serves ${servedBy} already`),
-    ]);
+    await this.alerts.raise([gateFailed(input, `serves ${servedBy} already`)]);
     return CONFLICT;
   }
 }
