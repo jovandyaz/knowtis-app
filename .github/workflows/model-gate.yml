@@ -115,7 +115,7 @@ jobs:
         run: npx nx run api:eval-security
 
       - name: Post the verdict
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (steps.eval.outcome == 'success' || steps.eval.outcome == 'failure') }}
         env:
           KNOWTIS_API_URL: ${{ secrets.KNOWTIS_API_URL }}
           MODEL_GATE_TOKEN: ${{ secrets.MODEL_GATE_TOKEN }}

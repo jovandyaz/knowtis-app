@@ -17,8 +17,10 @@ const TRIALS_RE = new RegExp(`^ +AI_EVAL_TRIALS: ${SECURITY_TRIALS}$`, 'm');
 const EVAL_STEP = '- id: eval';
 const EVALUATED_MODEL_RE = /^ +AI_EVAL_MODEL: \$\{\{ matrix\.modelId \}\}$/m;
 const JUDGED_MODEL_RE = /^ +MODEL_ID: \$\{\{ matrix\.modelId \}\}$/m;
-const VERDICT_STEP_RE =
-  /^ +- name: Post the verdict\n +if: \$\{\{ !cancelled\(\) \}\}$/m;
+const VERDICT_CONDITION_RE =
+  /^ +- name: Post the verdict\n +if: \$\{\{ !cancelled\(\) && \((.+)\) \}\}$/m;
+const EVAL_OUTCOME_TERM_RE = /^steps\.eval\.outcome == '(\w+)'$/;
+const EVAL_RAN_OUTCOMES = ['success', 'failure'];
 const PASSED_RE = /^ +PASSED: \$\{\{ steps\.eval\.outcome == 'success' \}\}$/m;
 const GRADER_KEY_CHECK = 'if [ -z "$ANTHROPIC_API_KEY" ]; then';
 const UNSET_SECRETS_EXIT_RE =
@@ -26,6 +28,15 @@ const UNSET_SECRETS_EXIT_RE =
 const GATE_SKIPS_EMPTY_MATRIX_RE =
   /^ {4}if: \$\{\{ needs\.pending\.outputs\.matrix != '\[\]' \}\}$/m;
 const EXPRESSION_OPEN = '${{';
+
+function verdictConditionTerms(): string[] {
+  const [, condition = ''] = GATE.match(VERDICT_CONDITION_RE) ?? [];
+  return condition.split('||').map((term) => term.trim());
+}
+
+function evalOutcomeOf(term: string): string | undefined {
+  return term.match(EVAL_OUTCOME_TERM_RE)?.[1];
+}
 
 function throwawayEnv(job: string): (string | undefined)[] {
   return THROWAWAY_ENV.map(
@@ -51,10 +62,20 @@ describe('model gate workflow', () => {
     expect(throwawayEnv(GATE)).toStrictEqual(weekly);
   });
 
-  it('posts the verdict whenever the leg was not cancelled', () => {
-    expect(GATE).toMatch(VERDICT_STEP_RE);
+  it('posts the verdict when the eval passed or failed, overriding the implicit success() check', () => {
+    expect(verdictConditionTerms().map(evalOutcomeOf)).toEqual(
+      expect.arrayContaining(EVAL_RAN_OUTCOMES)
+    );
     expect(GATE).toMatch(PASSED_RE);
     expect(GATE).toContain(EVAL_STEP);
+  });
+
+  it('never posts a verdict when the eval did not run', () => {
+    expect(
+      verdictConditionTerms().filter(
+        (term) => !EVAL_RAN_OUTCOMES.includes(evalOutcomeOf(term) ?? '')
+      )
+    ).toStrictEqual([]);
   });
 
   it('fails the leg before the eval when the grader key is missing, since a skipped suite would pass', () => {

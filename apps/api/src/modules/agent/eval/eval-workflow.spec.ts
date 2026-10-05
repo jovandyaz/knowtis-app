@@ -29,10 +29,28 @@ const UNSET_SECRETS_EXIT_RE =
 const GUARDED_ACTIVE_READ_RE =
   /if ! body=\$\(curl [^)]+\/api\/v1\/internal\/model-gate\/active"\); then\n +echo "::warning::.+"\n +exit 0\n +fi/;
 const FAILING_EXIT_RE = /exit [1-9]/;
+const JQ_TEST_PATTERN_RE = /test\("(.+?)"\)/;
+const JQ_ESCAPED_BACKSLASH = '\\\\';
+const JQ_END_OF_INPUT = '\\z';
+const ALIAS_PIN = 'openrouter:~anthropic/claude-sonnet-latest';
+const NEWLINE_INJECTION = 'openrouter:x/y\nbalanced=evil';
+const TRAILING_NEWLINE = 'openrouter:x/y\n';
 const EXPRESSION_OPEN = '${{';
 const REFERENCE_MODEL = 'anthropic:claude-sonnet-5';
 const BEHAVIOR_TRIALS = '3';
 const SECURITY_TRIALS = '10';
+
+function servedModelPattern(): RegExp {
+  const [script = ''] = runScripts(jobSection(WORKFLOW, 'resolve'));
+  const [, escaped = ''] = script.match(JQ_TEST_PATTERN_RE) ?? [];
+  const pattern = escaped.replaceAll(JQ_ESCAPED_BACKSLASH, '\\');
+  if (!pattern.endsWith(JQ_END_OF_INPUT)) {
+    throw new Error(
+      `served model pattern is not anchored at end of input: ${pattern}`
+    );
+  }
+  return new RegExp(`${pattern.slice(0, -JQ_END_OF_INPUT.length)}$`);
+}
 
 function overridable(intent: ModelIntent, repositoryVariable: string): string {
   return `\${{ needs.resolve.outputs.${intent} || vars.${repositoryVariable} || '${PLATFORM_SEED_MODELS[intent]}' }}`;
@@ -103,6 +121,20 @@ describe('weekly eval workflow', () => {
     expect(scripts[0]).toMatch(UNSET_SECRETS_EXIT_RE);
     expect(scripts[0]).toMatch(GUARDED_ACTIVE_READ_RE);
     expect(scripts[0]).not.toMatch(FAILING_EXIT_RE);
+  });
+
+  it('accepts every served model id, alias pins included, and nothing that could break an output line', () => {
+    const pattern = servedModelPattern();
+    const accepted = [
+      ...Object.values(PLATFORM_SEED_MODELS),
+      REFERENCE_MODEL,
+      ALIAS_PIN,
+    ];
+
+    expect(accepted.filter((id) => !pattern.test(id))).toStrictEqual([]);
+    expect(
+      [NEWLINE_INJECTION, TRAILING_NEWLINE, ''].filter((id) => pattern.test(id))
+    ).toStrictEqual([]);
   });
 
   it('never interpolates an expression inside run', () => {

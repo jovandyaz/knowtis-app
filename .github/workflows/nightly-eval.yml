@@ -44,7 +44,7 @@ jobs:
             exit 0
           fi
           for intent in fast balanced powerful; do
-            model=$(jq -r --arg intent "$intent" '.[$intent] | strings | select(test("^[a-z0-9-]+:[A-Za-z0-9._/:-]+\\z"))' <<<"$body")
+            model=$(jq -r --arg intent "$intent" '.[$intent] | strings | select(test("^[a-z0-9-]+:[A-Za-z0-9._/:~-]+\\z"))' <<<"$body")
             if [ -z "$model" ]; then
               echo "::warning::No valid served model for $intent; its legs evaluate the repository variable or the seed."
             fi
