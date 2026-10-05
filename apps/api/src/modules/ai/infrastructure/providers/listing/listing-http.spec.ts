@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
 
 import {
+  listingCall,
+  type ListingFetch,
+} from '../../../testing/stub-listing-fetch';
+import {
   boundedListing,
   getListingJson,
   listedOf,
@@ -130,6 +134,22 @@ describe('listing-http', () => {
       kind: 'unavailable',
       error: 'HTTP 502',
     });
+  });
+
+  it('refuses a redirect, which answers unavailable without the key', async () => {
+    const fetchMock = vi.fn<ListingFetch>(async (_url, init) => {
+      if (init.redirect === 'error') {
+        throw new TypeError(`unexpected redirect while sending ${API_KEY}`);
+      }
+      return new Response(JSON.stringify({ data: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(boundedListing(API_KEY, readListing)).resolves.toEqual({
+      kind: 'unavailable',
+      error: 'unexpected redirect while sending [redacted]',
+    });
+    expect(listingCall(fetchMock, 0).init.redirect).toBe('error');
   });
 
   it('resolves a same-origin next link and rejects a foreign one', () => {

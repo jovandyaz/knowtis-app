@@ -40,13 +40,13 @@ export interface ListingPage {
 const providerMessage = z.object({ error: z.object({ message: z.string() }) });
 const idEntry = z.object({ id: z.string() });
 
-/** One GET with the key in `headers`. `body` is the parsed JSON, or null when the body is not JSON; rejects only when the request itself fails. */
+/** One GET with the key in `headers`. `body` is the parsed JSON, or null when the body is not JSON; rejects only when the request itself fails, a redirect included, since following one would carry the key to wherever it points. */
 export async function getListingJson(
   url: URL,
   headers: Readonly<Record<string, string>>,
   signal: AbortSignal
 ): Promise<ListingResponse> {
-  const response = await fetch(url, { headers, signal });
+  const response = await fetch(url, { headers, signal, redirect: 'error' });
   const body: unknown = await response.json().catch(() => null);
   return response.ok
     ? { ok: true, body }
