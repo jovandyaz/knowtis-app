@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   buttonVariants,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -54,6 +55,7 @@ const GATE_STATUS_BADGE_VARIANTS = {
 
 const ROLL_BACK_LABEL = 'Roll back';
 const GATE_RUN_LABEL = 'Gate run';
+const LAST_GATE_RUN_LABEL = 'Last gate run';
 const SAFE_RUN_URL_PREFIX = 'https://';
 
 // The overview carries the stored pin and the served model, not the config
@@ -70,6 +72,29 @@ function ModelId({ id }: { id: string }) {
     <span title={id} className="block max-w-56 truncate font-mono text-xs">
       {id}
     </span>
+  );
+}
+
+interface GateRunLinkProps {
+  href: string;
+  label: string;
+  intentLabel: string;
+}
+
+function GateRunLink({ href, label, intentLabel }: GateRunLinkProps) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`${label}: ${intentLabel}`}
+      className={cn(
+        buttonVariants({ variant: 'link', size: 'sm' }),
+        'h-auto px-0'
+      )}
+    >
+      {label}
+    </a>
   );
 }
 
@@ -96,6 +121,7 @@ function ResolutionRow({
     gateRunUrl,
   } = resolution;
   const intentLabel = INTENT_LABELS[resolution.intent] ?? resolution.intent;
+  const source = pinSourceOf(resolution);
   const runUrl = gateRunUrl?.startsWith(SAFE_RUN_URL_PREFIX)
     ? gateRunUrl
     : null;
@@ -106,7 +132,15 @@ function ResolutionRow({
         <span title={resolution.selectorKey}>{intentLabel}</span>
       </TableCell>
       <TableCell>
-        <ConfigSourceBadge source={pinSourceOf(resolution)} pinnable />
+        <div className="flex min-w-0 flex-col items-start gap-0.5">
+          <ConfigSourceBadge source={source} pinnable />
+          {source === 'stale' ? (
+            <span className="text-xs text-(--muted-foreground)">
+              stored <span className="font-mono">{resolution.pin}</span> is no
+              longer served
+            </span>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell>
         <div className="flex min-w-0 flex-col gap-0.5">
@@ -147,21 +181,19 @@ function ResolutionRow({
               </span>
             ) : null}
             {runUrl ? (
-              <a
+              <GateRunLink
                 href={runUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`${GATE_RUN_LABEL}: ${intentLabel}`}
-                className={buttonVariants({
-                  variant: 'link',
-                  size: 'sm',
-                  className: 'h-auto px-0',
-                })}
-              >
-                {GATE_RUN_LABEL}
-              </a>
+                label={GATE_RUN_LABEL}
+                intentLabel={intentLabel}
+              />
             ) : null}
           </div>
+        ) : runUrl ? (
+          <GateRunLink
+            href={runUrl}
+            label={LAST_GATE_RUN_LABEL}
+            intentLabel={intentLabel}
+          />
         ) : (
           '—'
         )}
@@ -213,6 +245,16 @@ function ResolutionRow({
                       after the next sync and gate run. To keep{' '}
                       <span className="font-mono">{previousModelId}</span>, pin
                       it.
+                      {source === 'custom' ? (
+                        <>
+                          {' '}
+                          The pin keeps serving{' '}
+                          <span className="font-mono">
+                            {resolution.pin}
+                          </span>{' '}
+                          until it is released.
+                        </>
+                      ) : null}
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>

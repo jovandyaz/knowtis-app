@@ -10,15 +10,27 @@ import { PlatformResolutionsSection } from '../PlatformResolutionsSection';
 const {
   usePlatformResolutionsMock,
   rollbackMutate,
+  rollbackReset,
   rollbackState,
   resetMutate,
+  resetReset,
   resetState,
 } = vi.hoisted(() => ({
   usePlatformResolutionsMock: vi.fn(),
   rollbackMutate: vi.fn(),
-  rollbackState: { isPending: false, isError: false, error: null },
+  rollbackReset: vi.fn(),
+  rollbackState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
   resetMutate: vi.fn(),
-  resetState: { isPending: false, isError: false, error: null },
+  resetReset: vi.fn(),
+  resetState: {
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
@@ -28,12 +40,12 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     usePlatformResolutions: () => usePlatformResolutionsMock(),
     useRollbackResolution: () => ({
       mutate: rollbackMutate,
-      reset: vi.fn(),
+      reset: rollbackReset,
       ...rollbackState,
     }),
     useResetAiConfig: () => ({
       mutate: resetMutate,
-      reset: vi.fn(),
+      reset: resetReset,
       ...resetState,
     }),
   };
@@ -87,9 +99,14 @@ describe('PlatformResolutionsSection', () => {
   beforeEach(() => {
     usePlatformResolutionsMock.mockReset();
     rollbackMutate.mockReset();
+    rollbackReset.mockReset();
     resetMutate.mockReset();
-    rollbackState.isPending = false;
-    resetState.isPending = false;
+    resetReset.mockReset();
+    for (const state of [rollbackState, resetState]) {
+      state.isPending = false;
+      state.isError = false;
+      state.error = null;
+    }
   });
 
   it('shows auto and pinned intents', () => {
@@ -144,6 +161,9 @@ describe('PlatformResolutionsSection', () => {
 
     const balanced = within(rowOf('Balanced'));
     expect(balanced.getByText('stale')).toBeInTheDocument();
+    expect(rowOf('Balanced')).toHaveTextContent(
+      'stored openrouter:vendor/gone is no longer served'
+    );
     expect(
       balanced.getByRole('button', { name: 'Release pin: Balanced' })
     ).toBeInTheDocument();
@@ -212,6 +232,98 @@ describe('PlatformResolutionsSection', () => {
     }
   });
 
+  it('links the last gate run once nothing is pending', () => {
+    renderSection([resolution({ gateRunUrl: RUN_URL })]);
+
+    const run = within(rowOf('Balanced')).getByRole('link', {
+      name: 'Last gate run: Balanced',
+    });
+    expect(run).toHaveTextContent('Last gate run');
+    expect(run).toHaveAttribute('href', RUN_URL);
+    expect(run).toHaveAttribute('target', '_blank');
+    expect(run).toHaveAttribute('rel', 'noreferrer');
+  });
+
+  it('hides the last gate run link for a non-https url', () => {
+    renderSection([
+      resolution({
+        gateRunUrl: 'http://github.com/jovandyaz/knowtis-app/actions/runs/123',
+      }),
+    ]);
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('says in the roll back dialog that a served pin keeps serving', async () => {
+    renderSection([
+      resolution({ pin: PIN, served: PIN, previousModelId: PREVIOUS }),
+    ]);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Roll back: Balanced' })
+    );
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      `The pin keeps serving ${PIN} until it is released.`
+    );
+  });
+
+  it('says nothing about a pin the runtime cannot serve', async () => {
+    renderSection([
+      resolution({ pin: 'openrouter:vendor/gone', previousModelId: PREVIOUS }),
+    ]);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Roll back: Balanced' })
+    );
+
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('keeps serving');
+  });
+
+  it('shows why a roll back failed', () => {
+    rollbackState.isError = true;
+    rollbackState.error = new Error(
+      "'platform.balanced' changed since it was loaded; reload and try again"
+    );
+    renderSection([resolution({ previousModelId: PREVIOUS })]);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'changed since it was loaded; reload and try again'
+    );
+  });
+
+  it('shows why a release was refused', () => {
+    resetState.isError = true;
+    resetState.error = new Error('each tier needs its own model');
+    renderSection([resolution({ pin: PIN, served: PIN })]);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'each tier needs its own model'
+    );
+  });
+
+  it("clears the other action's error before acting", async () => {
+    renderSection([
+      resolution({ pin: PIN, served: PIN, previousModelId: PREVIOUS }),
+    ]);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Release pin: Balanced' })
+    );
+    expect(rollbackReset).toHaveBeenCalled();
+    expect(resetReset).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Roll back: Balanced' })
+    );
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Roll back',
+      })
+    );
+    expect(resetReset).toHaveBeenCalled();
+  });
+
   it('rolls back the pair its confirmation names', async () => {
     renderSection([resolution({ previousModelId: PREVIOUS })]);
 
@@ -226,6 +338,7 @@ describe('PlatformResolutionsSection', () => {
     expect(dialog).toHaveTextContent(
       `Auto mode can bring ${ACTIVE} back after the next sync and gate run. To keep ${PREVIOUS}, pin it.`
     );
+    expect(dialog).not.toHaveTextContent('keeps serving');
     expect(rollbackMutate).not.toHaveBeenCalled();
 
     await userEvent.click(

@@ -778,12 +778,12 @@ The backoffice never reads `/ai/models` — that list is caller-relative (BYOK, 
 
 The **Platform resolutions** section leads the AI Config **Models** tab. It sits inside the tab's config panel, so while `ai_enabled` is off it is hidden behind "AI is disabled" with the other settings (every `/ai/catalog/*` route answers 403 then). Each intent's row shows:
 
-- **Source**: **auto** without a pin, **pinned** when the pin is the served model, and **stale** for any other pin, which the runtime cannot serve.
+- **Source**: **auto** without a pin, **pinned** when the pin is the served model, and **stale** for any other pin, which the runtime cannot serve; a stale row adds "stored `<pin>` is no longer served", as the Models table does.
 - **Served**, with "released `<model>` on `<date>`" while the row records a released pin.
 - **Active**, with "since `<date>`" once it has changed.
-- **Pending**: the pending model, a **gate pending** or **gate failed** badge, the gate detail, and a **Gate run** link. The link renders only for an `https://` URL, and only while a model is pending.
+- **Pending**: the pending model, a **gate pending** or **gate failed** badge, the gate detail, and a **Gate run** link. With nothing pending it shows a **Last gate run** link instead, to the run whose URL the row kept (after a pass, the run that activated the model; after a roll back, it can belong to the model rolled back from, so it is not shown beside the active model). Either link renders only for an `https://` URL.
 - **Candidate**: the selector's current pick.
-- **Release pin** whenever a pin is stored, stale included (`DELETE /ai/config/:key`), and **Roll back** while the row has a previous model, after a confirmation that names both models; it sends that pair. An applied roll back also refreshes the **Model catalog** candidates, which leave out the active resolutions, and a refused one refetches the rows.
+- **Release pin** whenever a pin is stored, stale included (`DELETE /ai/config/:key`), and **Roll back** while the row has a previous model, after a confirmation that names both models, and that a served pin keeps serving until it is released; it sends that pair. An applied roll back also refreshes the **Model catalog** candidates, which leave out the active resolutions, and a refused one refetches the rows.
 
 The **Model catalog** section shows "Last sync `<relative time>`" beside **Sync now**, and nothing while `lastSyncAt` is null. A sync refetches it.
 
@@ -792,7 +792,7 @@ The **Model catalog** section shows "Last sync `<relative time>`" beside **Sync 
 - **409** (`ResolutionRollbackUnavailableError`, "changed since it was loaded; reload and try again") when the intent no longer holds both confirmed models, a row without a previous model included.
 - **400** for a selector key outside the three platform intents, a missing, empty or overlong model id, or when another intent serves the previous model, by its pin or its active resolution. That is the [release clash](#dynamic-model-configuration) rule, checked against resolutions re-read from the store, so a sibling activated on another instance counts.
 - An applied roll back is audited as `ai_resolution.rolled_back` (`before.active`, `after.active`: the confirmed models) and logged as `ai.model.resolution_rolled_back` (`selectorKey`, `modelId`: the restored model, `previousModelId`, `actorId`), in the activation's `ai.model.*` family. It refreshes the resolution cache of the instance that served it; other instances follow within 60 s.
-- A pin keeps serving. The roll back moves only the active resolution, which the intent serves once the pin is released.
+- A supported pin keeps serving. The roll back moves only the active resolution, which the intent serves once the pin is released. A stale pin serves nothing, so the roll back takes effect at once.
 
 A roll back is a quick revert, not a hold. The selector still resolves to the newer model, so auto mode can bring it back: the next conclusive sync pends it again, and a passing gate run activates it. To keep the older model, pin it: the pin is the circuit breaker. The model rolled back from becomes the previous model, so it stays platform-billed for `RESOLUTION_GRACE_DAYS` like any other previous model.
 
