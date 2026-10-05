@@ -56,6 +56,7 @@ export class ByokModelsService {
     if (listing.kind !== PROVIDER_LISTING_KIND.LISTED) {
       this.logger.warn({
         event: 'byok.relist_failed',
+        userId,
         provider,
         reason: listing.kind,
         error: listing.error,

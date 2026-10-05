@@ -239,7 +239,7 @@ describe('ByokService', () => {
     expect(repo.upsert).toHaveBeenCalledTimes(1);
     expect(models.save).not.toHaveBeenCalled();
     expect(loggedWarnings(warn)).toEqual([
-      { event: 'byok.listing_incomplete', provider: 'openai' },
+      { event: 'byok.listing_incomplete', userId: 'u1', provider: 'openai' },
     ]);
   });
 
@@ -256,6 +256,7 @@ describe('ByokService', () => {
     expect(loggedWarnings(warn)).toEqual([
       {
         event: 'byok.listing_store_failed',
+        userId: 'u1',
         provider: 'anthropic',
         error: STORE_FAILURE,
       },
@@ -282,6 +283,7 @@ describe('ByokService', () => {
       expect(loggedWarnings(warn)).toEqual([
         {
           event: 'byok.validation_failed',
+          userId: 'u1',
           provider: 'openai',
           reason: listing.kind,
           error: listing.error,

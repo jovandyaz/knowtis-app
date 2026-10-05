@@ -159,6 +159,7 @@ describe('ByokRelistTask', () => {
     expect(warn.mock.calls.map((call) => call[0])).toEqual([
       {
         event: 'byok.relist.item_failed',
+        userId: keys[1]?.userId,
         provider: keys[1]?.provider,
         error: STORE_FAILURE,
       },

@@ -110,6 +110,7 @@ export class ByokRelistTask {
     } catch (error) {
       this.logger.warn({
         event: 'byok.relist.item_failed',
+        userId: key.userId,
         provider: key.provider,
         error: reasonOf(error),
       });

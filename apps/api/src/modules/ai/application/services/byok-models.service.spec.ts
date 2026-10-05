@@ -208,6 +208,7 @@ describe('ByokModelsService.relist', () => {
     expect(warn.mock.calls.map((call) => call[0])).toEqual([
       {
         event: 'byok.relist_failed',
+        userId: USER_ID,
         provider: 'anthropic',
         reason: kind,
         error,

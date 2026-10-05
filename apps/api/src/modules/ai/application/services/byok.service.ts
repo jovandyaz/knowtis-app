@@ -135,6 +135,7 @@ export class ByokService {
     if (listing.kind !== PROVIDER_LISTING_KIND.LISTED) {
       this.logger.warn({
         event: 'byok.validation_failed',
+        userId,
         provider,
         reason: listing.kind,
         error: listing.error,
@@ -179,7 +180,7 @@ export class ByokService {
     modelIds: readonly string[] | null
   ): Promise<void> {
     if (modelIds === null) {
-      this.logger.warn({ event: 'byok.listing_incomplete', provider });
+      this.logger.warn({ event: 'byok.listing_incomplete', userId, provider });
       return;
     }
     try {
@@ -194,6 +195,7 @@ export class ByokService {
     } catch (error) {
       this.logger.warn({
         event: 'byok.listing_store_failed',
+        userId,
         provider,
         error: reasonOf(error),
       });
