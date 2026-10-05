@@ -13,4 +13,6 @@ export interface ModelIndexRepository {
   ): Promise<string[]>;
   /** Rows with `absent_since` null. */
   listListed(): Promise<IndexedModel[]>;
+  /** The newest `last_seen_at` among the listed rows of `provider`, or null while it lists none. */
+  lastSeenAt(provider: IndexProvider): Promise<Date | null>;
 }

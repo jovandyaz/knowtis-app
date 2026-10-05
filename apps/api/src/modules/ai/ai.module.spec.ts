@@ -20,6 +20,7 @@ import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.wri
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
+import { SyncStalenessTask } from './infrastructure/catalog/sync-staleness.task';
 import { AI_REDIS } from './infrastructure/redis/ai-redis.provider';
 import { ModelGateController } from './model-gate.controller';
 
@@ -34,6 +35,7 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   CatalogAlertsWriter,
   CatalogSyncTask,
   PlatformCandidatesWriter,
+  SyncStalenessTask,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -108,6 +110,7 @@ describe('AIModule wiring', () => {
           CatalogSyncTask,
           PlatformCandidatesWriter,
           ModelGateService,
+          SyncStalenessTask,
         ].filter(
           (token) => !Object.values(moduleRef.get(token)).includes(writer)
         );

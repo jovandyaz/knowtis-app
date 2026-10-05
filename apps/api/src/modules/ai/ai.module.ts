@@ -76,6 +76,7 @@ import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-
 import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
+import { SyncStalenessTask } from './infrastructure/catalog/sync-staleness.task';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
@@ -173,6 +174,7 @@ import { ModelGateController } from './model-gate.controller';
     CatalogAlertsWriter,
     PlatformCandidatesWriter,
     CatalogSyncTask,
+    SyncStalenessTask,
     AiCatalogAdminService,
     AssignableModelsService,
     ModelGateService,

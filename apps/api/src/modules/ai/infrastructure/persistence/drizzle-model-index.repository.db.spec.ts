@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, isNull } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { MAX_INT32, type IndexedModel } from '@knowtis/ai-gateway';
@@ -28,6 +28,9 @@ const TEST_IDS = [FIRST_ID, SECOND_ID, THIRD_ID, OTHER_PROVIDER_ID];
 
 const FIRST_SEEN_AT = new Date('2000-01-01T00:00:00.000Z');
 const SECOND_SEEN_AT = new Date('2000-01-02T00:00:00.000Z');
+const THIRD_SEEN_AT = new Date('2000-01-03T00:00:00.000Z');
+const AFTER_LAST_SEEN_AT = new Date('2000-01-04T00:00:00.000Z');
+const ROLLBACK = new Error('roll back the isolated index');
 
 const SMALL_INPUT_COST = 1.88e-8;
 const SMALLEST_OUTPUT_COST = 5e-11;
@@ -97,6 +100,26 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
   async function ownListed(): Promise<IndexedModel[]> {
     const listed = await repo.listListed();
     return listed.filter((model) => TEST_IDS.includes(model.id));
+  }
+
+  /** Runs `check` on a repository bound to a transaction that retires every listed row first and is rolled back after, so other specs' and syncs' rows neither count nor change. */
+  async function withIsolatedIndex(
+    check: (isolated: DrizzleModelIndexRepository) => Promise<void>
+  ): Promise<void> {
+    await db
+      .transaction(async (tx) => {
+        await tx
+          .update(aiModelIndex)
+          .set({ absentSince: FIRST_SEEN_AT })
+          .where(isNull(aiModelIndex.absentSince));
+        await check(new DrizzleModelIndexRepository(tx as unknown as Database));
+        throw ROLLBACK;
+      })
+      .catch((error: unknown) => {
+        if (error !== ROLLBACK) {
+          throw error;
+        }
+      });
   }
 
   async function absentSince(id: string): Promise<Date | null> {
@@ -280,5 +303,44 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelIndexRepository', () => {
 
     expect(await absentSince(FIRST_ID)).toBeNull();
     expect(await ownListed()).toHaveLength(1);
+  });
+
+  it("reads the newest last_seen_at among the provider's listed rows", async () => {
+    await withIsolatedIndex(async (isolated) => {
+      await isolated.upsertMany([indexed(FIRST_ID)], FIRST_SEEN_AT);
+      await isolated.upsertMany([indexed(SECOND_ID)], SECOND_SEEN_AT);
+      await isolated.upsertMany(
+        [
+          indexed(THIRD_ID),
+          indexed(OTHER_PROVIDER_ID, {
+            provider: 'anthropic',
+            source: 'models_dev',
+          }),
+        ],
+        THIRD_SEEN_AT
+      );
+      await isolated.markAbsent('openrouter', AFTER_LAST_SEEN_AT, [
+        FIRST_ID,
+        SECOND_ID,
+      ]);
+
+      expect(await isolated.lastSeenAt('openrouter')).toEqual(SECOND_SEEN_AT);
+    });
+  });
+
+  it('reads no last_seen_at while the provider lists no row', async () => {
+    await withIsolatedIndex(async (isolated) => {
+      await isolated.upsertMany(
+        [
+          indexed(OTHER_PROVIDER_ID, {
+            provider: 'anthropic',
+            source: 'models_dev',
+          }),
+        ],
+        THIRD_SEEN_AT
+      );
+
+      expect(await isolated.lastSeenAt('openrouter')).toBeNull();
+    });
   });
 });
