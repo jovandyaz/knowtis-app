@@ -433,6 +433,8 @@ AI models and the fallback chain can be changed at runtime via the `ai_config` d
 
 **Pin releases.** A pin change on an intent key records the model it stopped serving in that intent's `released_model_id` / `released_at`, so the model stays platform-billed for `RESOLUTION_GRACE_DAYS` (see [Send-time resolution](#send-time-resolution)). A `PUT` records the previous pin when it was served and differs from both the new value and the active resolution; a pin that replaces auto records nothing, because the active resolution stays platform-billed anyway. A `DELETE` records the released pin unless it is the active resolution or the catalog no longer supports it. Chain changes record nothing. The record is best-effort: the config change is already stored, so a failed write logs `ai.config.release_record_failed` (`intent`, `modelId`, `reason`) at warn and only shortens that model's grace.
 
+**Release clash.** A `DELETE` on an intent key answers **400** (`InvalidAIConfigError`, "Model '…' already serves the '…' tier; each tier needs its own model") when the intent's active resolution is the model another intent already serves, by its pin or its own active resolution: releasing would make two intents serve one model, which a `PUT` refuses too. The check runs before anything is deleted, so it refuses even when no pin is stored, and nothing is audited or recorded. Re-pin or release the other intent first. It reads the active resolution from the 60 s resolution cache and the other intents' pins from the 30 s config cache, the same staleness as every config read.
+
 **Cache:** the 30s cache is NestJS `CacheModule.register()` (`ai.module.ts`) — in-process, per API instance. A write invalidates the cache of the instance that served it; other instances converge when their TTL expires. There is no shared invalidation.
 
 **Supported keys:**
@@ -455,11 +457,11 @@ A `model` key takes a single server-invocable model id — an eligible model-ind
 
 **REST API** (admin only):
 
-| Method | Path              | Description                                                                                                                                                                                                                                                              |
-| ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/ai/config`      | Effective config entries (`{key, value, kind, source, storedValue, description, updatedAt}[]`; source is `custom`, `default`, or `stale`); a model key's `value` is the model it serves, its active resolution while auto                                                |
-| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; a `model` key takes one server-invocable id, `ai_fallback_chain` a comma-separated list with at least one server-routable member)                                                                                               |
-| DELETE | `/ai/config/:key` | Release a pin or reset a value — deletes the DB row, so a model key serves its active resolution, the chain derives from the intents and any other key its code default; records a released intent pin (above), audits `ai_config.reset`, returns the effective entries. |
+| Method | Path              | Description                                                                                                                                                                                                                                                                                              |
+| ------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/config`      | Effective config entries (`{key, value, kind, source, storedValue, description, updatedAt}[]`; source is `custom`, `default`, or `stale`); a model key's `value` is the model it serves, its active resolution while auto                                                                                |
+| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; a `model` key takes one server-invocable id, `ai_fallback_chain` a comma-separated list with at least one server-routable member)                                                                                                                               |
+| DELETE | `/ai/config/:key` | Release a pin or reset a value — deletes the DB row, so a model key serves its active resolution, the chain derives from the intents and any other key its code default; records a released intent pin (above), audits `ai_config.reset`, returns the effective entries. 400 on a release clash (above). |
 
 After updating or resetting a config value, the serving instance's cache entry is deleted and other instances pick the change up within 30 seconds. Every write lands in the admin audit log (`ai_config.updated` / `ai_config.reset`).
 
@@ -582,7 +584,7 @@ Open-weight models ship and change price weekly, so any fixed list goes stale si
 
 ### The tables
 
-`ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate` or `promoted`. The `reasoning` jsonb column (migration `0042`) is no longer read or written, because effort ladders come from the model index; it stays in the table, nullable, so an instance still running the previous release keeps working while a deploy overlaps. New rows leave it null, and a later migration drops it. Promotion stamps `promoted_by` and `promoted_at`; retiring a promoted model sets it back to `candidate`, so it rejoins the promotion queue.
+`ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate` or `promoted`. The `reasoning` jsonb column (migration `0042`) is gone from the Drizzle schema, because effort ladders come from the model index, so no query names it; migration `0062` records that schema change and does nothing to the database. The column stays in the table, nullable, so an instance still running the release before it keeps working while a deploy overlaps, and a migration in a later release drops it. Promotion stamps `promoted_by` and `promoted_at`; retiring a promoted model sets it back to `candidate`, so it rejoins the promotion queue.
 
 `ai_catalog_alerts` records what needs a human: `deprecation` and `unavailable` (a watched platform model or a **promoted** model upstream stopped listing), each with a free-text `detail`. The schema still accepts a `price_drift` kind for alerts already on file; the sync does not raise it, because the model index tracks upstream prices daily. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
 
@@ -598,7 +600,7 @@ OpenRouter and models.dev are fetched independently. When the OpenRouter fetch f
 
 The same run writes the [model index](#model-catalog--pricing) and watches the OpenRouter **platform models** (every `openrouter:` id `getPlatformModelIds()` returns: the served intent models, the served chain, then each active resolution) and the **promoted** models on OpenRouter, filing an alert for a model that vanished upstream or one OpenRouter dates for expiration. While the resolutions are still the cold-start seed floor, `getPlatformModelIds()` rejects, and the run watches no platform model that pass (`ai.catalog.platform_models_read_failed`). Absence is only ever concluded from a complete read that lists a model by a platform selector author (`deepseek/`, `z-ai/`) and carries no anonymous discard; when it cannot conclude, the run warns `ai.catalog.absence_watch_blind` instead of silently reporting a clean sync. A price move raises nothing: the index already serves the new price.
 
-**Platform candidates.** After a write in which the OpenRouter batch concluded absence (accepted, conclusive and not shrunk), `PlatformCandidatesWriter` resolves each [platform selector](#platform-selectors) over the served index and compares the result with that intent's `ai_model_resolutions` row (`resolutionChange`). A candidate other than the active and the pending model becomes `pending_model_id` with `gate_status = 'pending'` and logs `ai.model_resolution.pending`. A candidate equal to the active model clears a `pending` entry and logs `ai.model_resolution.pending_cleared`, but keeps a `failed` one, so an id that already failed is not re-queued when it comes back. No candidate, or the one already pending, changes nothing. Each write is compare-and-set on the pending model and gate status it read: a row that changed in between is left alone and the pass logs `ai.model_resolution.pending_skipped`. A failed pass logs `ai.model_resolution.pending_failed` at warn and leaves the resolutions as they were until the next sync. Nothing activates a pending candidate yet: the active model changes only through an eval gate verdict, and no endpoint writes one today.
+**Platform candidates.** After a write in which the OpenRouter batch concluded absence (accepted, conclusive and not shrunk), `PlatformCandidatesWriter` resolves each [platform selector](#platform-selectors) over the served index and compares the result with that intent's `ai_model_resolutions` row (`resolutionChange`). A candidate other than the active and the pending model becomes `pending_model_id` with `gate_status = 'pending'` and logs `ai.model_resolution.pending`. A candidate equal to the active model clears a `pending` entry and logs `ai.model_resolution.pending_cleared`, but keeps a `failed` one, so an id that already failed is not re-queued when it comes back. No candidate, or the one already pending, changes nothing. Each write is compare-and-set on the pending model and gate status it read: a row that changed in between is left alone and the pass logs `ai.model_resolution.pending_skipped`. A failed pass logs `ai.model_resolution.pending_failed` at warn and leaves the resolutions as they were until the next sync. A pending candidate becomes active only through a passing verdict of the [model gate](#model-gate), which evaluates it every day.
 
 ### Catalog admission ceiling
 
@@ -662,7 +664,7 @@ An intent with no servable model is reported `{ available: false, reason: 'no_ro
 
 So when one model is reachable through several keys (directly and through OpenRouter), the primary key runs it, and a model picked under Advanced runs on the key shown with it. An intent's winner is the first selector candidate any held key serves, whatever the primary is.
 
-**Billing is per model, never per provider or tier.** `billingFor` bills the caller's key whenever the caller holds a key for the model's provider; a byok-tier turn that would not bill a key is refused (`billingMatchesTier`, logged `agent.billing.tier_mismatch`). On the server side, `isPlatformBilled` is true for the models the three intents serve now, plus, while the server can route them, the promoted open-tier models, every active platform resolution, and each previous or released model of a resolution row that left within `RESOLUTION_GRACE_DAYS` (7 days, inclusive; `platformBilledModelIds`). Every other model is key-billed.
+**Billing is per model, never per provider or tier.** `billingFor` bills the caller's key whenever the caller holds a key for the model's provider; a byok-tier turn that would not bill a key is refused (`billingMatchesTier`, logged `agent.billing.tier_mismatch`). On the server side, `isPlatformBilled` is true for the models the three intents serve now, plus, while the server can route them, the promoted open-tier models and every active platform resolution. In a platform-billed catalog (the anonymous and free tiers) it also counts each previous or released model of a resolution row that left within `RESOLUTION_GRACE_DAYS` (7 days, inclusive; `platformBilledModelIds`). A key-billed catalog counts only the active resolutions (`activeModelIds`), never that grace, so a model the platform stopped serving is key-billed for an own-keys caller at once. Every other model is key-billed.
 
 ### Platform selectors
 
@@ -676,7 +678,7 @@ The intents of the platform-billed tiers come from **platform selectors** (`PLAT
 
 All three require `tool_call` and `structured_output`. The powerful selector refuses ids containing `-flash` (`excludedIdTokens`), because models.dev files flash tiers such as `glm-5.3-flashx` under the `glm` family. The live index can resolve differently as prices and releases move: a newer row that crosses its ceiling is skipped for the next eligible one. Open-weight families rename between generations, so adding a family is a one-line change to the table.
 
-A selector's result never serves a turn by itself. Each intent serves its **active resolution**, the `active_model_id` of its `ai_model_resolutions` row (`platform.fast`, `platform.balanced`, `platform.powerful`). The daily sync records a selector result that differs from it as the row's pending candidate (see [The sync job](#the-sync-job)), and only an eval gate verdict makes a candidate active. A fresh database is seeded with `openrouter:deepseek/deepseek-v3.2` (balanced), `openrouter:minimax/minimax-m2.5` (fast) and `openrouter:moonshotai/kimi-k2.5` (powerful), so its first conclusive sync pends whatever the selectors resolve that day. An admin pin overrides the active resolution until it is released (see [Dynamic Model Configuration](#dynamic-model-configuration)).
+A selector's result never serves a turn by itself. Each intent serves its **active resolution**, the `active_model_id` of its `ai_model_resolutions` row (`platform.fast`, `platform.balanced`, `platform.powerful`). The daily sync records a selector result that differs from it as the row's pending candidate (see [The sync job](#the-sync-job)), and only a passing [model gate](#model-gate) verdict makes a candidate active. A fresh database is seeded with `openrouter:deepseek/deepseek-v3.2` (balanced), `openrouter:minimax/minimax-m2.5` (fast) and `openrouter:moonshotai/kimi-k2.5` (powerful), so its first conclusive sync pends whatever the selectors resolve that day. An admin pin overrides the active resolution until it is released (see [Dynamic Model Configuration](#dynamic-model-configuration)).
 
 ### `SelectableModel` shape
 
@@ -700,7 +702,7 @@ A selector's result never serves a turn by itself. Each intent serves its **acti
 3. `user_ai_settings.preferred_model` — the account override set from the picker. It counts only when the caller holds a key for its provider; any other stored value is ignored without being reported. A stored model that is a plain route of an index model stands for that model: while its route stays in the catalog it runs on its own key, and once the route has left the catalog it runs on another held key that serves the same model (see [Primary provider](#primary-provider)).
 4. `user_ai_settings.preferred_intent` (null = `balanced`) — the model the tier's catalog routes that intent to. An intent with no servable model is substituted visibly: the turn runs on the first intent that has one in `INTENT_FALLBACK_ORDER` (`balanced`, `fast`, `powerful`; `packages/shared/types/src/lib/ai.types.ts`) and reports `fallback: { reason: 'intent_unavailable', from: <intent>, to: <model> }`. Only when no intent has a model does the turn end with `no_route`. The notes client walks the same order to name the serving model (`resolveServingModel`, which `TierBadge` reads).
 
-A stored model that has left the catalog **falls back visibly, and only within the same billing class**: the turn runs on the model of the caller's preferred intent (else balanced) and reports why (`model_retired` when the catalog no longer supports it, or when the caller's key-billed catalog no longer lists it because its selector moved on; `key_removed` when the caller's key for it is gone and no other held key serves the same model — which only a resumed conversation's pinned model can report, since a stored `preferred_model` on a key the caller no longer holds is ignored without a report — `not_in_tier` otherwise), and the server logs `ai.model.fallback`. A model the platform stopped serving — an activation replaced it, or an admin re-pinned or released it — stays in the platform billing class for `RESOLUTION_GRACE_DAYS`, so a resumed conversation pinned on it falls back visibly to the intent's model instead of ending as `key_removed`; after the grace window it reads as key-billed. A `model_retired` fallback from the stored `preferred_model` itself, on a turn with no per-turn `model` and no pinned model, is reported once: `chooseTurnModel` names it as `retiredPick` (`retiredStoredPick`), and only when that turn completes and its `agent:done` has carried the notice does the handler call `ModelPreferenceService.forgetRetiredPick`, which clears the pick (`clearPreferredModel`, a write that does nothing once the row holds another pick) and keeps `preferred_intent`, so the next turn resolves the intent. A turn refused or failed after resolution clears nothing, so the next turn reports the pick again. Nothing is named unless the latest refresh of both caches succeeded: not while the model index serves the vendored snapshot or its last refresh failed (`ModelIndexCache.servesFreshIndex`, true only after a refresh that read listed rows), where a model newer than the snapshot, or one another instance already serves, reads as retired; nor while the latest `PromotedModelsCache` refresh failed or none has landed (`isFresh`), where a promoted pick reads as retired. `key_removed` and `not_in_tier` keep the pick, since a re-added key or a plan change can bring it back. The clear is best-effort: a failed write logs `ai.preferences.retired_pick_clear_failed { userId, model, error }` at warn and never fails the turn. A stored or pinned model that is a plain route of an index model — its own id derives the index canonical (`plainRouteCanonical`) and carries no `:variant` — is never a fallback while another held key serves the same model: the turn re-routes silently, so `requested` differs from `resolved` and no `fallback` is present. The other route is the first one still in the caller's catalog, which lists a model's routes primary first, then the other direct keys, then OpenRouter. A pricier SKU or batch variant filed under the same canonical is a different model to bill and never stands in. This happens only once the stored route has left the catalog: a routed model displaced by a primary switch, a single vendor id that has retired, or a removed key when another key serves the model. When the stored model and the substitute bill differently, or no intent model is servable, the turn ends with `AI_MODEL_UNAVAILABLE` `{ reason, suggestedModel }` (`agent:error`, logged `ai.model.unavailable`) and nothing is consumed. `reason` is one of `model_retired`, `key_removed`, `not_in_tier` or `no_route`; `suggestedModel` is the model the caller would have been given, or `null`. A key deleted between the turn's tier resolution and its key lookup ends the turn the same way, with `key_removed` and `suggestedModel: null`. The notes client treats it as a refusal before the run: the message goes back to the composer with no Retry, and the catalog, preferences and keys are re-read, so the picker shows what the caller's tier runs now — after the last key is deleted, the free default.
+A stored model that has left the catalog **falls back visibly, and only within the same billing class**: the turn runs on the model of the caller's preferred intent (else balanced) and reports why (`model_retired` when the catalog no longer supports it, or when the caller's key-billed catalog no longer lists it because its selector moved on; `key_removed` when the caller's key for it is gone and no other held key serves the same model — which only a resumed conversation's pinned model can report, since a stored `preferred_model` on a key the caller no longer holds is ignored without a report — `not_in_tier` otherwise), and the server logs `ai.model.fallback`. A model the platform stopped serving — an activation replaced it, or an admin re-pinned or released it — stays in the platform billing class for `RESOLUTION_GRACE_DAYS` for a platform-billed caller, so a resumed conversation pinned on it falls back visibly to the intent's model instead of ending as `key_removed`; after the grace window it reads as key-billed. An own-keys caller gets no grace: the model is key-billed for them at once, so a resumed conversation pinned on it falls back visibly with `key_removed` to the intent's model on a key they hold. A `model_retired` fallback from the stored `preferred_model` itself, on a turn with no per-turn `model` and no pinned model, is reported once: `chooseTurnModel` names it as `retiredPick` (`retiredStoredPick`), and only when that turn completes and its `agent:done` has carried the notice does the handler call `ModelPreferenceService.forgetRetiredPick`, which clears the pick (`clearPreferredModel`, a write that does nothing once the row holds another pick) and keeps `preferred_intent`, so the next turn resolves the intent. A turn refused or failed after resolution clears nothing, so the next turn reports the pick again. Nothing is named unless the latest refresh of both caches succeeded: not while the model index serves the vendored snapshot or its last refresh failed (`ModelIndexCache.servesFreshIndex`, true only after a refresh that read listed rows), where a model newer than the snapshot, or one another instance already serves, reads as retired; nor while the latest `PromotedModelsCache` refresh failed or none has landed (`isFresh`), where a promoted pick reads as retired. `key_removed` and `not_in_tier` keep the pick, since a re-added key or a plan change can bring it back. The clear is best-effort: a failed write logs `ai.preferences.retired_pick_clear_failed { userId, model, error }` at warn and never fails the turn. A stored or pinned model that is a plain route of an index model — its own id derives the index canonical (`plainRouteCanonical`) and carries no `:variant` — is never a fallback while another held key serves the same model: the turn re-routes silently, so `requested` differs from `resolved` and no `fallback` is present. The other route is the first one still in the caller's catalog, which lists a model's routes primary first, then the other direct keys, then OpenRouter. A pricier SKU or batch variant filed under the same canonical is a different model to bill and never stands in. This happens only once the stored route has left the catalog: a routed model displaced by a primary switch, a single vendor id that has retired, or a removed key when another key serves the model. When the stored model and the substitute bill differently, or no intent model is servable, the turn ends with `AI_MODEL_UNAVAILABLE` `{ reason, suggestedModel }` (`agent:error`, logged `ai.model.unavailable`) and nothing is consumed. `reason` is one of `model_retired`, `key_removed`, `not_in_tier` or `no_route`; `suggestedModel` is the model the caller would have been given, or `null`. A key deleted between the turn's tier resolution and its key lookup ends the turn the same way, with `key_removed` and `suggestedModel: null`. The notes client treats it as a refusal before the run: the message goes back to the composer with no Retry, and the catalog, preferences and keys are re-read, so the picker shows what the caller's tier runs now — after the last key is deleted, the free default.
 
 Every `agent:done` — a completed turn, a checkpoint stop and the resume after an approval or a rejection — carries `modelResolution: { requested, resolved, fallback? }`, where `fallback` (`{ reason, from, to }`) is present only when the server substituted the model. The reported model is the one the turn was routed to; the [fallback chain](#cross-provider-fallback-chain) may still relay it to another model if its provider is down or out of credit, and the model reported in `usage.model` is the one that actually served the turn. The notes client shows a `fallback` as a one-line notice under that reply — the catalog label of `to` (else its id; a guest reads no catalog, so it gets the id) and why, generic for a reason it does not know — and re-reads the catalog, preferences and keys; the transcript does not store it, so a reload or a refetch of the thread shows the reply without the notice.
 
@@ -878,6 +880,7 @@ Names and defaults from `apps/api/src/config/env.config.ts` (Zod schema, validat
 | `LANGFUSE_PUBLIC_KEY`  | —                            | Langfuse public key; tracing is a no-op unless both keys are set                                                                                                                                                                                                                                           |
 | `LANGFUSE_SECRET_KEY`  | —                            | Langfuse secret key                                                                                                                                                                                                                                                                                        |
 | `LANGFUSE_BASE_URL`    | `https://cloud.langfuse.com` | Langfuse endpoint                                                                                                                                                                                                                                                                                          |
+| `MODEL_GATE_TOKEN`     | —                            | Bearer token for the [model gate](#model-gate) endpoints, at least 32 characters (`openssl rand -hex 32`); the same value is the `MODEL_GATE_TOKEN` repository secret. Unset or blank, the `/internal/model-gate/*` routes answer 404                                                                      |
 | `AI_EVAL_MODEL`        | —                            | Model driving the copilot eval harness (`api:eval`); unset uses the harness's pinned default                                                                                                                                                                                                               |
 | `AI_EVAL_TRIALS`       | `1`                          | Trials per promptfoo eval case (read by `eval/runtime/eval-runtime.ts`, not by the env schema)                                                                                                                                                                                                             |
 | `AI_EVAL_OUTPUT_DIR`   | —                            | Directory where eval runs persist results (read by the eval runtime, not by the env schema); unset writes nothing                                                                                                                                                                                          |
@@ -901,6 +904,7 @@ Names and defaults from `apps/api/src/config/env.config.ts` (Zod schema, validat
 | Agent health report + webhook alert                                                                          | Daily cron always runs; the webhook needs `AI_ALERT_WEBHOOK_URL` ([Agent health alerts](#agent-health-alerts))                                                                                 |
 | Daily-budget guardrails (cost reservation, BYOK cost ceiling, global spend breaker, per-IP anonymous budget) | Always enforced ([Rate Limiting](#rate-limiting), [Billing & rate limiting](#billing--rate-limiting))                                                                                          |
 | Daily OpenRouter catalog sync                                                                                | Always runs ([Open-Tier Model Catalog](#open-tier-model-catalog))                                                                                                                              |
+| Model gate endpoints ([Model gate](#model-gate))                                                             | `MODEL_GATE_TOKEN`; the routes answer 404 while it is unset, and the `ai_enabled` flag never blocks them                                                                                       |
 | MCP OAuth authorization server                                                                               | The OAuth env vars on both services, no flag involved (see [MCP.md](MCP.md))                                                                                                                   |
 | Verified-identity gate (widening a share or a link, MCP keys, BYOK keys, OAuth app connections)              | Always enforced (`VerifiedIdentityPolicy`) — see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)                                                                                       |
 
@@ -955,7 +959,19 @@ Used by `AIConfigService` for dynamic model configuration (see [Dynamic Model Co
 | `gate_run_url`      | varchar(500)   | Link to the gate run                                                              |
 | `updated_at`        | timestamptz    | Default `now()`; set by every write                                               |
 
-One row per platform intent (migration `0059`). A third CHECK keeps `pending_model_id` and `gate_status` both null or both set. Migration `0060` seeds the three rows with `PLATFORM_SEED_MODELS` (`deepseek-v3.2` balanced, `minimax-m2.5` fast, `kimi-k2.5` powerful, all `openrouter:`) and no history, release or pending entry; `platform-resolution.spec.ts` holds that SQL to the constant. The two history pairs have different jobs: `previous_*` is moved only by an activation and is what a rollback restores, while `released_*` records pins an admin replaced or released, so a rollback can never activate an ungated pin. Both pairs keep a model platform-billed for `RESOLUTION_GRACE_DAYS` (see [Send-time resolution](#send-time-resolution)), and each holds only the latest change. See [Platform selectors](#platform-selectors).
+One row per platform intent (migration `0059`). A third CHECK keeps `pending_model_id` and `gate_status` both null or both set. Migration `0060` seeds the three rows with `PLATFORM_SEED_MODELS` (`deepseek-v3.2` balanced, `minimax-m2.5` fast, `kimi-k2.5` powerful, all `openrouter:`) and no history, release or pending entry; `platform-resolution.spec.ts` holds that SQL to the constant. The two history pairs have different jobs: `previous_*` is moved only by an activation and is what a rollback restores, while `released_*` records pins an admin replaced or released, so a rollback can never activate an ungated pin. Both pairs keep a model platform-billed for `RESOLUTION_GRACE_DAYS` for platform-billed callers (see [Send-time resolution](#send-time-resolution)), and each holds only the latest change. See [Platform selectors](#platform-selectors).
+
+**Gate columns.** The sync sets `pending_model_id` with `gate_status = 'pending'`, and the [model gate](#model-gate)'s verdict is the only other writer. `recordVerdict` is one compare-and-set `UPDATE` on `pending_model_id = <model> AND gate_status = 'pending'`, so a verdict for a model that is no longer pending writes nothing:
+
+- **Pass:** `previous_model_id` takes the old `active_model_id`, the pending model becomes `active_model_id`, `changed_at` is stamped, and `pending_model_id`, `gate_status` and `gate_detail` clear together. `gate_run_url` keeps the link to the run that activated the model.
+- **Fail:** `gate_status` becomes `failed`, with `gate_detail` and `gate_run_url`. `pending_model_id` stays, so the sync does not pend the same id again while the selector keeps resolving to it.
+
+Both stamp `updated_at`. Migration `0061` dropped `passed` from the `gate_status` CHECK: a pass clears the status in the same write that activates the model, so `passed` could never be stored.
+
+**One released slot.** `released_*` holds a single release per intent, a limit that is accepted:
+
+- After pins A → B → C within seven days, A loses its grace when C replaces B. A platform-billed conversation resumed on A then ends visibly with `AI_MODEL_UNAVAILABLE` (`key_removed`, naming the suggested model) instead of falling back. Nothing is billed to the wrong party.
+- An instance learns a release from its next resolution read, up to 60 s after another instance stopped serving the pin, and a resume on that model meets the same refusal meanwhile. That is the same staleness every cached config read has.
 
 ### `system_provider_keys`
 
@@ -1156,45 +1172,48 @@ Three entry points:
 
 ## REST API
 
-All `/ai/*` endpoints are under `/api/v1` and require `JwtAuthGuard` + `FeatureFlagGuard('ai_enabled')`; "admin" adds `RolesGuard`. The `/agent/memories*` and `/agent/conversations*` endpoints (`modules/agent/memory.controller.ts`, `modules/agent/conversation.controller.ts`) are `JwtAuthGuard` only — no `ai_enabled` gate. The Throttle column is the per-endpoint `@Throttle` override (requests per 60s); blank means the app-wide default applies. All buckets are tracked by the app-wide `UserScopedThrottlerGuard` (`core/throttling/`): per user id for registered callers, per IP for anonymous sessions.
+All `/ai/*` endpoints are under `/api/v1` and require `JwtAuthGuard` + `FeatureFlagGuard('ai_enabled')`; "admin" adds `RolesGuard`. The `/agent/memories*` and `/agent/conversations*` endpoints (`modules/agent/memory.controller.ts`, `modules/agent/conversation.controller.ts`) are `JwtAuthGuard` only — no `ai_enabled` gate. The `/internal/model-gate/*` endpoints (`modules/ai/model-gate.controller.ts`) take no session and no flag: `ModelGateTokenGuard` admits only the `MODEL_GATE_TOKEN` bearer, answers 404 while that variable is unset and 401 to a missing or wrong bearer (see [Model gate](#model-gate)). The Throttle column is the per-endpoint `@Throttle` override (requests per 60s); blank means the app-wide default applies. All buckets are tracked by the app-wide `UserScopedThrottlerGuard` (`core/throttling/`): per user id for registered callers, per IP for anonymous sessions.
 
-| Method | Path                                | Throttle | Description                                                                                                                                                                            |
-| ------ | ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/ai/complete`                      |          | Non-streaming completion. Body: `AICompleteDto` (`COMPLETION_AI_ACTIONS` only).                                                                                                        |
-| POST   | `/ai/voice-note`                    |          | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                                                                                                                  |
-| POST   | `/ai/organization/suggest`          | 10       | Bucket + tag suggestions for owned notes (`modules/organization/ai-organization.controller.ts`); notes under `SUGGEST_MIN_CONTENT_CHARS` (200) are refused.                            |
-| GET    | `/ai/quota`                         |          | The caller's daily copilot message quota (`{ tier, messages }`); 503 with `Retry-After` if the tier or quota store cannot be reached. See [Daily Message Quota](#daily-message-quota). |
-| GET    | `/ai/usage`                         |          | Daily token + cost usage for authenticated user.                                                                                                                                       |
-| GET    | `/ai/metrics`                       |          | Usage summary. Query: `?period=day\|week\|month`.                                                                                                                                      |
-| GET    | `/ai/health`                        |          | Per-provider cooldown snapshot (admin).                                                                                                                                                |
-| GET    | `/ai/config`                        | 30       | Effective config entries with `source: custom\|default\|stale` (admin).                                                                                                                |
-| PUT    | `/ai/config/:key`                   | 10       | Update a config value — an eligible server-invocable model id (or a promoted one), or for `ai_fallback_chain` a comma-separated list with at least one server-routable member (admin). |
-| DELETE | `/ai/config/:key`                   | 10       | Release a pin (model and chain keys return to auto) or reset a key to its code default; audits `ai_config.reset` (admin).                                                              |
-| GET    | `/ai/providers`                     | 30       | Provider key sources + enablement (admin). See [System Provider Keys](#system-provider-keys-database-overrides-env).                                                                   |
-| PUT    | `/ai/providers/:provider`           | 5        | Store a key (kept unless the probe definitively rejects it; verdict in `probe`) and/or set `enabled` (admin).                                                                          |
-| DELETE | `/ai/providers/:provider/key`       | 5        | Clear the stored key (admin).                                                                                                                                                          |
-| POST   | `/ai/providers/:provider/test`      | 5        | Probe the routing key; resolves 200 with a pass/fail verdict (admin).                                                                                                                  |
-| GET    | `/ai/models`                        |          | The `{ tier, models, intents }` envelope of the caller's tier catalog, with `reasoning` and `servesIntent` per model. See [Copilot Model Selection](#copilot-model-selection).         |
-| GET    | `/ai/preferences`                   |          | The caller's account-default copilot model and intent.                                                                                                                                 |
-| PUT    | `/ai/preferences`                   |          | Patch the caller's model/intent preferences (partial); 422 `AI_MODEL_UNAVAILABLE` for a model outside the tier.                                                                        |
-| GET    | `/ai/keys`                          |          | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                                                                                                                  |
-| PUT    | `/ai/keys/:provider`                | 5        | Validate + store a provider key.                                                                                                                                                       |
-| DELETE | `/ai/keys/:provider`                |          | Remove a stored provider key.                                                                                                                                                          |
-| GET    | `/ai/catalog`                       | 30       | Promoted models and open alerts (admin). See [Open-Tier Model Catalog](#open-tier-model-catalog).                                                                                      |
-| GET    | `/ai/catalog/candidates`            | 30       | One ranked page of the promotion queue, without the active platform resolutions; `search` matches id or label (admin).                                                                 |
-| GET    | `/ai/catalog/assignable`            | 30       | Eligible index + promoted models with `routableByServer` for the backoffice intent pickers (admin).                                                                                    |
-| POST   | `/ai/catalog/sync`                  | 3        | Run the catalog sync pass on demand (admin).                                                                                                                                           |
-| POST   | `/ai/catalog/:id/promote`           | 10       | Publish a candidate in the chosen tier (admin).                                                                                                                                        |
-| POST   | `/ai/catalog/:id/retire`            | 10       | Withdraw a promoted model; it rejoins the candidates (admin).                                                                                                                          |
-| PATCH  | `/ai/catalog/:id`                   | 10       | Admin-owned label and description (admin).                                                                                                                                             |
-| POST   | `/ai/catalog/alerts/:id/resolve`    | 10       | Resolve an alert; idempotent (admin).                                                                                                                                                  |
-| GET    | `/agent/memories`                   |          | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).                                                                                                |
-| DELETE | `/agent/memories/:id`               |          | Forget one memory.                                                                                                                                                                     |
-| DELETE | `/agent/memories`                   |          | Forget all memories.                                                                                                                                                                   |
-| GET    | `/agent/conversations`              |          | The caller's conversations with at least one message, newest activity first (`{ items, total, page, limit }`). See [Reading a conversation back](#reading-a-conversation-back).        |
-| GET    | `/agent/conversations/:id/messages` |          | The display transcript of one conversation; `404` when it is not the caller's, `400` for a non-UUID id.                                                                                |
-| PATCH  | `/agent/conversations/:id`          |          | Rename (`{ title }`, 1–120 code points after whitespace normalization). Never bumps `updated_at`.                                                                                      |
-| DELETE | `/agent/conversations/:id`          |          | Delete a conversation and its messages. Memories extracted from it are kept.                                                                                                           |
+| Method | Path                                | Throttle | Description                                                                                                                                                                                          |
+| ------ | ----------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/ai/complete`                      |          | Non-streaming completion. Body: `AICompleteDto` (`COMPLETION_AI_ACTIONS` only).                                                                                                                      |
+| POST   | `/ai/voice-note`                    |          | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                                                                                                                                |
+| POST   | `/ai/organization/suggest`          | 10       | Bucket + tag suggestions for owned notes (`modules/organization/ai-organization.controller.ts`); notes under `SUGGEST_MIN_CONTENT_CHARS` (200) are refused.                                          |
+| GET    | `/ai/quota`                         |          | The caller's daily copilot message quota (`{ tier, messages }`); 503 with `Retry-After` if the tier or quota store cannot be reached. See [Daily Message Quota](#daily-message-quota).               |
+| GET    | `/ai/usage`                         |          | Daily token + cost usage for authenticated user.                                                                                                                                                     |
+| GET    | `/ai/metrics`                       |          | Usage summary. Query: `?period=day\|week\|month`.                                                                                                                                                    |
+| GET    | `/ai/health`                        |          | Per-provider cooldown snapshot (admin).                                                                                                                                                              |
+| GET    | `/ai/config`                        | 30       | Effective config entries with `source: custom\|default\|stale` (admin).                                                                                                                              |
+| PUT    | `/ai/config/:key`                   | 10       | Update a config value — an eligible server-invocable model id (or a promoted one), or for `ai_fallback_chain` a comma-separated list with at least one server-routable member (admin).               |
+| DELETE | `/ai/config/:key`                   | 10       | Release a pin (model and chain keys return to auto) or reset a key to its code default; audits `ai_config.reset`; 400 when the intent's active model already serves another intent (admin).          |
+| GET    | `/ai/providers`                     | 30       | Provider key sources + enablement (admin). See [System Provider Keys](#system-provider-keys-database-overrides-env).                                                                                 |
+| PUT    | `/ai/providers/:provider`           | 5        | Store a key (kept unless the probe definitively rejects it; verdict in `probe`) and/or set `enabled` (admin).                                                                                        |
+| DELETE | `/ai/providers/:provider/key`       | 5        | Clear the stored key (admin).                                                                                                                                                                        |
+| POST   | `/ai/providers/:provider/test`      | 5        | Probe the routing key; resolves 200 with a pass/fail verdict (admin).                                                                                                                                |
+| GET    | `/ai/models`                        |          | The `{ tier, models, intents }` envelope of the caller's tier catalog, with `reasoning` and `servesIntent` per model. See [Copilot Model Selection](#copilot-model-selection).                       |
+| GET    | `/ai/preferences`                   |          | The caller's account-default copilot model and intent.                                                                                                                                               |
+| PUT    | `/ai/preferences`                   |          | Patch the caller's model/intent preferences (partial); 422 `AI_MODEL_UNAVAILABLE` for a model outside the tier.                                                                                      |
+| GET    | `/ai/keys`                          |          | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                                                                                                                                |
+| PUT    | `/ai/keys/:provider`                | 5        | Validate + store a provider key.                                                                                                                                                                     |
+| DELETE | `/ai/keys/:provider`                |          | Remove a stored provider key.                                                                                                                                                                        |
+| GET    | `/ai/catalog`                       | 30       | Promoted models and open alerts (admin). See [Open-Tier Model Catalog](#open-tier-model-catalog).                                                                                                    |
+| GET    | `/ai/catalog/candidates`            | 30       | One ranked page of the promotion queue, without the active platform resolutions; `search` matches id or label (admin).                                                                               |
+| GET    | `/ai/catalog/assignable`            | 30       | Eligible index + promoted models with `routableByServer` for the backoffice intent pickers (admin).                                                                                                  |
+| POST   | `/ai/catalog/sync`                  | 3        | Run the catalog sync pass on demand (admin).                                                                                                                                                         |
+| POST   | `/ai/catalog/:id/promote`           | 10       | Publish a candidate in the chosen tier (admin).                                                                                                                                                      |
+| POST   | `/ai/catalog/:id/retire`            | 10       | Withdraw a promoted model; it rejoins the candidates (admin).                                                                                                                                        |
+| PATCH  | `/ai/catalog/:id`                   | 10       | Admin-owned label and description (admin).                                                                                                                                                           |
+| POST   | `/ai/catalog/alerts/:id/resolve`    | 10       | Resolve an alert; idempotent (admin).                                                                                                                                                                |
+| GET    | `/internal/model-gate/pending`      | 30       | The selectors whose pending model awaits a verdict (`{ selectorKey, modelId }[]`); a failed one is not listed again (gate token).                                                                    |
+| GET    | `/internal/model-gate/active`       | 30       | The model each intent serves in production, its pin else its active resolution (`{ fast, balanced, powerful }`; gate token).                                                                         |
+| POST   | `/internal/model-gate/verdict`      | 30       | Record a verdict (`{ selectorKey, modelId, passed, runUrl, detail? }`, `runUrl` https only); 200 with `{ applied: true }` or `{ applied: false, reason: 'not_pending' \| 'conflict' }` (gate token). |
+| GET    | `/agent/memories`                   |          | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).                                                                                                              |
+| DELETE | `/agent/memories/:id`               |          | Forget one memory.                                                                                                                                                                                   |
+| DELETE | `/agent/memories`                   |          | Forget all memories.                                                                                                                                                                                 |
+| GET    | `/agent/conversations`              |          | The caller's conversations with at least one message, newest activity first (`{ items, total, page, limit }`). See [Reading a conversation back](#reading-a-conversation-back).                      |
+| GET    | `/agent/conversations/:id/messages` |          | The display transcript of one conversation; `404` when it is not the caller's, `400` for a non-UUID id.                                                                                              |
+| PATCH  | `/agent/conversations/:id`          |          | Rename (`{ title }`, 1–120 code points after whitespace normalization). Never bumps `updated_at`.                                                                                                    |
+| DELETE | `/agent/conversations/:id`          |          | Delete a conversation and its messages. Memories extracted from it are kept.                                                                                                                         |
 
 > Swagger UI available at `/api/docs` in development.
 
@@ -1250,7 +1269,7 @@ pnpm nx run api:eval
   (HITL and prompt-injection resistance) require every graded trial to pass; behavior cases fail
   when they pass fewer than `ceil(2/3 * G)` of their **graded** trials G. Agent behavior is
   stochastic, so a single trial cannot distinguish a regression from variance — weekly CI runs
-  3 trials (10 on its security legs), while the local default stays at 1 for cheap pre-merge runs. These are per-case pass
+  3 trials (10 on its security legs, as does the [model gate](#model-gate)), while the local default stays at 1 for cheap pre-merge runs. These are per-case pass
   rates, not a statistical pass@k estimate.
 - **Ungraded trials:** a trial whose every failing assertion is a grader transport error
   (`metadata.graderError` — e.g. HTTP 529 from the rubric model) carries no verdict, so it
@@ -1298,21 +1317,31 @@ pnpm nx run api:eval
 | Leg                      | Model under test            | Target          | Trials |
 | ------------------------ | --------------------------- | --------------- | ------ |
 | `reference`              | `anthropic:claude-sonnet-5` | `eval`          | 3      |
-| `default-model`          | `ai_default_model`          | `eval`          | 3      |
-| `default-model-security` | `ai_default_model`          | `eval-security` | 10     |
-| `fast-model-security`    | `ai_fast_model`             | `eval-security` | 10     |
-| `deep-model-security`    | `ai_deep_model`             | `eval-security` | 10     |
+| `default-model`          | served `balanced` model     | `eval`          | 3      |
+| `default-model-security` | served `balanced` model     | `eval-security` | 10     |
+| `fast-model-security`    | served `fast` model         | `eval-security` | 10     |
+| `deep-model-security`    | served `powerful` model     | `eval-security` | 10     |
 
 The reference leg is a ceiling and a stable time series; the other four exist because the
 models that serve production turns are not the reference model, and injection resistance
 measured on one says nothing about the others. The security legs run ten trials because attack success is a rate: with every trial required to pass, an attack that lands one time in ten still reads green 73% of weeks at three trials and 35% at ten. Ten narrows the blind spot; it does not close it, and the per-case pass counts in each leg's summary are the number to read, not the colour. Legs do not cancel each other (`fail-fast: false`) — a red leg is a finding about
 that model, not a broken run.
 
-The production legs default to the seeded platform resolutions, `PLATFORM_SEED_MODELS` (a
-spec fails when the workflow literals and that constant drift apart). Production serves admin
-pins and resolutions that move without a deploy, so when what the intents serve diverges from
-the seed, set the repository variables `AI_EVAL_DEFAULT_MODEL`, `AI_EVAL_FAST_MODEL` and
-`AI_EVAL_DEEP_MODEL` to the ids they serve — otherwise CI keeps grading models no user reaches.
+The production legs evaluate what production serves, since admin pins and resolutions move
+without a deploy. A `resolve` job reads `GET /api/v1/internal/model-gate/active` with the
+`KNOWTIS_API_URL` and `MODEL_GATE_TOKEN` secrets (see [Model gate](#model-gate)), which answers
+each intent's pin, else its active resolution. The `default-model` legs take `balanced`,
+`fast-model-security` takes `fast` and `deep-model-security` takes `powerful`. Each id is
+validated before it becomes a job output, and the pattern admits `~` alias pins such as
+`openrouter:~anthropic/claude-sonnet-latest`.
+
+`resolve` never fails, because a red `resolve` would skip every leg. With the secrets unset it
+ends with a notice; when the API cannot be read, the body is not a JSON object, or an intent's
+id is missing or invalid, it warns and leaves that output empty. A leg without a served model
+falls back to its repository variable (`AI_EVAL_DEFAULT_MODEL`, `AI_EVAL_FAST_MODEL` or
+`AI_EVAL_DEEP_MODEL`), then to the seeded platform resolution, `PLATFORM_SEED_MODELS` (a spec
+fails when the workflow literals and that constant drift apart). The variables therefore matter
+only while the secrets are unset or the API is unreachable.
 
 Each leg provisions a `pgvector/pgvector:pg16` service (migrations create the `vector`
 extension), applies migrations, then runs its target. Every leg needs the `ANTHROPIC_API_KEY`
@@ -1336,6 +1365,98 @@ uploaded the same artifact, writing a drift table to the job summary. The earlie
 conclusion is ignored — a red leg still uploads valid results, and one red leg must not freeze
 the baseline of the others. The step refuses the comparison when the pinned model or trial
 count changed, and never fails the job.
+
+### Model gate
+
+`.github/workflows/model-gate.yml` ("Model Gate") decides whether a platform selector's pending
+candidate (see [The sync job](#the-sync-job)) may serve. It runs daily at 05:00 UTC, two hours
+after the 03:00 catalog sync, and on `workflow_dispatch`. Runs queue rather than cancel each
+other (`concurrency: model-gate`).
+
+- **Pending matrix.** The `pending` job reads `GET /api/v1/internal/model-gate/pending` and
+  starts one `gate` leg per entry. An entry whose selector key or model id fails validation is
+  dropped with a `::warning::` and stays ungated. The model id pattern admits no `~` alias, which
+  a platform selector never resolves to anyway. An empty list skips the `gate` job. When
+  `KNOWTIS_API_URL` or `MODEL_GATE_TOKEN` is unset, `pending` ends green with a `::notice::` and
+  gates nothing, so the daily cron stays quiet until the secrets exist. An error from the API
+  fails `pending`.
+- **Gate leg.** Each leg provisions the same `pgvector/pgvector:pg16` service and throwaway env
+  as the weekly legs, applies migrations, and runs `api:eval-security` (the Copilot security
+  cases and the `injection-guard` suite) against the candidate with `AI_EVAL_TRIALS=10`, where
+  every graded trial must pass. Legs run independently (`fail-fast: false`), and each uploads a
+  `gate-results-<selectorKey>` artifact (90-day retention).
+- **Missing keys.** Before installing dependencies, a leg fails when `ANTHROPIC_API_KEY` is unset —
+  the suites would skip, vitest would exit 0, and a model nothing evaluated would pass — or when
+  the candidate is an `openrouter:` model and `OPENROUTER_API_KEY` is unset.
+- **A verdict only when the eval ran.** The leg posts `{ selectorKey, modelId, passed, runUrl }`
+  to `POST /api/v1/internal/model-gate/verdict` when the eval step succeeded (`passed: true`) or
+  failed (`passed: false`); a provider error during the eval is a failure, not noise. The step's
+  `if:` is `!cancelled()` and an eval outcome of `success` or `failure`. It names a status
+  function on purpose: without one GitHub applies `success()`, which would drop every failed
+  verdict.
+  The workflow sends no `detail`, so a failure stores the default and the run link carries the
+  evidence.
+- **Infrastructure failures retry the next day.** When the key check, the install or the
+  migrations fail, the eval never runs and no verdict is posted. The candidate stays pending, the
+  next daily run evaluates it again, and the red job is the signal.
+
+**What a verdict does** (`ModelGateService`):
+
+- **Pass.** The service reads the row from the store and refreshes the resolution cache, then
+  checks that the model is still the row's gate-pending one. A model another intent already
+  serves, by its pin or its active resolution (`AIConfigService.intentServing`), is an
+  **activation clash**: nothing is written, the row stays pending, the endpoint answers
+  `{ applied: false, reason: 'conflict' }`, and the service warns
+  `ai.model_resolution.activation_conflict` (`selectorKey`, `modelId`, `servedBy`). The candidate
+  stays listed, so the gate evaluates it again every day and activates it once the other intent
+  stops serving it, unless the selector has moved on. Otherwise `recordVerdict` activates it (see
+  [`ai_model_resolutions`](#ai_model_resolutions)), the cache is refreshed again, and the service
+  logs `ai.model.resolution_activated` (`selectorKey`, `modelId`, `previousModelId`).
+- **Fail.** `recordVerdict` stores `failed` with the detail (trimmed, a blank one replaced by
+  `eval gate failed`, cut at 500 characters) and the run link. `/pending` stops listing the row,
+  and the sync does not pend the same id again; a different selector result replaces it.
+- **No longer pending.** A verdict for a model that is not the row's gate-pending model —
+  already activated, already failed, or replaced by a newer candidate — writes nothing and
+  answers 200 with `{ applied: false, reason: 'not_pending' }`, so a replayed or late verdict is
+  harmless. The compare-and-set write holds this even when a sync re-pends the row between the
+  read and the write.
+
+The clash check reads pins through the 30 s per-process `ai_config` cache, so a pin set on
+another instance within those 30 s can be missed. Two intents then serve one model until an
+admin re-pins. That window is the one `PUT /ai/config/:key` already has, and it is accepted
+because verdicts land once a day.
+
+**Endpoints.** `ModelGateController` serves the three routes under
+`/api/v1/internal/model-gate` (see [REST API](#rest-api)). They take no user session and sit
+outside the `ai_enabled` flag, so the AI kill switch never blocks a verdict.
+`ModelGateTokenGuard` compares SHA-256 digests of the presented bearer and `MODEL_GATE_TOKEN`
+with `timingSafeEqual`. While `MODEL_GATE_TOKEN` is unset or blank every route answers 404, as if
+it did not exist, and a missing or wrong bearer answers 401. Each route allows 30 requests a minute, and the CI caller
+is tracked by IP. The verdict body takes a platform selector key, a model id of at most 120
+characters, a strict boolean `passed`, an https `runUrl` and an optional `detail`, each text at
+most 500 characters; anything else answers 400.
+
+**Setup.**
+
+- Railway, API service: `MODEL_GATE_TOKEN`, at least 32 characters (`openssl rand -hex 32`). The
+  API refuses to boot with a shorter one.
+- GitHub repository secrets: `MODEL_GATE_TOKEN` with the same value, and `KNOWTIS_API_URL`, the
+  API origin with no trailing slash and no `/api/v1` (the workflows append the path). The gate
+  and the weekly `resolve` job both read them. The gate legs also need `ANTHROPIC_API_KEY` and
+  `OPENROUTER_API_KEY`.
+
+**Events.** The resolutions log under two prefixes, so a filter on `ai.model_resolution.*`
+misses an activation:
+
+| Event                                      | Level | When                                                                |
+| ------------------------------------------ | ----- | ------------------------------------------------------------------- |
+| `ai.model_resolution.pending`              | info  | The sync pends a selector's candidate                               |
+| `ai.model_resolution.pending_cleared`      | info  | The selector came back to the active model, clearing a pending gate |
+| `ai.model_resolution.pending_skipped`      | info  | A row changed between the sync's read and its write                 |
+| `ai.model_resolution.pending_failed`       | warn  | The sync's candidates pass failed                                   |
+| `ai.model_resolution.cache_refresh_failed` | warn  | The resolution cache could not re-read the store                    |
+| `ai.model_resolution.activation_conflict`  | warn  | A passing candidate is served by another intent                     |
+| `ai.model.resolution_activated`            | info  | A passing verdict activated a candidate                             |
 
 ### Judge calibration
 
