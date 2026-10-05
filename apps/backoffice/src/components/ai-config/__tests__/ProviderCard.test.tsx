@@ -263,22 +263,19 @@ describe('ProviderCard', () => {
     testReset.mockImplementation(() => {
       state.test.data = undefined;
     });
+    const writtenAt = '2026-07-01T00:00:00.000Z';
     const routing = providerWith({
       keySource: 'database',
       keyPrefix: 'sk-ant-1',
-      updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+      updatedAt: new Date(writtenAt),
     });
     const { rerender } = render(<ProviderCard provider={routing} />);
 
     state.test.data = { ok: true, modelCount: LISTED_MODEL_COUNT };
     rerender(<ProviderCard provider={routing} />);
 
-    // Same instant, new object — what a refetch hands back.
-    rerender(
-      <ProviderCard
-        provider={{ ...routing, updatedAt: new Date(routing.updatedAt!) }}
-      />
-    );
+    const refetched = { ...routing, updatedAt: new Date(writtenAt) };
+    rerender(<ProviderCard provider={refetched} />);
     rerender(<ProviderCard provider={routing} />);
 
     expect(screen.getByText(/anthropic accepted the key/i)).toBeInTheDocument();
