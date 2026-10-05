@@ -19,11 +19,23 @@ import {
 const OPENROUTER_KEY_URL = 'https://openrouter.ai/api/v1/key';
 const OPENROUTER_USER_MODELS_URL = 'https://openrouter.ai/api/v1/models/user';
 
-const keyInfo = z.object({ data: z.looseObject({}) });
+const keyInfo = z.object({
+  data: z.looseObject({
+    is_management_key: z.boolean().optional(),
+    is_provisioning_key: z.boolean().optional(),
+  }),
+});
 const userModelsPage = z.object({
   data: z.array(z.unknown()),
   links: z.object({ next: z.string().nullish() }).nullish(),
 });
+
+// `/key` answers a management key 2xx, but OpenRouter refuses one on every
+// completion endpoint, so storing it would fail every turn.
+const MANAGEMENT_KEY_LISTING: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.REJECTED,
+  error: 'A management key cannot call models',
+};
 
 function parsePage(body: unknown): ListingPage | null {
   const parsed = userModelsPage.safeParse(body);
@@ -41,11 +53,11 @@ function parsePage(body: unknown): ListingPage | null {
 }
 
 /**
- * Lists what an OpenRouter key can call. `GET /api/v1/key` decides the key;
- * `GET /api/v1/models/user` (the full list, filtered by the account's provider
- * preferences, privacy settings and guardrails) names the models, following
- * same-origin `links.next`. Once the key passed, any listing failure, the
- * bound included, is unknown.
+ * Lists what an OpenRouter key can call. `GET /api/v1/key` decides the key and
+ * refuses a management key; `GET /api/v1/models/user` (the full list, filtered
+ * by the account's provider preferences, privacy settings and guardrails) names
+ * the models, following same-origin `links.next`. Once the key passed, any
+ * listing failure, the bound included, is unknown.
  */
 export class OpenRouterKeyModelsClient implements ProviderModelsClient {
   async list(
@@ -62,8 +74,15 @@ export class OpenRouterKeyModelsClient implements ProviderModelsClient {
     if (!key.ok) {
       return refusalOf(key);
     }
-    if (!keyInfo.safeParse(key.body).success) {
+    const info = keyInfo.safeParse(key.body);
+    if (!info.success) {
       return MALFORMED_LISTING;
+    }
+    if (
+      info.data.data.is_management_key ||
+      info.data.data.is_provisioning_key
+    ) {
+      return MANAGEMENT_KEY_LISTING;
     }
     keyAccepted();
     const listing = await paginatedListing(

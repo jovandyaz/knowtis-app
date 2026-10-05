@@ -87,20 +87,44 @@ describe('OpenRouterKeyModelsClient', () => {
     }
   });
 
-  it('reads a 401 from /key as rejected and never lists', async () => {
-    const fetchMock = stubListingFetch({
-      body: OPENROUTER_INVALID_KEY_BODY,
+  it.each([
+    {
       status: HttpStatus.UNAUTHORIZED,
-    });
-    const keyAccepted = vi.fn();
-
-    await expect(list(keyAccepted)).resolves.toEqual({
-      kind: 'rejected',
+      body: OPENROUTER_INVALID_KEY_BODY,
       error: `HTTP 401: ${OPENROUTER_INVALID_KEY_BODY.error.message}`,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(keyAccepted).not.toHaveBeenCalled();
-  });
+    },
+    { status: HttpStatus.FORBIDDEN, body: null, error: 'HTTP 403' },
+  ])(
+    'reads a $status from /key as rejected and never lists',
+    async ({ status, body, error }) => {
+      const fetchMock = stubListingFetch({ body, status });
+      const keyAccepted = vi.fn();
+
+      await expect(list(keyAccepted)).resolves.toEqual({
+        kind: 'rejected',
+        error,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(keyAccepted).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['is_management_key', 'is_provisioning_key'])(
+    'rejects a management key without listing: %s',
+    async (flag) => {
+      const fetchMock = stubListingFetch({
+        body: { data: { ...OPENROUTER_KEY.data, [flag]: true } },
+      });
+      const keyAccepted = vi.fn();
+
+      await expect(list(keyAccepted)).resolves.toEqual({
+        kind: 'rejected',
+        error: 'A management key cannot call models',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(keyAccepted).not.toHaveBeenCalled();
+    }
+  );
 
   it('answers unavailable when /key fails for another reason', async () => {
     const fetchMock = stubListingFetch({
