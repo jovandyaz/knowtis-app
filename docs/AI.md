@@ -1349,9 +1349,12 @@ secret for the judge and fails fast without it, so a silently-skipped run can't 
 and the graded run needs a funded Anthropic account (a zero-credit key surfaces as an eval
 error, not a skip). Legs that pin an `openrouter:*` model also fail fast without
 `OPENROUTER_API_KEY`; the reference leg deliberately does not receive that key, so its fallback
-chain stays empty and its history stays comparable. Each suite self-skips without its own
-provider key, so the retrieval and web-search suites only run when `VOYAGE_API_KEY` /
-`TAVILY_API_KEY` are configured.
+chain stays empty and its history stays comparable. The eval step receives no other provider
+key, so a served model on another provider (`openai:` or `google:`) turns its legs red every
+week until that provider's key is added as a repository secret and passed to the eval step: the
+served model wins, and the repository variables are only a fallback, so they cannot redirect
+those legs. Each suite self-skips without its own provider key, so the retrieval and web-search
+suites only run when `VOYAGE_API_KEY` / `TAVILY_API_KEY` are configured.
 
 Copilot security cases require every evaluable trial to pass; behavior cases require at least
 2/3 of evaluable trials. Grader errors leave the denominator, and a case with no evaluable
@@ -1383,8 +1386,8 @@ other (`concurrency: model-gate`).
 - **Gate leg.** Each leg provisions the same `pgvector/pgvector:pg16` service and throwaway env
   as the weekly legs, applies migrations, and runs `api:eval-security` (the Copilot security
   cases and the `injection-guard` suite) against the candidate with `AI_EVAL_TRIALS=10`, where
-  every graded trial must pass. Legs run independently (`fail-fast: false`), and each uploads a
-  `gate-results-<selectorKey>` artifact (90-day retention).
+  security cases require every graded trial to pass. Legs run independently (`fail-fast: false`),
+  and each uploads a `gate-results-<selectorKey>` artifact (90-day retention).
 - **Missing keys.** Before installing dependencies, a leg fails when `ANTHROPIC_API_KEY` is unset —
   the suites would skip, vitest would exit 0, and a model nothing evaluated would pass — or when
   the candidate is an `openrouter:` model and `OPENROUTER_API_KEY` is unset.
@@ -1431,15 +1434,17 @@ because verdicts land once a day.
 outside the `ai_enabled` flag, so the AI kill switch never blocks a verdict.
 `ModelGateTokenGuard` compares SHA-256 digests of the presented bearer and `MODEL_GATE_TOKEN`
 with `timingSafeEqual`. While `MODEL_GATE_TOKEN` is unset or blank every route answers 404, as if
-it did not exist, and a missing or wrong bearer answers 401. Each route allows 30 requests a minute, and the CI caller
-is tracked by IP. The verdict body takes a platform selector key, a model id of at most 120
-characters, a strict boolean `passed`, an https `runUrl` and an optional `detail`, each text at
-most 500 characters; anything else answers 400.
+it did not exist, and a missing or wrong bearer answers 401. Each route allows 30 requests a
+minute, and the CI caller is tracked by IP. The verdict body takes a platform selector key, a
+model id of at most 120 characters, a strict boolean `passed`, an https `runUrl` and an optional
+`detail`, each text at most 500 characters; anything else answers 400.
 
 **Setup.**
 
 - Railway, API service: `MODEL_GATE_TOKEN`, at least 32 characters (`openssl rand -hex 32`). The
-  API refuses to boot with a shorter one.
+  API refuses to boot with a shorter one. Once it is set in Railway, add
+  `MODEL_GATE_TOKEN: preserve()` to `.railway/railway.ts` in its own PR, so the IaC plan does not
+  read the variable as a delete (see [`.railway/railway.ts`](DEPLOYMENT.md#railwayrailwayts)).
 - GitHub repository secrets: `MODEL_GATE_TOKEN` with the same value, and `KNOWTIS_API_URL`, the
   API origin with no trailing slash and no `/api/v1` (the workflows append the path). The gate
   and the weekly `resolve` job both read them. The gate legs also need `ANTHROPIC_API_KEY` and

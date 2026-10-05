@@ -171,6 +171,8 @@ Each image ships its `dist/apps/<app>` output plus a production install of exact
 | `NODE_ENV`                     | No                           | Declared as `production` in `.railway/railway.ts`                                                                                                                                                                                                               |
 | `PORT`                         | No                           | Declared as `3333` in `.railway/railway.ts` (also the schema default)                                                                                                                                                                                           |
 
+After setting `MODEL_GATE_TOKEN` in Railway, add `MODEL_GATE_TOKEN: preserve()` to `.railway/railway.ts` in its own PR, so the IaC plan does not read the variable as a delete (see [`.railway/railway.ts`](#railwayrailwayts)).
+
 AI variables (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `BYOK_ENCRYPTION_KEY`, budgets, alert webhook, Langfuse, Voyage, Tavily, …) are documented in [AI.md → Environment Variables](AI.md#environment-variables).
 
 #### OAuth variables (API and MCP)
