@@ -6,7 +6,6 @@ import type { ModelIntent } from '@knowtis/shared-types';
 import type { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { ResolutionRollbackUnavailableError } from '../../domain/errors/resolution-rollback-unavailable.error';
 import { SELECTOR_KEY_BY_INTENT } from '../../domain/model-catalog/platform-resolution';
-import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
@@ -15,10 +14,7 @@ import {
   createResolutionsStub,
   seededResolution,
 } from '../../testing/platform-resolutions';
-import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   InvalidAIConfigError,
   type AIConfigEntry,
@@ -63,7 +59,6 @@ function make(
   opts: {
     entries?: AIConfigEntry[];
     resolutions?: ReturnType<typeof seededResolution>[];
-    index?: ModelIndexCache;
   } = {}
 ) {
   const config = {
@@ -99,7 +94,6 @@ function make(
     resolutions,
     indexRepo,
     config as unknown as AIConfigService,
-    opts.index ?? createSnapshotIndex(),
     resolutionCache,
     audit as unknown as AdminAuditService
   );
@@ -223,17 +217,14 @@ describe('PlatformResolutionsAdminService', () => {
     );
   });
 
-  it('reports a null candidate for an empty selector', async () => {
-    const index = new ModelIndexCache(
-      createModelIndexRepositoryStub(async () => [
-        createIndexedModel({
-          id: 'openrouter:vendor/unrelated',
-          provider: OPENROUTER_PROVIDER,
-        }),
-      ])
-    );
-    await index.refresh();
-    const { service } = make({ index });
+  it('reports a null candidate for a selector the stored index leaves empty', async () => {
+    const { service, indexRepo } = make();
+    vi.mocked(indexRepo.listListed).mockResolvedValue([
+      createIndexedModel({
+        id: 'openrouter:vendor/unrelated',
+        provider: OPENROUTER_PROVIDER,
+      }),
+    ]);
 
     const { intents } = await service.overview();
 

@@ -15,6 +15,7 @@ import {
   intentOfSelectorKey,
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
+import { servedIndexRows } from '../../domain/model-catalog/served-index-rows';
 import {
   MODEL_INDEX_REPOSITORY,
   type ModelIndexRepository,
@@ -23,7 +24,6 @@ import {
   MODEL_RESOLUTION_REPOSITORY,
   type ModelResolutionRepository,
 } from '../../domain/ports/model-resolution.repository';
-import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import {
   AIConfigService,
@@ -40,20 +40,20 @@ export class PlatformResolutionsAdminService {
     @Inject(MODEL_INDEX_REPOSITORY)
     private readonly indexRepository: ModelIndexRepository,
     private readonly config: AIConfigService,
-    private readonly index: ModelIndexCache,
     private readonly resolutionCache: PlatformResolutionCache,
     private readonly audit: AdminAuditService
   ) {}
 
   async overview(): Promise<PlatformResolutionsDto> {
-    const [rows, entries, lastSeenAt] = await Promise.all([
+    const [rows, entries, lastSeenAt, listed] = await Promise.all([
       this.resolutions.list(),
       this.config.getEffectiveConfig(),
       this.indexRepository.lastSeenAt(OPENROUTER_PROVIDER),
+      this.indexRepository.listListed(),
     ]);
     const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
     const now = new Date();
-    const indexRows = this.index.catalog().all();
+    const indexRows = servedIndexRows(listed);
     const intents = MODEL_INTENTS.flatMap((intent) => {
       const row = rows.find(
         (read) => intentOfSelectorKey(read.selectorKey) === intent

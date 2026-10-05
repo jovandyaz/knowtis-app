@@ -772,7 +772,7 @@ The backoffice never reads `/ai/models` — that list is caller-relative (BYOK, 
 - `intent`, `selectorKey`, and `configKey`, the `ai_config` key that pins the intent.
 - `pin`: the stored pin, a stale one included, or `null` while the intent is auto. `served`: the model the intent serves, by the rule `/internal/model-gate/active` follows: a supported pin, else the active resolution.
 - `activeModelId`, `changedAt`, `previousModelId`, `releasedModelId`, `releasedAt`, `pendingModelId`, `gateStatus`, `gateDetail` and `gateRunUrl`: the intent's [`ai_model_resolutions`](#ai_model_resolutions) row, read from the store rather than the 60 s cache.
-- `candidateModelId`: what the intent's [platform selector](#platform-selectors) resolves to over the instance's model index cache, or `null`. That cache re-reads the index every 60 s, so for up to a minute after a sync the candidate can still show the previous pick while `pendingModelId` already shows the new one.
+- `candidateModelId`: what the intent's [platform selector](#platform-selectors) resolves to, or `null`. It is resolved over the stored index like the [sync's candidates](#the-sync-job) (`servedIndexRows` over the listed rows), so every instance shows the pick the sync would pend.
 
 `lastSyncAt` is the newest `last_seen_at` among the listed OpenRouter index rows, the reading the [stale sync](#the-sync-job) check judges, or `null` while none is listed.
 
