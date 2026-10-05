@@ -259,12 +259,14 @@ export class CatalogSyncTask {
 
     for (const finding of findings) {
       try {
-        await this.repo.createAlert(
+        const opened = await this.repo.createAlert(
           finding.modelId,
           finding.kind,
           finding.detail
         );
-        alerts += 1;
+        if (opened) {
+          alerts += 1;
+        }
       } catch (error) {
         failures.push({
           target: `${finding.modelId} ${finding.kind}`,

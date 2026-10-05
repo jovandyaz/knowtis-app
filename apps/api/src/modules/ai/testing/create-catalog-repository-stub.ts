@@ -11,7 +11,7 @@ export function createCatalogRepositoryStub(
     setStatus: vi.fn(),
     updateCopy: vi.fn(),
     listAlerts: vi.fn(),
-    createAlert: vi.fn(),
+    createAlert: vi.fn().mockResolvedValue(true),
     resolveAlert: vi.fn().mockResolvedValue(true),
     listCandidates: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   };

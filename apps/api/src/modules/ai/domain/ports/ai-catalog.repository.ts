@@ -43,12 +43,12 @@ export interface AiCatalogRepository {
     patch: { label?: string; description?: string }
   ): Promise<CatalogModel | null>;
   listAlerts(unresolvedOnly: boolean): Promise<CatalogAlert[]>;
-  /** No-op while an unresolved alert already exists for the same `(modelId, kind)`. */
+  /** True when a new open alert was inserted; false, and a no-op, while an unresolved alert already exists for the same `(modelId, kind)`. */
   createAlert(
     modelId: string,
     kind: CatalogAlertKind,
     detail: string
-  ): Promise<void>;
+  ): Promise<boolean>;
   /** Resolves to whether this call closed the alert; false when it is unknown or already resolved, which preserves the original resolution time. */
   resolveAlert(id: number): Promise<boolean>;
   /** One ranked page: scored first, unscored last, `id` breaking ties. `search` matches label or id, case-insensitively; `excludeIds` leaves those models out of the page and the total. */

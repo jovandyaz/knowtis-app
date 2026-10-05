@@ -462,6 +462,15 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(openIds).toEqual([...openIds].sort((a, b) => b - a));
   });
 
+  it('returns true for a new alert and false while one is open for the same model and kind', async () => {
+    await expect(
+      repo.createAlert(PRIMARY_MODEL_ID, 'unavailable', FIRST_ALERT_DETAIL)
+    ).resolves.toBe(true);
+    await expect(
+      repo.createAlert(PRIMARY_MODEL_ID, 'unavailable', SECOND_ALERT_DETAIL)
+    ).resolves.toBe(false);
+  });
+
   it('should accept every alert kind the domain can raise', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
 

@@ -107,7 +107,7 @@ function make(
   const lock = createAdvisoryLockClient(options.locked ?? true);
   const repo = {
     upsertCandidate: vi.fn().mockResolvedValue(undefined),
-    createAlert: vi.fn().mockResolvedValue(undefined),
+    createAlert: vi.fn().mockResolvedValue(true),
     listByStatus: vi
       .fn()
       .mockResolvedValue((options.promoted ?? []).map((id) => ({ id }))),
@@ -250,6 +250,21 @@ describe('CatalogSyncTask', () => {
 
     expect(result.alerts).toBe(1);
     expect(repo.createAlert).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts only alerts it opened', async () => {
+    const { task, repo, openRouter } = make({ promoted: [PROMOTED_ID] });
+    const inSync = withWatchedInSync();
+    openRouter.fetchModels.mockResolvedValue({
+      ...inSync,
+      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
+    });
+    repo.createAlert.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const result = await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledTimes(2);
+    expect(result.alerts).toBe(1);
   });
 
   it('should raise an unavailable alert when a watched model leaves OpenRouter', async () => {
