@@ -152,7 +152,7 @@
       "save": "Guardar",
       "remove": "Eliminar",
       "saving": "Validando…",
-      "invalid": "La clave fue rechazada. Verifica que sea válida y tenga cuota.",
+      "invalid": "No se pudo verificar la clave. Revisa que sea válida e inténtalo de nuevo.",
       "stored": "Clave guardada ({{prefix}}…)",
       "billedBadge": "Tu clave",
       "lastUsed": "Último uso {{when}}",

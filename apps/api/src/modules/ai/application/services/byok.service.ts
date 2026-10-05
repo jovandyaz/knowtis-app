@@ -12,7 +12,15 @@ import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
-import { byokProbeModelId } from '../../domain/model-catalog/probe-model';
+import {
+  KEY_FINGERPRINTER,
+  type KeyFingerprinter,
+} from '../../domain/ports/key-fingerprinter.port';
+import {
+  PROVIDER_LISTING_KIND,
+  PROVIDER_MODELS_LISTER,
+  type ProviderModelsLister,
+} from '../../domain/ports/provider-models.port';
 import {
   USER_AI_SETTINGS_REPOSITORY,
   type UserAiSettingsRepository,
@@ -21,16 +29,14 @@ import {
   USER_PROVIDER_KEYS_REPOSITORY,
   type UserProviderKeysRepository,
 } from '../../domain/ports/user-provider-keys.repository';
-import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import {
+  USER_PROVIDER_MODELS_REPOSITORY,
+  type UserProviderModelsRepository,
+} from '../../domain/ports/user-provider-models.repository';
 import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
-import {
-  probeProviderKey,
-  type ProbeResult,
-} from '../../infrastructure/providers/provider-probe';
-import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
@@ -56,11 +62,15 @@ export class ByokService {
     @Inject(USER_PROVIDER_KEYS_REPOSITORY)
     private readonly repo: UserProviderKeysRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly registry: ProviderRegistryFactory,
     private readonly verifiedIdentity: VerifiedIdentityPolicy,
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
-    private readonly index: ModelIndexCache
+    @Inject(PROVIDER_MODELS_LISTER)
+    private readonly lister: ProviderModelsLister,
+    @Inject(USER_PROVIDER_MODELS_REPOSITORY)
+    private readonly models: UserProviderModelsRepository,
+    @Inject(KEY_FINGERPRINTER)
+    private readonly fingerprints: KeyFingerprinter
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -121,22 +131,18 @@ export class ByokService {
       userId,
       'Verify your email address to store a provider key'
     );
-    const probe = await this.validateKey(provider, apiKey);
-    if (!probe.valid) {
+    const listing = await this.lister.list(provider, apiKey);
+    if (listing.kind !== PROVIDER_LISTING_KIND.LISTED) {
       this.logger.warn({
         event: 'byok.validation_failed',
+        userId,
         provider,
-        reason: probe.reason,
-        error: probe.error,
+        reason: listing.kind,
+        error: listing.error,
       });
-      if (probe.reason === 'rejected') {
+      if (listing.kind === PROVIDER_LISTING_KIND.REJECTED) {
         throw new UnprocessableEntityException(
-          `The ${provider} key was rejected. Check it is valid and has quota.`
-        );
-      }
-      if (probe.reason === 'unconfigured') {
-        throw new ServiceUnavailableException(
-          `No ${provider} model is available to check the key. Try again later.`
+          `The ${provider} key was rejected. Check that it is valid.`
         );
       }
       throw new ServiceUnavailableException(
@@ -151,6 +157,7 @@ export class ByokService {
       secret,
       apiKey.slice(0, KEY_PREFIX_LENGTH)
     );
+    await this.recordListing(userId, provider, apiKey, listing.modelIds);
   }
 
   async deleteKey(userId: string, provider: ByokProvider): Promise<void> {
@@ -166,15 +173,32 @@ export class ByokService {
     }
   }
 
-  private validateKey(
+  private async recordListing(
+    userId: string,
     provider: ByokProvider,
-    apiKey: string
-  ): Promise<ProbeResult> {
-    return probeProviderKey(
-      this.registry,
-      provider,
-      apiKey,
-      byokProbeModelId(provider, this.index.catalog().all())
-    );
+    apiKey: string,
+    modelIds: readonly string[] | null
+  ): Promise<void> {
+    if (modelIds === null) {
+      this.logger.warn({ event: 'byok.listing_incomplete', userId, provider });
+      return;
+    }
+    try {
+      await this.models.save(userId, {
+        provider,
+        keyFingerprint: this.fingerprints.hash(apiKey),
+        modelIds,
+        // The re-list cron treats a listing older than its key's updated_at as
+        // due, so this clock must be read after the key upsert, never before.
+        syncedAt: new Date(),
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'byok.listing_store_failed',
+        userId,
+        provider,
+        error: reasonOf(error),
+      });
+    }
   }
 }

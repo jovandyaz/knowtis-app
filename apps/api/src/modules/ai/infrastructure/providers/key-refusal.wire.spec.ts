@@ -1,24 +1,10 @@
 import { generateText, streamText, type LanguageModel } from 'ai';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type Mock,
-} from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { executeWithChain } from '@knowtis/ai-gateway';
 
-import { AiProvidersController } from '../../ai-providers.controller';
 import { createMockConfig } from '../../testing/create-mock-config';
-import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
 import { classifyByokKeyFailure } from './byok-key-failure';
-import { probeProviderKey } from './provider-probe';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
 const OPENAI_MODEL = 'openai:gpt-5.6-terra';
@@ -112,32 +98,10 @@ describe('a caller-keyed OpenAI model on the wire', () => {
 
     expect(fetch).toHaveBeenCalledTimes(SDK_RETRIES + 1);
   });
-
-  it('rejects a probed key out of quota after one request', async () => {
-    const fetch = openaiAnswering('insufficient_quota');
-    vi.stubGlobal('fetch', fetch);
-
-    const probe = await probeProviderKey(
-      new ProviderRegistryFactory(createMockConfig()),
-      'openai',
-      USER_KEY,
-      'openai:gpt-6-luna'
-    );
-
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(probe).toMatchObject({ valid: false, reason: 'rejected' });
-  });
 });
 
 describe('a platform-keyed OpenAI model on the wire', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(SNAPSHOT_DATE);
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.useRealTimers();
-  });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('asks the provider once for a server key out of quota', async () => {
     const fetch = openaiAnswering('insufficient_quota');
@@ -183,21 +147,5 @@ describe('a platform-keyed OpenAI model on the wire', () => {
     await streamedError(factory.languageModel(OPENAI_MODEL));
 
     expect(fetch).toHaveBeenCalledTimes(SDK_RETRIES + 1);
-  });
-
-  it('tests a server key out of quota as rejected after one request', async () => {
-    const fetch = openaiAnswering('insufficient_quota');
-    vi.stubGlobal('fetch', fetch);
-    const controller = new AiProvidersController(
-      {} as never,
-      await platformFactory(),
-      createSnapshotIndex(),
-      { getPlatformModelIds: async () => [] }
-    );
-
-    const result = await controller.test({ provider: 'openai' });
-
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ ok: false, reason: 'rejected' });
   });
 });

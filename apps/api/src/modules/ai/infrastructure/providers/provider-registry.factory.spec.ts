@@ -450,6 +450,50 @@ describe('ProviderRegistryFactory', () => {
     });
   });
 
+  describe('routingKey', () => {
+    const ENV_KEY = 'env-anthropic-key';
+    const STORED_KEY = 'stored-anthropic-key';
+
+    async function primedFactory(
+      overrides: Record<string, unknown>,
+      stored: SystemProviderConfig
+    ) {
+      const factory = new ProviderRegistryFactory(
+        createMockConfig({ ANTHROPIC_API_KEY: ENV_KEY, ...overrides }),
+        sourceOf([['anthropic', stored]])
+      );
+      await factory.onModuleInit();
+      return factory;
+    }
+
+    it('answers the stored key over the env key', async () => {
+      const factory = await primedFactory(
+        {},
+        { enabled: true, apiKey: STORED_KEY }
+      );
+
+      expect(factory.routingKey('anthropic')).toBe(STORED_KEY);
+    });
+
+    it('answers null in gateway mode', async () => {
+      const factory = await primedFactory(
+        { AI_GATEWAY_API_KEY: 'gw-key' },
+        { enabled: true, apiKey: STORED_KEY }
+      );
+
+      expect(factory.routingKey('anthropic')).toBeNull();
+    });
+
+    it('answers null for a disabled provider', async () => {
+      const factory = await primedFactory(
+        {},
+        { enabled: false, apiKey: STORED_KEY }
+      );
+
+      expect(factory.routingKey('anthropic')).toBeNull();
+    });
+  });
+
   describe('BYOK (per-request key override)', () => {
     it('should build a model from a user key for a provider the server lacks', () => {
       const factory = makeFactory({ GOOGLE_GENERATIVE_AI_API_KEY: '' });

@@ -2,16 +2,21 @@ import { randomBytes } from 'node:crypto';
 
 import {
   HttpStatus,
+  Logger,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { generateText } from 'ai';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
-  EMAIL_NOT_VERIFIED_CODE,
-  type ByokProvider,
-} from '@knowtis/shared-types';
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
+
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
 import {
   IDENTITY_STATE,
@@ -19,39 +24,56 @@ import {
   type IdentityState,
 } from '../../../../test-support/verified-identity';
 import {
+  PROVIDER_LISTING_KIND,
+  type ProviderListing,
+} from '../../domain/ports/provider-models.port';
+import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
-import type { ProbeResult } from '../../infrastructure/providers/provider-probe';
-import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
+import { LISTING_TIMEOUT_MESSAGE } from '../../infrastructure/providers/listing/listing-http';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { ByokService } from './byok.service';
-
-vi.mock('ai', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('ai')>()),
-  generateText: vi.fn().mockResolvedValue({ usage: { outputTokens: 16 } }),
-}));
 
 const masterKeyB64 = randomBytes(32).toString('base64');
 const masterKey = Buffer.from(masterKeyB64, 'base64');
 
+const ANTHROPIC_KEY = 'sk-ant-supersecret-12345';
+const OPENAI_KEY = 'sk-proj-ABCDEF1234567890';
+const LISTED_MODEL_IDS = ['claude-haiku-4-5-20251001'];
+const KEY_WRITE_DELAY_MS = 1_500;
+const STORE_FAILURE = 'connection terminated unexpectedly';
+
+const LISTED: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.LISTED,
+  modelIds: LISTED_MODEL_IDS,
+};
+const REJECTED: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.REJECTED,
+  error: 'HTTP 401: invalid x-api-key',
+};
+const UNAVAILABLE: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+  error: 'HTTP 529: Overloaded',
+};
+
+const fingerprintOf = (apiKey: string) => `fp:${apiKey.length}`;
+
 interface MakeOverrides {
   identity?: IdentityState;
-  validate?: (provider: ByokProvider, key: string) => Promise<ProbeResult>;
-  realProbe?: boolean;
+  listing?: ProviderListing;
   repo?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
+  models?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
 }
 
-function makeService(overrides: MakeOverrides) {
+function makeService(overrides: MakeOverrides = {}) {
   const store = new Map<string, unknown>();
   const repo = {
     listForUser: vi.fn().mockResolvedValue([]),
     getEnabledProviders: vi.fn().mockResolvedValue([]),
     getEncrypted: vi.fn().mockResolvedValue(null),
     upsert: vi.fn(
-      async (_u: string, _p: ByokProvider, secret: unknown, prefix: string) => {
+      async (_u: string, _p: string, secret: unknown, prefix: string) => {
         store.set('secret', secret);
         store.set('prefix', prefix);
       }
@@ -64,29 +86,37 @@ function makeService(overrides: MakeOverrides) {
     get: (k: string) =>
       k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
   };
-  const registry = { languageModel: vi.fn() };
   const settings = {
     clearBoundToUnheldProvider: vi.fn().mockResolvedValue(undefined),
   };
+  const lister = {
+    list: vi.fn().mockResolvedValue(overrides.listing ?? LISTED),
+  };
+  const models = {
+    save: vi.fn().mockResolvedValue(undefined),
+    ...overrides.models,
+  };
+  const fingerprints = { hash: fingerprintOf };
   const service = new ByokService(
     repo as never,
     config as never,
-    registry as never,
     policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED),
     settings as never,
-    createSnapshotIndex()
+    lister,
+    models as never,
+    fingerprints
   );
-  const validateKey = vi.fn(
-    overrides.validate ?? (async () => ({ valid: true }) as ProbeResult)
-  );
-  if (!overrides.realProbe) {
-    (service as never as { validateKey: unknown }).validateKey = validateKey;
-  }
-  return { service, repo, store, validateKey, settings };
+  return { service, repo, store, lister, models, settings };
 }
 
+const loggedWarnings = (warn: MockInstance<Logger['warn']>) =>
+  warn.mock.calls.map((call) => call[0]);
+
 describe('ByokService', () => {
+  let warn: MockInstance<Logger['warn']>;
+
   afterEach(() => {
+    warn.mockRestore();
     vi.useRealTimers();
   });
 
@@ -94,96 +124,185 @@ describe('ByokService', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(SNAPSHOT_DATE);
     vi.clearAllMocks();
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
   });
 
   it('encrypts on setKey and stores a masked prefix', async () => {
-    const { service, store } = makeService({});
-    await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
+    const { service, store } = makeService();
+    await service.setKey('u1', 'anthropic', ANTHROPIC_KEY);
     expect(store.get('prefix')).toBe('sk-ant-s');
     expect(decryptSecret(store.get('secret') as never, masterKey)).toBe(
-      'sk-ant-supersecret-12345'
+      ANTHROPIC_KEY
     );
   });
 
-  it('rejects an invalid key with 422', async () => {
-    const { service } = makeService({
-      validate: async () => ({
-        valid: false,
-        reason: 'rejected',
-        error: '401 unauthorized',
-      }),
-    });
-    await expect(service.setKey('u1', 'openai', 'bad')).rejects.toBeInstanceOf(
-      UnprocessableEntityException
+  it("lists the key and stores its listing with the key's fingerprint", async () => {
+    const { service, lister, repo, models } = makeService();
+
+    await service.setKey('u1', 'anthropic', ANTHROPIC_KEY);
+
+    expect(lister.list.mock.calls).toEqual([['anthropic', ANTHROPIC_KEY]]);
+    expect(models.save.mock.calls).toEqual([
+      [
+        'u1',
+        {
+          provider: 'anthropic',
+          keyFingerprint: fingerprintOf(ANTHROPIC_KEY),
+          modelIds: LISTED_MODEL_IDS,
+          syncedAt: SNAPSHOT_DATE,
+        },
+      ],
+    ]);
+    expect(repo.upsert.mock.invocationCallOrder[0]).toBeLessThan(
+      models.save.mock.invocationCallOrder[0] ?? 0
     );
   });
 
-  it.each(['unavailable', 'timeout'] as const)(
-    'answers 503, not 422, when the probe is %s',
-    async (reason) => {
-      const { service, repo } = makeService({
-        validate: async () => ({ valid: false, reason, error: 'boom' }),
-      });
-      const failure = await service
-        .setKey('u1', 'openai', 'sk-good-123456')
-        .catch((e: unknown) => e);
-      expect(failure).toBeInstanceOf(ServiceUnavailableException);
-      expect((failure as Error).message).toMatch(/could not be reached/i);
-      expect(repo.upsert).not.toHaveBeenCalled();
-    }
-  );
-
-  it('refuses a key no model can probe and stores nothing', async () => {
-    const { service, repo, settings } = makeService({
-      validate: async () => ({
-        valid: false,
-        reason: 'unconfigured',
-        error: "No model resolves for provider 'openai'",
-      }),
+  it('stamps the listing no earlier than the key it describes was stored', async () => {
+    const keyWrittenAt = new Date(SNAPSHOT_DATE.getTime() + KEY_WRITE_DELAY_MS);
+    const { service, models } = makeService({
+      repo: {
+        upsert: vi.fn(async () => {
+          vi.setSystemTime(keyWrittenAt);
+        }),
+      },
     });
+
+    await service.setKey('u1', 'anthropic', ANTHROPIC_KEY);
+
+    const syncedAt: Date = models.save.mock.calls[0]?.[1]?.syncedAt;
+    expect(syncedAt.getTime()).toBeGreaterThanOrEqual(keyWrittenAt.getTime());
+  });
+
+  it('rejects a key the provider refused with 422 and stores nothing', async () => {
+    const { service, repo, models, settings } = makeService({
+      listing: REJECTED,
+    });
+
     const failure = await service
-      .setKey('u1', 'openai', 'sk-untested-123456')
+      .setKey('u1', 'openai', OPENAI_KEY)
       .catch((e: unknown) => e);
-    expect(failure).toBeInstanceOf(ServiceUnavailableException);
-    expect((failure as Error).message).toMatch(/no openai model/i);
+
+    expect(failure).toBeInstanceOf(UnprocessableEntityException);
+    expect((failure as Error).message).toBe(
+      'The openai key was rejected. Check that it is valid.'
+    );
     expect(repo.upsert).not.toHaveBeenCalled();
+    expect(models.save).not.toHaveBeenCalled();
     expect(settings.clearBoundToUnheldProvider).not.toHaveBeenCalled();
   });
 
-  it.each(['rejected', 'unavailable', 'timeout', 'unconfigured'] as const)(
-    'logs provider, reason and error when the probe is %s',
-    async (reason) => {
-      const warn = vi
-        .spyOn((await import('@nestjs/common')).Logger.prototype, 'warn')
-        .mockImplementation(() => undefined);
-      const { service } = makeService({
-        validate: async () => ({
-          valid: false,
-          reason,
-          error: 'why it failed',
-        }),
-      });
-      await service.setKey('u1', 'openai', 'sk-x-123456').catch(() => null);
-      expect(warn).toHaveBeenCalledWith({
-        event: 'byok.validation_failed',
-        provider: 'openai',
-        reason,
-        error: 'why it failed',
-      });
-      warn.mockRestore();
+  it('answers 503 when the provider cannot be reached and stores nothing', async () => {
+    const { service, repo, models, settings } = makeService({
+      listing: UNAVAILABLE,
+    });
+
+    const failure = await service
+      .setKey('u1', 'openai', OPENAI_KEY)
+      .catch((e: unknown) => e);
+
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+    expect((failure as Error).message).toBe(
+      'openai could not be reached to check the key. Try again in a moment.'
+    );
+    expect(repo.upsert).not.toHaveBeenCalled();
+    expect(models.save).not.toHaveBeenCalled();
+    expect(settings.clearBoundToUnheldProvider).not.toHaveBeenCalled();
+  });
+
+  it('accepts a key whose listing proves it valid even without credit', async () => {
+    const { service, repo } = makeService({
+      listing: { kind: PROVIDER_LISTING_KIND.LISTED, modelIds: ['gpt-6-luna'] },
+    });
+
+    await expect(
+      service.setKey('u1', 'openai', OPENAI_KEY)
+    ).resolves.toBeUndefined();
+
+    expect(repo.upsert).toHaveBeenCalledWith(
+      'u1',
+      'openai',
+      expect.anything(),
+      'sk-proj-'
+    );
+  });
+
+  it('stores the key without a listing when the listing is incomplete', async () => {
+    const { service, repo, models } = makeService({
+      listing: { kind: PROVIDER_LISTING_KIND.LISTED, modelIds: null },
+    });
+
+    await service.setKey('u1', 'openai', OPENAI_KEY);
+
+    expect(repo.upsert).toHaveBeenCalledTimes(1);
+    expect(models.save).not.toHaveBeenCalled();
+    expect(loggedWarnings(warn)).toEqual([
+      { event: 'byok.listing_incomplete', userId: 'u1', provider: 'openai' },
+    ]);
+  });
+
+  it('keeps the saved key when its listing cannot be stored', async () => {
+    const { service, repo } = makeService({
+      models: { save: vi.fn().mockRejectedValue(new Error(STORE_FAILURE)) },
+    });
+
+    await expect(
+      service.setKey('u1', 'anthropic', ANTHROPIC_KEY)
+    ).resolves.toBeUndefined();
+
+    expect(repo.upsert).toHaveBeenCalledTimes(1);
+    expect(loggedWarnings(warn)).toEqual([
+      {
+        event: 'byok.listing_store_failed',
+        userId: 'u1',
+        provider: 'anthropic',
+        error: STORE_FAILURE,
+      },
+    ]);
+  });
+
+  it.each([
+    ['a rejection', REJECTED],
+    ['an unavailable provider', UNAVAILABLE],
+    [
+      'a listing that timed out',
+      {
+        kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+        error: LISTING_TIMEOUT_MESSAGE,
+      } as const,
+    ],
+  ])(
+    'logs the provider, kind and the listing error of %s',
+    async (_case, listing) => {
+      const { service } = makeService({ listing });
+
+      await service.setKey('u1', 'openai', OPENAI_KEY).catch(() => null);
+
+      expect(loggedWarnings(warn)).toEqual([
+        {
+          event: 'byok.validation_failed',
+          userId: 'u1',
+          provider: 'openai',
+          reason: listing.kind,
+          error: listing.error,
+        },
+      ]);
     }
   );
 
   it('throws 503 when no master key is configured', async () => {
-    const { service } = makeService({});
+    const { service, lister } = makeService();
     (service as never as { masterKey: Buffer | null }).masterKey = null;
     await expect(
       service.setKey('u1', 'anthropic', 'sk-ant')
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(lister.list).not.toHaveBeenCalled();
   });
 
   it('enabledProviders is empty when anonymous', async () => {
-    const { service } = makeService({});
+    const { service } = makeService();
     expect((await service.enabledProviders('u1', true)).size).toBe(0);
   });
 
@@ -234,147 +353,19 @@ describe('ByokService', () => {
     });
   });
 
-  it('validates the key against a provider that rejects maxOutputTokens below 16 (OpenAI minimum)', async () => {
-    // Mimic OpenAI's Responses API, which rejects max_output_tokens < 16. setKey
-    // must succeed, proving validateKey never probes with a value below 16.
-    vi.mocked(generateText).mockImplementation((async (opts: {
-      maxOutputTokens?: number;
-    }) => {
-      if ((opts.maxOutputTokens ?? 0) < 16) {
-        throw new Error('integer below minimum value. Expected a value >= 16');
-      }
-      return { usage: { outputTokens: 16 } };
-    }) as never);
-    const store = new Map<string, unknown>();
-    const repo = {
-      listForUser: vi.fn().mockResolvedValue([]),
-      getEnabledProviders: vi.fn().mockResolvedValue([]),
-      getEncrypted: vi.fn().mockResolvedValue(null),
-      upsert: vi.fn(
-        async (
-          _u: string,
-          _p: ByokProvider,
-          secret: unknown,
-          prefix: string
-        ) => {
-          store.set('secret', secret);
-          store.set('prefix', prefix);
-        }
-      ),
-      remove: vi.fn(),
-      touchLastUsed: vi.fn(),
-    };
-    const config = {
-      get: (k: string) =>
-        k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
-    };
-    const registry = { languageModel: vi.fn().mockReturnValue({}) };
-    const service = new ByokService(
-      repo as never,
-      config as never,
-      registry as never,
-      policyFor(IDENTITY_STATE.VERIFIED),
-      { clearBoundToUnheldProvider: vi.fn() } as never,
-      createSnapshotIndex()
-    );
-
-    await expect(
-      service.setKey('u1', 'openai', 'sk-valid-123456')
-    ).resolves.toBeUndefined();
-    expect(repo.upsert).toHaveBeenCalled();
-    expect(registry.languageModel).toHaveBeenCalledWith(
-      'openai:gpt-6-luna',
-      'sk-valid-123456'
-    );
-  });
-
-  it('validates an openrouter key against its fast BYOK route', async () => {
-    const registry = { languageModel: vi.fn().mockReturnValue({}) };
-    const config = {
-      get: (k: string) =>
-        k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
-    };
-    const repo = {
-      listForUser: vi.fn().mockResolvedValue([]),
-      getEnabledProviders: vi.fn().mockResolvedValue([]),
-      getEncrypted: vi.fn().mockResolvedValue(null),
-      upsert: vi.fn(),
-      remove: vi.fn(),
-      touchLastUsed: vi.fn(),
-    };
-    const service = new ByokService(
-      repo as never,
-      config as never,
-      registry as never,
-      policyFor(IDENTITY_STATE.VERIFIED),
-      { clearBoundToUnheldProvider: vi.fn() } as never,
-      createSnapshotIndex()
-    );
-
-    await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
-
-    expect(registry.languageModel).toHaveBeenCalledWith(
-      'openrouter:anthropic/claude-haiku-4.5',
-      'sk-or-v1-valid-key-000'
-    );
-  });
-
-  it('does not log the raw provider error when key validation fails', async () => {
-    const warn = vi
-      .spyOn((await import('@nestjs/common')).Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
-
-    const { service } = makeService({
-      realProbe: true,
-    });
-    vi.mocked(generateText).mockRejectedValueOnce(
-      Object.assign(
-        new Error('Incorrect API key provided: sk-proj-ABCDEF1234567890'),
-        {}
-      )
-    );
-
-    await expect(
-      service.setKey('user-1', 'openai', 'sk-proj-ABCDEF1234567890')
-    ).rejects.toThrow(ServiceUnavailableException);
-
-    const loggedPayloads = warn.mock.calls.map((c) => JSON.stringify(c[0]));
-    expect(loggedPayloads.some((p) => p.includes('sk-proj'))).toBe(false);
-    expect(loggedPayloads.some((p) => p.includes('[redacted]'))).toBe(true);
-    expect(
-      loggedPayloads.some((p) => p.includes('byok.validation_failed'))
-    ).toBe(true);
-    warn.mockRestore();
-  });
-
   describe('verified email gate', () => {
-    const expectKeyStoredForU1 = (
-      repo: { upsert: ReturnType<typeof vi.fn> },
-      store: Map<string, unknown>
-    ) => {
-      expect(repo.upsert).toHaveBeenCalledWith(
-        'u1',
-        'anthropic',
-        expect.anything(),
-        'sk-ant-s'
-      );
-      expect(decryptSecret(store.get('secret') as never, masterKey)).toBe(
-        'sk-ant-supersecret-12345'
-      );
-    };
-
     it('refuses an unverified user with EMAIL_NOT_VERIFIED and stores nothing', async () => {
-      const { service, repo, validateKey } = makeService({
+      const { service, repo, lister } = makeService({
         identity: IDENTITY_STATE.UNVERIFIED,
       });
 
       await expect(
-        service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345')
+        service.setKey('u1', 'anthropic', ANTHROPIC_KEY)
       ).rejects.toMatchObject({
         status: HttpStatus.FORBIDDEN,
         response: { code: EMAIL_NOT_VERIFIED_CODE },
       });
-      expect(validateKey).not.toHaveBeenCalled();
+      expect(lister.list).not.toHaveBeenCalled();
       expect(repo.upsert).not.toHaveBeenCalled();
     });
 
@@ -383,15 +374,23 @@ describe('ByokService', () => {
         identity: IDENTITY_STATE.VERIFIED,
       });
 
-      await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
+      await service.setKey('u1', 'anthropic', ANTHROPIC_KEY);
 
-      expectKeyStoredForU1(repo, store);
+      expect(repo.upsert).toHaveBeenCalledWith(
+        'u1',
+        'anthropic',
+        expect.anything(),
+        'sk-ant-s'
+      );
+      expect(decryptSecret(store.get('secret') as never, masterKey)).toBe(
+        ANTHROPIC_KEY
+      );
     });
   });
 
   describe('deleteKey', () => {
     it('removes the key, then clears the settings bound to it only while no key is stored', async () => {
-      const { service, repo, settings } = makeService({});
+      const { service, repo, settings } = makeService();
 
       await service.deleteKey('u1', 'openai');
 
@@ -407,9 +406,9 @@ describe('ByokService', () => {
 
   describe('setKey and the settings bound to its provider', () => {
     it('clears the settings bound to an unheld provider before storing its key', async () => {
-      const { service, repo, settings } = makeService({});
+      const { service, repo, settings } = makeService();
 
-      await service.setKey('u1', 'openai', 'sk-openai-key-123456');
+      await service.setKey('u1', 'openai', OPENAI_KEY);
 
       expect(settings.clearBoundToUnheldProvider.mock.calls).toEqual([
         ['u1', 'openai'],
@@ -417,21 +416,6 @@ describe('ByokService', () => {
       expect(
         settings.clearBoundToUnheldProvider.mock.invocationCallOrder[0]
       ).toBeLessThan(repo.upsert.mock.invocationCallOrder[0] ?? 0);
-    });
-
-    it('touches no settings when the provider rejects the key', async () => {
-      const { service, settings } = makeService({
-        validate: async () => ({
-          valid: false,
-          reason: 'rejected',
-          error: '401 unauthorized',
-        }),
-      });
-
-      await expect(
-        service.setKey('u1', 'openai', 'sk-bad')
-      ).rejects.toBeInstanceOf(UnprocessableEntityException);
-      expect(settings.clearBoundToUnheldProvider).not.toHaveBeenCalled();
     });
   });
 });

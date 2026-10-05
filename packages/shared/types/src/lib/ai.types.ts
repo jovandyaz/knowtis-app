@@ -302,8 +302,9 @@ export interface SystemProviderInfo {
 }
 
 /**
- * Why a provider probe failed. 'rejected' and 'unconfigured' need an admin to
- * act; 'unavailable' is transient and worth retrying.
+ * Why checking a provider key by listing its models failed. 'rejected' (the
+ * provider refused the key) and 'unconfigured' (no key routes, so nothing was
+ * listed) need an admin to act; 'unavailable' is transient and worth retrying.
  */
 export const PROVIDER_PROBE_FAILURES = [
   'rejected',
@@ -312,9 +313,9 @@ export const PROVIDER_PROBE_FAILURES = [
 ] as const;
 export type ProviderProbeFailure = (typeof PROVIDER_PROBE_FAILURES)[number];
 
-/** A probe that ran and reports what happened — a refusal is an answer, not a transport error. */
+/** What listing the routing key's models found — a refusal is an answer, not a transport error. `modelCount` is null when the key is valid but its full list is unknown. */
 export type ProviderTestResult =
-  | { readonly ok: true; readonly model: string }
+  | { readonly ok: true; readonly modelCount: number | null }
   | {
       readonly ok: false;
       readonly reason: ProviderProbeFailure;
@@ -322,7 +323,7 @@ export type ProviderTestResult =
     };
 
 /**
- * Outcome of probing a just-saved system provider key. A definitive refusal
+ * Outcome of listing a just-saved system provider key's models. A refusal
  * never reaches this shape (the save is rejected instead); `valid: false`
  * means the provider could not be reached, so the key was stored unverified.
  */

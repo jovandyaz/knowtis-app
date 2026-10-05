@@ -1,0 +1,340 @@
+import { HttpStatus, Logger } from '@nestjs/common';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
+
+import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+
+import {
+  FAILED_REQUEST_MESSAGE,
+  listingCall,
+  stubListingFetch,
+  type ListingFetch,
+} from '../../../testing/stub-listing-fetch';
+import {
+  boundedListing,
+  getListingJson,
+  listedOf,
+  LISTING_ERROR_MAX_LENGTH,
+  LISTING_TIMEOUT_MESSAGE,
+  LISTING_TIMEOUT_MS,
+  refusalOf,
+  sameOriginNext,
+  UNKNOWN_LISTING,
+} from './listing-http';
+import * as recordedFixtures from './provider-listing.fixtures';
+
+const PROVIDER = 'openrouter';
+const API_KEY = 'sk-test-listing-key-0001';
+const LISTING_URL = new URL('https://api.example.test/v1/models');
+const KEY_SHAPED = /\bsk-|AIza|Bearer/;
+const openaiRefusalEchoing = (key: string) =>
+  `Incorrect API key provided: ${key}. You can find your API key at https://platform.openai.com/account/api-keys.`;
+
+function readListing(signal: AbortSignal) {
+  return getListingJson(LISTING_URL, {}, signal).then((response) =>
+    response.ok ? UNKNOWN_LISTING : refusalOf(response)
+  );
+}
+
+const incompleteListingLogs = (warn: MockInstance<Logger['warn']>) =>
+  warn.mock.calls
+    .map((call) => call[0])
+    .filter(
+      (entry: { event?: string }) =>
+        entry.event === 'provider_listing.incomplete'
+    );
+
+describe('listing-http', () => {
+  let warn: MockInstance<Logger['warn']>;
+
+  beforeEach(() => {
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps an empty listing unknown', () => {
+    expect(listedOf([])).toEqual(UNKNOWN_LISTING);
+    expect(listedOf([''])).toEqual(UNKNOWN_LISTING);
+  });
+
+  it('drops ids longer than MODEL_ID_MAX_LENGTH and de-duplicates', () => {
+    const longest = 'm'.repeat(MODEL_ID_MAX_LENGTH);
+
+    expect(listedOf(['a', longest, `${longest}x`, 'a', ''])).toEqual({
+      kind: 'listed',
+      modelIds: ['a', longest],
+    });
+  });
+
+  it('answers unavailable when the bound passes', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      (_url: URL, _init: RequestInit) => new Promise<Response>(() => undefined)
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = boundedListing(PROVIDER, API_KEY, readListing);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS - 1);
+    await expect(
+      Promise.race([pending, Promise.resolve('still pending')])
+    ).resolves.toBe('still pending');
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(pending).resolves.toEqual({
+      kind: 'unavailable',
+      error: LISTING_TIMEOUT_MESSAGE,
+    });
+    expect(fetchMock.mock.calls[0]?.[1].signal?.aborted).toBe(true);
+  });
+
+  it('lists null when the bound passes after the key was accepted', async () => {
+    vi.useFakeTimers();
+
+    const pending = boundedListing(
+      PROVIDER,
+      API_KEY,
+      (_signal, keyAccepted) => {
+        keyAccepted();
+        return new Promise<never>(() => undefined);
+      }
+    );
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+    expect(incompleteListingLogs(warn)).toEqual([
+      {
+        event: 'provider_listing.incomplete',
+        provider: PROVIDER,
+        reason: LISTING_TIMEOUT_MESSAGE,
+      },
+    ]);
+  });
+
+  it('lists null when the read throws after the key was accepted', async () => {
+    const listing = await boundedListing(
+      PROVIDER,
+      API_KEY,
+      async (_signal, keyAccepted) => {
+        keyAccepted();
+        throw new TypeError(`${FAILED_REQUEST_MESSAGE} for ${API_KEY}`);
+      }
+    );
+
+    expect(listing).toEqual(UNKNOWN_LISTING);
+    expect(incompleteListingLogs(warn)).toEqual([
+      {
+        event: 'provider_listing.incomplete',
+        provider: PROVIDER,
+        reason: `${FAILED_REQUEST_MESSAGE} for [redacted]`,
+      },
+    ]);
+  });
+
+  it('lists null, and logs why, when the read refuses after the key was accepted', async () => {
+    const listing = await boundedListing(
+      PROVIDER,
+      API_KEY,
+      async (_signal, keyAccepted) => {
+        keyAccepted();
+        return { kind: 'rejected', error: `HTTP 403: refused ${API_KEY}` };
+      }
+    );
+
+    expect(listing).toEqual(UNKNOWN_LISTING);
+    expect(incompleteListingLogs(warn)).toEqual([
+      {
+        event: 'provider_listing.incomplete',
+        provider: PROVIDER,
+        reason: 'HTTP 403: refused [redacted]',
+      },
+    ]);
+  });
+
+  it('logs nothing for a listing that completes after the key was accepted', async () => {
+    const listing = await boundedListing(
+      PROVIDER,
+      API_KEY,
+      async (_signal, keyAccepted) => {
+        keyAccepted();
+        return listedOf(['a']);
+      }
+    );
+
+    expect(listing).toEqual({ kind: 'listed', modelIds: ['a'] });
+    expect(incompleteListingLogs(warn)).toEqual([]);
+  });
+
+  it('logs nothing for a failure before the key was accepted', async () => {
+    await boundedListing(PROVIDER, API_KEY, async () => ({
+      kind: 'unavailable',
+      error: 'HTTP 500',
+    }));
+
+    expect(incompleteListingLogs(warn)).toEqual([]);
+  });
+
+  it('redacts the key from a thrown error', async () => {
+    const listing = await boundedListing(PROVIDER, API_KEY, async () => {
+      throw new Error(`connect failed for ${API_KEY} at the edge`);
+    });
+
+    expect(listing).toEqual({
+      kind: 'unavailable',
+      error: 'connect failed for [redacted] at the edge',
+    });
+  });
+
+  it('redacts the key from a refusal the provider echoed it in', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: { message: `Bad key ${API_KEY}` } }),
+            { status: HttpStatus.UNAUTHORIZED }
+          )
+      )
+    );
+
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
+      kind: 'rejected',
+      error: 'HTTP 401: Bad key [redacted]',
+    });
+  });
+
+  it('redacts the masked key OpenAI echoes in a refusal', async () => {
+    stubListingFetch({
+      body: { error: { message: openaiRefusalEchoing('sk-proj-****7890') } },
+      status: HttpStatus.UNAUTHORIZED,
+    });
+
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
+      kind: 'rejected',
+      error: `HTTP 401: ${openaiRefusalEchoing('[redacted]')}`,
+    });
+  });
+
+  it('redacts every key-shaped fragment from a thrown error', async () => {
+    const listing = await boundedListing(PROVIDER, API_KEY, async () => {
+      throw new Error(
+        'request for sk-or-v1-****9f2Q and AIzaSy****9f2Q failed'
+      );
+    });
+
+    expect(listing).toEqual({
+      kind: 'unavailable',
+      error: 'request for [redacted] and [redacted] failed',
+    });
+  });
+
+  it('leaves words that only begin like a key untouched', async () => {
+    const message = 'skipped the risk-free page';
+
+    const listing = await boundedListing(PROVIDER, API_KEY, async () => {
+      throw new Error(message);
+    });
+
+    expect(listing).toEqual({ kind: 'unavailable', error: message });
+  });
+
+  it('truncates a long provider message', async () => {
+    const message = 'x'.repeat(LISTING_ERROR_MAX_LENGTH * 2);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { message } }), {
+            status: HttpStatus.INTERNAL_SERVER_ERROR,
+          })
+      )
+    );
+
+    const listing = await boundedListing(PROVIDER, API_KEY, readListing);
+
+    expect(listing).toEqual({
+      kind: 'unavailable',
+      error: `HTTP 500: ${message}`.slice(0, LISTING_ERROR_MAX_LENGTH),
+    });
+  });
+
+  it('reports only the status when the refusal body is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<html>Bad gateway</html>', {
+            status: HttpStatus.BAD_GATEWAY,
+          })
+      )
+    );
+
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
+      kind: 'unavailable',
+      error: 'HTTP 502',
+    });
+  });
+
+  it('refuses a redirect, which answers unavailable without the key', async () => {
+    const fetchMock = vi.fn<ListingFetch>(async (_url, init) => {
+      if (init.redirect === 'error') {
+        throw new TypeError(`unexpected redirect while sending ${API_KEY}`);
+      }
+      return new Response(JSON.stringify({ data: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
+      kind: 'unavailable',
+      error: 'unexpected redirect while sending [redacted]',
+    });
+    expect(listingCall(fetchMock, 0).init.redirect).toBe('error');
+  });
+
+  it('resolves a same-origin next link and rejects a foreign one', () => {
+    const base = 'https://openrouter.ai/api/v1/models/user';
+    const second = 'https://openrouter.ai/api/v1/models/user?offset=2';
+
+    expect(sameOriginNext('/api/v1/models/user?offset=2', base)).toBe(second);
+    expect(sameOriginNext(second, base)).toBe(second);
+    expect(sameOriginNext('https://evil.example/api/v1/models', base)).toBe(
+      null
+    );
+    expect(sameOriginNext('http://[::1', base)).toBe(null);
+    expect(sameOriginNext('', base)).toBe(null);
+    expect(sameOriginNext(null, base)).toBe(null);
+    expect(sameOriginNext(undefined, base)).toBe(null);
+  });
+
+  it('the recorded fixtures carry no key material', () => {
+    const fixtures = Object.entries(recordedFixtures);
+
+    expect(fixtures.length).toBeGreaterThan(0);
+    for (const [name, fixture] of fixtures) {
+      expect({ name, leaks: KEY_SHAPED.test(JSON.stringify(fixture)) }).toEqual(
+        { name, leaks: false }
+      );
+    }
+  });
+});

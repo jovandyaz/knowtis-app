@@ -1,0 +1,221 @@
+import { HttpStatus, Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ProviderListing } from '../../../domain/ports/provider-models.port';
+import {
+  FAILED_REQUEST_MESSAGE,
+  listingCall,
+  stubListingFetch,
+  stubListingFetchThenHang,
+  stubListingFetchThenThrow,
+} from '../../../testing/stub-listing-fetch';
+import {
+  GOOGLE_MODEL_PREFIX,
+  GoogleModelsClient,
+} from './google-models.client';
+import { HttpProviderModelsLister } from './http-provider-models.lister';
+import {
+  LISTING_TIMEOUT_MESSAGE,
+  LISTING_TIMEOUT_MS,
+  MALFORMED_LISTING,
+  UNKNOWN_LISTING,
+} from './listing-http';
+import {
+  GOOGLE_INVALID_KEY_BODY,
+  GOOGLE_MODELS_PAGE_1,
+  GOOGLE_MODELS_PAGE_2,
+} from './provider-listing.fixtures';
+
+const API_KEY = 'AIza-test-listing-0001';
+const GOOGLE_BAD_REQUEST_BODY = {
+  error: {
+    message: 'Request contains an invalid argument.',
+    details: [{ reason: 'BAD_REQUEST' }],
+  },
+};
+
+function list(): Promise<ProviderListing> {
+  return new GoogleModelsClient().list(
+    API_KEY,
+    new AbortController().signal,
+    () => undefined
+  );
+}
+
+describe('GoogleModelsClient', () => {
+  beforeEach(() => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('lists null when a later page hangs after the first page answered', async () => {
+    vi.useFakeTimers();
+    const fetchMock = stubListingFetchThenHang({ body: GOOGLE_MODELS_PAGE_1 });
+
+    const pending = new HttpProviderModelsLister().list('google', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(listingCall(fetchMock, 1).init.signal?.aborted).toBe(true);
+  });
+
+  it('lists null when a later page request throws', async () => {
+    stubListingFetchThenThrow({ body: GOOGLE_MODELS_PAGE_1 });
+
+    await expect(
+      new HttpProviderModelsLister().list('google', API_KEY)
+    ).resolves.toEqual(UNKNOWN_LISTING);
+  });
+
+  it('stays unavailable when the first page request throws', async () => {
+    stubListingFetchThenThrow();
+
+    await expect(
+      new HttpProviderModelsLister().list('google', API_KEY)
+    ).resolves.toEqual({ kind: 'unavailable', error: FAILED_REQUEST_MESSAGE });
+  });
+
+  it('stays unavailable when the first page hangs', async () => {
+    vi.useFakeTimers();
+    stubListingFetchThenHang();
+
+    const pending = new HttpProviderModelsLister().list('google', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({
+      kind: 'unavailable',
+      error: LISTING_TIMEOUT_MESSAGE,
+    });
+  });
+
+  it('strips the models/ prefix and follows nextPageToken', async () => {
+    const fetchMock = stubListingFetch(
+      { body: GOOGLE_MODELS_PAGE_1 },
+      { body: GOOGLE_MODELS_PAGE_2 }
+    );
+
+    await expect(list()).resolves.toEqual({
+      kind: 'listed',
+      modelIds: [
+        ...GOOGLE_MODELS_PAGE_1.models,
+        ...GOOGLE_MODELS_PAGE_2.models,
+      ].map((model) => model.name.slice(GOOGLE_MODEL_PREFIX.length)),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const first = listingCall(fetchMock, 0).url;
+    const second = listingCall(fetchMock, 1).url;
+    expect(`${first.origin}${first.pathname}`).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models'
+    );
+    expect(first.searchParams.get('pageSize')).toBe('1000');
+    expect(first.searchParams.has('pageToken')).toBe(false);
+    expect(second.searchParams.get('pageToken')).toBe(
+      GOOGLE_MODELS_PAGE_1.nextPageToken
+    );
+  });
+
+  it('keeps only names under models/', async () => {
+    stubListingFetch({
+      body: {
+        models: [
+          { name: 'models/gemini-2.5-flash' },
+          { name: 'tunedModels/support-bot' },
+          { name: 'models/' },
+          { displayName: 'Unnamed' },
+        ],
+      },
+    });
+
+    await expect(list()).resolves.toEqual({
+      kind: 'listed',
+      modelIds: ['gemini-2.5-flash'],
+    });
+  });
+
+  it('lists null for an empty answer', async () => {
+    stubListingFetch({ body: {} });
+
+    await expect(list()).resolves.toEqual(UNKNOWN_LISTING);
+  });
+
+  it('answers unavailable for a first page that is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>', { status: HttpStatus.OK }))
+    );
+
+    await expect(list()).resolves.toEqual(MALFORMED_LISTING);
+  });
+
+  it('answers unavailable for a first page whose body is JSON null', async () => {
+    stubListingFetch({ body: null });
+
+    await expect(list()).resolves.toEqual(MALFORMED_LISTING);
+  });
+
+  it('never puts the key in the URL', async () => {
+    const fetchMock = stubListingFetch(
+      { body: GOOGLE_MODELS_PAGE_1 },
+      { body: GOOGLE_MODELS_PAGE_2 }
+    );
+
+    await list();
+
+    for (const index of [0, 1]) {
+      const { url, init } = listingCall(fetchMock, index);
+      expect(url.searchParams.has('key')).toBe(false);
+      expect(url.search).not.toContain('key=');
+      expect(url.toString()).not.toContain(API_KEY);
+      expect(init.headers).toEqual({ 'x-goog-api-key': API_KEY });
+    }
+  });
+
+  it('reads a 400 API_KEY_INVALID as rejected', async () => {
+    stubListingFetch({
+      body: GOOGLE_INVALID_KEY_BODY,
+      status: HttpStatus.BAD_REQUEST,
+    });
+
+    await expect(list()).resolves.toEqual({
+      kind: 'rejected',
+      error: `HTTP 400: ${GOOGLE_INVALID_KEY_BODY.error.message}`,
+    });
+  });
+
+  it.each([HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN])(
+    'reads %i as rejected',
+    async (status) => {
+      stubListingFetch({ body: null, status });
+
+      await expect(list()).resolves.toEqual({
+        kind: 'rejected',
+        error: `HTTP ${status}`,
+      });
+    }
+  );
+
+  it('reads another 400 as unavailable', async () => {
+    stubListingFetch({
+      body: GOOGLE_BAD_REQUEST_BODY,
+      status: HttpStatus.BAD_REQUEST,
+    });
+
+    await expect(list()).resolves.toEqual({
+      kind: 'unavailable',
+      error: `HTTP 400: ${GOOGLE_BAD_REQUEST_BODY.error.message}`,
+    });
+  });
+
+  it('lists null when the page token repeats', async () => {
+    const fetchMock = stubListingFetch({ body: GOOGLE_MODELS_PAGE_1 });
+
+    await expect(list()).resolves.toEqual(UNKNOWN_LISTING);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

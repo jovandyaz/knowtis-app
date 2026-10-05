@@ -14,7 +14,8 @@ const OPENAI_NO_CREDIT = new Set([
   'insufficient_quota',
   'credit_balance_exhausted',
 ]);
-const GEMINI_BAD_KEY_REASON = 'API_KEY_INVALID';
+/** The `details[].reason` Gemini sends with the 400 it answers a key it does not recognise. */
+export const GEMINI_BAD_KEY_REASON = 'API_KEY_INVALID';
 
 const optionalText = z.string().optional().catch(undefined);
 const providerErrorBody = z.object({

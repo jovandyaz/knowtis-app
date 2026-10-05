@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 
-import { ModuleRef } from '@nestjs/core';
+import { TokenHasher } from '@jovandyaz/auth-nestjs';
+import { ConfigService } from '@nestjs/config';
+import { CronExpression } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 
@@ -10,21 +12,34 @@ import {
 } from '../../test-support/module-boot';
 import { AIModule } from './ai.module';
 import { AIConfigService } from './application/services/ai-config.service';
+import { ByokModelsService } from './application/services/byok-models.service';
+import { ByokService } from './application/services/byok.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
+import {
+  KEY_FINGERPRINTER,
+  type KeyFingerprinter,
+} from './domain/ports/key-fingerprinter.port';
 import {
   PINNED_MODELS_SOURCE,
   PLATFORM_MODELS_SOURCE,
 } from './domain/ports/platform-models.port';
+import { PROVIDER_MODELS_LISTER } from './domain/ports/provider-models.port';
+import { USER_PROVIDER_MODELS_REPOSITORY } from './domain/ports/user-provider-models.repository';
+import { ByokRelistTask } from './infrastructure/byok/byok-relist.task';
 import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { SyncStalenessTask } from './infrastructure/catalog/sync-staleness.task';
+import { HttpProviderModelsLister } from './infrastructure/providers/listing/http-provider-models.lister';
 import { AI_REDIS } from './infrastructure/redis/ai-redis.provider';
 import { ModelGateController } from './model-gate.controller';
 
 const COMPILE_TIMEOUT_MS = 15_000;
+const HMAC_SHA256_HEX = /^[0-9a-f]{64}$/;
+// The key @nestjs/schedule's explorer reads a @Cron from; the package does not export it.
+const CRON_METADATA_KEY = 'SCHEDULE_CRON_OPTIONS';
 
 const GRAPH_UNDER_TEST: readonly unknown[] = [
   PLATFORM_MODELS_SOURCE,
@@ -36,6 +51,11 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   CatalogSyncTask,
   PlatformCandidatesWriter,
   SyncStalenessTask,
+  PROVIDER_MODELS_LISTER,
+  USER_PROVIDER_MODELS_REPOSITORY,
+  KEY_FINGERPRINTER,
+  ByokModelsService,
+  ByokRelistTask,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -54,24 +74,20 @@ describe('AIModule wiring', () => {
       .compile();
 
   it(
-    "resolves the key service's lazy platform models source to the AI config service",
+    'gives the BYOK and system key services one model lister',
     async () => {
       const moduleRef = await compileAIModule();
 
       try {
-        const keysModuleRef = Object.values(
-          moduleRef.get(SystemProviderKeysService)
-        ).find(
-          (dependency): dependency is ModuleRef =>
-            dependency instanceof ModuleRef
-        );
-        const source = keysModuleRef?.get(PLATFORM_MODELS_SOURCE);
+        const lister = moduleRef.get(PROVIDER_MODELS_LISTER);
 
         // A failing toBe deep-compares and prints both container instances,
         // which runs the worker out of memory; a boolean fails readably.
         expect(
-          source === moduleRef.get(AIConfigService),
-          "PLATFORM_MODELS_SOURCE is not the module's AIConfigService instance"
+          [ByokService, SystemProviderKeysService].every((token) =>
+            Object.values(moduleRef.get(token)).includes(lister)
+          ),
+          "the key services do not share the module's PROVIDER_MODELS_LISTER"
         ).toBe(true);
       } finally {
         await moduleRef.close();
@@ -124,6 +140,69 @@ describe('AIModule wiring', () => {
             moduleRef.get(AIConfigService),
           "PINNED_MODELS_SOURCE is not the module's AIConfigService instance"
         ).toBe(true);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'provides the HTTP model lister',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        expect(
+          moduleRef.get(PROVIDER_MODELS_LISTER) instanceof
+            HttpProviderModelsLister,
+          'PROVIDER_MODELS_LISTER is not an HttpProviderModelsLister'
+        ).toBe(true);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'fingerprints keys with the token hash key',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const fingerprint = moduleRef
+          .get<KeyFingerprinter>(KEY_FINGERPRINTER)
+          .hash('x');
+        const tokenHashKey = moduleRef
+          .get(ConfigService)
+          .getOrThrow<string>('TOKEN_HASH_KEY');
+
+        expect(fingerprint).toMatch(HMAC_SHA256_HEX);
+        expect(fingerprint).toBe(new TokenHasher(tokenHashKey).hash('x'));
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'schedules the BYOK re-list task',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const task = moduleRef.get(ByokRelistTask);
+
+        expect(
+          Object.values(task).includes(moduleRef.get(ByokModelsService)),
+          "ByokRelistTask is not wired to the module's ByokModelsService"
+        ).toBe(true);
+        expect(Reflect.getMetadata(CRON_METADATA_KEY, task.relistDue)).toEqual({
+          cronTime: CronExpression.EVERY_DAY_AT_4AM,
+          timeZone: 'UTC',
+        });
       } finally {
         await moduleRef.close();
       }

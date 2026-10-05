@@ -1,29 +1,42 @@
-import { UnprocessableEntityException } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Logger, UnprocessableEntityException } from '@nestjs/common';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
 import {
-  PLATFORM_MODELS_SOURCE,
-  PlatformResolutionsUnreadError,
-  type PlatformModelsSource,
-} from '../../domain/ports/platform-models.port';
+  PROVIDER_LISTING_KIND,
+  type ProviderListing,
+  type ProviderModelsLister,
+} from '../../domain/ports/provider-models.port';
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
-import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
-import {
-  createSnapshotIndex,
-  SNAPSHOT_DATE,
-} from '../../testing/snapshot-index';
+import { LISTING_TIMEOUT_MESSAGE } from '../../infrastructure/providers/listing/listing-http';
 import { SystemProviderKeysService } from './system-provider-keys.service';
-
-vi.mock('../../infrastructure/providers/provider-probe', () => ({
-  probeProviderKey: vi.fn(),
-}));
 
 const MASTER_KEY = Buffer.alloc(32, 7);
 const MASTER_KEY_B64 = MASTER_KEY.toString('base64');
 const ACTOR = 'admin-user-id';
-const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
+
+const LISTED: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.LISTED,
+  modelIds: ['claude-haiku-4-5-20251001'],
+};
+const REJECTED: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.REJECTED,
+  error: 'HTTP 401: invalid x-api-key',
+};
+const UNAVAILABLE: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+  error: LISTING_TIMEOUT_MESSAGE,
+};
 
 function rowFor(provider: AIProvider, apiKey: string | null, enabled = true) {
   return {
@@ -52,13 +65,8 @@ describe('SystemProviderKeysService', () => {
   };
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let env: Record<string, string>;
-  const registry = { languageModel: vi.fn() };
-  let platformModels: PlatformModelsSource;
-  const moduleRef = {
-    get: vi.fn((token: unknown) =>
-      token === PLATFORM_MODELS_SOURCE ? platformModels : registry
-    ),
-  };
+  let lister: { list: Mock<ProviderModelsLister['list']> };
+  let warn: MockInstance<Logger['warn']>;
 
   function build(masterKey: string | null = MASTER_KEY_B64) {
     const configService = {
@@ -70,18 +78,15 @@ describe('SystemProviderKeysService', () => {
       mockRepo as never,
       configService as never,
       mockAudit as never,
-      moduleRef as never,
-      createSnapshotIndex()
+      lister
     );
   }
 
   afterEach(() => {
-    vi.useRealTimers();
+    warn.mockRestore();
   });
 
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(SNAPSHOT_DATE);
     env = {};
     mockRepo = {
       getAll: vi.fn().mockResolvedValue([]),
@@ -90,9 +95,12 @@ describe('SystemProviderKeysService', () => {
       clearKey: vi.fn(),
     };
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
-    vi.mocked(probeProviderKey).mockReset().mockResolvedValue({ valid: true });
-    platformModels = { getPlatformModelIds: async () => [FAST_PIN] };
-    moduleRef.get.mockClear();
+    lister = {
+      list: vi.fn<ProviderModelsLister['list']>().mockResolvedValue(LISTED),
+    };
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     service = build();
   });
 
@@ -225,123 +233,97 @@ describe('SystemProviderKeysService', () => {
         build(null).setKey('openrouter', 'sk-or-v1-secret', ACTOR)
       ).rejects.toThrow('BYOK_ENCRYPTION_KEY is not configured');
       expect(mockRepo.setKey).not.toHaveBeenCalled();
-      expect(probeProviderKey).not.toHaveBeenCalled();
+      expect(lister.list).not.toHaveBeenCalled();
     });
 
-    it('should probe the candidate key and report that it passed', async () => {
-      await expect(
-        service.setKey('anthropic', 'sk-ant-good-key', ACTOR)
-      ).resolves.toEqual({ valid: true });
+    it.each([
+      ['with its models', LISTED],
+      [
+        'with its list unknown',
+        { kind: PROVIDER_LISTING_KIND.LISTED, modelIds: null } as const,
+      ],
+    ])(
+      'stores and audits a key the listing accepts: %s',
+      async (_case, listing) => {
+        lister.list.mockResolvedValue(listing);
 
-      expect(probeProviderKey).toHaveBeenCalledWith(
-        registry,
-        'anthropic',
-        'sk-ant-good-key',
-        'anthropic:claude-haiku-4-5'
-      );
-    });
+        await expect(
+          service.setKey('anthropic', 'sk-ant-good-key', ACTOR)
+        ).resolves.toEqual({ valid: true });
 
-    it('should probe the first platform model on the provider', async () => {
-      await service.setKey('openrouter', 'sk-or-good-key', ACTOR);
+        expect(lister.list).toHaveBeenCalledWith(
+          'anthropic',
+          'sk-ant-good-key'
+        );
+        expect(mockRepo.setKey).toHaveBeenCalledWith(
+          'anthropic',
+          expect.anything(),
+          'sk-ant-g',
+          ACTOR
+        );
+        expect(mockAudit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'ai_provider.key_set',
+            after: { keyPrefix: 'sk-ant-g', probe: 'passed' },
+          })
+        );
+        expect(warn).not.toHaveBeenCalled();
+      }
+    );
 
-      expect(probeProviderKey).toHaveBeenCalledWith(
-        registry,
-        'openrouter',
-        'sk-or-good-key',
-        FAST_PIN
-      );
-    });
-
-    it('probes the fast BYOK route while the resolutions are unread', async () => {
-      platformModels = {
-        getPlatformModelIds: async () => {
-          throw new PlatformResolutionsUnreadError();
-        },
-      };
-
-      await service.setKey('openrouter', 'sk-or-good-key', ACTOR);
-
-      expect(probeProviderKey).toHaveBeenCalledWith(
-        registry,
-        'openrouter',
-        'sk-or-good-key',
-        'openrouter:anthropic/claude-haiku-4.5'
-      );
-    });
-
-    it('should veto a key the provider definitively refused and store nothing', async () => {
-      vi.mocked(probeProviderKey).mockResolvedValue({
-        valid: false,
-        reason: 'rejected',
-        error: 'invalid x-api-key',
-      });
+    it('vetoes a key the provider refused and stores nothing', async () => {
+      lister.list.mockResolvedValue(REJECTED);
 
       await expect(
         service.setKey('anthropic', 'sk-ant-bad-key', ACTOR)
       ).rejects.toMatchObject({
         constructor: UnprocessableEntityException,
         response: {
-          message: 'anthropic refused the probe: invalid x-api-key',
+          message: 'anthropic refused the key: HTTP 401: invalid x-api-key',
           code: 'rejected',
         },
       });
 
       expect(mockRepo.setKey).not.toHaveBeenCalled();
       expect(mockAudit.record).not.toHaveBeenCalled();
+      expect(warn.mock.calls.map((call) => call[0])).toEqual([
+        {
+          event: 'system_provider_key.probe_failed',
+          provider: 'anthropic',
+          reason: 'rejected',
+          error: REJECTED.error,
+        },
+      ]);
     });
 
-    it('should refuse a key no model can probe and store nothing', async () => {
-      vi.mocked(probeProviderKey).mockResolvedValue({
-        valid: false,
-        reason: 'unconfigured',
-        error: "No model resolves for provider 'anthropic'",
-      });
+    it('keeps a key the provider could not be reached to check and reports why', async () => {
+      lister.list.mockResolvedValue(UNAVAILABLE);
 
       await expect(
-        service.setKey('anthropic', 'sk-ant-untested', ACTOR)
-      ).rejects.toMatchObject({
-        constructor: UnprocessableEntityException,
-        response: {
-          message:
-            "anthropic key cannot be probed: No model resolves for provider 'anthropic'",
-          code: 'unconfigured',
+        service.setKey('anthropic', 'sk-ant-maybe-key', ACTOR)
+      ).resolves.toEqual({ valid: false, error: UNAVAILABLE.error });
+
+      expect(mockRepo.setKey).toHaveBeenCalledWith(
+        'anthropic',
+        expect.anything(),
+        'sk-ant-m',
+        ACTOR
+      );
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'ai_provider.key_set',
+          after: { keyPrefix: 'sk-ant-m', probe: 'unavailable' },
+        })
+      );
+      expect(warn.mock.calls.map((call) => call[0])).toEqual([
+        {
+          event: 'system_provider_key.probe_failed',
+          provider: 'anthropic',
+          reason: 'unavailable',
+          error: UNAVAILABLE.error,
         },
-      });
-
-      expect(mockRepo.setKey).not.toHaveBeenCalled();
-      expect(mockAudit.record).not.toHaveBeenCalled();
+      ]);
     });
-
-    it.each(['unavailable', 'timeout'] as const)(
-      'should store the key when the probe ends in %s and report the failure',
-      async (reason) => {
-        vi.mocked(probeProviderKey).mockResolvedValue({
-          valid: false,
-          reason,
-          error: 'Failed after 3 attempts',
-        });
-
-        await expect(
-          service.setKey('anthropic', 'sk-ant-maybe-key', ACTOR)
-        ).resolves.toEqual({
-          valid: false,
-          error: 'Failed after 3 attempts',
-        });
-
-        expect(mockRepo.setKey).toHaveBeenCalledWith(
-          'anthropic',
-          expect.anything(),
-          'sk-ant-m',
-          ACTOR
-        );
-        expect(mockAudit.record).toHaveBeenCalledWith(
-          expect.objectContaining({
-            action: 'ai_provider.key_set',
-            after: { keyPrefix: 'sk-ant-m', probe: reason },
-          })
-        );
-      }
-    );
   });
 
   describe('clearKey', () => {

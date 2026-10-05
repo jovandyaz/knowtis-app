@@ -173,7 +173,10 @@ export type SetSystemProviderResult = z.infer<
 >;
 
 export const ProviderTestResultSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), model: z.string() }),
+  z.object({
+    ok: z.literal(true),
+    modelCount: z.number().int().nonnegative().nullable(),
+  }),
   z.object({
     ok: z.literal(false),
     reason: z.enum(PROVIDER_PROBE_FAILURES),

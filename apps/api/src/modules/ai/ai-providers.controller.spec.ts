@@ -1,43 +1,47 @@
 import {
   BadRequestException,
+  Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { APICallError, RetryError } from 'ai';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
 import {
-  PlatformResolutionsUnreadError,
-  type PlatformModelsSource,
-} from './domain/ports/platform-models.port';
-import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
-import { createSnapshotIndex, SNAPSHOT_DATE } from './testing/snapshot-index';
-
-// Only the call is stubbed; the error classes must stay real because the
-// classifier reads the SDK's own retryability verdict off them.
-vi.mock('ai', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('ai')>()),
-  generateText: vi.fn(),
-}));
+  PROVIDER_LISTING_KIND,
+  type ProviderListing,
+  type ProviderModelsLister,
+} from './domain/ports/provider-models.port';
 
 const user = { id: 'admin-1' } as never;
-const FAST_PIN = 'openrouter:deepseek/deepseek-v4.1-flash';
-
-function apiCallError(statusCode: number, message = 'nope') {
-  return new APICallError({
-    message,
-    url: 'https://provider.test/v1',
-    requestBodyValues: {},
-    statusCode,
-  });
-}
 const anthropic = { provider: 'anthropic' } as never;
+const ROUTING_KEY = 'sk-ant-routing-key-0001';
+const LISTED_MODEL_IDS = ['claude-haiku-4-5-20251001', 'claude-sonnet-5'];
+
+const LISTED: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.LISTED,
+  modelIds: LISTED_MODEL_IDS,
+};
+const REJECTED: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.REJECTED,
+  error: 'HTTP 401: invalid x-api-key',
+};
+const UNAVAILABLE: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+  error: 'HTTP 529: Overloaded',
+};
 
 function make(
-  index = createSnapshotIndex(),
-  platformModels: PlatformModelsSource = {
-    getPlatformModelIds: async () => [FAST_PIN],
-  }
+  listing: ProviderListing = LISTED,
+  routingKey: string | null = ROUTING_KEY
 ) {
   const systemKeys = {
     list: vi.fn().mockResolvedValue([]),
@@ -46,38 +50,36 @@ function make(
     clearKey: vi.fn().mockResolvedValue(undefined),
   };
   const registry = {
-    languageModel: vi.fn().mockReturnValue('probe-model'),
     refreshSystemConfigs: vi.fn().mockResolvedValue(undefined),
-    routingSecrets: vi.fn().mockReturnValue([]),
+    routingKey: vi.fn().mockReturnValue(routingKey),
+  };
+  const lister: { list: Mock<ProviderModelsLister['list']> } = {
+    list: vi.fn<ProviderModelsLister['list']>().mockResolvedValue(listing),
   };
   return {
     controller: new AiProvidersController(
       systemKeys as never,
       registry as never,
-      index,
-      platformModels
+      lister
     ),
     systemKeys,
     registry,
+    lister,
   };
 }
 
-async function probeFailsWith(error: unknown) {
-  const { generateText } = vi.mocked(await import('ai'));
-  generateText.mockRejectedValueOnce(error);
-}
-
 describe('AiProvidersController', () => {
-  beforeEach(async () => {
+  let warn: MockInstance<Logger['warn']>;
+
+  beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(SNAPSHOT_DATE);
-    const { generateText } = vi.mocked(await import('ai'));
-    generateText.mockResolvedValue({} as never);
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    warn.mockRestore();
   });
 
   it('should reject a request that changes nothing', async () => {
@@ -117,12 +119,12 @@ describe('AiProvidersController', () => {
     );
   });
 
-  describe('probe on save', () => {
+  describe('listing on save', () => {
     it('should keep a key the provider could not vet and report why', async () => {
       const { controller, systemKeys } = make();
       systemKeys.setKey.mockResolvedValue({
         valid: false,
-        error: 'Failed after 3 attempts',
+        error: UNAVAILABLE.error,
       });
 
       const result = await controller.set(user, anthropic, {
@@ -134,17 +136,14 @@ describe('AiProvidersController', () => {
         'sk-ant-doubtful',
         'admin-1'
       );
-      expect(result.probe).toEqual({
-        valid: false,
-        error: 'Failed after 3 attempts',
-      });
+      expect(result.probe).toEqual({ valid: false, error: UNAVAILABLE.error });
     });
 
     it('should propagate a veto without refreshing routing', async () => {
       const { controller, systemKeys, registry } = make();
       systemKeys.setKey.mockRejectedValue(
         new UnprocessableEntityException({
-          message: 'anthropic refused the probe: invalid x-api-key',
+          message: 'anthropic refused the key: HTTP 401: invalid x-api-key',
           code: 'rejected',
         })
       );
@@ -171,258 +170,108 @@ describe('AiProvidersController', () => {
   });
 
   describe('test connection', () => {
-    it('should probe the key that currently routes, not a candidate', async () => {
-      const { generateText } = vi.mocked(await import('ai'));
-      const { controller, registry } = make();
+    it('lists the key that currently routes, not a candidate', async () => {
+      const { controller, registry, lister } = make();
 
-      const result = await controller.test(anthropic);
+      await controller.test(anthropic);
 
-      expect(registry.languageModel).toHaveBeenCalledWith(
-        'anthropic:claude-haiku-4-5'
-      );
-      expect(generateText).toHaveBeenCalledTimes(1);
-      expect(result).toEqual({
+      expect(registry.routingKey).toHaveBeenCalledWith('anthropic');
+      expect(lister.list).toHaveBeenCalledTimes(1);
+      expect(lister.list).toHaveBeenCalledWith('anthropic', ROUTING_KEY);
+    });
+
+    it('reports how many models the key lists', async () => {
+      const { controller } = make();
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
         ok: true,
-        model: 'anthropic:claude-haiku-4-5',
+        modelCount: LISTED_MODEL_IDS.length,
       });
     });
 
-    it('should probe the first platform model on the provider', async () => {
-      const { controller, registry } = make();
-
-      await controller.test({ provider: 'openrouter' } as never);
-
-      expect(registry.languageModel).toHaveBeenCalledWith(FAST_PIN);
-    });
-
-    it('should probe the fast BYOK route while the resolutions are unread', async () => {
-      const { controller } = make(createSnapshotIndex(), {
-        getPlatformModelIds: async () => {
-          throw new PlatformResolutionsUnreadError();
-        },
+    it('reports a valid key whose list is unknown without a count', async () => {
+      const { controller } = make({
+        kind: PROVIDER_LISTING_KIND.LISTED,
+        modelIds: null,
       });
 
-      await expect(
-        controller.test({ provider: 'openrouter' } as never)
-      ).resolves.toEqual({
+      await expect(controller.test(anthropic)).resolves.toEqual({
         ok: true,
-        model: 'openrouter:anthropic/claude-haiku-4.5',
+        modelCount: null,
       });
     });
 
-    it('should fall back to the fast BYOK route when no platform model uses the provider', async () => {
-      const { controller, registry } = make();
-
-      await controller.test({ provider: 'openai' } as never);
-
-      expect(registry.languageModel).toHaveBeenCalledWith('openai:gpt-6-luna');
-    });
-
-    it('should report unconfigured, without a request, when no model resolves', async () => {
-      const { generateText } = vi.mocked(await import('ai'));
-      const emptyIndex = { catalog: () => ({ all: () => [] }) };
-      const { controller, registry } = make(emptyIndex as never);
-
-      await expect(
-        controller.test({ provider: 'openai' } as never)
-      ).resolves.toEqual({
-        ok: false,
-        reason: 'unconfigured',
-        message: "No model resolves for provider 'openai'",
-      });
-      expect(registry.languageModel).not.toHaveBeenCalled();
-      expect(generateText).not.toHaveBeenCalled();
-    });
-
-    it('should report a refusal with the routing secret scrubbed from the provider echo', async () => {
-      const { controller, registry } = make();
-      registry.routingSecrets.mockReturnValue(['sk-ant-routing-secret']);
-      await probeFailsWith(
-        apiCallError(401, 'invalid x-api-key: sk-ant-routing-secret')
-      );
+    it("reports a refusal in the provider's words", async () => {
+      const { controller } = make(REJECTED);
 
       await expect(controller.test(anthropic)).resolves.toEqual({
         ok: false,
         reason: 'rejected',
-        message: 'anthropic refused the probe: invalid x-api-key: [redacted]',
+        message: 'anthropic refused the key: HTTP 401: invalid x-api-key',
       });
-    });
-
-    it('should report exhausted retries as the provider being unavailable, not the key', async () => {
-      const { controller } = make();
-      await probeFailsWith(
-        new RetryError({
-          message: 'Failed after 3 attempts',
-          reason: 'maxRetriesExceeded',
-          errors: [apiCallError(503)],
-        })
-      );
-
-      await expect(controller.test(anthropic)).resolves.toEqual({
-        ok: false,
-        reason: 'unavailable',
-        message: 'anthropic is unavailable right now. Retry shortly.',
-      });
-    });
-
-    it('should report a probe that hit its time bound as unavailable', async () => {
-      const { controller } = make();
-      await probeFailsWith(
-        new DOMException(
-          'The operation was aborted due to timeout',
-          'TimeoutError'
-        )
-      );
-
-      await expect(controller.test(anthropic)).resolves.toEqual({
-        ok: false,
-        reason: 'unavailable',
-        message: 'anthropic is unavailable right now. Retry shortly.',
-      });
-    });
-
-    it('should report a provider with nothing routing as unconfigured', async () => {
-      const { controller, registry } = make();
-      registry.languageModel.mockImplementation(() => {
-        throw new ProviderNotConfiguredError('anthropic has no key');
-      });
-
-      await expect(controller.test(anthropic)).resolves.toEqual({
-        ok: false,
-        reason: 'unconfigured',
-        message: 'anthropic has no key',
-      });
-    });
-
-    it('should bound the probe with an abort signal', async () => {
-      const { generateText } = vi.mocked(await import('ai'));
-      const { controller } = make();
-
-      await controller.test(anthropic);
-
-      expect(generateText.mock.calls[0][0].abortSignal).toBeInstanceOf(
-        AbortSignal
-      );
-    });
-
-    // A failed probe is the answer the caller asked for. Throwing would hand it
-    // to the global filter, which masks 5xx bodies to 'Internal server error'.
-    it('should resolve with the failure instead of throwing', async () => {
-      await probeFailsWith(new DOMException('timed out', 'TimeoutError'));
-      const { controller } = make();
-
-      await expect(controller.test(anthropic)).resolves.toEqual({
-        ok: false,
-        reason: 'unavailable',
-        message: expect.stringContaining('unavailable'),
-      });
-    });
-
-    it.each([
-      ['no usable key', "No key for 'anthropic'"],
-      ['a disabled provider', "Provider 'anthropic' is disabled"],
-    ])('should report %s as unconfigured', async (_label, message) => {
-      const { controller, registry } = make();
-      registry.languageModel.mockImplementation(() => {
-        throw new ProviderNotConfiguredError(message);
-      });
-
-      await expect(controller.test(anthropic)).resolves.toEqual({
-        ok: false,
-        reason: 'unconfigured',
-        message,
-      });
-    });
-
-    it('should carry the provider’s own words when it refuses', async () => {
-      // The observed case: a valid key on an unfunded account answers 400.
-      await probeFailsWith(apiCallError(400, 'Your credit balance is too low'));
-      const { controller } = make();
-
-      const result = await controller.test(anthropic);
-
-      expect(result).toMatchObject({ ok: false, reason: 'rejected' });
-      expect(result.ok === false && result.message).toContain(
-        'credit balance is too low'
-      );
-    });
-
-    it('should keep the routing key out of the error the provider echoes back', async () => {
-      await probeFailsWith(
-        apiCallError(401, 'Incorrect API key provided: sk-ant-stored-value.')
-      );
-      const { controller, registry } = make();
-      registry.routingSecrets.mockReturnValue(['sk-ant-stored-value']);
-      const warn = vi
-        .spyOn(controller['logger'], 'warn')
-        .mockImplementation(() => undefined);
-
-      const result = await controller.test(anthropic);
-
-      expect(JSON.stringify(result)).not.toContain('sk-ant-stored-value');
-      expect(JSON.stringify(warn.mock.calls)).not.toContain(
-        'sk-ant-stored-value'
-      );
-      expect(result.ok === false && result.message).toContain('[redacted]');
-      expect(registry.routingSecrets).toHaveBeenCalledWith('anthropic');
-    });
-
-    it('should scrub the key the probe actually used when another admin rotates it mid-flight', async () => {
-      const { generateText } = vi.mocked(await import('ai'));
-      const { controller, registry } = make();
-      registry.routingSecrets.mockReturnValue(['sk-ant-in-flight']);
-      const warn = vi
-        .spyOn(controller['logger'], 'warn')
-        .mockImplementation(() => undefined);
-      generateText.mockImplementationOnce(async () => {
-        registry.routingSecrets.mockReturnValue(['sk-ant-rotated-in']);
-        throw apiCallError(401, 'Incorrect API key: sk-ant-in-flight.');
-      });
-
-      const result = await controller.test(anthropic);
-
-      expect(JSON.stringify(result)).not.toContain('sk-ant-in-flight');
-      expect(JSON.stringify(warn.mock.calls)).not.toContain('sk-ant-in-flight');
-    });
-
-    it.each([401, 403, 400, 404])(
-      'should treat HTTP %i as a refusal the admin must act on',
-      async (statusCode) => {
-        await probeFailsWith(apiCallError(statusCode));
-        const { controller } = make();
-
-        await expect(controller.test(anthropic)).resolves.toMatchObject({
-          ok: false,
+      expect(warn.mock.calls.map((call) => call[0])).toEqual([
+        {
+          event: 'system_provider_key.test_failed',
+          provider: 'anthropic',
           reason: 'rejected',
-        });
-      }
-    );
+          error: REJECTED.error,
+        },
+      ]);
+    });
 
-    // The SDK retries 429/5xx to exhaustion and rethrows a RetryError, which
-    // carries no statusCode — reading one off the error would classify these as
-    // refusals and tell the admin to fix a key that is fine.
-    it.each([429, 500, 503])(
-      'should treat HTTP %i as transient after the SDK exhausts its retries',
-      async (statusCode) => {
-        await probeFailsWith(
-          new RetryError({
-            message: `Failed after 3 attempts`,
-            reason: 'maxRetriesExceeded',
-            errors: [apiCallError(statusCode)],
-          })
-        );
-        const { controller } = make();
+    // Redaction is the lister's contract, so the mock answers as the real one
+    // does; the controller relays that error as is.
+    it('keeps the routing key out of a refusal it reports', async () => {
+      const redacted = {
+        kind: PROVIDER_LISTING_KIND.REJECTED,
+        error: 'HTTP 401: Incorrect API key provided: [redacted].',
+      } as const;
+      const { controller } = make(redacted);
 
-        await expect(controller.test(anthropic)).resolves.toMatchObject({
-          ok: false,
+      const result = await controller.test(anthropic);
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'rejected',
+        message: `anthropic refused the key: ${redacted.error}`,
+      });
+      expect(JSON.stringify(result)).not.toContain(ROUTING_KEY);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(ROUTING_KEY);
+    });
+
+    it('reports unavailable without blaming the key', async () => {
+      const { controller } = make(UNAVAILABLE);
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unavailable',
+        message: 'anthropic is unavailable right now. Retry shortly.',
+      });
+      expect(warn.mock.calls.map((call) => call[0])).toEqual([
+        {
+          event: 'system_provider_key.test_failed',
+          provider: 'anthropic',
           reason: 'unavailable',
-        });
-      }
-    );
+          error: UNAVAILABLE.error,
+        },
+      ]);
+    });
+
+    it('reports unconfigured, without a request, when no key routes directly', async () => {
+      const { controller, lister } = make(LISTED, null);
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unconfigured',
+        message:
+          'No anthropic key routes directly: store one or enable the provider',
+      });
+      expect(lister.list).not.toHaveBeenCalled();
+    });
   });
 
   describe('throttling', () => {
-    it.each(['list', 'set', 'clearKey'] as const)(
+    it.each(['list', 'set', 'clearKey', 'test'] as const)(
       'should throttle %s',
       (route) => {
         expect(

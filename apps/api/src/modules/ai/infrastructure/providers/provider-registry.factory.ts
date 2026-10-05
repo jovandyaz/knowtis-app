@@ -42,7 +42,7 @@ function asV4Provider(provider: ReturnType<typeof createOpenRouter>) {
   });
 }
 
-export class ProviderNotConfiguredError extends Error {
+class ProviderNotConfiguredError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ProviderNotConfiguredError';
@@ -183,9 +183,9 @@ export class ProviderRegistryFactory implements OnModuleInit {
 
   /**
    * Builds a model from a caller-supplied key, bypassing the registry entirely.
-   * Serves both BYOK turns and probing a candidate server key before storing it;
-   * whether a given provider is offered for BYOK is gated upstream by
-   * BYOK_PROVIDERS, not here. A refusal of that key is never retried by the SDK.
+   * Serves BYOK turns; whether a given provider is offered for BYOK is gated
+   * upstream by BYOK_PROVIDERS, not here. A refusal of that key is never
+   * retried by the SDK.
    */
   private ephemeralLanguageModel(
     modelId: QualifiedModelId,
@@ -241,18 +241,13 @@ export class ProviderRegistryFactory implements OnModuleInit {
     return this.routableKey(provider) !== undefined;
   }
 
-  /** Every secret that could route for this provider, so a caller can scrub the ones a provider echoes back in an error. */
-  routingSecrets(provider: AIProvider): string[] {
+  /** The key that routes `provider` directly now; null in gateway mode or when the provider is disabled or keyless. */
+  routingKey(provider: AIProvider): string | null {
+    if (this.gateway) {
+      return null;
+    }
     this.refreshSystemConfigsIfStale();
-    const candidates = this.gateway
-      ? [this.configService.get('AI_GATEWAY_API_KEY')]
-      : [
-          this.systemConfigs.get(provider)?.apiKey,
-          this.configService.get(PROVIDER_ENV_KEYS[provider]),
-        ];
-    return candidates.filter(
-      (secret): secret is string => typeof secret === 'string' && secret !== ''
-    );
+    return this.routableKey(provider) ?? null;
   }
 
   /**

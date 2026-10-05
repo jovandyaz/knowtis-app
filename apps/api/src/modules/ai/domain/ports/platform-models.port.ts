@@ -12,7 +12,7 @@ export interface PinnedModelsSource {
   getPinnedModelIds(): Promise<string[]>;
 }
 
-/** The resolution store has not been read yet, so the served models are the cold-start seed floor, which must never anchor a probe or a watch. */
+/** The resolution store has not been read yet, so the served models are the cold-start seed floor, which must never anchor a watch. */
 export class PlatformResolutionsUnreadError extends Error {
   constructor() {
     super('Platform model resolutions have not been read from the store yet');
