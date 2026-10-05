@@ -44,7 +44,7 @@ describe('ByokModelNotFoundListener', () => {
     expect(reportModelNotFound).not.toHaveBeenCalled();
   });
 
-  it('never rejects when the re-list fails', async () => {
+  it('awaits the re-list before settling', async () => {
     const { listener, reportModelNotFound } = makeListener();
     let finishRelist: () => void = () => undefined;
     reportModelNotFound.mockReturnValue(
