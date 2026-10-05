@@ -57,7 +57,20 @@ const UNAVAILABLE: ProviderListing = {
   error: 'HTTP 529: Overloaded',
 };
 
-const fingerprintOf = (apiKey: string) => `fp:${apiKey.length}`;
+const ANTHROPIC_FINGERPRINT = 'fp:anthropic';
+const OPENAI_FINGERPRINT = 'fp:openai';
+const FINGERPRINTS = new Map([
+  [ANTHROPIC_KEY, ANTHROPIC_FINGERPRINT],
+  [OPENAI_KEY, OPENAI_FINGERPRINT],
+]);
+
+function fingerprintOf(apiKey: string): string {
+  const fingerprint = FINGERPRINTS.get(apiKey);
+  if (fingerprint === undefined) {
+    throw new Error('the fingerprint double knows no such key');
+  }
+  return fingerprint;
+}
 
 interface MakeOverrides {
   identity?: IdentityState;
@@ -150,7 +163,7 @@ describe('ByokService', () => {
         'u1',
         {
           provider: 'anthropic',
-          keyFingerprint: fingerprintOf(ANTHROPIC_KEY),
+          keyFingerprint: ANTHROPIC_FINGERPRINT,
           modelIds: LISTED_MODEL_IDS,
           syncedAt: SNAPSHOT_DATE,
         },
@@ -382,8 +395,8 @@ describe('ByokService', () => {
 
       expect(await service.keyFingerprints('u1')).toEqual(
         new Map([
-          ['anthropic', fingerprintOf(ANTHROPIC_KEY)],
-          ['openai', fingerprintOf(OPENAI_KEY)],
+          ['anthropic', ANTHROPIC_FINGERPRINT],
+          ['openai', OPENAI_FINGERPRINT],
         ])
       );
       expect(repo.listEncrypted.mock.calls).toEqual([['u1']]);
@@ -406,7 +419,7 @@ describe('ByokService', () => {
       });
 
       expect(await service.keyFingerprints('u1')).toEqual(
-        new Map([['anthropic', fingerprintOf(ANTHROPIC_KEY)]])
+        new Map([['anthropic', ANTHROPIC_FINGERPRINT]])
       );
       expect(error.mock.calls.map((call) => call[0])).toEqual([
         expect.objectContaining({
