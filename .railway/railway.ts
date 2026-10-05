@@ -30,6 +30,7 @@ export default defineRailway(() => {
     env: {
       AI_AGENT_MAX_MS: preserve(),
       AI_AGENT_MAX_OUTPUT_TOKENS: preserve(),
+      AI_ALERT_WEBHOOK_URL: preserve(),
       AI_DAILY_COST_LIMIT_USD: preserve(),
       AI_DAILY_TOKEN_LIMIT: preserve(),
       ANTHROPIC_API_KEY: preserve(),
@@ -48,6 +49,7 @@ export default defineRailway(() => {
       LANGFUSE_PUBLIC_KEY: preserve(),
       LANGFUSE_SECRET_KEY: preserve(),
       MCP_RESOURCE_URL: preserve(),
+      MODEL_GATE_TOKEN: preserve(),
       NODE_ENV: 'production',
       OAUTH_COOKIE_KEYS: preserve(),
       OAUTH_ISSUER: preserve(),
