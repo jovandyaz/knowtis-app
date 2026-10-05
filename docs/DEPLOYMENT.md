@@ -171,7 +171,7 @@ Each image ships its `dist/apps/<app>` output plus a production install of exact
 | `NODE_ENV`                     | No                           | Declared as `production` in `.railway/railway.ts`                                                                                                                                                                                                               |
 | `PORT`                         | No                           | Declared as `3333` in `.railway/railway.ts` (also the schema default)                                                                                                                                                                                           |
 
-After setting `MODEL_GATE_TOKEN` in Railway, add `MODEL_GATE_TOKEN: preserve()` to `.railway/railway.ts` in its own PR, so the IaC plan does not read the variable as a delete (see [`.railway/railway.ts`](#railwayrailwayts)).
+`.railway/railway.ts` preserves neither `MODEL_GATE_TOKEN` nor `AI_ALERT_WEBHOOK_URL`. Once they are set in Railway, add `MODEL_GATE_TOKEN: preserve()` and `AI_ALERT_WEBHOOK_URL: preserve()` to it in a PR of their own, so the IaC plan does not read either variable as a delete: the workflow refuses that plan, and a `--confirm-destructive` apply of it would wipe the value (see [`.railway/railway.ts`](#railwayrailwayts)).
 
 AI variables (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `BYOK_ENCRYPTION_KEY`, budgets, alert webhook, Langfuse, Voyage, Tavily, …) are documented in [AI.md → Environment Variables](AI.md#environment-variables).
 
