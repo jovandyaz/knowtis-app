@@ -44,6 +44,9 @@ export function createModelResolutionRepositoryStub(
       .fn<ModelResolutionRepository['recordVerdict']>()
       .mockResolvedValue(true),
     recordRelease: vi.fn(),
+    rollback: vi
+      .fn<ModelResolutionRepository['rollback']>()
+      .mockResolvedValue({ clearedPending: false }),
   };
 }
 

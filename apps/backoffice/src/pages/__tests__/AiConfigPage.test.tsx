@@ -71,6 +71,12 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useUpdateCatalogCopy: () => idleMutation,
     useResolveCatalogAlert: () => idleMutation,
     useSyncCatalog: () => idleMutation,
+    usePlatformResolutions: () => ({
+      ...idleQuery,
+      data: { intents: [], lastSyncAt: null },
+      refetch: vi.fn(),
+    }),
+    useRollbackResolution: () => idleMutation,
   };
 });
 
@@ -475,6 +481,56 @@ describe('AiConfigPage', () => {
         screen.queryByRole('switch', { name: /retired_flag/i })
       ).toBeNull();
     }
+  });
+
+  it('leads the Models tab with the platform resolutions', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_default_model',
+          value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
+          source: 'custom',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    const headings = within(screen.getByRole('tabpanel'))
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings.slice(0, 2)).toEqual(['Platform resolutions', 'Models']);
+  });
+
+  it('shows no platform resolutions while AI is disabled', () => {
+    useAiConfigMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('Forbidden'),
+      refetch: vi.fn(),
+    });
+    useFeatureFlagsMock.mockReturnValue({
+      data: [flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, false)],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(
+      screen.getByRole('heading', { name: 'AI is disabled' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Platform resolutions' })
+    ).not.toBeInTheDocument();
   });
 
   it('offers the model catalog alongside the models', () => {

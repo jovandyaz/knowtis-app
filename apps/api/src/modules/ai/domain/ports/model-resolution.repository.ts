@@ -1,4 +1,7 @@
-import type { PlatformSelectorKey } from '@knowtis/shared-types';
+import type {
+  PlatformSelectorKey,
+  RollbackResolutionInput,
+} from '@knowtis/shared-types';
 
 import type { ModelResolution } from '../model-catalog/platform-resolution';
 
@@ -11,6 +14,12 @@ export type PendingSlot = Pick<
   ModelResolution,
   'pendingModelId' | 'gateStatus'
 >;
+
+/** What an applied roll back did besides the swap. */
+export interface AppliedRollback {
+  /** Whether it cleared a `pending` entry on the model it restored. */
+  readonly clearedPending: boolean;
+}
 
 export type GateVerdict =
   | { readonly passed: true; readonly runUrl: string }
@@ -42,6 +51,12 @@ export interface ModelResolutionRepository {
     verdict: GateVerdict,
     at: Date
   ): Promise<boolean>;
+  /** Swaps the selector's active and previous models, stamping `changedAt`, only while they still equal `expected`. In the same transaction it clears a `pending` entry on the restored model, as the sync clears a candidate equal to the active model; any other pending entry, and a `failed` one, stays. Resolves null when the row no longer holds `expected`. */
+  rollback(
+    selectorKey: PlatformSelectorKey,
+    expected: RollbackResolutionInput,
+    at: Date
+  ): Promise<AppliedRollback | null>;
   /** Records the model an admin pin change stopped serving. */
   recordRelease(
     selectorKey: PlatformSelectorKey,

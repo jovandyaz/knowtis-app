@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DataAccessAdmin from '@knowtis/data-access-admin';
 import type {
@@ -23,6 +23,7 @@ const {
   resolveAlertMutate,
   syncMutate,
   syncStateMock,
+  usePlatformResolutionsMock,
 } = vi.hoisted(() => ({
   useAiCatalogMock: vi.fn(),
   useAiConfigMock: vi.fn(),
@@ -33,6 +34,7 @@ const {
   resolveAlertMutate: vi.fn(),
   syncMutate: vi.fn(),
   syncStateMock: vi.fn(),
+  usePlatformResolutionsMock: vi.fn(),
 }));
 
 const IDLE_MUTATION = { isPending: false, isError: false, error: null };
@@ -63,6 +65,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
       ...mutationStateMock(),
     }),
     useSyncCatalog: () => ({ mutate: syncMutate, ...syncStateMock() }),
+    usePlatformResolutions: () => usePlatformResolutionsMock(),
   };
 });
 
@@ -129,6 +132,12 @@ describe('CatalogSection', () => {
     mutationStateMock.mockReturnValue(IDLE_MUTATION);
     syncMutate.mockReset();
     syncStateMock.mockReturnValue(IDLE_SYNC);
+    usePlatformResolutionsMock.mockReset();
+    usePlatformResolutionsMock.mockReturnValue({ data: undefined });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // Roles are derived from the effective config, so the wiring from
@@ -232,11 +241,21 @@ describe('CatalogSection', () => {
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: 'Resolve retirement_scheduled alert for openrouter:z-ai/glm-5.2',
+        name: 'Resolve Retirement scheduled alert for openrouter:z-ai/glm-5.2',
       })
     );
 
     expect(resolveAlertMutate).toHaveBeenCalledWith(82);
+  });
+
+  it('names a resolve button by the raw kind this bundle does not know', () => {
+    renderSection({ alerts: [alert({ kind: 'context_shrink' })] });
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Resolve context_shrink alert for openrouter:z-ai/glm-5.2',
+      })
+    ).toBeInTheDocument();
   });
 
   it('locks Retire while a mutation is in flight', () => {
@@ -498,6 +517,36 @@ describe('CatalogSection', () => {
     renderSection();
 
     expect(screen.getByRole('status')).toHaveTextContent(/skipped/i);
+  });
+
+  it('shows the last sync time', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-04T12:00:00.000Z'));
+    usePlatformResolutionsMock.mockReturnValue({
+      data: {
+        intents: [],
+        lastSyncAt: new Date('2026-10-04T09:00:00.000Z'),
+      },
+    });
+
+    renderSection();
+
+    expect(screen.getByText(/^Last sync/)).toHaveTextContent(
+      'Last sync about 3 hours ago'
+    );
+  });
+
+  it('claims no last sync before any sync has indexed a model', () => {
+    usePlatformResolutionsMock.mockReturnValue({
+      data: { intents: [], lastSyncAt: null },
+    });
+
+    renderSection();
+
+    expect(
+      screen.getByRole('button', { name: 'Sync now' })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/last sync/i)).not.toBeInTheDocument();
   });
 
   it('disables the sync button while another catalog mutation is in flight', () => {

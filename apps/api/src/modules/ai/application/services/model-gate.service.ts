@@ -98,7 +98,7 @@ export class ModelGateService {
     return this.config.getIntentModels();
   }
 
-  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. A recorded failure and a refused activation raise `gate_failed`. */
+  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. A recorded failure and a refused activation raise `gate_failed`; an applied verdict resolves the model's open `resolution_pending` alert. */
   verdict(input: VerdictInput): Promise<ModelGateVerdictResultDto> {
     return input.passed ? this.onPassed(input) : this.onFailed(input);
   }
@@ -140,6 +140,7 @@ export class ModelGateService {
       modelId,
       previousModelId: row.activeModelId,
     });
+    await this.alerts.resolvePending(modelId);
     return APPLIED;
   }
 
@@ -158,6 +159,7 @@ export class ModelGateService {
       return NOT_PENDING;
     }
     await this.alerts.raise([gateFailed(input, failure)]);
+    await this.alerts.resolvePending(modelId);
     return APPLIED;
   }
 

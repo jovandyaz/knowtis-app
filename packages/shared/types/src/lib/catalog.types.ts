@@ -1,4 +1,4 @@
-import type { ModelIntent, ModelTier } from './ai.types';
+import type { AIConfigKey, ModelIntent, ModelTier } from './ai.types';
 
 export const CATALOG_MODEL_STATUSES = ['candidate', 'promoted'] as const;
 export type CatalogModelStatus = (typeof CATALOG_MODEL_STATUSES)[number];
@@ -59,6 +59,30 @@ export interface ModelGatePendingDto {
 
 /** The model each platform intent serves in production: its pin, else its active resolution. */
 export type ModelGateActiveDto = Record<ModelIntent, string>;
+
+/** One platform intent's resolution state for the backoffice: what is pinned, what production serves, and the selector's candidate. */
+export interface PlatformResolutionDto {
+  readonly intent: ModelIntent;
+  readonly selectorKey: PlatformSelectorKey;
+  readonly configKey: AIConfigKey;
+  readonly pin: string | null;
+  readonly served: string;
+  readonly activeModelId: string;
+  readonly changedAt: string | null;
+  readonly previousModelId: string | null;
+  readonly releasedModelId: string | null;
+  readonly releasedAt: string | null;
+  readonly pendingModelId: string | null;
+  readonly gateStatus: ModelGateStatus | null;
+  readonly gateDetail: string | null;
+  readonly gateRunUrl: string | null;
+  readonly candidateModelId: string | null;
+}
+
+export interface PlatformResolutionsDto {
+  readonly intents: readonly PlatformResolutionDto[];
+  readonly lastSyncAt: string | null;
+}
 
 /** What a gate verdict did. A verdict that changed nothing is still a 200, so CI can resend it. */
 export type ModelGateVerdictResultDto =
@@ -152,6 +176,12 @@ export interface AssignableModelDto {
 /** Promotion is never implicit about reach: the tier decides which pool the model joins. */
 export interface PromoteCatalogModelInput {
   tier: ModelTier;
+}
+
+/** The active and previous models a roll back confirmed: it applies only while the intent still holds both. */
+export interface RollbackResolutionInput {
+  activeModelId: string;
+  previousModelId: string;
 }
 
 export interface UpdateCatalogCopyInput {

@@ -3,6 +3,7 @@ import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -30,6 +31,7 @@ import {
   type CatalogOverviewDto,
   type CatalogSyncResultDto,
   type PaginatedCandidatesDto,
+  type PlatformResolutionsDto,
 } from '@knowtis/shared-types';
 
 import {
@@ -46,10 +48,15 @@ import {
   RequireFeatureFlag,
 } from '../feature-flags/feature-flag.guard';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
+import { InvalidAIConfigError } from './application/services/ai-config.service';
 import { AssignableModelsService } from './application/services/assignable-models.service';
+import { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
+import { ResolutionRollbackUnavailableError } from './domain/errors/resolution-rollback-unavailable.error';
 import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
 import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
+import { PlatformSelectorParamDto } from './dto/platform-selector-param.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
+import { RollbackResolutionDto } from './dto/rollback-resolution.dto';
 import { UpdateCatalogCopyDto } from './dto/update-catalog-copy.dto';
 
 const AI_DISABLED = 'AI feature is disabled';
@@ -69,7 +76,8 @@ const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 export class AiCatalogController {
   constructor(
     private readonly catalog: AiCatalogAdminService,
-    private readonly assignable: AssignableModelsService
+    private readonly assignable: AssignableModelsService,
+    private readonly resolutions: PlatformResolutionsAdminService
   ) {}
 
   @ApiOperation({
@@ -115,6 +123,59 @@ export class AiCatalogController {
   @Get('assignable')
   listAssignable(): Promise<AssignableModelDto[]> {
     return this.assignable.list();
+  }
+
+  @ApiOperation({
+    summary: 'List the platform intents resolution state',
+    description:
+      "Per intent: the stored pin, the model production serves, the active resolution with its history, the pending model with its gate status, and the selector's current candidate; plus when the index last synced.",
+  })
+  @ApiResponse({ status: 200, description: 'Platform resolutions' })
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(READ_THROTTLE)
+  @Get('resolutions')
+  listResolutions(): Promise<PlatformResolutionsDto> {
+    return this.resolutions.overview();
+  }
+
+  @ApiOperation({
+    summary: 'Roll a platform intent back to its previous model',
+    description:
+      'Swaps the active and previous resolution of the intent while they are still the two models the admin confirmed, and answers the refreshed platform resolutions. A gate-pending entry on the restored model clears with it; any other pending entry stays. A supported pin keeps serving until it is released.',
+  })
+  @ApiResponse({ status: 200, description: 'Platform resolutions' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'The intent no longer holds the confirmed active and previous models',
+  })
+  @ApiBadRequest(
+    'unknown selector, invalid model ids, or another intent serves the previous model'
+  )
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(MUTATION_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  @Post('resolutions/:selectorKey/rollback')
+  async rollbackResolution(
+    @CurrentUser() user: RequestUser,
+    @Param() params: PlatformSelectorParamDto,
+    @Body() confirmed: RollbackResolutionDto
+  ): Promise<PlatformResolutionsDto> {
+    try {
+      return await this.resolutions.rollback(
+        params.selectorKey,
+        confirmed,
+        user.id
+      );
+    } catch (error) {
+      if (error instanceof ResolutionRollbackUnavailableError) {
+        throw new ConflictException(error.message);
+      }
+      if (error instanceof InvalidAIConfigError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   @ApiOperation({

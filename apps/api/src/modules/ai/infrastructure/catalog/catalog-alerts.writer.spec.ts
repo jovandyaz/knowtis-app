@@ -155,7 +155,7 @@ describe('CatalogAlertsWriter', () => {
     expect(repo.createAlert).not.toHaveBeenCalled();
   });
 
-  describe('resolveOpen', () => {
+  describe('resolving an open alert', () => {
     const STALE_ALERT_ID = 7;
 
     function openAlert(
@@ -197,6 +197,34 @@ describe('CatalogAlertsWriter', () => {
       expect(await writer.resolveOpen('openrouter', 'sync_stale')).toBe(false);
 
       expect(repo.resolveAlert).not.toHaveBeenCalled();
+    });
+
+    it('resolves the resolution_pending alert of a model that stopped awaiting the gate', async () => {
+      const { writer, repo } = make();
+      vi.mocked(repo.listAlerts).mockResolvedValue([
+        openAlert(1, CANDIDATE, 'gate_failed'),
+        openAlert(STALE_ALERT_ID, CANDIDATE, 'resolution_pending'),
+      ]);
+
+      await writer.resolvePending(CANDIDATE);
+
+      expect(repo.resolveAlert).toHaveBeenCalledTimes(1);
+      expect(repo.resolveAlert).toHaveBeenCalledWith(STALE_ALERT_ID);
+    });
+
+    it('never rejects when resolving resolution_pending fails', async () => {
+      const { writer, repo } = make();
+      vi.mocked(repo.listAlerts).mockRejectedValue(
+        new Error('alerts table locked')
+      );
+
+      await expect(writer.resolvePending(CANDIDATE)).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith({
+        event: 'ai.catalog.alert_resolve_failed',
+        subject: CANDIDATE,
+        kind: 'resolution_pending',
+        reason: 'alerts table locked',
+      });
     });
   });
 });

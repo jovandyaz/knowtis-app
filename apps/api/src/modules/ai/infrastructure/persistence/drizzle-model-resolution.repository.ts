@@ -2,7 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import type { PlatformSelectorKey } from '@knowtis/shared-types';
+import type {
+  PlatformSelectorKey,
+  RollbackResolutionInput,
+} from '@knowtis/shared-types';
 
 import {
   aiModelResolutions,
@@ -16,10 +19,18 @@ import {
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
 import type {
+  AppliedRollback,
   GateVerdict,
   ModelResolutionRepository,
   PendingSlot,
 } from '../../domain/ports/model-resolution.repository';
+
+const CLEARED_PENDING = {
+  pendingModelId: null,
+  gateStatus: null,
+  gateDetail: null,
+  gateRunUrl: null,
+} as const;
 
 function toResolution(row: AiModelResolutionRow): ModelResolution {
   return {
@@ -83,13 +94,7 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
   ): Promise<boolean> {
     const updated = await this.db
       .update(aiModelResolutions)
-      .set({
-        pendingModelId: null,
-        gateStatus: null,
-        gateDetail: null,
-        gateRunUrl: null,
-        updatedAt: at,
-      })
+      .set({ ...CLEARED_PENDING, updatedAt: at })
       .where(
         and(
           eq(aiModelResolutions.selectorKey, selectorKey),
@@ -124,11 +129,59 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
         and(
           eq(aiModelResolutions.selectorKey, selectorKey),
           eq(aiModelResolutions.pendingModelId, modelId),
-          eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS)
+          eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS),
+          verdict.passed
+            ? sql`${aiModelResolutions.activeModelId} IS DISTINCT FROM ${modelId}`
+            : undefined
         )
       )
       .returning({ selectorKey: aiModelResolutions.selectorKey });
     return updated.length > 0;
+  }
+
+  // Postgres evaluates every SET expression against the old row, so the two
+  // columns swap without a temporary. The swap's row lock holds until the clear
+  // commits, and a passed verdict never applies to the model already active, so
+  // no pass can set the previous model to the active one.
+  async rollback(
+    selectorKey: PlatformSelectorKey,
+    expected: RollbackResolutionInput,
+    at: Date
+  ): Promise<AppliedRollback | null> {
+    return this.db.transaction(async (tx) => {
+      const [swapped] = await tx
+        .update(aiModelResolutions)
+        .set({
+          activeModelId: sql`${aiModelResolutions.previousModelId}`,
+          previousModelId: sql`${aiModelResolutions.activeModelId}`,
+          changedAt: at,
+          updatedAt: at,
+        })
+        .where(
+          and(
+            eq(aiModelResolutions.selectorKey, selectorKey),
+            eq(aiModelResolutions.activeModelId, expected.activeModelId),
+            eq(aiModelResolutions.previousModelId, expected.previousModelId)
+          )
+        )
+        .returning({
+          pendingModelId: aiModelResolutions.pendingModelId,
+          gateStatus: aiModelResolutions.gateStatus,
+        });
+      if (!swapped) {
+        return null;
+      }
+      const clearedPending =
+        swapped.pendingModelId === expected.previousModelId &&
+        swapped.gateStatus === PENDING_GATE_STATUS;
+      if (clearedPending) {
+        await tx
+          .update(aiModelResolutions)
+          .set({ ...CLEARED_PENDING, updatedAt: at })
+          .where(eq(aiModelResolutions.selectorKey, selectorKey));
+      }
+      return { clearedPending };
+    });
   }
 
   async recordRelease(

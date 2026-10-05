@@ -209,6 +209,8 @@ export {
   type ModelGatePendingDto,
   type ModelGateActiveDto,
   type ModelGateVerdictResultDto,
+  type PlatformResolutionDto,
+  type PlatformResolutionsDto,
   CATALOG_LABEL_MAX_LENGTH,
   CATALOG_DESCRIPTION_MAX_LENGTH,
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
@@ -225,6 +227,7 @@ export {
   type CatalogSyncResultDto,
   type AssignableModelDto,
   type PromoteCatalogModelInput,
+  type RollbackResolutionInput,
   type UpdateCatalogCopyInput,
 } from './lib/catalog.types';
 

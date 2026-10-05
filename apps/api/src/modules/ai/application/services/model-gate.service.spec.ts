@@ -56,6 +56,9 @@ function make(
     raise: vi
       .fn<CatalogAlertsWriter['raise']>()
       .mockResolvedValue({ opened: 1, failed: 0 }),
+    resolvePending: vi
+      .fn<CatalogAlertsWriter['resolvePending']>()
+      .mockResolvedValue(undefined),
   };
   const service = new ModelGateService(
     repo,
@@ -339,5 +342,63 @@ describe('ModelGateService', () => {
 
     expect(outcome).toEqual({ applied: false, reason: 'not_pending' });
     expect(log).not.toHaveBeenCalled();
+  });
+
+  describe('the resolution_pending alert', () => {
+    it('is resolved once a pass is applied', async () => {
+      const { service, alerts } = make();
+
+      await service.verdict({
+        selectorKey: 'platform.fast',
+        modelId: CANDIDATE,
+        passed: true,
+        runUrl: RUN_URL,
+      });
+
+      expect(alerts.resolvePending).toHaveBeenCalledWith(CANDIDATE);
+    });
+
+    it('is resolved once a failure is stored', async () => {
+      const { service, alerts } = make();
+
+      await service.verdict({
+        selectorKey: 'platform.fast',
+        modelId: CANDIDATE,
+        passed: false,
+        runUrl: RUN_URL,
+        detail: VERDICT_DETAIL,
+      });
+
+      expect(alerts.resolvePending).toHaveBeenCalledWith(CANDIDATE);
+    });
+
+    it('stays open on an activation conflict', async () => {
+      const { service, alerts } = make([FAST_PENDING], 'balanced');
+
+      await service.verdict({
+        selectorKey: 'platform.fast',
+        modelId: CANDIDATE,
+        passed: true,
+        runUrl: RUN_URL,
+      });
+
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
+    });
+
+    it('stays open for a verdict on a model no longer pending', async () => {
+      const { service, repo, alerts } = make();
+      vi.mocked(repo.recordVerdict).mockResolvedValue(false);
+
+      for (const passed of [true, false]) {
+        await service.verdict({
+          selectorKey: 'platform.fast',
+          modelId: CANDIDATE,
+          passed,
+          runUrl: RUN_URL,
+        });
+      }
+
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
+    });
   });
 });

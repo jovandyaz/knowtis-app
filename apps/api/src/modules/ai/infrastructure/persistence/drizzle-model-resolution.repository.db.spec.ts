@@ -37,6 +37,10 @@ const RELEASED = 'openrouter:qwen/qwen3.8-max-0902';
 const RUN_URL = 'https://github.com/jovandyaz/knowtis-app/actions/runs/1';
 const VERDICT_DETAIL = 'leaked a secret';
 const NOTHING_PENDING = { pendingModelId: null, gateStatus: null };
+const FAST_PAIR = {
+  activeModelId: PLATFORM_SEED_MODELS.fast,
+  previousModelId: PREVIOUS,
+};
 
 describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
   let moduleRef: TestingModule;
@@ -285,6 +289,29 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
+  it('refuses a passed verdict for the model already active', async () => {
+    await repo.setPending(
+      'platform.fast',
+      PLATFORM_SEED_MODELS.fast,
+      NOTHING_PENDING,
+      AT
+    );
+    const applied = await repo.recordVerdict(
+      'platform.fast',
+      PLATFORM_SEED_MODELS.fast,
+      { passed: true, runUrl: RUN_URL },
+      LATER_AT
+    );
+    expect(applied).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      previousModelId: null,
+      pendingModelId: PLATFORM_SEED_MODELS.fast,
+      gateStatus: 'pending',
+      updatedAt: AT,
+    });
+  });
+
   it('keeps a failed pending model with its verdict detail', async () => {
     await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
     const applied = await repo.recordVerdict(
@@ -345,6 +372,173 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       gateRunUrl: RUN_URL,
       updatedAt: AT,
     });
+  });
+
+  it('swaps the active and previous models', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: NEW_PENDING,
+        gateStatus: 'failed',
+        gateDetail: VERDICT_DETAIL,
+        gateRunUrl: RUN_URL,
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: false });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      previousModelId: PLATFORM_SEED_MODELS.fast,
+      changedAt: LATER_AT,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+      updatedAt: LATER_AT,
+    });
+  });
+
+  it('clears a gate-pending entry on the model it restores', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: PREVIOUS,
+        gateStatus: 'pending',
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: true });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      previousModelId: PLATFORM_SEED_MODELS.fast,
+      changedAt: LATER_AT,
+      pendingModelId: null,
+      gateStatus: null,
+      gateDetail: null,
+      gateRunUrl: null,
+      updatedAt: LATER_AT,
+    });
+  });
+
+  it('keeps a failed entry on the model it restores', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: PREVIOUS,
+        gateStatus: 'failed',
+        gateDetail: VERDICT_DETAIL,
+        gateRunUrl: RUN_URL,
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: false });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      pendingModelId: PREVIOUS,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+    });
+  });
+
+  it("keeps another model's gate-pending entry", async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: NEW_PENDING,
+        gateStatus: 'pending',
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: false });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'pending',
+    });
+  });
+
+  it('refuses without a previous model', async () => {
+    const before = await rowOf('platform.fast');
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toBeNull();
+    expect(await rowOf('platform.fast')).toEqual(before);
+  });
+
+  it('refuses when the active model changed meanwhile', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({ previousModelId: PREVIOUS, changedAt: CHANGED_AT, updatedAt: AT })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      { ...FAST_PAIR, activeModelId: RELEASED },
+      LATER_AT
+    );
+
+    expect(rolledBack).toBeNull();
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      previousModelId: PREVIOUS,
+      changedAt: CHANGED_AT,
+      updatedAt: AT,
+    });
+  });
+
+  it('refuses when the previous model changed meanwhile', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({ previousModelId: PREVIOUS, changedAt: CHANGED_AT, updatedAt: AT })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+    const before = await rowOf('platform.fast');
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      { ...FAST_PAIR, previousModelId: OLD_PENDING },
+      LATER_AT
+    );
+
+    expect(rolledBack).toBeNull();
+    expect(await rowOf('platform.fast')).toEqual(before);
   });
 
   it('records the model a pin change released', async () => {

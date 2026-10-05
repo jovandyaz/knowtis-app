@@ -4,6 +4,7 @@ import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeade
 import { CatalogSection } from '@/components/ai-config/CatalogSection';
 import { MessageLimitsSection } from '@/components/ai-config/MessageLimitsSection';
 import { ModelsSection } from '@/components/ai-config/ModelsSection';
+import { PlatformResolutionsSection } from '@/components/ai-config/PlatformResolutionsSection';
 import { ProvidersSection } from '@/components/ai-config/ProvidersSection';
 import { ReasoningSection } from '@/components/ai-config/ReasoningSection';
 import { RoutingSection } from '@/components/ai-config/RoutingSection';
@@ -115,6 +116,7 @@ export function AiConfigPage() {
         <TabsContent value={TAB.models} className="flex flex-col gap-8 pt-4">
           {renderConfigPanel(
             <>
+              <PlatformResolutionsSection />
               <ModelsSection
                 entries={modelEntries}
                 onConfigureProviders={() => setTab(TAB.providers)}

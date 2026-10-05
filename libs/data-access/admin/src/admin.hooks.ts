@@ -13,6 +13,7 @@ import type {
   AIProvider,
   AssignableModelDto,
   ModelTier,
+  RollbackResolutionInput,
   UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
 
@@ -31,6 +32,7 @@ import {
   PaginatedAuditSchema,
   PaginatedCandidatesSchema,
   PaginatedUsersSchema,
+  PlatformResolutionsSchema,
   ProviderTestResultSchema,
   SetSystemProviderResultSchema,
   SystemProvidersSchema,
@@ -60,6 +62,8 @@ export const adminQueryKeys = {
   systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
   aiHealth: () => [...adminQueryKeys.all, 'ai-health'] as const,
   aiCatalog: () => [...adminQueryKeys.all, 'ai-catalog'] as const,
+  platformResolutions: () =>
+    [...adminQueryKeys.all, 'platform-resolutions'] as const,
   aiCatalogCandidates: (params: AiCatalogCandidatesParams) =>
     [...adminQueryKeys.aiCatalog(), 'candidates', params] as const,
 } as const;
@@ -169,6 +173,9 @@ function invalidateAiConfigDependents(queryClient: QueryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() }),
     queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() }),
+    queryClient.invalidateQueries({
+      queryKey: adminQueryKeys.platformResolutions(),
+    }),
   ]);
 }
 
@@ -404,7 +411,55 @@ export function useSyncCatalog() {
   return useMutation({
     mutationFn: async () =>
       CatalogSyncResultSchema.parse(await httpClient.post('/ai/catalog/sync')),
-    onSettled: () => invalidateCatalogDependents(queryClient),
+    onSettled: () =>
+      Promise.all([
+        invalidateCatalogDependents(queryClient),
+        queryClient.invalidateQueries({
+          queryKey: adminQueryKeys.platformResolutions(),
+        }),
+      ]),
+  });
+}
+
+export function usePlatformResolutions() {
+  return useQuery({
+    queryKey: adminQueryKeys.platformResolutions(),
+    queryFn: async () =>
+      PlatformResolutionsSchema.parse(
+        await httpClient.get('/ai/catalog/resolutions')
+      ),
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useRollbackResolution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      selectorKey,
+      activeModelId,
+      previousModelId,
+    }: RollbackResolutionInput & { selectorKey: string }) =>
+      PlatformResolutionsSchema.parse(
+        await httpClient.post(
+          `/ai/catalog/resolutions/${encodeURIComponent(selectorKey)}/rollback`,
+          { activeModelId, previousModelId }
+        )
+      ),
+    onSuccess: (resolutions) => {
+      queryClient.setQueryData(
+        adminQueryKeys.platformResolutions(),
+        resolutions
+      );
+      return Promise.all([
+        invalidateCatalogDependents(queryClient),
+        queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() }),
+      ]);
+    },
+    onError: () =>
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.platformResolutions(),
+      }),
   });
 }
 

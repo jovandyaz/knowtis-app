@@ -1,15 +1,31 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CatalogModelDto } from '@knowtis/shared-types';
 
+import { RolesGuard } from '../authorization/roles.guard';
 import { AiCatalogController } from './ai-catalog.controller';
 import type { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
+import { InvalidAIConfigError } from './application/services/ai-config.service';
 import type { AssignableModelsService } from './application/services/assignable-models.service';
+import type { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
+import { ResolutionRollbackUnavailableError } from './domain/errors/resolution-rollback-unavailable.error';
 
 const ACTOR = { id: 'admin-user-id' } as never;
 const MODEL_ID = 'openrouter:vendor/promoted-one';
 const ALERT_ID = 7;
+const NO_RESOLUTIONS = { intents: [], lastSyncAt: null };
+const FAST_PAIR = {
+  activeModelId: 'openrouter:z-ai/glm-5.3',
+  previousModelId: 'openrouter:moonshotai/kimi-k2.5',
+};
 
 const model: CatalogModelDto = {
   id: MODEL_ID,
@@ -34,6 +50,9 @@ describe('AiCatalogController', () => {
   };
   let assignable: {
     [K in keyof AssignableModelsService]: ReturnType<typeof vi.fn>;
+  };
+  let resolutions: {
+    [K in keyof PlatformResolutionsAdminService]: ReturnType<typeof vi.fn>;
   };
   let controller: AiCatalogController;
 
@@ -60,13 +79,106 @@ describe('AiCatalogController', () => {
     assignable = {
       list: vi.fn().mockResolvedValue([]),
     };
-    controller = new AiCatalogController(catalog as never, assignable as never);
+    resolutions = {
+      overview: vi.fn().mockResolvedValue(NO_RESOLUTIONS),
+      rollback: vi.fn().mockResolvedValue(NO_RESOLUTIONS),
+    };
+    controller = new AiCatalogController(
+      catalog as never,
+      assignable as never,
+      resolutions as never
+    );
   });
 
   it('serves the catalog overview', async () => {
     expect(await controller.list()).toEqual({
       promoted: [],
       alerts: [],
+    });
+  });
+
+  it('serves the platform resolutions straight from the service', async () => {
+    expect(await controller.listResolutions()).toEqual({
+      intents: [],
+      lastSyncAt: null,
+    });
+  });
+
+  it('rolls back the pair the admin confirmed, on their behalf', async () => {
+    expect(
+      await controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
+    ).toEqual(NO_RESOLUTIONS);
+    expect(resolutions.rollback).toHaveBeenCalledWith(
+      'platform.fast',
+      FAST_PAIR,
+      'admin-user-id'
+    );
+  });
+
+  it('answers 409 when the intent no longer holds the confirmed pair', async () => {
+    resolutions.rollback.mockRejectedValue(
+      new ResolutionRollbackUnavailableError('changed since it was loaded')
+    );
+
+    await expect(
+      controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('answers 400 when another intent serves the previous model', async () => {
+    resolutions.rollback.mockRejectedValue(new InvalidAIConfigError('clash'));
+
+    await expect(
+      controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('surfaces any other roll back failure untouched', async () => {
+    const failure = new Error('resolutions table locked');
+    resolutions.rollback.mockRejectedValue(failure);
+
+    await expect(
+      controller.rollbackResolution(
+        ACTOR,
+        { selectorKey: 'platform.fast' },
+        FAST_PAIR
+      )
+    ).rejects.toBe(failure);
+  });
+
+  describe('requires the admin role', () => {
+    function contextOf(role: string): ExecutionContext {
+      return {
+        getHandler: () => AiCatalogController.prototype.listResolutions,
+        getClass: () => AiCatalogController,
+        switchToHttp: () => ({ getRequest: () => ({ user: { role } }) }),
+      } as unknown as ExecutionContext;
+    }
+
+    it('refuses a member', () => {
+      const guard = new RolesGuard(new Reflector());
+
+      expect(() => guard.canActivate(contextOf('user'))).toThrow(
+        ForbiddenException
+      );
+    });
+
+    it('admits an admin', () => {
+      const guard = new RolesGuard(new Reflector());
+
+      expect(guard.canActivate(contextOf('admin'))).toBe(true);
     });
   });
 

@@ -32,6 +32,9 @@ function make(
     raise: vi
       .fn<CatalogAlertsWriter['raise']>()
       .mockResolvedValue({ opened: 0, failed: 0 }),
+    resolvePending: vi
+      .fn<CatalogAlertsWriter['resolvePending']>()
+      .mockResolvedValue(undefined),
   };
   return {
     writer: new PlatformCandidatesWriter(
@@ -212,6 +215,72 @@ describe('PlatformCandidatesWriter', () => {
 
     expect(repo.clearPending).toHaveBeenCalledTimes(1);
     expect(raised(alerts)).toEqual([]);
+  });
+
+  describe('the resolution_pending alert of the model it stops awaiting the gate', () => {
+    it('is resolved when a newer candidate replaces a gate-pending one', async () => {
+      const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+        seededResolution('powerful', {
+          pendingModelId: 'openrouter:z-ai/glm-5.1',
+          gateStatus: 'pending',
+        }),
+      ]);
+
+      expect(await writer.write(SNAPSHOT_DATE)).toBe(1);
+
+      expect(alerts.resolvePending).toHaveBeenCalledWith(
+        'openrouter:z-ai/glm-5.1'
+      );
+    });
+
+    it('is resolved when the selector clears its pending candidate', async () => {
+      const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+        seededResolution('balanced', {
+          activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
+          pendingModelId: 'openrouter:deepseek/deepseek-v4-pro',
+          gateStatus: 'pending',
+        }),
+      ]);
+
+      await writer.write(SNAPSHOT_DATE);
+
+      expect(alerts.resolvePending).toHaveBeenCalledWith(
+        'openrouter:deepseek/deepseek-v4-pro'
+      );
+    });
+
+    it('is left to the verdict for a replaced failed candidate', async () => {
+      const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+        seededResolution('powerful', {
+          pendingModelId: 'openrouter:z-ai/glm-5.1',
+          gateStatus: 'failed',
+        }),
+      ]);
+
+      expect(await writer.write(SNAPSHOT_DATE)).toBe(1);
+
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
+    });
+
+    it('stays open when another writer changed the row first', async () => {
+      const { writer, repo, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+        seededResolution('powerful', {
+          pendingModelId: 'openrouter:z-ai/glm-5.1',
+          gateStatus: 'pending',
+        }),
+        seededResolution('balanced', {
+          activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
+          pendingModelId: 'openrouter:deepseek/deepseek-v4-pro',
+          gateStatus: 'pending',
+        }),
+      ]);
+      vi.mocked(repo.setPending).mockResolvedValue(false);
+      vi.mocked(repo.clearPending).mockResolvedValue(false);
+
+      expect(await writer.write(SNAPSHOT_DATE)).toBe(0);
+
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
+    });
   });
 
   it('logs each candidate it pends or clears', async () => {
