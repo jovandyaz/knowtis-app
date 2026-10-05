@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 
+import { CronExpression } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +10,7 @@ import {
 } from '../../test-support/module-boot';
 import { AIModule } from './ai.module';
 import { AIConfigService } from './application/services/ai-config.service';
+import { ByokModelsService } from './application/services/byok-models.service';
 import { ByokService } from './application/services/byok.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
@@ -22,6 +24,7 @@ import {
 } from './domain/ports/platform-models.port';
 import { PROVIDER_MODELS_LISTER } from './domain/ports/provider-models.port';
 import { USER_PROVIDER_MODELS_REPOSITORY } from './domain/ports/user-provider-models.repository';
+import { ByokRelistTask } from './infrastructure/byok/byok-relist.task';
 import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
@@ -33,6 +36,8 @@ import { ModelGateController } from './model-gate.controller';
 
 const COMPILE_TIMEOUT_MS = 15_000;
 const HMAC_SHA256_HEX = /^[0-9a-f]{64}$/;
+// The key @nestjs/schedule's explorer reads a @Cron from; the package does not export it.
+const CRON_METADATA_KEY = 'SCHEDULE_CRON_OPTIONS';
 
 const GRAPH_UNDER_TEST: readonly unknown[] = [
   PLATFORM_MODELS_SOURCE,
@@ -47,6 +52,8 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   PROVIDER_MODELS_LISTER,
   USER_PROVIDER_MODELS_REPOSITORY,
   KEY_FINGERPRINTER,
+  ByokModelsService,
+  ByokRelistTask,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -165,6 +172,29 @@ describe('AIModule wiring', () => {
         expect(
           moduleRef.get<KeyFingerprinter>(KEY_FINGERPRINTER).hash('x')
         ).toMatch(HMAC_SHA256_HEX);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'schedules the BYOK re-list task',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const task = moduleRef.get(ByokRelistTask);
+
+        expect(
+          Object.values(task).includes(moduleRef.get(ByokModelsService)),
+          "ByokRelistTask is not wired to the module's ByokModelsService"
+        ).toBe(true);
+        expect(Reflect.getMetadata(CRON_METADATA_KEY, task.relistDue)).toEqual({
+          cronTime: CronExpression.EVERY_DAY_AT_4AM,
+          timeZone: 'UTC',
+        });
       } finally {
         await moduleRef.close();
       }

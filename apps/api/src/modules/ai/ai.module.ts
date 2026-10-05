@@ -29,6 +29,7 @@ import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
 import { AssignableModelsService } from './application/services/assignable-models.service';
+import { ByokModelsService } from './application/services/byok-models.service';
 import { ByokService } from './application/services/byok.service';
 import { InjectionClassifierService } from './application/services/injection-classifier.service';
 import { MessageQuotaService } from './application/services/message-quota.service';
@@ -72,6 +73,7 @@ import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys
 import { USER_PROVIDER_MODELS_REPOSITORY } from './domain/ports/user-provider-models.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
+import { ByokRelistTask } from './infrastructure/byok/byok-relist.task';
 import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
@@ -149,6 +151,8 @@ import { ModelGateController } from './model-gate.controller';
       useClass: DrizzleUserAiSettingsRepository,
     },
     ByokService,
+    ByokModelsService,
+    ByokRelistTask,
     {
       provide: USER_PROVIDER_KEYS_REPOSITORY,
       useClass: DrizzleUserProviderKeysRepository,
