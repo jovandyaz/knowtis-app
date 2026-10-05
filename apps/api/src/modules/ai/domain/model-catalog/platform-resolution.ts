@@ -32,6 +32,8 @@ export const SELECTOR_KEY_BY_INTENT = {
 
 export const PENDING_GATE_STATUS = 'pending' as const satisfies ModelGateStatus;
 
+export const FAILED_GATE_STATUS = 'failed' as const satisfies ModelGateStatus;
+
 /** The models migration 0060 seeds, and what the resolution cache serves until its first successful read. Each is what a dead prod pin of its intent fell back to before resolutions were stored, so a dead pin keeps its fallback. */
 export const PLATFORM_SEED_MODELS = {
   fast: 'openrouter:minimax/minimax-m2.5',

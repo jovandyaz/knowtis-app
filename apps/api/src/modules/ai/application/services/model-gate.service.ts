@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
-  type ModelGateVerdictSkipReason,
+  type ModelGatePendingDto,
+  type ModelGateVerdictResultDto,
   type ModelIntent,
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
@@ -21,15 +22,6 @@ import { AIConfigService } from './ai-config.service';
 
 const DEFAULT_GATE_FAILURE_DETAIL = 'eval gate failed';
 
-export interface PendingGateEntry {
-  readonly selectorKey: PlatformSelectorKey;
-  readonly modelId: string;
-}
-
-export type VerdictOutcome =
-  | { readonly applied: true }
-  | { readonly applied: false; readonly reason: ModelGateVerdictSkipReason };
-
 export interface VerdictInput {
   readonly selectorKey: PlatformSelectorKey;
   readonly modelId: string;
@@ -38,9 +30,15 @@ export interface VerdictInput {
   readonly detail?: string;
 }
 
-const APPLIED: VerdictOutcome = { applied: true };
-const NOT_PENDING: VerdictOutcome = { applied: false, reason: 'not_pending' };
-const CONFLICT: VerdictOutcome = { applied: false, reason: 'conflict' };
+const APPLIED: ModelGateVerdictResultDto = { applied: true };
+const NOT_PENDING: ModelGateVerdictResultDto = {
+  applied: false,
+  reason: 'not_pending',
+};
+const CONFLICT: ModelGateVerdictResultDto = {
+  applied: false,
+  reason: 'conflict',
+};
 
 function gatePendingModelOf(row: ModelResolution): string | null {
   return row.gateStatus === PENDING_GATE_STATUS ? row.pendingModelId : null;
@@ -66,7 +64,7 @@ export class ModelGateService {
   ) {}
 
   /** The selectors whose pending model awaits a verdict; a failed one is not listed again. */
-  async pending(): Promise<PendingGateEntry[]> {
+  async pending(): Promise<ModelGatePendingDto[]> {
     const rows = await this.repository.list();
     return rows.flatMap((row) => {
       const modelId = gatePendingModelOf(row);
@@ -82,7 +80,7 @@ export class ModelGateService {
   }
 
   /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. */
-  verdict(input: VerdictInput): Promise<VerdictOutcome> {
+  verdict(input: VerdictInput): Promise<ModelGateVerdictResultDto> {
     return input.passed ? this.onPassed(input) : this.onFailed(input);
   }
 
@@ -92,7 +90,7 @@ export class ModelGateService {
     selectorKey,
     modelId,
     runUrl,
-  }: VerdictInput): Promise<VerdictOutcome> {
+  }: VerdictInput): Promise<ModelGateVerdictResultDto> {
     const [rows] = await Promise.all([
       this.repository.list(),
       this.resolutions.refresh(),
@@ -132,7 +130,7 @@ export class ModelGateService {
     modelId,
     runUrl,
     detail,
-  }: VerdictInput): Promise<VerdictOutcome> {
+  }: VerdictInput): Promise<ModelGateVerdictResultDto> {
     const applied = await this.repository.recordVerdict(
       selectorKey,
       modelId,
@@ -146,7 +144,7 @@ export class ModelGateService {
     selectorKey: PlatformSelectorKey,
     modelId: string,
     servedBy: ModelIntent
-  ): VerdictOutcome {
+  ): ModelGateVerdictResultDto {
     this.logger.warn({
       event: 'ai.model_resolution.activation_conflict',
       selectorKey,

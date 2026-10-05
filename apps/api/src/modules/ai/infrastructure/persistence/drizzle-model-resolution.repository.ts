@@ -2,10 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import type {
-  ModelGateStatus,
-  PlatformSelectorKey,
-} from '@knowtis/shared-types';
+import type { PlatformSelectorKey } from '@knowtis/shared-types';
 
 import {
   aiModelResolutions,
@@ -14,6 +11,7 @@ import {
   type Database,
 } from '../../../../database';
 import {
+  FAILED_GATE_STATUS,
   PENDING_GATE_STATUS,
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
@@ -22,8 +20,6 @@ import type {
   ModelResolutionRepository,
   PendingSlot,
 } from '../../domain/ports/model-resolution.repository';
-
-const FAILED_GATE_STATUS = 'failed' as const satisfies ModelGateStatus;
 
 function toResolution(row: AiModelResolutionRow): ModelResolution {
   return {
