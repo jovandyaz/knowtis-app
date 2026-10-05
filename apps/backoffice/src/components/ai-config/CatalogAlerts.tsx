@@ -35,31 +35,32 @@ export function CatalogAlerts({
         Open alerts
       </h3>
       <ul className="flex flex-col gap-2">
-        {alerts.map((alert) => (
-          <li key={alert.id} className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">
-              {ALERT_KIND_LABELS[alert.kind] ?? alert.kind}
-            </Badge>
-            <span className="font-mono text-xs text-(--muted-foreground)">
-              {alert.modelId}
-            </span>
-            <span className="min-w-0 flex-1 basis-48 wrap-break-word text-sm">
-              {alert.detail}
-            </span>
-            <span className="text-xs text-(--muted-foreground)">
-              {alert.createdAt.toLocaleDateString()}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={disabled}
-              aria-label={`Resolve ${alert.kind} alert for ${alert.modelId}`}
-              onClick={() => onResolve(alert.id)}
-            >
-              Resolve
-            </Button>
-          </li>
-        ))}
+        {alerts.map((alert) => {
+          const kindLabel = ALERT_KIND_LABELS[alert.kind] ?? alert.kind;
+          return (
+            <li key={alert.id} className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{kindLabel}</Badge>
+              <span className="font-mono text-xs text-(--muted-foreground)">
+                {alert.modelId}
+              </span>
+              <span className="min-w-0 flex-1 basis-48 wrap-break-word text-sm">
+                {alert.detail}
+              </span>
+              <span className="text-xs text-(--muted-foreground)">
+                {alert.createdAt.toLocaleDateString()}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={disabled}
+                aria-label={`Resolve ${kindLabel} alert for ${alert.modelId}`}
+                onClick={() => onResolve(alert.id)}
+              >
+                Resolve
+              </Button>
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );

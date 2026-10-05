@@ -232,11 +232,21 @@ describe('CatalogSection', () => {
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: 'Resolve retirement_scheduled alert for openrouter:z-ai/glm-5.2',
+        name: 'Resolve Retirement scheduled alert for openrouter:z-ai/glm-5.2',
       })
     );
 
     expect(resolveAlertMutate).toHaveBeenCalledWith(82);
+  });
+
+  it('names a resolve button by the raw kind this bundle does not know', () => {
+    renderSection({ alerts: [alert({ kind: 'context_shrink' })] });
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Resolve context_shrink alert for openrouter:z-ai/glm-5.2',
+      })
+    ).toBeInTheDocument();
   });
 
   it('locks Retire while a mutation is in flight', () => {
