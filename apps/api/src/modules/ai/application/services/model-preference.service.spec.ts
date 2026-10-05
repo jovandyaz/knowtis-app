@@ -17,6 +17,7 @@ import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import { entitledIdsOf } from '../../domain/model-catalog/byok-entitlement';
 import {
+  entitledRoutes,
   reachableRoutes,
   resolveByokSelectors,
 } from '../../domain/model-catalog/byok-intent-routes';
@@ -793,7 +794,10 @@ describe('ModelPreferenceService', () => {
 
     it('chooses a turn model among entitled routes only', async () => {
       const [first, next] = reachableRoutes(
-        resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE).powerful,
+        entitledRoutes(
+          resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE).powerful,
+          () => true
+        ),
         ['anthropic', 'openrouter'],
         'anthropic'
       );

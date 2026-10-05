@@ -94,6 +94,19 @@ function resolvedWith(
 const ids = (catalog: ReturnType<typeof catalogFor>) =>
   catalog.models.map((scoped) => scoped.model.id);
 
+function rankedOn(
+  intent: ModelIntent,
+  provider: ByokProvider
+): readonly IndexedModel[] {
+  const rows = BYOK[intent][0]?.ranked[provider];
+  if (rows === undefined) {
+    throw new Error(
+      `the first ${intent} candidate ranks nothing on ${provider}`
+    );
+  }
+  return rows;
+}
+
 describe('tierCatalog', () => {
   it('gives an anonymous caller only the default intent model', () => {
     const catalog = catalogFor('anonymous');
@@ -352,11 +365,50 @@ describe('tierCatalog', () => {
     expect(catalog.billing).toBe('key');
   });
 
-  it('routes an intent to the next entitled candidate', () => {
-    const anthropicBalanced = snapshotRouteId('balanced', 'anthropic');
+  it('an un-entitled newest direct route falls back to the key’s older entitled row, not to another provider', () => {
+    const [newest, older] = rankedOn('balanced', 'anthropic');
+    const [routed] = rankedOn('balanced', 'openrouter');
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openrouter'],
+      offered: [],
+      isEntitled: (id) => id !== newest?.id,
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'balanced',
+      available: true,
+      modelId: older?.id,
+      substituted: false,
+    });
+    expect(ids(catalog)).toContain(routed?.id);
+    expect(ids(catalog)).not.toContain(newest?.id);
+  });
+
+  it('falls through to another provider of the candidate only when no direct row is entitled', () => {
+    const direct = new Set(
+      rankedOn('balanced', 'anthropic').map((row) => row.id)
+    );
+    const [routed] = rankedOn('balanced', 'openrouter');
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openrouter'],
+      offered: [],
+      isEntitled: (id) => !direct.has(id),
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'balanced',
+      available: true,
+      modelId: routed?.id,
+      substituted: true,
+    });
+    expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
+  });
+
+  it('routes an intent to the next candidate only when no row of the first is entitled', () => {
+    const direct = new Set(
+      rankedOn('balanced', 'anthropic').map((row) => row.id)
+    );
     const catalog = catalogFor('byok', {
       heldProviders: ['anthropic', 'openai'],
-      isEntitled: (id) => id !== anthropicBalanced,
+      isEntitled: (id) => !direct.has(id),
     });
     expect(catalog.intents).toContainEqual({
       intent: 'balanced',
@@ -364,7 +416,7 @@ describe('tierCatalog', () => {
       modelId: snapshotRouteId('balanced', 'openai'),
       substituted: true,
     });
-    expect(ids(catalog)).not.toContain(anthropicBalanced);
+    expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
   });
 
   it('keeps every route of a held provider without a listing', () => {
@@ -404,7 +456,9 @@ describe('tierCatalog', () => {
   it('reports no_route when no candidate of an intent is entitled', () => {
     const fastRoutes = new Set(
       BYOK.fast.flatMap((candidate) =>
-        Object.values(candidate.routes).map((row) => row?.id)
+        Object.values(candidate.ranked).flatMap(
+          (rows) => rows?.map((row) => row.id) ?? []
+        )
       )
     );
     const catalog = catalogFor('byok', {

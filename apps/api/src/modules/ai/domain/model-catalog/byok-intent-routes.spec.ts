@@ -16,11 +16,24 @@ import {
   resolveByokSelectors,
   routeIntent,
   type ByokResolutions,
+  type SelectorRoutes,
 } from './byok-intent-routes';
-import { BYOK_SELECTORS, resolveByokIntent } from './model-selectors';
+import {
+  BYOK_SELECTORS,
+  rankSelector,
+  resolveByokIntent,
+} from './model-selectors';
 
 const RESOLUTIONS = resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE);
 const WITHIN_RETIREMENT_WINDOW = '2026-10-20';
+const ENTITLED_TO_ALL = () => true;
+
+function newestRoutes(
+  intent: ModelIntent,
+  resolutions: ByokResolutions = RESOLUTIONS
+): SelectorRoutes[] {
+  return entitledRoutes(resolutions[intent], ENTITLED_TO_ALL);
+}
 
 function route(
   intent: ModelIntent,
@@ -28,7 +41,7 @@ function route(
   resolutions: ByokResolutions = RESOLUTIONS
 ) {
   const chosen = routeIntent(
-    resolutions[intent],
+    newestRoutes(intent, resolutions),
     held,
     effectivePrimary(held, null)
   );
@@ -40,7 +53,7 @@ function reachableIds(
   held: readonly ByokProvider[],
   primary: ByokProvider | null
 ): string[] {
-  return reachableRoutes(RESOLUTIONS[intent], held, primary).map(
+  return reachableRoutes(newestRoutes(intent), held, primary).map(
     (row) => row.id
   );
 }
@@ -76,14 +89,14 @@ describe('resolveByokSelectors', () => {
     }
   });
 
-  it("resolves each selector only on its author's direct provider and OpenRouter", () => {
+  it("ranks each selector only on its author's direct provider and OpenRouter, the newest row first", () => {
     expect(
       MODEL_INTENTS.map((intent) =>
         RESOLUTIONS[intent].map((candidate) =>
           Object.fromEntries(
-            Object.entries(candidate.routes).map(([provider, row]) => [
+            Object.entries(candidate.ranked).map(([provider, rows]) => [
               provider,
-              row?.id,
+              rows?.[0]?.id,
             ])
           )
         )
@@ -134,32 +147,51 @@ describe('resolveByokSelectors', () => {
     ]);
   });
 
-  it('leaves out a provider on which the selector resolves nothing', () => {
+  it('leaves out a provider on which the selector ranks nothing', () => {
     const withoutGoogle = resolveByokSelectors(
       MODEL_INDEX_SNAPSHOT.filter((row) => row.provider !== 'google'),
       SNAPSHOT_DATE
     );
-    expect(Object.keys(withoutGoogle.powerful[2]?.routes ?? {})).toEqual([
+    expect(Object.keys(withoutGoogle.powerful[2]?.ranked ?? {})).toEqual([
       'openrouter',
     ]);
   });
 
-  it('resolves at the given time, so a row inside its retirement window drops out', () => {
+  it('ranks at the given time, so a row inside its retirement window drops out', () => {
     const rows: IndexedModel[] = MODEL_INDEX_SNAPSHOT.map((row) =>
       row.id === 'anthropic:claude-sonnet-5-5'
         ? { ...row, retiresAt: WITHIN_RETIREMENT_WINDOW }
         : row
     );
     expect(
-      resolveByokSelectors(rows, SNAPSHOT_DATE).balanced[0]?.routes.anthropic
-        ?.id
+      resolveByokSelectors(rows, SNAPSHOT_DATE).balanced[0]?.ranked
+        .anthropic?.[0]?.id
     ).toBe('anthropic:claude-sonnet-5');
   });
 
-  it('never resolves one row for two intents', () => {
+  it('keeps every ranked row of a provider, as the selector ranks it there', () => {
+    for (const intent of MODEL_INTENTS) {
+      for (const { selector, ranked } of RESOLUTIONS[intent]) {
+        for (const provider of BYOK_PROVIDERS) {
+          expect(ranked[provider] ?? []).toEqual(
+            rankSelector(
+              selector,
+              provider,
+              MODEL_INDEX_SNAPSHOT,
+              SNAPSHOT_DATE
+            )
+          );
+        }
+      }
+    }
+  });
+
+  it('never ranks one row under two intents', () => {
     const ids = MODEL_INTENTS.flatMap((intent) =>
       RESOLUTIONS[intent].flatMap((candidate) =>
-        Object.values(candidate.routes).map((row) => row?.id)
+        Object.values(candidate.ranked).flatMap(
+          (rows) => rows?.map((row) => row.id) ?? []
+        )
       )
     );
     expect(new Set(ids).size).toBe(ids.length);
@@ -167,23 +199,55 @@ describe('resolveByokSelectors', () => {
 });
 
 describe('entitledRoutes', () => {
-  it('keeps the candidate order and drops only the routes not entitled', () => {
-    const [byAnthropic, byOpenai, byGoogle] = RESOLUTIONS.balanced;
-    const dropped = new Set(
-      [byAnthropic.routes.anthropic, ...Object.values(byOpenai.routes)].map(
-        (row) => row?.id
-      )
+  const [byAnthropic, byOpenai, byGoogle] = RESOLUTIONS.balanced;
+
+  it("routes each provider to the selector's newest row when every row is entitled", () => {
+    expect(entitledRoutes(RESOLUTIONS.balanced, ENTITLED_TO_ALL)).toStrictEqual(
+      RESOLUTIONS.balanced.map(({ selector, ranked }) => ({
+        selector,
+        routes: Object.fromEntries(
+          Object.entries(ranked).map(([provider, rows]) => [
+            provider,
+            rows?.[0],
+          ])
+        ),
+      }))
+    );
+  });
+
+  it("keeps a provider's newest entitled row when its newest is not", () => {
+    const [newest, older] = byAnthropic.ranked.anthropic ?? [];
+
+    const [routed] = entitledRoutes(
+      RESOLUTIONS.balanced,
+      (row) => row !== newest
     );
 
+    expect(older).toBeDefined();
+    expect(routed?.routes.anthropic).toBe(older);
+  });
+
+  it('keeps the candidate order and drops a provider only when none of its ranked rows is entitled', () => {
+    const dropped = new Set([
+      ...(byAnthropic.ranked.anthropic ?? []),
+      ...Object.values(byOpenai.ranked).flat(),
+    ]);
+
     expect(
-      entitledRoutes(RESOLUTIONS.balanced, (row) => !dropped.has(row.id))
-    ).toEqual([
+      entitledRoutes(RESOLUTIONS.balanced, (row) => !dropped.has(row))
+    ).toStrictEqual([
       {
         selector: byAnthropic.selector,
-        routes: { openrouter: byAnthropic.routes.openrouter },
+        routes: { openrouter: byAnthropic.ranked.openrouter?.[0] },
       },
       { selector: byOpenai.selector, routes: {} },
-      byGoogle,
+      {
+        selector: byGoogle.selector,
+        routes: {
+          google: byGoogle.ranked.google?.[0],
+          openrouter: byGoogle.ranked.openrouter?.[0],
+        },
+      },
     ]);
   });
 });
@@ -296,7 +360,7 @@ describe('routeIntent', () => {
           SNAPSHOT_DATE
         );
         expect(
-          routeIntent(RESOLUTIONS[intent], [provider], provider)?.row ?? null
+          routeIntent(newestRoutes(intent), [provider], provider)?.row ?? null
         ).toBe(expected);
         if (expected !== null) {
           servedProviders.add(provider);
