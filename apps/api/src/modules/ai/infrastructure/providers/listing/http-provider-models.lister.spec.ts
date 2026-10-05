@@ -6,7 +6,11 @@ import type { ProviderListing } from '../../../domain/ports/provider-models.port
 import { AnthropicModelsClient } from './anthropic-models.client';
 import { GoogleModelsClient } from './google-models.client';
 import { HttpProviderModelsLister } from './http-provider-models.lister';
-import { LISTING_TIMEOUT_MS, type ProviderModelsClient } from './listing-http';
+import {
+  LISTING_TIMEOUT_MESSAGE,
+  LISTING_TIMEOUT_MS,
+  type ProviderModelsClient,
+} from './listing-http';
 import { OpenAIModelsClient } from './openai-models.client';
 import { OpenRouterKeyModelsClient } from './openrouter-key-models.client';
 
@@ -75,7 +79,7 @@ describe('HttpProviderModelsLister', () => {
 
     await expect(pending).resolves.toEqual({
       kind: 'unavailable',
-      error: 'The listing timed out',
+      error: LISTING_TIMEOUT_MESSAGE,
     });
     expect(hung.mock.calls[0]?.[1].aborted).toBe(true);
   });

@@ -1,7 +1,7 @@
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
-import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+import { MODEL_ID_MAX_LENGTH, type AIProvider } from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../../core/errors/reason-of';
 import {
@@ -15,7 +15,7 @@ export const MAX_LISTING_PAGES = 10;
 /** The longest error a listing reports, measured after the key is redacted. */
 export const LISTING_ERROR_MAX_LENGTH = 300;
 
-const LISTING_TIMEOUT_MESSAGE = 'The listing timed out';
+export const LISTING_TIMEOUT_MESSAGE = 'The listing timed out';
 // Below this a "key" is too short to match anything but itself in prose.
 const REDACTABLE_KEY_MIN_LENGTH = 8;
 const REDACTED_KEY = '[redacted]';
@@ -23,8 +23,10 @@ const REDACTED_KEY = '[redacted]';
 // the exact key cannot catch. The hyphen keeps words like "skipped" intact.
 const KEY_SHAPED_FRAGMENT = /\b(?:sk-(?:proj-|or-)?|AIza)[-_A-Za-z0-9*]{4,}/g;
 
+const logger = new Logger('ProviderListing');
+
 export interface ProviderModelsClient {
-  /** Reads one provider's model list with `apiKey`, honouring `signal`, and calls `keyAccepted` once the provider has proven the key valid. May reject: `boundedListing` turns a throw into `unavailable`, or into an unknown list once `keyAccepted` was called. */
+  /** Reads one provider's model list with `apiKey`, honouring `signal`, and calls `keyAccepted` once the provider has proven the key valid. May reject: `boundedListing` turns a throw into `unavailable`, and any failure once `keyAccepted` was called into an unknown list. */
   list(
     apiKey: string,
     signal: AbortSignal,
@@ -98,7 +100,7 @@ export const MALFORMED_LISTING: ProviderListing = {
   error: 'The provider answered with an unexpected model list',
 };
 
-/** `ids` de-duplicated, with ids outside 1..MODEL_ID_MAX_LENGTH dropped; an empty list is unknown (Ruling 6). */
+/** `ids` de-duplicated, with ids outside 1..MODEL_ID_MAX_LENGTH dropped; an empty list is unknown. */
 export function listedOf(ids: readonly string[]): ProviderListing {
   const routable = [
     ...new Set(
@@ -158,8 +160,14 @@ export async function paginatedListing(
   return UNKNOWN_LISTING;
 }
 
-/** Runs `read` under one LISTING_TIMEOUT_MS bound. A throw or the bound is `unavailable`, or lists null once `read` called `keyAccepted`; every error is redacted of `apiKey` and of anything key-shaped, then truncated. */
+/**
+ * Runs `read` under one LISTING_TIMEOUT_MS bound. A throw or the bound is
+ * `unavailable`; once `read` called `keyAccepted`, any failure lists null and
+ * logs `provider_listing.incomplete` with its reason. Every error is redacted
+ * of `apiKey` and of anything key-shaped, then truncated.
+ */
 export async function boundedListing(
+  provider: AIProvider,
   apiKey: string,
   read: (
     signal: AbortSignal,
@@ -174,11 +182,12 @@ export async function boundedListing(
   const timedOut = new Promise<ProviderListing>((resolve) => {
     timer = setTimeout(() => {
       bound.abort(new DOMException(LISTING_TIMEOUT_MESSAGE, 'TimeoutError'));
-      resolve(accepted ? UNKNOWN_LISTING : TIMED_OUT_LISTING);
+      resolve(TIMED_OUT_LISTING);
     }, LISTING_TIMEOUT_MS);
   });
+  let listing: ProviderListing;
   try {
-    return scrubbedListing(
+    listing = scrubbedListing(
       await Promise.race([
         read(bound.signal, () => {
           accepted = true;
@@ -188,15 +197,22 @@ export async function boundedListing(
       apiKey
     );
   } catch (error) {
-    return accepted
-      ? UNKNOWN_LISTING
-      : {
-          kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
-          error: scrubbed(reasonOf(error), apiKey),
-        };
+    listing = {
+      kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+      error: scrubbed(reasonOf(error), apiKey),
+    };
   } finally {
     clearTimeout(timer);
   }
+  if (!accepted || listing.kind === PROVIDER_LISTING_KIND.LISTED) {
+    return listing;
+  }
+  logger.warn({
+    event: 'provider_listing.incomplete',
+    provider,
+    reason: listing.error,
+  });
+  return UNKNOWN_LISTING;
 }
 
 /** `next` resolved against `base`, or null when it is absent, unparsable or cross-origin. */

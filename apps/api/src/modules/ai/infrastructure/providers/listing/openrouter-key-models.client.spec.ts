@@ -1,5 +1,13 @@
-import { HttpStatus } from '@nestjs/common';
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { HttpStatus, Logger } from '@nestjs/common';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 import type { ProviderListing } from '../../../domain/ports/provider-models.port';
 import {
@@ -11,6 +19,7 @@ import {
 } from '../../../testing/stub-listing-fetch';
 import { HttpProviderModelsLister } from './http-provider-models.lister';
 import {
+  LISTING_TIMEOUT_MESSAGE,
   LISTING_TIMEOUT_MS,
   MALFORMED_LISTING,
   MAX_LISTING_PAGES,
@@ -39,6 +48,10 @@ function list(
   );
 }
 
+function listBounded(): Promise<ProviderListing> {
+  return new HttpProviderModelsLister().list('openrouter', API_KEY);
+}
+
 function userModelsPage(ids: readonly string[], next: string | null) {
   return { data: ids.map((id) => ({ id })), links: { next } };
 }
@@ -50,9 +63,14 @@ function readsOf(fetchMock: Mock<ListingFetch>): string[] {
 }
 
 describe('OpenRouterKeyModelsClient', () => {
+  beforeEach(() => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("checks the key before listing the user's models", async () => {
@@ -181,23 +199,21 @@ describe('OpenRouterKeyModelsClient', () => {
     async ({ reply }) => {
       stubListingFetch({ body: OPENROUTER_KEY }, reply);
 
-      await expect(list()).resolves.toEqual(UNKNOWN_LISTING);
+      await expect(listBounded()).resolves.toEqual(UNKNOWN_LISTING);
     }
   );
 
   it('keeps a valid key unknown when the user listing request throws', async () => {
     stubListingFetchThenThrow({ body: OPENROUTER_KEY });
 
-    await expect(
-      new HttpProviderModelsLister().list('openrouter', API_KEY)
-    ).resolves.toEqual(UNKNOWN_LISTING);
+    await expect(listBounded()).resolves.toEqual(UNKNOWN_LISTING);
   });
 
   it('lists null when the user models read hangs after the key was accepted', async () => {
     vi.useFakeTimers();
     const fetchMock = stubListingFetchThenHang({ body: OPENROUTER_KEY });
 
-    const pending = new HttpProviderModelsLister().list('openrouter', API_KEY);
+    const pending = listBounded();
     await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
 
     await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
@@ -209,12 +225,12 @@ describe('OpenRouterKeyModelsClient', () => {
     vi.useFakeTimers();
     stubListingFetchThenHang();
 
-    const pending = new HttpProviderModelsLister().list('openrouter', API_KEY);
+    const pending = listBounded();
     await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
 
     await expect(pending).resolves.toEqual({
       kind: 'unavailable',
-      error: 'The listing timed out',
+      error: LISTING_TIMEOUT_MESSAGE,
     });
   });
 
@@ -245,7 +261,7 @@ describe('OpenRouterKeyModelsClient', () => {
       }
     );
 
-    await expect(list()).resolves.toEqual(UNKNOWN_LISTING);
+    await expect(listBounded()).resolves.toEqual(UNKNOWN_LISTING);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

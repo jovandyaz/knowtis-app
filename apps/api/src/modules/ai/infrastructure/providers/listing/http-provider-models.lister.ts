@@ -24,7 +24,7 @@ export class HttpProviderModelsLister implements ProviderModelsLister {
     };
 
   list(provider: AIProvider, apiKey: string): Promise<ProviderListing> {
-    return boundedListing(apiKey, (signal, keyAccepted) =>
+    return boundedListing(provider, apiKey, (signal, keyAccepted) =>
       this.clients[provider].list(apiKey, signal, keyAccepted)
     );
   }

@@ -31,6 +31,7 @@ import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
+import { LISTING_TIMEOUT_MESSAGE } from '../../infrastructure/providers/listing/listing-http';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import { ByokService } from './byok.service';
 
@@ -268,7 +269,7 @@ describe('ByokService', () => {
       'a listing that timed out',
       {
         kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
-        error: 'The listing timed out',
+        error: LISTING_TIMEOUT_MESSAGE,
       } as const,
     ],
   ])(

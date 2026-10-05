@@ -18,6 +18,7 @@ import {
   type ProviderModelsLister,
 } from '../../domain/ports/provider-models.port';
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
+import { LISTING_TIMEOUT_MESSAGE } from '../../infrastructure/providers/listing/listing-http';
 import { SystemProviderKeysService } from './system-provider-keys.service';
 
 const MASTER_KEY = Buffer.alloc(32, 7);
@@ -34,7 +35,7 @@ const REJECTED: ProviderListing = {
 };
 const UNAVAILABLE: ProviderListing = {
   kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
-  error: 'The listing timed out',
+  error: LISTING_TIMEOUT_MESSAGE,
 };
 
 function rowFor(provider: AIProvider, apiKey: string | null, enabled = true) {

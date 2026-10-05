@@ -1,5 +1,5 @@
-import { HttpStatus } from '@nestjs/common';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HttpStatus, Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProviderListing } from '../../../domain/ports/provider-models.port';
 import {
@@ -15,6 +15,7 @@ import {
 } from './google-models.client';
 import { HttpProviderModelsLister } from './http-provider-models.lister';
 import {
+  LISTING_TIMEOUT_MESSAGE,
   LISTING_TIMEOUT_MS,
   MALFORMED_LISTING,
   UNKNOWN_LISTING,
@@ -42,9 +43,14 @@ function list(): Promise<ProviderListing> {
 }
 
 describe('GoogleModelsClient', () => {
+  beforeEach(() => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('lists null when a later page hangs after the first page answered', async () => {
@@ -84,7 +90,7 @@ describe('GoogleModelsClient', () => {
 
     await expect(pending).resolves.toEqual({
       kind: 'unavailable',
-      error: 'The listing timed out',
+      error: LISTING_TIMEOUT_MESSAGE,
     });
   });
 

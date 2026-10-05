@@ -1,9 +1,18 @@
-import { HttpStatus } from '@nestjs/common';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HttpStatus, Logger } from '@nestjs/common';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 
 import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
 
 import {
+  FAILED_REQUEST_MESSAGE,
   listingCall,
   stubListingFetch,
   type ListingFetch,
@@ -13,6 +22,7 @@ import {
   getListingJson,
   listedOf,
   LISTING_ERROR_MAX_LENGTH,
+  LISTING_TIMEOUT_MESSAGE,
   LISTING_TIMEOUT_MS,
   refusalOf,
   sameOriginNext,
@@ -20,6 +30,7 @@ import {
 } from './listing-http';
 import * as recordedFixtures from './provider-listing.fixtures';
 
+const PROVIDER = 'openrouter';
 const API_KEY = 'sk-test-listing-key-0001';
 const LISTING_URL = new URL('https://api.example.test/v1/models');
 const KEY_SHAPED = /\bsk-|AIza|Bearer/;
@@ -32,10 +43,27 @@ function readListing(signal: AbortSignal) {
   );
 }
 
+const incompleteListingLogs = (warn: MockInstance<Logger['warn']>) =>
+  warn.mock.calls
+    .map((call) => call[0])
+    .filter(
+      (entry: { event?: string }) =>
+        entry.event === 'provider_listing.incomplete'
+    );
+
 describe('listing-http', () => {
+  let warn: MockInstance<Logger['warn']>;
+
+  beforeEach(() => {
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('keeps an empty listing unknown', () => {
@@ -59,7 +87,7 @@ describe('listing-http', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const pending = boundedListing(API_KEY, readListing);
+    const pending = boundedListing(PROVIDER, API_KEY, readListing);
     await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS - 1);
     await expect(
       Promise.race([pending, Promise.resolve('still pending')])
@@ -68,7 +96,7 @@ describe('listing-http', () => {
 
     await expect(pending).resolves.toEqual({
       kind: 'unavailable',
-      error: 'The listing timed out',
+      error: LISTING_TIMEOUT_MESSAGE,
     });
     expect(fetchMock.mock.calls[0]?.[1].signal?.aborted).toBe(true);
   });
@@ -76,29 +104,91 @@ describe('listing-http', () => {
   it('lists null when the bound passes after the key was accepted', async () => {
     vi.useFakeTimers();
 
-    const pending = boundedListing(API_KEY, (_signal, keyAccepted) => {
-      keyAccepted();
-      return new Promise<never>(() => undefined);
-    });
+    const pending = boundedListing(
+      PROVIDER,
+      API_KEY,
+      (_signal, keyAccepted) => {
+        keyAccepted();
+        return new Promise<never>(() => undefined);
+      }
+    );
     await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
 
     await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+    expect(incompleteListingLogs(warn)).toEqual([
+      {
+        event: 'provider_listing.incomplete',
+        provider: PROVIDER,
+        reason: LISTING_TIMEOUT_MESSAGE,
+      },
+    ]);
   });
 
   it('lists null when the read throws after the key was accepted', async () => {
     const listing = await boundedListing(
+      PROVIDER,
       API_KEY,
       async (_signal, keyAccepted) => {
         keyAccepted();
-        throw new TypeError('fetch failed');
+        throw new TypeError(`${FAILED_REQUEST_MESSAGE} for ${API_KEY}`);
       }
     );
 
     expect(listing).toEqual(UNKNOWN_LISTING);
+    expect(incompleteListingLogs(warn)).toEqual([
+      {
+        event: 'provider_listing.incomplete',
+        provider: PROVIDER,
+        reason: `${FAILED_REQUEST_MESSAGE} for [redacted]`,
+      },
+    ]);
+  });
+
+  it('lists null, and logs why, when the read refuses after the key was accepted', async () => {
+    const listing = await boundedListing(
+      PROVIDER,
+      API_KEY,
+      async (_signal, keyAccepted) => {
+        keyAccepted();
+        return { kind: 'rejected', error: `HTTP 403: refused ${API_KEY}` };
+      }
+    );
+
+    expect(listing).toEqual(UNKNOWN_LISTING);
+    expect(incompleteListingLogs(warn)).toEqual([
+      {
+        event: 'provider_listing.incomplete',
+        provider: PROVIDER,
+        reason: 'HTTP 403: refused [redacted]',
+      },
+    ]);
+  });
+
+  it('logs nothing for a listing that completes after the key was accepted', async () => {
+    const listing = await boundedListing(
+      PROVIDER,
+      API_KEY,
+      async (_signal, keyAccepted) => {
+        keyAccepted();
+        return listedOf(['a']);
+      }
+    );
+
+    expect(listing).toEqual({ kind: 'listed', modelIds: ['a'] });
+    expect(incompleteListingLogs(warn)).toEqual([]);
+  });
+
+  it('logs nothing for a failure before the key was accepted', async () => {
+    await boundedListing(PROVIDER, API_KEY, async () => ({
+      kind: 'unavailable',
+      error: 'HTTP 500',
+    }));
+
+    expect(incompleteListingLogs(warn)).toEqual([]);
   });
 
   it('redacts the key from a thrown error', async () => {
-    const listing = await boundedListing(API_KEY, async () => {
+    const listing = await boundedListing(PROVIDER, API_KEY, async () => {
       throw new Error(`connect failed for ${API_KEY} at the edge`);
     });
 
@@ -120,7 +210,9 @@ describe('listing-http', () => {
       )
     );
 
-    await expect(boundedListing(API_KEY, readListing)).resolves.toEqual({
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
       kind: 'rejected',
       error: 'HTTP 401: Bad key [redacted]',
     });
@@ -132,14 +224,16 @@ describe('listing-http', () => {
       status: HttpStatus.UNAUTHORIZED,
     });
 
-    await expect(boundedListing(API_KEY, readListing)).resolves.toEqual({
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
       kind: 'rejected',
       error: `HTTP 401: ${openaiRefusalEchoing('[redacted]')}`,
     });
   });
 
   it('redacts every key-shaped fragment from a thrown error', async () => {
-    const listing = await boundedListing(API_KEY, async () => {
+    const listing = await boundedListing(PROVIDER, API_KEY, async () => {
       throw new Error(
         'request for sk-or-v1-****9f2Q and AIzaSy****9f2Q failed'
       );
@@ -154,7 +248,7 @@ describe('listing-http', () => {
   it('leaves words that only begin like a key untouched', async () => {
     const message = 'skipped the risk-free page';
 
-    const listing = await boundedListing(API_KEY, async () => {
+    const listing = await boundedListing(PROVIDER, API_KEY, async () => {
       throw new Error(message);
     });
 
@@ -173,7 +267,7 @@ describe('listing-http', () => {
       )
     );
 
-    const listing = await boundedListing(API_KEY, readListing);
+    const listing = await boundedListing(PROVIDER, API_KEY, readListing);
 
     expect(listing).toEqual({
       kind: 'unavailable',
@@ -192,7 +286,9 @@ describe('listing-http', () => {
       )
     );
 
-    await expect(boundedListing(API_KEY, readListing)).resolves.toEqual({
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
       kind: 'unavailable',
       error: 'HTTP 502',
     });
@@ -207,7 +303,9 @@ describe('listing-http', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(boundedListing(API_KEY, readListing)).resolves.toEqual({
+    await expect(
+      boundedListing(PROVIDER, API_KEY, readListing)
+    ).resolves.toEqual({
       kind: 'unavailable',
       error: 'unexpected redirect while sending [redacted]',
     });

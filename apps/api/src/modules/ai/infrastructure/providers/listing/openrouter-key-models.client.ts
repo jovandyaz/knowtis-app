@@ -11,7 +11,6 @@ import {
   paginatedListing,
   refusalOf,
   sameOriginNext,
-  UNKNOWN_LISTING,
   type ListingPage,
   type ProviderModelsClient,
 } from './listing-http';
@@ -85,7 +84,7 @@ export class OpenRouterKeyModelsClient implements ProviderModelsClient {
       return MANAGEMENT_KEY_LISTING;
     }
     keyAccepted();
-    const listing = await paginatedListing(
+    return paginatedListing(
       (pageUrl) =>
         getListingJson(
           new URL(pageUrl ?? OPENROUTER_USER_MODELS_URL),
@@ -95,8 +94,5 @@ export class OpenRouterKeyModelsClient implements ProviderModelsClient {
       parsePage,
       keyAccepted
     );
-    return listing.kind === PROVIDER_LISTING_KIND.LISTED
-      ? listing
-      : UNKNOWN_LISTING;
   }
 }
