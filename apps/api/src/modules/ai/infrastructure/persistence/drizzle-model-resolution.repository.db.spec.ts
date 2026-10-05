@@ -347,6 +347,68 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
+  it('swaps the active and previous models', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: NEW_PENDING,
+        gateStatus: 'failed',
+        gateDetail: VERDICT_DETAIL,
+        gateRunUrl: RUN_URL,
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      PLATFORM_SEED_MODELS.fast,
+      LATER_AT
+    );
+
+    expect(rolledBack).toBe(true);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      previousModelId: PLATFORM_SEED_MODELS.fast,
+      changedAt: LATER_AT,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+      updatedAt: LATER_AT,
+    });
+  });
+
+  it('refuses without a previous model', async () => {
+    const before = await rowOf('platform.fast');
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      PLATFORM_SEED_MODELS.fast,
+      LATER_AT
+    );
+
+    expect(rolledBack).toBe(false);
+    expect(await rowOf('platform.fast')).toEqual(before);
+  });
+
+  it('refuses when the active model changed meanwhile', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({ previousModelId: PREVIOUS, changedAt: CHANGED_AT, updatedAt: AT })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback('platform.fast', RELEASED, LATER_AT);
+
+    expect(rolledBack).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      previousModelId: PREVIOUS,
+      changedAt: CHANGED_AT,
+      updatedAt: AT,
+    });
+  });
+
   it('records the model a pin change released', async () => {
     await repo.setPending(
       'platform.powerful',

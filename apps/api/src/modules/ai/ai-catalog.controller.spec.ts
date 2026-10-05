@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
   type ExecutionContext,
@@ -12,12 +13,15 @@ import type { CatalogModelDto } from '@knowtis/shared-types';
 import { RolesGuard } from '../authorization/roles.guard';
 import { AiCatalogController } from './ai-catalog.controller';
 import type { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
+import { InvalidAIConfigError } from './application/services/ai-config.service';
 import type { AssignableModelsService } from './application/services/assignable-models.service';
 import type { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
+import { ResolutionRollbackUnavailableError } from './domain/errors/resolution-rollback-unavailable.error';
 
 const ACTOR = { id: 'admin-user-id' } as never;
 const MODEL_ID = 'openrouter:vendor/promoted-one';
 const ALERT_ID = 7;
+const NO_RESOLUTIONS = { intents: [], lastSyncAt: null };
 
 const model: CatalogModelDto = {
   id: MODEL_ID,
@@ -72,7 +76,8 @@ describe('AiCatalogController', () => {
       list: vi.fn().mockResolvedValue([]),
     };
     resolutions = {
-      overview: vi.fn().mockResolvedValue({ intents: [], lastSyncAt: null }),
+      overview: vi.fn().mockResolvedValue(NO_RESOLUTIONS),
+      rollback: vi.fn().mockResolvedValue(NO_RESOLUTIONS),
     };
     controller = new AiCatalogController(
       catalog as never,
@@ -93,6 +98,45 @@ describe('AiCatalogController', () => {
       intents: [],
       lastSyncAt: null,
     });
+  });
+
+  it('rolls a platform intent back on behalf of the admin who asked', async () => {
+    expect(
+      await controller.rollbackResolution(ACTOR, {
+        selectorKey: 'platform.fast',
+      })
+    ).toEqual(NO_RESOLUTIONS);
+    expect(resolutions.rollback).toHaveBeenCalledWith(
+      'platform.fast',
+      'admin-user-id'
+    );
+  });
+
+  it('answers 409 when the intent has nothing to roll back to', async () => {
+    resolutions.rollback.mockRejectedValue(
+      new ResolutionRollbackUnavailableError('nothing to roll back to')
+    );
+
+    await expect(
+      controller.rollbackResolution(ACTOR, { selectorKey: 'platform.fast' })
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('answers 400 when another intent serves the previous model', async () => {
+    resolutions.rollback.mockRejectedValue(new InvalidAIConfigError('clash'));
+
+    await expect(
+      controller.rollbackResolution(ACTOR, { selectorKey: 'platform.fast' })
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('surfaces any other roll back failure untouched', async () => {
+    const failure = new Error('resolutions table locked');
+    resolutions.rollback.mockRejectedValue(failure);
+
+    await expect(
+      controller.rollbackResolution(ACTOR, { selectorKey: 'platform.fast' })
+    ).rejects.toBe(failure);
   });
 
   describe('requires the admin role', () => {

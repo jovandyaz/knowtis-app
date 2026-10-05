@@ -198,21 +198,18 @@ export class AIConfigService
   }
 
   /**
-   * The three intent tiers must resolve to three different models: the picker
-   * renders one row per intent, and a shared id would silently drop a row.
+   * Rejects with `InvalidAIConfigError` when an intent other than `intent` serves
+   * `modelId`. The three intent tiers must resolve to three different models: the
+   * picker renders one row per intent, and a shared id would silently drop a row.
    */
-  private async assertIntentModelsStayDistinct(
-    key: AIConfigKey,
-    value: string
+  async assertNotServedByAnotherIntent(
+    modelId: string,
+    intent: ModelIntent
   ): Promise<void> {
-    const changed = intentOfConfigKey(key);
-    if (!changed) {
-      return;
-    }
-    const clash = await this.intentServing(value, changed);
+    const clash = await this.intentServing(modelId, intent);
     if (clash) {
       throw new InvalidAIConfigError(
-        `Model '${value}' already serves the '${clash}' tier; each tier needs its own model`
+        `Model '${modelId}' already serves the '${clash}' tier; each tier needs its own model`
       );
     }
   }
@@ -391,9 +388,11 @@ export class AIConfigService
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
     this.validateValue(CONFIG_KEYS[key], value);
-    await this.assertIntentModelsStayDistinct(key, value);
-    const previous = await this.repository.get(key);
     const intent = intentOfConfigKey(key);
+    if (intent) {
+      await this.assertNotServedByAnotherIntent(value, intent);
+    }
+    const previous = await this.repository.get(key);
     const servedBefore = intent
       ? this.servedIntentModel(intent, previous ?? AUTO_MODEL_SETTING)
       : NO_SERVED_MODEL;
@@ -427,8 +426,8 @@ export class AIConfigService
     }
     const intent = intentOfConfigKey(key);
     const active = intent ? this.resolutions.activeModelId(intent) : null;
-    if (active !== null) {
-      await this.assertIntentModelsStayDistinct(key, active);
+    if (intent && active !== null) {
+      await this.assertNotServedByAnotherIntent(active, intent);
     }
     const deleted = await this.repository.delete(key);
     if (!deleted) {

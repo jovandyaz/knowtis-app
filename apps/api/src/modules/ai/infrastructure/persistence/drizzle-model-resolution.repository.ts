@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { PlatformSelectorKey } from '@knowtis/shared-types';
@@ -125,6 +125,32 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
           eq(aiModelResolutions.selectorKey, selectorKey),
           eq(aiModelResolutions.pendingModelId, modelId),
           eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS)
+        )
+      )
+      .returning({ selectorKey: aiModelResolutions.selectorKey });
+    return updated.length > 0;
+  }
+
+  // Postgres evaluates every SET expression against the old row, so the two
+  // columns swap without a temporary.
+  async rollback(
+    selectorKey: PlatformSelectorKey,
+    expectedActiveModelId: string,
+    at: Date
+  ): Promise<boolean> {
+    const updated = await this.db
+      .update(aiModelResolutions)
+      .set({
+        activeModelId: sql`${aiModelResolutions.previousModelId}`,
+        previousModelId: sql`${aiModelResolutions.activeModelId}`,
+        changedAt: at,
+        updatedAt: at,
+      })
+      .where(
+        and(
+          eq(aiModelResolutions.selectorKey, selectorKey),
+          eq(aiModelResolutions.activeModelId, expectedActiveModelId),
+          isNotNull(aiModelResolutions.previousModelId)
         )
       )
       .returning({ selectorKey: aiModelResolutions.selectorKey });

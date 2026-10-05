@@ -3,6 +3,7 @@ import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -47,10 +48,13 @@ import {
   RequireFeatureFlag,
 } from '../feature-flags/feature-flag.guard';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
+import { InvalidAIConfigError } from './application/services/ai-config.service';
 import { AssignableModelsService } from './application/services/assignable-models.service';
 import { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
+import { ResolutionRollbackUnavailableError } from './domain/errors/resolution-rollback-unavailable.error';
 import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
 import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
+import { PlatformSelectorParamDto } from './dto/platform-selector-param.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
 import { UpdateCatalogCopyDto } from './dto/update-catalog-copy.dto';
 
@@ -131,6 +135,40 @@ export class AiCatalogController {
   @Get('resolutions')
   listResolutions(): Promise<PlatformResolutionsDto> {
     return this.resolutions.overview();
+  }
+
+  @ApiOperation({
+    summary: 'Roll a platform intent back to its previous model',
+    description:
+      'Swaps the active and previous resolution of the intent, leaving its pending model alone, and answers the refreshed platform resolutions. A pin keeps serving until it is released.',
+  })
+  @ApiResponse({ status: 200, description: 'Platform resolutions' })
+  @ApiResponse({
+    status: 409,
+    description: 'No previous model, or the active model changed meanwhile',
+  })
+  @ApiBadRequest(
+    'unknown selector, or another intent serves the previous model'
+  )
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(MUTATION_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  @Post('resolutions/:selectorKey/rollback')
+  async rollbackResolution(
+    @CurrentUser() user: RequestUser,
+    @Param() params: PlatformSelectorParamDto
+  ): Promise<PlatformResolutionsDto> {
+    try {
+      return await this.resolutions.rollback(params.selectorKey, user.id);
+    } catch (error) {
+      if (error instanceof ResolutionRollbackUnavailableError) {
+        throw new ConflictException(error.message);
+      }
+      if (error instanceof InvalidAIConfigError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   @ApiOperation({

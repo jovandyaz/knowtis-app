@@ -42,6 +42,12 @@ export interface ModelResolutionRepository {
     verdict: GateVerdict,
     at: Date
   ): Promise<boolean>;
+  /** Swaps the selector's active and previous models in one write, stamping `changedAt`, only while `expectedActiveModelId` is still active and a previous model exists. Leaves the pending entry alone. Resolves whether a row changed. */
+  rollback(
+    selectorKey: PlatformSelectorKey,
+    expectedActiveModelId: string,
+    at: Date
+  ): Promise<boolean>;
   /** Records the model an admin pin change stopped serving. */
   recordRelease(
     selectorKey: PlatformSelectorKey,

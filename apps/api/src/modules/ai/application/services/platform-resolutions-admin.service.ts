@@ -5,8 +5,11 @@ import {
   MODEL_INTENTS,
   type PlatformResolutionDto,
   type PlatformResolutionsDto,
+  type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
+import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
+import { ResolutionRollbackUnavailableError } from '../../domain/errors/resolution-rollback-unavailable.error';
 import { resolvePlatformIntent } from '../../domain/model-catalog/model-selectors';
 import {
   intentOfSelectorKey,
@@ -21,13 +24,14 @@ import {
   type ModelResolutionRepository,
 } from '../../domain/ports/model-resolution.repository';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
+import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import {
   AIConfigService,
   INTENT_CONFIG_KEYS,
   type AIConfigEntry,
 } from './ai-config.service';
 
-/** What the backoffice shows per platform intent. Mirrors `/internal/model-gate/active`: a supported pin serves, otherwise the active resolution does. */
+/** What the backoffice shows per platform intent, and its roll back. Mirrors `/internal/model-gate/active`: a supported pin serves, otherwise the active resolution does. */
 @Injectable()
 export class PlatformResolutionsAdminService {
   constructor(
@@ -36,7 +40,9 @@ export class PlatformResolutionsAdminService {
     @Inject(MODEL_INDEX_REPOSITORY)
     private readonly indexRepository: ModelIndexRepository,
     private readonly config: AIConfigService,
-    private readonly index: ModelIndexCache
+    private readonly index: ModelIndexCache,
+    private readonly resolutionCache: PlatformResolutionCache,
+    private readonly audit: AdminAuditService
   ) {}
 
   async overview(): Promise<PlatformResolutionsDto> {
@@ -64,6 +70,56 @@ export class PlatformResolutionsAdminService {
         : [];
     });
     return { intents, lastSyncAt: lastSeenAt?.toISOString() ?? null };
+  }
+
+  /**
+   * Makes the intent's previous model active again and the active one previous,
+   * leaving its pending entry alone, then answers the refreshed overview.
+   * Rejects with `ResolutionRollbackUnavailableError` when there is no previous
+   * model or the active one changed since it was read, and with
+   * `InvalidAIConfigError` when another intent serves the previous model.
+   */
+  async rollback(
+    selectorKey: PlatformSelectorKey,
+    actorId: string
+  ): Promise<PlatformResolutionsDto> {
+    // Refreshed before the clash check: a sibling intent activated on another
+    // instance would otherwise stay invisible until the cache's next interval.
+    const [rows] = await Promise.all([
+      this.resolutions.list(),
+      this.resolutionCache.refresh(),
+    ]);
+    const row = rows.find((read) => read.selectorKey === selectorKey);
+    const previous = row?.previousModelId ?? null;
+    if (!row || previous === null) {
+      throw new ResolutionRollbackUnavailableError(
+        `'${selectorKey}' has no previous model to roll back to`
+      );
+    }
+    await this.config.assertNotServedByAnotherIntent(
+      previous,
+      intentOfSelectorKey(selectorKey)
+    );
+    const rolledBack = await this.resolutions.rollback(
+      selectorKey,
+      row.activeModelId,
+      new Date()
+    );
+    if (!rolledBack) {
+      throw new ResolutionRollbackUnavailableError(
+        `'${selectorKey}' changed while rolling back; reload and try again`
+      );
+    }
+    await this.audit.record({
+      actorId,
+      action: 'ai_resolution.rolled_back',
+      targetType: 'ai_model_resolution',
+      targetId: selectorKey,
+      before: { active: row.activeModelId },
+      after: { active: previous },
+    });
+    await this.resolutionCache.refresh();
+    return this.overview();
   }
 }
 

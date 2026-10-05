@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import type { ModelIntent } from '@knowtis/shared-types';
 
+import type { AdminAuditService } from '../../../admin/audit/admin-audit.service';
+import { ResolutionRollbackUnavailableError } from '../../domain/errors/resolution-rollback-unavailable.error';
 import { SELECTOR_KEY_BY_INTENT } from '../../domain/model-catalog/platform-resolution';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
@@ -10,13 +12,18 @@ import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
 import {
   createModelResolutionRepositoryStub,
+  createResolutionsStub,
   seededResolution,
 } from '../../testing/platform-resolutions';
 import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
-import type { AIConfigEntry, AIConfigService } from './ai-config.service';
+import {
+  InvalidAIConfigError,
+  type AIConfigEntry,
+  type AIConfigService,
+} from './ai-config.service';
 import { PlatformResolutionsAdminService } from './platform-resolutions-admin.service';
 
 const PIN = 'openrouter:vendor/pinned';
@@ -24,6 +31,12 @@ const SERVED_FAST = 'openrouter:minimax/minimax-m2.5';
 const PENDING_ID = 'openrouter:vendor/next';
 const RUN_URL = 'https://ci.example/runs/9';
 const LAST_SEEN = new Date('2026-10-03T06:00:00.000Z');
+const PREVIOUS_FAST = 'openrouter:vendor/old';
+const ACTOR_ID = 'admin-user-id';
+const FAST_WITH_PREVIOUS = seededResolution('fast', {
+  previousModelId: PREVIOUS_FAST,
+  changedAt: new Date('2026-09-01T00:00:00.000Z'),
+});
 const CONFIG_KEY_BY_INTENT = {
   fast: 'ai_fast_model',
   balanced: 'ai_default_model',
@@ -63,6 +76,9 @@ function make(
           entry('ai_deep_model', { value: 'p' }),
         ]
       ),
+    assertNotServedByAnotherIntent: vi
+      .fn<AIConfigService['assertNotServedByAnotherIntent']>()
+      .mockResolvedValue(undefined),
   };
   const resolutions = createModelResolutionRepositoryStub(
     async () =>
@@ -74,13 +90,30 @@ function make(
   );
   const indexRepo = createModelIndexRepositoryStub(async () => []);
   vi.mocked(indexRepo.lastSeenAt).mockResolvedValue(LAST_SEEN);
+  const resolutionCache = createResolutionsStub();
+  const refresh = vi.spyOn(resolutionCache, 'refresh');
+  const audit = {
+    record: vi.fn<AdminAuditService['record']>().mockResolvedValue(undefined),
+  };
   const service = new PlatformResolutionsAdminService(
     resolutions,
     indexRepo,
     config as unknown as AIConfigService,
-    opts.index ?? createSnapshotIndex()
+    opts.index ?? createSnapshotIndex(),
+    resolutionCache,
+    audit as unknown as AdminAuditService
   );
-  return { service, indexRepo, config };
+  return { service, indexRepo, config, resolutions, refresh, audit };
+}
+
+function withPreviousFast() {
+  return make({
+    resolutions: [
+      FAST_WITH_PREVIOUS,
+      seededResolution('balanced'),
+      seededResolution('powerful'),
+    ],
+  });
 }
 
 describe('PlatformResolutionsAdminService', () => {
@@ -219,5 +252,101 @@ describe('PlatformResolutionsAdminService', () => {
 
     expect(lastSyncAt).toBeNull();
     expect(indexRepo.lastSeenAt).toHaveBeenCalledWith(OPENROUTER_PROVIDER);
+  });
+
+  describe('rollback', () => {
+    it('rolls the intent back to its previous model', async () => {
+      const { service, resolutions } = withPreviousFast();
+
+      await service.rollback('platform.fast', ACTOR_ID);
+
+      expect(resolutions.rollback).toHaveBeenCalledWith(
+        'platform.fast',
+        SERVED_FAST,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it('answers the overview read after the roll back', async () => {
+      const { service, resolutions, refresh, config } = withPreviousFast();
+
+      const overview = await service.rollback('platform.fast', ACTOR_ID);
+
+      expect(overview.intents.map((row) => row.intent)).toEqual([
+        'fast',
+        'balanced',
+        'powerful',
+      ]);
+      const rolledBackAt = vi.mocked(resolutions.rollback).mock
+        .invocationCallOrder[0];
+      expect(Math.max(...refresh.mock.invocationCallOrder)).toBeGreaterThan(
+        rolledBackAt
+      );
+      expect(
+        config.getEffectiveConfig.mock.invocationCallOrder[0]
+      ).toBeGreaterThan(Math.max(...refresh.mock.invocationCallOrder));
+    });
+
+    it('audits ai_resolution.rolled_back with the swapped models', async () => {
+      const { service, audit } = withPreviousFast();
+
+      await service.rollback('platform.fast', ACTOR_ID);
+
+      expect(audit.record).toHaveBeenCalledWith({
+        actorId: ACTOR_ID,
+        action: 'ai_resolution.rolled_back',
+        targetType: 'ai_model_resolution',
+        targetId: 'platform.fast',
+        before: { active: SERVED_FAST },
+        after: { active: PREVIOUS_FAST },
+      });
+    });
+
+    it('refuses without a previous model', async () => {
+      const { service, resolutions, audit } = make();
+
+      await expect(
+        service.rollback('platform.fast', ACTOR_ID)
+      ).rejects.toBeInstanceOf(ResolutionRollbackUnavailableError);
+      expect(resolutions.rollback).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the active model changed meanwhile', async () => {
+      const { service, resolutions, audit } = withPreviousFast();
+      vi.mocked(resolutions.rollback).mockResolvedValue(false);
+
+      await expect(
+        service.rollback('platform.fast', ACTOR_ID)
+      ).rejects.toBeInstanceOf(ResolutionRollbackUnavailableError);
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('refuses a previous model another intent serves', async () => {
+      const { service, resolutions, config, audit } = withPreviousFast();
+      config.assertNotServedByAnotherIntent.mockRejectedValue(
+        new InvalidAIConfigError('clash')
+      );
+
+      await expect(
+        service.rollback('platform.fast', ACTOR_ID)
+      ).rejects.toBeInstanceOf(InvalidAIConfigError);
+      expect(config.assertNotServedByAnotherIntent).toHaveBeenCalledWith(
+        PREVIOUS_FAST,
+        'fast'
+      );
+      expect(resolutions.rollback).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('checks the clash against resolutions refreshed from the store', async () => {
+      const { service, refresh, config } = withPreviousFast();
+
+      await service.rollback('platform.fast', ACTOR_ID);
+
+      expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(
+        config.assertNotServedByAnotherIntent.mock.invocationCallOrder[0]
+      );
+    });
   });
 });
