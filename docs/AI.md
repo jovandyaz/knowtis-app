@@ -594,7 +594,7 @@ Open-weight models ship and change price weekly, so any fixed list goes stale si
 | `pin_unavailable`      | Model                                                    | An intent pin or a fallback chain id is not listed in the model index                                                            | Yes     |
 | `retirement_scheduled` | Model                                                    | A served, pending, pinned or chained model's index row carries an OpenRouter retirement date or a models.dev `deprecated` status | —       |
 | `selector_empty`       | Selector key (`platform.fast`, …)                        | A platform selector resolves to no model after a concluded OpenRouter pass                                                       | Yes     |
-| `resolution_pending`   | Model                                                    | The sync pends a selector's candidate for the [model gate](#model-gate)                                                          | —       |
+| `resolution_pending`   | Model                                                    | The sync pends a selector's candidate for the [model gate](#model-gate); resolved on its own once a verdict on it is applied     | —       |
 | `gate_failed`          | Model                                                    | The model gate fails a candidate, or a passing candidate is served by another intent already                                     | Yes     |
 | `sync_rejected`        | Provider (`openrouter`, `anthropic`, `openai`, `google`) | The index write rejected the provider's batch for shrink or floor                                                                | —       |
 | `family_drift`         | Model                                                    | An eligible model of a family no selector lists is newer than every model its author serves                                      | —       |
@@ -602,7 +602,7 @@ Open-weight models ship and change price weekly, so any fixed list goes stale si
 
 [The sync job](#the-sync-job) describes each watch. Migration `0063` deleted the `price_drift` rows, a kind nothing raised once the model index tracked upstream prices daily, and renamed the `deprecation` rows to `retirement_scheduled`, keeping their history.
 
-A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row. The only alert a watch closes is `sync_stale`, which the [stale sync](#the-sync-job) check resolves once the sync is fresh again, so the next outage opens a new one and notifies again. Every other alert stays open until an admin resolves it (`POST /ai/catalog/alerts/:id/resolve`), even after its cause clears. One resolved while its cause persists is raised again the next time a watch sees it.
+A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row. Two alerts close on their own. The [stale sync](#the-sync-job) check resolves `sync_stale` once the sync is fresh again, so the next outage opens a new one and notifies again. The [model gate](#model-gate) resolves a model's `resolution_pending` once a verdict on it is applied, passed or failed: the candidate no longer awaits the gate. Every other alert stays open until an admin resolves it (`POST /ai/catalog/alerts/:id/resolve`), even after its cause clears. One resolved while its cause persists is raised again the next time a watch sees it.
 
 `CatalogAlertsWriter` files every kind. Only an alert it newly opens of a `NOTIFYING_ALERT_KINDS` kind (`selector_empty`, `gate_failed`, `pin_unavailable`, `sync_stale`) fires the `ai.catalog.alert` [webhook](#health--alerting) with `{ kind, subject, detail }`. A deduped alert never fires it, so each kind notifies at most once per subject until the alert is resolved. A failed write logs `ai.catalog.alert_failed` (`subject`, `kind`, `reason`) at warn and the rest are still filed.
 
@@ -1449,19 +1449,25 @@ other (`concurrency: model-gate`).
   evaluates it again every day and activates it once the other intent stops serving it, unless
   the selector has moved on; the open alert dedupes those daily clashes into one. Otherwise
   `recordVerdict` activates it (see [`ai_model_resolutions`](#ai_model_resolutions)), the cache
-  is refreshed again, and the service logs `ai.model.resolution_activated` (`selectorKey`,
-  `modelId`, `previousModelId`).
+  is refreshed again, the service logs `ai.model.resolution_activated` (`selectorKey`,
+  `modelId`, `previousModelId`), and it resolves the model's open `resolution_pending` alert.
+  A clash leaves that alert open, since the candidate still awaits the gate.
 - **Fail.** `recordVerdict` stores `failed` with the detail (trimmed, a blank one replaced by
   `eval gate failed`, cut at 500 characters) and the run link, and raises a `gate_failed` alert on
   the model with the detail `<selectorKey> (<runUrl>): <stored detail>`. An alert detail is cut at
   500 characters (`CATALOG_ALERT_DETAIL_MAX_LENGTH`), and the reason goes last, so a long one
-  loses only its tail. `/pending` stops listing the row, and the sync does not pend the same id
-  again; a different selector result replaces it.
+  loses only its tail. It also resolves the model's open `resolution_pending` alert. `/pending`
+  stops listing the row, and the sync does not pend the same id again; a different selector
+  result replaces it.
 - **No longer pending.** A verdict for a model that is not the row's gate-pending model —
   already activated, already failed, or replaced by a newer candidate — writes nothing and
   answers 200 with `{ applied: false, reason: 'not_pending' }`, so a replayed or late verdict is
-  harmless and raises no alert. The compare-and-set write holds this even when a sync re-pends the
-  row between the read and the write.
+  harmless and neither raises nor resolves an alert. The compare-and-set write holds this even
+  when a sync re-pends the row between the read and the write.
+
+Resolving `resolution_pending` never fails a verdict: a failed resolve logs
+`ai.catalog.alert_resolve_failed` (`subject`, `kind`, `reason`) at warn, and the alert stays open
+until an admin resolves it.
 
 The clash check reads pins through the 30 s per-process `ai_config` cache, so a pin set on
 another instance within those 30 s can be missed. Two intents then serve one model until an

@@ -3,12 +3,14 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
   CATALOG_ALERT_DETAIL_MAX_LENGTH,
+  type CatalogAlertKind,
   type ModelGatePendingDto,
   type ModelGateVerdictResultDto,
   type ModelIntent,
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   intentOfSelectorKey,
@@ -24,6 +26,7 @@ import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-r
 import { AIConfigService } from './ai-config.service';
 
 const DEFAULT_GATE_FAILURE_DETAIL = 'eval gate failed';
+const RESOLUTION_PENDING = 'resolution_pending' satisfies CatalogAlertKind;
 
 export interface VerdictInput {
   readonly selectorKey: PlatformSelectorKey;
@@ -98,7 +101,7 @@ export class ModelGateService {
     return this.config.getIntentModels();
   }
 
-  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. A recorded failure and a refused activation raise `gate_failed`. */
+  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. A recorded failure and a refused activation raise `gate_failed`; an applied verdict resolves the model's open `resolution_pending` alert. */
   verdict(input: VerdictInput): Promise<ModelGateVerdictResultDto> {
     return input.passed ? this.onPassed(input) : this.onFailed(input);
   }
@@ -140,6 +143,7 @@ export class ModelGateService {
       modelId,
       previousModelId: row.activeModelId,
     });
+    await this.resolvePendingAlert(modelId);
     return APPLIED;
   }
 
@@ -158,6 +162,7 @@ export class ModelGateService {
       return NOT_PENDING;
     }
     await this.alerts.raise([gateFailed(input, failure)]);
+    await this.resolvePendingAlert(modelId);
     return APPLIED;
   }
 
@@ -173,5 +178,18 @@ export class ModelGateService {
     });
     await this.alerts.raise([gateFailed(input, `serves ${servedBy} already`)]);
     return CONFLICT;
+  }
+
+  private async resolvePendingAlert(modelId: string): Promise<void> {
+    try {
+      await this.alerts.resolveOpen(modelId, RESOLUTION_PENDING);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.catalog.alert_resolve_failed',
+        subject: modelId,
+        kind: RESOLUTION_PENDING,
+        reason: reasonOf(error),
+      });
+    }
   }
 }
