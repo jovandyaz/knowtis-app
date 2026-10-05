@@ -18,11 +18,11 @@ import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleUserProviderKeysRepository } from './drizzle-user-provider-keys.repository';
 import { DrizzleUserProviderModelsRepository } from './drizzle-user-provider-models.repository';
 
-const USER_ID = '00000000-0000-4000-8000-0000000000c5';
+const USER_ID = '00000000-0000-4000-8000-0000000000cc';
 const OLD_FP = 'a'.repeat(64);
 const NEW_FP = 'b'.repeat(64);
 const DAY_MS = 24 * 60 * 60 * 1000;
-const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000c6';
+const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000cd';
 
 describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
   let moduleRef: TestingModule;
