@@ -16,6 +16,7 @@ import {
 } from '../execution-context/tier-policy';
 import {
   effectivePrimary,
+  entitledRoutes,
   reachableRoutes,
   routeIntent,
   type ByokResolutions,
@@ -61,6 +62,7 @@ export interface TierCatalogInput {
   readonly isPlatformRoutable: (modelId: string) => boolean;
   readonly indexRow: (modelId: string) => IndexedModel | undefined;
   readonly byok: ByokResolutions;
+  readonly isEntitled: (modelId: string) => boolean;
 }
 
 const NO_ROUTE = 'no_route';
@@ -141,14 +143,19 @@ function keyCatalog(input: TierCatalogInput): TierCatalog {
   const held = new Set<string>(input.heldProviders);
   const primary = effectivePrimary(input.heldProviders, input.storedPrimary);
   const listed = input.offered.filter(
-    (model) => held.has(providerOf(model.id)) && input.isSupported(model.id)
+    (model) =>
+      held.has(providerOf(model.id)) &&
+      input.isSupported(model.id) &&
+      input.isEntitled(model.id)
   );
   const listedIds = new Set(listed.map((model) => model.id));
   const intentOf = new Map<string, ModelIntent>();
   const availability: IntentAvailability[] = [];
   const routed: OfferedModel[] = [];
   for (const intent of MODEL_INTENTS) {
-    const candidates = input.byok[intent];
+    const candidates = entitledRoutes(input.byok[intent], (row) =>
+      input.isEntitled(row.id)
+    );
     const route = routeIntent(candidates, input.heldProviders, primary);
     if (route === null) {
       availability.push({ intent, available: false, reason: NO_ROUTE });

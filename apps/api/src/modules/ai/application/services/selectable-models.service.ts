@@ -16,6 +16,10 @@ import {
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
 import {
+  isEntitled,
+  type ByokEntitlements,
+} from '../../domain/model-catalog/byok-entitlement';
+import {
   resolveByokSelectors,
   type ByokResolutions,
 } from '../../domain/model-catalog/byok-intent-routes';
@@ -70,7 +74,8 @@ export class SelectableModelsService {
   catalogFor(
     execution: Pick<AiExecutionContext, 'tier' | 'policy' | 'byokProviders'>,
     platformIntents: Readonly<Record<ModelIntent, string>>,
-    storedPrimary: ByokProvider | null
+    storedPrimary: ByokProvider | null,
+    entitlements: ByokEntitlements
   ): TierCatalog {
     return tierCatalog({
       tier: execution.tier,
@@ -83,6 +88,7 @@ export class SelectableModelsService {
       isPlatformRoutable: (id) => this.registry.isModelAvailable(id),
       indexRow: (id) => this.index.catalog().get(id),
       byok: this.byokResolutions(),
+      isEntitled: (id) => isEntitled(id, entitlements),
     });
   }
 

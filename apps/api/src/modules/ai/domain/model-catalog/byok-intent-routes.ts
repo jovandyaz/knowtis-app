@@ -77,6 +77,23 @@ function routeOrder(
   ];
 }
 
+/** Each candidate with only the routes `isEntitled` keeps; a candidate left without routes stays, so selector order is unchanged. */
+export function entitledRoutes(
+  candidates: readonly SelectorRoutes[],
+  isEntitled: (row: IndexedModel) => boolean
+): SelectorRoutes[] {
+  return candidates.map(({ selector, routes }) => {
+    const kept: Partial<Record<ByokProvider, IndexedModel>> = {};
+    for (const provider of BYOK_PROVIDERS) {
+      const row = routes[provider];
+      if (row !== undefined && isEntitled(row)) {
+        kept[provider] = row;
+      }
+    }
+    return { selector, routes: kept };
+  });
+}
+
 /** Every route the held keys reach: candidates in selector order, each candidate's routes in route order (primary, other direct keys in add order, OpenRouter last). */
 export function reachableRoutes(
   candidates: readonly SelectorRoutes[],

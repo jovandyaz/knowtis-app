@@ -21,6 +21,7 @@ import {
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
+import { NO_ENTITLEMENTS } from '../../domain/model-catalog/byok-entitlement';
 import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
@@ -72,7 +73,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
   function listedTo(execution: AiExecutionContext) {
     return selectable.toSelectable(
-      selectable.catalogFor(execution, PLATFORM_INTENTS, null)
+      selectable.catalogFor(execution, PLATFORM_INTENTS, null, NO_ENTITLEMENTS)
     );
   }
 

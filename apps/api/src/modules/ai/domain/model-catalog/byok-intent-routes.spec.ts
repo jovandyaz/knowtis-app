@@ -11,6 +11,7 @@ import {
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
 import {
   effectivePrimary,
+  entitledRoutes,
   reachableRoutes,
   resolveByokSelectors,
   routeIntent,
@@ -162,6 +163,28 @@ describe('resolveByokSelectors', () => {
       )
     );
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('entitledRoutes', () => {
+  it('keeps the candidate order and drops only the routes not entitled', () => {
+    const [byAnthropic, byOpenai, byGoogle] = RESOLUTIONS.balanced;
+    const dropped = new Set(
+      [byAnthropic.routes.anthropic, ...Object.values(byOpenai.routes)].map(
+        (row) => row?.id
+      )
+    );
+
+    expect(
+      entitledRoutes(RESOLUTIONS.balanced, (row) => !dropped.has(row.id))
+    ).toEqual([
+      {
+        selector: byAnthropic.selector,
+        routes: { openrouter: byAnthropic.routes.openrouter },
+      },
+      { selector: byOpenai.selector, routes: {} },
+      byGoogle,
+    ]);
   });
 });
 

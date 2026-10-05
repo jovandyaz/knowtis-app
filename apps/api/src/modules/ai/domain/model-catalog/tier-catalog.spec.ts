@@ -11,12 +11,15 @@ import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
+import { snapshotRouteId } from '../../testing/snapshot-route';
 import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
+import { entitledIdsOf, isEntitled } from './byok-entitlement';
 import {
   resolveByokSelectors,
   type ByokResolutions,
 } from './byok-intent-routes';
+import { slugOf } from './catalog-model';
 import {
   findInCatalog,
   intentDescriptionKey,
@@ -60,6 +63,7 @@ function catalogFor(
     isPlatformRoutable?: (id: string) => boolean;
     indexRow?: (id: string) => IndexedModel | undefined;
     byok?: ByokResolutions;
+    isEntitled?: (id: string) => boolean;
   } = {}
 ) {
   return tierCatalog({
@@ -74,6 +78,7 @@ function catalogFor(
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
     indexRow: options.indexRow ?? ((id) => SNAPSHOT.get(id)),
     byok: options.byok ?? BYOK,
+    isEntitled: options.isEntitled ?? (() => true),
   });
 }
 
@@ -345,6 +350,84 @@ describe('tierCatalog', () => {
       ids(catalog).filter((id) => PLATFORM_INTENT_IDS.includes(id))
     ).toEqual([]);
     expect(catalog.billing).toBe('key');
+  });
+
+  it('routes an intent to the next entitled candidate', () => {
+    const anthropicBalanced = snapshotRouteId('balanced', 'anthropic');
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openai'],
+      isEntitled: (id) => id !== anthropicBalanced,
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'balanced',
+      available: true,
+      modelId: snapshotRouteId('balanced', 'openai'),
+      substituted: true,
+    });
+    expect(ids(catalog)).not.toContain(anthropicBalanced);
+  });
+
+  it('keeps every route of a held provider without a listing', () => {
+    const openaiFast = snapshotRouteId('fast', 'openai');
+    const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
+      ['openai', entitledIdsOf([slugOf(openaiFast)])],
+    ]);
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openai'],
+      isEntitled: (id) => isEntitled(id, entitlements),
+    });
+    expect(ids(catalog)).toEqual([
+      snapshotRouteId('fast', 'anthropic'),
+      openaiFast,
+      snapshotRouteId('balanced', 'anthropic'),
+      snapshotRouteId('powerful', 'anthropic'),
+    ]);
+    expect(
+      MODEL_INTENTS.map((intent) => intentModelOf(catalog, intent))
+    ).toEqual(
+      MODEL_INTENTS.map((intent) => snapshotRouteId(intent, 'anthropic'))
+    );
+  });
+
+  it('drops a promoted model its key is not entitled to', () => {
+    const promoted = 'openrouter:z-ai/glm-5.2';
+    const held: ByokProvider[] = ['openrouter'];
+    const unfiltered = ids(catalogFor('byok', { heldProviders: held }));
+    const catalog = catalogFor('byok', {
+      heldProviders: held,
+      isEntitled: (id) => id !== promoted,
+    });
+    expect(unfiltered).toContain(promoted);
+    expect(ids(catalog)).toEqual(unfiltered.filter((id) => id !== promoted));
+  });
+
+  it('reports no_route when no candidate of an intent is entitled', () => {
+    const fastRoutes = new Set(
+      BYOK.fast.flatMap((candidate) =>
+        Object.values(candidate.routes).map((row) => row?.id)
+      )
+    );
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openrouter'],
+      isEntitled: (id) => !fastRoutes.has(id),
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'fast',
+      available: false,
+      reason: 'no_route',
+    });
+    expect(ids(catalog).filter((id) => fastRoutes.has(id))).toEqual([]);
+    expect(intentModelOf(catalog, 'balanced')).toBe(
+      snapshotRouteId('balanced', 'anthropic')
+    );
+  });
+
+  it('ignores entitlement in platform catalogs', () => {
+    for (const tier of ['anonymous', 'free'] as const) {
+      expect(catalogFor(tier, { isEntitled: () => false })).toEqual(
+        catalogFor(tier)
+      );
+    }
   });
 
   it('lets the stored primary provider pick the route of the winning candidate', () => {

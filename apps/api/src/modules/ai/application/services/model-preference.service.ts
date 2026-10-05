@@ -22,6 +22,7 @@ import type {
   AiExecutionContext,
 } from '../../domain/execution-context/ai-execution-context';
 import { CATALOG_SCOPE } from '../../domain/execution-context/tier-policy';
+import { NO_ENTITLEMENTS } from '../../domain/model-catalog/byok-entitlement';
 import {
   chooseModel,
   MODEL_CHOICE,
@@ -69,7 +70,8 @@ export class ModelPreferenceService {
     const catalog = this.selectable.catalogFor(
       execution,
       platformIntents,
-      primaryProvider
+      primaryProvider,
+      NO_ENTITLEMENTS
     );
     return {
       tier: catalog.tier,
@@ -293,7 +295,8 @@ export class ModelPreferenceService {
     const catalog = this.selectable.catalogFor(
       execution,
       platformIntents,
-      primaryProvider
+      primaryProvider,
+      NO_ENTITLEMENTS
     );
     return {
       catalog,

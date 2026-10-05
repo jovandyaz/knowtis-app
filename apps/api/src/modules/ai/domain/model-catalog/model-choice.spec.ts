@@ -12,6 +12,7 @@ import type {
 } from '@knowtis/shared-types';
 
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import { snapshotRouteId } from '../../testing/snapshot-route';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
 import { resolveByokSelectors } from './byok-intent-routes';
 import {
@@ -72,6 +73,7 @@ function setup(
     storedPrimary?: ByokProvider | null;
     platformIntents?: Record<ModelIntent, string>;
     rows?: readonly IndexedModel[];
+    isEntitled?: (id: string) => boolean;
   } = {}
 ) {
   const platformIntents = options.platformIntents ?? PLATFORM_INTENTS;
@@ -98,6 +100,7 @@ function setup(
       options.rows ?? MODEL_INDEX_SNAPSHOT,
       SNAPSHOT_DATE
     ),
+    isEntitled: options.isEntitled ?? (() => true),
   });
   return (request: Partial<ModelRequest>) =>
     chooseModel(
@@ -611,6 +614,41 @@ describe('chooseModel', () => {
         kind: 'unavailable',
         reason: 'key_removed',
         suggestedModel: PLATFORM_INTENTS.balanced,
+      });
+    });
+  });
+
+  describe('a model its held key is not entitled to', () => {
+    const unentitled = snapshotRouteId('powerful', 'anthropic');
+    const keyIntent = snapshotRouteId('balanced', 'anthropic');
+    const choose = setup('byok', ['anthropic'], undefined, {
+      isEntitled: (id) => id !== unentitled,
+    });
+
+    it.each(['preferredModel', 'pinned'] as const)(
+      'falls back from it as retired, given as %s',
+      (field) => {
+        expect(choose({ [field]: unentitled })).toEqual({
+          kind: 'resolved',
+          model: keyIntent,
+          resolution: {
+            requested: unentitled,
+            resolved: keyIntent,
+            fallback: {
+              reason: 'model_retired',
+              from: unentitled,
+              to: keyIntent,
+            },
+          },
+        });
+      }
+    );
+
+    it('refuses it as retired when the request names it', () => {
+      expect(choose({ explicit: unentitled })).toEqual({
+        kind: 'unavailable',
+        reason: 'model_retired',
+        suggestedModel: keyIntent,
       });
     });
   });
