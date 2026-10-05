@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
@@ -129,6 +130,7 @@ describe('PlatformResolutionsAdminService', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('reports auto and pinned intents', async () => {
@@ -319,6 +321,23 @@ describe('PlatformResolutionsAdminService', () => {
         targetId: 'platform.fast',
         before: { active: SERVED_FAST },
         after: { active: PREVIOUS_FAST },
+      });
+    });
+
+    it('logs ai.model.resolution_rolled_back with the confirmed models', async () => {
+      const log = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const { service } = withPreviousFast();
+
+      await service.rollback('platform.fast', FAST_PAIR, ACTOR_ID);
+
+      expect(log).toHaveBeenCalledWith({
+        event: 'ai.model.resolution_rolled_back',
+        selectorKey: 'platform.fast',
+        modelId: PREVIOUS_FAST,
+        previousModelId: SERVED_FAST,
+        actorId: ACTOR_ID,
       });
     });
 

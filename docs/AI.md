@@ -791,7 +791,7 @@ The **Model catalog** section shows "Last sync `<relative time>`" beside **Sync 
 
 - **409** (`ResolutionRollbackUnavailableError`, "changed since it was loaded; reload and try again") when the intent no longer holds both confirmed models, a row without a previous model included.
 - **400** for a selector key outside the three platform intents, a missing, empty or overlong model id, or when another intent serves the previous model, by its pin or its active resolution. That is the [release clash](#dynamic-model-configuration) rule, checked against resolutions re-read from the store, so a sibling activated on another instance counts.
-- An applied roll back is audited as `ai_resolution.rolled_back` (`before.active`, `after.active`: the confirmed models) and refreshes the resolution cache of the instance that served it; other instances follow within 60 s.
+- An applied roll back is audited as `ai_resolution.rolled_back` (`before.active`, `after.active`: the confirmed models) and logged as `ai.model.resolution_rolled_back` (`selectorKey`, `modelId`: the restored model, `previousModelId`, `actorId`), in the activation's `ai.model.*` family. It refreshes the resolution cache of the instance that served it; other instances follow within 60 s.
 - A pin keeps serving. The roll back moves only the active resolution, which the intent serves once the pin is released.
 
 A roll back is a quick revert, not a hold. The selector still resolves to the newer model, so auto mode can bring it back: the next conclusive sync pends it again, and a passing gate run activates it. To keep the older model, pin it: the pin is the circuit breaker. The model rolled back from becomes the previous model, so it stays platform-billed for `RESOLUTION_GRACE_DAYS` like any other previous model.
@@ -1529,7 +1529,7 @@ model id of at most 120 characters, a strict boolean `passed`, an https `runUrl`
   `OPENROUTER_API_KEY`.
 
 **Events.** The resolutions log under two prefixes, so a filter on `ai.model_resolution.*`
-misses an activation:
+misses an activation and a roll back:
 
 | Event                                      | Level | When                                                                |
 | ------------------------------------------ | ----- | ------------------------------------------------------------------- |
@@ -1540,6 +1540,7 @@ misses an activation:
 | `ai.model_resolution.cache_refresh_failed` | warn  | The resolution cache could not re-read the store                    |
 | `ai.model_resolution.activation_conflict`  | warn  | A passing candidate is served by another intent                     |
 | `ai.model.resolution_activated`            | info  | A passing verdict activated a candidate                             |
+| `ai.model.resolution_rolled_back`          | info  | An admin rolled an intent back to its previous model                |
 
 ### Judge calibration
 

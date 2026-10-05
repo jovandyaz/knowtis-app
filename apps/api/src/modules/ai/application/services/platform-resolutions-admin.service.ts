@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
 import {
@@ -36,6 +36,8 @@ import {
 /** What the backoffice shows per platform intent, and its roll back. Mirrors `/internal/model-gate/active`: a supported pin serves, otherwise the active resolution does. */
 @Injectable()
 export class PlatformResolutionsAdminService {
+  private readonly logger = new Logger(PlatformResolutionsAdminService.name);
+
   constructor(
     @Inject(MODEL_RESOLUTION_REPOSITORY)
     private readonly resolutions: ModelResolutionRepository,
@@ -112,6 +114,13 @@ export class PlatformResolutionsAdminService {
       targetId: selectorKey,
       before: { active: confirmed.activeModelId },
       after: { active: confirmed.previousModelId },
+    });
+    this.logger.log({
+      event: 'ai.model.resolution_rolled_back',
+      selectorKey,
+      modelId: confirmed.previousModelId,
+      previousModelId: confirmed.activeModelId,
+      actorId,
     });
     if (applied.clearedPending) {
       await this.alerts.resolvePending(confirmed.previousModelId);
