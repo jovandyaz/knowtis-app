@@ -33,9 +33,7 @@ function unavailableDetail(slug: string): string {
  * one about to be declared gone.
  */
 function absenceCheck(catalog: UpstreamCatalog) {
-  const bySlug = new Map(
-    catalog.models.map((model) => [model.id.toLowerCase(), model])
-  );
+  const listed = new Set(catalog.models.map((model) => model.id.toLowerCase()));
   const unparseable = new Set(catalog.discarded.map((id) => id.toLowerCase()));
   const recognizable = catalog.models.some((model) =>
     PLATFORM_AUTHOR_PREFIXES.some((prefix) =>
@@ -48,7 +46,7 @@ function absenceCheck(catalog: UpstreamCatalog) {
   return {
     conclusive,
     isGone: (slug: string) =>
-      conclusive && !bySlug.has(slug) && !unparseable.has(slug),
+      conclusive && !listed.has(slug) && !unparseable.has(slug),
   };
 }
 

@@ -77,7 +77,7 @@ if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
 const [WATCHED_SLUG] = WATCHED_SLUGS;
 const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
-/** Watched models present and undated, so they raise nothing, plus `DEEPSEEK_CANDIDATE`, an unwatched platform-author row that keeps the read recognizable: a fixture that omits a watched model asserts it vanished upstream. */
+/** Watched models present, so they raise nothing, plus `DEEPSEEK_CANDIDATE`, an unwatched platform-author row that keeps the read recognizable: a fixture that omits a watched model asserts it vanished upstream. */
 function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
   const provided = new Set(models.map((model) => model.id));
   return {
