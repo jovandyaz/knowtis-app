@@ -25,6 +25,7 @@ import {
   MODEL_RESOLUTION_REPOSITORY,
   type ModelResolutionRepository,
 } from '../../domain/ports/model-resolution.repository';
+import { CatalogAlertsWriter } from '../../infrastructure/catalog/catalog-alerts.writer';
 import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import {
   AIConfigService,
@@ -42,7 +43,8 @@ export class PlatformResolutionsAdminService {
     private readonly indexRepository: ModelIndexRepository,
     private readonly config: AIConfigService,
     private readonly resolutionCache: PlatformResolutionCache,
-    private readonly audit: AdminAuditService
+    private readonly audit: AdminAuditService,
+    private readonly alerts: CatalogAlertsWriter
   ) {}
 
   async overview(): Promise<PlatformResolutionsDto> {
@@ -75,8 +77,9 @@ export class PlatformResolutionsAdminService {
 
   /**
    * Makes the confirmed previous model active again and the confirmed active one
-   * previous, leaving the pending entry alone, then answers the refreshed
-   * overview. Rejects with `ResolutionRollbackUnavailableError` unless the intent
+   * previous, then answers the refreshed overview. A `pending` entry on the
+   * restored model clears with it and its `resolution_pending` alert resolves;
+   * any other pending entry stays. Rejects with `ResolutionRollbackUnavailableError` unless the intent
    * still holds both confirmed models, and with `InvalidAIConfigError` when
    * another intent serves the previous one.
    */
@@ -92,12 +95,12 @@ export class PlatformResolutionsAdminService {
       confirmed.previousModelId,
       intentOfSelectorKey(selectorKey)
     );
-    const rolledBack = await this.resolutions.rollback(
+    const applied = await this.resolutions.rollback(
       selectorKey,
       confirmed,
       new Date()
     );
-    if (!rolledBack) {
+    if (applied === null) {
       throw new ResolutionRollbackUnavailableError(
         `'${selectorKey}' changed since it was loaded; reload and try again`
       );
@@ -110,6 +113,9 @@ export class PlatformResolutionsAdminService {
       before: { active: confirmed.activeModelId },
       after: { active: confirmed.previousModelId },
     });
+    if (applied.clearedPending) {
+      await this.alerts.resolvePending(confirmed.previousModelId);
+    }
     await this.resolutionCache.refresh();
     return this.overview();
   }

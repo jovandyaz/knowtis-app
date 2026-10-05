@@ -19,10 +19,18 @@ import {
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
 import type {
+  AppliedRollback,
   GateVerdict,
   ModelResolutionRepository,
   PendingSlot,
 } from '../../domain/ports/model-resolution.repository';
+
+const CLEARED_PENDING = {
+  pendingModelId: null,
+  gateStatus: null,
+  gateDetail: null,
+  gateRunUrl: null,
+} as const;
 
 function toResolution(row: AiModelResolutionRow): ModelResolution {
   return {
@@ -86,13 +94,7 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
   ): Promise<boolean> {
     const updated = await this.db
       .update(aiModelResolutions)
-      .set({
-        pendingModelId: null,
-        gateStatus: null,
-        gateDetail: null,
-        gateRunUrl: null,
-        updatedAt: at,
-      })
+      .set({ ...CLEARED_PENDING, updatedAt: at })
       .where(
         and(
           eq(aiModelResolutions.selectorKey, selectorKey),
@@ -135,29 +137,48 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
   }
 
   // Postgres evaluates every SET expression against the old row, so the two
-  // columns swap without a temporary.
+  // columns swap without a temporary. The swap's row lock holds until the clear
+  // commits, so a pass on the restored model cannot activate it onto itself.
   async rollback(
     selectorKey: PlatformSelectorKey,
     expected: RollbackResolutionInput,
     at: Date
-  ): Promise<boolean> {
-    const updated = await this.db
-      .update(aiModelResolutions)
-      .set({
-        activeModelId: sql`${aiModelResolutions.previousModelId}`,
-        previousModelId: sql`${aiModelResolutions.activeModelId}`,
-        changedAt: at,
-        updatedAt: at,
-      })
-      .where(
-        and(
-          eq(aiModelResolutions.selectorKey, selectorKey),
-          eq(aiModelResolutions.activeModelId, expected.activeModelId),
-          eq(aiModelResolutions.previousModelId, expected.previousModelId)
+  ): Promise<AppliedRollback | null> {
+    return this.db.transaction(async (tx) => {
+      const [swapped] = await tx
+        .update(aiModelResolutions)
+        .set({
+          activeModelId: sql`${aiModelResolutions.previousModelId}`,
+          previousModelId: sql`${aiModelResolutions.activeModelId}`,
+          changedAt: at,
+          updatedAt: at,
+        })
+        .where(
+          and(
+            eq(aiModelResolutions.selectorKey, selectorKey),
+            eq(aiModelResolutions.activeModelId, expected.activeModelId),
+            eq(aiModelResolutions.previousModelId, expected.previousModelId)
+          )
         )
-      )
-      .returning({ selectorKey: aiModelResolutions.selectorKey });
-    return updated.length > 0;
+        .returning({
+          pendingModelId: aiModelResolutions.pendingModelId,
+          gateStatus: aiModelResolutions.gateStatus,
+        });
+      if (!swapped) {
+        return null;
+      }
+      const clearedPending =
+        swapped.pendingModelId === expected.previousModelId &&
+        swapped.gateStatus === PENDING_GATE_STATUS;
+      if (clearedPending) {
+        await tx
+          .update(aiModelResolutions)
+          .set({ ...CLEARED_PENDING, updatedAt: at })
+          .where(eq(aiModelResolutions.selectorKey, selectorKey))
+          .returning({ selectorKey: aiModelResolutions.selectorKey });
+      }
+      return { clearedPending };
+    });
   }
 
   async recordRelease(

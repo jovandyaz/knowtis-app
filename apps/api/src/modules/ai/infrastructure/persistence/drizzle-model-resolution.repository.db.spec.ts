@@ -370,7 +370,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       LATER_AT
     );
 
-    expect(rolledBack).toBe(true);
+    expect(rolledBack).toEqual({ clearedPending: false });
     expect(await rowOf('platform.fast')).toMatchObject({
       activeModelId: PREVIOUS,
       previousModelId: PLATFORM_SEED_MODELS.fast,
@@ -383,6 +383,90 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
+  it('clears a gate-pending entry on the model it restores', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: PREVIOUS,
+        gateStatus: 'pending',
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: true });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      previousModelId: PLATFORM_SEED_MODELS.fast,
+      changedAt: LATER_AT,
+      pendingModelId: null,
+      gateStatus: null,
+      gateDetail: null,
+      gateRunUrl: null,
+      updatedAt: LATER_AT,
+    });
+  });
+
+  it('keeps a failed entry on the model it restores', async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: PREVIOUS,
+        gateStatus: 'failed',
+        gateDetail: VERDICT_DETAIL,
+        gateRunUrl: RUN_URL,
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: false });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      pendingModelId: PREVIOUS,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+    });
+  });
+
+  it("keeps another model's gate-pending entry", async () => {
+    await db
+      .update(aiModelResolutions)
+      .set({
+        previousModelId: PREVIOUS,
+        changedAt: CHANGED_AT,
+        pendingModelId: NEW_PENDING,
+        gateStatus: 'pending',
+      })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+
+    const rolledBack = await repo.rollback(
+      'platform.fast',
+      FAST_PAIR,
+      LATER_AT
+    );
+
+    expect(rolledBack).toEqual({ clearedPending: false });
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PREVIOUS,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'pending',
+    });
+  });
+
   it('refuses without a previous model', async () => {
     const before = await rowOf('platform.fast');
 
@@ -392,7 +476,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       LATER_AT
     );
 
-    expect(rolledBack).toBe(false);
+    expect(rolledBack).toBeNull();
     expect(await rowOf('platform.fast')).toEqual(before);
   });
 
@@ -408,7 +492,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       LATER_AT
     );
 
-    expect(rolledBack).toBe(false);
+    expect(rolledBack).toBeNull();
     expect(await rowOf('platform.fast')).toMatchObject({
       activeModelId: PLATFORM_SEED_MODELS.fast,
       previousModelId: PREVIOUS,
@@ -430,7 +514,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       LATER_AT
     );
 
-    expect(rolledBack).toBe(false);
+    expect(rolledBack).toBeNull();
     expect(await rowOf('platform.fast')).toEqual(before);
   });
 

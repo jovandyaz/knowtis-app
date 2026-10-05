@@ -141,7 +141,7 @@ export class AiCatalogController {
   @ApiOperation({
     summary: 'Roll a platform intent back to its previous model',
     description:
-      'Swaps the active and previous resolution of the intent while they are still the two models the admin confirmed, leaving its pending model alone, and answers the refreshed platform resolutions. A supported pin keeps serving until it is released.',
+      'Swaps the active and previous resolution of the intent while they are still the two models the admin confirmed, and answers the refreshed platform resolutions. A gate-pending entry on the restored model clears with it; any other pending entry stays. A supported pin keeps serving until it is released.',
   })
   @ApiResponse({ status: 200, description: 'Platform resolutions' })
   @ApiResponse({

@@ -6,6 +6,7 @@ import type { ModelIntent } from '@knowtis/shared-types';
 import type { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { ResolutionRollbackUnavailableError } from '../../domain/errors/resolution-rollback-unavailable.error';
 import { SELECTOR_KEY_BY_INTENT } from '../../domain/model-catalog/platform-resolution';
+import type { CatalogAlertsWriter } from '../../infrastructure/catalog/catalog-alerts.writer';
 import { PLATFORM_FLOOR_ROWS } from '../../testing/create-floor-rows';
 import { createIndexedModel } from '../../testing/create-indexed-model';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
@@ -94,14 +95,20 @@ function make(
   const audit = {
     record: vi.fn<AdminAuditService['record']>().mockResolvedValue(undefined),
   };
+  const alerts = {
+    resolvePending: vi
+      .fn<CatalogAlertsWriter['resolvePending']>()
+      .mockResolvedValue(undefined),
+  };
   const service = new PlatformResolutionsAdminService(
     resolutions,
     indexRepo,
     config as unknown as AIConfigService,
     resolutionCache,
-    audit as unknown as AdminAuditService
+    audit as unknown as AdminAuditService,
+    alerts as unknown as CatalogAlertsWriter
   );
-  return { service, indexRepo, config, resolutions, refresh, audit };
+  return { service, indexRepo, config, resolutions, refresh, audit, alerts };
 }
 
 function withPreviousFast() {
@@ -317,12 +324,31 @@ describe('PlatformResolutionsAdminService', () => {
 
     it('refuses a roll back whose confirmed pair is no longer current', async () => {
       const { service, resolutions, audit } = withPreviousFast();
-      vi.mocked(resolutions.rollback).mockResolvedValue(false);
+      vi.mocked(resolutions.rollback).mockResolvedValue(null);
 
       await expect(
         service.rollback('platform.fast', FAST_PAIR, ACTOR_ID)
       ).rejects.toBeInstanceOf(ResolutionRollbackUnavailableError);
       expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it("resolves the restored model's resolution_pending once the roll back clears it", async () => {
+      const { service, resolutions, alerts } = withPreviousFast();
+      vi.mocked(resolutions.rollback).mockResolvedValue({
+        clearedPending: true,
+      });
+
+      await service.rollback('platform.fast', FAST_PAIR, ACTOR_ID);
+
+      expect(alerts.resolvePending).toHaveBeenCalledWith(PREVIOUS_FAST);
+    });
+
+    it('leaves resolution_pending alone when the roll back cleared nothing', async () => {
+      const { service, alerts } = withPreviousFast();
+
+      await service.rollback('platform.fast', FAST_PAIR, ACTOR_ID);
+
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
     });
 
     it('refuses a previous model another intent serves', async () => {
