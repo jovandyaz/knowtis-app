@@ -262,6 +262,10 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
 
   it('activates a passed pending model in one write', async () => {
     await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
+    await db
+      .update(aiModelResolutions)
+      .set({ gateDetail: VERDICT_DETAIL })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
     const applied = await repo.recordVerdict(
       'platform.fast',
       NEW_PENDING,
@@ -333,9 +337,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
         LATER_AT
       )
     ).toBe(false);
-    expect((await rowOf('platform.fast'))?.activeModelId).toBe(
-      PLATFORM_SEED_MODELS.fast
-    );
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+      updatedAt: AT,
+    });
   });
 
   it('records the model a pin change released', async () => {
