@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProviderListing } from '../../../domain/ports/provider-models.port';
 import {
+  FAILED_REQUEST_MESSAGE,
   listingCall,
   stubListingFetch,
   stubListingFetchThenHang,
+  stubListingFetchThenThrow,
 } from '../../../testing/stub-listing-fetch';
 import {
   GOOGLE_MODEL_PREFIX,
@@ -55,6 +57,22 @@ describe('GoogleModelsClient', () => {
     await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(listingCall(fetchMock, 1).init.signal?.aborted).toBe(true);
+  });
+
+  it('lists null when a later page request throws', async () => {
+    stubListingFetchThenThrow({ body: GOOGLE_MODELS_PAGE_1 });
+
+    await expect(
+      new HttpProviderModelsLister().list('google', API_KEY)
+    ).resolves.toEqual(UNKNOWN_LISTING);
+  });
+
+  it('stays unavailable when the first page request throws', async () => {
+    stubListingFetchThenThrow();
+
+    await expect(
+      new HttpProviderModelsLister().list('google', API_KEY)
+    ).resolves.toEqual({ kind: 'unavailable', error: FAILED_REQUEST_MESSAGE });
   });
 
   it('stays unavailable when the first page hangs', async () => {

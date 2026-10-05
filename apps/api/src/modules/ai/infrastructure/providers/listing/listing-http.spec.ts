@@ -82,6 +82,18 @@ describe('listing-http', () => {
     await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
   });
 
+  it('lists null when the read throws after the key was accepted', async () => {
+    const listing = await boundedListing(
+      API_KEY,
+      async (_signal, keyAccepted) => {
+        keyAccepted();
+        throw new TypeError('fetch failed');
+      }
+    );
+
+    expect(listing).toEqual(UNKNOWN_LISTING);
+  });
+
   it('redacts the key from a thrown error', async () => {
     const listing = await boundedListing(API_KEY, async () => {
       throw new Error(`connect failed for ${API_KEY} at the edge`);

@@ -21,7 +21,7 @@ const REDACTABLE_KEY_MIN_LENGTH = 8;
 const REDACTED_KEY = '[redacted]';
 
 export interface ProviderModelsClient {
-  /** Reads one provider's model list with `apiKey`, honouring `signal`, and calls `keyAccepted` once the provider has proven the key valid. May reject: `boundedListing` turns a throw into `unavailable`. */
+  /** Reads one provider's model list with `apiKey`, honouring `signal`, and calls `keyAccepted` once the provider has proven the key valid. May reject: `boundedListing` turns a throw into `unavailable`, or into an unknown list once `keyAccepted` was called. */
   list(
     apiKey: string,
     signal: AbortSignal,
@@ -155,7 +155,7 @@ export async function paginatedListing(
   return UNKNOWN_LISTING;
 }
 
-/** Runs `read` under one LISTING_TIMEOUT_MS bound; a throw is `unavailable`, and so is the bound unless `read` called `keyAccepted` first, when the bound lists null; every error is redacted of `apiKey` and truncated. */
+/** Runs `read` under one LISTING_TIMEOUT_MS bound. A throw or the bound is `unavailable`, or lists null once `read` called `keyAccepted`; every error is redacted of `apiKey` and truncated. */
 export async function boundedListing(
   apiKey: string,
   read: (
@@ -185,10 +185,12 @@ export async function boundedListing(
       apiKey
     );
   } catch (error) {
-    return {
-      kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
-      error: scrubbed(reasonOf(error), apiKey),
-    };
+    return accepted
+      ? UNKNOWN_LISTING
+      : {
+          kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+          error: scrubbed(reasonOf(error), apiKey),
+        };
   } finally {
     clearTimeout(timer);
   }

@@ -8,6 +8,9 @@ export interface StubbedListingReply {
 
 export type ListingFetch = (url: URL, init: RequestInit) => Promise<Response>;
 
+/** What Node's fetch rejects with when the request itself fails. */
+export const FAILED_REQUEST_MESSAGE = 'fetch failed';
+
 function responseOf(reply: StubbedListingReply | undefined): Response {
   return new Response(JSON.stringify(reply?.body ?? null), {
     status: reply?.status ?? HttpStatus.OK,
@@ -28,20 +31,39 @@ export function stubListingFetch(
   return fetchMock;
 }
 
-/** Stubs the global `fetch` to answer `replies` in order; every later call never settles, even once its signal aborts. */
-export function stubListingFetchThenHang(
-  ...replies: readonly StubbedListingReply[]
+function stubListingFetchThen(
+  replies: readonly StubbedListingReply[],
+  afterReplies: () => Promise<Response>
 ): Mock<ListingFetch> {
   let answered = 0;
   const fetchMock = vi.fn<ListingFetch>(() => {
     const reply = replies[answered];
     answered += 1;
     return reply === undefined
-      ? new Promise<never>(() => undefined)
+      ? afterReplies()
       : Promise.resolve(responseOf(reply));
   });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+/** Stubs the global `fetch` to answer `replies` in order; every later call never settles, even once its signal aborts. */
+export function stubListingFetchThenHang(
+  ...replies: readonly StubbedListingReply[]
+): Mock<ListingFetch> {
+  return stubListingFetchThen(
+    replies,
+    () => new Promise<never>(() => undefined)
+  );
+}
+
+/** Stubs the global `fetch` to answer `replies` in order; every later call rejects as a failed request. */
+export function stubListingFetchThenThrow(
+  ...replies: readonly StubbedListingReply[]
+): Mock<ListingFetch> {
+  return stubListingFetchThen(replies, () =>
+    Promise.reject(new TypeError(FAILED_REQUEST_MESSAGE))
+  );
 }
 
 /** The URL and init of the `index`th stubbed call. */

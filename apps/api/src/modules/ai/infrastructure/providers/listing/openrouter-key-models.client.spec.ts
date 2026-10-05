@@ -6,6 +6,7 @@ import {
   listingCall,
   stubListingFetch,
   stubListingFetchThenHang,
+  stubListingFetchThenThrow,
   type ListingFetch,
 } from '../../../testing/stub-listing-fetch';
 import { HttpProviderModelsLister } from './http-provider-models.lister';
@@ -161,15 +162,11 @@ describe('OpenRouterKeyModelsClient', () => {
   );
 
   it('keeps a valid key unknown when the user listing request throws', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn<ListingFetch>()
-        .mockResolvedValueOnce(new Response(JSON.stringify(OPENROUTER_KEY)))
-        .mockRejectedValueOnce(new TypeError('fetch failed'))
-    );
+    stubListingFetchThenThrow({ body: OPENROUTER_KEY });
 
-    await expect(list()).resolves.toEqual(UNKNOWN_LISTING);
+    await expect(
+      new HttpProviderModelsLister().list('openrouter', API_KEY)
+    ).resolves.toEqual(UNKNOWN_LISTING);
   });
 
   it('lists null when the user models read hangs after the key was accepted', async () => {
