@@ -26,10 +26,12 @@ import {
   useAuditLog,
   useClearSystemProviderKey,
   useGlobalAiTimeseries,
+  usePlatformResolutions,
   usePromoteCatalogModel,
   useResetAiConfig,
   useResolveCatalogAlert,
   useRetireCatalogModel,
+  useRollbackResolution,
   useSetAiConfig,
   useSetSystemProvider,
   useSyncCatalog,
@@ -1164,6 +1166,144 @@ describe('useSyncCatalog', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toMatchObject(reported);
     expect(result.current.data).not.toHaveProperty('indexed');
+  });
+});
+
+const PLATFORM_RESOLUTION = {
+  intent: 'balanced',
+  selectorKey: 'platform.balanced',
+  configKey: 'ai_model_balanced',
+  pin: null,
+  served: 'openrouter:z-ai/glm-5.2',
+  activeModelId: 'openrouter:z-ai/glm-5.2',
+  changedAt: '2026-10-01T00:00:00.000Z',
+  previousModelId: 'openrouter:z-ai/glm-5.1',
+  releasedModelId: null,
+  releasedAt: null,
+  pendingModelId: 'openrouter:z-ai/glm-5.3',
+  gateStatus: 'pending',
+  gateDetail: null,
+  gateRunUrl: null,
+  candidateModelId: null,
+};
+
+const PLATFORM_RESOLUTIONS = {
+  intents: [PLATFORM_RESOLUTION],
+  lastSyncAt: '2026-10-02T00:00:00.000Z',
+};
+
+describe('usePlatformResolutions', () => {
+  it('fetches the resolutions', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue(PLATFORM_RESOLUTIONS);
+
+    const { result } = renderHook(() => usePlatformResolutions(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/catalog/resolutions');
+    expect(result.current.data?.intents[0].selectorKey).toBe(
+      'platform.balanced'
+    );
+    expect(result.current.data?.intents[0].gateStatus).toBe('pending');
+  });
+
+  it('reads a gate status this bundle predates as no status', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...PLATFORM_RESOLUTIONS,
+      intents: [{ ...PLATFORM_RESOLUTION, gateStatus: 'quarantined' }],
+    });
+
+    const { result } = renderHook(() => usePlatformResolutions(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.intents[0].gateStatus).toBeNull();
+  });
+
+  it('keeps an intent this bundle predates', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...PLATFORM_RESOLUTIONS,
+      intents: [{ ...PLATFORM_RESOLUTION, intent: 'reasoning' }],
+    });
+
+    const { result } = renderHook(() => usePlatformResolutions(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.intents[0].intent).toBe('reasoning');
+  });
+});
+
+describe('useRollbackResolution', () => {
+  it('posts the rollback, caches the refreshed resolutions and invalidates the dependents', async () => {
+    const refreshed = {
+      ...PLATFORM_RESOLUTIONS,
+      intents: [{ ...PLATFORM_RESOLUTION, previousModelId: null }],
+    };
+    vi.mocked(httpClient.post).mockResolvedValue(refreshed);
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useRollbackResolution(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate('platform.balanced');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.post).toHaveBeenCalledWith(
+      '/ai/catalog/resolutions/platform.balanced/rollback'
+    );
+    expect(
+      client.getQueryData(adminQueryKeys.platformResolutions())
+    ).toMatchObject({ intents: [{ previousModelId: null }] });
+    for (const queryKey of [
+      adminQueryKeys.aiConfig(),
+      adminQueryKeys.assignableModels(),
+      adminQueryKeys.auditLists(),
+    ]) {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey });
+    }
+  });
+});
+
+describe('platform resolutions invalidation', () => {
+  it.each([
+    [
+      'useSyncCatalog',
+      useSyncCatalog,
+      () =>
+        vi.mocked(httpClient.post).mockResolvedValue({
+          status: 'completed',
+          skippedReason: null,
+          upstream: 1,
+          candidates: 0,
+          alerts: 0,
+          failures: 0,
+        }),
+    ],
+    [
+      'useSetAiConfig',
+      useSetAiConfig,
+      () => vi.mocked(httpClient.put).mockResolvedValue({}),
+    ],
+  ] as const)('%s invalidates them', async (_name, hook, respond) => {
+    respond();
+    const { result, invalidateSpy } = renderWithInvalidateSpy(
+      hook as () => { mutate: (input: never) => void; isSuccess: boolean }
+    );
+    result.current.mutate({ key: 'ai_model_balanced', value: 'x' } as never);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.platformResolutions(),
+    });
   });
 });
 

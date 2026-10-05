@@ -6,6 +6,7 @@ import {
   AI_PROVIDERS,
   CATALOG_MODEL_STATUSES,
   CATALOG_SYNC_STATUSES,
+  MODEL_GATE_STATUSES,
   MODEL_TIERS,
   PROVIDER_KEY_SOURCES,
   PROVIDER_PROBE_FAILURES,
@@ -257,3 +258,28 @@ export const CatalogSyncResultSchema = z.object({
   failures: z.number().int(),
 });
 export type CatalogSyncResult = z.infer<typeof CatalogSyncResultSchema>;
+
+export const PlatformResolutionSchema = z.object({
+  intent: z.string(),
+  selectorKey: z.string(),
+  configKey: z.string(),
+  pin: z.string().nullable(),
+  served: z.string(),
+  activeModelId: z.string(),
+  changedAt: z.coerce.date().nullable(),
+  previousModelId: z.string().nullable(),
+  releasedModelId: z.string().nullable(),
+  releasedAt: z.coerce.date().nullable(),
+  pendingModelId: z.string().nullable(),
+  gateStatus: z.enum(MODEL_GATE_STATUSES).nullable().catch(null),
+  gateDetail: z.string().nullable(),
+  gateRunUrl: z.string().nullable(),
+  candidateModelId: z.string().nullable(),
+});
+export type PlatformResolution = z.infer<typeof PlatformResolutionSchema>;
+
+export const PlatformResolutionsSchema = z.object({
+  intents: z.array(PlatformResolutionSchema),
+  lastSyncAt: z.coerce.date().nullable(),
+});
+export type PlatformResolutions = z.infer<typeof PlatformResolutionsSchema>;
