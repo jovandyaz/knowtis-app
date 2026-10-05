@@ -12,7 +12,7 @@ import {
 } from '../../domain/ports/model-index.repository';
 import { CatalogAlertsWriter } from './catalog-alerts.writer';
 
-/** Watches the model index sync from outside it, so a sync cron that stopped running still raises `sync_stale`. */
+/** Watches the model index sync from outside it, so a sync cron that stopped running still raises `sync_stale`, and resolves that alert once the sync recovers. */
 @Injectable()
 export class SyncStalenessTask {
   private readonly logger = new Logger(SyncStalenessTask.name);
@@ -23,7 +23,7 @@ export class SyncStalenessTask {
     private readonly alerts: CatalogAlertsWriter
   ) {}
 
-  /** Raises `sync_stale` unless a listed OpenRouter index row was seen recently. Never rejects. */
+  /** Raises `sync_stale` unless a listed OpenRouter index row was seen recently, and otherwise resolves the open one, so the next outage alerts again. Never rejects. */
   @Cron(CronExpression.EVERY_DAY_AT_6AM, { timeZone: 'UTC' })
   async check(): Promise<void> {
     try {
@@ -31,7 +31,9 @@ export class SyncStalenessTask {
         await this.index.lastSeenAt(OPENROUTER_PROVIDER),
         new Date()
       );
-      if (finding !== null) {
+      if (finding === null) {
+        await this.alerts.resolveOpen(OPENROUTER_PROVIDER, 'sync_stale');
+      } else {
         await this.alerts.raise([finding]);
       }
     } catch (error) {

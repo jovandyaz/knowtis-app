@@ -1,6 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { NOTIFYING_ALERT_KINDS } from '@knowtis/shared-types';
+import {
+  NOTIFYING_ALERT_KINDS,
+  type CatalogAlertKind,
+} from '@knowtis/shared-types';
 
 import { reasonOf } from '../../../../core/errors/reason-of';
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
@@ -18,7 +21,7 @@ export interface RaisedAlerts {
   readonly failed: number;
 }
 
-/** Turns watch findings into catalog alerts, and pings the ops webhook once per newly opened urgent one. */
+/** Turns watch findings into catalog alerts, pings the ops webhook once per newly opened urgent one, and resolves an alert a watch saw clear. */
 @Injectable()
 export class CatalogAlertsWriter {
   private readonly logger = new Logger(CatalogAlertsWriter.name);
@@ -54,6 +57,15 @@ export class CatalogAlertsWriter {
       }
     }
     return { opened, failed };
+  }
+
+  /** Resolves the open alert of `kind` on `subject`; false when none is open or another caller closed it first. Rejects when the store fails. */
+  async resolveOpen(subject: string, kind: CatalogAlertKind): Promise<boolean> {
+    const open = await this.repo.listAlerts(true);
+    const alert = open.find(
+      (row) => row.modelId === subject && row.kind === kind
+    );
+    return alert === undefined ? false : this.repo.resolveAlert(alert.id);
   }
 
   private async open({

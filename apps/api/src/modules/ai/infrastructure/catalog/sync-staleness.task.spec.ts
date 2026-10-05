@@ -19,6 +19,9 @@ function make(lastSeenAt: Date | null) {
     raise: vi
       .fn<CatalogAlertsWriter['raise']>()
       .mockResolvedValue({ opened: 1, failed: 0 }),
+    resolveOpen: vi
+      .fn<CatalogAlertsWriter['resolveOpen']>()
+      .mockResolvedValue(true),
   };
   const task = new SyncStalenessTask(
     index,
@@ -56,6 +59,7 @@ describe('SyncStalenessTask', () => {
         detail: expect.stringContaining(STALE_SEEN_AT.toISOString()),
       },
     ]);
+    expect(alerts.resolveOpen).not.toHaveBeenCalled();
   });
 
   it('raises sync_stale while the index lists no OpenRouter row', async () => {
@@ -77,6 +81,41 @@ describe('SyncStalenessTask', () => {
     await task.check();
 
     expect(alerts.raise).not.toHaveBeenCalled();
+  });
+
+  it('resolves the open sync_stale alert once the index is fresh again', async () => {
+    const { task, alerts } = make(FRESH_SEEN_AT);
+
+    await task.check();
+
+    expect(alerts.resolveOpen).toHaveBeenCalledWith(
+      OPENROUTER_PROVIDER,
+      'sync_stale'
+    );
+  });
+
+  it('stays quiet when the index is fresh and no sync_stale alert is open', async () => {
+    const { task, alerts } = make(FRESH_SEEN_AT);
+    alerts.resolveOpen.mockResolvedValue(false);
+
+    await expect(task.check()).resolves.toBeUndefined();
+
+    expect(alerts.raise).not.toHaveBeenCalled();
+    expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it('logs and swallows a failed resolve', async () => {
+    const { task, alerts } = make(FRESH_SEEN_AT);
+    alerts.resolveOpen.mockRejectedValue(new Error('alerts table locked'));
+
+    await expect(task.check()).resolves.toBeUndefined();
+
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.model_index.staleness_check_failed',
+        reason: 'alerts table locked',
+      })
+    );
   });
 
   it('logs and swallows a failed index read', async () => {

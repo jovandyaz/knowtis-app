@@ -6,6 +6,7 @@ import {
   type CatalogAlertKind,
 } from '@knowtis/shared-types';
 
+import type { CatalogAlert } from '../../domain/model-catalog/catalog-alert';
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import type { WebhookAlertService } from '../alerting/webhook-alert.service';
@@ -152,5 +153,50 @@ describe('CatalogAlertsWriter', () => {
 
     expect(await writer.raise([])).toEqual({ opened: 0, failed: 0 });
     expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
+  describe('resolveOpen', () => {
+    const STALE_ALERT_ID = 7;
+
+    function openAlert(
+      id: number,
+      modelId: string,
+      kind: CatalogAlertKind
+    ): CatalogAlert {
+      return {
+        id,
+        modelId,
+        kind,
+        detail: `${kind} on ${modelId}`,
+        createdAt: new Date(0),
+        resolvedAt: null,
+      };
+    }
+
+    it('resolves the open alert of the kind on the subject', async () => {
+      const { writer, repo } = make();
+      vi.mocked(repo.listAlerts).mockResolvedValue([
+        openAlert(1, 'openrouter', 'sync_rejected'),
+        openAlert(2, DEAD_PIN, 'sync_stale'),
+        openAlert(STALE_ALERT_ID, 'openrouter', 'sync_stale'),
+      ]);
+
+      expect(await writer.resolveOpen('openrouter', 'sync_stale')).toBe(true);
+
+      expect(repo.listAlerts).toHaveBeenCalledWith(true);
+      expect(repo.resolveAlert).toHaveBeenCalledTimes(1);
+      expect(repo.resolveAlert).toHaveBeenCalledWith(STALE_ALERT_ID);
+    });
+
+    it('resolves nothing when no such alert is open', async () => {
+      const { writer, repo } = make();
+      vi.mocked(repo.listAlerts).mockResolvedValue([
+        openAlert(1, 'openrouter', 'sync_rejected'),
+      ]);
+
+      expect(await writer.resolveOpen('openrouter', 'sync_stale')).toBe(false);
+
+      expect(repo.resolveAlert).not.toHaveBeenCalled();
+    });
   });
 });
