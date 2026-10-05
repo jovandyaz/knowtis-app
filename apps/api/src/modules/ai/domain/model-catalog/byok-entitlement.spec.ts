@@ -133,4 +133,16 @@ describe('entitlementsFrom', () => {
 
     expect(entitlements.has('anthropic')).toBe(false);
   });
+
+  it('falls open on an empty listing of the key the caller holds now', () => {
+    const entitlements = entitlementsFrom(
+      [{ ...listing, modelIds: [] }],
+      new Map([['anthropic', 'current']])
+    );
+
+    expect(entitlements.has('anthropic')).toBe(false);
+    expect(
+      isEntitled(snapshotRouteId('balanced', 'anthropic'), entitlements)
+    ).toBe(true);
+  });
 });

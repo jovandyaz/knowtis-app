@@ -37,14 +37,17 @@ export function isEntitled(
   return entitled === undefined || entitled.has(slugOf(modelId));
 }
 
-/** Only listings of the key the caller holds now; a mismatched or undecryptable key falls open. */
+/** Only non-empty listings of the key the caller holds now; an empty listing, or a mismatched or undecryptable key, falls open. */
 export function entitlementsFrom(
   listings: readonly StoredListing[],
   keyFingerprints: ReadonlyMap<ByokProvider, string>
 ): ByokEntitlements {
   const entitlements = new Map<ByokProvider, ReadonlySet<string>>();
   for (const listing of listings) {
-    if (keyFingerprints.get(listing.provider) === listing.keyFingerprint) {
+    if (
+      listing.modelIds.length > 0 &&
+      keyFingerprints.get(listing.provider) === listing.keyFingerprint
+    ) {
       entitlements.set(listing.provider, entitledIdsOf(listing.modelIds));
     }
   }
