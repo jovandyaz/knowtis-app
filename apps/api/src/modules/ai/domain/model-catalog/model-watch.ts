@@ -59,23 +59,27 @@ export function findPinUnavailable(
     );
 }
 
-/** Each distinct watched id whose index row carries a retirement date; an id the index lacks is left to the absence watches. `rows` must be listed index rows, as `ModelIndexCache.catalog().all()` serves them: a delisted row would date a model already gone. */
+function retirementDetail(row: IndexedModel): string | null {
+  if (row.retiresAt !== null) {
+    return `${row.id} retires on ${row.retiresAt}`;
+  }
+  return row.status === 'deprecated'
+    ? `${row.id} is deprecated upstream, with no retirement date`
+    : null;
+}
+
+/** Each distinct watched id whose index row carries a retirement date or a `deprecated` status, the only retirement signal models.dev publishes; an id the index lacks is left to the absence watches. `rows` must be listed index rows, as `ModelIndexCache.catalog().all()` serves them: a delisted row would date a model already gone. */
 export function findRetirementScheduled(
   watchedIds: readonly string[],
   rows: readonly IndexedModel[]
 ): WatchFinding[] {
   const byId = new Map(rows.map((row) => [row.id, row]));
   return [...new Set(watchedIds)].flatMap((id): WatchFinding[] => {
-    const retiresAt = byId.get(id)?.retiresAt ?? null;
-    return retiresAt === null
+    const row = byId.get(id);
+    const detail = row ? retirementDetail(row) : null;
+    return detail === null
       ? []
-      : [
-          {
-            subject: id,
-            kind: 'retirement_scheduled',
-            detail: `${id} retires on ${retiresAt}`,
-          },
-        ];
+      : [{ subject: id, kind: 'retirement_scheduled', detail }];
   });
 }
 

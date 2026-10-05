@@ -81,7 +81,12 @@ describe('findPinUnavailable', () => {
 
 describe('findRetirementScheduled', () => {
   const RETIRING = rowWhere((row) => row.retiresAt !== null);
-  const LASTING = rowWhere((row) => row.retiresAt === null);
+  const LASTING = rowWhere(
+    (row) => row.retiresAt === null && row.status === 'active'
+  );
+  const DEPRECATED = rowWhere(
+    (row) => row.retiresAt === null && row.status === 'deprecated'
+  );
 
   it('flags a watched model with a retirement date', () => {
     expect(findRetirementScheduled([RETIRING.id], ROWS)).toEqual([
@@ -96,6 +101,25 @@ describe('findRetirementScheduled', () => {
   it('ignores a model without one', () => {
     expect(findRetirementScheduled([LASTING.id], ROWS)).toEqual([]);
   });
+
+  it('flags a watched model its provider deprecated without a date', () => {
+    expect(findRetirementScheduled([DEPRECATED.id], ROWS)).toEqual([
+      {
+        subject: DEPRECATED.id,
+        kind: 'retirement_scheduled',
+        detail: `${DEPRECATED.id} is deprecated upstream, with no retirement date`,
+      },
+    ]);
+  });
+
+  it.each(['alpha', 'beta'] as const)(
+    'ignores an undated %s model',
+    (status) => {
+      expect(
+        findRetirementScheduled([LASTING.id], [{ ...LASTING, status }])
+      ).toEqual([]);
+    }
+  );
 
   it('ignores a watched id the index does not list', () => {
     expect(findRetirementScheduled([DEAD_PIN], ROWS)).toEqual([]);
