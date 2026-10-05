@@ -286,10 +286,12 @@ describe('AIConfigService', () => {
     expect(mockCache.del).toHaveBeenCalledWith('ai:config:ai_default_model');
   });
 
-  it('should audit the atomically deleted value without a preliminary read', async () => {
+  it('should audit the atomically deleted value, not one read before the delete', async () => {
+    mockRepo.get.mockImplementation(async (key: string) =>
+      key === 'ai_default_model' ? CUSTOM_FAST : null
+    );
     mockRepo.delete.mockResolvedValue(deletedRow(CUSTOM_MODEL));
     await service.resetConfig('ai_default_model', ACTOR);
-    expect(mockRepo.get).not.toHaveBeenCalled();
     expect(mockAudit.record).toHaveBeenCalledWith({
       actorId: ACTOR,
       action: 'ai_config.reset',
@@ -889,6 +891,48 @@ describe('AIConfigService', () => {
       );
       mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
       await service.resetConfig('ai_fast_model', ACTOR);
+      expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
+        'platform.fast',
+        FAST_PIN,
+        SNAPSHOT_DATE
+      );
+    });
+
+    it("refuses to release a pin when the intent's active model serves another intent", async () => {
+      const stored: Record<string, string> = {
+        ai_fast_model: FAST_PIN,
+        ai_default_model: PLATFORM_SEED_MODELS.fast,
+      };
+      mockRepo.get.mockImplementation(
+        async (key: string) => stored[key] ?? null
+      );
+      mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
+
+      const release = service.resetConfig('ai_fast_model', ACTOR);
+
+      await expect(release).rejects.toBeInstanceOf(InvalidAIConfigError);
+      await expect(release).rejects.toThrow(
+        `Model '${PLATFORM_SEED_MODELS.fast}' already serves the 'balanced' tier; each tier needs its own model`
+      );
+      expect(mockRepo.delete).not.toHaveBeenCalled();
+      expect(mockAudit.record).not.toHaveBeenCalled();
+      expect(mockResolutionRepo.recordRelease).not.toHaveBeenCalled();
+    });
+
+    it('releases a pin when the active model is distinct', async () => {
+      const stored: Record<string, string> = {
+        ai_fast_model: FAST_PIN,
+        ai_default_model: BALANCED_PIN,
+      };
+      mockRepo.get.mockImplementation(
+        async (key: string) => stored[key] ?? null
+      );
+      mockRepo.delete.mockResolvedValue(deletedRow(FAST_PIN));
+
+      await expect(
+        service.resetConfig('ai_fast_model', ACTOR)
+      ).resolves.toBeUndefined();
+      expect(mockRepo.delete).toHaveBeenCalledWith('ai_fast_model');
       expect(mockResolutionRepo.recordRelease).toHaveBeenCalledWith(
         'platform.fast',
         FAST_PIN,

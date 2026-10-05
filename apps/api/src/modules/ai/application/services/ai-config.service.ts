@@ -404,11 +404,15 @@ export class AIConfigService implements PlatformModelsSource {
     if (!isConfigKey(key)) {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
+    const intent = intentOfConfigKey(key);
+    const active = intent ? this.resolutions.activeModelId(intent) : null;
+    if (active !== null) {
+      await this.assertIntentModelsStayDistinct(key, active);
+    }
     const deleted = await this.repository.delete(key);
     if (!deleted) {
       return;
     }
-    const intent = intentOfConfigKey(key);
     const servedBefore = intent
       ? this.servedIntentModel(intent, deleted.value)
       : NO_SERVED_MODEL;
