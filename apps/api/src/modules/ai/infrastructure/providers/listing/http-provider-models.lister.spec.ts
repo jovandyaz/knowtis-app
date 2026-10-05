@@ -54,7 +54,8 @@ describe('HttpProviderModelsLister', () => {
       expect(listing).toEqual(listedBy(provider));
       expect(spies[provider]).toHaveBeenCalledWith(
         API_KEY,
-        expect.any(AbortSignal)
+        expect.any(AbortSignal),
+        expect.any(Function)
       );
       const others = AI_PROVIDERS.filter((other) => other !== provider);
       expect(

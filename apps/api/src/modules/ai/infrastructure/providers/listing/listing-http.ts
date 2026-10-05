@@ -21,8 +21,12 @@ const REDACTABLE_KEY_MIN_LENGTH = 8;
 const REDACTED_KEY = '[redacted]';
 
 export interface ProviderModelsClient {
-  /** Reads one provider's model list with `apiKey`, honouring `signal`. May reject: `boundedListing` turns a throw into `unavailable`. */
-  list(apiKey: string, signal: AbortSignal): Promise<ProviderListing>;
+  /** Reads one provider's model list with `apiKey`, honouring `signal`, and calls `keyAccepted` once the provider has proven the key valid. May reject: `boundedListing` turns a throw into `unavailable`. */
+  list(
+    apiKey: string,
+    signal: AbortSignal,
+    keyAccepted: () => void
+  ): Promise<ProviderListing>;
 }
 
 export type ListingResponse =
@@ -79,6 +83,11 @@ export function refusalOf(
 export const UNKNOWN_LISTING: ProviderListing = {
   kind: PROVIDER_LISTING_KIND.LISTED,
   modelIds: null,
+};
+
+const TIMED_OUT_LISTING: ProviderListing = {
+  kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
+  error: LISTING_TIMEOUT_MESSAGE,
 };
 
 export const MALFORMED_LISTING: ProviderListing = {
@@ -143,25 +152,33 @@ export async function paginatedListing(
   return UNKNOWN_LISTING;
 }
 
-/** Runs `read` under one LISTING_TIMEOUT_MS bound; a throw or the bound is `unavailable`; every error is redacted of `apiKey` and truncated. */
+/** Runs `read` under one LISTING_TIMEOUT_MS bound; a throw is `unavailable`, and so is the bound unless `read` called `keyAccepted` first, when the bound lists null; every error is redacted of `apiKey` and truncated. */
 export async function boundedListing(
   apiKey: string,
-  read: (signal: AbortSignal) => Promise<ProviderListing>
+  read: (
+    signal: AbortSignal,
+    keyAccepted: () => void
+  ) => Promise<ProviderListing>
 ): Promise<ProviderListing> {
   const bound = new AbortController();
+  let accepted = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   // A plain timer rather than AbortSignal.timeout, so fake timers can prove a
   // hung listing settles; the race also bounds a read that ignores the signal.
-  const timedOut = new Promise<never>((_, reject) => {
+  const timedOut = new Promise<ProviderListing>((resolve) => {
     timer = setTimeout(() => {
-      const reason = new DOMException(LISTING_TIMEOUT_MESSAGE, 'TimeoutError');
-      bound.abort(reason);
-      reject(reason);
+      bound.abort(new DOMException(LISTING_TIMEOUT_MESSAGE, 'TimeoutError'));
+      resolve(accepted ? UNKNOWN_LISTING : TIMED_OUT_LISTING);
     }, LISTING_TIMEOUT_MS);
   });
   try {
     return scrubbedListing(
-      await Promise.race([read(bound.signal), timedOut]),
+      await Promise.race([
+        read(bound.signal, () => {
+          accepted = true;
+        }),
+        timedOut,
+      ]),
       apiKey
     );
   } catch (error) {

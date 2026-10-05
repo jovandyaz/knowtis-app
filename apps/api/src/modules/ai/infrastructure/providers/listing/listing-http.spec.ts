@@ -70,6 +70,18 @@ describe('listing-http', () => {
     expect(fetchMock.mock.calls[0]?.[1].signal?.aborted).toBe(true);
   });
 
+  it('lists null when the bound passes after the key was accepted', async () => {
+    vi.useFakeTimers();
+
+    const pending = boundedListing(API_KEY, (_signal, keyAccepted) => {
+      keyAccepted();
+      return new Promise<never>(() => undefined);
+    });
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+  });
+
   it('redacts the key from a thrown error', async () => {
     const listing = await boundedListing(API_KEY, async () => {
       throw new Error(`connect failed for ${API_KEY} at the edge`);

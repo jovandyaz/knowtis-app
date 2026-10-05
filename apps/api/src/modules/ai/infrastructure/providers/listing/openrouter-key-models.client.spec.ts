@@ -7,7 +7,9 @@ import {
   stubListingFetch,
   type ListingFetch,
 } from '../../../testing/stub-listing-fetch';
+import { HttpProviderModelsLister } from './http-provider-models.lister';
 import {
+  LISTING_TIMEOUT_MS,
   MALFORMED_LISTING,
   MAX_LISTING_PAGES,
   UNKNOWN_LISTING,
@@ -25,10 +27,13 @@ const USER_MODELS_URL = 'https://openrouter.ai/api/v1/models/user';
 const SECOND_PAGE_PATH = '/api/v1/models/user?offset=6';
 const RECORDED_IDS = OPENROUTER_USER_MODELS.data.map((model) => model.id);
 
-function list(): Promise<ProviderListing> {
+function list(
+  keyAccepted: () => void = () => undefined
+): Promise<ProviderListing> {
   return new OpenRouterKeyModelsClient().list(
     API_KEY,
-    new AbortController().signal
+    new AbortController().signal,
+    keyAccepted
   );
 }
 
@@ -44,6 +49,7 @@ function readsOf(fetchMock: Mock<ListingFetch>): string[] {
 
 describe('OpenRouterKeyModelsClient', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -65,7 +71,11 @@ describe('OpenRouterKeyModelsClient', () => {
     );
     const signal = new AbortController().signal;
 
-    await new OpenRouterKeyModelsClient().list(API_KEY, signal);
+    await new OpenRouterKeyModelsClient().list(
+      API_KEY,
+      signal,
+      () => undefined
+    );
 
     for (const index of [0, 1]) {
       const { url, init } = listingCall(fetchMock, index);
@@ -80,12 +90,14 @@ describe('OpenRouterKeyModelsClient', () => {
       body: OPENROUTER_INVALID_KEY_BODY,
       status: HttpStatus.UNAUTHORIZED,
     });
+    const keyAccepted = vi.fn();
 
-    await expect(list()).resolves.toEqual({
+    await expect(list(keyAccepted)).resolves.toEqual({
       kind: 'rejected',
       error: `HTTP 401: ${OPENROUTER_INVALID_KEY_BODY.error.message}`,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(keyAccepted).not.toHaveBeenCalled();
   });
 
   it('answers unavailable when /key fails for another reason', async () => {
@@ -109,9 +121,11 @@ describe('OpenRouterKeyModelsClient', () => {
     'answers unavailable for a malformed /key body: $shape',
     async ({ body }) => {
       const fetchMock = stubListingFetch({ body });
+      const keyAccepted = vi.fn();
 
-      await expect(list()).resolves.toEqual(MALFORMED_LISTING);
+      await expect(list(keyAccepted)).resolves.toEqual(MALFORMED_LISTING);
       expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(keyAccepted).not.toHaveBeenCalled();
     }
   );
 
@@ -155,6 +169,39 @@ describe('OpenRouterKeyModelsClient', () => {
     );
 
     await expect(list()).resolves.toEqual(UNKNOWN_LISTING);
+  });
+
+  it('lists null when the user models read hangs after the key was accepted', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<ListingFetch>(async (url) =>
+      String(url) === KEY_URL
+        ? new Response(JSON.stringify(OPENROUTER_KEY))
+        : new Promise<never>(() => undefined)
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = new HttpProviderModelsLister().list('openrouter', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual(UNKNOWN_LISTING);
+    expect(readsOf(fetchMock)).toEqual([KEY_URL, USER_MODELS_URL]);
+    expect(listingCall(fetchMock, 1).init.signal?.aborted).toBe(true);
+  });
+
+  it('answers unavailable when /key hangs past the bound', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<ListingFetch>(() => new Promise<never>(() => undefined))
+    );
+
+    const pending = new HttpProviderModelsLister().list('openrouter', API_KEY);
+    await vi.advanceTimersByTimeAsync(LISTING_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({
+      kind: 'unavailable',
+      error: 'The listing timed out',
+    });
   });
 
   it('follows a same-origin next link', async () => {

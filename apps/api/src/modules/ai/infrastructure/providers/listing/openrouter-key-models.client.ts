@@ -44,10 +44,15 @@ function parsePage(body: unknown): ListingPage | null {
  * Lists what an OpenRouter key can call. `GET /api/v1/key` decides the key;
  * `GET /api/v1/models/user` (the full list, filtered by the account's provider
  * preferences, privacy settings and guardrails) names the models, following
- * same-origin `links.next`. Once the key passed, any listing failure is unknown.
+ * same-origin `links.next`. Once the key passed, any listing failure, the
+ * bound included, is unknown.
  */
 export class OpenRouterKeyModelsClient implements ProviderModelsClient {
-  async list(apiKey: string, signal: AbortSignal): Promise<ProviderListing> {
+  async list(
+    apiKey: string,
+    signal: AbortSignal,
+    keyAccepted: () => void
+  ): Promise<ProviderListing> {
     const headers = { Authorization: `Bearer ${apiKey}` };
     const key = await getListingJson(
       new URL(OPENROUTER_KEY_URL),
@@ -60,6 +65,7 @@ export class OpenRouterKeyModelsClient implements ProviderModelsClient {
     if (!keyInfo.safeParse(key.body).success) {
       return MALFORMED_LISTING;
     }
+    keyAccepted();
     const listing = await paginatedListing(
       (pageUrl) =>
         getListingJson(
