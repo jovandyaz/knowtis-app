@@ -15,7 +15,8 @@ import {
 } from '../../domain/ports/user-provider-models.repository';
 
 const ADVISORY_LOCK_KEY = 778_493_005;
-const RELIST_AFTER_HOURS = 24;
+// An hour short of a day, so a daily run re-lists rows the previous run stamped just after it started.
+const RELIST_AFTER_HOURS = 23;
 const RELIST_BATCH_SIZE = 50;
 const RELIST_MAX_BATCHES = 20;
 const MS_PER_HOUR = 3_600_000;

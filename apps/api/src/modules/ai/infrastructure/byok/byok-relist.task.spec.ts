@@ -19,7 +19,10 @@ import { ByokRelistTask } from './byok-relist.task';
 const BATCH_SIZE = 50;
 const MAX_BATCHES = 20;
 const SHORT_BATCH_SIZE = 3;
-const RELIST_AFTER_MS = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const RELIST_AFTER_MS = 23 * MS_PER_HOUR;
+const DAILY_RUN_AT = new Date('2026-10-05T04:00:00.000Z');
+const STAMPED_BY_PREVIOUS_RUN = new Date('2026-10-04T04:00:05.000Z');
 const STORE_FAILURE = 'connection terminated unexpectedly';
 
 const keysFrom = (start: number, count: number): ListingKey[] =>
@@ -78,6 +81,17 @@ describe('ByokRelistTask', () => {
     ]);
     expect(byokModels.relist.mock.calls).toEqual(
       [...first, ...second].map((key) => [key.userId, key.provider])
+    );
+  });
+
+  it('re-lists a row the previous daily run stamped just after it started', async () => {
+    const { task, models } = makeTask();
+
+    await task.run(DAILY_RUN_AT);
+
+    const olderThan: Date | undefined = models.findDue.mock.calls[0]?.[0];
+    expect(STAMPED_BY_PREVIOUS_RUN.getTime()).toBeLessThan(
+      olderThan?.getTime() ?? Number.NEGATIVE_INFINITY
     );
   });
 
