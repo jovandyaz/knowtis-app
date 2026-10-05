@@ -66,12 +66,8 @@ import { PlatformCandidatesWriter } from './platform-candidates.writer';
 const ADVISORY_LOCK_KEY = 778_493_003;
 const FAILURE_LOG_SAMPLE_SIZE = 10;
 
-const ABSENCE_REJECTION_DETAIL = {
-  shrink:
-    'shrink: the batch lists too few of the rows the index holds, so it retired none',
-  inconclusive:
-    'inconclusive: the read may have missed rows that still exist, so it retired none',
-} as const satisfies Record<Exclude<SyncRejection['reason'], 'floor'>, string>;
+const SHRINK_REJECTION_DETAIL =
+  'shrink: the batch lists too few of the rows the index holds, so it retired none';
 
 interface WriteFailure {
   target: string;
@@ -114,15 +110,21 @@ function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {
   };
 }
 
-function syncRejected(rejection: SyncRejection): WatchFinding {
-  return {
-    subject: rejection.provider,
-    kind: 'sync_rejected',
-    detail:
-      rejection.reason === 'floor'
-        ? `floor: the batch would leave ${rejection.models.join(', ')} unserved, so none of it was written`
-        : ABSENCE_REJECTION_DETAIL[rejection.reason],
-  };
+/** A `sync_rejected` finding for a shrink or floor rejection. An inconclusive batch is only logged: one discarded upstream row makes a batch inconclusive, which is routine. */
+function syncRejected(rejection: SyncRejection): WatchFinding[] {
+  if (rejection.reason === 'inconclusive') {
+    return [];
+  }
+  return [
+    {
+      subject: rejection.provider,
+      kind: 'sync_rejected',
+      detail:
+        rejection.reason === 'floor'
+          ? `floor: the batch would leave ${rejection.models.join(', ')} unserved, so none of it was written`
+          : SHRINK_REJECTION_DETAIL,
+    },
+  ];
 }
 
 function pendingModelIds(rows: readonly ModelResolution[]): string[] {
@@ -332,7 +334,7 @@ export class CatalogSyncTask {
     ]);
     if (!openRouter.ok) {
       const { rejected } = await this.writeIndex(null, modelsDev);
-      await this.alerts.raise(rejected.map(syncRejected));
+      await this.alerts.raise(rejected.flatMap(syncRejected));
       throw openRouter.error;
     }
     const catalog = openRouter.catalog;
@@ -349,7 +351,7 @@ export class CatalogSyncTask {
     const write = await this.writeIndex(catalog, modelsDev);
     const watched = await this.watchedModels();
     const findings = [
-      ...write.rejected.map(syncRejected),
+      ...write.rejected.flatMap(syncRejected),
       ...findOpenRouterDrift(catalog, watched.platform),
       ...(await this.promotedFindings(catalog, watched.platform)),
       ...(await this.indexFindings(watched, write.openRouterConcluded)),

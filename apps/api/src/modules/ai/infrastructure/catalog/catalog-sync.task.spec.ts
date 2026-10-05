@@ -812,15 +812,32 @@ describe('CatalogSyncTask', () => {
     const { task, repo, openRouter, indexWriter } = make();
     openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
     indexWriter.write.mockResolvedValueOnce(
-      indexWrite({ rejected: [{ provider: 'google', reason: 'inconclusive' }] })
+      indexWrite({ rejected: [{ provider: 'google', reason: 'shrink' }] })
     );
 
     await expect(task.run()).rejects.toThrow('openrouter down');
     expect(repo.createAlert).toHaveBeenCalledWith(
       'google',
       'sync_rejected',
-      expect.stringMatching(/^inconclusive: /)
+      expect.stringMatching(/^shrink: /)
     );
+  });
+
+  it('does not alert an inconclusive batch', async () => {
+    const { task, repo, indexWriter } = make();
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({
+        rejected: MODELS_DEV_PROVIDERS.map((provider) => ({
+          provider,
+          reason: 'inconclusive' as const,
+        })),
+      })
+    );
+
+    const result = await task.run();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+    expect(result.alerts).toBe(0);
   });
 
   it('raises pin_unavailable for a dead pin', async () => {
