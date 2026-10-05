@@ -31,6 +31,10 @@ const KEY_SOURCE_HINT: Record<SystemProvider['keySource'], string> = {
   none: 'No key anywhere — this provider cannot route.',
 };
 
+function modelCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'model' : 'models'}`;
+}
+
 interface ProviderCardProps {
   provider: SystemProvider;
 }
@@ -50,15 +54,15 @@ export function ProviderCard({ provider }: ProviderCardProps) {
     ''
   );
 
-  // A probe describes the key that was routing when it ran; once the row moves,
+  // A test describes the key that was routing when it ran; once the row moves,
   // the verdict is about a key that is no longer there.
-  const { reset: resetProbe } = testProvider;
+  const { reset: resetTest } = testProvider;
   // A refetch re-parses into a fresh Date, so compare the instant, not the object.
   const writtenAt = provider.updatedAt?.getTime() ?? null;
   useEffect(() => {
-    resetProbe();
+    resetTest();
   }, [
-    resetProbe,
+    resetTest,
     provider.keySource,
     provider.enabled,
     provider.keyPrefix,
@@ -121,7 +125,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
       {saveProbe ? (
         saveProbe.valid ? (
           <p role="status" className="text-xs text-(--muted-foreground)">
-            Key saved — {label} answered the probe.
+            Key saved — {label} accepted it.
           </p>
         ) : (
           <p
@@ -138,7 +142,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
         <p role="status" className="text-xs text-(--muted-foreground)">
           {testProvider.data.modelCount === null
             ? `${label} accepted the key.`
-            : `${label} accepted the key and lists ${testProvider.data.modelCount} models.`}
+            : `${label} accepted the key and lists ${modelCountLabel(testProvider.data.modelCount)}.`}
         </p>
       ) : testProvider.data ? (
         <p

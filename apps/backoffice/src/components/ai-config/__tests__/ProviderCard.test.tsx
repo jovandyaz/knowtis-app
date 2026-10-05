@@ -212,6 +212,16 @@ describe('ProviderCard', () => {
     );
   });
 
+  it('names a single model in the singular', () => {
+    state.test.data = { ok: true, modelCount: 1 };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Anthropic accepted the key and lists 1 model.'
+    );
+  });
+
   it('says the key was accepted when the count is unknown', () => {
     state.test.data = { ok: true, modelCount: null };
 
@@ -222,7 +232,7 @@ describe('ProviderCard', () => {
     );
   });
 
-  it('drops a probe verdict about a key that is no longer there', () => {
+  it('drops a test verdict about a key that is no longer there', () => {
     // The mocked hook is not reactive: reset() clears the verdict the way
     // react-query would, and the following render is what reveals it.
     testReset.mockImplementation(() => {
@@ -249,7 +259,7 @@ describe('ProviderCard', () => {
     expect(screen.queryByText(/accepted the key/i)).not.toBeInTheDocument();
   });
 
-  it('keeps a probe verdict when a refetch re-parses the same row', () => {
+  it('keeps a test verdict when a refetch re-parses the same row', () => {
     testReset.mockImplementation(() => {
       state.test.data = undefined;
     });
@@ -318,13 +328,13 @@ describe('ProviderCard', () => {
     expect(alert).not.toHaveTextContent('..');
   });
 
-  it('confirms a saved key that answered its probe', () => {
+  it('confirms a saved key the provider accepted', () => {
     state.set.data = { providers: [], probe: { valid: true } };
 
     render(<ProviderCard provider={providerWith()} />);
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      /key saved — anthropic answered the probe/i
+      'Key saved — Anthropic accepted it.'
     );
   });
 
