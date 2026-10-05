@@ -1,11 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
-import {
-  BYOK_PROVIDERS,
-  type ByokProvider,
-  type EncryptedSecret,
-  type ProviderKeyInfo,
+import type {
+  ByokProvider,
+  EncryptedSecret,
+  ProviderKeyInfo,
 } from '@knowtis/shared-types';
 
 import {
@@ -17,15 +16,7 @@ import type {
   StoredProviderKey,
   UserProviderKeysRepository,
 } from '../../domain/ports/user-provider-keys.repository';
-
-const BYOK_PROVIDER_SET = new Set<string>(BYOK_PROVIDERS);
-
-function toByokProvider(raw: string): ByokProvider {
-  if (!BYOK_PROVIDER_SET.has(raw)) {
-    throw new Error(`Invalid BYOK provider value in persistence: ${raw}`);
-  }
-  return raw as ByokProvider;
-}
+import { toByokProvider } from './byok-provider-column';
 
 @Injectable()
 export class DrizzleUserProviderKeysRepository implements UserProviderKeysRepository {
