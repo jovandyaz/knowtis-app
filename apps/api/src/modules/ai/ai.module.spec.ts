@@ -15,7 +15,6 @@ import { SystemProviderKeysService } from './application/services/system-provide
 import { PLATFORM_MODELS_SOURCE } from './domain/ports/platform-models.port';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { AI_REDIS } from './infrastructure/redis/ai-redis.provider';
-import { ModelGateTokenGuard } from './model-gate-token.guard';
 import { ModelGateController } from './model-gate.controller';
 
 const COMPILE_TIMEOUT_MS = 15_000;
@@ -70,7 +69,7 @@ describe('AIModule wiring', () => {
   );
 
   it(
-    'resolves the gate controller on the module gate service behind its token guard',
+    'resolves the gate controller on the module gate service',
     async () => {
       const moduleRef = await compileAIModule();
 
@@ -80,10 +79,6 @@ describe('AIModule wiring', () => {
         expect(
           Object.values(controller).includes(moduleRef.get(ModelGateService)),
           "ModelGateController is not wired to the module's ModelGateService"
-        ).toBe(true);
-        expect(
-          moduleRef.get(ModelGateTokenGuard) instanceof ModelGateTokenGuard,
-          'ModelGateTokenGuard does not resolve in the AI module'
         ).toBe(true);
       } finally {
         await moduleRef.close();

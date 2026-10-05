@@ -101,7 +101,6 @@ import { ExactMatchCacheService } from './infrastructure/redis/exact-match-cache
 import { RedisMessageQuotaAdapter } from './infrastructure/redis/redis-message-quota.adapter';
 import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.service';
 import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-search.adapter';
-import { ModelGateTokenGuard } from './model-gate-token.guard';
 import { ModelGateController } from './model-gate.controller';
 
 @Module({
@@ -171,7 +170,6 @@ import { ModelGateController } from './model-gate.controller';
     AiCatalogAdminService,
     AssignableModelsService,
     ModelGateService,
-    ModelGateTokenGuard,
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,

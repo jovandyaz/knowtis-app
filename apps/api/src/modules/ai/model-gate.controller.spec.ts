@@ -117,10 +117,13 @@ describe('ModelGateController over HTTP', () => {
     expect(await call('GET', '/active')).toEqual({ status: 200, body: active });
   });
 
-  it('rejects a verdict with a javascript: run url', async () => {
+  it.each([
+    ['javascript:', 'javascript:alert(document.cookie)'],
+    ['plain http', 'http://github.com/jovandyaz/knowtis-app/actions/runs/42'],
+  ])('rejects a verdict with a %s run url', async (_scheme, runUrl) => {
     const response = await call('POST', '/verdict', {
       ...VALID_VERDICT,
-      runUrl: 'javascript:alert(document.cookie)',
+      runUrl,
     });
 
     expect(response.status).toBe(400);
@@ -163,5 +166,14 @@ describe('ModelGateController over HTTP', () => {
     });
     expect(gate.verdict).toHaveBeenCalledTimes(1);
     expect({ ...gate.verdict.mock.calls[0]?.[0] }).toStrictEqual(verdict);
+  });
+});
+
+describe('ModelGateController throttling', () => {
+  it('caps each caller at 30 gate requests a minute', () => {
+    expect({
+      limit: Reflect.getMetadata('THROTTLER:LIMITdefault', ModelGateController),
+      ttl: Reflect.getMetadata('THROTTLER:TTLdefault', ModelGateController),
+    }).toEqual({ limit: 30, ttl: 60_000 });
   });
 });
