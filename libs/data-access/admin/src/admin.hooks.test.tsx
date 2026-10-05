@@ -1273,11 +1273,43 @@ describe('useRollbackResolution', () => {
     ).toMatchObject({ intents: [{ previousModelId: null }] });
     for (const queryKey of [
       adminQueryKeys.aiConfig(),
+      adminQueryKeys.aiCatalog(),
       adminQueryKeys.assignableModels(),
       adminQueryKeys.auditLists(),
     ]) {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey });
     }
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.platformResolutions(),
+    });
+  });
+
+  it('refetches the resolutions after a refused roll back and keeps the error', async () => {
+    const refused = new Error(
+      'changed since it was loaded; reload and try again'
+    );
+    vi.mocked(httpClient.post).mockRejectedValue(refused);
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useRollbackResolution(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({
+      selectorKey: 'platform.balanced',
+      activeModelId: 'openrouter:z-ai/glm-5.2',
+      previousModelId: 'openrouter:z-ai/glm-5.1',
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBe(refused);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.platformResolutions(),
+    });
   });
 });
 

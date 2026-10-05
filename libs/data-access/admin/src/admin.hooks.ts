@@ -452,15 +452,14 @@ export function useRollbackResolution() {
         resolutions
       );
       return Promise.all([
+        invalidateCatalogDependents(queryClient),
         queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() }),
-        queryClient.invalidateQueries({
-          queryKey: adminQueryKeys.assignableModels(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: adminQueryKeys.auditLists(),
-        }),
       ]);
     },
+    onError: () =>
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.platformResolutions(),
+      }),
   });
 }
 

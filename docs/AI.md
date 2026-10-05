@@ -783,7 +783,7 @@ The **Platform resolutions** section leads the AI Config **Models** tab. It sits
 - **Active**, with "since `<date>`" once it has changed.
 - **Pending**: the pending model, a **gate pending** or **gate failed** badge, the gate detail, and a **Gate run** link. The link renders only for an `https://` URL, and only while a model is pending.
 - **Candidate**: the selector's current pick.
-- **Release pin** whenever a pin is stored, stale included (`DELETE /ai/config/:key`), and **Roll back** while the row has a previous model, after a confirmation that names both models; it sends that pair.
+- **Release pin** whenever a pin is stored, stale included (`DELETE /ai/config/:key`), and **Roll back** while the row has a previous model, after a confirmation that names both models; it sends that pair. An applied roll back also refreshes the **Model catalog** candidates, which leave out the active resolutions, and a refused one refetches the rows.
 
 The **Model catalog** section shows "Last sync `<relative time>`" beside **Sync now**, and nothing while `lastSyncAt` is null. A sync refetches it.
 
