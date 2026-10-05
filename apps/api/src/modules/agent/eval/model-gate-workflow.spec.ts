@@ -39,6 +39,8 @@ const GATE_SKIPS_EMPTY_MATRIX_RE =
 const EXPRESSION_OPEN = '${{';
 const VALIDATED_FIELDS_ONLY_RE =
   /^ +matrix=\$\(jq -c '.+ \| map\(\{selectorKey, modelId\}\)' <<<"\$body"\)$/m;
+const ONE_LEG_AT_A_TIME_RE =
+  /^ +strategy:\n +fail-fast: false\n(?: +#.*\n)? +max-parallel: 1$/m;
 const UNKNOWN_SELECTOR = 'platform.other';
 const ALIAS_PIN = 'openrouter:~anthropic/claude-sonnet-latest';
 const TRAILING_NEWLINE = '\n';
@@ -71,6 +73,10 @@ describe('model gate workflow', () => {
   it('runs the eval-security target with ten trials', () => {
     expect(GATE).toMatch(EVAL_SECURITY_RUN_RE);
     expect(GATE).toMatch(TRIALS_RE);
+  });
+
+  it('runs one gate leg at a time, so two verdicts never activate one model', () => {
+    expect(GATE).toMatch(ONE_LEG_AT_A_TIME_RE);
   });
 
   it('evaluates and judges the same pending model', () => {

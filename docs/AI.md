@@ -1377,7 +1377,9 @@ after the 03:00 catalog sync, and on `workflow_dispatch`. Runs queue rather than
 other (`concurrency: model-gate`).
 
 - **Pending matrix.** The `pending` job reads `GET /api/v1/internal/model-gate/pending` and
-  starts one `gate` leg per entry. An entry whose selector key or model id fails validation is
+  starts one `gate` leg per entry. Legs run one at a time (`max-parallel: 1`), so each
+  verdict's clash check sees the previous activation and two legs never activate one model for
+  two intents. An entry whose selector key or model id fails validation is
   dropped with a `::warning::` and stays ungated. The model id pattern admits no `~` alias, which
   a platform selector never resolves to anyway. An empty list skips the `gate` job. When
   `KNOWTIS_API_URL` or `MODEL_GATE_TOKEN` is unset, `pending` ends green with a `::notice::` and

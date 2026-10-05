@@ -48,6 +48,8 @@ jobs:
     timeout-minutes: 75
     strategy:
       fail-fast: false
+      # Serial legs: each verdict's clash check must see the previous activation.
+      max-parallel: 1
       matrix:
         include: ${{ fromJSON(needs.pending.outputs.matrix) }}
     services:
