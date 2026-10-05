@@ -145,6 +145,15 @@ describe('GoogleModelsClient', () => {
   });
 
   it('answers unavailable for a first page that is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>', { status: HttpStatus.OK }))
+    );
+
+    await expect(list()).resolves.toEqual(MALFORMED_LISTING);
+  });
+
+  it('answers unavailable for a first page whose body is JSON null', async () => {
     stubListingFetch({ body: null });
 
     await expect(list()).resolves.toEqual(MALFORMED_LISTING);
