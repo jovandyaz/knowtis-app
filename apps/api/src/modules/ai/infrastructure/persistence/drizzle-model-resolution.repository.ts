@@ -129,7 +129,10 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
         and(
           eq(aiModelResolutions.selectorKey, selectorKey),
           eq(aiModelResolutions.pendingModelId, modelId),
-          eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS)
+          eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS),
+          verdict.passed
+            ? sql`${aiModelResolutions.activeModelId} IS DISTINCT FROM ${modelId}`
+            : undefined
         )
       )
       .returning({ selectorKey: aiModelResolutions.selectorKey });
@@ -138,7 +141,8 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
 
   // Postgres evaluates every SET expression against the old row, so the two
   // columns swap without a temporary. The swap's row lock holds until the clear
-  // commits, so a pass on the restored model cannot activate it onto itself.
+  // commits, and a passed verdict never applies to the model already active, so
+  // no pass can set the previous model to the active one.
   async rollback(
     selectorKey: PlatformSelectorKey,
     expected: RollbackResolutionInput,

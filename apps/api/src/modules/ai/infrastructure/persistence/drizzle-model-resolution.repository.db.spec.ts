@@ -289,6 +289,29 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
+  it('refuses a passed verdict for the model already active', async () => {
+    await repo.setPending(
+      'platform.fast',
+      PLATFORM_SEED_MODELS.fast,
+      NOTHING_PENDING,
+      AT
+    );
+    const applied = await repo.recordVerdict(
+      'platform.fast',
+      PLATFORM_SEED_MODELS.fast,
+      { passed: true, runUrl: RUN_URL },
+      LATER_AT
+    );
+    expect(applied).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      previousModelId: null,
+      pendingModelId: PLATFORM_SEED_MODELS.fast,
+      gateStatus: 'pending',
+      updatedAt: AT,
+    });
+  });
+
   it('keeps a failed pending model with its verdict detail', async () => {
     await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
     const applied = await repo.recordVerdict(
