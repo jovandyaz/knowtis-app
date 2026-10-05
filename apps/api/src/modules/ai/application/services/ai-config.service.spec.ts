@@ -1350,6 +1350,27 @@ describe('AIConfigService', () => {
     });
   });
 
+  describe('intentServing', () => {
+    it('names the other intent that serves a model, by pin or active resolution', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? CUSTOM_MODEL : null
+      );
+
+      expect(await service.intentServing(CUSTOM_MODEL, 'fast')).toBe(
+        'powerful'
+      );
+      expect(
+        await service.intentServing(PLATFORM_SEED_MODELS.balanced, 'fast')
+      ).toBe('balanced');
+    });
+
+    it('never names the intent it excepts', async () => {
+      expect(
+        await service.intentServing(PLATFORM_SEED_MODELS.fast, 'fast')
+      ).toBeNull();
+    });
+  });
+
   describe('models that left the catalog', () => {
     it('should serve the active resolution when the stored default model is gone', async () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);
