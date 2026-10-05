@@ -244,7 +244,7 @@ The backoffice project needs `VITE_API_URL` only (`apps/backoffice/.env.example`
 
 ## Feature Flag
 
-`ai_enabled` is the only feature flag in the system, rolled out from the backoffice **AI Config** page's status header. Every other AI/agent capability is either always on or gated by whether its own env var is configured — `AI_ALERT_WEBHOOK_URL` for agent health alerts, `VOYAGE_API_KEY` for hybrid retrieval and long-term memory, `TAVILY_API_KEY` for web search — see [AI.md → Feature flag](AI.md#feature-flag) for the full table.
+`ai_enabled` is the only feature flag in the system, rolled out from the backoffice **AI Config** page's status header. Every other AI/agent capability is either always on or gated by whether its own env var is configured — `AI_ALERT_WEBHOOK_URL` for the ops alert webhook (agent health, model catalog), `VOYAGE_API_KEY` for hybrid retrieval and long-term memory, `TAVILY_API_KEY` for web search — see [AI.md → Feature flag](AI.md#feature-flag) for the full table.
 
 ### Email verification gate
 
