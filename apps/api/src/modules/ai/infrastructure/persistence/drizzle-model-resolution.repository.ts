@@ -1,8 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import type { PlatformSelectorKey } from '@knowtis/shared-types';
+import type {
+  ModelGateStatus,
+  PlatformSelectorKey,
+} from '@knowtis/shared-types';
 
 import {
   aiModelResolutions,
@@ -15,9 +18,12 @@ import {
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
 import type {
+  GateVerdict,
   ModelResolutionRepository,
   PendingSlot,
 } from '../../domain/ports/model-resolution.repository';
+
+const FAILED_GATE_STATUS = 'failed' as const satisfies ModelGateStatus;
 
 function toResolution(row: AiModelResolutionRow): ModelResolution {
   return {
@@ -29,6 +35,8 @@ function toResolution(row: AiModelResolutionRow): ModelResolution {
     releasedAt: row.releasedAt,
     pendingModelId: row.pendingModelId,
     gateStatus: row.gateStatus,
+    gateDetail: row.gateDetail,
+    gateRunUrl: row.gateRunUrl,
   };
 }
 
@@ -90,6 +98,36 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
         and(
           eq(aiModelResolutions.selectorKey, selectorKey),
           eq(aiModelResolutions.pendingModelId, expectedPendingModelId),
+          eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS)
+        )
+      )
+      .returning({ selectorKey: aiModelResolutions.selectorKey });
+    return updated.length > 0;
+  }
+
+  async recordVerdict(
+    selectorKey: PlatformSelectorKey,
+    modelId: string,
+    verdict: GateVerdict,
+    at: Date
+  ): Promise<boolean> {
+    const outcome = verdict.passed
+      ? {
+          previousModelId: sql`${aiModelResolutions.activeModelId}`,
+          activeModelId: sql`${aiModelResolutions.pendingModelId}`,
+          changedAt: at,
+          pendingModelId: null,
+          gateStatus: null,
+          gateDetail: null,
+        }
+      : { gateStatus: FAILED_GATE_STATUS, gateDetail: verdict.detail };
+    const updated = await this.db
+      .update(aiModelResolutions)
+      .set({ ...outcome, gateRunUrl: verdict.runUrl, updatedAt: at })
+      .where(
+        and(
+          eq(aiModelResolutions.selectorKey, selectorKey),
+          eq(aiModelResolutions.pendingModelId, modelId),
           eq(aiModelResolutions.gateStatus, PENDING_GATE_STATUS)
         )
       )

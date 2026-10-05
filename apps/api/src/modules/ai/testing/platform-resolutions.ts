@@ -40,6 +40,9 @@ export function createModelResolutionRepositoryStub(
     clearPending: vi
       .fn<ModelResolutionRepository['clearPending']>()
       .mockResolvedValue(true),
+    recordVerdict: vi
+      .fn<ModelResolutionRepository['recordVerdict']>()
+      .mockResolvedValue(true),
     recordRelease: vi.fn(),
   };
 }

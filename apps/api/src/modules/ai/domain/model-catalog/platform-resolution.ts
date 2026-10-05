@@ -20,6 +20,8 @@ export interface ModelResolution {
   readonly releasedAt: Date | null;
   readonly pendingModelId: string | null;
   readonly gateStatus: ModelGateStatus | null;
+  readonly gateDetail: string | null;
+  readonly gateRunUrl: string | null;
 }
 
 export const SELECTOR_KEY_BY_INTENT = {
@@ -48,6 +50,8 @@ export const SEED_RESOLUTIONS: readonly ModelResolution[] = MODEL_INTENTS.map(
     releasedAt: null,
     pendingModelId: null,
     gateStatus: null,
+    gateDetail: null,
+    gateRunUrl: null,
   })
 );
 

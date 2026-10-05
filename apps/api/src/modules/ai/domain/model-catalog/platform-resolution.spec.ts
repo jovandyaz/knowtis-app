@@ -50,6 +50,8 @@ describe('platform resolution seed', () => {
         releasedAt: null,
         pendingModelId: null,
         gateStatus: null,
+        gateDetail: null,
+        gateRunUrl: null,
       });
     }
   );
