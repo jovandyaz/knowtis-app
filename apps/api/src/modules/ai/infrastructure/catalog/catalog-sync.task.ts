@@ -16,11 +16,11 @@ import {
   isCatalogCandidate,
   toCandidateUpsert,
 } from '../../domain/model-catalog/candidate-filter';
+import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   canConcludeAbsence,
   findOpenRouterDrift,
   findPromotedDrift,
-  type DriftFinding,
 } from '../../domain/model-catalog/openrouter-watch';
 import {
   AI_CATALOG_REPOSITORY,
@@ -119,7 +119,7 @@ export class CatalogSyncTask {
   private async promotedFindings(
     catalog: UpstreamCatalog,
     watched: readonly string[]
-  ): Promise<DriftFinding[]> {
+  ): Promise<WatchFinding[]> {
     try {
       const promoted = await this.repo.listByStatus(PROMOTED_STATUS);
       return findPromotedDrift(
@@ -238,7 +238,7 @@ export class CatalogSyncTask {
 
   private async persist(
     upstream: readonly UpstreamModel[],
-    findings: DriftFinding[],
+    findings: readonly WatchFinding[],
     indexed: number
   ): Promise<CatalogSyncResultDto> {
     const failures: WriteFailure[] = [];
@@ -260,7 +260,7 @@ export class CatalogSyncTask {
     for (const finding of findings) {
       try {
         const opened = await this.repo.createAlert(
-          finding.modelId,
+          finding.subject,
           finding.kind,
           finding.detail
         );
@@ -269,7 +269,7 @@ export class CatalogSyncTask {
         }
       } catch (error) {
         failures.push({
-          target: `${finding.modelId} ${finding.kind}`,
+          target: `${finding.subject} ${finding.kind}`,
           reason: reasonOf(error),
         });
       }

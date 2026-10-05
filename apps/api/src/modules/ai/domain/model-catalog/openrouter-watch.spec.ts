@@ -118,7 +118,7 @@ describe('findOpenRouterDrift', () => {
 
     expect(findings).toEqual([
       {
-        modelId: WATCHED_ID,
+        subject: WATCHED_ID,
         kind: 'unavailable',
         detail: expect.stringContaining(WATCHED_SLUG),
       },
@@ -192,7 +192,7 @@ describe('findOpenRouterDrift', () => {
     const read = catalogOf([upstreamModel('deepseek/deepseek-v4.1-flash')]);
     expect(findOpenRouterDrift(read, [])).toEqual([]);
     expect(findOpenRouterDrift(read, [WATCHED_ID])).toEqual([
-      { modelId: WATCHED_ID, kind: 'unavailable', detail: expect.any(String) },
+      { subject: WATCHED_ID, kind: 'unavailable', detail: expect.any(String) },
     ]);
   });
 });
@@ -210,7 +210,7 @@ describe('findPromotedDrift', () => {
 
     expect(findings).toEqual([
       {
-        modelId: PROMOTED_ID,
+        subject: PROMOTED_ID,
         kind: 'unavailable',
         detail: expect.stringContaining(PROMOTED_SLUG),
       },

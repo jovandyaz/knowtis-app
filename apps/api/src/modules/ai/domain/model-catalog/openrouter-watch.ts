@@ -1,15 +1,10 @@
-import { MODEL_INTENTS, type CatalogAlertKind } from '@knowtis/shared-types';
+import { MODEL_INTENTS } from '@knowtis/shared-types';
 
 import type { UpstreamCatalog } from '../ports/openrouter-models.port';
 import { OPENROUTER_ID_PREFIX } from './catalog-model';
 import { PLATFORM_SELECTORS } from './model-selectors';
+import type { WatchFinding } from './model-watch';
 import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
-
-export interface DriftFinding {
-  modelId: string;
-  kind: CatalogAlertKind;
-  detail: string;
-}
 
 /** OpenRouter authors the platform selectors pick from; a read listing none of them is not the catalog we know. */
 const PLATFORM_AUTHOR_PREFIXES = [
@@ -66,13 +61,13 @@ export function canConcludeAbsence(catalog: UpstreamCatalog): boolean {
 export function findOpenRouterDrift(
   catalog: UpstreamCatalog,
   watchedIds: readonly string[]
-): DriftFinding[] {
+): WatchFinding[] {
   const { isGone } = absenceCheck(catalog);
 
   return [...watchedSlugs(watchedIds)]
     .filter(([, slug]) => isGone(slug))
-    .map(([modelId, slug]) => ({
-      modelId,
+    .map(([subject, slug]) => ({
+      subject,
       kind: 'unavailable',
       detail: unavailableDetail(slug),
     }));
@@ -89,7 +84,7 @@ export function findPromotedDrift(
   promotedIds: readonly string[],
   catalog: UpstreamCatalog,
   watchedIds: readonly string[]
-): DriftFinding[] {
+): WatchFinding[] {
   const { isGone } = absenceCheck(catalog);
   const watched = watchedSlugs(watchedIds);
 
@@ -100,7 +95,7 @@ export function findPromotedDrift(
       return isGone(slug)
         ? [
             {
-              modelId: id,
+              subject: id,
               kind: 'unavailable' as const,
               detail: unavailableDetail(slug),
             },
