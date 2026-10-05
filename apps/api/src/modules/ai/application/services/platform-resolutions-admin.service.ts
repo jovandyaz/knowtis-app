@@ -81,9 +81,10 @@ export class PlatformResolutionsAdminService {
    * Makes the confirmed previous model active again and the confirmed active one
    * previous, then answers the refreshed overview. A `pending` entry on the
    * restored model clears with it and its `resolution_pending` alert resolves;
-   * any other pending entry stays. Rejects with `ResolutionRollbackUnavailableError` unless the intent
-   * still holds both confirmed models, and with `InvalidAIConfigError` when
-   * another intent serves the previous one.
+   * any other pending entry stays. Rejects with
+   * `ResolutionRollbackUnavailableError` unless the intent still holds both
+   * confirmed models, and with `InvalidAIConfigError` when another intent
+   * serves the previous one.
    */
   async rollback(
     selectorKey: PlatformSelectorKey,

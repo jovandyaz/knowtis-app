@@ -178,8 +178,7 @@ export class DrizzleModelResolutionRepository implements ModelResolutionReposito
         await tx
           .update(aiModelResolutions)
           .set({ ...CLEARED_PENDING, updatedAt: at })
-          .where(eq(aiModelResolutions.selectorKey, selectorKey))
-          .returning({ selectorKey: aiModelResolutions.selectorKey });
+          .where(eq(aiModelResolutions.selectorKey, selectorKey));
       }
       return { clearedPending };
     });

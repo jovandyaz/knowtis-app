@@ -1498,7 +1498,7 @@ other (`concurrency: model-gate`).
   harmless and neither raises nor resolves an alert. The compare-and-set write holds this even
   when a sync re-pends the row between the read and the write.
 
-Resolving `resolution_pending` never fails a verdict or a sync: a failed resolve logs
+Resolving `resolution_pending` never fails a verdict, a sync or a roll back: a failed resolve logs
 `ai.catalog.alert_resolve_failed` (`subject`, `kind`, `reason`) at warn, and the alert stays open
 until an admin resolves it.
 
