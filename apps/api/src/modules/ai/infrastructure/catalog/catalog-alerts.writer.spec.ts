@@ -1,7 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CatalogAlertKind } from '@knowtis/shared-types';
+import {
+  CATALOG_ALERT_KINDS,
+  type CatalogAlertKind,
+} from '@knowtis/shared-types';
 
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
@@ -89,6 +92,12 @@ describe('CatalogAlertsWriter', () => {
       await writer.raise([finding('resolution_pending', CANDIDATE)])
     ).toEqual({ opened: 1, failed: 0 });
     expect(webhook.notify).not.toHaveBeenCalled();
+  });
+
+  it('classifies every alert kind as either urgent or quiet', () => {
+    expect([...URGENT_KINDS, ...QUIET_KINDS].sort()).toEqual(
+      [...CATALOG_ALERT_KINDS].sort()
+    );
   });
 
   it.each(URGENT_KINDS)('notifies a newly opened %s alert', async (kind) => {
