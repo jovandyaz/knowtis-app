@@ -223,8 +223,8 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
     modelId: string,
     kind: CatalogAlertKind,
     detail: string
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const rows = await this.db
       .insert(aiCatalogAlerts)
       .values({ modelId, kind, detail })
       .onConflictDoNothing({
@@ -232,6 +232,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
         where: isNull(aiCatalogAlerts.resolvedAt),
       })
       .returning({ id: aiCatalogAlerts.id });
+    return rows.length > 0;
   }
 
   async resolveAlert(id: number): Promise<boolean> {

@@ -38,8 +38,8 @@ const COMPLETED_SYNC = {
 const alert: CatalogAlert = {
   id: ALERT_ID,
   modelId: MODEL_ID,
-  kind: 'price_drift',
-  detail: 'output cost rose by 40%',
+  kind: 'retirement_scheduled',
+  detail: 'the provider retires the model on 2026-12-31',
   createdAt: new Date('2026-08-10T10:00:00.000Z'),
   resolvedAt: null,
 };
@@ -110,7 +110,7 @@ describe('AiCatalogAdminService', () => {
       });
       expect(overview.alerts[0]).toMatchObject({
         id: ALERT_ID,
-        kind: 'price_drift',
+        kind: 'retirement_scheduled',
         resolvedAt: null,
       });
     });

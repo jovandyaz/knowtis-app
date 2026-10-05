@@ -1356,6 +1356,49 @@ describe('AIConfigService', () => {
     });
   });
 
+  describe('getPinnedModelIds', () => {
+    it('lists the stored intent pins, then the stored chain, once each, even those the catalog dropped', async () => {
+      const stored: Record<string, string> = {
+        ai_fast_model: FAST_PIN,
+        ai_default_model: DEAD_PIN,
+        ai_fallback_chain: `${FAST_PIN}, ${CHAIN_ONLY}`,
+      };
+      mockRepo.get.mockImplementation(
+        async (key: string) => stored[key] ?? null
+      );
+      mockCatalog.isSupported.mockImplementation((id) => id !== DEAD_PIN);
+
+      expect(await service.getPinnedModelIds()).toEqual([
+        FAST_PIN,
+        DEAD_PIN,
+        CHAIN_ONLY,
+      ]);
+    });
+
+    it('lists nothing while every intent and the chain are auto', async () => {
+      expect(await service.getPinnedModelIds()).toEqual([]);
+    });
+
+    it('lists the pins while the resolutions are still unread', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? DEEP_PIN : null
+      );
+      const cold = new AIConfigService(
+        mockRepo as never,
+        mockCache as never,
+        mockAudit as never,
+        mockRegistry as never,
+        mockCatalog as never,
+        { snapshot: () => [] } as never,
+        createSnapshotIndex(),
+        createResolutionsStub(SEED_RESOLUTIONS, { readStore: false }),
+        mockResolutionRepo
+      );
+
+      expect(await cold.getPinnedModelIds()).toEqual([DEEP_PIN]);
+    });
+  });
+
   describe('intent tiers stay distinct', () => {
     it('refuses to point a second tier at a model another tier already serves', async () => {
       mockRepo.get.mockImplementation(async (key: string) =>

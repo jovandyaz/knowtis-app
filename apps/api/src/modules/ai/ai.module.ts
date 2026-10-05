@@ -56,13 +56,17 @@ import { MODEL_INDEX_REPOSITORY } from './domain/ports/model-index.repository';
 import { MODEL_RESOLUTION_REPOSITORY } from './domain/ports/model-resolution.repository';
 import { MODELS_DEV_CLIENT } from './domain/ports/models-dev.port';
 import { OPENROUTER_MODELS_CLIENT } from './domain/ports/openrouter-models.port';
-import { PLATFORM_MODELS_SOURCE } from './domain/ports/platform-models.port';
+import {
+  PINNED_MODELS_SOURCE,
+  PLATFORM_MODELS_SOURCE,
+} from './domain/ports/platform-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
 import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
+import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
 import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
 import { ModelIndexCache } from './infrastructure/catalog/model-index.cache';
@@ -72,6 +76,7 @@ import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-
 import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
+import { SyncStalenessTask } from './infrastructure/catalog/sync-staleness.task';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
@@ -145,6 +150,7 @@ import { ModelGateController } from './model-gate.controller';
     FallbackChainService,
     { provide: FALLBACK_CHAIN_SOURCE, useExisting: AIConfigService },
     { provide: PLATFORM_MODELS_SOURCE, useExisting: AIConfigService },
+    { provide: PINNED_MODELS_SOURCE, useExisting: AIConfigService },
     { provide: OPENROUTER_ROUTING_SOURCE, useExisting: AIConfigService },
     SystemProviderKeysService,
     {
@@ -165,8 +171,10 @@ import { ModelGateController } from './model-gate.controller';
     },
     { provide: MODELS_DEV_CLIENT, useClass: ModelsDevHttpClient },
     ModelIndexWriter,
+    CatalogAlertsWriter,
     PlatformCandidatesWriter,
     CatalogSyncTask,
+    SyncStalenessTask,
     AiCatalogAdminService,
     AssignableModelsService,
     ModelGateService,

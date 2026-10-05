@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MODEL_INDEX_SNAPSHOT, type IndexedModel } from '@knowtis/ai-gateway';
 
+import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
+  PLATFORM_SEED_MODELS,
   SEED_RESOLUTIONS,
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
@@ -13,6 +15,7 @@ import {
   seededResolution,
 } from '../../testing/platform-resolutions';
 import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import type { CatalogAlertsWriter } from './catalog-alerts.writer';
 import { PlatformCandidatesWriter } from './platform-candidates.writer';
 
 const NOTHING_PENDING = { pendingModelId: null, gateStatus: null };
@@ -25,7 +28,24 @@ function make(
   const repo = createModelResolutionRepositoryStub(async () => [
     ...resolutions,
   ]);
-  return { writer: new PlatformCandidatesWriter(index, repo), repo };
+  const alerts = {
+    raise: vi
+      .fn<CatalogAlertsWriter['raise']>()
+      .mockResolvedValue({ opened: 0, failed: 0 }),
+  };
+  return {
+    writer: new PlatformCandidatesWriter(
+      index,
+      repo,
+      alerts as unknown as CatalogAlertsWriter
+    ),
+    repo,
+    alerts,
+  };
+}
+
+function raised(alerts: ReturnType<typeof make>['alerts']): WatchFinding[] {
+  return alerts.raise.mock.calls.flatMap(([findings]) => [...findings]);
 }
 
 describe('PlatformCandidatesWriter', () => {
@@ -142,6 +162,56 @@ describe('PlatformCandidatesWriter', () => {
     );
     await writer.write(SNAPSHOT_DATE);
     expect(repo.setPending).not.toHaveBeenCalled();
+  });
+
+  it('raises selector_empty when a selector has no candidate', async () => {
+    const { writer, alerts } = make(
+      MODEL_INDEX_SNAPSHOT.filter((row) => row.family !== 'deepseek-flash'),
+      [seededResolution('fast')]
+    );
+
+    await writer.write(SNAPSHOT_DATE);
+
+    expect(raised(alerts)).toEqual([
+      {
+        subject: 'platform.fast',
+        kind: 'selector_empty',
+        detail: expect.stringContaining(PLATFORM_SEED_MODELS.fast),
+      },
+    ]);
+  });
+
+  it('raises resolution_pending when it pends', async () => {
+    const { writer, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+      seededResolution('fast'),
+    ]);
+
+    await writer.write(SNAPSHOT_DATE);
+
+    expect(raised(alerts)).toEqual([
+      {
+        subject: 'openrouter:deepseek/deepseek-v4.1-flash',
+        kind: 'resolution_pending',
+        detail: expect.stringContaining('platform.fast'),
+      },
+    ]);
+  });
+
+  it('raises nothing for a pend another writer beat it to, or for a clear', async () => {
+    const { writer, repo, alerts } = make(MODEL_INDEX_SNAPSHOT, [
+      seededResolution('fast'),
+      seededResolution('balanced', {
+        activeModelId: 'openrouter:deepseek/deepseek-v4-pro-0813',
+        pendingModelId: 'openrouter:deepseek/deepseek-v4-pro',
+        gateStatus: 'pending',
+      }),
+    ]);
+    vi.mocked(repo.setPending).mockResolvedValue(false);
+
+    await writer.write(SNAPSHOT_DATE);
+
+    expect(repo.clearPending).toHaveBeenCalledTimes(1);
+    expect(raised(alerts)).toEqual([]);
   });
 
   it('logs each candidate it pends or clears', async () => {

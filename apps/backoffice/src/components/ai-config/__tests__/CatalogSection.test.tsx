@@ -8,6 +8,7 @@ import type {
   CatalogModel,
   CatalogOverview,
 } from '@knowtis/data-access-admin';
+import type { CatalogAlertKind } from '@knowtis/shared-types';
 
 import { CANDIDATES_PAGE_SIZE } from '../CandidatesTable';
 import { CatalogSection } from '../CatalogSection';
@@ -96,8 +97,8 @@ function alert(overrides: Partial<CatalogAlert> = {}): CatalogAlert {
   return {
     id: 58,
     modelId: 'openrouter:z-ai/glm-5.2',
-    kind: 'price_drift',
-    detail: 'OpenRouter output cost $1.62/M vs vendored $4.40/M',
+    kind: 'retirement_scheduled',
+    detail: 'The provider retires this model on 2026-12-31',
     createdAt: new Date('2026-08-09T10:00:00.000Z'),
     resolvedAt: null,
     ...overrides,
@@ -156,15 +157,15 @@ describe('CatalogSection', () => {
   it('lists an open alert with its kind, model and detail', () => {
     renderSection({ alerts: [alert()] });
 
-    expect(screen.getByText('Price drift')).toBeInTheDocument();
+    expect(screen.getByText('Retirement scheduled')).toBeInTheDocument();
     expect(screen.getByText('openrouter:z-ai/glm-5.2')).toBeInTheDocument();
-    expect(screen.getByText(/vs vendored/)).toBeInTheDocument();
+    expect(screen.getByText(/retires this model/)).toBeInTheDocument();
   });
 
   it('wraps a long alert detail instead of letting it widen the page', () => {
     renderSection({ alerts: [alert()] });
 
-    expect(screen.getByText(/vs vendored/)).toHaveClass(
+    expect(screen.getByText(/retires this model/)).toHaveClass(
       'basis-48',
       'wrap-break-word'
     );
@@ -186,6 +187,27 @@ describe('CatalogSection', () => {
     ).toHaveClass('min-w-0');
   });
 
+  const EXPECTED_ALERT_LABELS = {
+    unavailable: 'Unavailable',
+    pin_unavailable: 'Pin unavailable',
+    retirement_scheduled: 'Retirement scheduled',
+    selector_empty: 'Selector empty',
+    resolution_pending: 'Resolution pending',
+    gate_failed: 'Gate failed',
+    sync_rejected: 'Sync rejected',
+    family_drift: 'Family drift',
+    sync_stale: 'Sync stale',
+  } satisfies Record<CatalogAlertKind, string>;
+
+  it.each(Object.entries(EXPECTED_ALERT_LABELS))(
+    'labels a %s alert as %s',
+    (kind, label) => {
+      renderSection({ alerts: [alert({ kind })] });
+
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  );
+
   it('renders an alert kind this bundle does not know as its raw value', () => {
     renderSection({ alerts: [alert({ kind: 'context_shrink' })] });
 
@@ -203,14 +225,14 @@ describe('CatalogSection', () => {
   it('names each resolve button by kind so two alerts on one model differ', async () => {
     renderSection({
       alerts: [
-        alert({ id: 81, kind: 'price_drift' }),
-        alert({ id: 82, kind: 'deprecation' }),
+        alert({ id: 81, kind: 'unavailable' }),
+        alert({ id: 82, kind: 'retirement_scheduled' }),
       ],
     });
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: 'Resolve deprecation alert for openrouter:z-ai/glm-5.2',
+        name: 'Resolve retirement_scheduled alert for openrouter:z-ai/glm-5.2',
       })
     );
 

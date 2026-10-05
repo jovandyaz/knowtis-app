@@ -1,16 +1,10 @@
-import { MODEL_INTENTS, type CatalogAlertKind } from '@knowtis/shared-types';
+import { MODEL_INTENTS } from '@knowtis/shared-types';
 
 import type { UpstreamCatalog } from '../ports/openrouter-models.port';
-import { isoDateOf } from '../value-objects/utc-day';
 import { OPENROUTER_ID_PREFIX } from './catalog-model';
 import { PLATFORM_SELECTORS } from './model-selectors';
+import type { WatchFinding } from './model-watch';
 import { UNPARSEABLE_MODEL_ID } from './upstream-discards';
-
-export interface DriftFinding {
-  modelId: string;
-  kind: CatalogAlertKind;
-  detail: string;
-}
 
 /** OpenRouter authors the platform selectors pick from; a read listing none of them is not the catalog we know. */
 const PLATFORM_AUTHOR_PREFIXES = [
@@ -32,16 +26,14 @@ function unavailableDetail(slug: string): string {
 }
 
 /**
- * Slug lookup for one upstream read, plus the guard that decides whether it may
- * retire anything: only a catalog that reached the last page, lists a model by
- * an author the platform selectors pick from, and carries no anonymous discard
- * can prove absence — a discarded entry whose id failed to parse could be any
- * model, including the one about to be declared gone.
+ * The guard that decides whether one upstream read may retire anything: only a
+ * catalog that reached the last page, lists a model by an author the platform
+ * selectors pick from, and carries no anonymous discard can prove absence — a
+ * discarded entry whose id failed to parse could be any model, including the
+ * one about to be declared gone.
  */
 function absenceCheck(catalog: UpstreamCatalog) {
-  const bySlug = new Map(
-    catalog.models.map((model) => [model.id.toLowerCase(), model])
-  );
+  const listed = new Set(catalog.models.map((model) => model.id.toLowerCase()));
   const unparseable = new Set(catalog.discarded.map((id) => id.toLowerCase()));
   const recognizable = catalog.models.some((model) =>
     PLATFORM_AUTHOR_PREFIXES.some((prefix) =>
@@ -52,10 +44,9 @@ function absenceCheck(catalog: UpstreamCatalog) {
     catalog.complete && recognizable && !unparseable.has(UNPARSEABLE_MODEL_ID);
 
   return {
-    bySlug,
     conclusive,
     isGone: (slug: string) =>
-      conclusive && !bySlug.has(slug) && !unparseable.has(slug),
+      conclusive && !listed.has(slug) && !unparseable.has(slug),
   };
 }
 
@@ -64,37 +55,20 @@ export function canConcludeAbsence(catalog: UpstreamCatalog): boolean {
   return absenceCheck(catalog).conclusive;
 }
 
-/** Upstream changes on the platform's OpenRouter models, matched by slug: one it stopped listing or dates for expiration. */
+/** The platform's OpenRouter models that OpenRouter stopped listing, matched by slug. */
 export function findOpenRouterDrift(
   catalog: UpstreamCatalog,
   watchedIds: readonly string[]
-): DriftFinding[] {
-  const { bySlug, isGone } = absenceCheck(catalog);
-  const findings: DriftFinding[] = [];
+): WatchFinding[] {
+  const { isGone } = absenceCheck(catalog);
 
-  for (const [modelId, slug] of watchedSlugs(watchedIds)) {
-    const live = bySlug.get(slug);
-    if (live === undefined) {
-      if (isGone(slug)) {
-        findings.push({
-          modelId,
-          kind: 'unavailable',
-          detail: unavailableDetail(slug),
-        });
-      }
-      continue;
-    }
-
-    if (live.expirationDate !== null) {
-      findings.push({
-        modelId,
-        kind: 'deprecation',
-        detail: `OpenRouter lists expiration ${isoDateOf(live.expirationDate)}`,
-      });
-    }
-  }
-
-  return findings;
+  return [...watchedSlugs(watchedIds)]
+    .filter(([, slug]) => isGone(slug))
+    .map(([subject, slug]) => ({
+      subject,
+      kind: 'unavailable',
+      detail: unavailableDetail(slug),
+    }));
 }
 
 /**
@@ -108,7 +82,7 @@ export function findPromotedDrift(
   promotedIds: readonly string[],
   catalog: UpstreamCatalog,
   watchedIds: readonly string[]
-): DriftFinding[] {
+): WatchFinding[] {
   const { isGone } = absenceCheck(catalog);
   const watched = watchedSlugs(watchedIds);
 
@@ -119,7 +93,7 @@ export function findPromotedDrift(
       return isGone(slug)
         ? [
             {
-              modelId: id,
+              subject: id,
               kind: 'unavailable' as const,
               detail: unavailableDetail(slug),
             },

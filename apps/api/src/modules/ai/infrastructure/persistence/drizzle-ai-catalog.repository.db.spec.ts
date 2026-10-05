@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -48,11 +51,19 @@ const STALE_TIMESTAMP = new Date('2020-01-01T00:00:00.000Z');
 /** Postgres stamps `now()` from its own clock, which may drift from the test process clock. */
 const CLOCK_SKEW_TOLERANCE_MS = 5_000;
 
-const FIRST_ALERT_DETAIL = 'upstream marked the model deprecated';
-const SECOND_ALERT_DETAIL = 'upstream still reports the model deprecated';
+const FIRST_ALERT_DETAIL = 'the provider retires the model on 2026-12-31';
+const SECOND_ALERT_DETAIL =
+  'the provider still retires the model on 2026-12-31';
+const UNAVAILABLE_DETAIL = 'OpenRouter no longer lists the model';
 const PRICE_DRIFT_DETAIL = 'input cost rose by 40%';
 
-const ROLLBACK = new Error('roll back the renamed column');
+const WATCH_KINDS_MIGRATION = join(
+  __dirname,
+  '../../../../../drizzle/0063_platform_watch_alert_kinds.sql'
+);
+const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
+
+const ROLLBACK = new Error('roll back the spec transaction');
 
 const PROMOTE_OPEN: CatalogStatusChange = { status: 'promoted', tier: 'open' };
 const PROMOTE_FAST: CatalogStatusChange = { status: 'promoted', tier: 'fast' };
@@ -171,47 +182,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(candidates.map((model) => model.id)).toContain(PRIMARY_MODEL_ID);
   });
 
-  it('reads and updates catalog rows while the table still carries a reasoning column', async () => {
-    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-
-    const outcome: Record<string, unknown> = {};
-    await db
-      .transaction(async (tx) => {
-        await tx.execute(
-          sql`alter table ai_catalog_models rename column reasoning to reasoning_dropped`
-        );
-        const renamed = new DrizzleAiCatalogRepository(tx as never);
-        await renamed.listByStatus('candidate');
-        await renamed.listCandidates({ page: 1, limit: 5 });
-        outcome['setStatus'] = await renamed.setStatus(
-          PRIMARY_MODEL_ID,
-          PROMOTE_OPEN,
-          ACTOR_ID
-        );
-        outcome['updateCopy'] = await renamed.updateCopy(PRIMARY_MODEL_ID, {
-          label: ADMIN_LABEL,
-        });
-        outcome['upsert'] = await renamed
-          .upsertCandidate(candidate(SECONDARY_MODEL_ID))
-          .then(
-            () => 'ok',
-            () => 'rejected'
-          );
-        throw ROLLBACK;
-      })
-      .catch((error: unknown) => {
-        if (error !== ROLLBACK) {
-          throw error;
-        }
-      });
-
-    expect(outcome['setStatus']).toMatchObject({ status: 'promoted' });
-    expect(outcome['updateCopy']).toMatchObject({ label: ADMIN_LABEL });
-    expect(outcome['upsert']).toBe('ok');
-    const [column] = await db.execute<{ column_name: string }>(
+  it('has no reasoning column', async () => {
+    const columns = await db.execute<{ column_name: string }>(
       sql`select column_name from information_schema.columns where table_name = 'ai_catalog_models' and column_name = 'reasoning'`
     );
-    expect(column?.column_name).toBe('reasoning');
+
+    expect(columns).toHaveLength(0);
   });
 
   it('should list models ordered by id regardless of insertion order', async () => {
@@ -439,10 +415,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
     await repo.upsertCandidate(candidate(SECONDARY_MODEL_ID));
 
-    await repo.createAlert(PRIMARY_MODEL_ID, 'deprecation', FIRST_ALERT_DETAIL);
     await repo.createAlert(
       PRIMARY_MODEL_ID,
-      'deprecation',
+      'retirement_scheduled',
+      FIRST_ALERT_DETAIL
+    );
+    await repo.createAlert(
+      PRIMARY_MODEL_ID,
+      'retirement_scheduled',
       SECOND_ALERT_DETAIL
     );
 
@@ -450,16 +430,25 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(open).toHaveLength(1);
     expect(open[0].detail).toBe(FIRST_ALERT_DETAIL);
 
-    await repo.createAlert(PRIMARY_MODEL_ID, 'price_drift', PRICE_DRIFT_DETAIL);
+    await repo.createAlert(PRIMARY_MODEL_ID, 'unavailable', UNAVAILABLE_DETAIL);
     await repo.createAlert(
       SECONDARY_MODEL_ID,
-      'deprecation',
+      'retirement_scheduled',
       FIRST_ALERT_DETAIL
     );
 
     const openIds = (await ownAlerts(true)).map((alert) => alert.id);
     expect(openIds).toHaveLength(3);
     expect(openIds).toEqual([...openIds].sort((a, b) => b - a));
+  });
+
+  it('returns true for a new alert and false while one is open for the same model and kind', async () => {
+    await expect(
+      repo.createAlert(PRIMARY_MODEL_ID, 'unavailable', FIRST_ALERT_DETAIL)
+    ).resolves.toBe(true);
+    await expect(
+      repo.createAlert(PRIMARY_MODEL_ID, 'unavailable', SECOND_ALERT_DETAIL)
+    ).resolves.toBe(false);
   });
 
   it('should accept every alert kind the domain can raise', async () => {
@@ -475,9 +464,91 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     );
   });
 
+  it('renames deprecation alerts to retirement_scheduled and deletes price_drift alerts', async () => {
+    const statements = readFileSync(WATCH_KINDS_MIGRATION, 'utf8')
+      .split(STATEMENT_BREAKPOINT)
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
+
+    let migrated: Array<{
+      modelId: string;
+      kind: string;
+      detail: string;
+      open: boolean;
+    }> = [];
+    await db
+      .transaction(async (tx) => {
+        await tx.execute(
+          sql`alter table ai_catalog_alerts drop constraint ai_catalog_alerts_kind_check`
+        );
+        await tx.execute(
+          sql`alter table ai_catalog_alerts add constraint ai_catalog_alerts_kind_check check (kind in ('deprecation', 'price_drift', 'unavailable')) not valid`
+        );
+        await tx.execute(sql`
+          insert into ai_catalog_alerts (model_id, kind, detail, resolved_at) values
+            (${PRIMARY_MODEL_ID}, 'deprecation', ${FIRST_ALERT_DETAIL}, null),
+            (${PRIMARY_MODEL_ID}, 'deprecation', ${SECOND_ALERT_DETAIL}, now()),
+            (${SECONDARY_MODEL_ID}, 'price_drift', ${PRICE_DRIFT_DETAIL}, null),
+            (${SECONDARY_MODEL_ID}, 'unavailable', ${UNAVAILABLE_DETAIL}, null)
+        `);
+        for (const statement of statements) {
+          await tx.execute(sql.raw(statement));
+        }
+        const rows = await tx
+          .select()
+          .from(aiCatalogAlerts)
+          .where(inArray(aiCatalogAlerts.modelId, TEST_MODEL_IDS))
+          .orderBy(aiCatalogAlerts.id);
+        migrated = rows.map((row) => ({
+          modelId: row.modelId,
+          kind: row.kind,
+          detail: row.detail,
+          open: row.resolvedAt === null,
+        }));
+        throw ROLLBACK;
+      })
+      .catch((error: unknown) => {
+        if (error !== ROLLBACK) {
+          throw error;
+        }
+      });
+
+    expect(migrated).toEqual([
+      {
+        modelId: PRIMARY_MODEL_ID,
+        kind: 'retirement_scheduled',
+        detail: FIRST_ALERT_DETAIL,
+        open: true,
+      },
+      {
+        modelId: PRIMARY_MODEL_ID,
+        kind: 'retirement_scheduled',
+        detail: SECOND_ALERT_DETAIL,
+        open: false,
+      },
+      {
+        modelId: SECONDARY_MODEL_ID,
+        kind: 'unavailable',
+        detail: UNAVAILABLE_DETAIL,
+        open: true,
+      },
+    ]);
+    await expect(
+      repo.createAlert(
+        PRIMARY_MODEL_ID,
+        'retirement_scheduled',
+        FIRST_ALERT_DETAIL
+      )
+    ).resolves.toBe(true);
+  });
+
   it('should resolve an alert and allow a new one for the same kind', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    await repo.createAlert(PRIMARY_MODEL_ID, 'deprecation', FIRST_ALERT_DETAIL);
+    await repo.createAlert(
+      PRIMARY_MODEL_ID,
+      'retirement_scheduled',
+      FIRST_ALERT_DETAIL
+    );
     const [opened] = await ownAlerts(true);
 
     await repo.resolveAlert(opened.id);
@@ -489,7 +560,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
     await repo.createAlert(
       PRIMARY_MODEL_ID,
-      'deprecation',
+      'retirement_scheduled',
       SECOND_ALERT_DETAIL
     );
     const reopened = await ownAlerts(true);
@@ -499,7 +570,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   it('should keep the original resolution time when resolving twice', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    await repo.createAlert(PRIMARY_MODEL_ID, 'deprecation', FIRST_ALERT_DETAIL);
+    await repo.createAlert(
+      PRIMARY_MODEL_ID,
+      'retirement_scheduled',
+      FIRST_ALERT_DETAIL
+    );
     const [opened] = await ownAlerts(true);
 
     await repo.resolveAlert(opened.id);

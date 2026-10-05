@@ -14,7 +14,7 @@ import {
 
 import { MS_PER_DAY } from '../value-objects/utc-day';
 import type { OPEN_WEIGHT_AUTHORS } from './candidate-filter';
-import { slugOf } from './catalog-model';
+import { authorOf, slugOf } from './catalog-model';
 
 type DirectProvider = (typeof MODELS_DEV_PROVIDERS)[number];
 
@@ -79,7 +79,6 @@ const ALIAS_PREFIX = '~';
 const VARIANT_SEPARATOR = ':';
 const PREVIEW_TOKEN = '-preview';
 const TEXT_MODALITY = 'text';
-const AUTHOR_SEPARATOR = '/';
 const START_OF_DAY_UTC = 'T00:00:00Z';
 /** models.dev files `glm-5.3-flashx` under `glm`; a powerful intent never serves a flash tier. */
 const FLASH_ID_TOKEN = '-flash';
@@ -247,8 +246,7 @@ function servesSelector(
     return false;
   }
   return (
-    provider !== OPENROUTER_PROVIDER ||
-    slugOf(row.id).startsWith(`${selector.author}${AUTHOR_SEPARATOR}`)
+    provider !== OPENROUTER_PROVIDER || authorOf(row.id) === selector.author
   );
 }
 

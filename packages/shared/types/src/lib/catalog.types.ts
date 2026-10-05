@@ -11,11 +11,25 @@ export const CANDIDATE_STATUS =
   'candidate' as const satisfies CatalogModelStatus;
 
 export const CATALOG_ALERT_KINDS = [
-  'deprecation',
-  'price_drift',
   'unavailable',
+  'pin_unavailable',
+  'retirement_scheduled',
+  'selector_empty',
+  'resolution_pending',
+  'gate_failed',
+  'sync_rejected',
+  'family_drift',
+  'sync_stale',
 ] as const;
 export type CatalogAlertKind = (typeof CATALOG_ALERT_KINDS)[number];
+
+/** Kinds whose newly opened alert also goes to the ops webhook; the rest only show in the backoffice. */
+export const NOTIFYING_ALERT_KINDS: readonly CatalogAlertKind[] = [
+  'selector_empty',
+  'gate_failed',
+  'pin_unavailable',
+  'sync_stale',
+];
 
 /** One row of `ai_model_resolutions` per platform intent. */
 export const PLATFORM_SELECTOR_KEYS = [
@@ -56,6 +70,9 @@ export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
 
 /** Longest gate failure summary or run URL a model resolution keeps. */
 export const AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH = 500;
+
+/** Longest detail a catalog alert keeps. */
+export const CATALOG_ALERT_DETAIL_MAX_LENGTH = 500;
 
 /** Most a model may cost per output token to be admitted into the catalog. */
 export const CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN = 0.00002;

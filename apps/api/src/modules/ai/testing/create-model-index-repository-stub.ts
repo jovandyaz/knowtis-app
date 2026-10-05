@@ -9,5 +9,6 @@ export function createModelIndexRepositoryStub(
     listListed: vi.fn(listListed),
     upsertMany: vi.fn(),
     markAbsent: vi.fn(),
+    lastSeenAt: vi.fn(),
   };
 }

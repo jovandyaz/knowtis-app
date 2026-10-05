@@ -230,6 +230,7 @@ function make(listed: readonly IndexedModel[] = LISTED_ROWS) {
     listListed: vi
       .fn<ModelIndexRepository['listListed']>()
       .mockResolvedValue([...listed]),
+    lastSeenAt: vi.fn<ModelIndexRepository['lastSeenAt']>(),
   };
   const alerts = { notify: vi.fn<WebhookAlertService['notify']>() };
   return {

@@ -5,6 +5,13 @@ export interface PlatformModelsSource {
   getPlatformModelIds(): Promise<string[]>;
 }
 
+export const PINNED_MODELS_SOURCE = Symbol('PINNED_MODELS_SOURCE');
+
+export interface PinnedModelsSource {
+  /** The models an admin chose, once each: every stored intent pin that is not auto, then every stored fallback chain id, including those the catalog no longer supports and so does not serve. */
+  getPinnedModelIds(): Promise<string[]>;
+}
+
 /** The resolution store has not been read yet, so the served models are the cold-start seed floor, which must never anchor a probe or a watch. */
 export class PlatformResolutionsUnreadError extends Error {
   constructor() {

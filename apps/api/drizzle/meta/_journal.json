@@ -442,6 +442,20 @@
       "when": 1791164351548,
       "tag": "0062_forget_catalog_reasoning",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1791170660566,
+      "tag": "0063_platform_watch_alert_kinds",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791173820327,
+      "tag": "0064_drop_catalog_reasoning",
+      "breakpoints": true
     }
   ]
 }

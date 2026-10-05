@@ -749,8 +749,8 @@ const CATALOG_MODEL = {
 const CATALOG_ALERT = {
   id: 7,
   modelId: 'openrouter:z-ai/glm-5.2',
-  kind: 'deprecation',
-  detail: 'Upstream flagged the model as deprecated',
+  kind: 'retirement_scheduled',
+  detail: 'The provider retires the model on 2026-12-31',
   createdAt: '2026-08-09T00:00:00.000Z',
   resolvedAt: null,
 };

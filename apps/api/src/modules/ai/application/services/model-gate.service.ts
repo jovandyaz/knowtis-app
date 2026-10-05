@@ -2,12 +2,14 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
+  CATALOG_ALERT_DETAIL_MAX_LENGTH,
   type ModelGatePendingDto,
   type ModelGateVerdictResultDto,
   type ModelIntent,
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
+import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   intentOfSelectorKey,
   PENDING_GATE_STATUS,
@@ -17,6 +19,7 @@ import {
   MODEL_RESOLUTION_REPOSITORY,
   type ModelResolutionRepository,
 } from '../../domain/ports/model-resolution.repository';
+import { CatalogAlertsWriter } from '../../infrastructure/catalog/catalog-alerts.writer';
 import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import { AIConfigService } from './ai-config.service';
 
@@ -51,6 +54,21 @@ function failureDetail(detail: string | undefined): string {
   );
 }
 
+// The reason goes last, so a detail cut to fit loses only its tail.
+function gateFailed(
+  { selectorKey, modelId, runUrl }: VerdictInput,
+  reason: string
+): WatchFinding {
+  return {
+    subject: modelId,
+    kind: 'gate_failed',
+    detail: `${selectorKey} (${runUrl}): ${reason}`.slice(
+      0,
+      CATALOG_ALERT_DETAIL_MAX_LENGTH
+    ),
+  };
+}
+
 /** The eval gate's side of the platform resolutions: what awaits a verdict, what production serves, and applying a verdict. */
 @Injectable()
 export class ModelGateService {
@@ -60,7 +78,8 @@ export class ModelGateService {
     @Inject(MODEL_RESOLUTION_REPOSITORY)
     private readonly repository: ModelResolutionRepository,
     private readonly resolutions: PlatformResolutionCache,
-    private readonly config: AIConfigService
+    private readonly config: AIConfigService,
+    private readonly alerts: CatalogAlertsWriter
   ) {}
 
   /** The selectors whose pending model awaits a verdict; a failed one is not listed again. */
@@ -79,18 +98,17 @@ export class ModelGateService {
     return this.config.getIntentModels();
   }
 
-  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. */
+  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. A recorded failure and a refused activation raise `gate_failed`. */
   verdict(input: VerdictInput): Promise<ModelGateVerdictResultDto> {
     return input.passed ? this.onPassed(input) : this.onFailed(input);
   }
 
   // Refreshed before the clash check: a sibling intent activated on another
   // instance would otherwise stay invisible until the cache's next interval.
-  private async onPassed({
-    selectorKey,
-    modelId,
-    runUrl,
-  }: VerdictInput): Promise<ModelGateVerdictResultDto> {
+  private async onPassed(
+    input: VerdictInput
+  ): Promise<ModelGateVerdictResultDto> {
+    const { selectorKey, modelId, runUrl } = input;
     const [rows] = await Promise.all([
       this.repository.list(),
       this.resolutions.refresh(),
@@ -104,7 +122,7 @@ export class ModelGateService {
       intentOfSelectorKey(selectorKey)
     );
     if (servedBy !== null) {
-      return this.onConflict(selectorKey, modelId, servedBy);
+      return this.onConflict(input, servedBy);
     }
     const applied = await this.repository.recordVerdict(
       selectorKey,
@@ -125,32 +143,35 @@ export class ModelGateService {
     return APPLIED;
   }
 
-  private async onFailed({
-    selectorKey,
-    modelId,
-    runUrl,
-    detail,
-  }: VerdictInput): Promise<ModelGateVerdictResultDto> {
+  private async onFailed(
+    input: VerdictInput
+  ): Promise<ModelGateVerdictResultDto> {
+    const { selectorKey, modelId, runUrl, detail } = input;
+    const failure = failureDetail(detail);
     const applied = await this.repository.recordVerdict(
       selectorKey,
       modelId,
-      { passed: false, runUrl, detail: failureDetail(detail) },
+      { passed: false, runUrl, detail: failure },
       new Date()
     );
-    return applied ? APPLIED : NOT_PENDING;
+    if (!applied) {
+      return NOT_PENDING;
+    }
+    await this.alerts.raise([gateFailed(input, failure)]);
+    return APPLIED;
   }
 
-  private onConflict(
-    selectorKey: PlatformSelectorKey,
-    modelId: string,
+  private async onConflict(
+    input: VerdictInput,
     servedBy: ModelIntent
-  ): ModelGateVerdictResultDto {
+  ): Promise<ModelGateVerdictResultDto> {
     this.logger.warn({
       event: 'ai.model_resolution.activation_conflict',
-      selectorKey,
-      modelId,
+      selectorKey: input.selectorKey,
+      modelId: input.modelId,
       servedBy,
     });
+    await this.alerts.raise([gateFailed(input, `serves ${servedBy} already`)]);
     return CONFLICT;
   }
 }

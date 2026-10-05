@@ -41,6 +41,7 @@ import {
 } from '../../domain/ports/model-resolution.repository';
 import {
   PlatformResolutionsUnreadError,
+  type PinnedModelsSource,
   type PlatformModelsSource,
 } from '../../domain/ports/platform-models.port';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
@@ -166,7 +167,9 @@ export interface AIConfigEntry {
 }
 
 @Injectable()
-export class AIConfigService implements PlatformModelsSource {
+export class AIConfigService
+  implements PlatformModelsSource, PinnedModelsSource
+{
   private readonly logger = new Logger(AIConfigService.name);
 
   constructor(
@@ -299,6 +302,23 @@ export class AIConfigService implements PlatformModelsSource {
           ...this.resolutions.activeModelIds(),
         ].filter((id) => id !== NO_SERVED_MODEL)
       ),
+    ];
+  }
+
+  async getPinnedModelIds(): Promise<string[]> {
+    const [pins, chain] = await Promise.all([
+      Promise.all(
+        MODEL_INTENTS.map((intent) =>
+          this.getConfigValue(INTENT_CONFIG_KEYS[intent])
+        )
+      ),
+      this.getConfigValue('ai_fallback_chain'),
+    ]);
+    return [
+      ...new Set([
+        ...pins.filter((pin) => pin !== AUTO_MODEL_SETTING),
+        ...parseChain(chain),
+      ]),
     ];
   }
 

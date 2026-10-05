@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, max, notInArray, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import type { IndexedModel, IndexProvider } from '@knowtis/ai-gateway';
@@ -140,5 +140,18 @@ export class DrizzleModelIndexRepository implements ModelIndexRepository {
       .from(aiModelIndex)
       .where(isNull(aiModelIndex.absentSince));
     return rows.map(toIndexedModel);
+  }
+
+  async lastSeenAt(provider: IndexProvider): Promise<Date | null> {
+    const [row] = await this.db
+      .select({ lastSeenAt: max(aiModelIndex.lastSeenAt) })
+      .from(aiModelIndex)
+      .where(
+        and(
+          eq(aiModelIndex.provider, provider),
+          isNull(aiModelIndex.absentSince)
+        )
+      );
+    return row?.lastSeenAt ?? null;
   }
 }

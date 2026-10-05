@@ -1,20 +1,42 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MODELS_DEV_PROVIDERS, OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
+import {
+  MODEL_INDEX_SNAPSHOT,
+  MODEL_INDEX_SNAPSHOT_DATE,
+  MODELS_DEV_PROVIDERS,
+  OPENROUTER_PROVIDER,
+  type IndexedModel,
+} from '@knowtis/ai-gateway';
 import { INTENT_FALLBACK_ORDER } from '@knowtis/shared-types';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import { OPENROUTER_ID_PREFIX } from '../../domain/model-catalog/catalog-model';
-import { PLATFORM_SEED_MODELS } from '../../domain/model-catalog/platform-resolution';
+import {
+  PLATFORM_SEED_MODELS,
+  SEED_RESOLUTIONS,
+  type ModelResolution,
+} from '../../domain/model-catalog/platform-resolution';
 import type { ModelsDevCatalog } from '../../domain/ports/models-dev.port';
 import type {
   UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 import { PlatformResolutionsUnreadError } from '../../domain/ports/platform-models.port';
+import { createIndexedModel } from '../../testing/create-indexed-model';
+import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
+import {
+  createModelResolutionRepositoryStub,
+  seededResolution,
+} from '../../testing/platform-resolutions';
+import { SNAPSHOT_DATE } from '../../testing/snapshot-index';
+import type { WebhookAlertService } from '../alerting/webhook-alert.service';
+import { CatalogAlertsWriter } from './catalog-alerts.writer';
 import { CatalogSyncTask } from './catalog-sync.task';
-import type { ModelIndexWriter } from './model-index.writer';
+import type {
+  ModelIndexWriter,
+  ModelIndexWriteResult,
+} from './model-index.writer';
 import type { PlatformCandidatesWriter } from './platform-candidates.writer';
 
 const WATCHED_OUTPUT_COST = 0.0000044;
@@ -23,7 +45,6 @@ const PROMOTED_SLUG = 'qwen/qwen3-max';
 const PROMOTED_ID = `openrouter:${PROMOTED_SLUG}`;
 const PINNED_SLUG = 'qwen/qwen3.8-max';
 const PINNED_ID = 'openrouter:qwen/qwen3.8-max';
-const EXPIRATION_DATE = new Date('2026-12-31T00:00:00.000Z');
 
 function upstreamModel(
   id: string,
@@ -78,7 +99,30 @@ if (WATCHED_SLUGS.length < MIN_WATCHED_MODELS) {
 const [WATCHED_SLUG] = WATCHED_SLUGS;
 const WATCHED_ID = `${OPENROUTER_ID_PREFIX}${WATCHED_SLUG}`;
 
-/** Watched models present and undated, so they raise nothing, plus `DEEPSEEK_CANDIDATE`, an unwatched platform-author row that keeps the read recognizable: a fixture that omits a watched model asserts it vanished upstream. */
+const RETIRING = MODEL_INDEX_SNAPSHOT.find((row) => row.retiresAt !== null);
+if (!RETIRING) {
+  throw new Error('the sync spec needs a snapshot row with a retirement date');
+}
+
+const DEEPSEEK_NEWCOMER = createIndexedModel({
+  id: 'openrouter:deepseek/deepseek-v9-ultra',
+  family: 'deepseek-ultra',
+  releasedAt: MODEL_INDEX_SNAPSHOT_DATE,
+});
+
+function indexWrite(
+  overrides: Partial<ModelIndexWriteResult> = {}
+): ModelIndexWriteResult {
+  return {
+    indexed: INDEXED_ROWS,
+    absent: 0,
+    rejected: [],
+    concluded: [],
+    ...overrides,
+  };
+}
+
+/** Watched models present, so they raise nothing, plus `DEEPSEEK_CANDIDATE`, an unwatched platform-author row that keeps the read recognizable: a fixture that omits a watched model asserts it vanished upstream. */
 function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
   const provided = new Set(models.map((model) => model.id));
   return {
@@ -96,18 +140,30 @@ function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
 
 const IN_SYNC_COUNT = withWatchedInSync().models.length;
 
+/** A conclusive read in which `WATCHED_SLUG` vanished upstream. */
+function withWatchedGone(): UpstreamCatalog {
+  const inSync = withWatchedInSync();
+  return {
+    ...inSync,
+    models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
+  };
+}
+
 function make(
   options: {
-    upstream?: UpstreamModel[];
+    upstream?: readonly UpstreamModel[];
     locked?: boolean;
-    promoted?: string[];
-    platformModels?: string[];
+    promoted?: readonly string[];
+    platformModels?: readonly string[];
+    pinned?: readonly string[];
+    listed?: readonly IndexedModel[];
+    resolutions?: readonly ModelResolution[];
   } = {}
 ) {
   const lock = createAdvisoryLockClient(options.locked ?? true);
   const repo = {
     upsertCandidate: vi.fn().mockResolvedValue(undefined),
-    createAlert: vi.fn().mockResolvedValue(undefined),
+    createAlert: vi.fn().mockResolvedValue(true),
     listByStatus: vi
       .fn()
       .mockResolvedValue((options.promoted ?? []).map((id) => ({ id }))),
@@ -133,17 +189,34 @@ function make(
       .fn()
       .mockResolvedValue(options.platformModels ?? WATCHED_IDS),
   };
+  const pinnedModels = {
+    getPinnedModelIds: vi.fn().mockResolvedValue(options.pinned ?? []),
+  };
+  const index = createModelIndexRepositoryStub(async () => [
+    ...(options.listed ?? []),
+  ]);
+  const resolutions = createModelResolutionRepositoryStub(async () => [
+    ...(options.resolutions ?? SEED_RESOLUTIONS),
+  ]);
   const candidates = {
     write: vi.fn<PlatformCandidatesWriter['write']>().mockResolvedValue(0),
   };
+  const webhook = { notify: vi.fn<WebhookAlertService['notify']>() };
   const task = new CatalogSyncTask(
     lock.client,
     repo as never,
     openRouter as never,
     modelsDev as never,
     indexWriter as never,
+    index,
     platformModels,
-    candidates as never
+    pinnedModels,
+    resolutions,
+    candidates as never,
+    new CatalogAlertsWriter(
+      repo as never,
+      webhook as unknown as WebhookAlertService
+    )
   );
   return {
     task,
@@ -152,16 +225,26 @@ function make(
     openRouter,
     modelsDev,
     indexWriter,
+    index,
     platformModels,
+    pinnedModels,
+    resolutions,
     candidates,
+    webhook,
   };
 }
+
+type Synced = ReturnType<typeof make>;
+
+const DB_DOWN = new Error('db down');
 
 describe('CatalogSyncTask', () => {
   let errorLog: ReturnType<typeof vi.spyOn>;
   let warnLog: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SNAPSHOT_DATE);
     errorLog = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
@@ -172,6 +255,7 @@ describe('CatalogSyncTask', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -222,29 +306,9 @@ describe('CatalogSyncTask', () => {
     expect(candidate).not.toHaveProperty('reasoning');
   });
 
-  it('should raise a deprecation alert when OpenRouter dates a watched model', async () => {
-    const { task, repo } = make({
-      upstream: [
-        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
-      ],
-    });
-
-    await task.sync();
-
-    expect(repo.createAlert).toHaveBeenCalledWith(
-      WATCHED_ID,
-      'deprecation',
-      expect.stringContaining('2026-12-31')
-    );
-  });
-
   it('should alert once when a promoted platform default leaves OpenRouter', async () => {
     const { task, repo, openRouter } = make({ promoted: [WATCHED_ID] });
-    const inSync = withWatchedInSync();
-    openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
-    });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
 
     const result = await task.run();
 
@@ -252,13 +316,20 @@ describe('CatalogSyncTask', () => {
     expect(repo.createAlert).toHaveBeenCalledTimes(1);
   });
 
+  it('counts only alerts it opened', async () => {
+    const { task, repo, openRouter } = make({ promoted: [PROMOTED_ID] });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
+    repo.createAlert.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const result = await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledTimes(2);
+    expect(result.alerts).toBe(1);
+  });
+
   it('should raise an unavailable alert when a watched model leaves OpenRouter', async () => {
     const { task, repo, openRouter } = make();
-    const inSync = withWatchedInSync();
-    openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
-    });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
 
     await task.sync();
 
@@ -271,10 +342,8 @@ describe('CatalogSyncTask', () => {
 
   it('should raise no unavailable alert when the fetch stopped paginating early', async () => {
     const { task, repo, openRouter } = make();
-    const inSync = withWatchedInSync();
     openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
+      ...withWatchedGone(),
       complete: false,
     });
 
@@ -365,30 +434,21 @@ describe('CatalogSyncTask', () => {
     );
   });
 
-  it('should keep raising the other alerts when one alert write fails', async () => {
-    const { task, repo } = make({
-      upstream: [
-        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
-      ],
-      promoted: [PROMOTED_ID],
-    });
+  it('should keep raising the other alerts when one alert write fails, and count the failure', async () => {
+    const { task, repo, openRouter } = make({ promoted: [PROMOTED_ID] });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
     repo.createAlert.mockRejectedValueOnce(new Error('alerts table locked'));
 
-    await task.sync();
+    const result = await task.run();
 
     expect(repo.createAlert).toHaveBeenCalledTimes(2);
-    expect(warnLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'ai.catalog.sync_write_failed',
-        count: 1,
-        failures: [
-          {
-            target: `${WATCHED_ID} deprecation`,
-            reason: 'alerts table locked',
-          },
-        ],
-      })
-    );
+    expect(result).toEqual(expect.objectContaining({ alerts: 1, failures: 1 }));
+    expect(warnLog).toHaveBeenCalledWith({
+      event: 'ai.catalog.alert_failed',
+      subject: WATCHED_ID,
+      kind: 'unavailable',
+      reason: 'alerts table locked',
+    });
   });
   it('should report what an on-demand run wrote', async () => {
     const { task } = make({
@@ -596,10 +656,8 @@ describe('CatalogSyncTask', () => {
 
   it('should report nothing indexed but still sync candidates and alerts when the index write fails', async () => {
     const { task, repo, indexWriter } = make({
-      upstream: [
-        QWEN_CANDIDATE,
-        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
-      ],
+      upstream: [QWEN_CANDIDATE],
+      promoted: [PROMOTED_ID],
     });
     indexWriter.write.mockRejectedValue(new Error('model index locked'));
 
@@ -614,8 +672,8 @@ describe('CatalogSyncTask', () => {
       })
     );
     expect(repo.createAlert).toHaveBeenCalledWith(
-      WATCHED_ID,
-      'deprecation',
+      PROMOTED_ID,
+      'unavailable',
       expect.any(String)
     );
     expect(errorLog).toHaveBeenCalledWith(
@@ -709,6 +767,274 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).rejects.toThrow('openrouter down');
     expect(candidates.write).not.toHaveBeenCalled();
   });
+
+  it('raises sync_rejected for a shrink-rejected provider', async () => {
+    const { task, repo, indexWriter, webhook } = make();
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({ rejected: [{ provider: 'anthropic', reason: 'shrink' }] })
+    );
+
+    const result = await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      'anthropic',
+      'sync_rejected',
+      expect.stringMatching(/^shrink: /)
+    );
+    expect(result.alerts).toBe(1);
+    expect(webhook.notify).not.toHaveBeenCalled();
+  });
+
+  it('names what a floor-rejected batch would leave unserved', async () => {
+    const { task, repo, indexWriter } = make();
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({
+        rejected: [
+          {
+            provider: OPENROUTER_PROVIDER,
+            reason: 'floor',
+            models: ['platform.fast', 'platform.powerful'],
+          },
+        ],
+      })
+    );
+
+    await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      OPENROUTER_PROVIDER,
+      'sync_rejected',
+      expect.stringMatching(/^floor: .*platform\.fast, platform\.powerful/)
+    );
+  });
+
+  it('raises sync_rejected for the models.dev batch when the OpenRouter fetch fails', async () => {
+    const { task, repo, openRouter, indexWriter } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({ rejected: [{ provider: 'google', reason: 'shrink' }] })
+    );
+
+    await expect(task.run()).rejects.toThrow('openrouter down');
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      'google',
+      'sync_rejected',
+      expect.stringMatching(/^shrink: /)
+    );
+  });
+
+  it('does not alert an inconclusive batch', async () => {
+    const { task, repo, indexWriter } = make();
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({
+        rejected: MODELS_DEV_PROVIDERS.map((provider) => ({
+          provider,
+          reason: 'inconclusive' as const,
+        })),
+      })
+    );
+
+    const result = await task.run();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+    expect(result.alerts).toBe(0);
+  });
+
+  it('raises pin_unavailable for a dead pin', async () => {
+    const { task, repo, webhook } = make({ pinned: [PINNED_ID] });
+
+    const result = await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      PINNED_ID,
+      'pin_unavailable',
+      expect.stringContaining(PINNED_ID)
+    );
+    expect(result.alerts).toBe(1);
+    expect(webhook.notify).toHaveBeenCalledWith('ai.catalog.alert', {
+      kind: 'pin_unavailable',
+      subject: PINNED_ID,
+      detail: expect.stringContaining(PINNED_ID),
+    });
+  });
+
+  it('judges the pins against the index rows it lists after the write', async () => {
+    const { task, repo, index, indexWriter } = make({
+      pinned: [PINNED_ID],
+      listed: [createIndexedModel({ id: PINNED_ID })],
+    });
+
+    await task.run();
+
+    expect(
+      vi.mocked(index.listListed).mock.invocationCallOrder[0]
+    ).toBeGreaterThan(indexWriter.write.mock.invocationCallOrder[0]);
+    expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
+  it('keeps a pin the snapshot floor serves while its provider lists no row', async () => {
+    const { task, repo } = make({ pinned: [PLATFORM_SEED_MODELS.balanced] });
+
+    await task.run();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
+  it('re-raises a resolved pin_unavailable on the next sync', async () => {
+    const { task, repo, webhook } = make({ pinned: [PINNED_ID] });
+    repo.createAlert
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    await task.run();
+    await task.run();
+    await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledTimes(3);
+    expect(webhook.notify).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['served', { platformModels: [RETIRING.id] }],
+    ['pinned', { pinned: [RETIRING.id] }],
+    [
+      'pending',
+      {
+        resolutions: [
+          seededResolution('fast', {
+            pendingModelId: RETIRING.id,
+            gateStatus: 'pending',
+          }),
+        ],
+      },
+    ],
+  ])(
+    'raises retirement_scheduled for a %s model the index dates',
+    async (_, options) => {
+      const { task, repo } = make(options);
+
+      await task.run();
+
+      expect(repo.createAlert).toHaveBeenCalledWith(
+        RETIRING.id,
+        'retirement_scheduled',
+        expect.stringContaining(String(RETIRING.retiresAt))
+      );
+    }
+  );
+
+  it('watches a pending model for absence from OpenRouter', async () => {
+    const { task, repo } = make({
+      resolutions: [
+        seededResolution('fast', {
+          pendingModelId: PINNED_ID,
+          gateStatus: 'pending',
+        }),
+      ],
+    });
+
+    await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      PINNED_ID,
+      'unavailable',
+      expect.stringContaining(PINNED_SLUG)
+    );
+  });
+
+  it('raises family_drift after a concluded OpenRouter batch', async () => {
+    const { task, repo, indexWriter } = make({
+      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+    });
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({ concluded: [OPENROUTER_PROVIDER] })
+    );
+
+    await task.run();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      DEEPSEEK_NEWCOMER.id,
+      'family_drift',
+      'new deepseek-ultra family from deepseek'
+    );
+  });
+
+  it('raises no family_drift while the resolutions are unreadable', async () => {
+    const { task, repo, indexWriter, resolutions } = make({
+      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+    });
+    indexWriter.write.mockResolvedValueOnce(
+      indexWrite({ concluded: [OPENROUTER_PROVIDER] })
+    );
+    vi.mocked(resolutions.list).mockRejectedValue(DB_DOWN);
+
+    await task.run();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
+  it('raises no family_drift when the OpenRouter batch did not conclude', async () => {
+    const { task, repo } = make({
+      listed: [...MODEL_INDEX_SNAPSHOT, DEEPSEEK_NEWCOMER],
+    });
+
+    await task.run();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      read: 'pinned models',
+      event: 'ai.catalog.pinned_models_read_failed',
+      fail: ({ pinnedModels }: Synced) =>
+        pinnedModels.getPinnedModelIds.mockRejectedValue(DB_DOWN),
+      raised: [[RETIRING.id, 'retirement_scheduled']],
+    },
+    {
+      read: 'model index',
+      event: 'ai.catalog.index_read_failed',
+      fail: ({ index }: Synced) =>
+        vi.mocked(index.listListed).mockRejectedValue(DB_DOWN),
+      raised: [],
+    },
+    {
+      read: 'resolutions',
+      event: 'ai.catalog.resolutions_read_failed',
+      fail: ({ resolutions }: Synced) =>
+        vi.mocked(resolutions.list).mockRejectedValue(DB_DOWN),
+      raised: [[PINNED_ID, 'pin_unavailable']],
+    },
+  ])(
+    'still syncs, watching nothing from it, when the $read read fails',
+    async ({ event, fail, raised }) => {
+      const synced = make({
+        pinned: [PINNED_ID],
+        resolutions: [
+          seededResolution('fast', {
+            pendingModelId: RETIRING.id,
+            gateStatus: 'pending',
+          }),
+        ],
+        upstream: [
+          upstreamModel(RETIRING.id.slice(OPENROUTER_ID_PREFIX.length)),
+        ],
+      });
+      fail(synced);
+
+      const result = await synced.task.run();
+
+      expect(result.status).toBe('completed');
+      expect(warnLog).toHaveBeenCalledWith({ event, reason: DB_DOWN.message });
+      expect(
+        synced.repo.createAlert.mock.calls.map(([subject, kind]) => [
+          subject,
+          kind,
+        ])
+      ).toEqual(raised);
+    }
+  );
 
   it('should release the lock when the upstream fetch fails inside it', async () => {
     const { task, openRouter, lock } = make();

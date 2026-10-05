@@ -3,9 +3,15 @@ import { Badge, Button, Card } from '@knowtis/design-system';
 import type { CatalogAlertKind } from '@knowtis/shared-types';
 
 const ALERT_KIND_LABELS: Record<string, string> = {
-  deprecation: 'Deprecation',
-  price_drift: 'Price drift',
   unavailable: 'Unavailable',
+  pin_unavailable: 'Pin unavailable',
+  retirement_scheduled: 'Retirement scheduled',
+  selector_empty: 'Selector empty',
+  resolution_pending: 'Resolution pending',
+  gate_failed: 'Gate failed',
+  sync_rejected: 'Sync rejected',
+  family_drift: 'Family drift',
+  sync_stale: 'Sync stale',
 } satisfies Record<CatalogAlertKind, string>;
 
 interface CatalogAlertsProps {

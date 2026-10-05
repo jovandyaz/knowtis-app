@@ -90,29 +90,23 @@ describe('findOpenRouterDrift', () => {
     expect(findOpenRouterDrift(upstream, WATCHED_IDS)).toEqual([]);
   });
 
-  it('should report an upstream expiration date as a deprecation finding', () => {
+  it('leaves an upstream expiration date to the retirement watch', () => {
     const upstream = upstreamInSync([
       upstreamModel(WATCHED_SLUG, {
         expirationDate: new Date('2026-12-31T00:00:00.000Z'),
       }),
     ]);
 
-    const findings = findOpenRouterDrift(upstream, WATCHED_IDS);
-
-    expect(findings).toHaveLength(1);
-    expect(findings[0].modelId).toBe(WATCHED_ID);
-    expect(findings[0].kind).toBe('deprecation');
-    expect(findings[0].detail).toContain('2026-12-31');
+    expect(findOpenRouterDrift(upstream, WATCHED_IDS)).toEqual([]);
   });
 
   it('should never watch a model billed outside OpenRouter', () => {
-    const upstream = upstreamInSync([
-      upstreamModel('anthropic/claude-sonnet-5', {
-        expirationDate: new Date('2026-12-31T00:00:00.000Z'),
-      }),
-    ]);
-
-    expect(findOpenRouterDrift(upstream, WATCHED_IDS)).toEqual([]);
+    expect(
+      findOpenRouterDrift(upstreamInSync(), [
+        ...WATCHED_IDS,
+        'anthropic:claude-sonnet-5',
+      ])
+    ).toEqual([]);
   });
 
   it('should report a watched model that vanished from OpenRouter', () => {
@@ -124,7 +118,7 @@ describe('findOpenRouterDrift', () => {
 
     expect(findings).toEqual([
       {
-        modelId: WATCHED_ID,
+        subject: WATCHED_ID,
         kind: 'unavailable',
         detail: expect.stringContaining(WATCHED_SLUG),
       },
@@ -198,7 +192,7 @@ describe('findOpenRouterDrift', () => {
     const read = catalogOf([upstreamModel('deepseek/deepseek-v4.1-flash')]);
     expect(findOpenRouterDrift(read, [])).toEqual([]);
     expect(findOpenRouterDrift(read, [WATCHED_ID])).toEqual([
-      { modelId: WATCHED_ID, kind: 'unavailable', detail: expect.any(String) },
+      { subject: WATCHED_ID, kind: 'unavailable', detail: expect.any(String) },
     ]);
   });
 });
@@ -216,7 +210,7 @@ describe('findPromotedDrift', () => {
 
     expect(findings).toEqual([
       {
-        modelId: PROMOTED_ID,
+        subject: PROMOTED_ID,
         kind: 'unavailable',
         detail: expect.stringContaining(PROMOTED_SLUG),
       },
