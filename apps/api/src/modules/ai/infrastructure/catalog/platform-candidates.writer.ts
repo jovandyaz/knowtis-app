@@ -4,6 +4,7 @@ import { resolvePlatformIntent } from '../../domain/model-catalog/model-selector
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   intentOfSelectorKey,
+  PENDING_GATE_STATUS,
   resolutionChange,
   type ModelResolution,
   type ResolutionChange,
@@ -50,6 +51,17 @@ function resolutionPending(
   };
 }
 
+// A replaced failed candidate closed its alert when its verdict landed.
+function stoppedAwaitingGate(
+  change: ResolutionChange,
+  read: ModelResolution
+): string | null {
+  if (change.kind === 'clear') {
+    return change.pendingModelId;
+  }
+  return read.gateStatus === PENDING_GATE_STATUS ? read.pendingModelId : null;
+}
+
 /** Writes the platform selectors' candidates into the stored resolutions after a sync. */
 @Injectable()
 export class PlatformCandidatesWriter {
@@ -63,7 +75,7 @@ export class PlatformCandidatesWriter {
     private readonly alerts: CatalogAlertsWriter
   ) {}
 
-  /** Applies each selector's `resolutionChange` over the served index: pends a new candidate, or clears a `pending` entry once the candidate is the active model again. Each write applies only while the row still holds the pending entry it read. Raises `selector_empty` for a selector with no candidate and `resolution_pending` for each pend it applied. Resolves how many rows it changed. */
+  /** Applies each selector's `resolutionChange` over the served index: pends a new candidate, or clears a `pending` entry once the candidate is the active model again. Each write applies only while the row still holds the pending entry it read. Raises `selector_empty` for a selector with no candidate and `resolution_pending` for each pend it applied, and resolves `resolution_pending` on the gate-pending model an applied change replaced or cleared. Resolves how many rows it changed. */
   async write(now: Date): Promise<number> {
     const [listed, rows] = await Promise.all([
       this.index.listListed(),
@@ -86,6 +98,10 @@ export class PlatformCandidatesWriter {
         changed += 1;
         if (change.kind === 'pend') {
           findings.push(resolutionPending(change));
+        }
+        const settled = stoppedAwaitingGate(change, row);
+        if (settled !== null) {
+          await this.alerts.resolvePending(settled);
         }
       }
     }
