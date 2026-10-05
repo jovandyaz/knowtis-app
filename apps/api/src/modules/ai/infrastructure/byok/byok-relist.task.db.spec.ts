@@ -42,6 +42,7 @@ import {
   type ProviderListing,
   type ProviderModelsLister,
 } from '../../domain/ports/provider-models.port';
+import type { UserProviderModelsRepository } from '../../domain/ports/user-provider-models.repository';
 import { encryptSecret } from '../crypto/secret-cipher';
 import { DrizzleUserProviderKeysRepository } from '../persistence/drizzle-user-provider-keys.repository';
 import { DrizzleUserProviderModelsRepository } from '../persistence/drizzle-user-provider-models.repository';
@@ -75,6 +76,7 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
   let fingerprints: TokenHasher;
   let lister: { list: Mock<ProviderModelsLister['list']> };
   let task: ByokRelistTask;
+  let relist: MockInstance<ByokModelsService['relist']>;
   let warn: MockInstance<Logger['warn']>;
 
   const seedKey = async (provider: ByokProvider, apiKey: string) => {
@@ -94,6 +96,21 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
         )
       );
   };
+
+  // The database also holds keys of other specs and of local runs; re-listing
+  // them would decrypt rows this spec never wrote under its own master key.
+  const fixtureUserOnly = (
+    repo: DrizzleUserProviderModelsRepository
+  ): UserProviderModelsRepository => ({
+    get: (userId, provider) => repo.get(userId, provider),
+    save: (userId, listing) => repo.save(userId, listing),
+    replace: (userId, listing, expectedFingerprint) =>
+      repo.replace(userId, listing, expectedFingerprint),
+    findDue: async (olderThan, limit, after) =>
+      (await repo.findDue(olderThan, limit, after)).filter(
+        (key) => key.userId === USER_ID
+      ),
+  });
 
   const rowsOfUser = async () => ({
     anthropic: await modelsRepo.get(USER_ID, 'anthropic'),
@@ -155,10 +172,17 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
       modelsRepo,
       fingerprints
     );
+    const byokModels = new ByokModelsService(
+      byok,
+      lister,
+      modelsRepo,
+      fingerprints
+    );
+    relist = vi.spyOn(byokModels, 'relist');
     task = new ByokRelistTask(
       moduleRef.get<Sql>(DATABASE_CLIENT),
-      modelsRepo,
-      new ByokModelsService(byok, lister, modelsRepo, fingerprints)
+      fixtureUserOnly(modelsRepo),
+      byokModels
     );
   });
 
@@ -185,6 +209,14 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
     await expect(task.run(now)).resolves.toBe('completed');
 
     const ranUntil = Date.now();
+    expect(relist.mock.calls.map(([userId]) => userId)).toEqual([
+      USER_ID,
+      USER_ID,
+    ]);
+    expect(lister.list.mock.calls).toEqual([
+      ['anthropic', ANTHROPIC_KEY],
+      ['openai', OPENAI_KEY],
+    ]);
     const written = await rowsOfUser();
     expect(written).toEqual({
       anthropic: {
