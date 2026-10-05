@@ -56,9 +56,9 @@ function make(
     raise: vi
       .fn<CatalogAlertsWriter['raise']>()
       .mockResolvedValue({ opened: 1, failed: 0 }),
-    resolveOpen: vi
-      .fn<CatalogAlertsWriter['resolveOpen']>()
-      .mockResolvedValue(true),
+    resolvePending: vi
+      .fn<CatalogAlertsWriter['resolvePending']>()
+      .mockResolvedValue(undefined),
   };
   const service = new ModelGateService(
     repo,
@@ -355,10 +355,7 @@ describe('ModelGateService', () => {
         runUrl: RUN_URL,
       });
 
-      expect(alerts.resolveOpen).toHaveBeenCalledWith(
-        CANDIDATE,
-        'resolution_pending'
-      );
+      expect(alerts.resolvePending).toHaveBeenCalledWith(CANDIDATE);
     });
 
     it('is resolved once a failure is stored', async () => {
@@ -372,10 +369,7 @@ describe('ModelGateService', () => {
         detail: VERDICT_DETAIL,
       });
 
-      expect(alerts.resolveOpen).toHaveBeenCalledWith(
-        CANDIDATE,
-        'resolution_pending'
-      );
+      expect(alerts.resolvePending).toHaveBeenCalledWith(CANDIDATE);
     });
 
     it('stays open on an activation conflict', async () => {
@@ -388,7 +382,7 @@ describe('ModelGateService', () => {
         runUrl: RUN_URL,
       });
 
-      expect(alerts.resolveOpen).not.toHaveBeenCalled();
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
     });
 
     it('stays open for a verdict on a model no longer pending', async () => {
@@ -404,29 +398,7 @@ describe('ModelGateService', () => {
         });
       }
 
-      expect(alerts.resolveOpen).not.toHaveBeenCalled();
-    });
-
-    it('never fails the verdict when resolving it fails', async () => {
-      const { service, alerts } = make();
-      alerts.resolveOpen.mockRejectedValue(new Error('alerts table locked'));
-
-      for (const passed of [true, false]) {
-        expect(
-          await service.verdict({
-            selectorKey: 'platform.fast',
-            modelId: CANDIDATE,
-            passed,
-            runUrl: RUN_URL,
-          })
-        ).toEqual({ applied: true });
-      }
-      expect(warn).toHaveBeenCalledWith({
-        event: 'ai.catalog.alert_resolve_failed',
-        subject: CANDIDATE,
-        kind: 'resolution_pending',
-        reason: 'alerts table locked',
-      });
+      expect(alerts.resolvePending).not.toHaveBeenCalled();
     });
   });
 });

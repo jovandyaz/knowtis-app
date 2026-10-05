@@ -3,14 +3,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
   CATALOG_ALERT_DETAIL_MAX_LENGTH,
-  type CatalogAlertKind,
   type ModelGatePendingDto,
   type ModelGateVerdictResultDto,
   type ModelIntent,
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
-import { reasonOf } from '../../../../core/errors/reason-of';
 import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   intentOfSelectorKey,
@@ -26,7 +24,6 @@ import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-r
 import { AIConfigService } from './ai-config.service';
 
 const DEFAULT_GATE_FAILURE_DETAIL = 'eval gate failed';
-const RESOLUTION_PENDING = 'resolution_pending' satisfies CatalogAlertKind;
 
 export interface VerdictInput {
   readonly selectorKey: PlatformSelectorKey;
@@ -143,7 +140,7 @@ export class ModelGateService {
       modelId,
       previousModelId: row.activeModelId,
     });
-    await this.resolvePendingAlert(modelId);
+    await this.alerts.resolvePending(modelId);
     return APPLIED;
   }
 
@@ -162,7 +159,7 @@ export class ModelGateService {
       return NOT_PENDING;
     }
     await this.alerts.raise([gateFailed(input, failure)]);
-    await this.resolvePendingAlert(modelId);
+    await this.alerts.resolvePending(modelId);
     return APPLIED;
   }
 
@@ -178,18 +175,5 @@ export class ModelGateService {
     });
     await this.alerts.raise([gateFailed(input, `serves ${servedBy} already`)]);
     return CONFLICT;
-  }
-
-  private async resolvePendingAlert(modelId: string): Promise<void> {
-    try {
-      await this.alerts.resolveOpen(modelId, RESOLUTION_PENDING);
-    } catch (error) {
-      this.logger.warn({
-        event: 'ai.catalog.alert_resolve_failed',
-        subject: modelId,
-        kind: RESOLUTION_PENDING,
-        reason: reasonOf(error),
-      });
-    }
   }
 }

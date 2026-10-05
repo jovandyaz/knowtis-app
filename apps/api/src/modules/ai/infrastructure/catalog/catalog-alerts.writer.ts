@@ -15,6 +15,7 @@ import { WebhookAlertService } from '../alerting/webhook-alert.service';
 
 const CATALOG_ALERT_EVENT = 'ai.catalog.alert';
 const OPEN_ALERTS_ONLY = true;
+const RESOLUTION_PENDING = 'resolution_pending' satisfies CatalogAlertKind;
 
 /** What one `raise` did: the alerts it newly opened, and the writes that failed. */
 export interface RaisedAlerts {
@@ -67,6 +68,20 @@ export class CatalogAlertsWriter {
       (row) => row.modelId === subject && row.kind === kind
     );
     return alert === undefined ? false : this.repo.resolveAlert(alert.id);
+  }
+
+  /** Resolves the open `resolution_pending` alert on `modelId`, a candidate that stopped awaiting the gate. Never rejects: a failed resolve is logged as `ai.catalog.alert_resolve_failed` and the alert stays open. */
+  async resolvePending(modelId: string): Promise<void> {
+    try {
+      await this.resolveOpen(modelId, RESOLUTION_PENDING);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.catalog.alert_resolve_failed',
+        subject: modelId,
+        kind: RESOLUTION_PENDING,
+        reason: reasonOf(error),
+      });
+    }
   }
 
   private async open({
