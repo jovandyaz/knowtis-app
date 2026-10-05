@@ -42,13 +42,20 @@ import {
   type ProviderListing,
   type ProviderModelsLister,
 } from '../../domain/ports/provider-models.port';
-import type { UserProviderModelsRepository } from '../../domain/ports/user-provider-models.repository';
+import type {
+  ListingKey,
+  UserProviderModelsRepository,
+} from '../../domain/ports/user-provider-models.repository';
 import { encryptSecret } from '../crypto/secret-cipher';
 import { DrizzleUserProviderKeysRepository } from '../persistence/drizzle-user-provider-keys.repository';
 import { DrizzleUserProviderModelsRepository } from '../persistence/drizzle-user-provider-models.repository';
 import { ByokRelistTask } from './byok-relist.task';
 
 const USER_ID = '00000000-0000-4000-8000-0000000000e6';
+const JUST_BEFORE_USER: ListingKey = {
+  userId: '00000000-0000-4000-8000-0000000000e5',
+  provider: 'openai',
+};
 const MASTER_KEY_BYTES = 32;
 const TOKEN_HASH_KEY_BYTES = 32;
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -97,8 +104,9 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
       );
   };
 
-  // The database also holds keys of other specs and of local runs; re-listing
-  // them would decrypt rows this spec never wrote under its own master key.
+  // The database also holds keys of other specs and of local runs, which
+  // re-listing would decrypt under the wrong master key. The cursor starts at
+  // this spec's user so its keys come first, ahead of the SQL LIMIT.
   const fixtureUserOnly = (
     repo: DrizzleUserProviderModelsRepository
   ): UserProviderModelsRepository => ({
@@ -107,7 +115,7 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
     replace: (userId, listing, expectedFingerprint) =>
       repo.replace(userId, listing, expectedFingerprint),
     findDue: async (olderThan, limit, after) =>
-      (await repo.findDue(olderThan, limit, after)).filter(
+      (await repo.findDue(olderThan, limit, after ?? JUST_BEFORE_USER)).filter(
         (key) => key.userId === USER_ID
       ),
   });
