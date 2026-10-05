@@ -625,10 +625,21 @@ describe('chooseModel', () => {
       isEntitled: (id) => id !== unentitled,
     });
 
-    it.each(['preferredModel', 'pinned'] as const)(
-      'falls back from it as retired, given as %s',
-      (field) => {
-        expect(choose({ [field]: unentitled })).toEqual({
+    it.each([
+      ['preferredModel', unentitled],
+      ['pinned', null],
+    ] as const)(
+      'falls back from it as retired, given as %s, forgetting only a stored pick',
+      (field, forgotten) => {
+        const request: ModelRequest = {
+          preferredModel: null,
+          preferredIntent: null,
+          [field]: unentitled,
+        };
+
+        const choice = choose(request);
+
+        expect(choice).toEqual({
           kind: 'resolved',
           model: keyIntent,
           resolution: {
@@ -641,14 +652,76 @@ describe('chooseModel', () => {
             },
           },
         });
+        expect(retiredStoredPick(request, choice)).toBe(forgotten);
       }
     );
 
-    it('refuses it as retired when the request names it', () => {
-      expect(choose({ explicit: unentitled })).toEqual({
+    it('refuses it as retired when the request names it, forgetting nothing', () => {
+      const request: ModelRequest = {
+        explicit: unentitled,
+        preferredModel: null,
+        preferredIntent: null,
+      };
+
+      const choice = choose(request);
+
+      expect(choice).toEqual({
         kind: 'unavailable',
         reason: 'model_retired',
         suggestedModel: keyIntent,
+      });
+      expect(retiredStoredPick(request, choice)).toBeNull();
+    });
+
+    describe('when no direct row of the winning selector is entitled', () => {
+      const [sonnet] = resolveByokSelectors(
+        MODEL_INDEX_SNAPSHOT,
+        SNAPSHOT_DATE
+      ).balanced;
+      const direct = sonnet?.ranked.anthropic ?? [];
+      const [routed] = sonnet?.ranked.openrouter ?? [];
+      const unlisted = new Set(direct.map((row) => row.id));
+      const held: readonly ByokProvider[] = ['anthropic', 'openrouter'];
+      const isEntitled = (id: string) => !unlisted.has(id);
+
+      it('keeps the intent on the selector through OpenRouter, reported as substituted', () => {
+        const catalog = tierCatalog({
+          tier: 'byok',
+          scope: TIER_POLICIES.byok.catalog,
+          heldProviders: held,
+          storedPrimary: null,
+          platformIntents: PLATFORM_INTENTS,
+          offered: OFFERED,
+          isSupported: (id) => id !== RETIRED,
+          isPlatformRoutable: platformRoutes,
+          indexRow: () => undefined,
+          byok: resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE),
+          isEntitled,
+        });
+
+        expect(direct.length).toBeGreaterThan(1);
+        expect(catalog.intents).toContainEqual({
+          intent: 'balanced',
+          available: true,
+          modelId: routed?.id,
+          substituted: true,
+        });
+      });
+
+      it('serves a stored pick of the newest direct row on its OpenRouter route, with no fallback', () => {
+        const request: ModelRequest = {
+          preferredModel: direct[0]?.id ?? null,
+          preferredIntent: null,
+        };
+
+        const choice = setup('byok', held, undefined, { isEntitled })(request);
+
+        expect(choice).toEqual({
+          kind: 'resolved',
+          model: routed?.id,
+          resolution: { requested: direct[0]?.id, resolved: routed?.id },
+        });
+        expect(retiredStoredPick(request, choice)).toBeNull();
       });
     });
   });
