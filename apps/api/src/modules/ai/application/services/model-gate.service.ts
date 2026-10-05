@@ -8,6 +8,7 @@ import {
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
+import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   intentOfSelectorKey,
   PENDING_GATE_STATUS,
@@ -17,6 +18,7 @@ import {
   MODEL_RESOLUTION_REPOSITORY,
   type ModelResolutionRepository,
 } from '../../domain/ports/model-resolution.repository';
+import { CatalogAlertsWriter } from '../../infrastructure/catalog/catalog-alerts.writer';
 import { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
 import { AIConfigService } from './ai-config.service';
 
@@ -51,6 +53,10 @@ function failureDetail(detail: string | undefined): string {
   );
 }
 
+function gateFailed(modelId: string, detail: string): WatchFinding {
+  return { subject: modelId, kind: 'gate_failed', detail };
+}
+
 /** The eval gate's side of the platform resolutions: what awaits a verdict, what production serves, and applying a verdict. */
 @Injectable()
 export class ModelGateService {
@@ -60,7 +66,8 @@ export class ModelGateService {
     @Inject(MODEL_RESOLUTION_REPOSITORY)
     private readonly repository: ModelResolutionRepository,
     private readonly resolutions: PlatformResolutionCache,
-    private readonly config: AIConfigService
+    private readonly config: AIConfigService,
+    private readonly alerts: CatalogAlertsWriter
   ) {}
 
   /** The selectors whose pending model awaits a verdict; a failed one is not listed again. */
@@ -79,7 +86,7 @@ export class ModelGateService {
     return this.config.getIntentModels();
   }
 
-  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. */
+  /** Applies a verdict to the selector's pending model. A pass is not activated while another intent serves that model; a verdict for a model no longer pending changes nothing. A recorded failure and a refused activation raise `gate_failed`. */
   verdict(input: VerdictInput): Promise<ModelGateVerdictResultDto> {
     return input.passed ? this.onPassed(input) : this.onFailed(input);
   }
@@ -131,26 +138,34 @@ export class ModelGateService {
     runUrl,
     detail,
   }: VerdictInput): Promise<ModelGateVerdictResultDto> {
+    const failure = failureDetail(detail);
     const applied = await this.repository.recordVerdict(
       selectorKey,
       modelId,
-      { passed: false, runUrl, detail: failureDetail(detail) },
+      { passed: false, runUrl, detail: failure },
       new Date()
     );
-    return applied ? APPLIED : NOT_PENDING;
+    if (!applied) {
+      return NOT_PENDING;
+    }
+    await this.alerts.raise([gateFailed(modelId, failure)]);
+    return APPLIED;
   }
 
-  private onConflict(
+  private async onConflict(
     selectorKey: PlatformSelectorKey,
     modelId: string,
     servedBy: ModelIntent
-  ): ModelGateVerdictResultDto {
+  ): Promise<ModelGateVerdictResultDto> {
     this.logger.warn({
       event: 'ai.model_resolution.activation_conflict',
       selectorKey,
       modelId,
       servedBy,
     });
+    await this.alerts.raise([
+      gateFailed(modelId, `serves ${servedBy} already`),
+    ]);
     return CONFLICT;
   }
 }

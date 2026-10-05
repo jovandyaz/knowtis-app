@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { resolvePlatformIntent } from '../../domain/model-catalog/model-selectors';
+import type { WatchFinding } from '../../domain/model-catalog/model-watch';
 import {
   intentOfSelectorKey,
   resolutionChange,
@@ -16,6 +17,7 @@ import {
   MODEL_RESOLUTION_REPOSITORY,
   type ModelResolutionRepository,
 } from '../../domain/ports/model-resolution.repository';
+import { CatalogAlertsWriter } from './catalog-alerts.writer';
 
 function appliedEvent(change: ResolutionChange) {
   return change.kind === 'pend'
@@ -30,6 +32,24 @@ function appliedEvent(change: ResolutionChange) {
       };
 }
 
+function selectorEmpty(row: ModelResolution): WatchFinding {
+  return {
+    subject: row.selectorKey,
+    kind: 'selector_empty',
+    detail: `no model in the index matches this selector, so it keeps serving ${row.activeModelId}`,
+  };
+}
+
+function resolutionPending(
+  change: Extract<ResolutionChange, { kind: 'pend' }>
+): WatchFinding {
+  return {
+    subject: change.modelId,
+    kind: 'resolution_pending',
+    detail: `awaits the eval gate as the ${change.selectorKey} candidate`,
+  };
+}
+
 /** Writes the platform selectors' candidates into the stored resolutions after a sync. */
 @Injectable()
 export class PlatformCandidatesWriter {
@@ -39,16 +59,18 @@ export class PlatformCandidatesWriter {
     @Inject(MODEL_INDEX_REPOSITORY)
     private readonly index: ModelIndexRepository,
     @Inject(MODEL_RESOLUTION_REPOSITORY)
-    private readonly resolutions: ModelResolutionRepository
+    private readonly resolutions: ModelResolutionRepository,
+    private readonly alerts: CatalogAlertsWriter
   ) {}
 
-  /** Applies each selector's `resolutionChange` over the served index: pends a new candidate, or clears a `pending` entry once the candidate is the active model again. Each write applies only while the row still holds the pending entry it read. Resolves how many rows it changed. */
+  /** Applies each selector's `resolutionChange` over the served index: pends a new candidate, or clears a `pending` entry once the candidate is the active model again. Each write applies only while the row still holds the pending entry it read. Raises `selector_empty` for a selector with no candidate and `resolution_pending` for each pend it applied. Resolves how many rows it changed. */
   async write(now: Date): Promise<number> {
     const [listed, rows] = await Promise.all([
       this.index.listListed(),
       this.resolutions.list(),
     ]);
     const served = servedIndexRows(listed);
+    const findings: WatchFinding[] = [];
     let changed = 0;
     for (const row of rows) {
       const candidate = resolvePlatformIntent(
@@ -56,11 +78,18 @@ export class PlatformCandidatesWriter {
         served,
         now
       );
+      if (candidate === null) {
+        findings.push(selectorEmpty(row));
+      }
       const change = resolutionChange(row, candidate?.id ?? null);
       if (change !== null && (await this.apply(change, row, now))) {
         changed += 1;
+        if (change.kind === 'pend') {
+          findings.push(resolutionPending(change));
+        }
       }
     }
+    await this.alerts.raise(findings);
     return changed;
   }
 

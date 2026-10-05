@@ -10,6 +10,7 @@ import {
   PLATFORM_SEED_MODELS,
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
+import type { CatalogAlertsWriter } from '../../infrastructure/catalog/catalog-alerts.writer';
 import {
   createModelResolutionRepositoryStub,
   createResolutionsStub,
@@ -49,8 +50,18 @@ function make(
       .fn<AIConfigService['intentServing']>()
       .mockResolvedValue(servedBy),
   } satisfies Pick<AIConfigService, 'getIntentModels' | 'intentServing'>;
-  const service = new ModelGateService(repo, resolutions, config as never);
-  return { service, repo, refresh, config };
+  const alerts = {
+    raise: vi
+      .fn<CatalogAlertsWriter['raise']>()
+      .mockResolvedValue({ opened: 1, failed: 0 }),
+  };
+  const service = new ModelGateService(
+    repo,
+    resolutions,
+    config as never,
+    alerts as unknown as CatalogAlertsWriter
+  );
+  return { service, repo, refresh, config, alerts };
 }
 
 describe('ModelGateService', () => {
@@ -152,6 +163,54 @@ describe('ModelGateService', () => {
     expect(config.intentServing).not.toHaveBeenCalled();
   });
 
+  it('raises gate_failed on a failed verdict', async () => {
+    const { service, alerts } = make();
+
+    await service.verdict({
+      selectorKey: 'platform.fast',
+      modelId: CANDIDATE,
+      passed: false,
+      runUrl: RUN_URL,
+      detail: VERDICT_DETAIL,
+    });
+
+    expect(alerts.raise).toHaveBeenCalledWith([
+      { subject: CANDIDATE, kind: 'gate_failed', detail: VERDICT_DETAIL },
+    ]);
+  });
+
+  it('raises gate_failed on an activation conflict', async () => {
+    const { service, alerts } = make([FAST_PENDING], 'balanced');
+
+    await service.verdict({
+      selectorKey: 'platform.fast',
+      modelId: CANDIDATE,
+      passed: true,
+      runUrl: RUN_URL,
+    });
+
+    expect(alerts.raise).toHaveBeenCalledWith([
+      {
+        subject: CANDIDATE,
+        kind: 'gate_failed',
+        detail: 'serves balanced already',
+      },
+    ]);
+  });
+
+  it('raises no alert for an activated model', async () => {
+    const { service, alerts } = make();
+
+    await service.verdict({
+      selectorKey: 'platform.fast',
+      modelId: CANDIDATE,
+      passed: true,
+      runUrl: RUN_URL,
+    });
+
+    expect(alerts.raise).not.toHaveBeenCalled();
+  });
+
   it('does not activate a model another intent serves', async () => {
     const { service, repo, config } = make([FAST_PENDING], 'balanced');
 
@@ -189,7 +248,7 @@ describe('ModelGateService', () => {
   });
 
   it('reports a verdict for a model no longer pending as not_pending', async () => {
-    const { service, repo, config } = make(
+    const { service, repo, config, alerts } = make(
       [
         seededResolution('fast', {
           pendingModelId: NEWER_CANDIDATE,
@@ -212,6 +271,7 @@ describe('ModelGateService', () => {
     }
     expect(config.intentServing).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
+    expect(alerts.raise).not.toHaveBeenCalled();
   });
 
   it('reports not_pending for a passed verdict on a gate that already failed, even when its model would clash', async () => {

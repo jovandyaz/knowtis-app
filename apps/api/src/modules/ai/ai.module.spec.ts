@@ -12,7 +12,13 @@ import { AIModule } from './ai.module';
 import { AIConfigService } from './application/services/ai-config.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
-import { PLATFORM_MODELS_SOURCE } from './domain/ports/platform-models.port';
+import {
+  PINNED_MODELS_SOURCE,
+  PLATFORM_MODELS_SOURCE,
+} from './domain/ports/platform-models.port';
+import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
+import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
+import { PlatformCandidatesWriter } from './infrastructure/catalog/platform-candidates.writer';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { AI_REDIS } from './infrastructure/redis/ai-redis.provider';
 import { ModelGateController } from './model-gate.controller';
@@ -21,9 +27,13 @@ const COMPILE_TIMEOUT_MS = 15_000;
 
 const GRAPH_UNDER_TEST: readonly unknown[] = [
   PLATFORM_MODELS_SOURCE,
+  PINNED_MODELS_SOURCE,
   AIConfigService,
   PlatformResolutionCache,
   ModelGateService,
+  CatalogAlertsWriter,
+  CatalogSyncTask,
+  PlatformCandidatesWriter,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -79,6 +89,37 @@ describe('AIModule wiring', () => {
         expect(
           Object.values(controller).includes(moduleRef.get(ModelGateService)),
           "ModelGateController is not wired to the module's ModelGateService"
+        ).toBe(true);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'raises every watch alert through the module alert writer, reading pins from the AI config service',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const writer = moduleRef.get(CatalogAlertsWriter);
+        const unwired = [
+          CatalogSyncTask,
+          PlatformCandidatesWriter,
+          ModelGateService,
+        ].filter(
+          (token) => !Object.values(moduleRef.get(token)).includes(writer)
+        );
+
+        expect(
+          unwired.map((token) => token.name),
+          "providers not wired to the module's CatalogAlertsWriter"
+        ).toEqual([]);
+        expect(
+          moduleRef.get(PINNED_MODELS_SOURCE) ===
+            moduleRef.get(AIConfigService),
+          "PINNED_MODELS_SOURCE is not the module's AIConfigService instance"
         ).toBe(true);
       } finally {
         await moduleRef.close();
