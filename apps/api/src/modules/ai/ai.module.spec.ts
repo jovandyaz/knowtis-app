@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 
+import { TokenHasher } from '@jovandyaz/auth-nestjs';
+import { ConfigService } from '@nestjs/config';
 import { CronExpression } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
@@ -169,9 +171,15 @@ describe('AIModule wiring', () => {
       const moduleRef = await compileAIModule();
 
       try {
-        expect(
-          moduleRef.get<KeyFingerprinter>(KEY_FINGERPRINTER).hash('x')
-        ).toMatch(HMAC_SHA256_HEX);
+        const fingerprint = moduleRef
+          .get<KeyFingerprinter>(KEY_FINGERPRINTER)
+          .hash('x');
+        const tokenHashKey = moduleRef
+          .get(ConfigService)
+          .getOrThrow<string>('TOKEN_HASH_KEY');
+
+        expect(fingerprint).toMatch(HMAC_SHA256_HEX);
+        expect(fingerprint).toBe(new TokenHasher(tokenHashKey).hash('x'));
       } finally {
         await moduleRef.close();
       }
