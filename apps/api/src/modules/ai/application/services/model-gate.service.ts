@@ -1,6 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import type { ModelIntent, PlatformSelectorKey } from '@knowtis/shared-types';
+import type {
+  ModelGateVerdictSkipReason,
+  ModelIntent,
+  PlatformSelectorKey,
+} from '@knowtis/shared-types';
 
 import { AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH } from '../../../../database/schema/ai-model-resolutions.schema';
 import {
@@ -24,7 +28,7 @@ export interface PendingGateEntry {
 
 export type VerdictOutcome =
   | { readonly applied: true }
-  | { readonly applied: false; readonly reason: 'not_pending' | 'conflict' };
+  | { readonly applied: false; readonly reason: ModelGateVerdictSkipReason };
 
 export interface VerdictInput {
   readonly selectorKey: PlatformSelectorKey;

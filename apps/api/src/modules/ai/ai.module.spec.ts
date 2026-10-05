@@ -10,10 +10,13 @@ import {
 } from '../../test-support/module-boot';
 import { AIModule } from './ai.module';
 import { AIConfigService } from './application/services/ai-config.service';
+import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import { PLATFORM_MODELS_SOURCE } from './domain/ports/platform-models.port';
 import { PlatformResolutionCache } from './infrastructure/catalog/platform-resolution.cache';
 import { AI_REDIS } from './infrastructure/redis/ai-redis.provider';
+import { ModelGateTokenGuard } from './model-gate-token.guard';
+import { ModelGateController } from './model-gate.controller';
 
 const COMPILE_TIMEOUT_MS = 15_000;
 
@@ -21,6 +24,7 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   PLATFORM_MODELS_SOURCE,
   AIConfigService,
   PlatformResolutionCache,
+  ModelGateService,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -29,16 +33,19 @@ const mockAllButTheGraphUnderTest = (token: unknown) =>
   GRAPH_UNDER_TEST.includes(token) ? undefined : infrastructureStub();
 
 describe('AIModule wiring', () => {
+  const compileAIModule = () =>
+    Test.createTestingModule({
+      imports: [bootConfigModule(), AIModule],
+    })
+      .overrideProvider(AI_REDIS)
+      .useValue(infrastructureStub())
+      .useMocker(mockAllButTheGraphUnderTest)
+      .compile();
+
   it(
     "resolves the key service's lazy platform models source to the AI config service",
     async () => {
-      const moduleRef = await Test.createTestingModule({
-        imports: [bootConfigModule(), AIModule],
-      })
-        .overrideProvider(AI_REDIS)
-        .useValue(infrastructureStub())
-        .useMocker(mockAllButTheGraphUnderTest)
-        .compile();
+      const moduleRef = await compileAIModule();
 
       try {
         const keysModuleRef = Object.values(
@@ -54,6 +61,29 @@ describe('AIModule wiring', () => {
         expect(
           source === moduleRef.get(AIConfigService),
           "PLATFORM_MODELS_SOURCE is not the module's AIConfigService instance"
+        ).toBe(true);
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'resolves the gate controller on the module gate service behind its token guard',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const controller = moduleRef.get(ModelGateController);
+
+        expect(
+          Object.values(controller).includes(moduleRef.get(ModelGateService)),
+          "ModelGateController is not wired to the module's ModelGateService"
+        ).toBe(true);
+        expect(
+          moduleRef.get(ModelGateTokenGuard) instanceof ModelGateTokenGuard,
+          'ModelGateTokenGuard does not resolve in the AI module'
         ).toBe(true);
       } finally {
         await moduleRef.close();
