@@ -543,6 +543,9 @@ describe('CatalogSection', () => {
 
     renderSection();
 
+    expect(
+      screen.getByRole('button', { name: 'Sync now' })
+    ).toBeInTheDocument();
     expect(screen.queryByText(/last sync/i)).not.toBeInTheDocument();
   });
 
