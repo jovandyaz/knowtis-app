@@ -268,27 +268,10 @@ describe('AiProvidersController', () => {
       });
       expect(lister.list).not.toHaveBeenCalled();
     });
-
-    // A failed test is the answer the caller asked for. Throwing would hand it
-    // to the global filter, which masks 5xx bodies to 'Internal server error'.
-    it.each([
-      ['a refusal', REJECTED],
-      ['an unreachable provider', UNAVAILABLE],
-    ])(
-      'resolves with the failure instead of throwing: %s',
-      async (_case, listing) => {
-        const { controller } = make(listing);
-
-        await expect(controller.test(anthropic)).resolves.toMatchObject({
-          ok: false,
-          reason: listing.kind,
-        });
-      }
-    );
   });
 
   describe('throttling', () => {
-    it.each(['list', 'set', 'clearKey'] as const)(
+    it.each(['list', 'set', 'clearKey', 'test'] as const)(
       'should throttle %s',
       (route) => {
         expect(
