@@ -14,6 +14,7 @@ import {
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 
 const CATALOG_ALERT_EVENT = 'ai.catalog.alert';
+const OPEN_ALERTS_ONLY = true;
 
 /** What one `raise` did: the alerts it newly opened, and the writes that failed. */
 export interface RaisedAlerts {
@@ -61,7 +62,7 @@ export class CatalogAlertsWriter {
 
   /** Resolves the open alert of `kind` on `subject`; false when none is open or another caller closed it first. Rejects when the store fails. */
   async resolveOpen(subject: string, kind: CatalogAlertKind): Promise<boolean> {
-    const open = await this.repo.listAlerts(true);
+    const open = await this.repo.listAlerts(OPEN_ALERTS_ONLY);
     const alert = open.find(
       (row) => row.modelId === subject && row.kind === kind
     );
