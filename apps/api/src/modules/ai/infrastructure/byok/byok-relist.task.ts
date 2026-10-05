@@ -51,7 +51,7 @@ export class ByokRelistTask {
     }
   }
 
-  /** Re-lists the keys due at `now`, one at a time, unless another instance holds the lock. Rejects only when the due keys cannot be read. */
+  /** Re-lists the keys due at `now`, one at a time, unless another instance holds the lock. Rejects only when the advisory lock cannot be taken or released. */
   async run(now: Date): Promise<ByokRelistRunStatus> {
     const outcome = await runWithAdvisoryLock(
       this.client,
@@ -84,11 +84,18 @@ export class ByokRelistTask {
     let cursor: ListingKey | null = null;
     let batches = 0;
     while (batches < RELIST_MAX_BATCHES) {
-      const due = await this.models.findDue(
-        olderThan,
-        RELIST_BATCH_SIZE,
-        cursor
-      );
+      let due: ListingKey[];
+      try {
+        due = await this.models.findDue(olderThan, RELIST_BATCH_SIZE, cursor);
+      } catch (error) {
+        this.logger.error({
+          event: 'byok.relist.run_failed',
+          reason: reasonOf(error),
+          ...counts,
+          batches,
+        });
+        return;
+      }
       batches += 1;
       for (const key of due) {
         counts[await this.relistOne(key)] += 1;

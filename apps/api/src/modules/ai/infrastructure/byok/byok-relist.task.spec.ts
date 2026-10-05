@@ -197,9 +197,34 @@ describe('ByokRelistTask', () => {
     expect(lock.release).toHaveBeenCalledTimes(1);
   });
 
-  it('never rejects from the cron entry point', async () => {
+  it('logs the counts so far when a later batch cannot be read', async () => {
     const { task, models } = makeTask();
-    models.findDue.mockRejectedValue(new Error(STORE_FAILURE));
+    models.findDue
+      .mockResolvedValueOnce(keysFrom(0, BATCH_SIZE))
+      .mockRejectedValueOnce(new Error(STORE_FAILURE));
+
+    await expect(task.run(SNAPSHOT_DATE)).resolves.toBe('completed');
+
+    expect(error.mock.calls.map((call) => call[0])).toEqual([
+      {
+        event: 'byok.relist.run_failed',
+        reason: STORE_FAILURE,
+        listed: BATCH_SIZE,
+        superseded: 0,
+        unlisted: 0,
+        rejected: 0,
+        unavailable: 0,
+        no_key: 0,
+        failed: 0,
+        batches: 1,
+      },
+    ]);
+    expect(loggedEvents(log)).toEqual([]);
+  });
+
+  it('never rejects from the cron entry point', async () => {
+    const { task, lock } = makeTask();
+    lock.reserve.mockRejectedValue(new Error(STORE_FAILURE));
 
     await expect(task.relistDue()).resolves.toBeUndefined();
 

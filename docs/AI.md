@@ -2044,7 +2044,7 @@ The task reads due keys `RELIST_BATCH_SIZE` (50) at a time, at most `RELIST_MAX_
 | `no_key`      | The key is missing or no longer decrypts.                                              |
 | `failed`      | A storage error, a key deleted mid-re-list included; logged `byok.relist.item_failed`. |
 
-The run ends with `byok.relist.completed`, carrying each outcome's count and `batches`; a run that fails logs `byok.relist.run_failed`. A re-list never deletes a key or its listing: a key the provider now refuses keeps both, and the user's next turn on it reports the refusal (`AI_BYOK_KEY_FAILED`, see [Key failures](#key-failures)).
+The run ends with `byok.relist.completed`, carrying each outcome's count and `batches`. A run that cannot read its due keys ends with `byok.relist.run_failed` instead, carrying the counts so far; one that cannot take or release the lock logs it with the reason alone. A re-list never deletes a key or its listing: a key the provider now refuses keeps both, and the user's next turn on it reports the refusal (`AI_BYOK_KEY_FAILED`, see [Key failures](#key-failures)).
 
 ### Per-request provider injection
 
