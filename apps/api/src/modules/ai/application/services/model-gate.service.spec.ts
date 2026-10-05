@@ -212,6 +212,30 @@ describe('ModelGateService', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('reports not_pending for a passed verdict on a gate that already failed, even when its model would clash', async () => {
+    const { service, repo } = make(
+      [
+        seededResolution('fast', {
+          pendingModelId: CANDIDATE,
+          gateStatus: 'failed',
+          gateDetail: VERDICT_DETAIL,
+        }),
+      ],
+      'balanced'
+    );
+
+    const outcome = await service.verdict({
+      selectorKey: 'platform.fast',
+      modelId: CANDIDATE,
+      passed: true,
+      runUrl: RUN_URL,
+    });
+
+    expect(outcome).toEqual({ applied: false, reason: 'not_pending' });
+    expect(repo.recordVerdict).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('logs no activation when the write finds the model no longer pending', async () => {
     const { service, repo } = make();
     vi.mocked(repo.recordVerdict).mockResolvedValue(false);
