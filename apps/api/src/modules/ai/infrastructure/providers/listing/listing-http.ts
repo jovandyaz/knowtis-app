@@ -19,6 +19,9 @@ const LISTING_TIMEOUT_MESSAGE = 'The listing timed out';
 // Below this a "key" is too short to match anything but itself in prose.
 const REDACTABLE_KEY_MIN_LENGTH = 8;
 const REDACTED_KEY = '[redacted]';
+// Providers echo a refused key masked ("sk-proj-****abcd"), which redacting
+// the exact key cannot catch. The hyphen keeps words like "skipped" intact.
+const KEY_SHAPED_FRAGMENT = /\b(?:sk-(?:proj-|or-)?|AIza)[-_A-Za-z0-9*]{4,}/g;
 
 export interface ProviderModelsClient {
   /** Reads one provider's model list with `apiKey`, honouring `signal`, and calls `keyAccepted` once the provider has proven the key valid. May reject: `boundedListing` turns a throw into `unavailable`, or into an unknown list once `keyAccepted` was called. */
@@ -155,7 +158,7 @@ export async function paginatedListing(
   return UNKNOWN_LISTING;
 }
 
-/** Runs `read` under one LISTING_TIMEOUT_MS bound. A throw or the bound is `unavailable`, or lists null once `read` called `keyAccepted`; every error is redacted of `apiKey` and truncated. */
+/** Runs `read` under one LISTING_TIMEOUT_MS bound. A throw or the bound is `unavailable`, or lists null once `read` called `keyAccepted`; every error is redacted of `apiKey` and of anything key-shaped, then truncated. */
 export async function boundedListing(
   apiKey: string,
   read: (
@@ -212,13 +215,15 @@ export function sameOriginNext(
   }
 }
 
-/** Providers echo a rejected credential back in their error text; it must not reach a log or a response. */
+/** Providers echo a rejected credential back in their error text, whole or masked; it must not reach a log or a response. */
 function scrubbed(message: string, apiKey: string): string {
   const redacted =
     apiKey.length < REDACTABLE_KEY_MIN_LENGTH
       ? message
       : message.split(apiKey).join(REDACTED_KEY);
-  return redacted.slice(0, LISTING_ERROR_MAX_LENGTH);
+  return redacted
+    .replace(KEY_SHAPED_FRAGMENT, REDACTED_KEY)
+    .slice(0, LISTING_ERROR_MAX_LENGTH);
 }
 
 function scrubbedListing(

@@ -262,19 +262,18 @@ describe('ByokService', () => {
   });
 
   it.each([
-    ['a rejection', REJECTED, 'HTTP 401'],
-    ['an unavailable provider', UNAVAILABLE, 'HTTP 529'],
+    ['a rejection', REJECTED],
+    ['an unavailable provider', UNAVAILABLE],
     [
       'a listing that timed out',
       {
         kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
         error: 'The listing timed out',
       } as const,
-      'The listing timed out',
     ],
   ])(
-    'logs the provider, kind and failure class of %s',
-    async (_case, listing, failureClass) => {
+    'logs the provider, kind and the listing error of %s',
+    async (_case, listing) => {
       const { service } = makeService({ listing });
 
       await service.setKey('u1', 'openai', OPENAI_KEY).catch(() => null);
@@ -284,45 +283,7 @@ describe('ByokService', () => {
           event: 'byok.validation_failed',
           provider: 'openai',
           reason: listing.kind,
-          error: failureClass,
-        },
-      ]);
-    }
-  );
-
-  it.each([
-    [
-      'a rejection that echoes the masked key',
-      {
-        kind: PROVIDER_LISTING_KIND.REJECTED,
-        error:
-          'HTTP 401: Incorrect API key provided: sk-proj-****7890. You can find your API key at platform.openai.com.',
-      } as const,
-      'HTTP 401',
-    ],
-    [
-      'a failure without a status that names a key',
-      {
-        kind: PROVIDER_LISTING_KIND.UNAVAILABLE,
-        error: 'request for sk-proj-****7890 and AIzaSy****9f2Q failed',
-      } as const,
-      'request for [redacted] and [redacted] failed',
-    ],
-  ])(
-    'never logs the key when validation fails: %s',
-    async (_case, listing, logged) => {
-      const { service } = makeService({ listing });
-
-      await service.setKey('u1', 'openai', OPENAI_KEY).catch(() => null);
-
-      const payloads = JSON.stringify(loggedWarnings(warn));
-      expect(payloads).not.toMatch(/sk-proj|AIza|\*{4}/);
-      expect(loggedWarnings(warn)).toEqual([
-        {
-          event: 'byok.validation_failed',
-          provider: 'openai',
-          reason: listing.kind,
-          error: logged,
+          error: listing.error,
         },
       ]);
     }

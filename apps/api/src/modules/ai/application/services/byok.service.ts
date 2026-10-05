@@ -40,11 +40,6 @@ import {
 
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
-const REDACTED_KEY = '[redacted]';
-// Providers echo a refused key masked ("sk-proj-****abcd"), which redacting
-// the exact key cannot catch, so a log keeps only the status of their answer.
-const HTTP_STATUS_PREFIX = /^HTTP \d{3}/;
-const KEY_SHAPED_FRAGMENT = /\b(sk|sk-proj|sk-or|AIza)[-_A-Za-z0-9*]{4,}/g;
 
 export const BYOK_KEY_LOOKUP = {
   FOUND: 'found',
@@ -142,7 +137,7 @@ export class ByokService {
         event: 'byok.validation_failed',
         provider,
         reason: listing.kind,
-        error: failureClassOf(listing.error),
+        error: listing.error,
       });
       if (listing.kind === PROVIDER_LISTING_KIND.REJECTED) {
         throw new UnprocessableEntityException(
@@ -204,11 +199,4 @@ export class ByokService {
       });
     }
   }
-}
-
-function failureClassOf(error: string): string {
-  return (
-    HTTP_STATUS_PREFIX.exec(error)?.[0] ??
-    error.replace(KEY_SHAPED_FRAGMENT, REDACTED_KEY)
-  );
 }

@@ -5,6 +5,7 @@ import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
 
 import {
   listingCall,
+  stubListingFetch,
   type ListingFetch,
 } from '../../../testing/stub-listing-fetch';
 import {
@@ -22,6 +23,8 @@ import * as recordedFixtures from './provider-listing.fixtures';
 const API_KEY = 'sk-test-listing-key-0001';
 const LISTING_URL = new URL('https://api.example.test/v1/models');
 const KEY_SHAPED = /\bsk-|AIza|Bearer/;
+const openaiRefusalEchoing = (key: string) =>
+  `Incorrect API key provided: ${key}. You can find your API key at https://platform.openai.com/account/api-keys.`;
 
 function readListing(signal: AbortSignal) {
   return getListingJson(LISTING_URL, {}, signal).then((response) =>
@@ -121,6 +124,41 @@ describe('listing-http', () => {
       kind: 'rejected',
       error: 'HTTP 401: Bad key [redacted]',
     });
+  });
+
+  it('redacts the masked key OpenAI echoes in a refusal', async () => {
+    stubListingFetch({
+      body: { error: { message: openaiRefusalEchoing('sk-proj-****7890') } },
+      status: HttpStatus.UNAUTHORIZED,
+    });
+
+    await expect(boundedListing(API_KEY, readListing)).resolves.toEqual({
+      kind: 'rejected',
+      error: `HTTP 401: ${openaiRefusalEchoing('[redacted]')}`,
+    });
+  });
+
+  it('redacts every key-shaped fragment from a thrown error', async () => {
+    const listing = await boundedListing(API_KEY, async () => {
+      throw new Error(
+        'request for sk-or-v1-****9f2Q and AIzaSy****9f2Q failed'
+      );
+    });
+
+    expect(listing).toEqual({
+      kind: 'unavailable',
+      error: 'request for [redacted] and [redacted] failed',
+    });
+  });
+
+  it('leaves words that only begin like a key untouched', async () => {
+    const message = 'skipped the risk-free page';
+
+    const listing = await boundedListing(API_KEY, async () => {
+      throw new Error(message);
+    });
+
+    expect(listing).toEqual({ kind: 'unavailable', error: message });
   });
 
   it('truncates a long provider message', async () => {

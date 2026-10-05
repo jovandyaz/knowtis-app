@@ -24,6 +24,6 @@ export type ProviderListing =
     };
 
 export interface ProviderModelsLister {
-  /** Lists what `apiKey` can call on `provider` within `LISTING_TIMEOUT_MS`. Never rejects; every `error` is redacted of the key. */
+  /** Lists what `apiKey` can call on `provider` within `LISTING_TIMEOUT_MS`. Never rejects; every `error` is redacted of the key and of anything key-shaped, so a caller may log or show it as is. */
   list(provider: AIProvider, apiKey: string): Promise<ProviderListing>;
 }
