@@ -1523,9 +1523,7 @@ model id of at most 120 characters, a strict boolean `passed`, an https `runUrl`
 **Setup.**
 
 - Railway, API service: `MODEL_GATE_TOKEN`, at least 32 characters (`openssl rand -hex 32`). The
-  API refuses to boot with a shorter one. Once it is set in Railway, add
-  `MODEL_GATE_TOKEN: preserve()` to `.railway/railway.ts` in its own PR, so the IaC plan does not
-  read the variable as a delete (see [`.railway/railway.ts`](DEPLOYMENT.md#railwayrailwayts)).
+  API refuses to boot with a shorter one.
 - GitHub repository secrets: `MODEL_GATE_TOKEN` with the same value, and `KNOWTIS_API_URL`, the
   API origin with no trailing slash and no `/api/v1` (the workflows append the path). The gate
   and the weekly `resolve` job both read them. The gate legs also need `ANTHROPIC_API_KEY` and
