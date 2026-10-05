@@ -26,7 +26,9 @@ import {
   AI_INVALID_INPUT_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  BYOK_KEY_FAILURE_KIND,
   MESSAGE_KIND,
+  type ByokKeyFailureKind,
   type ConversationTranscript,
 } from '@knowtis/shared-types';
 
@@ -771,6 +773,51 @@ describe('useAgentStore', () => {
       expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledTimes(1);
     }
   );
+
+  describe("a refusal of the caller's own key", () => {
+    function failOnKey(kind: ByokKeyFailureKind) {
+      queryClient.setQueryData(aiModelsQueryKeys.list(), {});
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const { get } = capture();
+      useAgentStore.getState().sendMessage('hello');
+
+      get().onError({
+        code: AI_BYOK_KEY_FAILED_CODE,
+        message: 'refused',
+        provider: 'openai',
+        kind,
+      });
+
+      return {
+        invalidate,
+        stale: queryClient.getQueryState(aiModelsQueryKeys.list())
+          ?.isInvalidated,
+      };
+    }
+
+    afterEach(() => {
+      queryClient.removeQueries({ queryKey: aiModelsQueryKeys.all });
+    });
+
+    it("marks the picker's models stale, without refetching them, when the key cannot call the model", () => {
+      const { invalidate, stale } = failOnKey(BYOK_KEY_FAILURE_KIND.MODEL);
+
+      expect(stale).toBe(true);
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: aiModelsQueryKeys.all,
+        refetchType: 'none',
+      });
+    });
+
+    it("leaves the picker's models fresh when the provider refused the key itself", () => {
+      const { invalidate, stale } = failOnKey(BYOK_KEY_FAILURE_KIND.AUTH);
+
+      expect(stale).toBe(false);
+      expect(invalidate).not.toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: aiModelsQueryKeys.all })
+      );
+    });
+  });
 
   describe('the daily quota', () => {
     it('is refetched when a turn is done, in case its push was missed', () => {

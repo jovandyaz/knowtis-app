@@ -1,4 +1,5 @@
 import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
+import { aiModelsQueryKeys } from '@/hooks/useAvailableModels';
 import { refreshModelChoice } from '@/hooks/useProviderKeys';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
@@ -31,6 +32,7 @@ import {
   AI_INVALID_INPUT_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  BYOK_KEY_FAILURE_KIND,
   deriveConversationTitle,
   isAgentStopReason,
   isContinuableStop,
@@ -367,6 +369,15 @@ function queuedTexts(queue: readonly QueuedMessage[]): string[] {
 
 function invalidateQuota(): void {
   void queryClient.invalidateQueries({ queryKey: aiQuotaQueryKeys.all });
+}
+
+// The server re-lists the key in the background after this refusal, so a
+// refetch now would race it; the next mount or focus reads the new list.
+function markModelsStale(): void {
+  void queryClient.invalidateQueries({
+    queryKey: aiModelsQueryKeys.all,
+    refetchType: 'none',
+  });
 }
 
 function replyFallbackOf(
@@ -726,6 +737,12 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         invalidateQuota();
         if (error.code === AI_MODEL_UNAVAILABLE_CODE) {
           refreshModelChoice(queryClient);
+        }
+        if (
+          error.code === AI_BYOK_KEY_FAILED_CODE &&
+          error.kind === BYOK_KEY_FAILURE_KIND.MODEL
+        ) {
+          markModelsStale();
         }
         buffer.clearInactivityTimer();
         buffer.flush();
