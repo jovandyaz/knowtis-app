@@ -59,8 +59,7 @@ export class DrizzleUserProviderModelsRepository implements UserProviderModelsRe
           modelIds: values.modelIds,
           syncedAt: values.syncedAt,
         },
-      })
-      .returning({ userId: userProviderModels.userId });
+      });
   }
 
   async replace(

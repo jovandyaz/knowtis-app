@@ -23,6 +23,7 @@ const OLD_FP = 'a'.repeat(64);
 const NEW_FP = 'b'.repeat(64);
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OTHER_USER_ID = '00000000-0000-4000-8000-0000000000cd';
+const FOREIGN_KEY_VIOLATION = '23503';
 
 describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
   let moduleRef: TestingModule;
@@ -30,9 +31,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
   let keysRepo: DrizzleUserProviderKeysRepository;
   let repo: DrizzleUserProviderModelsRepository;
 
-  const seedKey = (provider: ByokProvider) =>
+  const seedKey = (provider: ByokProvider, userId: string = USER_ID) =>
     keysRepo.upsert(
-      USER_ID,
+      userId,
       provider,
       { ciphertext: 'ct', iv: 'iv', authTag: 'tag' },
       'sk-x'
@@ -151,7 +152,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
   it('rejects a listing for a key that was deleted meanwhile', async () => {
     await expect(
       repo.replace(USER_ID, listing('anthropic', OLD_FP, ['m1']), null)
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({
+        code: FOREIGN_KEY_VIOLATION,
+        constraint_name: 'user_provider_models_key_fk',
+      }),
+    });
   });
 
   it('deletes the listing with its key', async () => {
@@ -169,12 +175,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
     await seedKey('openai');
     await seedKey('openrouter');
     await seedKey('google');
-    await keysRepo.upsert(
-      OTHER_USER_ID,
-      'anthropic',
-      { ciphertext: 'ct', iv: 'iv', authTag: 'tag' },
-      'sk-x'
-    );
+    await seedKey('anthropic', OTHER_USER_ID);
     await db
       .update(userProviderKeys)
       .set({ updatedAt: new Date(now - 10 * DAY_MS) })
@@ -235,6 +236,21 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
       userId: USER_ID,
       provider: 'anthropic',
     });
-    expect(firstPage[0]).toEqual({ userId: USER_ID, provider: 'openai' });
+    expect(firstPage).toEqual([{ userId: USER_ID, provider: 'openai' }]);
+  });
+
+  it("pages from one user's last due key to the next user's first", async () => {
+    await seedKey('openrouter');
+    await seedKey('anthropic', OTHER_USER_ID);
+    await seedKey('openai', OTHER_USER_ID);
+
+    const nextPage = await repo.findDue(new Date(), 1, {
+      userId: USER_ID,
+      provider: 'openrouter',
+    });
+
+    expect(nextPage).toEqual([
+      { userId: OTHER_USER_ID, provider: 'anthropic' },
+    ]);
   });
 });
