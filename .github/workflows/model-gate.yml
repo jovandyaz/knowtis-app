@@ -1,0 +1,140 @@
+name: Model Gate
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-gate
+  cancel-in-progress: false
+
+jobs:
+  pending:
+    name: Pending platform candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - id: read
+        env:
+          KNOWTIS_API_URL: ${{ secrets.KNOWTIS_API_URL }}
+          MODEL_GATE_TOKEN: ${{ secrets.MODEL_GATE_TOKEN }}
+        run: |
+          if [ -z "$KNOWTIS_API_URL" ] || [ -z "$MODEL_GATE_TOKEN" ]; then
+            echo "::notice::KNOWTIS_API_URL or MODEL_GATE_TOKEN is not set; nothing to gate."
+            echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          body=$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer $MODEL_GATE_TOKEN" \
+            "$KNOWTIS_API_URL/api/v1/internal/model-gate/pending")
+          matrix=$(jq -c '[.[] | select((.selectorKey | test("^platform\\.(fast|balanced|powerful)\\z")) and (.modelId | test("^[a-z0-9-]+:[A-Za-z0-9._/:-]+\\z")))]' <<<"$body")
+          dropped=$(( $(jq length <<<"$body") - $(jq length <<<"$matrix") ))
+          if [ "$dropped" -gt 0 ]; then
+            echo "::warning::$dropped pending candidate(s) carry an unexpected selector or model id and stay ungated."
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  gate:
+    name: Gate (${{ matrix.selectorKey }})
+    needs: pending
+    if: ${{ needs.pending.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.pending.outputs.matrix) }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: knowtis_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_eval
+      JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
+      JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111
+      TOKEN_HASH_KEY: bmlnaHRseS1ldmFsLXRva2VuLWhhc2gta2V5LTMyYiE=
+      AI_EVAL_TRIALS: 10
+      AI_EVAL_MODEL: ${{ matrix.modelId }}
+      AI_EVAL_OUTPUT_DIR: ${{ github.workspace }}/eval-results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Fail fast if a provider key is missing
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NEEDS_OPENROUTER: ${{ startsWith(matrix.modelId, 'openrouter:') }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set — the security suite would skip and pass the model unevaluated."
+            exit 1
+          fi
+          if [ "$NEEDS_OPENROUTER" = "true" ] && [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::OPENROUTER_API_KEY secret is not set — this leg gates an OpenRouter model."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: npx nx db:migrate:run api
+
+      - id: eval
+        name: Run the security evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: npx nx run api:eval-security
+
+      - name: Post the verdict
+        if: ${{ !cancelled() }}
+        env:
+          KNOWTIS_API_URL: ${{ secrets.KNOWTIS_API_URL }}
+          MODEL_GATE_TOKEN: ${{ secrets.MODEL_GATE_TOKEN }}
+          SELECTOR_KEY: ${{ matrix.selectorKey }}
+          MODEL_ID: ${{ matrix.modelId }}
+          PASSED: ${{ steps.eval.outcome == 'success' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg s "$SELECTOR_KEY" --arg m "$MODEL_ID" --argjson p "$PASSED" --arg u "$RUN_URL" \
+            '{selectorKey:$s, modelId:$m, passed:$p, runUrl:$u}' |
+          curl --fail --silent --show-error --max-time 30 -X POST \
+            -H "Authorization: Bearer $MODEL_GATE_TOKEN" -H 'Content-Type: application/json' \
+            --data @- "$KNOWTIS_API_URL/api/v1/internal/model-gate/verdict"
+
+      - name: Upload eval results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-results-${{ matrix.selectorKey }}
+          path: eval-results
+          retention-days: 90
+          if-no-files-found: warn
