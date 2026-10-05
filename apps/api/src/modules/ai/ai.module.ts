@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { TokenHasher } from '@jovandyaz/auth-nestjs';
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -7,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
+import type { EnvConfig } from '../../config/env.config';
 import { AdminAuditModule } from '../admin/audit/admin-audit.module';
 import { UsersModule } from '../users/users.module';
 import { ShutdownDrainModule } from '../websocket/shutdown-drain.module';
@@ -49,6 +51,7 @@ import { AI_COMPLETION_PROVIDER } from './domain/ports/ai-provider.port';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-output.port';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
+import { KEY_FINGERPRINTER } from './domain/ports/key-fingerprinter.port';
 import {
   MESSAGE_QUOTA_PORT,
   USER_MESSAGE_COUNT_PORT,
@@ -66,6 +69,7 @@ import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
 import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys.repository';
+import { USER_PROVIDER_MODELS_REPOSITORY } from './domain/ports/user-provider-models.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { CatalogAlertsWriter } from './infrastructure/catalog/catalog-alerts.writer';
@@ -89,6 +93,7 @@ import { DrizzleSystemProviderKeysRepository } from './infrastructure/persistenc
 import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
 import { DrizzleUserMessageCountRepository } from './infrastructure/persistence/drizzle-user-message-count.repository';
 import { DrizzleUserProviderKeysRepository } from './infrastructure/persistence/drizzle-user-provider-keys.repository';
+import { DrizzleUserProviderModelsRepository } from './infrastructure/persistence/drizzle-user-provider-models.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
 import {
@@ -147,6 +152,16 @@ import { ModelGateController } from './model-gate.controller';
     {
       provide: USER_PROVIDER_KEYS_REPOSITORY,
       useClass: DrizzleUserProviderKeysRepository,
+    },
+    {
+      provide: USER_PROVIDER_MODELS_REPOSITORY,
+      useClass: DrizzleUserProviderModelsRepository,
+    },
+    {
+      provide: KEY_FINGERPRINTER,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvConfig, true>) =>
+        new TokenHasher(config.getOrThrow('TOKEN_HASH_KEY')),
     },
     ProviderRegistryFactory,
     WebhookAlertService,
