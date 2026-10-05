@@ -36,6 +36,7 @@ function makeTask(locked = true) {
   const models = {
     get: vi.fn(),
     listForUser: vi.fn(),
+    markStale: vi.fn(),
     save: vi.fn(),
     replace: vi.fn(),
     findDue: vi.fn().mockResolvedValue([]),

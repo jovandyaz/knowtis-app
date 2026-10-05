@@ -63,6 +63,30 @@ export class ByokModelsService {
     }
   }
 
+  /** A turn's provider could not find its model: mark the listing stale, then list the key again. Never rejects. */
+  async reportModelNotFound(
+    userId: string,
+    provider: ByokProvider
+  ): Promise<void> {
+    try {
+      await this.models.markStale(userId, provider);
+      const outcome = await this.relist(userId, provider);
+      this.logger.log({
+        event: 'byok.relist.model_not_found',
+        userId,
+        provider,
+        outcome,
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'byok.relist_failed',
+        userId,
+        provider,
+        error: reasonOf(error),
+      });
+    }
+  }
+
   /**
    * Lists the stored key again and writes its listing unless a newer key's listing landed first.
    * Never deletes the key or its listing. Rejects on a storage error, including a key deleted while it was re-listed.

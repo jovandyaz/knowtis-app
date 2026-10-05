@@ -105,6 +105,18 @@ export class DrizzleUserProviderModelsRepository implements UserProviderModelsRe
     return written.length > 0;
   }
 
+  async markStale(userId: string, provider: ByokProvider): Promise<void> {
+    await this.db
+      .update(userProviderModels)
+      .set({ syncedAt: null })
+      .where(
+        and(
+          eq(userProviderModels.userId, userId),
+          eq(userProviderModels.provider, provider)
+        )
+      );
+  }
+
   async findDue(
     olderThan: Date,
     limit: number,

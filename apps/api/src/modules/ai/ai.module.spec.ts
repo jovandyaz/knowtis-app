@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 import { TokenHasher } from '@jovandyaz/auth-nestjs';
 import { ConfigService } from '@nestjs/config';
+import type { OnEventMetadata } from '@nestjs/event-emitter';
 import { CronExpression } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
@@ -11,11 +12,13 @@ import {
   infrastructureStub,
 } from '../../test-support/module-boot';
 import { AIModule } from './ai.module';
+import { ByokModelNotFoundListener } from './application/listeners/byok-model-not-found.listener';
 import { AIConfigService } from './application/services/ai-config.service';
 import { ByokModelsService } from './application/services/byok-models.service';
 import { ByokService } from './application/services/byok.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
+import { ByokKeyFailedEvent } from './domain/events/byok-key-failed.event';
 import {
   KEY_FINGERPRINTER,
   type KeyFingerprinter,
@@ -40,6 +43,8 @@ const COMPILE_TIMEOUT_MS = 15_000;
 const HMAC_SHA256_HEX = /^[0-9a-f]{64}$/;
 // The key @nestjs/schedule's explorer reads a @Cron from; the package does not export it.
 const CRON_METADATA_KEY = 'SCHEDULE_CRON_OPTIONS';
+// The key @nestjs/event-emitter's loader reads an @OnEvent from; the package does not export it.
+const EVENT_LISTENER_METADATA_KEY = 'EVENT_LISTENER_METADATA';
 
 const GRAPH_UNDER_TEST: readonly unknown[] = [
   PLATFORM_MODELS_SOURCE,
@@ -56,6 +61,7 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   KEY_FINGERPRINTER,
   ByokModelsService,
   ByokRelistTask,
+  ByokModelNotFoundListener,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -203,6 +209,33 @@ describe('AIModule wiring', () => {
           cronTime: CronExpression.EVERY_DAY_AT_4AM,
           timeZone: 'UTC',
         });
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'registers the BYOK model-not-found listener',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const listener = moduleRef.get(ByokModelNotFoundListener);
+        const subscriptions: OnEventMetadata[] | undefined =
+          Reflect.getMetadata(
+            EVENT_LISTENER_METADATA_KEY,
+            listener.onKeyFailed
+          );
+
+        expect(
+          Object.values(listener).includes(moduleRef.get(ByokModelsService)),
+          "ByokModelNotFoundListener is not wired to the module's ByokModelsService"
+        ).toBe(true);
+        expect(subscriptions).toEqual([
+          { event: ByokKeyFailedEvent.EVENT_NAME, options: { async: true } },
+        ]);
       } finally {
         await moduleRef.close();
       }

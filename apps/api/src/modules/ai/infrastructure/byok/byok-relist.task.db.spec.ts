@@ -112,6 +112,7 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
   ): UserProviderModelsRepository => ({
     get: (userId, provider) => repo.get(userId, provider),
     listForUser: (userId) => repo.listForUser(userId),
+    markStale: (userId, provider) => repo.markStale(userId, provider),
     save: (userId, listing) => repo.save(userId, listing),
     replace: (userId, listing, expectedFingerprint) =>
       repo.replace(userId, listing, expectedFingerprint),

@@ -61,6 +61,7 @@ interface MakeOverrides {
   key?: ByokKeyLookup;
   listing?: ProviderListing;
   written?: boolean | Error;
+  markedStale?: Error;
   resolveKey?: Mock<ByokService['resolveKey']>;
   listings?: readonly ProviderModelListing[] | Error;
   keyFingerprints?: ReadonlyMap<ByokProvider, string> | Error;
@@ -85,6 +86,7 @@ function makeService(overrides: MakeOverrides = {}) {
   }
   const models = {
     get,
+    markStale: settle(overrides.markedStale ?? undefined),
     save: vi.fn(),
     replace,
     findDue: vi.fn(),
@@ -327,6 +329,76 @@ describe('ByokModelsService.entitlementsFor', () => {
           error: READ_FAILURE,
         },
       ]);
+    }
+  );
+});
+
+describe('ByokModelsService.reportModelNotFound', () => {
+  let log: MockInstance<Logger['log']>;
+  let warn: MockInstance<Logger['warn']>;
+
+  beforeEach(() => {
+    log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    log.mockRestore();
+    warn.mockRestore();
+  });
+
+  it('marks stale before re-listing', async () => {
+    const { service, models, lister } = makeService();
+
+    await expect(
+      service.reportModelNotFound(USER_ID, 'anthropic')
+    ).resolves.toBeUndefined();
+
+    expect(models.markStale.mock.calls).toEqual([[USER_ID, 'anthropic']]);
+    expect(models.markStale.mock.invocationCallOrder[0]).toBeLessThan(
+      models.get.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(lister.list.mock.calls).toEqual([['anthropic', API_KEY]]);
+    expect(models.replace).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls.map((call) => call[0])).toEqual([
+      {
+        event: 'byok.relist.model_not_found',
+        userId: USER_ID,
+        provider: 'anthropic',
+        outcome: 'listed',
+      },
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the stale mark', { markedStale: new Error(READ_FAILURE) }, READ_FAILURE],
+    [
+      'the re-list',
+      { written: new Error(FOREIGN_KEY_VIOLATION) },
+      FOREIGN_KEY_VIOLATION,
+    ],
+  ] as const)(
+    'logs and resolves when %s throws',
+    async (_step, overrides, reason) => {
+      const { service } = makeService(overrides);
+
+      await expect(
+        service.reportModelNotFound(USER_ID, 'anthropic')
+      ).resolves.toBeUndefined();
+
+      expect(warn.mock.calls.map((call) => call[0])).toEqual([
+        {
+          event: 'byok.relist_failed',
+          userId: USER_ID,
+          provider: 'anthropic',
+          error: reason,
+        },
+      ]);
+      expect(log).not.toHaveBeenCalled();
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(API_KEY);
     }
   );
 });

@@ -22,6 +22,7 @@ import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
+import { ByokModelNotFoundListener } from './application/listeners/byok-model-not-found.listener';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
 import { AICompletionPipeline } from './application/services/ai-completion-pipeline.service';
 import { AIConfigService } from './application/services/ai-config.service';
@@ -153,6 +154,7 @@ import { ModelGateController } from './model-gate.controller';
     ByokService,
     ByokModelsService,
     ByokRelistTask,
+    ByokModelNotFoundListener,
     {
       provide: USER_PROVIDER_KEYS_REPOSITORY,
       useClass: DrizzleUserProviderKeysRepository,

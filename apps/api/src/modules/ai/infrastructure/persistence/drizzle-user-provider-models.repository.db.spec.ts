@@ -185,6 +185,48 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
     });
   });
 
+  it('marks a listing stale and keeps it', async () => {
+    await seedKey('anthropic');
+    await seedKey('openai');
+    await seedKey('anthropic', OTHER_USER_ID);
+    const anthropic = listing('anthropic', OLD_FP, ['m1', 'm2']);
+    const openai = listing('openai', OLD_FP, ['m3']);
+    const otherUser = listing('anthropic', NEW_FP, ['m4']);
+    await repo.save(USER_ID, anthropic);
+    await repo.save(USER_ID, openai);
+    await repo.save(OTHER_USER_ID, otherUser);
+
+    await repo.markStale(USER_ID, 'anthropic');
+
+    expect(await repo.get(USER_ID, 'anthropic')).toEqual({
+      ...anthropic,
+      syncedAt: null,
+    });
+    expect(await repo.get(USER_ID, 'openai')).toEqual(openai);
+    expect(await repo.get(OTHER_USER_ID, 'anthropic')).toEqual(otherUser);
+  });
+
+  it('finds a stale listing due', async () => {
+    const now = Date.now();
+    const cut = new Date(now - DAY_MS);
+    await seedKey('anthropic');
+    await setKeyUpdatedAt('anthropic', new Date(now - 10 * DAY_MS));
+    await repo.save(
+      USER_ID,
+      listing('anthropic', OLD_FP, ['m1'], new Date(now))
+    );
+    const dueOfUser = async () =>
+      (await repo.findDue(cut, 100, null)).filter((k) => k.userId === USER_ID);
+
+    expect(await dueOfUser()).toEqual([]);
+
+    await repo.markStale(USER_ID, 'anthropic');
+
+    expect(await dueOfUser()).toEqual([
+      { userId: USER_ID, provider: 'anthropic' },
+    ]);
+  });
+
   it('deletes the listing with its key', async () => {
     await seedKey('anthropic');
     await repo.save(USER_ID, listing('anthropic', OLD_FP, ['m1']));
