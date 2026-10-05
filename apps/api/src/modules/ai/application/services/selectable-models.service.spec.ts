@@ -730,14 +730,26 @@ describe('SelectableModelsService', () => {
             INTENTS,
             ANTHROPIC_KEY
           )
-        ).toMatchObject({
+        ).toEqual({
           kind: 'resolved',
-          model: expect.stringMatching(/^anthropic:/),
+          model: SONNET_5_5,
           resolution: {
             requested: GLM,
-            fallback: { reason: 'key_removed', from: GLM },
+            resolved: SONNET_5_5,
+            fallback: { reason: 'key_removed', from: GLM, to: SONNET_5_5 },
           },
         });
+      });
+
+      it('counts the active resolutions, never the grace, as platform-billed in a key-billed catalog', () => {
+        const facts = graceService(REPLACED_IN_GRACE).factsFor(
+          ANTHROPIC_KEY.byokProviders,
+          { ...INTENTS, powerful: PROMOTED_ID },
+          CATALOG_BILLING.KEY
+        );
+
+        expect(facts.isPlatformBilled(INTENTS.powerful)).toBe(true);
+        expect(facts.isPlatformBilled(GLM)).toBe(false);
       });
 
       it("keeps a platform-billed caller's grace model platform-billed", () => {
