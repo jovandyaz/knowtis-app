@@ -42,7 +42,7 @@ function asV4Provider(provider: ReturnType<typeof createOpenRouter>) {
   });
 }
 
-export class ProviderNotConfiguredError extends Error {
+class ProviderNotConfiguredError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ProviderNotConfiguredError';

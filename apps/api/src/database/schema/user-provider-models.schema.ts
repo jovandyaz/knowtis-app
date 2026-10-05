@@ -11,7 +11,7 @@ import {
 import { userProviderKeys } from './user-provider-keys.schema';
 
 const PROVIDER_MAX_LENGTH = 20;
-export const KEY_FINGERPRINT_LENGTH = 64;
+const KEY_FINGERPRINT_LENGTH = 64;
 
 export const userProviderModels = pgTable(
   'user_provider_models',
