@@ -20,6 +20,8 @@ export interface ModelResolution {
   readonly releasedAt: Date | null;
   readonly pendingModelId: string | null;
   readonly gateStatus: ModelGateStatus | null;
+  readonly gateDetail: string | null;
+  readonly gateRunUrl: string | null;
 }
 
 export const SELECTOR_KEY_BY_INTENT = {
@@ -29,6 +31,8 @@ export const SELECTOR_KEY_BY_INTENT = {
 } as const satisfies Record<ModelIntent, PlatformSelectorKey>;
 
 export const PENDING_GATE_STATUS = 'pending' as const satisfies ModelGateStatus;
+
+export const FAILED_GATE_STATUS = 'failed' as const satisfies ModelGateStatus;
 
 /** The models migration 0060 seeds, and what the resolution cache serves until its first successful read. Each is what a dead prod pin of its intent fell back to before resolutions were stored, so a dead pin keeps its fallback. */
 export const PLATFORM_SEED_MODELS = {
@@ -48,6 +52,8 @@ export const SEED_RESOLUTIONS: readonly ModelResolution[] = MODEL_INTENTS.map(
     releasedAt: null,
     pendingModelId: null,
     gateStatus: null,
+    gateDetail: null,
+    gateRunUrl: null,
   })
 );
 

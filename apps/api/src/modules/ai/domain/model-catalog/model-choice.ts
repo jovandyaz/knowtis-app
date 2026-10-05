@@ -28,7 +28,7 @@ export interface ModelRequest {
 export interface ModelFacts {
   readonly heldProviders: ReadonlySet<string>;
   readonly isSupported: (modelId: string) => boolean;
-  /** Per model, never per provider: true only for a model the platform pays for: the served intents, the routable open-tier models, active resolutions, and previous or released models still inside the grace window. */
+  /** Per model, never per provider: true only for a model the platform pays for: the served intents, the routable open-tier models, active resolutions, and, in a platform-billed catalog, previous or released models still inside the grace window. */
   readonly isPlatformBilled: (modelId: string) => boolean;
   /** The index identity shared by every route of one model; undefined for an id the index does not list. */
   readonly canonicalOf: (modelId: string) => string | undefined;

@@ -1,4 +1,4 @@
-import type { ModelTier } from './ai.types';
+import type { ModelIntent, ModelTier } from './ai.types';
 
 export const CATALOG_MODEL_STATUSES = ['candidate', 'promoted'] as const;
 export type CatalogModelStatus = (typeof CATALOG_MODEL_STATUSES)[number];
@@ -26,11 +26,36 @@ export const PLATFORM_SELECTOR_KEYS = [
 export type PlatformSelectorKey = (typeof PLATFORM_SELECTOR_KEYS)[number];
 
 /** Where a pending platform model stands in the eval gate. */
-export const MODEL_GATE_STATUSES = ['pending', 'passed', 'failed'] as const;
+export const MODEL_GATE_STATUSES = ['pending', 'failed'] as const;
 export type ModelGateStatus = (typeof MODEL_GATE_STATUSES)[number];
+
+/** Why an eval gate verdict changed nothing: the model is no longer pending, or another intent already serves it. */
+export const MODEL_GATE_VERDICT_SKIP_REASONS = [
+  'not_pending',
+  'conflict',
+] as const;
+export type ModelGateVerdictSkipReason =
+  (typeof MODEL_GATE_VERDICT_SKIP_REASONS)[number];
+
+/** A platform selector whose pending model awaits an eval gate verdict. */
+export interface ModelGatePendingDto {
+  selectorKey: PlatformSelectorKey;
+  modelId: string;
+}
+
+/** The model each platform intent serves in production: its pin, else its active resolution. */
+export type ModelGateActiveDto = Record<ModelIntent, string>;
+
+/** What a gate verdict did. A verdict that changed nothing is still a 200, so CI can resend it. */
+export type ModelGateVerdictResultDto =
+  | { applied: true }
+  | { applied: false; reason: ModelGateVerdictSkipReason };
 
 export const CATALOG_LABEL_MAX_LENGTH = 100;
 export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
+
+/** Longest gate failure summary or run URL a model resolution keeps. */
+export const AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH = 500;
 
 /** Most a model may cost per output token to be admitted into the catalog. */
 export const CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN = 0.00002;

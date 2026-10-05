@@ -205,15 +205,25 @@ export class AIConfigService implements PlatformModelsSource {
     if (!changed) {
       return;
     }
-    const current = await this.getIntentModels();
-    const clash = MODEL_INTENTS.find(
-      (intent) => intent !== changed && current[intent] === value
-    );
+    const clash = await this.intentServing(value, changed);
     if (clash) {
       throw new InvalidAIConfigError(
         `Model '${value}' already serves the '${clash}' tier; each tier needs its own model`
       );
     }
+  }
+
+  /** The intent other than `except` that serves `modelId` (its supported pin, else its active resolution), or null when none does. */
+  async intentServing(
+    modelId: string,
+    except: ModelIntent
+  ): Promise<ModelIntent | null> {
+    const served = await this.getIntentModels();
+    return (
+      MODEL_INTENTS.find(
+        (intent) => intent !== except && served[intent] === modelId
+      ) ?? null
+    );
   }
 
   // The active resolution serves even when the catalog no longer supports it: the
@@ -394,11 +404,15 @@ export class AIConfigService implements PlatformModelsSource {
     if (!isConfigKey(key)) {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
+    const intent = intentOfConfigKey(key);
+    const active = intent ? this.resolutions.activeModelId(intent) : null;
+    if (active !== null) {
+      await this.assertIntentModelsStayDistinct(key, active);
+    }
     const deleted = await this.repository.delete(key);
     if (!deleted) {
       return;
     }
-    const intent = intentOfConfigKey(key);
     const servedBefore = intent
       ? this.servedIntentModel(intent, deleted.value)
       : NO_SERVED_MODEL;

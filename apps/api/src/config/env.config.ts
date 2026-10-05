@@ -25,6 +25,8 @@ function canonicalAddress(entry: string): string {
   return `${address.toString()}/${prefixLength}`;
 }
 
+const MODEL_GATE_TOKEN_MIN_LENGTH = 32;
+
 const envSchemaBase = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -69,6 +71,7 @@ const envSchemaBase = z.object({
   AGENT_TOOL_ERROR_ALERT_RATE: z.coerce.number().min(0).max(1).default(0.1),
   AGENT_NO_ANSWER_ALERT_RATE: z.coerce.number().min(0).max(1).default(0.1),
   AI_EVAL_MODEL: z.string().optional(),
+  MODEL_GATE_TOKEN: z.string().min(MODEL_GATE_TOKEN_MIN_LENGTH).optional(),
   VOYAGE_API_KEY: z.string().optional(),
   AI_EMBEDDING_MODEL: z.string().default('voyage-4'),
   TAVILY_API_KEY: z.string().optional(),

@@ -16,6 +16,7 @@ import {
   RESOLUTION_GRACE_DAYS,
   type ModelResolution,
 } from '../../domain/model-catalog/platform-resolution';
+import { CATALOG_BILLING } from '../../domain/model-catalog/tier-catalog';
 import { MS_PER_DAY, utcDayOf } from '../../domain/value-objects/utc-day';
 import type { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import type { PlatformResolutionCache } from '../../infrastructure/catalog/platform-resolution.cache';
@@ -78,7 +79,7 @@ function makeSelectableModelsService(
   index: IndexStub = createSnapshotIndex(),
   resolutions: Pick<
     PlatformResolutionCache,
-    'platformBilledModelIds'
+    'platformBilledModelIds' | 'activeModelIds'
   > = createResolutionsStub()
 ) {
   return new SelectableModelsService(
@@ -102,7 +103,10 @@ function indexOf(rows: readonly IndexedModel[]): IndexStub {
 function makeOpenService(
   promoted: readonly CatalogModel[] = [],
   index?: IndexStub,
-  resolutions?: Pick<PlatformResolutionCache, 'platformBilledModelIds'>
+  resolutions?: Pick<
+    PlatformResolutionCache,
+    'platformBilledModelIds' | 'activeModelIds'
+  >
 ) {
   const catalog: ModelCatalog = {
     isSupported: () => true,
@@ -610,12 +614,14 @@ describe('SelectableModelsService', () => {
     function pinnedTurn(
       service: SelectableModelsService,
       pinned: string,
-      intents: Readonly<Record<ModelIntent, string>>
+      intents: Readonly<Record<ModelIntent, string>>,
+      caller: AiExecutionContext = FREE_CALLER
     ) {
+      const catalog = service.catalogFor(caller, intents, null);
       return chooseModel(
-        service.catalogFor(FREE_CALLER, intents, null),
+        catalog,
         { pinned, preferredModel: null, preferredIntent: null },
-        service.factsFor(NO_BYOK, intents)
+        service.factsFor(caller.byokProviders, intents, catalog.billing)
       );
     }
 
@@ -646,7 +652,7 @@ describe('SelectableModelsService', () => {
 
       expect(
         service
-          .factsFor(NO_BYOK, PROMOTED_FAST_INTENTS)
+          .factsFor(NO_BYOK, PROMOTED_FAST_INTENTS, CATALOG_BILLING.PLATFORM)
           .isPlatformBilled(INTENTS.fast)
       ).toBe(true);
       expect(pinnedTurn(service, INTENTS.fast, PROMOTED_FAST_INTENTS)).toEqual(
@@ -662,18 +668,20 @@ describe('SelectableModelsService', () => {
 
       expect(
         service
-          .factsFor(NO_BYOK, PROMOTED_FAST_INTENTS)
+          .factsFor(NO_BYOK, PROMOTED_FAST_INTENTS, CATALOG_BILLING.PLATFORM)
           .isPlatformBilled(INTENTS.fast)
       ).toBe(false);
     });
 
     it('bills an open model that is no platform default to the platform only once promoted', () => {
       expect(
-        makeOpenService().factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)
+        makeOpenService()
+          .factsFor(NO_BYOK, INTENTS, CATALOG_BILLING.PLATFORM)
+          .isPlatformBilled(GLM)
       ).toBe(false);
       expect(
         makeOpenService([createCatalogModel({ id: GLM, tier: 'open' })])
-          .factsFor(NO_BYOK, INTENTS)
+          .factsFor(NO_BYOK, INTENTS, CATALOG_BILLING.PLATFORM)
           .isPlatformBilled(GLM)
       ).toBe(true);
     });
@@ -684,9 +692,11 @@ describe('SelectableModelsService', () => {
         releasedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
       });
 
-      expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
-        true
-      );
+      expect(
+        service
+          .factsFor(NO_BYOK, INTENTS, CATALOG_BILLING.PLATFORM)
+          .isPlatformBilled(GLM)
+      ).toBe(true);
       expect(pinnedTurn(service, GLM, INTENTS)).toMatchObject({
         kind: 'resolved',
         resolution: { fallback: { reason: 'not_in_tier', from: GLM } },
@@ -699,9 +709,66 @@ describe('SelectableModelsService', () => {
         changedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
       });
 
-      expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
-        true
-      );
+      expect(
+        service
+          .factsFor(NO_BYOK, INTENTS, CATALOG_BILLING.PLATFORM)
+          .isPlatformBilled(GLM)
+      ).toBe(true);
+    });
+
+    describe('a model an activation replaced, inside its grace window', () => {
+      const REPLACED_IN_GRACE = {
+        previousModelId: GLM,
+        changedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS),
+      };
+
+      it('falls back to a held key with key_removed when an own-keys caller resumes on a platform model in its grace window', () => {
+        expect(
+          pinnedTurn(
+            graceService(REPLACED_IN_GRACE),
+            GLM,
+            INTENTS,
+            ANTHROPIC_KEY
+          )
+        ).toEqual({
+          kind: 'resolved',
+          model: SONNET_5_5,
+          resolution: {
+            requested: GLM,
+            resolved: SONNET_5_5,
+            fallback: { reason: 'key_removed', from: GLM, to: SONNET_5_5 },
+          },
+        });
+      });
+
+      it('counts the active resolutions, never the grace, as platform-billed in a key-billed catalog', () => {
+        const facts = graceService(REPLACED_IN_GRACE).factsFor(
+          ANTHROPIC_KEY.byokProviders,
+          { ...INTENTS, powerful: PROMOTED_ID },
+          CATALOG_BILLING.KEY
+        );
+
+        expect(facts.isPlatformBilled(INTENTS.powerful)).toBe(true);
+        expect(facts.isPlatformBilled(GLM)).toBe(false);
+      });
+
+      it("keeps a platform-billed caller's grace model platform-billed", () => {
+        expect(
+          pinnedTurn(graceService(REPLACED_IN_GRACE), GLM, INTENTS)
+        ).toEqual({
+          kind: 'resolved',
+          model: INTENTS.balanced,
+          resolution: {
+            requested: GLM,
+            resolved: INTENTS.balanced,
+            fallback: {
+              reason: 'not_in_tier',
+              from: GLM,
+              to: INTENTS.balanced,
+            },
+          },
+        });
+      });
     });
 
     it('stops billing a released model to the platform once the grace ends', () => {
@@ -710,9 +777,11 @@ describe('SelectableModelsService', () => {
         releasedAt: new Date(SNAPSHOT_DATE.getTime() - GRACE_MS - 1),
       });
 
-      expect(service.factsFor(NO_BYOK, INTENTS).isPlatformBilled(GLM)).toBe(
-        false
-      );
+      expect(
+        service
+          .factsFor(NO_BYOK, INTENTS, CATALOG_BILLING.PLATFORM)
+          .isPlatformBilled(GLM)
+      ).toBe(false);
       expect(pinnedTurn(service, GLM, INTENTS)).toEqual({
         kind: 'unavailable',
         reason: 'key_removed',

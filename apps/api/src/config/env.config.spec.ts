@@ -692,3 +692,25 @@ describe('env.config IMAGE_IMPORT_ALLOWED_IPS', () => {
     ).toEqual([]);
   });
 });
+
+describe('env.config MODEL_GATE_TOKEN', () => {
+  it('rejects a gate token shorter than 32 characters', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, MODEL_GATE_TOKEN: 'g'.repeat(31) })
+    ).toThrow(/MODEL_GATE_TOKEN/);
+  });
+
+  it('accepts a gate token of 32 characters', () => {
+    const token = 'g'.repeat(32);
+
+    expect(
+      validateEnv({ ...validEnv, MODEL_GATE_TOKEN: token }).MODEL_GATE_TOKEN
+    ).toBe(token);
+  });
+
+  it('treats a blank gate token as unset', () => {
+    expect(
+      validateEnv({ ...validEnv, MODEL_GATE_TOKEN: '' }).MODEL_GATE_TOKEN
+    ).toBeUndefined();
+  });
+});

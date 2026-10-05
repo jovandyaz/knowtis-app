@@ -15,8 +15,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: Served platform models
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      fast: ${{ steps.read.outputs.fast }}
+      balanced: ${{ steps.read.outputs.balanced }}
+      powerful: ${{ steps.read.outputs.powerful }}
+    steps:
+      - id: read
+        env:
+          KNOWTIS_API_URL: ${{ secrets.KNOWTIS_API_URL }}
+          MODEL_GATE_TOKEN: ${{ secrets.MODEL_GATE_TOKEN }}
+        run: |
+          if [ -z "$KNOWTIS_API_URL" ] || [ -z "$MODEL_GATE_TOKEN" ]; then
+            echo "::notice::KNOWTIS_API_URL or MODEL_GATE_TOKEN is not set; the legs evaluate the repository variables or the seeds."
+            exit 0
+          fi
+          if ! body=$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer $MODEL_GATE_TOKEN" \
+            "$KNOWTIS_API_URL/api/v1/internal/model-gate/active"); then
+            echo "::warning::Could not read the served models; the legs evaluate the repository variables or the seeds."
+            exit 0
+          fi
+          if ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$body"; then
+            echo "::warning::The served models are not a JSON object; the legs evaluate the repository variables or the seeds."
+            exit 0
+          fi
+          for intent in fast balanced powerful; do
+            model=$(jq -r --arg intent "$intent" '.[$intent] | strings | select(test("^[a-z0-9-]+:[A-Za-z0-9._/:~-]+\\z"))' <<<"$body")
+            if [ -z "$model" ]; then
+              echo "::warning::No valid served model for $intent; its legs evaluate the repository variable or the seed."
+            fi
+            echo "$intent=$model" >> "$GITHUB_OUTPUT"
+          done
+
   evals:
     name: AI Evals (${{ matrix.leg }})
+    needs: resolve
     runs-on: ubuntu-latest
     # Above the 50-minute vitest budget of a ten-trial suite, so a hung turn
     # fails inside vitest and the leg still uploads its results.
@@ -25,28 +62,28 @@ jobs:
       # Each leg is evidence about a different model; one red leg must not hide the rest.
       fail-fast: false
       matrix:
-        # The production legs fall back to the seeded platform resolutions
-        # (migration 0060); set the AI_EVAL_*_MODEL repository variables to
-        # whatever the intents serve.
+        # The production legs evaluate what prod serves (the resolve job), then
+        # the AI_EVAL_*_MODEL repository variables, then the seeded platform
+        # resolutions (migration 0060).
         include:
           - leg: reference
             model: anthropic:claude-sonnet-5
             target: eval
             trials: 3
           - leg: default-model
-            model: ${{ vars.AI_EVAL_DEFAULT_MODEL || 'openrouter:deepseek/deepseek-v3.2' }}
+            model: ${{ needs.resolve.outputs.balanced || vars.AI_EVAL_DEFAULT_MODEL || 'openrouter:deepseek/deepseek-v3.2' }}
             target: eval
             trials: 3
           - leg: default-model-security
-            model: ${{ vars.AI_EVAL_DEFAULT_MODEL || 'openrouter:deepseek/deepseek-v3.2' }}
+            model: ${{ needs.resolve.outputs.balanced || vars.AI_EVAL_DEFAULT_MODEL || 'openrouter:deepseek/deepseek-v3.2' }}
             target: eval-security
             trials: 10
           - leg: fast-model-security
-            model: ${{ vars.AI_EVAL_FAST_MODEL || 'openrouter:minimax/minimax-m2.5' }}
+            model: ${{ needs.resolve.outputs.fast || vars.AI_EVAL_FAST_MODEL || 'openrouter:minimax/minimax-m2.5' }}
             target: eval-security
             trials: 10
           - leg: deep-model-security
-            model: ${{ vars.AI_EVAL_DEEP_MODEL || 'openrouter:moonshotai/kimi-k2.5' }}
+            model: ${{ needs.resolve.outputs.powerful || vars.AI_EVAL_DEEP_MODEL || 'openrouter:moonshotai/kimi-k2.5' }}
             target: eval-security
             trials: 10
     services:
@@ -117,7 +154,8 @@ jobs:
           # The reference leg keeps the environment it has always had, so its
           # time series stays comparable and its fallback chain stays empty.
           OPENROUTER_API_KEY: ${{ startsWith(matrix.model, 'openrouter:') && secrets.OPENROUTER_API_KEY || '' }}
-        run: npx nx run api:${{ matrix.target }}
+          EVAL_TARGET: ${{ matrix.target }}
+        run: npx nx run "api:$EVAL_TARGET"
 
       - name: Compare against the previous run
         if: always()

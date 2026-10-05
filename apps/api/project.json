@@ -138,7 +138,8 @@
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/.github/workflows/nightly-eval.yml"
+        "{workspaceRoot}/.github/workflows/nightly-eval.yml",
+        "{workspaceRoot}/.github/workflows/model-gate.yml"
       ],
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {

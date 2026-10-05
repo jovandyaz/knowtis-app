@@ -30,6 +30,7 @@ import { AssignableModelsService } from './application/services/assignable-model
 import { ByokService } from './application/services/byok.service';
 import { InjectionClassifierService } from './application/services/injection-classifier.service';
 import { MessageQuotaService } from './application/services/message-quota.service';
+import { ModelGateService } from './application/services/model-gate.service';
 import { ModelPreferenceService } from './application/services/model-preference.service';
 import {
   PromptLoaderService,
@@ -100,6 +101,7 @@ import { ExactMatchCacheService } from './infrastructure/redis/exact-match-cache
 import { RedisMessageQuotaAdapter } from './infrastructure/redis/redis-message-quota.adapter';
 import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.service';
 import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-search.adapter';
+import { ModelGateController } from './model-gate.controller';
 
 @Module({
   imports: [
@@ -122,6 +124,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AiProvidersController,
     AiCatalogController,
     AiQuotaController,
+    ModelGateController,
   ],
   providers: [
     SelectableModelsService,
@@ -166,6 +169,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     CatalogSyncTask,
     AiCatalogAdminService,
     AssignableModelsService,
+    ModelGateService,
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,

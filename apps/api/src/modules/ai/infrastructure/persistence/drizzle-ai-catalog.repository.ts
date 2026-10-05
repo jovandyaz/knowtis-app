@@ -5,7 +5,6 @@ import {
   count,
   desc,
   eq,
-  getTableColumns,
   ilike,
   isNull,
   notInArray,
@@ -41,14 +40,7 @@ import type {
 
 const CANDIDATE_TIER = 'open' as const satisfies ModelTier;
 
-const UNREAD_CATALOG_COLUMN = 'reasoning';
-
-type CatalogModelRead = Omit<AiCatalogModelRow, typeof UNREAD_CATALOG_COLUMN>;
-
-const { [UNREAD_CATALOG_COLUMN]: _unread, ...CATALOG_MODEL_COLUMNS } =
-  getTableColumns(aiCatalogModels);
-
-function toCatalogModel(row: CatalogModelRead): CatalogModel {
+function toCatalogModel(row: AiCatalogModelRow): CatalogModel {
   return {
     id: row.id,
     label: row.label,
@@ -99,7 +91,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
 
   async listByStatus(status: CatalogModelStatus): Promise<CatalogModel[]> {
     const rows = await this.db
-      .select(CATALOG_MODEL_COLUMNS)
+      .select()
       .from(aiCatalogModels)
       .where(eq(aiCatalogModels.status, status))
       .orderBy(asc(aiCatalogModels.id));
@@ -132,7 +124,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
 
     const [rows, totals] = await Promise.all([
       this.db
-        .select(CATALOG_MODEL_COLUMNS)
+        .select()
         .from(aiCatalogModels)
         .where(predicate)
         // `desc()` cannot express NULLS LAST, and intelligenceIndex is nullable
@@ -196,7 +188,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
       .update(aiCatalogModels)
       .set({ status: change.status, updatedAt: sql`now()`, ...promotion })
       .where(eq(aiCatalogModels.id, id))
-      .returning(CATALOG_MODEL_COLUMNS);
+      .returning();
     return row ? toCatalogModel(row) : null;
   }
 
@@ -214,7 +206,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
         updatedAt: sql`now()`,
       })
       .where(eq(aiCatalogModels.id, id))
-      .returning(CATALOG_MODEL_COLUMNS);
+      .returning();
     return row ? toCatalogModel(row) : null;
   }
 

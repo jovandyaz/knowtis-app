@@ -102,7 +102,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
-  it('maps every column of a row to the resolution and drops the gate detail', async () => {
+  it('maps every column of a row to the resolution', async () => {
     await db
       .update(aiModelResolutions)
       .set({
@@ -130,6 +130,8 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       releasedAt: RELEASED_AT,
       pendingModelId: NEW_PENDING,
       gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
     });
   });
 
@@ -258,6 +260,93 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
     });
   });
 
+  it('activates a passed pending model in one write', async () => {
+    await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
+    await db
+      .update(aiModelResolutions)
+      .set({ gateDetail: VERDICT_DETAIL })
+      .where(eq(aiModelResolutions.selectorKey, 'platform.fast'));
+    const applied = await repo.recordVerdict(
+      'platform.fast',
+      NEW_PENDING,
+      { passed: true, runUrl: RUN_URL },
+      LATER_AT
+    );
+    expect(applied).toBe(true);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: NEW_PENDING,
+      previousModelId: PLATFORM_SEED_MODELS.fast,
+      changedAt: LATER_AT,
+      pendingModelId: null,
+      gateStatus: null,
+      gateDetail: null,
+      gateRunUrl: RUN_URL,
+      updatedAt: LATER_AT,
+    });
+  });
+
+  it('keeps a failed pending model with its verdict detail', async () => {
+    await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
+    const applied = await repo.recordVerdict(
+      'platform.fast',
+      NEW_PENDING,
+      { passed: false, runUrl: RUN_URL, detail: VERDICT_DETAIL },
+      LATER_AT
+    );
+    expect(applied).toBe(true);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+      updatedAt: LATER_AT,
+    });
+  });
+
+  it('ignores a verdict for a model that is no longer pending', async () => {
+    await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
+    const applied = await repo.recordVerdict(
+      'platform.fast',
+      OLD_PENDING,
+      { passed: true, runUrl: RUN_URL },
+      LATER_AT
+    );
+    expect(applied).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'pending',
+      updatedAt: AT,
+    });
+  });
+
+  it('ignores a second verdict once the first one failed', async () => {
+    await repo.setPending('platform.fast', NEW_PENDING, NOTHING_PENDING, AT);
+    await repo.recordVerdict(
+      'platform.fast',
+      NEW_PENDING,
+      { passed: false, runUrl: RUN_URL, detail: VERDICT_DETAIL },
+      AT
+    );
+    expect(
+      await repo.recordVerdict(
+        'platform.fast',
+        NEW_PENDING,
+        { passed: true, runUrl: RUN_URL },
+        LATER_AT
+      )
+    ).toBe(false);
+    expect(await rowOf('platform.fast')).toMatchObject({
+      activeModelId: PLATFORM_SEED_MODELS.fast,
+      pendingModelId: NEW_PENDING,
+      gateStatus: 'failed',
+      gateDetail: VERDICT_DETAIL,
+      gateRunUrl: RUN_URL,
+      updatedAt: AT,
+    });
+  });
+
   it('records the model a pin change released', async () => {
     await repo.setPending(
       'platform.powerful',
@@ -291,6 +380,17 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       db
         .update(aiModelResolutions)
         .set({ pendingModelId: NEW_PENDING })
+        .where(eq(aiModelResolutions.selectorKey, 'platform.fast'))
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ code: CHECK_VIOLATION }),
+    });
+  });
+
+  it('refuses a passed gate status', async () => {
+    await expect(
+      db
+        .update(aiModelResolutions)
+        .set({ pendingModelId: NEW_PENDING, gateStatus: 'passed' as never })
         .where(eq(aiModelResolutions.selectorKey, 'platform.fast'))
     ).rejects.toMatchObject({
       cause: expect.objectContaining({ code: CHECK_VIOLATION }),
