@@ -132,7 +132,8 @@ const CONFIG_KEYS = {
   },
 } as const satisfies Record<AIConfigKey, ConfigKeyDef>;
 
-const INTENT_CONFIG_KEYS = {
+/** The config key that pins each intent's model. */
+export const INTENT_CONFIG_KEYS = {
   fast: 'ai_fast_model',
   balanced: 'ai_default_model',
   powerful: 'ai_deep_model',

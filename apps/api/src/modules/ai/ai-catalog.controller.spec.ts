@@ -1,11 +1,19 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CatalogModelDto } from '@knowtis/shared-types';
 
+import { RolesGuard } from '../authorization/roles.guard';
 import { AiCatalogController } from './ai-catalog.controller';
 import type { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
 import type { AssignableModelsService } from './application/services/assignable-models.service';
+import type { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
 
 const ACTOR = { id: 'admin-user-id' } as never;
 const MODEL_ID = 'openrouter:vendor/promoted-one';
@@ -35,6 +43,9 @@ describe('AiCatalogController', () => {
   let assignable: {
     [K in keyof AssignableModelsService]: ReturnType<typeof vi.fn>;
   };
+  let resolutions: {
+    [K in keyof PlatformResolutionsAdminService]: ReturnType<typeof vi.fn>;
+  };
   let controller: AiCatalogController;
 
   beforeEach(() => {
@@ -60,13 +71,51 @@ describe('AiCatalogController', () => {
     assignable = {
       list: vi.fn().mockResolvedValue([]),
     };
-    controller = new AiCatalogController(catalog as never, assignable as never);
+    resolutions = {
+      overview: vi.fn().mockResolvedValue({ intents: [], lastSyncAt: null }),
+    };
+    controller = new AiCatalogController(
+      catalog as never,
+      assignable as never,
+      resolutions as never
+    );
   });
 
   it('serves the catalog overview', async () => {
     expect(await controller.list()).toEqual({
       promoted: [],
       alerts: [],
+    });
+  });
+
+  it('serves the platform resolutions straight from the service', async () => {
+    expect(await controller.listResolutions()).toEqual({
+      intents: [],
+      lastSyncAt: null,
+    });
+  });
+
+  describe('requires the admin role', () => {
+    function contextOf(role: string): ExecutionContext {
+      return {
+        getHandler: () => AiCatalogController.prototype.listResolutions,
+        getClass: () => AiCatalogController,
+        switchToHttp: () => ({ getRequest: () => ({ user: { role } }) }),
+      } as unknown as ExecutionContext;
+    }
+
+    it('refuses a member', () => {
+      const guard = new RolesGuard(new Reflector());
+
+      expect(() => guard.canActivate(contextOf('user'))).toThrow(
+        ForbiddenException
+      );
+    });
+
+    it('admits an admin', () => {
+      const guard = new RolesGuard(new Reflector());
+
+      expect(guard.canActivate(contextOf('admin'))).toBe(true);
     });
   });
 

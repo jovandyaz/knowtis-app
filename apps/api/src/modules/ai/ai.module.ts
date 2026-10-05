@@ -32,6 +32,7 @@ import { InjectionClassifierService } from './application/services/injection-cla
 import { MessageQuotaService } from './application/services/message-quota.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { ModelPreferenceService } from './application/services/model-preference.service';
+import { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
 import {
   PromptLoaderService,
   PROMPTS_DIR,
@@ -177,6 +178,7 @@ import { ModelGateController } from './model-gate.controller';
     SyncStalenessTask,
     AiCatalogAdminService,
     AssignableModelsService,
+    PlatformResolutionsAdminService,
     ModelGateService,
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {

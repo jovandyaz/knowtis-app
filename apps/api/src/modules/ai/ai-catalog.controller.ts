@@ -30,6 +30,7 @@ import {
   type CatalogOverviewDto,
   type CatalogSyncResultDto,
   type PaginatedCandidatesDto,
+  type PlatformResolutionsDto,
 } from '@knowtis/shared-types';
 
 import {
@@ -47,6 +48,7 @@ import {
 } from '../feature-flags/feature-flag.guard';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
 import { AssignableModelsService } from './application/services/assignable-models.service';
+import { PlatformResolutionsAdminService } from './application/services/platform-resolutions-admin.service';
 import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
 import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
@@ -69,7 +71,8 @@ const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 export class AiCatalogController {
   constructor(
     private readonly catalog: AiCatalogAdminService,
-    private readonly assignable: AssignableModelsService
+    private readonly assignable: AssignableModelsService,
+    private readonly resolutions: PlatformResolutionsAdminService
   ) {}
 
   @ApiOperation({
@@ -115,6 +118,19 @@ export class AiCatalogController {
   @Get('assignable')
   listAssignable(): Promise<AssignableModelDto[]> {
     return this.assignable.list();
+  }
+
+  @ApiOperation({
+    summary: 'List the platform intents resolution state',
+    description:
+      "Per intent: the stored pin, the model production serves, the active resolution with its history, the pending model with its gate status, and the selector's current candidate; plus when the index last synced.",
+  })
+  @ApiResponse({ status: 200, description: 'Platform resolutions' })
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(READ_THROTTLE)
+  @Get('resolutions')
+  listResolutions(): Promise<PlatformResolutionsDto> {
+    return this.resolutions.overview();
   }
 
   @ApiOperation({
