@@ -234,6 +234,31 @@ describe('AgentCopilotPanel', () => {
     ]);
   });
 
+  it('points a model the key cannot call at the model menu, not at the key', () => {
+    render(<AgentCopilotPanel />, { wrapper });
+    const refused: AgentByokKeyFailedError = {
+      code: AI_BYOK_KEY_FAILED_CODE,
+      message: 'Your API key was refused by the provider.',
+      provider: 'openai',
+      kind: 'model',
+    };
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: refused,
+        retryMode: 'none',
+      });
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.byokKeyFailed.model'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'ai.copilot.byok.reviewKey' })
+    ).not.toBeInTheDocument();
+  });
+
   it('does not offer a code to a visitor with no address', () => {
     render(<AgentCopilotPanel />, { wrapper: anonymousWrapper });
 

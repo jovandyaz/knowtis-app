@@ -30,6 +30,7 @@ import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AI_BYOK_KEY_FAILED_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  BYOK_KEY_FAILURE_KIND,
   isContinuableStop,
 } from '@knowtis/shared-types';
 
@@ -234,7 +235,8 @@ export function AgentCopilotPanel() {
       })
     : t(errorMessageKey);
   const reviewKey =
-    error?.code === AI_BYOK_KEY_FAILED_CODE
+    error?.code === AI_BYOK_KEY_FAILED_CODE &&
+    error.kind !== BYOK_KEY_FAILURE_KIND.MODEL
       ? {
           action: {
             label: t('ai.copilot.byok.reviewKey'),
