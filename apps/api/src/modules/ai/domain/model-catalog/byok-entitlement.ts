@@ -1,3 +1,4 @@
+import { providerOf } from '@knowtis/ai-gateway';
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
 
 import { slugOf } from './catalog-model';
@@ -14,12 +15,6 @@ export interface StoredListing {
 }
 
 const DATE_SUFFIX = /-(?:\d{8}|\d{4}-\d{2}-\d{2})$/;
-const PROVIDER_SEPARATOR = ':';
-
-function byokProviderOf(modelId: string): ByokProvider | null {
-  const provider = modelId.slice(0, modelId.indexOf(PROVIDER_SEPARATOR));
-  return BYOK_PROVIDERS.find((candidate) => candidate === provider) ?? null;
-}
 
 /** The listed ids plus each dated snapshot id under its undated id; never a prefix match. */
 export function entitledIdsOf(listed: readonly string[]): ReadonlySet<string> {
@@ -36,8 +31,9 @@ export function isEntitled(
   modelId: string,
   entitlements: ByokEntitlements
 ): boolean {
-  const provider = byokProviderOf(modelId);
-  const entitled = provider === null ? undefined : entitlements.get(provider);
+  const provider = providerOf(modelId);
+  const held = BYOK_PROVIDERS.find((candidate) => candidate === provider);
+  const entitled = held === undefined ? undefined : entitlements.get(held);
   return entitled === undefined || entitled.has(slugOf(modelId));
 }
 

@@ -90,6 +90,12 @@ describe('isEntitled', () => {
       )
     ).toBe(true);
   });
+
+  it('never reads a held provider out of an id without a provider separator', () => {
+    expect(
+      isEntitled('googlex', entitlementsOf('google', ['gemini-3.8-flash']))
+    ).toBe(true);
+  });
 });
 
 describe('entitlementsFrom', () => {

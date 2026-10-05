@@ -24,4 +24,8 @@ describe('authorOf', () => {
   it('has no author for an OpenRouter slug without a vendor', () => {
     expect(authorOf('openrouter:auto')).toBeNull();
   });
+
+  it('reads an id without a provider separator whole', () => {
+    expect(authorOf('anthropicx')).toBe('anthropicx');
+  });
 });
