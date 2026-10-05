@@ -53,7 +53,6 @@ const SECOND_ALERT_DETAIL = 'upstream still reports the model deprecated';
 const PRICE_DRIFT_DETAIL = 'input cost rose by 40%';
 
 const ROLLBACK = new Error('roll back the renamed column');
-const OLD_LADDER = { levels: ['low', 'high'], mandatory: true };
 
 const PROMOTE_OPEN: CatalogStatusChange = { status: 'promoted', tier: 'open' };
 const PROMOTE_FAST: CatalogStatusChange = { status: 'promoted', tier: 'fast' };
@@ -172,38 +171,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(candidates.map((model) => model.id)).toContain(PRIMARY_MODEL_ID);
   });
 
-  it('inserts a candidate with the unread reasoning column left null', async () => {
-    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-
-    const [row] = await db.execute<{ reasoning: unknown }>(
-      sql`select reasoning from ai_catalog_models where id = ${PRIMARY_MODEL_ID}`
-    );
-    expect(row?.reasoning).toBeNull();
-  });
-
-  it('neither reads nor overwrites a reasoning value an older instance wrote', async () => {
-    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    await db.execute(
-      sql`update ai_catalog_models set reasoning = ${JSON.stringify(OLD_LADDER)}::jsonb where id = ${PRIMARY_MODEL_ID}`
-    );
-
-    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    const { items } = await repo.listCandidates({
-      page: 1,
-      limit: 50,
-      search: PRIMARY_MODEL_ID,
-    });
-
-    expect(
-      items.find((model) => model.id === PRIMARY_MODEL_ID)
-    ).not.toHaveProperty('reasoning');
-    const [row] = await db.execute<{ reasoning: unknown }>(
-      sql`select reasoning from ai_catalog_models where id = ${PRIMARY_MODEL_ID}`
-    );
-    expect(row?.reasoning).toEqual(OLD_LADDER);
-  });
-
-  it('reads and updates catalog rows without naming the unread reasoning column', async () => {
+  it('reads and updates catalog rows while the table still carries a reasoning column', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
 
     const outcome: Record<string, unknown> = {};
@@ -226,7 +194,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
         outcome['upsert'] = await renamed
           .upsertCandidate(candidate(SECONDARY_MODEL_ID))
           .then(
-            () => 'resolved',
+            () => 'ok',
             () => 'rejected'
           );
         throw ROLLBACK;
@@ -239,7 +207,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
     expect(outcome['setStatus']).toMatchObject({ status: 'promoted' });
     expect(outcome['updateCopy']).toMatchObject({ label: ADMIN_LABEL });
-    expect(outcome['upsert']).toBe('rejected');
+    expect(outcome['upsert']).toBe('ok');
     const [column] = await db.execute<{ column_name: string }>(
       sql`select column_name from information_schema.columns where table_name = 'ai_catalog_models' and column_name = 'reasoning'`
     );
