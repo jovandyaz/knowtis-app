@@ -127,6 +127,26 @@ describe('OpenRouterKeyModelsClient', () => {
     }
   );
 
+  it.each([
+    { name: 'no flags', data: {} },
+    {
+      name: 'null flags',
+      data: { is_management_key: null, is_provisioning_key: null },
+    },
+  ])('accepts a key with $name and lists it', async ({ data }) => {
+    const fetchMock = stubListingFetch(
+      { body: { data } },
+      { body: OPENROUTER_USER_MODELS }
+    );
+    const keyAccepted = vi.fn();
+
+    const listing = await list(keyAccepted);
+
+    expect(listing.kind).toBe('listed');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(keyAccepted).toHaveBeenCalled();
+  });
+
   it.each(['is_management_key', 'is_provisioning_key'])(
     'rejects a management key without listing: %s',
     async (flag) => {

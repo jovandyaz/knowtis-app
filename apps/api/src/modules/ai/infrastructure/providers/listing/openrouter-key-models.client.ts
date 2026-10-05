@@ -20,8 +20,8 @@ const OPENROUTER_USER_MODELS_URL = 'https://openrouter.ai/api/v1/models/user';
 
 const keyInfo = z.object({
   data: z.looseObject({
-    is_management_key: z.boolean().optional(),
-    is_provisioning_key: z.boolean().optional(),
+    is_management_key: z.boolean().nullish(),
+    is_provisioning_key: z.boolean().nullish(),
   }),
 });
 const userModelsPage = z.object({
