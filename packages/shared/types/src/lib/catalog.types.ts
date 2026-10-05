@@ -54,6 +54,9 @@ export type ModelGateVerdictResultDto =
 export const CATALOG_LABEL_MAX_LENGTH = 100;
 export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
 
+/** Longest gate failure summary or run URL a model resolution keeps. */
+export const AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH = 500;
+
 /** Most a model may cost per output token to be admitted into the catalog. */
 export const CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN = 0.00002;
 

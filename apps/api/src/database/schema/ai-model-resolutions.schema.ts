@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 import {
+  AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
   MODEL_GATE_STATUSES,
   MODEL_ID_MAX_LENGTH,
   PLATFORM_SELECTOR_KEYS,
@@ -13,9 +14,6 @@ import { sqlLiteralList } from './sql-literal-list';
 
 const SELECTOR_KEY_MAX_LENGTH = 32;
 const GATE_STATUS_MAX_LENGTH = 16;
-
-/** Longest gate failure summary or run URL a row keeps. */
-export const AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH = 500;
 
 export const aiModelResolutions = pgTable(
   'ai_model_resolutions',

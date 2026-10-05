@@ -1,9 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ModelIntent } from '@knowtis/shared-types';
+import {
+  AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
+  type ModelIntent,
+} from '@knowtis/shared-types';
 
-import { AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH } from '../../../../database/schema/ai-model-resolutions.schema';
 import {
   PLATFORM_SEED_MODELS,
   type ModelResolution,

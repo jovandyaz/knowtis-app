@@ -9,13 +9,13 @@ import {
 } from 'class-validator';
 
 import {
+  AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
   MODEL_ID_MAX_LENGTH,
   PLATFORM_SELECTOR_KEYS,
   type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
 import { IsStrictBoolean } from '../../../core/validation/is-strict-boolean.decorator';
-import { AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH } from '../../../database/schema/ai-model-resolutions.schema';
 
 const RUN_URL_PROTOCOLS = ['https'];
 

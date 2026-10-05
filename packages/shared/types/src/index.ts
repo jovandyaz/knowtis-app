@@ -210,6 +210,7 @@ export {
   type ModelGateVerdictResultDto,
   CATALOG_LABEL_MAX_LENGTH,
   CATALOG_DESCRIPTION_MAX_LENGTH,
+  AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
   CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   type CatalogModelDto,
   type CatalogAlertDto,

@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import type {
-  ModelGateVerdictSkipReason,
-  ModelIntent,
-  PlatformSelectorKey,
+import {
+  AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH,
+  type ModelGateVerdictSkipReason,
+  type ModelIntent,
+  type PlatformSelectorKey,
 } from '@knowtis/shared-types';
 
-import { AI_MODEL_RESOLUTION_TEXT_MAX_LENGTH } from '../../../../database/schema/ai-model-resolutions.schema';
 import {
   intentOfSelectorKey,
   PENDING_GATE_STATUS,
