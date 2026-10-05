@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
+import type {
+  ByokProvider,
+  EncryptedSecret,
+  ProviderKeyInfo,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { reasonOf } from '../../../../core/errors/reason-of';
@@ -40,6 +44,14 @@ import {
 
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
+
+function tryDecrypt(stored: EncryptedSecret, masterKey: Buffer): string | null {
+  try {
+    return decryptSecret(stored, masterKey);
+  } catch {
+    return null;
+  }
+}
 
 export const BYOK_KEY_LOOKUP = {
   FOUND: 'found',
@@ -99,20 +111,27 @@ export class ByokService {
     if (!stored) {
       return { kind: BYOK_KEY_LOOKUP.MISSING };
     }
-    try {
-      return {
-        kind: BYOK_KEY_LOOKUP.FOUND,
-        apiKey: decryptSecret(stored, this.masterKey),
-      };
-    } catch (error) {
-      this.logger.error({
-        event: 'byok.decrypt_failed',
-        userId,
-        provider,
-        error: reasonOf(error),
-      });
-      return { kind: BYOK_KEY_LOOKUP.UNDECRYPTABLE };
+    const apiKey = this.decrypt(userId, provider, stored, this.masterKey);
+    return apiKey === null
+      ? { kind: BYOK_KEY_LOOKUP.UNDECRYPTABLE }
+      : { kind: BYOK_KEY_LOOKUP.FOUND, apiKey };
+  }
+
+  /** The fingerprint of each stored key that still decrypts; empty without a master key. A key that no longer decrypts is left out without a log: `resolveKey` reports it. */
+  async keyFingerprints(
+    userId: string
+  ): Promise<ReadonlyMap<ByokProvider, string>> {
+    const fingerprints = new Map<ByokProvider, string>();
+    if (!this.masterKey) {
+      return fingerprints;
     }
+    for (const stored of await this.repo.listEncrypted(userId)) {
+      const apiKey = tryDecrypt(stored, this.masterKey);
+      if (apiKey !== null) {
+        fingerprints.set(stored.provider, this.fingerprints.hash(apiKey));
+      }
+    }
+    return fingerprints;
   }
 
   listKeys(userId: string): Promise<ProviderKeyInfo[]> {
@@ -170,6 +189,25 @@ export class ByokService {
       await this.repo.touchLastUsed(userId, provider);
     } catch (error) {
       this.logger.warn(`byok last-used update failed: ${reasonOf(error)}`);
+    }
+  }
+
+  private decrypt(
+    userId: string,
+    provider: ByokProvider,
+    stored: EncryptedSecret,
+    masterKey: Buffer
+  ): string | null {
+    try {
+      return decryptSecret(stored, masterKey);
+    } catch (error) {
+      this.logger.error({
+        event: 'byok.decrypt_failed',
+        userId,
+        provider,
+        error: reasonOf(error),
+      });
+      return null;
     }
   }
 

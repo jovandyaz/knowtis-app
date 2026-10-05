@@ -281,24 +281,35 @@ function byResolutionOrder(a: IndexedModel, b: IndexedModel): number {
   return a.id < b.id ? -1 : 1;
 }
 
-/** The newest eligible row of the selector's families on `provider`, or null when `provider` is neither the selector's author nor openrouter. Ties go to the shortest id, then id order, so an alias beats its dated snapshot. */
+/** Every eligible row of the selector's families on `provider`, newest first; empty when `provider` is neither the selector's author nor openrouter. Ties go to the shortest id, then id order, so an alias beats its dated snapshot. */
+export function rankSelector(
+  selector: ModelSelector,
+  provider: IndexProvider,
+  rows: readonly IndexedModel[],
+  now: Date
+): IndexedModel[] {
+  if (provider !== OPENROUTER_PROVIDER && provider !== selector.author) {
+    return [];
+  }
+  return rows
+    .filter(
+      (row) =>
+        servesSelector(row, selector, provider) &&
+        row.family !== null &&
+        selector.families.includes(row.family) &&
+        isEligible(row, selector, now)
+    )
+    .toSorted(byResolutionOrder);
+}
+
+/** The first row `rankSelector` ranks, or null when it ranks none. */
 export function resolveSelector(
   selector: ModelSelector,
   provider: IndexProvider,
   rows: readonly IndexedModel[],
   now: Date = new Date()
 ): IndexedModel | null {
-  if (provider !== OPENROUTER_PROVIDER && provider !== selector.author) {
-    return null;
-  }
-  const candidates = rows.filter(
-    (row) =>
-      servesSelector(row, selector, provider) &&
-      row.family !== null &&
-      selector.families.includes(row.family) &&
-      isEligible(row, selector, now)
-  );
-  return candidates.toSorted(byResolutionOrder)[0] ?? null;
+  return rankSelector(selector, provider, rows, now)[0] ?? null;
 }
 
 /** The first BYOK selector of `intent`, in table order, that resolves on `provider`: what a holder of only this key runs. */

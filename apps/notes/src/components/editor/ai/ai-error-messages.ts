@@ -39,7 +39,8 @@ type AIErrorMessageKey =
   | 'ai.errors.modelUnavailable'
   | 'ai.errors.byokKeyFailed.auth'
   | 'ai.errors.byokKeyFailed.credit'
-  | 'ai.errors.byokKeyFailed.permission';
+  | 'ai.errors.byokKeyFailed.permission'
+  | 'ai.errors.byokKeyFailed.model';
 
 export const GENERIC_AI_ERROR_KEY: AIErrorMessageKey = 'ai.errors.generic';
 
@@ -79,6 +80,7 @@ const BYOK_KEY_FAILURE_TO_KEY: Record<string, AIErrorMessageKey> = {
   [BYOK_KEY_FAILURE_KIND.AUTH]: 'ai.errors.byokKeyFailed.auth',
   [BYOK_KEY_FAILURE_KIND.CREDIT]: 'ai.errors.byokKeyFailed.credit',
   [BYOK_KEY_FAILURE_KIND.PERMISSION]: 'ai.errors.byokKeyFailed.permission',
+  [BYOK_KEY_FAILURE_KIND.MODEL]: 'ai.errors.byokKeyFailed.model',
 } satisfies Record<ByokKeyFailureKind, AIErrorMessageKey>;
 
 /**

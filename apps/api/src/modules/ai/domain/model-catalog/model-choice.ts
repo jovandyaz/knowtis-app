@@ -89,7 +89,8 @@ function keyBilledPreference(
 }
 
 // Plans never gate a model on the caller's own key, so a key catalog that no
-// longer lists one means its selector moved on, never that the plan excludes it.
+// longer lists one means its selector moved on or the key lost it, never that
+// the plan excludes it.
 function isRetired(
   modelId: string,
   facts: ModelFacts,

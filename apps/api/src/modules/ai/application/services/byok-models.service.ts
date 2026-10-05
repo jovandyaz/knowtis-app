@@ -2,6 +2,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import type { ByokProvider } from '@knowtis/shared-types';
 
+import { reasonOf } from '../../../../core/errors/reason-of';
+import {
+  entitlementsFrom,
+  NO_ENTITLEMENTS,
+  type ByokEntitlements,
+} from '../../domain/model-catalog/byok-entitlement';
 import {
   KEY_FINGERPRINTER,
   type KeyFingerprinter,
@@ -38,6 +44,49 @@ export class ByokModelsService {
     @Inject(KEY_FINGERPRINTER)
     private readonly fingerprints: KeyFingerprinter
   ) {}
+
+  /** The caller's entitlements; never rejects: a read failure falls open (logged byok.entitlement.read_failed). */
+  async entitlementsFor(userId: string): Promise<ByokEntitlements> {
+    try {
+      const [listings, keyFingerprints] = await Promise.all([
+        this.models.listForUser(userId),
+        this.byok.keyFingerprints(userId),
+      ]);
+      return entitlementsFrom(listings, keyFingerprints);
+    } catch (error) {
+      this.logger.warn({
+        event: 'byok.entitlement.read_failed',
+        userId,
+        error: reasonOf(error),
+      });
+      return NO_ENTITLEMENTS;
+    }
+  }
+
+  /** A turn's provider could not find its model: mark the listing stale, then list the key again. Never rejects. */
+  async reportModelNotFound(
+    userId: string,
+    provider: ByokProvider
+  ): Promise<void> {
+    try {
+      await this.models.markStale(userId, provider);
+      const outcome = await this.relist(userId, provider);
+      this.logger.log({
+        event: 'byok.relist.model_not_found',
+        userId,
+        provider,
+        outcome,
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'byok.relist_failed',
+        userId,
+        provider,
+        reason: 'error',
+        error: reasonOf(error),
+      });
+    }
+  }
 
   /**
    * Lists the stored key again and writes its listing unless a newer key's listing landed first.

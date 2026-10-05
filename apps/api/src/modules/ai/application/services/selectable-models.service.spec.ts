@@ -6,10 +6,21 @@ import {
   type IndexedModel,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import type { ModelIntent } from '@knowtis/shared-types';
+import {
+  MODEL_INTENTS,
+  type ByokProvider,
+  type ModelIntent,
+} from '@knowtis/shared-types';
 
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
-import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import {
+  entitledIdsOf,
+  NO_ENTITLEMENTS,
+} from '../../domain/model-catalog/byok-entitlement';
+import {
+  slugOf,
+  type CatalogModel,
+} from '../../domain/model-catalog/catalog-model';
 import { chooseModel } from '../../domain/model-catalog/model-choice';
 import { RETIREMENT_WINDOW_DAYS } from '../../domain/model-catalog/model-selectors';
 import {
@@ -33,6 +44,7 @@ import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
+import { snapshotRouteId } from '../../testing/snapshot-route';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SONNET_5 = 'anthropic:claude-sonnet-5';
@@ -163,7 +175,9 @@ function listed(
   execution: AiExecutionContext,
   intents: Readonly<Record<ModelIntent, string>> = INTENTS
 ) {
-  return service.toSelectable(service.catalogFor(execution, intents, null));
+  return service.toSelectable(
+    service.catalogFor(execution, intents, null, NO_ENTITLEMENTS)
+  );
 }
 
 describe('SelectableModelsService', () => {
@@ -304,7 +318,7 @@ describe('SelectableModelsService', () => {
       const service = makeOpenService([], { catalog: () => served });
       const balancedOf = () =>
         service
-          .catalogFor(ANTHROPIC_KEY, INTENTS, null)
+          .catalogFor(ANTHROPIC_KEY, INTENTS, null, NO_ENTITLEMENTS)
           .intents.find((entry) => entry.intent === 'balanced');
 
       expect(balancedOf()).toMatchObject({ modelId: SONNET_5_5 });
@@ -326,6 +340,34 @@ describe('SelectableModelsService', () => {
       expect(all).toHaveBeenCalledTimes(2);
     });
 
+    it("builds the key catalog from the caller's entitlements", () => {
+      const [fast, balanced, powerful] = MODEL_INTENTS.map((intent) =>
+        snapshotRouteId(intent, 'anthropic')
+      );
+      const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
+        ['anthropic', entitledIdsOf([fast, powerful].map(slugOf))],
+      ]);
+
+      const catalog = makeOpenService().catalogFor(
+        ANTHROPIC_KEY,
+        INTENTS,
+        null,
+        entitlements
+      );
+
+      expect(catalog.models.map((m) => m.model.id)).toEqual([fast, powerful]);
+      expect(catalog.intents).toContainEqual({
+        intent: 'balanced',
+        available: false,
+        reason: 'no_route',
+      });
+      expect(
+        makeOpenService()
+          .catalogFor(ANTHROPIC_KEY, INTENTS, null, NO_ENTITLEMENTS)
+          .models.map((m) => m.model.id)
+      ).toContain(balanced);
+    });
+
     it('drops a route from the same catalog once its retirement enters the window', () => {
       const lastEligibleDay = utcDayOf(SNAPSHOT_DATE);
       const retiresAt = new Date(lastEligibleDay.start);
@@ -342,7 +384,7 @@ describe('SelectableModelsService', () => {
       );
       const balancedOf = () =>
         service
-          .catalogFor(ANTHROPIC_KEY, INTENTS, null)
+          .catalogFor(ANTHROPIC_KEY, INTENTS, null, NO_ENTITLEMENTS)
           .intents.find((entry) => entry.intent === 'balanced');
 
       expect(balancedOf()).toMatchObject({ modelId: SONNET_5_5 });
@@ -477,7 +519,12 @@ describe('SelectableModelsService', () => {
     it('lists a free caller’s intent models as platform-billed, the balanced one default, with no access field', () => {
       const svc = makeOpenService();
       const models = svc.toSelectable(
-        svc.catalogFor(createExecutionContext({ tier: 'free' }), INTENTS, null)
+        svc.catalogFor(
+          createExecutionContext({ tier: 'free' }),
+          INTENTS,
+          null,
+          NO_ENTITLEMENTS
+        )
       );
       expect(models.map((m) => [m.id, m.servesIntent, m.isDefault])).toEqual([
         [INTENTS.fast, 'fast', false],
@@ -497,7 +544,8 @@ describe('SelectableModelsService', () => {
             byokProviders: ['anthropic'],
           }),
           INTENTS,
-          null
+          null,
+          NO_ENTITLEMENTS
         )
       );
       expect(models.every((m) => m.billedToUser)).toBe(true);
@@ -512,7 +560,8 @@ describe('SelectableModelsService', () => {
       const catalog = makeOpenService().catalogFor(
         createExecutionContext({ tier: 'free' }),
         INTENTS,
-        null
+        null,
+        NO_ENTITLEMENTS
       );
       expect(catalog.models.map((m) => m.model.id)).toEqual(
         Object.values(INTENTS)
@@ -525,7 +574,8 @@ describe('SelectableModelsService', () => {
       ]).catalogFor(
         createExecutionContext({ tier: 'byok', byokProviders: ['anthropic'] }),
         INTENTS,
-        null
+        null,
+        NO_ENTITLEMENTS
       );
       expect(
         catalog.models.every((m) => m.model.id.startsWith('anthropic:'))
@@ -543,7 +593,8 @@ describe('SelectableModelsService', () => {
       const free = service.catalogFor(
         createExecutionContext({ tier: 'free' }),
         INTENTS,
-        null
+        null,
+        NO_ENTITLEMENTS
       );
 
       expect(free.models.map((m) => m.model.id)).not.toContain(
@@ -617,7 +668,12 @@ describe('SelectableModelsService', () => {
       intents: Readonly<Record<ModelIntent, string>>,
       caller: AiExecutionContext = FREE_CALLER
     ) {
-      const catalog = service.catalogFor(caller, intents, null);
+      const catalog = service.catalogFor(
+        caller,
+        intents,
+        null,
+        NO_ENTITLEMENTS
+      );
       return chooseModel(
         catalog,
         { pinned, preferredModel: null, preferredIntent: null },

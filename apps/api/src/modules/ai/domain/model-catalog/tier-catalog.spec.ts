@@ -11,12 +11,15 @@ import {
   createSnapshotIndex,
   SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
+import { snapshotRouteId } from '../../testing/snapshot-route';
 import { supportedAtSnapshot } from '../../testing/supported-at-snapshot';
 import { TIER_POLICIES } from '../execution-context/tier-policy';
+import { entitledIdsOf, isEntitled } from './byok-entitlement';
 import {
   resolveByokSelectors,
   type ByokResolutions,
 } from './byok-intent-routes';
+import { slugOf } from './catalog-model';
 import {
   findInCatalog,
   intentDescriptionKey,
@@ -60,6 +63,7 @@ function catalogFor(
     isPlatformRoutable?: (id: string) => boolean;
     indexRow?: (id: string) => IndexedModel | undefined;
     byok?: ByokResolutions;
+    isEntitled?: (id: string) => boolean;
   } = {}
 ) {
   return tierCatalog({
@@ -74,6 +78,7 @@ function catalogFor(
       options.isPlatformRoutable ?? ((id) => id.startsWith('openrouter:')),
     indexRow: options.indexRow ?? ((id) => SNAPSHOT.get(id)),
     byok: options.byok ?? BYOK,
+    isEntitled: options.isEntitled ?? (() => true),
   });
 }
 
@@ -88,6 +93,19 @@ function resolvedWith(
 
 const ids = (catalog: ReturnType<typeof catalogFor>) =>
   catalog.models.map((scoped) => scoped.model.id);
+
+function rankedOn(
+  intent: ModelIntent,
+  provider: ByokProvider
+): readonly IndexedModel[] {
+  const rows = BYOK[intent][0]?.ranked[provider];
+  if (rows === undefined) {
+    throw new Error(
+      `the first ${intent} candidate ranks nothing on ${provider}`
+    );
+  }
+  return rows;
+}
 
 describe('tierCatalog', () => {
   it('gives an anonymous caller only the default intent model', () => {
@@ -345,6 +363,125 @@ describe('tierCatalog', () => {
       ids(catalog).filter((id) => PLATFORM_INTENT_IDS.includes(id))
     ).toEqual([]);
     expect(catalog.billing).toBe('key');
+  });
+
+  it('an un-entitled newest direct route falls back to the key’s older entitled row, not to another provider', () => {
+    const [newest, older] = rankedOn('balanced', 'anthropic');
+    const [routed] = rankedOn('balanced', 'openrouter');
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openrouter'],
+      offered: [],
+      isEntitled: (id) => id !== newest?.id,
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'balanced',
+      available: true,
+      modelId: older?.id,
+      substituted: false,
+    });
+    expect(ids(catalog)).toContain(routed?.id);
+    expect(ids(catalog)).not.toContain(newest?.id);
+  });
+
+  it('falls through to another provider of the candidate only when no direct row is entitled', () => {
+    const direct = new Set(
+      rankedOn('balanced', 'anthropic').map((row) => row.id)
+    );
+    const [routed] = rankedOn('balanced', 'openrouter');
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openrouter'],
+      offered: [],
+      isEntitled: (id) => !direct.has(id),
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'balanced',
+      available: true,
+      modelId: routed?.id,
+      substituted: true,
+    });
+    expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
+  });
+
+  it('routes an intent to the next candidate only when no row of the first is entitled', () => {
+    const direct = new Set(
+      rankedOn('balanced', 'anthropic').map((row) => row.id)
+    );
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openai'],
+      isEntitled: (id) => !direct.has(id),
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'balanced',
+      available: true,
+      modelId: snapshotRouteId('balanced', 'openai'),
+      substituted: true,
+    });
+    expect(ids(catalog).filter((id) => direct.has(id))).toEqual([]);
+  });
+
+  it('keeps every route of a held provider without a listing', () => {
+    const openaiFast = snapshotRouteId('fast', 'openai');
+    const entitlements = new Map<ByokProvider, ReadonlySet<string>>([
+      ['openai', entitledIdsOf([slugOf(openaiFast)])],
+    ]);
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openai'],
+      isEntitled: (id) => isEntitled(id, entitlements),
+    });
+    expect(ids(catalog)).toEqual([
+      snapshotRouteId('fast', 'anthropic'),
+      openaiFast,
+      snapshotRouteId('balanced', 'anthropic'),
+      snapshotRouteId('powerful', 'anthropic'),
+    ]);
+    expect(
+      MODEL_INTENTS.map((intent) => intentModelOf(catalog, intent))
+    ).toEqual(
+      MODEL_INTENTS.map((intent) => snapshotRouteId(intent, 'anthropic'))
+    );
+  });
+
+  it('drops a promoted model its key is not entitled to', () => {
+    const promoted = 'openrouter:z-ai/glm-5.2';
+    const held: ByokProvider[] = ['openrouter'];
+    const unfiltered = ids(catalogFor('byok', { heldProviders: held }));
+    const catalog = catalogFor('byok', {
+      heldProviders: held,
+      isEntitled: (id) => id !== promoted,
+    });
+    expect(unfiltered).toContain(promoted);
+    expect(ids(catalog)).toEqual(unfiltered.filter((id) => id !== promoted));
+  });
+
+  it('reports no_route when no candidate of an intent is entitled', () => {
+    const fastRoutes = new Set(
+      BYOK.fast.flatMap((candidate) =>
+        Object.values(candidate.ranked).flatMap(
+          (rows) => rows?.map((row) => row.id) ?? []
+        )
+      )
+    );
+    const catalog = catalogFor('byok', {
+      heldProviders: ['anthropic', 'openrouter'],
+      isEntitled: (id) => !fastRoutes.has(id),
+    });
+    expect(catalog.intents).toContainEqual({
+      intent: 'fast',
+      available: false,
+      reason: 'no_route',
+    });
+    expect(ids(catalog).filter((id) => fastRoutes.has(id))).toEqual([]);
+    expect(intentModelOf(catalog, 'balanced')).toBe(
+      snapshotRouteId('balanced', 'anthropic')
+    );
+  });
+
+  it('ignores entitlement in platform catalogs', () => {
+    for (const tier of ['anonymous', 'free'] as const) {
+      expect(catalogFor(tier, { isEntitled: () => false })).toEqual(
+        catalogFor(tier)
+      );
+    }
   });
 
   it('lets the stored primary provider pick the route of the winning candidate', () => {

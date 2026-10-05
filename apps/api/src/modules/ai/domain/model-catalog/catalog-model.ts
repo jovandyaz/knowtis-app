@@ -1,3 +1,4 @@
+import { providerOf } from '@knowtis/ai-gateway';
 import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
 
 /** Namespace every OpenRouter model id carries: this prefix followed by the upstream slug. */
@@ -14,7 +15,7 @@ export function slugOf(modelId: string): string {
 /** Who makes the model: the vendor of an OpenRouter `vendor/model` slug, else the direct provider the id names; null for an OpenRouter slug without a vendor. */
 export function authorOf(modelId: string): string | null {
   if (!modelId.startsWith(OPENROUTER_ID_PREFIX)) {
-    return modelId.slice(0, modelId.indexOf(PROVIDER_SEPARATOR));
+    return providerOf(modelId);
   }
   const slug = slugOf(modelId);
   const vendorEnd = slug.indexOf(AUTHOR_SEPARATOR);

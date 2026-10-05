@@ -589,6 +589,11 @@ describe('AiSdkAgentOrchestrator', () => {
       body: '{"error":{"type":"permission_error"}}',
       kind: 'permission',
     },
+    {
+      statusCode: 404,
+      body: '{"error":{"type":"not_found_error"}}',
+      kind: 'model',
+    },
   ])(
     'ends a BYOK turn the provider refuses as AI_BYOK_KEY_FAILED ($kind) without retrying',
     async ({ statusCode, body, kind }) => {

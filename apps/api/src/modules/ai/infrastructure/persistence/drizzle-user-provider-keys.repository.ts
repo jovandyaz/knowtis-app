@@ -71,6 +71,23 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
     return row ?? null;
   }
 
+  async listEncrypted(
+    userId: string
+  ): Promise<Array<StoredProviderKey & { readonly provider: ByokProvider }>> {
+    const rows = await this.db
+      .select({
+        provider: userProviderKeys.provider,
+        ciphertext: userProviderKeys.ciphertext,
+        iv: userProviderKeys.iv,
+        authTag: userProviderKeys.authTag,
+        keyPrefix: userProviderKeys.keyPrefix,
+      })
+      .from(userProviderKeys)
+      .where(eq(userProviderKeys.userId, userId))
+      .orderBy(asc(userProviderKeys.provider));
+    return rows.map((r) => ({ ...r, provider: toByokProvider(r.provider) }));
+  }
+
   async upsert(
     userId: string,
     provider: ByokProvider,

@@ -80,6 +80,12 @@ describe('classifyByokKeyFailure', () => {
     },
     {
       provider: 'anthropic',
+      status: 404,
+      body: '{"type":"error","error":{"type":"not_found_error"}}',
+      expected: 'model',
+    },
+    {
+      provider: 'anthropic',
       status: 429,
       body: '{"type":"error","error":{"type":"rate_limit_error"}}',
       expected: null,
@@ -101,6 +107,18 @@ describe('classifyByokKeyFailure', () => {
       status: 403,
       body: '{"error":{"code":"unsupported_country_region_territory"}}',
       expected: 'permission',
+    },
+    {
+      provider: 'openai',
+      status: 404,
+      body: '{"error":{"code":"model_not_found"}}',
+      expected: 'model',
+    },
+    {
+      provider: 'openai',
+      status: 400,
+      body: '{"error":{"code":"model_not_found"}}',
+      expected: 'model',
     },
     {
       provider: 'openai',
@@ -158,6 +176,18 @@ describe('classifyByokKeyFailure', () => {
       expected: null,
     },
     {
+      provider: 'openrouter',
+      status: 404,
+      body: '{"error":{"message":"No endpoints found"}}',
+      expected: 'model',
+    },
+    {
+      provider: 'openrouter',
+      status: 400,
+      body: '{"error":{"message":"x is not a valid model ID"}}',
+      expected: null,
+    },
+    {
       provider: 'google',
       status: 400,
       body: '{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"bad schema"}}',
@@ -186,6 +216,12 @@ describe('classifyByokKeyFailure', () => {
       status: 403,
       body: '{"error":{"code":403,"status":"PERMISSION_DENIED"}}',
       expected: 'permission',
+    },
+    {
+      provider: 'google',
+      status: 404,
+      body: '{"error":{"status":"NOT_FOUND"}}',
+      expected: 'model',
     },
     {
       provider: 'google',
@@ -357,6 +393,23 @@ describe('keyRefusalMiddleware', () => {
 
     expect(doStream).toHaveBeenCalledTimes(SDK_RETRIES + 1);
     expect(RetryError.isInstance(error)).toBe(true);
+  });
+
+  it('sends a model the provider cannot find only once, as the same error', async () => {
+    const notFound = new APICallError({
+      message: 'model not found',
+      url: 'https://provider.test/v1',
+      requestBodyValues: {},
+      statusCode: 404,
+      responseBody: '{"error":{"code":"model_not_found"}}',
+    });
+    const { model, doStream } = refusingModel(notFound);
+
+    const error = await streamedError(model);
+
+    expect(doStream).toHaveBeenCalledTimes(1);
+    expect(error).toBe(notFound);
+    expect(classifyByokKeyFailure(error, 'openai')).toBe('model');
   });
 
   it('sends a generate call the provider refused for the key only once', async () => {

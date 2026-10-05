@@ -2,20 +2,25 @@ import 'reflect-metadata';
 
 import { TokenHasher } from '@jovandyaz/auth-nestjs';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { CronExpression } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { BYOK_KEY_FAILURE_KIND } from '@knowtis/shared-types';
 
 import {
   bootConfigModule,
   infrastructureStub,
 } from '../../test-support/module-boot';
 import { AIModule } from './ai.module';
+import { ByokModelNotFoundListener } from './application/listeners/byok-model-not-found.listener';
 import { AIConfigService } from './application/services/ai-config.service';
 import { ByokModelsService } from './application/services/byok-models.service';
 import { ByokService } from './application/services/byok.service';
 import { ModelGateService } from './application/services/model-gate.service';
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
+import { ByokKeyFailedEvent } from './domain/events/byok-key-failed.event';
 import {
   KEY_FINGERPRINTER,
   type KeyFingerprinter,
@@ -40,6 +45,7 @@ const COMPILE_TIMEOUT_MS = 15_000;
 const HMAC_SHA256_HEX = /^[0-9a-f]{64}$/;
 // The key @nestjs/schedule's explorer reads a @Cron from; the package does not export it.
 const CRON_METADATA_KEY = 'SCHEDULE_CRON_OPTIONS';
+const USER_ID = '00000000-0000-4000-8000-000000000001';
 
 const GRAPH_UNDER_TEST: readonly unknown[] = [
   PLATFORM_MODELS_SOURCE,
@@ -56,6 +62,7 @@ const GRAPH_UNDER_TEST: readonly unknown[] = [
   KEY_FINGERPRINTER,
   ByokModelsService,
   ByokRelistTask,
+  ByokModelNotFoundListener,
 ];
 
 // A stand-in for a token under test would hide the missing registration this
@@ -66,7 +73,7 @@ const mockAllButTheGraphUnderTest = (token: unknown) =>
 describe('AIModule wiring', () => {
   const compileAIModule = () =>
     Test.createTestingModule({
-      imports: [bootConfigModule(), AIModule],
+      imports: [bootConfigModule(), EventEmitterModule.forRoot(), AIModule],
     })
       .overrideProvider(AI_REDIS)
       .useValue(infrastructureStub())
@@ -203,6 +210,42 @@ describe('AIModule wiring', () => {
           cronTime: CronExpression.EVERY_DAY_AT_4AM,
           timeZone: 'UTC',
         });
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'delivers a model key failure to the BYOK model-not-found handler',
+    async () => {
+      const moduleRef = await compileAIModule();
+
+      try {
+        const reportModelNotFound = vi
+          .spyOn(moduleRef.get(ByokModelsService), 'reportModelNotFound')
+          .mockResolvedValue(undefined);
+        await moduleRef.init();
+        const emitter = moduleRef.get(EventEmitter2);
+
+        await emitter.emitAsync(
+          ByokKeyFailedEvent.EVENT_NAME,
+          new ByokKeyFailedEvent(USER_ID, 'openai', BYOK_KEY_FAILURE_KIND.AUTH)
+        );
+
+        await emitter.emitAsync(
+          ByokKeyFailedEvent.EVENT_NAME,
+          new ByokKeyFailedEvent(USER_ID, 'openai', BYOK_KEY_FAILURE_KIND.MODEL)
+        );
+        await vi.waitFor(() =>
+          expect(reportModelNotFound).toHaveBeenCalledExactlyOnceWith(
+            USER_ID,
+            'openai'
+          )
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(reportModelNotFound).toHaveBeenCalledTimes(1);
       } finally {
         await moduleRef.close();
       }

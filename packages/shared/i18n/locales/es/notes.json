@@ -432,7 +432,8 @@
       "byokKeyFailed": {
         "auth": "El proveedor rechazó tu API key. Revísala en Configuración → Asistente IA.",
         "credit": "Tu cuenta del proveedor se quedó sin créditos o alcanzó su límite de gasto. Recárgala o sube el límite con el proveedor.",
-        "permission": "El proveedor rechazó esta solicitud con tu API key. Revisa los permisos de la key, la disponibilidad del modelo y tu región con el proveedor."
+        "permission": "El proveedor rechazó esta solicitud con tu API key. Revisa los permisos de la key, la disponibilidad del modelo y tu región con el proveedor.",
+        "model": "Tu API key no puede usar este modelo. Elige otro en el menú de modelos."
       }
     },
     "copilot": {

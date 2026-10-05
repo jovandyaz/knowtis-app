@@ -1,13 +1,19 @@
 import type { ByokProvider } from './ai.types';
 
-/** What the provider refused about the caller's key: its identity, its funds, or its reach. */
-export const BYOK_KEY_FAILURE_KINDS = ['auth', 'credit', 'permission'] as const;
+/** What the provider refused about the caller's key: its identity, its funds, its reach, or a model it cannot call. */
+export const BYOK_KEY_FAILURE_KINDS = [
+  'auth',
+  'credit',
+  'permission',
+  'model',
+] as const;
 export type ByokKeyFailureKind = (typeof BYOK_KEY_FAILURE_KINDS)[number];
 
 export const BYOK_KEY_FAILURE_KIND = {
   AUTH: 'auth',
   CREDIT: 'credit',
   PERMISSION: 'permission',
+  MODEL: 'model',
 } as const satisfies Record<string, ByokKeyFailureKind>;
 
 export const AI_BYOK_KEY_FAILED_CODE = 'AI_BYOK_KEY_FAILED';

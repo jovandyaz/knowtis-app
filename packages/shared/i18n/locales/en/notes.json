@@ -432,7 +432,8 @@
       "byokKeyFailed": {
         "auth": "Your API key was rejected by the provider. Check it in Settings → AI Assistant.",
         "credit": "Your provider account is out of credits or reached its spending limit. Top it up or raise the limit with the provider.",
-        "permission": "The provider refused this request for your API key. Check the key's permissions, the model's availability and your region with the provider."
+        "permission": "The provider refused this request for your API key. Check the key's permissions, the model's availability and your region with the provider.",
+        "model": "Your API key can't use this model. Pick another one in the model menu."
       }
     },
     "copilot": {

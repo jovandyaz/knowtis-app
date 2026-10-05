@@ -105,6 +105,31 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
     expect(await repo.get(USER_ID, 'openai')).toBeNull();
   });
 
+  it('lists every listing of a user', async () => {
+    await seedKey('anthropic');
+    await seedKey('openai');
+    await seedKey('anthropic', OTHER_USER_ID);
+    const anthropic = listing('anthropic', OLD_FP, ['m1']);
+    const openai = listing('openai', NEW_FP, ['m2', 'm3']);
+    await repo.save(USER_ID, openai);
+    await repo.save(USER_ID, anthropic);
+    await repo.save(OTHER_USER_ID, listing('anthropic', NEW_FP, ['m4']));
+    await db
+      .update(userProviderModels)
+      .set({ syncedAt: null })
+      .where(
+        and(
+          eq(userProviderModels.userId, USER_ID),
+          eq(userProviderModels.provider, 'openai')
+        )
+      );
+
+    expect(await repo.listForUser(USER_ID)).toEqual([
+      anthropic,
+      { ...openai, syncedAt: null },
+    ]);
+  });
+
   it('save replaces the listing of a previous key', async () => {
     await seedKey('anthropic');
     await repo.save(USER_ID, listing('anthropic', OLD_FP, ['m1']));
@@ -158,6 +183,48 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderModelsRepository', () => {
         constraint_name: 'user_provider_models_key_fk',
       }),
     });
+  });
+
+  it('marks a listing stale and keeps it', async () => {
+    await seedKey('anthropic');
+    await seedKey('openai');
+    await seedKey('anthropic', OTHER_USER_ID);
+    const anthropic = listing('anthropic', OLD_FP, ['m1', 'm2']);
+    const openai = listing('openai', OLD_FP, ['m3']);
+    const otherUser = listing('anthropic', NEW_FP, ['m4']);
+    await repo.save(USER_ID, anthropic);
+    await repo.save(USER_ID, openai);
+    await repo.save(OTHER_USER_ID, otherUser);
+
+    await repo.markStale(USER_ID, 'anthropic');
+
+    expect(await repo.get(USER_ID, 'anthropic')).toEqual({
+      ...anthropic,
+      syncedAt: null,
+    });
+    expect(await repo.get(USER_ID, 'openai')).toEqual(openai);
+    expect(await repo.get(OTHER_USER_ID, 'anthropic')).toEqual(otherUser);
+  });
+
+  it('finds a stale listing due', async () => {
+    const now = Date.now();
+    const cut = new Date(now - DAY_MS);
+    await seedKey('anthropic');
+    await setKeyUpdatedAt('anthropic', new Date(now - 10 * DAY_MS));
+    await repo.save(
+      USER_ID,
+      listing('anthropic', OLD_FP, ['m1'], new Date(now))
+    );
+    const dueOfUser = async () =>
+      (await repo.findDue(cut, 100, null)).filter((k) => k.userId === USER_ID);
+
+    expect(await dueOfUser()).toEqual([]);
+
+    await repo.markStale(USER_ID, 'anthropic');
+
+    expect(await dueOfUser()).toEqual([
+      { userId: USER_ID, provider: 'anthropic' },
+    ]);
   });
 
   it('deletes the listing with its key', async () => {

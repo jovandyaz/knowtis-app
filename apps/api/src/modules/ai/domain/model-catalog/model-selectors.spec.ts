@@ -21,6 +21,7 @@ import {
   isAssignableModel,
   isEligible,
   PLATFORM_SELECTORS,
+  rankSelector,
   resolveByokIntent,
   resolvePlatformIntent,
   resolveSelector,
@@ -403,6 +404,76 @@ describe('resolveSelector over the snapshot', () => {
     expect(resolvedId(selectorOf('powerful', 'google'), 'openrouter')).toBe(
       'openrouter:google/gemini-3.1-pro-preview'
     );
+  });
+});
+
+describe('rankSelector over the snapshot', () => {
+  const BYOK_CASES = MODEL_INTENTS.flatMap((intent) =>
+    BYOK_SELECTORS[intent].flatMap((selector) =>
+      BYOK_PROVIDERS.map((provider) => ({
+        intent,
+        author: selector.author,
+        provider,
+        selector,
+      }))
+    )
+  );
+
+  function ranked(selector: ModelSelector, provider: IndexProvider) {
+    return rankSelector(
+      selector,
+      provider,
+      MODEL_INDEX_SNAPSHOT,
+      SNAPSHOT_DATE
+    );
+  }
+
+  it.each(BYOK_CASES)(
+    'leads $intent $author on $provider with the row resolveSelector resolves',
+    ({ selector, provider }) => {
+      expect(ranked(selector, provider)[0] ?? null).toBe(
+        resolveSelector(selector, provider, MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE)
+      );
+    }
+  );
+
+  it.each(BYOK_CASES)(
+    'ranks $intent $author on $provider as successive resolutions, each over the rows not yet ranked',
+    ({ selector, provider }) => {
+      let rows: readonly IndexedModel[] = MODEL_INDEX_SNAPSHOT;
+      for (const expected of [...ranked(selector, provider), null]) {
+        const next = resolveSelector(selector, provider, rows, SNAPSHOT_DATE);
+        expect(next).toBe(expected);
+        rows = rows.filter((candidate) => candidate !== next);
+      }
+    }
+  );
+
+  it.each(BYOK_CASES)(
+    'ranks only eligible rows of $intent $author on $provider, newest first',
+    ({ selector, provider }) => {
+      const rows = ranked(selector, provider);
+      for (const [position, row] of rows.entries()) {
+        expect(row.provider).toBe(provider);
+        expect(selector.families).toContain(row.family);
+        expect(isEligible(row, selector, SNAPSHOT_DATE)).toBe(true);
+        if (position > 0) {
+          expect(byNewestRelease(rows[position - 1], row)).toBeLessThanOrEqual(
+            0
+          );
+        }
+      }
+    }
+  );
+
+  it('keeps the older eligible rows of a family behind the newest', () => {
+    const [newest, older] = ranked(
+      selectorOf('balanced', 'anthropic'),
+      'anthropic'
+    );
+    expect(newest?.id).toBe(RESOLUTIONS.balanced.direct.anthropic);
+    expect(older).toBeDefined();
+    expect(byNewestRelease(newest, older)).toBeLessThan(0);
   });
 });
 

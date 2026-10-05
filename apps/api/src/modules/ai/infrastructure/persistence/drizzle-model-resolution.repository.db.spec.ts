@@ -73,6 +73,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
 
   beforeEach(async () => {
     snapshot = await db.select().from(aiModelResolutions);
+    await db.update(aiModelResolutions).set(NOTHING_PENDING);
   });
 
   afterEach(async () => {

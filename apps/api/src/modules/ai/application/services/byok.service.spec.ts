@@ -57,7 +57,20 @@ const UNAVAILABLE: ProviderListing = {
   error: 'HTTP 529: Overloaded',
 };
 
-const fingerprintOf = (apiKey: string) => `fp:${apiKey.length}`;
+const ANTHROPIC_FINGERPRINT = 'fp:anthropic';
+const OPENAI_FINGERPRINT = 'fp:openai';
+const FINGERPRINTS = new Map([
+  [ANTHROPIC_KEY, ANTHROPIC_FINGERPRINT],
+  [OPENAI_KEY, OPENAI_FINGERPRINT],
+]);
+
+function fingerprintOf(apiKey: string): string {
+  const fingerprint = FINGERPRINTS.get(apiKey);
+  if (fingerprint === undefined) {
+    throw new Error('the fingerprint double knows no such key');
+  }
+  return fingerprint;
+}
 
 interface MakeOverrides {
   identity?: IdentityState;
@@ -72,6 +85,7 @@ function makeService(overrides: MakeOverrides = {}) {
     listForUser: vi.fn().mockResolvedValue([]),
     getEnabledProviders: vi.fn().mockResolvedValue([]),
     getEncrypted: vi.fn().mockResolvedValue(null),
+    listEncrypted: vi.fn().mockResolvedValue([]),
     upsert: vi.fn(
       async (_u: string, _p: string, secret: unknown, prefix: string) => {
         store.set('secret', secret);
@@ -149,7 +163,7 @@ describe('ByokService', () => {
         'u1',
         {
           provider: 'anthropic',
-          keyFingerprint: fingerprintOf(ANTHROPIC_KEY),
+          keyFingerprint: ANTHROPIC_FINGERPRINT,
           modelIds: LISTED_MODEL_IDS,
           syncedAt: SNAPSHOT_DATE,
         },
@@ -328,7 +342,10 @@ describe('ByokService', () => {
     });
   });
 
-  it('resolveKey reports a key that no longer decrypts', async () => {
+  it('resolveKey reports a key that no longer decrypts, logging it once', async () => {
+    const error = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     const { service } = makeService({
       repo: {
         getEncrypted: vi.fn().mockResolvedValue({
@@ -339,9 +356,18 @@ describe('ByokService', () => {
         }),
       },
     });
+
     expect(await service.resolveKey('u1', 'anthropic')).toEqual({
       kind: 'undecryptable',
     });
+    expect(error.mock.calls.map((call) => call[0])).toEqual([
+      expect.objectContaining({
+        event: 'byok.decrypt_failed',
+        userId: 'u1',
+        provider: 'anthropic',
+      }),
+    ]);
+    error.mockRestore();
   });
 
   it('resolveKey reports a key deleted since the tier was resolved', async () => {
@@ -350,6 +376,80 @@ describe('ByokService', () => {
     });
     expect(await service.resolveKey('u1', 'anthropic')).toEqual({
       kind: 'missing',
+    });
+  });
+
+  describe('keyFingerprints', () => {
+    const storedKey = (provider: string, apiKey: string) => ({
+      provider,
+      ...encryptSecret(apiKey, masterKey),
+      keyPrefix: 'sk-',
+    });
+    const UNDECRYPTABLE_KEY = {
+      provider: 'openai',
+      ciphertext: 'bad',
+      iv: 'x',
+      authTag: 'y',
+      keyPrefix: 'p',
+    };
+
+    it('fingerprints every stored key that decrypts', async () => {
+      const { service, repo } = makeService({
+        repo: {
+          listEncrypted: vi
+            .fn()
+            .mockResolvedValue([
+              storedKey('anthropic', ANTHROPIC_KEY),
+              storedKey('openai', OPENAI_KEY),
+            ]),
+        },
+      });
+
+      expect(await service.keyFingerprints('u1')).toEqual(
+        new Map([
+          ['anthropic', ANTHROPIC_FINGERPRINT],
+          ['openai', OPENAI_FINGERPRINT],
+        ])
+      );
+      expect(repo.listEncrypted.mock.calls).toEqual([['u1']]);
+      expect(repo.getEncrypted).not.toHaveBeenCalled();
+    });
+
+    it('omits a key that no longer decrypts, without logging it', async () => {
+      const error = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      const { service } = makeService({
+        repo: {
+          listEncrypted: vi
+            .fn()
+            .mockResolvedValue([
+              storedKey('anthropic', ANTHROPIC_KEY),
+              UNDECRYPTABLE_KEY,
+            ]),
+        },
+      });
+
+      expect(await service.keyFingerprints('u1')).toEqual(
+        new Map([['anthropic', ANTHROPIC_FINGERPRINT]])
+      );
+      expect(error).not.toHaveBeenCalled();
+      expect(loggedWarnings(warn)).toEqual([]);
+      error.mockRestore();
+    });
+
+    it('fingerprints nothing without a master key', async () => {
+      const { service, repo } = makeService({
+        repo: {
+          listEncrypted: vi
+            .fn()
+            .mockResolvedValue([storedKey('anthropic', ANTHROPIC_KEY)]),
+        },
+      });
+      (service as never as { masterKey: Buffer | null }).masterKey = null;
+
+      expect((await service.keyFingerprints('u1')).size).toBe(0);
+      expect(repo.listEncrypted).not.toHaveBeenCalled();
     });
   });
 

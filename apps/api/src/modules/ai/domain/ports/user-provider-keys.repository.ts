@@ -16,6 +16,9 @@ export interface UserProviderKeysRepository {
     userId: string,
     provider: ByokProvider
   ): Promise<StoredProviderKey | null>;
+  listEncrypted(
+    userId: string
+  ): Promise<Array<StoredProviderKey & { readonly provider: ByokProvider }>>;
   upsert(
     userId: string,
     provider: ByokProvider,

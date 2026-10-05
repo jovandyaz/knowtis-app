@@ -14,6 +14,7 @@ const OPENAI_NO_CREDIT = new Set([
   'insufficient_quota',
   'credit_balance_exhausted',
 ]);
+const OPENAI_MODEL_NOT_FOUND = 'model_not_found';
 /** The `details[].reason` Gemini sends with the 400 it answers a key it does not recognise. */
 export const GEMINI_BAD_KEY_REASON = 'API_KEY_INVALID';
 
@@ -103,8 +104,11 @@ function geminiKind(
  * status and the parsed error body per provider, because the same status means
  * different things: OpenRouter's 403 is mostly a content block, OpenAI reports
  * spent credit as a 429, Anthropic's spent prepaid credit and Gemini's bad key
- * arrive as a 400. Null means unclassified, not "the key is fine": a caller
- * must never read it as leave to retry on another key or model.
+ * arrive as a 400. Any 404, and OpenAI's `model_not_found` at any status, is a
+ * model the key cannot call; OpenRouter's 400 for an unknown slug stays
+ * unclassified, since the slug is wrong for every key. Null means
+ * unclassified, not "the key is fine": a caller must never read it as leave to
+ * retry on another key or model.
  */
 export function classifyByokKeyFailure(
   error: unknown,
@@ -117,6 +121,13 @@ export function classifyByokKeyFailure(
   }
   if (status === HttpStatus.UNAUTHORIZED) {
     return BYOK_KEY_FAILURE_KIND.AUTH;
+  }
+  if (
+    status === HttpStatus.NOT_FOUND ||
+    (provider === 'openai' &&
+      errorFieldsOf(call)?.code === OPENAI_MODEL_NOT_FOUND)
+  ) {
+    return BYOK_KEY_FAILURE_KIND.MODEL;
   }
   switch (provider) {
     case 'anthropic':

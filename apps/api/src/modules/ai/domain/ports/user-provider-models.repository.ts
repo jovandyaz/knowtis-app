@@ -17,6 +17,7 @@ export interface UserProviderModelsRepository {
     userId: string,
     provider: ByokProvider
   ): Promise<ProviderModelListing | null>;
+  listForUser(userId: string): Promise<ProviderModelListing[]>;
   /** The listing of the key just stored, replacing whatever the row held. */
   save(
     userId: string,
@@ -28,6 +29,8 @@ export interface UserProviderModelsRepository {
     listing: ProviderModelListing & { readonly syncedAt: Date },
     expectedFingerprint: string | null
   ): Promise<boolean>;
+  /** Marks the listing stale (`synced_at` null) so it is re-listed; the listing itself keeps filtering until then. */
+  markStale(userId: string, provider: ByokProvider): Promise<void>;
   /** Keys due for a re-list, in (user_id, provider) order after `after`: no listing, stale, synced before `olderThan`, or synced before the key was last stored. */
   findDue(
     olderThan: Date,

@@ -7,18 +7,26 @@ import {
 
 import {
   BYOK_SELECTORS,
-  resolveSelector,
+  rankSelector,
   type ModelSelector,
 } from './model-selectors';
 
-/** One selector's resolution on each provider that serves its author: its direct provider and OpenRouter. */
+/** One selector's eligible rows, newest first, on each provider that serves its author: its direct provider and OpenRouter. A provider ranking nothing is absent. */
+export interface SelectorCandidates {
+  readonly selector: ModelSelector;
+  readonly ranked: Readonly<
+    Partial<Record<ByokProvider, readonly IndexedModel[]>>
+  >;
+}
+
+/** One selector's route on each provider that serves it. */
 export interface SelectorRoutes {
   readonly selector: ModelSelector;
   readonly routes: Readonly<Partial<Record<ByokProvider, IndexedModel>>>;
 }
 
 export type ByokResolutions = Readonly<
-  Record<ModelIntent, readonly SelectorRoutes[]>
+  Record<ModelIntent, readonly SelectorCandidates[]>
 >;
 
 export interface IntentRoute {
@@ -28,32 +36,32 @@ export interface IntentRoute {
 
 const AGGREGATOR: ByokProvider = 'openrouter';
 
-function resolveIntentSelectors(
+function rankIntentSelectors(
   intent: ModelIntent,
   rows: readonly IndexedModel[],
   now: Date
-): SelectorRoutes[] {
+): SelectorCandidates[] {
   return BYOK_SELECTORS[intent].map((selector) => {
-    const routes: Partial<Record<ByokProvider, IndexedModel>> = {};
+    const ranked: Partial<Record<ByokProvider, readonly IndexedModel[]>> = {};
     for (const provider of BYOK_PROVIDERS) {
-      const row = resolveSelector(selector, provider, rows, now);
-      if (row !== null) {
-        routes[provider] = row;
+      const onProvider = rankSelector(selector, provider, rows, now);
+      if (onProvider.length > 0) {
+        ranked[provider] = onProvider;
       }
     }
-    return { selector, routes };
+    return { selector, ranked };
   });
 }
 
-/** Every BYOK selector of each intent, in selector order, resolved over `rows` at `now`. */
+/** Every BYOK selector of each intent, in selector order, ranked over `rows` at `now`. */
 export function resolveByokSelectors(
   rows: readonly IndexedModel[],
   now: Date
 ): ByokResolutions {
   return {
-    fast: resolveIntentSelectors('fast', rows, now),
-    balanced: resolveIntentSelectors('balanced', rows, now),
-    powerful: resolveIntentSelectors('powerful', rows, now),
+    fast: rankIntentSelectors('fast', rows, now),
+    balanced: rankIntentSelectors('balanced', rows, now),
+    powerful: rankIntentSelectors('powerful', rows, now),
   };
 }
 
@@ -75,6 +83,23 @@ function routeOrder(
     ...rest.filter((provider) => provider !== AGGREGATOR),
     ...rest.filter((provider) => provider === AGGREGATOR),
   ];
+}
+
+/** Each candidate routed on each provider to its newest row `isEntitled` keeps; a provider with none is dropped, and a candidate left without routes stays, so selector order is unchanged. */
+export function entitledRoutes(
+  candidates: readonly SelectorCandidates[],
+  isEntitled: (row: IndexedModel) => boolean
+): SelectorRoutes[] {
+  return candidates.map(({ selector, ranked }) => {
+    const routes: Partial<Record<ByokProvider, IndexedModel>> = {};
+    for (const provider of BYOK_PROVIDERS) {
+      const row = ranked[provider]?.find(isEntitled);
+      if (row !== undefined) {
+        routes[provider] = row;
+      }
+    }
+    return { selector, routes };
+  });
 }
 
 /** Every route the held keys reach: candidates in selector order, each candidate's routes in route order (primary, other direct keys in add order, OpenRouter last). */

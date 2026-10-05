@@ -3,21 +3,32 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MODEL_INDEX_SNAPSHOT } from '@knowtis/ai-gateway';
-import type {
-  ByokProvider,
-  ModelIntent,
-  UpdateAiPreferencesInput,
+import {
+  MODEL_INTENTS,
+  type ByokProvider,
+  type ModelIntent,
+  type UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
 
 import { AiUnavailableError } from '../../domain/errors/ai-unavailable.error';
 import type { AiExecutionContext } from '../../domain/execution-context/ai-execution-context';
-import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
+import { entitledIdsOf } from '../../domain/model-catalog/byok-entitlement';
+import {
+  entitledRoutes,
+  reachableRoutes,
+  resolveByokSelectors,
+} from '../../domain/model-catalog/byok-intent-routes';
+import {
+  slugOf,
+  type CatalogModel,
+} from '../../domain/model-catalog/catalog-model';
 import type { UserAiSettings } from '../../domain/ports/user-ai-settings.repository';
 import { ModelIndexCache } from '../../infrastructure/catalog/model-index.cache';
 import { ModelUnavailableException } from '../../model-unavailable.exception';
+import { createByokModelsStub } from '../../testing/create-byok-models-stub';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createExecutionContext } from '../../testing/create-execution-context';
 import { createModelIndexRepositoryStub } from '../../testing/create-model-index-repository-stub';
@@ -25,7 +36,9 @@ import { createResolutionsStub } from '../../testing/platform-resolutions';
 import {
   createSnapshotIndex,
   createSyncedSnapshotIndex,
+  SNAPSHOT_DATE,
 } from '../../testing/snapshot-index';
+import { snapshotRouteId } from '../../testing/snapshot-route';
 import { ModelPreferenceService } from './model-preference.service';
 import { SelectableModelsService } from './selectable-models.service';
 
@@ -35,6 +48,11 @@ const DIRECT_SONNET = 'anthropic:claude-sonnet-5-5';
 const GLM = 'openrouter:z-ai/glm-5.2';
 const ROUTED_SONNET = 'openrouter:anthropic/claude-sonnet-5.5';
 const DIRECT_OPUS = 'anthropic:claude-opus-5-5';
+const PLATFORM_INTENTS: Readonly<Record<ModelIntent, string>> = {
+  fast: 'openrouter:minimax/minimax-m2.5',
+  balanced: 'openrouter:deepseek/deepseek-v3.2',
+  powerful: 'openrouter:moonshotai/kimi-k2.5',
+};
 
 function makeChooser(
   settings: {
@@ -82,20 +100,20 @@ function makeChooser(
     }),
   };
   const aiConfig = {
-    getIntentModels: vi.fn().mockResolvedValue({
-      fast: 'openrouter:minimax/minimax-m2.5',
-      balanced: 'openrouter:deepseek/deepseek-v3.2',
-      powerful: 'openrouter:moonshotai/kimi-k2.5',
-    }),
+    getIntentModels: vi
+      .fn<() => Promise<Record<ModelIntent, string>>>()
+      .mockResolvedValue(PLATFORM_INTENTS),
   };
+  const byokModels = createByokModelsStub();
   const svc = new ModelPreferenceService(
     repo as never,
     selectable,
     aiConfig as never,
     index,
-    promotedCache as never
+    promotedCache as never,
+    byokModels as never
   );
-  return { svc, repo, selectable, promotedCache };
+  return { svc, repo, selectable, promotedCache, byokModels, aiConfig };
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -699,6 +717,159 @@ describe('ModelPreferenceService', () => {
           primaryProvider: 'openrouter',
         })
       ).toMatchObject({ details: { suggestedModel: ROUTED_SONNET } });
+      expect(repo.patchSettings).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the caller's entitlements", () => {
+    const BYOK_ANTHROPIC_OPENROUTER = createExecutionContext({
+      tier: 'byok',
+      byokProviders: ['anthropic', 'openrouter'],
+    });
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(SNAPSHOT_DATE);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function anthropicListingWithout(unlisted: string) {
+      const listed = MODEL_INTENTS.map((intent) =>
+        snapshotRouteId(intent, 'anthropic')
+      )
+        .filter((id) => id !== unlisted)
+        .map(slugOf);
+      return new Map<ByokProvider, ReadonlySet<string>>([
+        ['anthropic', entitledIdsOf(listed)],
+      ]);
+    }
+
+    it.each([
+      [
+        'choosing a turn model',
+        (svc: ModelPreferenceService) =>
+          svc.chooseTurnModel(BYOK_ANTHROPIC, {}),
+      ],
+      [
+        'writing a model preference',
+        (svc: ModelPreferenceService) =>
+          writeAs(svc, BYOK_ANTHROPIC, {
+            preferredModel: snapshotRouteId('fast', 'anthropic'),
+          }),
+      ],
+    ])(
+      'reads entitlements alongside the platform intents when %s',
+      async (_, act) => {
+        const { svc, aiConfig, byokModels } = makeChooser();
+        let releaseIntents: () => void = () => undefined;
+        aiConfig.getIntentModels.mockReturnValueOnce(
+          new Promise((resolve) => {
+            releaseIntents = () => resolve(PLATFORM_INTENTS);
+          })
+        );
+
+        const acting = act(svc);
+
+        await vi.waitFor(() =>
+          expect(byokModels.entitlementsFor.mock.calls).toEqual([
+            [BYOK_ANTHROPIC.subject.userId],
+          ])
+        );
+        releaseIntents();
+        await acting;
+      }
+    );
+
+    it("lists an own-keys catalog filtered by the caller's entitlements", async () => {
+      const balanced = snapshotRouteId('balanced', 'anthropic');
+      const { svc, byokModels } = makeChooser();
+      byokModels.entitlementsFor.mockResolvedValue(
+        anthropicListingWithout(balanced)
+      );
+
+      const catalog = await svc.listModels(BYOK_ANTHROPIC);
+
+      expect(byokModels.entitlementsFor.mock.calls).toEqual([
+        [BYOK_ANTHROPIC.subject.userId],
+      ]);
+      expect(catalog.models.map((m) => m.id)).toEqual(
+        MODEL_INTENTS.map((intent) =>
+          snapshotRouteId(intent, 'anthropic')
+        ).filter((id) => id !== balanced)
+      );
+      expect(catalog.intents).toContainEqual({
+        intent: 'balanced',
+        available: false,
+        reason: 'no_route',
+      });
+    });
+
+    it.each([
+      ['anonymous', createExecutionContext({ tier: 'anonymous' })],
+      ['free', FREE_CALLER],
+    ] as const)(
+      'never reads entitlements for a platform catalog (%s)',
+      async (_tier, execution) => {
+        const { svc, byokModels } = makeChooser({
+          preferredModel: 'openrouter:minimax/minimax-m2.5',
+        });
+
+        await svc.listModels(execution);
+        await svc.chooseTurnModel(execution, {});
+        await svc.getUserPreferences(
+          execution.subject.userId,
+          async () => execution
+        );
+        await writeAs(svc, execution, {
+          preferredModel: 'openrouter:deepseek/deepseek-v3.2',
+        }).catch(() => null);
+
+        expect(byokModels.entitlementsFor).not.toHaveBeenCalled();
+      }
+    );
+
+    it('chooses a turn model among entitled routes only', async () => {
+      const [first, next] = reachableRoutes(
+        entitledRoutes(
+          resolveByokSelectors(MODEL_INDEX_SNAPSHOT, SNAPSHOT_DATE).powerful,
+          () => true
+        ),
+        ['anthropic', 'openrouter'],
+        'anthropic'
+      );
+      const { svc, byokModels } = makeChooser({ preferredIntent: 'powerful' });
+      byokModels.entitlementsFor.mockResolvedValue(
+        anthropicListingWithout(first.id)
+      );
+
+      await expect(
+        svc.chooseTurnModel(BYOK_ANTHROPIC_OPENROUTER, {})
+      ).resolves.toEqual({
+        kind: 'resolved',
+        model: next.id,
+        resolution: { requested: null, resolved: next.id },
+      });
+    });
+
+    it('refuses a preference for a route the key is not entitled to with model_retired', async () => {
+      const powerful = snapshotRouteId('powerful', 'anthropic');
+      const { svc, repo, byokModels } = makeChooser();
+      byokModels.entitlementsFor.mockResolvedValue(
+        anthropicListingWithout(powerful)
+      );
+
+      const error = await writeAs(svc, BYOK_ANTHROPIC, {
+        preferredModel: powerful,
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ModelUnavailableException);
+      expect((error as ModelUnavailableException).getResponse()).toMatchObject({
+        code: 'AI_MODEL_UNAVAILABLE',
+        details: { reason: 'model_retired' },
+      });
       expect(repo.patchSettings).not.toHaveBeenCalled();
     });
   });

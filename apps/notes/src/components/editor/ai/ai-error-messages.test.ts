@@ -45,6 +45,7 @@ describe('aiErrorMessageKey', () => {
     ['auth', 'ai.errors.byokKeyFailed.auth'],
     ['credit', 'ai.errors.byokKeyFailed.credit'],
     ['permission', 'ai.errors.byokKeyFailed.permission'],
+    ['model', 'ai.errors.byokKeyFailed.model'],
   ])('names what the provider refused about a BYOK key (%s)', (kind, key) => {
     expect(aiErrorMessageKey({ code: 'AI_BYOK_KEY_FAILED', kind })).toBe(key);
   });
