@@ -199,6 +199,7 @@ export {
   CANDIDATE_STATUS,
   CATALOG_ALERT_KINDS,
   type CatalogAlertKind,
+  NOTIFYING_ALERT_KINDS,
   PLATFORM_SELECTOR_KEYS,
   type PlatformSelectorKey,
   MODEL_GATE_STATUSES,

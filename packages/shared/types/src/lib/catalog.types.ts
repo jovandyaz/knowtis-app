@@ -11,11 +11,25 @@ export const CANDIDATE_STATUS =
   'candidate' as const satisfies CatalogModelStatus;
 
 export const CATALOG_ALERT_KINDS = [
-  'deprecation',
-  'price_drift',
   'unavailable',
+  'pin_unavailable',
+  'retirement_scheduled',
+  'selector_empty',
+  'resolution_pending',
+  'gate_failed',
+  'sync_rejected',
+  'family_drift',
+  'sync_stale',
 ] as const;
 export type CatalogAlertKind = (typeof CATALOG_ALERT_KINDS)[number];
+
+/** Kinds whose newly opened alert also goes to the ops webhook; the rest only show in the backoffice. */
+export const NOTIFYING_ALERT_KINDS: readonly CatalogAlertKind[] = [
+  'selector_empty',
+  'gate_failed',
+  'pin_unavailable',
+  'sync_stale',
+];
 
 /** One row of `ai_model_resolutions` per platform intent. */
 export const PLATFORM_SELECTOR_KEYS = [

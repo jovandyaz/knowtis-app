@@ -23,7 +23,6 @@ const PROMOTED_SLUG = 'qwen/qwen3-max';
 const PROMOTED_ID = `openrouter:${PROMOTED_SLUG}`;
 const PINNED_SLUG = 'qwen/qwen3.8-max';
 const PINNED_ID = 'openrouter:qwen/qwen3.8-max';
-const EXPIRATION_DATE = new Date('2026-12-31T00:00:00.000Z');
 
 function upstreamModel(
   id: string,
@@ -95,6 +94,15 @@ function withWatchedInSync(...models: UpstreamModel[]): UpstreamCatalog {
 }
 
 const IN_SYNC_COUNT = withWatchedInSync().models.length;
+
+/** A conclusive read in which `WATCHED_SLUG` vanished upstream. */
+function withWatchedGone(): UpstreamCatalog {
+  const inSync = withWatchedInSync();
+  return {
+    ...inSync,
+    models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
+  };
+}
 
 function make(
   options: {
@@ -222,29 +230,9 @@ describe('CatalogSyncTask', () => {
     expect(candidate).not.toHaveProperty('reasoning');
   });
 
-  it('should raise a deprecation alert when OpenRouter dates a watched model', async () => {
-    const { task, repo } = make({
-      upstream: [
-        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
-      ],
-    });
-
-    await task.sync();
-
-    expect(repo.createAlert).toHaveBeenCalledWith(
-      WATCHED_ID,
-      'deprecation',
-      expect.stringContaining('2026-12-31')
-    );
-  });
-
   it('should alert once when a promoted platform default leaves OpenRouter', async () => {
     const { task, repo, openRouter } = make({ promoted: [WATCHED_ID] });
-    const inSync = withWatchedInSync();
-    openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
-    });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
 
     const result = await task.run();
 
@@ -254,11 +242,7 @@ describe('CatalogSyncTask', () => {
 
   it('counts only alerts it opened', async () => {
     const { task, repo, openRouter } = make({ promoted: [PROMOTED_ID] });
-    const inSync = withWatchedInSync();
-    openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
-    });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
     repo.createAlert.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
     const result = await task.run();
@@ -269,11 +253,7 @@ describe('CatalogSyncTask', () => {
 
   it('should raise an unavailable alert when a watched model leaves OpenRouter', async () => {
     const { task, repo, openRouter } = make();
-    const inSync = withWatchedInSync();
-    openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
-    });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
 
     await task.sync();
 
@@ -286,10 +266,8 @@ describe('CatalogSyncTask', () => {
 
   it('should raise no unavailable alert when the fetch stopped paginating early', async () => {
     const { task, repo, openRouter } = make();
-    const inSync = withWatchedInSync();
     openRouter.fetchModels.mockResolvedValue({
-      ...inSync,
-      models: inSync.models.filter((model) => model.id !== WATCHED_SLUG),
+      ...withWatchedGone(),
       complete: false,
     });
 
@@ -381,12 +359,8 @@ describe('CatalogSyncTask', () => {
   });
 
   it('should keep raising the other alerts when one alert write fails', async () => {
-    const { task, repo } = make({
-      upstream: [
-        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
-      ],
-      promoted: [PROMOTED_ID],
-    });
+    const { task, repo, openRouter } = make({ promoted: [PROMOTED_ID] });
+    openRouter.fetchModels.mockResolvedValue(withWatchedGone());
     repo.createAlert.mockRejectedValueOnce(new Error('alerts table locked'));
 
     await task.sync();
@@ -398,7 +372,7 @@ describe('CatalogSyncTask', () => {
         count: 1,
         failures: [
           {
-            target: `${WATCHED_ID} deprecation`,
+            target: `${WATCHED_ID} unavailable`,
             reason: 'alerts table locked',
           },
         ],
@@ -611,10 +585,8 @@ describe('CatalogSyncTask', () => {
 
   it('should report nothing indexed but still sync candidates and alerts when the index write fails', async () => {
     const { task, repo, indexWriter } = make({
-      upstream: [
-        QWEN_CANDIDATE,
-        upstreamModel(WATCHED_SLUG, { expirationDate: EXPIRATION_DATE }),
-      ],
+      upstream: [QWEN_CANDIDATE],
+      promoted: [PROMOTED_ID],
     });
     indexWriter.write.mockRejectedValue(new Error('model index locked'));
 
@@ -629,8 +601,8 @@ describe('CatalogSyncTask', () => {
       })
     );
     expect(repo.createAlert).toHaveBeenCalledWith(
-      WATCHED_ID,
-      'deprecation',
+      PROMOTED_ID,
+      'unavailable',
       expect.any(String)
     );
     expect(errorLog).toHaveBeenCalledWith(
