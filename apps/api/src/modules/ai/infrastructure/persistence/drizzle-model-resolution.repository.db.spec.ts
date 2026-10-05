@@ -385,4 +385,15 @@ describe.runIf(DB_AVAILABLE)('DrizzleModelResolutionRepository', () => {
       cause: expect.objectContaining({ code: CHECK_VIOLATION }),
     });
   });
+
+  it('refuses a passed gate status', async () => {
+    await expect(
+      db
+        .update(aiModelResolutions)
+        .set({ pendingModelId: NEW_PENDING, gateStatus: 'passed' as never })
+        .where(eq(aiModelResolutions.selectorKey, 'platform.fast'))
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ code: CHECK_VIOLATION }),
+    });
+  });
 });
