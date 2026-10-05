@@ -45,6 +45,14 @@ import {
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
 
+function tryDecrypt(stored: EncryptedSecret, masterKey: Buffer): string | null {
+  try {
+    return decryptSecret(stored, masterKey);
+  } catch {
+    return null;
+  }
+}
+
 export const BYOK_KEY_LOOKUP = {
   FOUND: 'found',
   MISSING: 'missing',
@@ -109,7 +117,7 @@ export class ByokService {
       : { kind: BYOK_KEY_LOOKUP.FOUND, apiKey };
   }
 
-  /** The fingerprint of each stored key that still decrypts; empty without a master key. */
+  /** The fingerprint of each stored key that still decrypts; empty without a master key. A key that no longer decrypts is left out without a log: `resolveKey` reports it. */
   async keyFingerprints(
     userId: string
   ): Promise<ReadonlyMap<ByokProvider, string>> {
@@ -118,12 +126,7 @@ export class ByokService {
       return fingerprints;
     }
     for (const stored of await this.repo.listEncrypted(userId)) {
-      const apiKey = this.decrypt(
-        userId,
-        stored.provider,
-        stored,
-        this.masterKey
-      );
+      const apiKey = tryDecrypt(stored, this.masterKey);
       if (apiKey !== null) {
         fingerprints.set(stored.provider, this.fingerprints.hash(apiKey));
       }

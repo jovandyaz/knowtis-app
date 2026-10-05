@@ -342,7 +342,10 @@ describe('ByokService', () => {
     });
   });
 
-  it('resolveKey reports a key that no longer decrypts', async () => {
+  it('resolveKey reports a key that no longer decrypts, logging it once', async () => {
+    const error = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
     const { service } = makeService({
       repo: {
         getEncrypted: vi.fn().mockResolvedValue({
@@ -353,9 +356,18 @@ describe('ByokService', () => {
         }),
       },
     });
+
     expect(await service.resolveKey('u1', 'anthropic')).toEqual({
       kind: 'undecryptable',
     });
+    expect(error.mock.calls.map((call) => call[0])).toEqual([
+      expect.objectContaining({
+        event: 'byok.decrypt_failed',
+        userId: 'u1',
+        provider: 'anthropic',
+      }),
+    ]);
+    error.mockRestore();
   });
 
   it('resolveKey reports a key deleted since the tier was resolved', async () => {
@@ -403,7 +415,7 @@ describe('ByokService', () => {
       expect(repo.getEncrypted).not.toHaveBeenCalled();
     });
 
-    it('omits a key that no longer decrypts', async () => {
+    it('omits a key that no longer decrypts, without logging it', async () => {
       const error = vi
         .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => undefined);
@@ -421,13 +433,8 @@ describe('ByokService', () => {
       expect(await service.keyFingerprints('u1')).toEqual(
         new Map([['anthropic', ANTHROPIC_FINGERPRINT]])
       );
-      expect(error.mock.calls.map((call) => call[0])).toEqual([
-        expect.objectContaining({
-          event: 'byok.decrypt_failed',
-          userId: 'u1',
-          provider: 'openai',
-        }),
-      ]);
+      expect(error).not.toHaveBeenCalled();
+      expect(loggedWarnings(warn)).toEqual([]);
       error.mockRestore();
     });
 
