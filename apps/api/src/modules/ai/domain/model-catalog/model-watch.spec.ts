@@ -170,6 +170,24 @@ describe('findFamilyDrift', () => {
     ).toEqual([]);
   });
 
+  it('ignores a model with no family', () => {
+    const model = newcomer({ family: null });
+
+    expect(
+      findFamilyDrift([...ROWS, model], SEED_RESOLUTIONS, SNAPSHOT_DATE)
+    ).toEqual([]);
+  });
+
+  it('stays quiet for an author with no served model', () => {
+    const resolutions = SEED_RESOLUTIONS.filter(
+      (row) => row.activeModelId !== DEEPSEEK_ACTIVE.id
+    );
+
+    expect(
+      findFamilyDrift([...ROWS, newcomer()], resolutions, SNAPSHOT_DATE)
+    ).toEqual([]);
+  });
+
   it('ignores an author no selector picks from', () => {
     const model = newcomer({
       id: 'openrouter:moonshotai/kimi-k9',

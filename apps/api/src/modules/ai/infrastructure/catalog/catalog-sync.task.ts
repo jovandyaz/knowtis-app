@@ -99,8 +99,7 @@ interface WatchedModels {
   /** Served, fallback and pending platform models: the OpenRouter absence watch. */
   readonly platform: readonly string[];
   readonly pinned: readonly string[];
-  /** Null when unread: family drift judged against no resolution would flag every unlisted family of a platform author. */
-  readonly resolutions: readonly ModelResolution[] | null;
+  readonly resolutions: readonly ModelResolution[];
 }
 
 function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {
@@ -246,14 +245,14 @@ export class CatalogSyncTask {
         [],
         'ai.catalog.pinned_models_read_failed'
       ),
-      this.readOr<ModelResolution[] | null>(
+      this.readOr(
         () => this.resolutions.list(),
-        null,
+        [],
         'ai.catalog.resolutions_read_failed'
       ),
     ]);
     return {
-      platform: [...platform, ...pendingModelIds(resolutions ?? [])],
+      platform: [...platform, ...pendingModelIds(resolutions)],
       pinned,
       resolutions,
     };
@@ -281,7 +280,7 @@ export class CatalogSyncTask {
         [...watched.platform, ...watched.pinned],
         served
       ),
-      ...(openRouterConcluded && watched.resolutions !== null
+      ...(openRouterConcluded
         ? findFamilyDrift(served, watched.resolutions, new Date())
         : []),
     ];

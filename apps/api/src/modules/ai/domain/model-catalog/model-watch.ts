@@ -59,7 +59,7 @@ export function findPinUnavailable(
     );
 }
 
-/** Each distinct watched id whose index row carries a retirement date; an id the index lacks is left to the absence watches. */
+/** Each distinct watched id whose index row carries a retirement date; an id the index lacks is left to the absence watches. `rows` must be listed index rows, as `ModelIndexCache.catalog().all()` serves them: a delisted row would date a model already gone. */
 export function findRetirementScheduled(
   watchedIds: readonly string[],
   rows: readonly IndexedModel[]
@@ -104,14 +104,14 @@ function isNewerThanServed(
   served: readonly ServedRelease[]
 ): boolean {
   const { releasedAt } = row;
+  const releases = served.filter((release) => release.author === author);
   return (
     releasedAt !== null &&
-    served
-      .filter((release) => release.author === author)
-      .every(
-        (release) =>
-          release.releasedAt !== null && releasedAt > release.releasedAt
-      )
+    releases.length > 0 &&
+    releases.every(
+      (release) =>
+        release.releasedAt !== null && releasedAt > release.releasedAt
+    )
   );
 }
 
@@ -142,7 +142,9 @@ function familyDriftOf(
  * Rows a selector of their author would pick but for a family no selector
  * lists, released after every model that author serves (the active platform
  * resolutions and the current BYOK picks): a generation the selectors miss. An
- * author with a served model of unknown release date reports nothing.
+ * author that serves no model, or one of unknown release date, reports
+ * nothing. `rows` must be listed index rows, as `ModelIndexCache.catalog().all()`
+ * serves them.
  */
 export function findFamilyDrift(
   rows: readonly IndexedModel[],
