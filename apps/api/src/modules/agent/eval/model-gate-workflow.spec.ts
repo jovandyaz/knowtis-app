@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { jobSection, readWorkflow, runScripts } from './workflow-text';
+import { PLATFORM_SELECTOR_KEYS } from '@knowtis/shared-types';
+
+import { PLATFORM_SEED_MODELS } from '../../ai/domain/model-catalog/platform-resolution';
+import {
+  jobSection,
+  jqTestPatterns,
+  readWorkflow,
+  runScripts,
+} from './workflow-text';
 
 const WORKFLOW = readWorkflow('model-gate.yml');
 const WEEKLY = readWorkflow('nightly-eval.yml');
+const PENDING = jobSection(WORKFLOW, 'pending');
 const GATE = jobSection(WORKFLOW, 'gate');
 const SECURITY_TRIALS = 10;
 const THROWAWAY_ENV = [
@@ -28,6 +37,20 @@ const UNSET_SECRETS_EXIT_RE =
 const GATE_SKIPS_EMPTY_MATRIX_RE =
   /^ {4}if: \$\{\{ needs\.pending\.outputs\.matrix != '\[\]' \}\}$/m;
 const EXPRESSION_OPEN = '${{';
+const VALIDATED_FIELDS_ONLY_RE =
+  /^ +matrix=\$\(jq -c '.+ \| map\(\{selectorKey, modelId\}\)' <<<"\$body"\)$/m;
+const UNKNOWN_SELECTOR = 'platform.other';
+const ALIAS_PIN = 'openrouter:~anthropic/claude-sonnet-latest';
+const TRAILING_NEWLINE = '\n';
+
+function pendingEntryPatterns(): { selectorKey: RegExp; modelId: RegExp } {
+  const [script = ''] = runScripts(PENDING);
+  const [selectorKey, modelId] = jqTestPatterns(script);
+  if (!selectorKey || !modelId) {
+    throw new Error('the pending job validates no selector key or model id');
+  }
+  return { selectorKey, modelId };
+}
 
 function verdictConditionTerms(): string[] {
   const [, condition = ''] = GATE.match(VERDICT_CONDITION_RE) ?? [];
@@ -94,8 +117,42 @@ describe('model gate workflow', () => {
     ).toStrictEqual([]);
   });
 
+  it('gates only a platform selector key, and nothing that could break the matrix', () => {
+    const { selectorKey } = pendingEntryPatterns();
+
+    expect(
+      PLATFORM_SELECTOR_KEYS.filter((key) => !selectorKey.test(key))
+    ).toStrictEqual([]);
+    expect(
+      [
+        UNKNOWN_SELECTOR,
+        `${PLATFORM_SELECTOR_KEYS[0]}${TRAILING_NEWLINE}`,
+        '',
+      ].filter((key) => selectorKey.test(key))
+    ).toStrictEqual([]);
+  });
+
+  it('gates only a model id without an alias, and nothing that could break the matrix', () => {
+    const { modelId } = pendingEntryPatterns();
+
+    expect(
+      Object.values(PLATFORM_SEED_MODELS).filter((id) => !modelId.test(id))
+    ).toStrictEqual([]);
+    expect(
+      [ALIAS_PIN, `${PLATFORM_SEED_MODELS.fast}${TRAILING_NEWLINE}`, ''].filter(
+        (id) => modelId.test(id)
+      )
+    ).toStrictEqual([]);
+  });
+
+  it('keeps only the validated selector key and model id in the matrix', () => {
+    const [script = ''] = runScripts(PENDING);
+
+    expect(script).toMatch(VALIDATED_FIELDS_ONLY_RE);
+  });
+
   it('ends green when the gate secrets are unset', () => {
-    const scripts = runScripts(jobSection(WORKFLOW, 'pending'));
+    const scripts = runScripts(PENDING);
 
     expect(scripts).toHaveLength(1);
     expect(scripts[0]).toMatch(UNSET_SECRETS_EXIT_RE);

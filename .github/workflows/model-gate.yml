@@ -33,7 +33,7 @@ jobs:
           body=$(curl --fail --silent --show-error --max-time 30 \
             -H "Authorization: Bearer $MODEL_GATE_TOKEN" \
             "$KNOWTIS_API_URL/api/v1/internal/model-gate/pending")
-          matrix=$(jq -c '[.[] | select((.selectorKey | test("^platform\\.(fast|balanced|powerful)\\z")) and (.modelId | test("^[a-z0-9-]+:[A-Za-z0-9._/:-]+\\z")))]' <<<"$body")
+          matrix=$(jq -c '[.[] | select((.selectorKey | test("^platform\\.(fast|balanced|powerful)\\z")) and (.modelId | test("^[a-z0-9-]+:[A-Za-z0-9._/:-]+\\z")))] | map({selectorKey, modelId})' <<<"$body")
           dropped=$(( $(jq length <<<"$body") - $(jq length <<<"$matrix") ))
           if [ "$dropped" -gt 0 ]; then
             echo "::warning::$dropped pending candidate(s) carry an unexpected selector or model id and stay ungated."

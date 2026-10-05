@@ -10,6 +10,9 @@ const JOB_INDENT = '  ';
 const TOP_OR_JOB_LEVEL_LINE_RE = /^ {0,2}\S/;
 const RUN_KEY_RE = /^( *(?:- )?)run:(.*)$/;
 const BLOCK_SCALAR_RE = /^[|>][-+]?$/;
+const JQ_TEST_PATTERN_RE = /test\("(.+?)"\)/g;
+const JQ_ESCAPED_BACKSLASH = '\\\\';
+const JQ_END_OF_INPUT = '\\z';
 
 function indentOf(line: string): number {
   return line.length - line.trimStart().length;
@@ -49,5 +52,16 @@ export function runScripts(workflow: string): string[] {
       (next) => next.trim() !== '' && indentOf(next) <= keyPrefix.length
     );
     return [(end === -1 ? rest : rest.slice(0, end)).join('\n')];
+  });
+}
+
+/** Every jq `test("…")` pattern in `script`, in order, as a RegExp with jq's semantics. Throws unless each one ends with `\z`: jq's `$` also matches before a trailing newline, which would reach `$GITHUB_OUTPUT`. */
+export function jqTestPatterns(script: string): RegExp[] {
+  return [...script.matchAll(JQ_TEST_PATTERN_RE)].map(([, escaped = '']) => {
+    const pattern = escaped.replaceAll(JQ_ESCAPED_BACKSLASH, '\\');
+    if (!pattern.endsWith(JQ_END_OF_INPUT)) {
+      throw new Error(`jq pattern is not anchored at end of input: ${pattern}`);
+    }
+    return new RegExp(`${pattern.slice(0, -JQ_END_OF_INPUT.length)}$`);
   });
 }

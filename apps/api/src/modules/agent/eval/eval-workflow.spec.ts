@@ -9,6 +9,7 @@ import { PLATFORM_SEED_MODELS } from '../../ai/domain/model-catalog/platform-res
 import { EVAL_CATEGORIES } from './cases';
 import {
   jobSection,
+  jqTestPatterns,
   readWorkflow,
   REPO_ROOT,
   runScripts,
@@ -29,9 +30,6 @@ const UNSET_SECRETS_EXIT_RE =
 const GUARDED_ACTIVE_READ_RE =
   /if ! body=\$\(curl [^)]+\/api\/v1\/internal\/model-gate\/active"\); then\n +echo "::warning::.+"\n +exit 0\n +fi/;
 const FAILING_EXIT_RE = /exit [1-9]/;
-const JQ_TEST_PATTERN_RE = /test\("(.+?)"\)/;
-const JQ_ESCAPED_BACKSLASH = '\\\\';
-const JQ_END_OF_INPUT = '\\z';
 const ALIAS_PIN = 'openrouter:~anthropic/claude-sonnet-latest';
 const NEWLINE_INJECTION = 'openrouter:x/y\nbalanced=evil';
 const TRAILING_NEWLINE = 'openrouter:x/y\n';
@@ -42,14 +40,11 @@ const SECURITY_TRIALS = '10';
 
 function servedModelPattern(): RegExp {
   const [script = ''] = runScripts(jobSection(WORKFLOW, 'resolve'));
-  const [, escaped = ''] = script.match(JQ_TEST_PATTERN_RE) ?? [];
-  const pattern = escaped.replaceAll(JQ_ESCAPED_BACKSLASH, '\\');
-  if (!pattern.endsWith(JQ_END_OF_INPUT)) {
-    throw new Error(
-      `served model pattern is not anchored at end of input: ${pattern}`
-    );
+  const [pattern] = jqTestPatterns(script);
+  if (!pattern) {
+    throw new Error('the resolve job validates no served model id');
   }
-  return new RegExp(`${pattern.slice(0, -JQ_END_OF_INPUT.length)}$`);
+  return pattern;
 }
 
 function overridable(intent: ModelIntent, repositoryVariable: string): string {
