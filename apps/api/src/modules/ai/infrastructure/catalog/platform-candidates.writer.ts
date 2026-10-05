@@ -51,7 +51,7 @@ function resolutionPending(
   };
 }
 
-// A replaced failed candidate closed its alert when its verdict landed.
+// Skips a replaced failed candidate, since its verdict already closed its alert.
 function stoppedAwaitingGate(
   change: ResolutionChange,
   read: ModelResolution
