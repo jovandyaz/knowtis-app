@@ -7,6 +7,7 @@ import { FilePlus2, PencilLine, UserPlus, type LucideIcon } from 'lucide-react';
 import { Badge, Button, cn } from '@knowtis/design-system';
 import { ReadOnlyEditor } from '@knowtis/editor';
 
+import { BLOCK_LINK_NAVIGATION } from '../../lib/block-link-navigation';
 import { sanitizeProposalHtml } from '../../lib/sanitize-ai-html';
 import { Confirmation, ConfirmationFooter } from '../ai-elements/confirmation';
 import { readProposalPayload } from './proposal-payload';
@@ -101,6 +102,7 @@ export function AgentProposalCard({
                 <div
                   id="proposal-preview"
                   data-testid="proposal-preview"
+                  {...BLOCK_LINK_NAVIGATION}
                   className={cn(
                     'prose prose-sm dark:prose-invert max-w-none overflow-y-auto rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs transition-[max-height] duration-200 motion-reduce:transition-none',
                     expanded ? 'max-h-[min(40vh,20rem)]' : 'max-h-40'

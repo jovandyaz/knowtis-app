@@ -44,11 +44,31 @@ const EXPECTED_REPORT_ONLY_CSP_DIRECTIVES: [string, string[]][] = [
   ['report-to', [CSP_REPORT_GROUP]],
 ];
 
+interface VercelRewrite {
+  source: string;
+  destination: string;
+  has?: { type: string; key: string; value?: { inc?: string[] } | string }[];
+}
+
+const FETCH_DEST_HEADER = 'sec-fetch-dest';
+const ALLOWED_PROXY_FETCH_DESTS = ['script', 'empty'];
+const ABSOLUTE_HTTP_URL = /^https?:\/\//i;
+
+interface VercelConfig {
+  rewrites?: VercelRewrite[];
+  headers?: VercelHeaderRule[];
+}
+
+function vercelConfig(): VercelConfig {
+  return JSON.parse(readFileSync(VERCEL_CONFIG_PATH, 'utf8')) as VercelConfig;
+}
+
+function rewrites(): VercelRewrite[] {
+  return vercelConfig().rewrites ?? [];
+}
+
 function headerRules(): VercelHeaderRule[] | undefined {
-  const config = JSON.parse(readFileSync(VERCEL_CONFIG_PATH, 'utf8')) as {
-    headers?: VercelHeaderRule[];
-  };
-  return config.headers;
+  return vercelConfig().headers;
 }
 
 function cspDirectives(header: string): [string, string[]][] {
@@ -97,5 +117,20 @@ describe('notes security headers (vercel.json)', () => {
       IMG_SRC_DIRECTIVE,
       UPGRADE_INSECURE_REQUESTS_DIRECTIVE,
     ]);
+  });
+
+  it('forwards off-origin proxy rewrites only for script and empty fetch destinations', () => {
+    const proxies = rewrites().filter(({ destination }) =>
+      ABSOLUTE_HTTP_URL.test(destination)
+    );
+    expect(proxies).toHaveLength(2);
+    for (const { source, has } of proxies) {
+      const condition = has?.find(
+        ({ type, key }) => type === 'header' && key === FETCH_DEST_HEADER
+      );
+      const allowed =
+        typeof condition?.value === 'object' ? condition.value.inc : undefined;
+      expect(allowed, source).toEqual(ALLOWED_PROXY_FETCH_DESTS);
+    }
   });
 });

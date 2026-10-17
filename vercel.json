@@ -7,10 +7,24 @@
   "rewrites": [
     {
       "source": "/t/static/:path(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "sec-fetch-dest",
+          "value": { "inc": ["script", "empty"] }
+        }
+      ],
       "destination": "https://us-assets.i.posthog.com/static/:path"
     },
     {
       "source": "/t/:path(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "sec-fetch-dest",
+          "value": { "inc": ["script", "empty"] }
+        }
+      ],
       "destination": "https://us.i.posthog.com/:path"
     },
     {

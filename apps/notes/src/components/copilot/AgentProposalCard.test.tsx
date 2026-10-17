@@ -1,5 +1,12 @@
 import type { PendingProposal } from '@/stores/agent.store';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { expectLinkNavigationBlocked } from '@/test/link-navigation';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -178,5 +185,24 @@ describe('AgentProposalCard', () => {
     await waitFor(() =>
       expect(region.querySelector('.ProseMirror')).toHaveTextContent('do')
     );
+  });
+
+  it('blocks navigation from a link in the preview but not other clicks', async () => {
+    render(
+      <AgentProposalCard
+        proposal={{
+          ...proposal,
+          payload: {
+            title: 'GTD',
+            contentHtml: '<p>plain <a href="https://evil.test/?q=1">go</a></p>',
+          },
+        }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    const region = screen.getByTestId('proposal-preview');
+    await within(region).findByRole('link');
+    expectLinkNavigationBlocked(region, 'plain');
   });
 });

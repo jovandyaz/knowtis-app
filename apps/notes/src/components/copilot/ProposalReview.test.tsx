@@ -1,5 +1,12 @@
 import type { UpdateProposal } from '@/stores/agent.store';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { expectLinkNavigationBlocked } from '@/test/link-navigation';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -386,5 +393,30 @@ describe('ProposalReview', () => {
     expect(
       screen.getByRole('button', { name: 'ai.copilot.proposal.approveUpdate' })
     ).toBeEnabled();
+  });
+
+  describe('links', () => {
+    const LINKED_AFTER = {
+      payload: {
+        title: 'Landing',
+        contentHtml: '<p>new <a href="https://evil.test/b">go</a></p>',
+      },
+    };
+
+    it('blocks navigation from a link in the diff preview', async () => {
+      ready({ contentHtml: '<p>old <a href="https://evil.test/a">x</a></p>' });
+      renderReview(LINKED_AFTER);
+      const region = screen.getByTestId('review-diff');
+      await within(region).findByRole('link');
+      expectLinkNavigationBlocked(region, 'new');
+    });
+
+    it('blocks navigation from a link in the fallback preview', async () => {
+      mockedBefore.mockReturnValue({ status: 'error' });
+      renderReview(LINKED_AFTER);
+      const region = screen.getByTestId('review-fallback');
+      await within(region).findByRole('link');
+      expectLinkNavigationBlocked(region, 'new');
+    });
   });
 });

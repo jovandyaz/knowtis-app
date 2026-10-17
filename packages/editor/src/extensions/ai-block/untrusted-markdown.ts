@@ -37,9 +37,10 @@ const allowElement: AllowElement = (element) => {
 
 export const UNTRUSTED_MARKDOWN_PROPS: Pick<
   StreamdownProps,
-  'rehypePlugins' | 'allowElement' | 'unwrapDisallowed'
+  'rehypePlugins' | 'allowElement' | 'unwrapDisallowed' | 'linkSafety'
 > = {
   rehypePlugins: [defaultRehypePlugins['sanitize']],
   allowElement,
   unwrapDisallowed: true,
+  linkSafety: { enabled: true },
 };
