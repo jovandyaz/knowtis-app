@@ -501,10 +501,12 @@ In **direct mode**, each provider's key resolves **DB → env → none**: `Provi
 
 | Method | Path                           | Description                                                                                                                  |
 | ------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/ai/providers`                | Every provider with its `keySource`, `enabled`, `keyPrefix`, and `storedKeyUnreadable`.                                      |
+| GET    | `/ai/providers`                | Every provider with its `keySource`, `enabled`, `keyPrefix`, `keySuffix`, and `storedKeyUnreadable`.                         |
 | PUT    | `/ai/providers/:provider`      | Store a key and/or set `enabled`. A key's models are **listed, then the key is stored**; the verdict rides along as `probe`. |
 | DELETE | `/ai/providers/:provider/key`  | Clear the stored key; if the provider stays enabled, routing falls back to the env var when present.                         |
 | POST   | `/ai/providers/:provider/test` | List the models of whatever key currently routes directly — answers "is this provider working right now?".                   |
+
+`keyPrefix` and `keySuffix` describe the key that routes: the stored key when it decrypts, otherwise the environment key, so an admin can match either against the provider's dashboard. They come from the same key, and at most 12 characters are shown. A stored key that does not decrypt and has no environment fallback keeps its stored prefix with a null suffix, which names the broken key the card asks the admin to replace or clear. The card shows the hint as `prefix…last4`, and shows "Updated {date}" only for a database-sourced key.
 
 Both read the key's model list through the lister a BYOK save uses (`PROVIDER_MODELS_LISTER`, see [Listing a key's models](#listing-a-keys-models)): no turn is sent, no tokens are spent and no model has to resolve, so neither the platform models nor the model index are involved. Every error a listing reports arrives already scrubbed of the key and of anything key-shaped, so both log and show it as is.
 
@@ -1980,11 +1982,11 @@ Env: `BYOK_ENCRYPTION_KEY`, `AI_BYOK_DAILY_COST_LIMIT_USD` — see [Environment 
 
 `AiKeysController` (`apps/api/src/modules/ai/ai-keys.controller.ts`, `@Controller('ai/keys')`, guarded by `JwtAuthGuard` + `FeatureFlagGuard`):
 
-| Method | Path                 | Effect                                                                                        |
-| ------ | -------------------- | --------------------------------------------------------------------------------------------- |
-| GET    | `/ai/keys`           | List stored keys as `ProviderKeyInfo[]` — masked `keyPrefix` only, never the secret.          |
-| PUT    | `/ai/keys/:provider` | List the models `{ apiKey }` can call, then encrypt + store (upsert) the key and its listing. |
-| DELETE | `/ai/keys/:provider` | Remove the stored key for that provider.                                                      |
+| Method | Path                 | Effect                                                                                          |
+| ------ | -------------------- | ----------------------------------------------------------------------------------------------- |
+| GET    | `/ai/keys`           | List stored keys as `ProviderKeyInfo[]` — `keyPrefix`, `keySuffix` and dates, never the secret. |
+| PUT    | `/ai/keys/:provider` | List the models `{ apiKey }` can call, then encrypt + store (upsert) the key and its listing.   |
+| DELETE | `/ai/keys/:provider` | Remove the stored key for that provider.                                                        |
 
 `:provider` is one of `anthropic | openai | google | openrouter` (`BYOK_PROVIDERS`, validated by `ProviderParamDto`). A `PUT` validates the key by listing its models (see [Listing a key's models](#listing-a-keys-models)): no turn is sent, no tokens are spent and no model has to resolve. A refusal (`rejected`) answers `422` ("The `<provider>` key was rejected. Check that it is valid."), and a provider that cannot be reached (`unavailable`) answers `503` ("`<provider>` could not be reached to check the key. Try again in a moment."). Either way nothing is stored, no setting changes, and `byok.validation_failed` logs the user id, the provider, the kind and the scrubbed error. A key with no credit lists like any valid key, so it is accepted; its first turn reports `AI_BYOK_KEY_FAILED` `kind: credit` (see [Key failures](#key-failures)). An accepted key is encrypted and stored, then its listing is written to `user_provider_models` (see **Storage** below).
 
@@ -2008,13 +2010,13 @@ Env: `BYOK_ENCRYPTION_KEY`, `AI_BYOK_DAILY_COST_LIMIT_USD` — see [Environment 
 
 ### Encryption
 
-`secret-cipher.ts` (pure functions) encrypts each key with **AES-256-GCM** under `BYOK_ENCRYPTION_KEY`, persisting `{ ciphertext, iv, auth_tag }` plus a short masked `key_prefix` for display. The decrypted key lives only in memory for the duration of one request — never logged, thrown, sent to telemetry, or returned. `secret-cipher` and `ByokService` both re-assert the 32-byte master-key length defensively.
+`secret-cipher.ts` (pure functions) encrypts each key with **AES-256-GCM** under `BYOK_ENCRYPTION_KEY`, persisting `{ ciphertext, iv, auth_tag }` plus a short masked `key_prefix` for display. The last four characters are not stored: `listKeys` derives `keySuffix` by decrypting each key when it lists them. A key that no longer decrypts, a server without `BYOK_ENCRYPTION_KEY`, or a key shorter than 20 characters gets a null suffix, and that path logs nothing. The decrypted key lives only in memory for the duration of one request — never logged, thrown, sent to telemetry, or returned. `secret-cipher` and `ByokService` both re-assert the 32-byte master-key length defensively.
 
 There is no lossless rotation path because stored rows have no key version and decryption uses only the current master key. If compromise forces rotation, rotate `BYOK_ENCRYPTION_KEY` directly and require users to delete and re-enter their provider keys. `setKey` itself only ever fails closed (503) for a `BYOK_ENCRYPTION_KEY` that is absent or not exactly 32 bytes after base64 decoding — a validly-shaped new key is accepted immediately, so saving a new key during rotation works right away. The rows encrypted under the **old** key are the casualty: `resolveKey` cannot decrypt them under the new key, logs `byok.decrypt_failed`, and reports the key as `undecryptable` rather than throwing — every copilot turn on it then ends with `AI_BYOK_KEY_FAILED` (`kind: auth`) before any model call, which is exactly why every affected user must delete and re-enter it. Preserving existing credentials would require a separately designed dual-key, versioned re-encryption migration; never replace the key silently.
 
 ### Key storage
 
-`user_provider_keys` (migration `0014_windy_master_mold.sql`; `0015_perfect_sentinel.sql` added the provider `CHECK`, widened to four providers by `0023_wide_bedlam.sql`): composite PK `(user_id, provider)`, `ciphertext` / `iv` / `auth_tag` text, `key_prefix` varchar(12), `last_used_at?`, `created_at`, `updated_at`, FK `user_id → users` CASCADE, and `CHECK (provider in ('anthropic','openai','google','openrouter'))`. The same `0014` migration adds the `ai_usage.byok` boolean (default false) that tags user-billed turns.
+`user_provider_keys` (migration `0014_windy_master_mold.sql`; `0015_perfect_sentinel.sql` added the provider `CHECK`, widened to four providers by `0023_wide_bedlam.sql`): composite PK `(user_id, provider)`, `ciphertext` / `iv` / `auth_tag` text, `key_prefix` varchar(12), `last_used_at?`, `created_at`, `updated_at`, FK `user_id → users` CASCADE, and `CHECK (provider in ('anthropic','openai','google','openrouter'))`. Replacing a key (the upsert's conflict branch) bumps `updated_at` and clears `last_used_at`, so a new key never inherits the old one's dates. `ProviderKeyInfo.keyStoredAt` is `updated_at`; `createdAt` is when the provider was first added and still orders the default primary provider. The same `0014` migration adds the `ai_usage.byok` boolean (default false) that tags user-billed turns.
 
 `user_provider_models` (migration `0065_user_provider_models.sql`) records what each stored key lists: composite PK `(user_id, provider)`, `key_fingerprint` varchar(64), `model_ids` text[] (bare ids, see [Listing a key's models](#listing-a-keys-models)), and `synced_at` timestamptz, nullable. FK `user_provider_models_key_fk` `(user_id, provider) → user_provider_keys` CASCADE, so deleting a key, or its user, deletes its listing.
 
@@ -2093,7 +2095,7 @@ The key-management endpoint is throttled independently: `PUT /ai/keys/:provider`
 
 ### Frontend
 
-**Settings → Asistente IA** always shows `AIKeysManager`: a per-provider row with a masked-input field to save a key and a remove button, backed by the `useProviderKeys` hooks over `ai-keys.api`. A saved key surfaces as `Clave guardada (sk-…)`. The key endpoints reject a guest, so the composer's `CopilotModelPicker` still hides the BYOK affordances for an anonymous session (`canUseByok = !isAnonymous`).
+**Settings → Asistente IA** always shows `AIKeysManager`: a per-provider row with a masked-input field to save a key and a remove button, backed by the `useProviderKeys` hooks over `ai-keys.api`. A saved key surfaces as `prefix…last4` in monospace (e.g. `sk-ant-u…uAAA`), the way provider dashboards list keys, with when it was added and last used; the primary-provider picker cards show the same hint. When a turn ends with `AI_BYOK_KEY_FAILED` `kind: auth` or `permission`, the copilot banner names the key that failed with the same hint. The key inputs set `autocomplete="new-password"` and the 1Password, LastPass and Bitwarden ignore attributes, so neither the browser nor a password manager fills a saved login into them. The key endpoints reject a guest, so the composer's `CopilotModelPicker` still hides the BYOK affordances for an anonymous session (`canUseByok = !isAnonymous`).
 
 ### Replayed history input guard
 
