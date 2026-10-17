@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ApiClient from '@knowtis/api-client';
 import {
   agentClient,
+  aiKeysApi,
   aiQuotaApi,
   ApiClientError,
   conversationsApi,
@@ -37,10 +38,16 @@ import {
 } from '../../test/auth-harness';
 import { AgentCopilotPanel } from './AgentCopilotPanel';
 
+const translate = vi.hoisted(() => vi.fn());
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, opts?: { context?: string }) =>
-      opts?.context ? `${key}_${opts.context}` : key,
+    t: (key: string, opts?: { context?: string; key?: string }) => {
+      translate(key, opts);
+      if (opts?.context) {
+        return `${key}_${opts.context}`;
+      }
+      return opts?.key ? `${key} [${opts.key}]` : key;
+    },
     i18n: { language: 'en' },
   }),
 }));
@@ -107,6 +114,7 @@ vi.mock('@knowtis/api-client', async (importOriginal) => ({
     setSessionExpiredHandler: vi.fn(),
     onQuota: vi.fn(() => () => undefined),
   },
+  aiKeysApi: { list: vi.fn() },
   aiQuotaApi: { getQuota: vi.fn() },
   conversationsApi: { transcript: vi.fn() },
 }));
@@ -125,7 +133,15 @@ const anonymousWrapper = createAuthWrapper(createAuthApiMock(), {
   user: { ...HARNESS_PROFILE, isAnonymous: true },
 });
 
+function freshWrapper() {
+  return createAuthWrapper(createAuthApiMock(), { user: HARNESS_PROFILE });
+}
+
 beforeEach(() => {
+  translate.mockClear();
+  vi.mocked(aiKeysApi.list)
+    .mockReset()
+    .mockReturnValue(new Promise(() => undefined));
   vi.mocked(aiQuotaApi.getQuota)
     .mockReset()
     .mockReturnValue(new Promise(() => undefined));
@@ -196,6 +212,85 @@ describe('AgentCopilotPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'ai.errors.byokKeyFailed.credit'
     );
+    expect(translate).toHaveBeenCalledWith(
+      'ai.errors.byokKeyFailed.credit',
+      undefined
+    );
+    expect(aiKeysApi.list).not.toHaveBeenCalled();
+  });
+
+  it('names which stored key the provider rejected', async () => {
+    vi.mocked(aiKeysApi.list).mockResolvedValue([
+      {
+        provider: 'anthropic',
+        keyPrefix: 'sk-ant-a',
+        keySuffix: 'IAAA',
+        lastUsedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        keyStoredAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: {
+          code: AI_BYOK_KEY_FAILED_CODE,
+          message: 'refused',
+          provider: 'anthropic',
+          kind: 'auth',
+        },
+      });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Anthropic (sk-ant-a…IAAA)'
+      )
+    );
+  });
+
+  it('names only the provider when the keys have not loaded', () => {
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: {
+          code: AI_BYOK_KEY_FAILED_CODE,
+          message: 'refused',
+          provider: 'anthropic',
+          kind: 'permission',
+        },
+      });
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(
+      'ai.errors.byokKeyFailed.permission [Anthropic]'
+    );
+    expect(alert).not.toHaveTextContent('undefined');
+  });
+
+  it('never leaks a placeholder when the refusal names no provider', () => {
+    render(<AgentCopilotPanel />, { wrapper: freshWrapper() });
+
+    act(() => {
+      useAgentStore.setState({
+        status: 'error',
+        error: {
+          code: AI_BYOK_KEY_FAILED_CODE,
+          message: 'refused',
+          kind: 'auth',
+        },
+      });
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'ai.errors.byokKeyFailed.auth [ai.errors.byokKeyFailed.keyFallback]'
+    );
+    expect(aiKeysApi.list).not.toHaveBeenCalled();
   });
 
   it('offers to check the key instead of a retry when the provider refused it', async () => {
@@ -254,6 +349,11 @@ describe('AgentCopilotPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'ai.errors.byokKeyFailed.model'
     );
+    expect(translate).toHaveBeenCalledWith(
+      'ai.errors.byokKeyFailed.model',
+      undefined
+    );
+    expect(aiKeysApi.list).not.toHaveBeenCalled();
     expect(
       screen.queryByRole('button', { name: 'ai.copilot.byok.reviewKey' })
     ).not.toBeInTheDocument();

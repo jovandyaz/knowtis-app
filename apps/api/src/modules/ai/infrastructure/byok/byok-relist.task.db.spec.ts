@@ -46,6 +46,7 @@ import type {
   ListingKey,
   UserProviderModelsRepository,
 } from '../../domain/ports/user-provider-models.repository';
+import { keyPrefixOf } from '../../domain/provider-key-hint';
 import { encryptSecret } from '../crypto/secret-cipher';
 import { DrizzleUserProviderKeysRepository } from '../persistence/drizzle-user-provider-keys.repository';
 import { DrizzleUserProviderModelsRepository } from '../persistence/drizzle-user-provider-models.repository';
@@ -61,7 +62,6 @@ const TOKEN_HASH_KEY_BYTES = 32;
 const MS_PER_HOUR = 60 * 60 * 1000;
 const LISTED_AGO_MS = 25 * MS_PER_HOUR;
 const KEY_STORED_AGO_MS = 26 * MS_PER_HOUR;
-const KEY_PREFIX_LENGTH = 8;
 
 const ANTHROPIC_KEY = 'sk-ant-relist-db-0000000001';
 const OPENAI_KEY = 'sk-proj-relist-db-000000002';
@@ -91,7 +91,7 @@ describe.runIf(DB_AVAILABLE)('ByokRelistTask (database)', () => {
       USER_ID,
       provider,
       encryptSecret(apiKey, masterKey),
-      apiKey.slice(0, KEY_PREFIX_LENGTH)
+      keyPrefixOf(apiKey)
     );
     await db
       .update(userProviderKeys)

@@ -1,3 +1,5 @@
+import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
+
 import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
   AGENT_PROPOSAL_EXPIRED_CODE,
@@ -9,7 +11,10 @@ import {
   AI_QUOTA_EXHAUSTED_CODE,
   BYOK_KEY_FAILURE_KIND,
   type ByokKeyFailureKind,
+  type ByokProvider,
+  type ProviderKeyInfo,
 } from '@knowtis/shared-types';
+import { formatKeyHint } from '@knowtis/shared-util';
 
 type AIErrorMessageKey =
   | 'ai.errors.generic'
@@ -99,4 +104,17 @@ export function aiErrorMessageKey(
       ? BYOK_KEY_FAILURE_TO_KEY[error.kind ?? '']
       : CODE_TO_KEY[error.code];
   return key ?? GENERIC_AI_ERROR_KEY;
+}
+
+export function byokKeyFailedParams(
+  provider: ByokProvider,
+  keys: readonly ProviderKeyInfo[] | undefined
+): { key: string } {
+  const label = PROVIDER_LABEL[provider];
+  const stored = keys?.find((k) => k.provider === provider);
+  return {
+    key: stored
+      ? `${label} (${formatKeyHint(stored.keyPrefix, stored.keySuffix)})`
+      : label,
+  };
 }

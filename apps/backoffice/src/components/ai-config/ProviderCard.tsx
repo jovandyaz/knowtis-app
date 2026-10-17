@@ -16,6 +16,7 @@ import {
   Switch,
 } from '@knowtis/design-system';
 import type { AIProvider } from '@knowtis/shared-types';
+import { formatKeyHint } from '@knowtis/shared-util';
 
 const PROVIDER_LABEL: Record<AIProvider, string> = {
   anthropic: 'Anthropic',
@@ -30,6 +31,24 @@ const KEY_SOURCE_HINT: Record<SystemProvider['keySource'], string> = {
     'Routing uses the key from the environment. Store one here to override it.',
   none: 'No key anywhere — this provider cannot route.',
 };
+
+const SAME_YEAR_DATE_FORMAT = new Intl.DateTimeFormat('en', {
+  day: 'numeric',
+  month: 'short',
+});
+const OTHER_YEAR_DATE_FORMAT = new Intl.DateTimeFormat('en', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+function formatUpdatedDate(date: Date): string {
+  const format =
+    date.getFullYear() === new Date().getFullYear()
+      ? SAME_YEAR_DATE_FORMAT
+      : OTHER_YEAR_DATE_FORMAT;
+  return format.format(date);
+}
 
 function modelCountLabel(count: number): string {
   return `${count} ${count === 1 ? 'model' : 'models'}`;
@@ -66,6 +85,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
     provider.keySource,
     provider.enabled,
     provider.keyPrefix,
+    provider.keySuffix,
     writtenAt,
   ]);
 
@@ -93,8 +113,13 @@ export function ProviderCard({ provider }: ProviderCardProps) {
           {provider.keySource}
         </Badge>
         {provider.keyPrefix ? (
-          <span className="font-mono text-xs text-(--muted-foreground)">
-            {provider.keyPrefix}…
+          <span className="rounded bg-(--muted) px-1.5 py-0.5 font-mono text-xs break-all">
+            {formatKeyHint(provider.keyPrefix, provider.keySuffix)}
+          </span>
+        ) : null}
+        {provider.keySource === 'database' && provider.updatedAt ? (
+          <span className="text-xs text-(--muted-foreground)">
+            Updated {formatUpdatedDate(provider.updatedAt)}
           </span>
         ) : null}
       </div>

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,9 +36,17 @@ vi.mock('@/hooks/useAISettings', () => ({
 function key(
   provider: ByokProvider,
   createdAt: string,
-  keyPrefix: string
+  keyPrefix: string,
+  keySuffix: string
 ): ProviderKeyInfo {
-  return { provider, keyPrefix, lastUsedAt: null, createdAt };
+  return {
+    provider,
+    keyPrefix,
+    keySuffix,
+    lastUsedAt: null,
+    createdAt,
+    keyStoredAt: createdAt,
+  };
 }
 
 function preferences(primaryProvider: ByokProvider | null): AIPreferences {
@@ -50,8 +58,18 @@ function preferences(primaryProvider: ByokProvider | null): AIPreferences {
   };
 }
 
-const ANTHROPIC = key('anthropic', '2026-01-01T00:00:00.000Z', 'sk-ant-a');
-const OPENROUTER = key('openrouter', '2026-02-01T00:00:00.000Z', 'sk-or-v1');
+const ANTHROPIC = key(
+  'anthropic',
+  '2026-01-01T00:00:00.000Z',
+  'sk-ant-a',
+  'uAAA'
+);
+const OPENROUTER = key(
+  'openrouter',
+  '2026-02-01T00:00:00.000Z',
+  'sk-or-v1',
+  '007e'
+);
 
 describe('PrimaryProviderPicker', () => {
   beforeEach(() => {
@@ -93,8 +111,11 @@ describe('PrimaryProviderPicker', () => {
       expect.stringContaining('Anthropic'),
       expect.stringContaining('OpenRouter'),
     ]);
-    expect(radios[0]).toHaveTextContent(
-      'aiAssistant.byok.stored(prefix=sk-ant-a)'
+    expect(within(radios[0]).getByText('sk-ant-a…uAAA')).toHaveClass(
+      'font-mono'
+    );
+    expect(within(radios[1]).getByText('sk-or-v1…007e')).toHaveClass(
+      'font-mono'
     );
     expect(screen.getByRole('radio', { name: /^Anthropic/ })).toBeChecked();
   });

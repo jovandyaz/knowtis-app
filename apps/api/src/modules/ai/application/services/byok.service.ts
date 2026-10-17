@@ -37,12 +37,12 @@ import {
   USER_PROVIDER_MODELS_REPOSITORY,
   type UserProviderModelsRepository,
 } from '../../domain/ports/user-provider-models.repository';
+import { keyPrefixOf, keySuffixOf } from '../../domain/provider-key-hint';
 import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
 
-const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
 
 function tryDecrypt(stored: EncryptedSecret, masterKey: Buffer): string | null {
@@ -134,8 +134,25 @@ export class ByokService {
     return fingerprints;
   }
 
-  listKeys(userId: string): Promise<ProviderKeyInfo[]> {
-    return this.repo.listForUser(userId);
+  async listKeys(userId: string): Promise<ProviderKeyInfo[]> {
+    const masterKey = this.masterKey;
+    if (!masterKey) {
+      const keys = await this.repo.listForUser(userId);
+      return keys.map((key) => ({ ...key, keySuffix: null }));
+    }
+    const [keys, encrypted] = await Promise.all([
+      this.repo.listForUser(userId),
+      this.repo.listEncrypted(userId),
+    ]);
+    const suffixes = new Map<ByokProvider, string | null>();
+    for (const stored of encrypted) {
+      const apiKey = tryDecrypt(stored, masterKey);
+      suffixes.set(stored.provider, apiKey ? keySuffixOf(apiKey) : null);
+    }
+    return keys.map((key) => ({
+      ...key,
+      keySuffix: suffixes.get(key.provider) ?? null,
+    }));
   }
 
   async setKey(
@@ -170,12 +187,7 @@ export class ByokService {
     }
     const secret = encryptSecret(apiKey, this.masterKey);
     await this.settings.clearBoundToUnheldProvider(userId, provider);
-    await this.repo.upsert(
-      userId,
-      provider,
-      secret,
-      apiKey.slice(0, KEY_PREFIX_LENGTH)
-    );
+    await this.repo.upsert(userId, provider, secret, keyPrefixOf(apiKey));
     await this.recordListing(userId, provider, apiKey, listing.modelIds);
   }
 

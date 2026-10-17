@@ -89,7 +89,14 @@ function byokCatalog(models: SelectableModel[]): ModelCatalogResponse {
 }
 
 function key(provider: ByokProvider, createdAt: string): ProviderKeyInfo {
-  return { provider, keyPrefix: 'sk-***', lastUsedAt: null, createdAt };
+  return {
+    provider,
+    keyPrefix: 'sk-***',
+    keySuffix: null,
+    lastUsedAt: null,
+    createdAt,
+    keyStoredAt: createdAt,
+  };
 }
 
 function renderBadge() {

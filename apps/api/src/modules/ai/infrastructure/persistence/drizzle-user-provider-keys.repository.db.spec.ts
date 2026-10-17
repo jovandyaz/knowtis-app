@@ -143,6 +143,31 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderKeysRepository', () => {
     expect(await repo.listForUser(USER_ID)).toHaveLength(1);
   });
 
+  it('replacing a key clears lastUsedAt and moves keyStoredAt', async () => {
+    await seedAnthropic();
+    await repo.touchLastUsed(USER_ID, 'anthropic');
+    await db
+      .update(userProviderKeys)
+      .set({ updatedAt: sql`now() - interval '1 day'` })
+      .where(eq(userProviderKeys.userId, USER_ID));
+    const [before] = await repo.listForUser(USER_ID);
+
+    await repo.upsert(
+      USER_ID,
+      'anthropic',
+      { ciphertext: 'ct2', iv: 'iv2', authTag: 'tag2' },
+      'sk-ant-y'
+    );
+    const [after] = await repo.listForUser(USER_ID);
+
+    expect(before.lastUsedAt).not.toBeNull();
+    expect(after.lastUsedAt).toBeNull();
+    expect(after.createdAt).toBe(before.createdAt);
+    expect(new Date(after.keyStoredAt).getTime()).toBeGreaterThan(
+      new Date(before.keyStoredAt).getTime()
+    );
+  });
+
   it('touchLastUsed stamps lastUsedAt', async () => {
     await seedAnthropic();
     await repo.touchLastUsed(USER_ID, 'anthropic');

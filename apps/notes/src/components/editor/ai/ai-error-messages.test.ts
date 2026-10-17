@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_TURN_NOT_CONTINUABLE_CODE } from '@knowtis/shared-types';
+import {
+  AGENT_TURN_NOT_CONTINUABLE_CODE,
+  type ProviderKeyInfo,
+} from '@knowtis/shared-types';
 
-import { aiErrorMessageKey } from './ai-error-messages';
+import { aiErrorMessageKey, byokKeyFailedParams } from './ai-error-messages';
 
 describe('aiErrorMessageKey', () => {
   it('maps a transient overloaded provider error to its own message', () => {
@@ -67,5 +70,40 @@ describe('aiErrorMessageKey', () => {
     expect(aiErrorMessageKey({ code: 'SOMETHING_ELSE' })).toBe(
       'ai.errors.generic'
     );
+  });
+});
+
+describe('byokKeyFailedParams', () => {
+  const anthropicKey: ProviderKeyInfo = {
+    provider: 'anthropic',
+    keyPrefix: 'sk-ant-a',
+    keySuffix: 'IAAA',
+    lastUsedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    keyStoredAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('names the key by provider and masked hint when a stored key is known', () => {
+    expect(byokKeyFailedParams('anthropic', [anthropicKey])).toEqual({
+      key: 'Anthropic (sk-ant-a…IAAA)',
+    });
+  });
+
+  it('shows only the prefix when the suffix is unavailable', () => {
+    expect(
+      byokKeyFailedParams('anthropic', [{ ...anthropicKey, keySuffix: null }])
+    ).toEqual({ key: 'Anthropic (sk-ant-a…)' });
+  });
+
+  it('falls back to the provider name when the keys are not loaded', () => {
+    expect(byokKeyFailedParams('anthropic', undefined)).toEqual({
+      key: 'Anthropic',
+    });
+  });
+
+  it('falls back to the provider name when no stored key matches', () => {
+    expect(byokKeyFailedParams('openai', [anthropicKey])).toEqual({
+      key: 'OpenAI',
+    });
   });
 });

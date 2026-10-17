@@ -27,7 +27,14 @@ describe('providerOfModel', () => {
 });
 
 function key(provider: ByokProvider, createdAt: string): ProviderKeyInfo {
-  return { provider, keyPrefix: 'sk-***', lastUsedAt: null, createdAt };
+  return {
+    provider,
+    keyPrefix: 'sk-***',
+    keySuffix: null,
+    lastUsedAt: null,
+    createdAt,
+    keyStoredAt: createdAt,
+  };
 }
 
 const OLDER = '2026-01-01T00:00:00.000Z';

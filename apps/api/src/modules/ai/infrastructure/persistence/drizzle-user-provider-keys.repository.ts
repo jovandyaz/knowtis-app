@@ -22,13 +22,16 @@ import { toByokProvider } from './byok-provider-column';
 export class DrizzleUserProviderKeysRepository implements UserProviderKeysRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
 
-  async listForUser(userId: string): Promise<ProviderKeyInfo[]> {
+  async listForUser(
+    userId: string
+  ): Promise<Array<Omit<ProviderKeyInfo, 'keySuffix'>>> {
     const rows = await this.db
       .select({
         provider: userProviderKeys.provider,
         keyPrefix: userProviderKeys.keyPrefix,
         lastUsedAt: userProviderKeys.lastUsedAt,
         createdAt: userProviderKeys.createdAt,
+        updatedAt: userProviderKeys.updatedAt,
       })
       .from(userProviderKeys)
       .where(eq(userProviderKeys.userId, userId));
@@ -37,6 +40,7 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
       keyPrefix: r.keyPrefix,
       lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
+      keyStoredAt: r.updatedAt.toISOString(),
     }));
   }
 
@@ -99,7 +103,12 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
       .values({ userId, provider, ...secret, keyPrefix })
       .onConflictDoUpdate({
         target: [userProviderKeys.userId, userProviderKeys.provider],
-        set: { ...secret, keyPrefix, updatedAt: sql`now()` },
+        set: {
+          ...secret,
+          keyPrefix,
+          lastUsedAt: null,
+          updatedAt: sql`now()`,
+        },
       })
       .returning({ userId: userProviderKeys.userId });
   }

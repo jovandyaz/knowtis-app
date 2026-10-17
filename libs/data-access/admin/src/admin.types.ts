@@ -151,6 +151,7 @@ export const SystemProviderSchema = z.object({
   keySource: z.enum(PROVIDER_KEY_SOURCES),
   storedKeyUnreadable: z.boolean(),
   keyPrefix: z.string().nullable(),
+  keySuffix: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),
 });
 export type SystemProvider = z.infer<typeof SystemProviderSchema>;
