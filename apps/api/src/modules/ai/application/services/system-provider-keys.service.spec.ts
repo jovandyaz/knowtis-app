@@ -17,6 +17,7 @@ import {
   type ProviderListing,
   type ProviderModelsLister,
 } from '../../domain/ports/provider-models.port';
+import { keyPrefixOf } from '../../domain/provider-key-hint';
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
 import { LISTING_TIMEOUT_MESSAGE } from '../../infrastructure/providers/listing/listing-http';
 import { SystemProviderKeysService } from './system-provider-keys.service';
@@ -43,7 +44,7 @@ function rowFor(provider: AIProvider, apiKey: string | null, enabled = true) {
     provider,
     enabled,
     secret: apiKey ? encryptSecret(apiKey, MASTER_KEY) : null,
-    keyPrefix: apiKey ? apiKey.slice(0, 8) : null,
+    keyPrefix: apiKey ? keyPrefixOf(apiKey) : null,
     updatedAt: new Date('2026-07-17T00:00:00.000Z'),
   };
 }
@@ -144,7 +145,7 @@ describe('SystemProviderKeysService', () => {
   describe('list', () => {
     it('should report a stored key as database-sourced with only its prefix', async () => {
       mockRepo.getAll.mockResolvedValue([
-        rowFor('openrouter', 'sk-or-v1-secret'),
+        rowFor('openrouter', 'sk-or-v1-secret-0123456789abcdef'),
       ]);
 
       const entry = (await service.list()).find(
@@ -157,6 +158,7 @@ describe('SystemProviderKeysService', () => {
         keySource: 'database',
         storedKeyUnreadable: false,
         keyPrefix: 'sk-or-v1',
+        keySuffix: 'cdef',
         updatedAt: '2026-07-17T00:00:00.000Z',
       });
     });
@@ -195,6 +197,33 @@ describe('SystemProviderKeysService', () => {
 
       expect(entry?.keySource).toBe('none');
       expect(entry?.storedKeyUnreadable).toBe(true);
+      expect(entry?.keyPrefix).toBe(keyPrefixOf('sk-stored'));
+      expect(entry?.keySuffix).toBeNull();
+    });
+
+    it('should hint an environment-sourced key and give none to a provider without one', async () => {
+      env['ANTHROPIC_API_KEY'] = 'sk-ant-env-0123456789abcdef';
+
+      const providers = await service.list();
+      const anthropic = providers.find((p) => p.provider === 'anthropic');
+      const google = providers.find((p) => p.provider === 'google');
+
+      expect(anthropic?.keyPrefix).toBe('sk-ant-e');
+      expect(anthropic?.keySuffix).toBe('cdef');
+      expect(anthropic?.updatedAt).toBeNull();
+      expect(google?.keyPrefix).toBeNull();
+      expect(google?.keySuffix).toBeNull();
+    });
+
+    it('should hint the env key an unreadable stored row falls back to', async () => {
+      env['OPENAI_API_KEY'] = 'sk-openai-env-0123456789abcdef';
+      mockRepo.getAll.mockResolvedValue([undecryptableRow('openai')]);
+
+      const entry = (await service.list()).find((p) => p.provider === 'openai');
+
+      expect(entry?.keySource).toBe('environment');
+      expect(entry?.keyPrefix).toBe('sk-opena');
+      expect(entry?.keySuffix).toBe('cdef');
     });
 
     it('should list every known provider', async () => {

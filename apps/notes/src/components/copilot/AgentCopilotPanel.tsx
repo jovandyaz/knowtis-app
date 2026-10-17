@@ -9,6 +9,7 @@ import {
   useAiQuotaSync,
   type QuotaState,
 } from '@/hooks/useAiQuota';
+import { useProviderKeys } from '@/hooks/useProviderKeys';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { captureProductEvent } from '@/lib/analytics/product-events';
 import { clockTimeOf } from '@/lib/format-date';
@@ -36,6 +37,7 @@ import {
 
 import {
   aiErrorMessageKey,
+  byokKeyFailedParams,
   GENERIC_AI_ERROR_KEY,
 } from '../editor/ai/ai-error-messages';
 import { AgentComposer } from './AgentComposer';
@@ -229,11 +231,24 @@ export function AgentCopilotPanel() {
     toast.info(t('ai.copilot.history.gone'));
   }, [error, conversationWasGone, answeredError, markErrorAnswered, t]);
 
+  const namesKey =
+    error?.code === AI_BYOK_KEY_FAILED_CODE &&
+    (error.kind === BYOK_KEY_FAILURE_KIND.AUTH ||
+      error.kind === BYOK_KEY_FAILURE_KIND.PERMISSION);
+  const refusedProvider = namesKey ? error.provider : undefined;
+  const { data: providerKeys } = useProviderKeys(refusedProvider !== undefined);
   const errorMessage = liveQuotaRefusal?.resetsAt
     ? t('ai.copilot.quota.exhaustedToday', {
         ...clockTimeOf(liveQuotaRefusal.resetsAt, i18n.language),
       })
-    : t(errorMessageKey);
+    : namesKey
+      ? t(
+          errorMessageKey,
+          refusedProvider
+            ? byokKeyFailedParams(refusedProvider, providerKeys)
+            : { key: t('ai.errors.byokKeyFailed.keyFallback') }
+        )
+      : t(errorMessageKey);
   const reviewKey =
     error?.code === AI_BYOK_KEY_FAILED_CODE &&
     error.kind !== BYOK_KEY_FAILURE_KIND.MODEL

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -11,7 +11,7 @@ import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
 
 import { Button, PasswordInput } from '@knowtis/design-system';
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
-import { formatRelativeTime } from '@knowtis/shared-util';
+import { formatKeyHint, formatRelativeTime } from '@knowtis/shared-util';
 
 import { SectionHeader } from '../SectionHeader';
 
@@ -33,6 +33,28 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
   const [rejectedKeyProvider, setRejectedKeyProvider] =
     useState<ByokProvider | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
+  const dateFormats = useMemo(
+    () => ({
+      sameYear: new Intl.DateTimeFormat(i18n.language, {
+        day: 'numeric',
+        month: 'short',
+      }),
+      otherYear: new Intl.DateTimeFormat(i18n.language, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+    }),
+    [i18n.language]
+  );
+  const formatAdded = (iso: string) => {
+    const added = new Date(iso);
+    const format =
+      added.getFullYear() === new Date().getFullYear()
+        ? dateFormats.sameYear
+        : dateFormats.otherYear;
+    return format.format(added);
+  };
 
   useEffect(() => {
     if (focusFirstField) {
@@ -52,35 +74,57 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
           const draft = drafts[provider] ?? '';
           return (
             <div key={provider} className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">
                   {PROVIDER_LABEL[provider]}
                 </span>
                 {stored ? (
-                  <span className="text-xs text-(--muted-foreground)">
-                    {t('aiAssistant.byok.stored', { prefix: stored.keyPrefix })}
-                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeKey.mutate(provider)}
+                  >
+                    {t('aiAssistant.byok.remove')}
+                  </Button>
                 ) : null}
               </div>
               {stored ? (
-                <p className="text-xs text-(--muted-foreground)">
-                  {stored.lastUsedAt
-                    ? t('aiAssistant.byok.lastUsed', {
-                        when: formatRelativeTime(
-                          new Date(stored.lastUsedAt),
-                          i18n.language
-                        ),
-                      })
-                    : t('aiAssistant.byok.neverUsed')}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <span className="rounded bg-(--muted) px-1.5 py-0.5 font-mono text-xs break-all">
+                    {formatKeyHint(stored.keyPrefix, stored.keySuffix)}
+                  </span>
+                  <span className="text-(--muted-foreground)">
+                    {t('aiAssistant.byok.added', {
+                      date: formatAdded(stored.keyStoredAt),
+                    })}
+                  </span>
+                  <span className="text-(--muted-foreground)">
+                    {stored.lastUsedAt
+                      ? t('aiAssistant.byok.lastUsed', {
+                          when: formatRelativeTime(
+                            new Date(stored.lastUsedAt),
+                            i18n.language
+                          ),
+                        })
+                      : t('aiAssistant.byok.neverUsed')}
+                  </span>
+                </div>
               ) : null}
               <div className="flex gap-2">
                 <PasswordInput
                   ref={index === 0 ? firstField : undefined}
                   value={draft}
-                  placeholder={t('aiAssistant.byok.placeholder', {
-                    provider: PROVIDER_LABEL[provider],
-                  })}
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore
+                  placeholder={
+                    stored
+                      ? t('aiAssistant.byok.replacePlaceholder')
+                      : t('aiAssistant.byok.placeholder', {
+                          provider: PROVIDER_LABEL[provider],
+                        })
+                  }
                   onChange={(e) =>
                     setDrafts((d) => ({ ...d, [provider]: e.target.value }))
                   }
@@ -111,14 +155,6 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
                     ? t('aiAssistant.byok.saving')
                     : t('aiAssistant.byok.save')}
                 </Button>
-                {stored ? (
-                  <Button
-                    variant="ghost"
-                    onClick={() => removeKey.mutate(provider)}
-                  >
-                    {t('aiAssistant.byok.remove')}
-                  </Button>
-                ) : null}
               </div>
               {rejectedKeyProvider === provider ? (
                 <p className="text-xs text-(--destructive)">

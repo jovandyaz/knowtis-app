@@ -38,8 +38,10 @@ const mockKeys = [
   {
     provider: 'anthropic' as const,
     keyPrefix: 'sk-ant-***',
+    keySuffix: null,
     lastUsedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
+    keyStoredAt: '2026-01-01T00:00:00Z',
   },
 ];
 
@@ -92,6 +94,21 @@ describe('useSetProviderKey', () => {
     expect(queryClient.getQueryData(providerKeysQueryKeys.list())).toEqual(
       mockKeys
     );
+  });
+
+  it('replaces the cached list with the PUT response, so a new suffix shows without a refetch', async () => {
+    const replaced = [{ ...mockKeys[0], keySuffix: 'NEW1' }];
+    vi.mocked(aiKeysApi.set).mockResolvedValue(replaced);
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(providerKeysQueryKeys.list(), mockKeys);
+    const { result } = renderHook(() => useSetProviderKey(), { wrapper });
+
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-test' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryClient.getQueryData(providerKeysQueryKeys.list())).toEqual([
+      expect.objectContaining({ keySuffix: 'NEW1' }),
+    ]);
   });
 });
 

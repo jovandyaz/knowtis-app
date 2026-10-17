@@ -9,6 +9,7 @@ import {
 import { PROVIDER_LABEL } from '@/lib/ai/provider-labels';
 
 import { RadioCardGroup } from '@knowtis/design-system';
+import { formatKeyHint } from '@knowtis/shared-util';
 
 import { SectionHeader } from '../SectionHeader';
 
@@ -40,7 +41,11 @@ export function PrimaryProviderPicker() {
         options={keysInAddedOrder(held).map((key) => ({
           value: key.provider,
           title: PROVIDER_LABEL[key.provider],
-          description: t('aiAssistant.byok.stored', { prefix: key.keyPrefix }),
+          description: (
+            <span className="font-mono break-all">
+              {formatKeyHint(key.keyPrefix, key.keySuffix)}
+            </span>
+          ),
         }))}
         value={primary}
         onValueChange={(provider) => update({ primaryProvider: provider })}

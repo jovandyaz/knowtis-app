@@ -62,6 +62,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
 });
 
 const LISTED_MODEL_COUNT = 12;
+const THIS_YEAR = new Date().getFullYear();
 
 function providerWith(overrides: Partial<SystemProvider> = {}): SystemProvider {
   return {
@@ -70,6 +71,7 @@ function providerWith(overrides: Partial<SystemProvider> = {}): SystemProvider {
     keySource: 'environment',
     storedKeyUnreadable: false,
     keyPrefix: null,
+    keySuffix: null,
     updatedAt: null,
     ...overrides,
   };
@@ -107,6 +109,102 @@ describe('ProviderCard', () => {
     expect(screen.getByText('sk-ant-1…')).toBeInTheDocument();
   });
 
+  it('shows the stored key hint in monospace with the year-less update date', () => {
+    render(
+      <ProviderCard
+        provider={providerWith({
+          keySource: 'database',
+          keyPrefix: 'sk-ant-a',
+          keySuffix: 'zgAA',
+          updatedAt: new Date(THIS_YEAR, 8, 9, 12),
+        })}
+      />
+    );
+
+    expect(screen.getByText('sk-ant-a…zgAA')).toHaveClass('font-mono');
+    expect(screen.getByText('Updated Sep 9')).toBeInTheDocument();
+  });
+
+  it('adds the year to the update date when it is not this year', () => {
+    render(
+      <ProviderCard
+        provider={providerWith({
+          keySource: 'database',
+          keyPrefix: 'sk-ant-a',
+          keySuffix: 'zgAA',
+          updatedAt: new Date(THIS_YEAR - 1, 8, 9, 12),
+        })}
+      />
+    );
+
+    expect(
+      screen.getByText(`Updated Sep 9, ${THIS_YEAR - 1}`)
+    ).toBeInTheDocument();
+  });
+
+  it('shows only the prefix when the suffix is unavailable', () => {
+    render(
+      <ProviderCard
+        provider={providerWith({
+          keySource: 'database',
+          keyPrefix: 'sk-ant-a',
+          keySuffix: null,
+        })}
+      />
+    );
+
+    expect(screen.getByText('sk-ant-a…')).toBeInTheDocument();
+  });
+
+  it('shows no date for a stored key without an update time', () => {
+    render(
+      <ProviderCard
+        provider={providerWith({
+          keySource: 'database',
+          keyPrefix: 'sk-ant-a',
+          updatedAt: null,
+        })}
+      />
+    );
+
+    expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
+  });
+
+  it('does not claim an update date for an environment key', () => {
+    render(
+      <ProviderCard
+        provider={providerWith({
+          keySource: 'environment',
+          keyPrefix: 'sk-ant-a',
+          updatedAt: new Date(THIS_YEAR, 8, 9, 12),
+        })}
+      />
+    );
+
+    expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
+  });
+
+  it('shows the hint of an environment key beside its badge', () => {
+    render(
+      <ProviderCard
+        provider={providerWith({
+          keySource: 'environment',
+          keyPrefix: 'sk-ant-a',
+          keySuffix: 'zgAA',
+        })}
+      />
+    );
+
+    expect(screen.getByText('environment')).toBeInTheDocument();
+    expect(screen.getByText('sk-ant-a…zgAA')).toHaveClass(
+      'rounded',
+      'bg-(--muted)',
+      'font-mono',
+      'break-all'
+    );
+    expect(screen.queryByText(/^Updated /)).not.toBeInTheDocument();
+  });
+
   it('says a disabled provider is out of routing, not that its env key serves', () => {
     render(
       <ProviderCard
@@ -118,6 +216,16 @@ describe('ProviderCard', () => {
     expect(
       screen.queryByText(/routing uses the key from the environment/i)
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps password managers and browser autofill out of the key field', () => {
+    render(<ProviderCard provider={providerWith()} />);
+
+    const field = screen.getByLabelText('Anthropic API key');
+    expect(field).toHaveAttribute('autocomplete', 'new-password');
+    expect(field).toHaveAttribute('data-1p-ignore');
+    expect(field).toHaveAttribute('data-lpignore', 'true');
+    expect(field).toHaveAttribute('data-bwignore');
   });
 
   it('toggles enablement', async () => {
@@ -253,6 +361,29 @@ describe('ProviderCard', () => {
       ...routing,
       updatedAt: new Date('2026-07-02T00:00:00.000Z'),
     };
+    rerender(<ProviderCard provider={replaced} />);
+    rerender(<ProviderCard provider={replaced} />);
+
+    expect(screen.queryByText(/accepted the key/i)).not.toBeInTheDocument();
+  });
+
+  it('drops a test verdict when the stored key suffix changes', () => {
+    testReset.mockImplementation(() => {
+      state.test.data = undefined;
+    });
+    const routing = providerWith({
+      keySource: 'database',
+      keyPrefix: 'sk-ant-a',
+      keySuffix: 'zgAA',
+      updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+    });
+    const { rerender } = render(<ProviderCard provider={routing} />);
+
+    state.test.data = { ok: true, modelCount: LISTED_MODEL_COUNT };
+    rerender(<ProviderCard provider={routing} />);
+    expect(screen.getByText(/anthropic accepted the key/i)).toBeInTheDocument();
+
+    const replaced = { ...routing, keySuffix: 'Qw12' };
     rerender(<ProviderCard provider={replaced} />);
     rerender(<ProviderCard provider={replaced} />);
 

@@ -1,11 +1,15 @@
 import { useProviderKeys, useSetProviderKey } from '@/hooks';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
-import { BYOK_PROVIDERS, EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  BYOK_PROVIDERS,
+  EMAIL_NOT_VERIFIED_CODE,
+  type ProviderKeyInfo,
+} from '@knowtis/shared-types';
 
 import {
   createAuthApiMock,
@@ -29,15 +33,12 @@ const mutateRemoveKey = vi.fn();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (k: string, opts?: Record<string, string>) => {
-      if (opts) {
-        return Object.entries(opts).reduce(
-          (acc, [key, val]) => acc.replace(`{{${key}}}`, val),
-          k
-        );
-      }
-      return k;
-    },
+    t: (k: string, opts?: Record<string, string>) =>
+      opts
+        ? `${k}(${Object.entries(opts)
+            .map(([name, value]) => `${name}=${value}`)
+            .join(',')})`
+        : k,
     i18n: { language: 'en' },
   }),
 }));
@@ -56,6 +57,24 @@ vi.mock('@/hooks', async (importOriginal) => ({
   })),
 }));
 
+function mockProviderKeys(data: ProviderKeyInfo[]) {
+  vi.mocked(useProviderKeys).mockReturnValue({
+    data,
+  } as unknown as ReturnType<typeof useProviderKeys>);
+}
+
+function storedKey(overrides: Partial<ProviderKeyInfo> = {}): ProviderKeyInfo {
+  return {
+    provider: 'anthropic',
+    keyPrefix: 'sk-ant-a',
+    keySuffix: 'uAAA',
+    lastUsedAt: null,
+    createdAt: '2026-08-01T12:00:00.000Z',
+    keyStoredAt: '2026-09-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
 async function saveFirstKey() {
   const inputs = screen.getAllByPlaceholderText(
     /aiAssistant\.byok\.placeholder/i
@@ -69,9 +88,7 @@ async function saveFirstKey() {
 describe('AIKeysManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useProviderKeys).mockReturnValue({
-      data: [],
-    } as unknown as ReturnType<typeof useProviderKeys>);
+    mockProviderKeys([]);
     vi.mocked(useSetProviderKey).mockReturnValue({
       mutate: mutateSetKey,
       isPending: false,
@@ -130,6 +147,21 @@ describe('AIKeysManager', () => {
     expect(screen.getByText('OpenRouter')).toBeInTheDocument();
   });
 
+  it('keeps password managers and browser autofill out of every key field', () => {
+    render(<AIKeysManager />, { wrapper });
+
+    const fields = screen.getAllByPlaceholderText(
+      /aiAssistant\.byok\.(placeholder|replacePlaceholder)/
+    );
+    expect(fields).toHaveLength(BYOK_PROVIDERS.length);
+    fields.forEach((field) => {
+      expect(field).toHaveAttribute('autocomplete', 'new-password');
+      expect(field).toHaveAttribute('data-1p-ignore');
+      expect(field).toHaveAttribute('data-lpignore', 'true');
+      expect(field).toHaveAttribute('data-bwignore');
+    });
+  });
+
   it('Save buttons are disabled when the input is empty', () => {
     render(<AIKeysManager />, { wrapper });
 
@@ -161,14 +193,12 @@ describe('AIKeysManager', () => {
     );
   });
 
-  it('shows the stored prefix hint and removes the stored key on click', async () => {
-    vi.mocked(useProviderKeys).mockReturnValue({
-      data: [{ provider: 'openai', keyPrefix: 'sk-1234' }],
-    } as unknown as ReturnType<typeof useProviderKeys>);
+  it('shows the recognizable key hint and removes the stored key on click', async () => {
+    mockProviderKeys([storedKey({ createdAt: '2026-09-01T07:16:48.549Z' })]);
 
     render(<AIKeysManager />, { wrapper });
 
-    expect(screen.getByText(/aiAssistant\.byok\.stored/)).toBeInTheDocument();
+    expect(screen.getByText('sk-ant-a…uAAA')).toHaveClass('font-mono');
 
     const removeButtons = screen.getAllByRole('button', {
       name: /aiAssistant\.byok\.remove/i,
@@ -177,20 +207,134 @@ describe('AIKeysManager', () => {
 
     await userEvent.click(removeButtons[0]);
 
-    expect(mutateRemoveKey).toHaveBeenCalledWith('openai');
+    expect(mutateRemoveKey).toHaveBeenCalledWith('anthropic');
+  });
+
+  it('keeps Remove in the provider header row, apart from the key field and Save', () => {
+    mockProviderKeys([storedKey()]);
+
+    render(<AIKeysManager />, { wrapper });
+
+    const header = screen.getByRole('button', {
+      name: /aiAssistant\.byok\.remove/i,
+    }).parentElement;
+    if (!header) {
+      throw new Error('Remove has no header row');
+    }
+    expect(header).toHaveTextContent('Anthropic');
+    expect(
+      within(header).queryByRole('button', { name: /aiAssistant\.byok\.save/i })
+    ).not.toBeInTheDocument();
+    expect(
+      within(header).queryByPlaceholderText(/aiAssistant\.byok\./)
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows only the prefix when the key has no readable suffix', () => {
+    mockProviderKeys([
+      storedKey({ keySuffix: null, createdAt: '2026-09-01T07:16:48.549Z' }),
+    ]);
+
+    render(<AIKeysManager />, { wrapper });
+
+    expect(screen.getByText('sk-ant-a…')).toHaveClass('font-mono');
+  });
+
+  describe('added date', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-15T12:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('dates the added label from when the current key was stored, not first added', () => {
+      mockProviderKeys([
+        storedKey({
+          createdAt: '2020-03-05T12:00:00.000Z',
+          keyStoredAt: '2026-09-01T12:00:00.000Z',
+        }),
+      ]);
+
+      render(<AIKeysManager />, { wrapper });
+
+      expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
+        'aiAssistant.byok.added(date=Sep 1)'
+      );
+    });
+
+    it('omits the year for a key added this year', () => {
+      mockProviderKeys([
+        storedKey({ keyStoredAt: '2026-09-01T12:00:00.000Z' }),
+      ]);
+
+      render(<AIKeysManager />, { wrapper });
+
+      expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
+        'aiAssistant.byok.added(date=Sep 1)'
+      );
+    });
+
+    it('includes the year for a key added in an earlier year', () => {
+      mockProviderKeys([
+        storedKey({ keyStoredAt: '2020-03-05T12:00:00.000Z' }),
+      ]);
+
+      render(<AIKeysManager />, { wrapper });
+
+      expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
+        'aiAssistant.byok.added(date=Mar 5, 2020)'
+      );
+    });
+  });
+
+  it('asks for a replacement key only on a provider that already has one', () => {
+    mockProviderKeys([storedKey()]);
+
+    render(<AIKeysManager />, { wrapper });
+
+    expect(
+      screen.getAllByPlaceholderText(/aiAssistant\.byok\.replacePlaceholder/)
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByPlaceholderText(/aiAssistant\.byok\.placeholder/)
+    ).toHaveLength(BYOK_PROVIDERS.length - 1);
+  });
+
+  it('shows the new suffix right after a replacement key is saved', async () => {
+    mockProviderKeys([storedKey()]);
+    mutateSetKey.mockImplementation((_input, { onSuccess }) => {
+      mockProviderKeys([storedKey({ keySuffix: 'NEW1' })]);
+      onSuccess();
+    });
+    const { rerender } = render(<AIKeysManager />, { wrapper });
+
+    await userEvent.type(
+      screen.getAllByPlaceholderText(
+        /aiAssistant\.byok\.replacePlaceholder/
+      )[0],
+      'sk-ant-new-key'
+    );
+    await userEvent.click(
+      screen.getAllByRole('button', { name: /aiAssistant\.byok\.save/i })[0]
+    );
+    rerender(<AIKeysManager />);
+
+    expect(screen.getByText('sk-ant-a…NEW1')).toBeInTheDocument();
   });
 
   it('shows the last-used hint when the stored key has been used', () => {
-    vi.mocked(useProviderKeys).mockReturnValue({
-      data: [
-        {
-          provider: 'google',
-          keyPrefix: 'AQ.Ab8',
-          lastUsedAt: '2026-06-19T16:36:02.981Z',
-          createdAt: '2026-06-19T07:16:48.549Z',
-        },
-      ],
-    } as unknown as ReturnType<typeof useProviderKeys>);
+    mockProviderKeys([
+      storedKey({
+        provider: 'google',
+        keyPrefix: 'AQ.Ab8',
+        lastUsedAt: '2026-06-19T16:36:02.981Z',
+        createdAt: '2026-06-19T07:16:48.549Z',
+        keySuffix: null,
+      }),
+    ]);
 
     render(<AIKeysManager />, { wrapper });
 
@@ -198,16 +342,14 @@ describe('AIKeysManager', () => {
   });
 
   it('shows the never-used hint when the stored key has not been used yet', () => {
-    vi.mocked(useProviderKeys).mockReturnValue({
-      data: [
-        {
-          provider: 'openai',
-          keyPrefix: 'sk-1234',
-          lastUsedAt: null,
-          createdAt: '2026-06-19T07:16:48.549Z',
-        },
-      ],
-    } as unknown as ReturnType<typeof useProviderKeys>);
+    mockProviderKeys([
+      storedKey({
+        provider: 'openai',
+        keyPrefix: 'sk-1234',
+        createdAt: '2026-06-19T07:16:48.549Z',
+        keySuffix: null,
+      }),
+    ]);
 
     render(<AIKeysManager />, { wrapper });
 

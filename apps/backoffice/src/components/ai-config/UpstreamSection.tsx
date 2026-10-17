@@ -124,6 +124,9 @@ export function UpstreamSection({ entry, mode }: UpstreamSectionProps) {
           disabled={mutating}
           spellCheck={false}
           autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           aria-invalid={error !== null}
           aria-describedby={error !== null ? `${copy.id}-error` : undefined}
           placeholder={copy.placeholder}

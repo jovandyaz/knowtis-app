@@ -298,6 +298,8 @@ export interface SystemProviderInfo {
    */
   readonly storedKeyUnreadable: boolean;
   readonly keyPrefix: string | null;
+  /** Last 4 chars of the key; null when the stored key no longer decrypts, the server has no master key, or the key is shorter than 20 chars. */
+  readonly keySuffix: string | null;
   readonly updatedAt: string | null;
 }
 
@@ -341,8 +343,12 @@ export interface SetSystemProviderResult {
 export interface ProviderKeyInfo {
   readonly provider: ByokProvider;
   readonly keyPrefix: string;
+  /** Last 4 chars of the key; null when the stored key no longer decrypts, the server has no master key, or the key is shorter than 20 chars. */
+  readonly keySuffix: string | null;
   readonly lastUsedAt: string | null;
   readonly createdAt: string;
+  /** When the current key was stored; `createdAt` is when the provider was first added. */
+  readonly keyStoredAt: string;
 }
 
 export interface EncryptedSecret {

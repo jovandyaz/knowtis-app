@@ -566,6 +566,7 @@ const PROVIDERS = [
     keySource: 'database',
     storedKeyUnreadable: false,
     keyPrefix: 'sk-ant-1',
+    keySuffix: 'zgAA',
     updatedAt: '2026-07-17T00:00:00.000Z',
   },
 ];
@@ -582,6 +583,7 @@ describe('useSystemProviders', () => {
     expect(httpClient.get).toHaveBeenCalledWith('/ai/providers');
     expect(result.current.data?.[0].updatedAt).toBeInstanceOf(Date);
     expect(result.current.data?.[0].storedKeyUnreadable).toBe(false);
+    expect(result.current.data?.[0].keySuffix).toBe('zgAA');
   });
 });
 
@@ -1481,6 +1483,7 @@ describe('admin mutations and their invalidations', () => {
       keySource: 'database',
       storedKeyUnreadable: false,
       keyPrefix: 'sk-ant',
+      keySuffix: 'zgAA',
       updatedAt: '2026-07-01T00:00:00.000Z',
     },
   ];

@@ -29,7 +29,7 @@ describe('AiKeysController', () => {
   it('sets a key then returns the masked list', async () => {
     const { controller, byok } = make();
     byok.listKeys.mockResolvedValueOnce([
-      { provider: 'anthropic', keyPrefix: 'sk-ant-' },
+      { provider: 'anthropic', keyPrefix: 'sk-ant-', keySuffix: 'uAAA' },
     ]);
 
     const result = await controller.set(
@@ -41,7 +41,9 @@ describe('AiKeysController', () => {
     );
 
     expect(byok.setKey).toHaveBeenCalledWith('u1', 'anthropic', 'sk-ant-1234');
-    expect(result).toEqual([{ provider: 'anthropic', keyPrefix: 'sk-ant-' }]);
+    expect(result).toEqual([
+      { provider: 'anthropic', keyPrefix: 'sk-ant-', keySuffix: 'uAAA' },
+    ]);
   });
 
   it('forbids anonymous users from setting a key', async () => {

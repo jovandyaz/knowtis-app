@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { LucideIcon } from 'lucide-react';
 import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 
@@ -6,7 +8,7 @@ import { cn } from '../utils/cn';
 export interface RadioCardOption<T extends string> {
   value: T;
   title: string;
-  description: string;
+  description: ReactNode;
   icon?: LucideIcon;
 }
 

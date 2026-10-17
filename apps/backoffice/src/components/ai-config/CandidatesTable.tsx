@@ -141,6 +141,9 @@ export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
         </h3>
         <Input
           type="search"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           aria-label="Search candidates"
           placeholder="Search a model…"
           className="sm:max-w-xs"

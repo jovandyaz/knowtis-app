@@ -12,7 +12,6 @@ import {
   type AIProvider,
   type EncryptedSecret,
   type ProviderKeyProbeResult,
-  type ProviderKeySource,
   type SystemProviderInfo,
 } from '@knowtis/shared-types';
 
@@ -28,6 +27,7 @@ import {
   SYSTEM_PROVIDER_KEYS_REPOSITORY,
   type SystemProviderKeysRepository,
 } from '../../domain/ports/system-provider-keys.repository';
+import { keyPrefixOf, keySuffixOf } from '../../domain/provider-key-hint';
 import {
   decryptSecret,
   encryptSecret,
@@ -38,7 +38,6 @@ import {
   type SystemProviderKeysSource,
 } from '../../infrastructure/providers/provider-registry.factory';
 
-const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
 
 /** Owns the server-side provider keys stored in the database. */
@@ -83,12 +82,15 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
       const row = rows.get(provider);
       const secret = row?.secret ?? null;
       const storedKey = this.decrypt(provider, secret);
+      const envKey = storedKey ? null : this.envKey(provider);
+      const shownKey = storedKey ?? envKey;
       return {
         provider,
         enabled: row?.enabled ?? true,
-        keySource: this.keySource(provider, storedKey),
+        keySource: storedKey ? 'database' : envKey ? 'environment' : 'none',
         storedKeyUnreadable: Boolean(secret) && !storedKey,
-        keyPrefix: row?.keyPrefix ?? null,
+        keyPrefix: shownKey ? keyPrefixOf(shownKey) : (row?.keyPrefix ?? null),
+        keySuffix: shownKey ? keySuffixOf(shownKey) : null,
         updatedAt: row?.updatedAt.toISOString() ?? null,
       };
     });
@@ -126,7 +128,7 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
         });
       }
     }
-    const keyPrefix = apiKey.slice(0, KEY_PREFIX_LENGTH);
+    const keyPrefix = keyPrefixOf(apiKey);
     await this.repo.setKey(
       provider,
       encryptSecret(apiKey, this.masterKey),
@@ -177,16 +179,8 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     }
   }
 
-  private keySource(
-    provider: AIProvider,
-    storedKey: string | null
-  ): ProviderKeySource {
-    if (storedKey) {
-      return 'database';
-    }
-    return this.configService.get(PROVIDER_ENV_KEYS[provider])
-      ? 'environment'
-      : 'none';
+  private envKey(provider: AIProvider): string | null {
+    return this.configService.get(PROVIDER_ENV_KEYS[provider]) || null;
   }
 
   private audit(

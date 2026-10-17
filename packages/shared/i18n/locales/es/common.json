@@ -153,7 +153,8 @@
       "remove": "Eliminar",
       "saving": "Validando…",
       "invalid": "No se pudo verificar la clave. Revisa que sea válida e inténtalo de nuevo.",
-      "stored": "Clave guardada ({{prefix}}…)",
+      "added": "Agregada el {{date}}",
+      "replacePlaceholder": "Pega una clave nueva",
       "billedBadge": "Tu clave",
       "lastUsed": "Último uso {{when}}",
       "neverUsed": "Sin usar todavía"

@@ -379,6 +379,84 @@ describe('ByokService', () => {
     });
   });
 
+  describe('listKeys', () => {
+    const LONG_KEY = 'sk-ant-api03-abcdefghijklmnopuAAA';
+    const row = (provider: string) => ({
+      provider,
+      keyPrefix: 'sk-ant-a',
+      lastUsedAt: null,
+      createdAt: '2026-10-17T00:00:00.000Z',
+      keyStoredAt: '2026-10-17T00:00:00.000Z',
+    });
+    const stored = (provider: string, apiKey: string) => ({
+      provider,
+      ...encryptSecret(apiKey, masterKey),
+      keyPrefix: 'sk-ant-a',
+    });
+
+    it('adds the last four characters of each key that decrypts', async () => {
+      const { service } = makeService({
+        repo: {
+          listForUser: vi.fn().mockResolvedValue([row('anthropic')]),
+          listEncrypted: vi
+            .fn()
+            .mockResolvedValue([stored('anthropic', LONG_KEY)]),
+        },
+      });
+
+      expect(await service.listKeys('u1')).toEqual([
+        { ...row('anthropic'), keySuffix: 'uAAA' },
+      ]);
+    });
+
+    it('gives a null suffix to a key that no longer decrypts, without logging', async () => {
+      const error = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      const { service } = makeService({
+        repo: {
+          listForUser: vi
+            .fn()
+            .mockResolvedValue([row('anthropic'), row('openai')]),
+          listEncrypted: vi.fn().mockResolvedValue([
+            stored('anthropic', LONG_KEY),
+            {
+              provider: 'openai',
+              ciphertext: 'bad',
+              iv: 'x',
+              authTag: 'y',
+              keyPrefix: 'p',
+            },
+          ]),
+        },
+      });
+
+      const keys = await service.listKeys('u1');
+
+      expect(keys.map((k) => k.keySuffix)).toEqual(['uAAA', null]);
+      expect(error).not.toHaveBeenCalled();
+      expect(loggedWarnings(warn)).toEqual([]);
+      error.mockRestore();
+    });
+
+    it('gives every row a null suffix without a master key', async () => {
+      const { service, repo } = makeService({
+        repo: {
+          listForUser: vi.fn().mockResolvedValue([row('anthropic')]),
+          listEncrypted: vi
+            .fn()
+            .mockResolvedValue([stored('anthropic', LONG_KEY)]),
+        },
+      });
+      (service as never as { masterKey: Buffer | null }).masterKey = null;
+
+      expect(await service.listKeys('u1')).toEqual([
+        { ...row('anthropic'), keySuffix: null },
+      ]);
+      expect(repo.listEncrypted).not.toHaveBeenCalled();
+    });
+  });
+
   describe('keyFingerprints', () => {
     const storedKey = (provider: string, apiKey: string) => ({
       provider,
