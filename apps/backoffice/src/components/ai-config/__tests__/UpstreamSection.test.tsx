@@ -121,6 +121,24 @@ describe('UpstreamSection', () => {
     );
   });
 
+  it('keeps password managers and browser autofill out of the list field', () => {
+    render(
+      <UpstreamSection
+        mode="ignore"
+        entry={{
+          ...entryWith('', 'default'),
+          key: 'ai_openrouter_ignored_providers',
+        }}
+      />
+    );
+
+    const field = screen.getByRole('textbox', { name: 'Ignored providers' });
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    expect(field).toHaveAttribute('data-1p-ignore');
+    expect(field).toHaveAttribute('data-lpignore', 'true');
+    expect(field).toHaveAttribute('data-bwignore');
+  });
+
   it('edits independent preference and exclusion lists with distinct labels', async () => {
     render(
       <>

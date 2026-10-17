@@ -110,6 +110,9 @@ function PromotedModelRow({
       <TableCell>
         <Input
           aria-label={`Label for ${model.id}`}
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           className="min-w-40"
           value={label}
           maxLength={CATALOG_LABEL_MAX_LENGTH}
@@ -120,6 +123,9 @@ function PromotedModelRow({
       <TableCell>
         <Input
           aria-label={`Description for ${model.id}`}
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           className="min-w-72"
           value={description}
           maxLength={CATALOG_DESCRIPTION_MAX_LENGTH}

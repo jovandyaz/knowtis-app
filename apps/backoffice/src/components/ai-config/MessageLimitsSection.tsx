@@ -94,6 +94,9 @@ function MessageLimitField({ entry }: { entry: AiConfigEntry }) {
           inputMode="numeric"
           spellCheck={false}
           autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           aria-invalid={error !== null}
           aria-describedby={describedBy}
           onChange={(event) => edit(event.target.value)}

@@ -218,6 +218,16 @@ describe('ProviderCard', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('keeps password managers and browser autofill out of the key field', () => {
+    render(<ProviderCard provider={providerWith()} />);
+
+    const field = screen.getByLabelText('Anthropic API key');
+    expect(field).toHaveAttribute('autocomplete', 'new-password');
+    expect(field).toHaveAttribute('data-1p-ignore');
+    expect(field).toHaveAttribute('data-lpignore', 'true');
+    expect(field).toHaveAttribute('data-bwignore');
+  });
+
   it('toggles enablement', async () => {
     render(<ProviderCard provider={providerWith()} />);
 

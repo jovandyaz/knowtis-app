@@ -181,6 +181,10 @@ export function ProviderCard({ provider }: ProviderCardProps) {
       <div className="flex flex-col gap-2 sm:flex-row">
         <PasswordInput
           value={draft}
+          autoComplete="new-password"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           aria-label={`${label} API key`}
           placeholder={`New ${label} API key`}
           disabled={isBusy}

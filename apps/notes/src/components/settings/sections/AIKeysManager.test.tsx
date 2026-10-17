@@ -147,6 +147,21 @@ describe('AIKeysManager', () => {
     expect(screen.getByText('OpenRouter')).toBeInTheDocument();
   });
 
+  it('keeps password managers and browser autofill out of every key field', () => {
+    render(<AIKeysManager />, { wrapper });
+
+    const fields = screen.getAllByPlaceholderText(
+      /aiAssistant\.byok\.(placeholder|replacePlaceholder)/
+    );
+    expect(fields).toHaveLength(BYOK_PROVIDERS.length);
+    fields.forEach((field) => {
+      expect(field).toHaveAttribute('autocomplete', 'new-password');
+      expect(field).toHaveAttribute('data-1p-ignore');
+      expect(field).toHaveAttribute('data-lpignore', 'true');
+      expect(field).toHaveAttribute('data-bwignore');
+    });
+  });
+
   it('Save buttons are disabled when the input is empty', () => {
     render(<AIKeysManager />, { wrapper });
 

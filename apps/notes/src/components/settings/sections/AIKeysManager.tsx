@@ -114,6 +114,10 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
                 <PasswordInput
                   ref={index === 0 ? firstField : undefined}
                   value={draft}
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore
                   placeholder={
                     stored
                       ? t('aiAssistant.byok.replacePlaceholder')
