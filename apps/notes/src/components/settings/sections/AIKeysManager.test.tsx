@@ -2,7 +2,7 @@ import { useProviderKeys, useSetProviderKey } from '@/hooks';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
 import {
@@ -240,39 +240,54 @@ describe('AIKeysManager', () => {
     expect(screen.getByText('sk-ant-a…')).toHaveClass('font-mono');
   });
 
-  it('dates the added label from when the current key was stored, not first added', () => {
-    mockProviderKeys([
-      storedKey({
-        createdAt: '2020-03-05T12:00:00.000Z',
-        keyStoredAt: '2026-09-01T12:00:00.000Z',
-      }),
-    ]);
+  describe('added date', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-15T12:00:00.000Z'));
+    });
 
-    render(<AIKeysManager />, { wrapper });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
-    expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
-      'date=Sep 1'
-    );
-  });
+    it('dates the added label from when the current key was stored, not first added', () => {
+      mockProviderKeys([
+        storedKey({
+          createdAt: '2020-03-05T12:00:00.000Z',
+          keyStoredAt: '2026-09-01T12:00:00.000Z',
+        }),
+      ]);
 
-  it('omits the year for a key added this year', () => {
-    mockProviderKeys([storedKey({ keyStoredAt: new Date().toISOString() })]);
+      render(<AIKeysManager />, { wrapper });
 
-    render(<AIKeysManager />, { wrapper });
+      expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
+        'aiAssistant.byok.added(date=Sep 1)'
+      );
+    });
 
-    expect(screen.getByText(/aiAssistant\.byok\.added/)).not.toHaveTextContent(
-      String(new Date().getFullYear())
-    );
-  });
+    it('omits the year for a key added this year', () => {
+      mockProviderKeys([
+        storedKey({ keyStoredAt: '2026-09-01T12:00:00.000Z' }),
+      ]);
 
-  it('includes the year for a key added in an earlier year', () => {
-    mockProviderKeys([storedKey({ keyStoredAt: '2020-03-05T12:00:00.000Z' })]);
+      render(<AIKeysManager />, { wrapper });
 
-    render(<AIKeysManager />, { wrapper });
+      expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
+        'aiAssistant.byok.added(date=Sep 1)'
+      );
+    });
 
-    expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
-      '2020'
-    );
+    it('includes the year for a key added in an earlier year', () => {
+      mockProviderKeys([
+        storedKey({ keyStoredAt: '2020-03-05T12:00:00.000Z' }),
+      ]);
+
+      render(<AIKeysManager />, { wrapper });
+
+      expect(screen.getByText(/aiAssistant\.byok\.added/)).toHaveTextContent(
+        'aiAssistant.byok.added(date=Mar 5, 2020)'
+      );
+    });
   });
 
   it('asks for a replacement key only on a provider that already has one', () => {
