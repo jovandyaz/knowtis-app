@@ -27,7 +27,7 @@ vi.mock('@knowtis/data-access-agent', () => ({
       hooks.remove(id, options, callbacks),
     isPending: false,
   }),
-  isConversationGone: (error: unknown) =>
+  isGone: (error: unknown) =>
     (error as { status?: number } | null)?.status === 404,
   invalidateConversations: vi.fn(),
 }));

@@ -19,7 +19,11 @@ function stubMatchMedia(matches: boolean) {
 describe('useRightDockStore', () => {
   beforeEach(() => {
     localStorage.clear();
-    useRightDockStore.setState({ isOpen: false, hasAutoOpened: false });
+    useRightDockStore.setState({
+      isOpen: false,
+      hasAutoOpened: false,
+      focusTarget: null,
+    });
   });
 
   afterEach(() => {
@@ -67,8 +71,47 @@ describe('useRightDockStore', () => {
     expect(useRightDockStore.getState().hasAutoOpened).toBe(true);
   });
 
-  it('persists only isOpen and hasAutoOpened to localStorage', () => {
+  it('carries the focus target the caller opened the dock for', () => {
+    useRightDockStore.getState().open('composer');
+
+    expect(useRightDockStore.getState()).toMatchObject({
+      isOpen: true,
+      focusTarget: 'composer',
+    });
+  });
+
+  it('opens with nothing to focus when the caller names no target', () => {
+    useRightDockStore.getState().open('composer');
     useRightDockStore.getState().open();
+
+    expect(useRightDockStore.getState().focusTarget).toBeNull();
+  });
+
+  it('drops the focus target once it is taken', () => {
+    useRightDockStore.getState().open('composer');
+    useRightDockStore.getState().clearFocusTarget();
+
+    expect(useRightDockStore.getState()).toMatchObject({
+      isOpen: true,
+      focusTarget: null,
+    });
+  });
+
+  it.each([
+    ['closed', () => useRightDockStore.getState().close()],
+    ['toggled shut', () => useRightDockStore.getState().toggle()],
+  ])('drops the focus target when the dock is %s', (_label, shut) => {
+    useRightDockStore.getState().open('composer');
+    shut();
+
+    expect(useRightDockStore.getState()).toMatchObject({
+      isOpen: false,
+      focusTarget: null,
+    });
+  });
+
+  it('persists only isOpen and hasAutoOpened to localStorage', () => {
+    useRightDockStore.getState().open('composer');
     const raw = localStorage.getItem('right-dock');
     expect(raw).not.toBeNull();
     const stored: { state: Record<string, unknown> } = JSON.parse(raw ?? '');

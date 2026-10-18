@@ -105,3 +105,5 @@ export {
   conversationsApi,
   type ConversationPageRequest,
 } from './lib/conversations.api';
+
+export { memoriesApi } from './lib/memories.api';

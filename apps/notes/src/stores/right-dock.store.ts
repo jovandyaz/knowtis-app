@@ -3,11 +3,18 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { safeLocalStorage } from '@knowtis/shared-util';
 
+export const DOCK_FOCUS_TARGETS = ['composer'] as const;
+
+export type DockFocusTarget = (typeof DOCK_FOCUS_TARGETS)[number];
+
 interface RightDockStore {
   isOpen: boolean;
   hasAutoOpened: boolean;
-  open: () => void;
+  /** What takes the focus once the dock shows it; whoever takes it clears it. Session-only. */
+  focusTarget: DockFocusTarget | null;
+  open: (focusTarget?: DockFocusTarget) => void;
   close: () => void;
+  clearFocusTarget: () => void;
   toggle: () => void;
   autoOpenOnce: () => void;
   /** The copilot is showing a proposal review instead of the chat. Session-only. */
@@ -21,9 +28,15 @@ export const useRightDockStore = create<RightDockStore>()(
     (set, get) => ({
       isOpen: false,
       hasAutoOpened: false,
-      open: () => set({ isOpen: true }),
-      close: () => set({ isOpen: false }),
-      toggle: () => set({ isOpen: !get().isOpen }),
+      focusTarget: null,
+      open: (focusTarget) =>
+        set({ isOpen: true, focusTarget: focusTarget ?? null }),
+      close: () => set({ isOpen: false, focusTarget: null }),
+      clearFocusTarget: () => set({ focusTarget: null }),
+      toggle: () =>
+        set(
+          get().isOpen ? { isOpen: false, focusTarget: null } : { isOpen: true }
+        ),
       autoOpenOnce: () => {
         if (!get().hasAutoOpened) {
           set({ isOpen: true, hasAutoOpened: true });

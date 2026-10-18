@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   type KeyboardEvent,
@@ -30,6 +31,8 @@ interface ComposerInputProps {
 interface AgentComposerProps extends ComposerInputProps {
   counter?: ReactNode;
   locked?: ReactNode;
+  focusRequested?: boolean;
+  onFocusTaken?: () => void;
 }
 
 const ICON_BUTTON_CLASS = 'h-8 w-8 shrink-0 p-0';
@@ -147,6 +150,8 @@ function ComposerInput({
 export function AgentComposer({
   counter,
   locked,
+  focusRequested = false,
+  onFocusTaken,
   ...inputProps
 }: AgentComposerProps) {
   const { t } = useTranslation('notes');
@@ -185,6 +190,18 @@ export function AgentComposer({
       shell.querySelector('textarea')?.focus({ preventScroll: true });
     }
   }, [isLocked]);
+
+  useEffect(() => {
+    if (!focusRequested) {
+      return;
+    }
+    onFocusTaken?.();
+    if (!window.matchMedia(COARSE_POINTER_QUERY).matches) {
+      shellRef.current
+        ?.querySelector('textarea')
+        ?.focus({ preventScroll: true });
+    }
+  }, [focusRequested, onFocusTaken]);
 
   const hint = isTurnAlive(status)
     ? t('ai.copilot.composerHintBusy', {

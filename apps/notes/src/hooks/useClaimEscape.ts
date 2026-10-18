@@ -3,12 +3,13 @@ import { useEffect, useEffectEvent, type RefObject } from 'react';
 const ESCAPE_KEY = 'Escape';
 
 /**
- * Hands an Escape pressed in `ref`'s element to `onEscape` and keeps it from
- * dismissing the dialog or sheet around that element. Radix reads Escape in a
- * document capture listener, which runs before the element's own key handlers,
- * so only a window capture listener gets there first. While composing, only
- * `stopPropagation` is used: that still keeps the dismiss handlers downstream
- * from seeing the event, but leaves `preventDefault` for the IME itself.
+ * Hands an Escape pressed in `ref`'s element, or on anything inside it, to
+ * `onEscape` and keeps it from dismissing the dialog or sheet around it. Radix
+ * reads Escape in a document capture listener, which runs before the element's
+ * own key handlers, so only a window capture listener gets there first. While
+ * composing, only `stopPropagation` is used: that still keeps the dismiss
+ * handlers downstream from seeing the event, but leaves `preventDefault` for
+ * the IME itself.
  */
 export function useClaimEscape(
   ref: RefObject<HTMLElement | null>,
@@ -18,7 +19,11 @@ export function useClaimEscape(
 
   useEffect(() => {
     const claim = (event: KeyboardEvent) => {
-      if (event.key !== ESCAPE_KEY || event.target !== ref.current) {
+      if (
+        event.key !== ESCAPE_KEY ||
+        !(event.target instanceof Node) ||
+        !ref.current?.contains(event.target)
+      ) {
         return;
       }
       if (event.isComposing) {

@@ -1,7 +1,10 @@
 import { aiQuotaQueryKeys, quotaStateOf } from '@/hooks/useAiQuota';
 import { aiModelsQueryKeys } from '@/hooks/useAvailableModels';
 import { refreshModelChoice } from '@/hooks/useProviderKeys';
-import { captureProductEvent } from '@/lib/analytics/product-events';
+import {
+  captureProductEvent,
+  type ConversationOpenSource,
+} from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create, type StoreApi } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -16,10 +19,7 @@ import {
   type AgentStreamHandle,
   type WebSource,
 } from '@knowtis/api-client';
-import {
-  invalidateConversations,
-  isConversationGone,
-} from '@knowtis/data-access-agent';
+import { invalidateConversations, isGone } from '@knowtis/data-access-agent';
 import {
   invalidateNoteCollections,
   notesQueryKeys,
@@ -62,8 +62,6 @@ export type ConversationHydration =
   | 'loading'
   | 'loaded'
   | 'failed';
-
-export type ConversationOpenSource = 'switcher' | 'reload';
 
 /**
  * What `retryLast` does with the failure on screen: send the message again,
@@ -1007,7 +1005,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
       if (superseded()) {
         return 'superseded';
       }
-      if (isConversationGone(error)) {
+      if (isGone(error)) {
         return 'gone';
       }
       set({ hydration: failedState });

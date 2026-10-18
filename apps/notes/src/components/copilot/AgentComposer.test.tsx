@@ -452,6 +452,51 @@ describe('AgentComposer focus when the lock lifts', () => {
   });
 });
 
+describe('AgentComposer focus on request', () => {
+  beforeEach(() => {
+    stubPointer('fine');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('moves the focus into the input when asked, and says it took it', () => {
+    const onFocusTaken = vi.fn();
+
+    render(
+      <>
+        <button type="button">elsewhere</button>
+        <Composer draft="" focusRequested onFocusTaken={onFocusTaken} />
+      </>
+    );
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(onFocusTaken).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the keyboard closed on a touch screen but still takes the request', () => {
+    stubPointer('coarse');
+    const onFocusTaken = vi.fn();
+
+    render(<Composer draft="" focusRequested onFocusTaken={onFocusTaken} />);
+
+    expect(screen.getByRole('textbox')).not.toHaveFocus();
+    expect(onFocusTaken).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes no focus while nothing asks for it', () => {
+    const onFocusTaken = vi.fn();
+
+    render(
+      <Composer draft="" focusRequested={false} onFocusTaken={onFocusTaken} />
+    );
+
+    expect(screen.getByRole('textbox')).not.toHaveFocus();
+    expect(onFocusTaken).not.toHaveBeenCalled();
+  });
+});
+
 describe('AgentComposer sizing', () => {
   afterEach(() => {
     vi.restoreAllMocks();

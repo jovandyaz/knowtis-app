@@ -6,11 +6,10 @@ import {
   type UseMutationOptions,
 } from '@tanstack/react-query';
 
-import { ApiClientError, conversationsApi } from '@knowtis/api-client';
+import { conversationsApi } from '@knowtis/api-client';
 
 const FIRST_PAGE = 1;
 const CONVERSATIONS_STALE_TIME_MS = 30_000;
-const NOT_FOUND_STATUS = 404;
 
 export const conversationsQueryKeys = {
   all: ['conversations'] as const,
@@ -31,12 +30,6 @@ export type ConversationMutationCallbacks<TVariables> = Pick<
 
 export function invalidateConversations(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: conversationsQueryKeys.all });
-}
-
-export function isConversationGone(error: unknown): boolean {
-  return (
-    ApiClientError.isApiClientError(error) && error.status === NOT_FOUND_STATUS
-  );
 }
 
 export function useConversations(limit: number) {

@@ -10,9 +10,12 @@ export type SettingsSection =
   | 'connectedApps'
   | 'account'
   | 'aiAssistant'
+  | 'memory'
   | 'plan';
 
-export type SettingsFocusTarget = 'aiKeys';
+export const SETTINGS_FOCUS_TARGETS = ['aiKeys'] as const;
+
+export type SettingsFocusTarget = (typeof SETTINGS_FOCUS_TARGETS)[number];
 
 interface SettingsStore {
   isOpen: boolean;

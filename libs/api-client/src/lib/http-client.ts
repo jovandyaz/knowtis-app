@@ -27,13 +27,19 @@ export class ApiClientError extends Error {
    * is not specific to any one endpoint or status.
    */
   readonly retryAfterMs: number | undefined;
+  /**
+   * The machine-readable specifics the server attached to `code`, such as the
+   * `reason` of a refusal, or undefined when the error body carried none.
+   */
+  readonly details: Record<string, unknown> | undefined;
 
   constructor(
     message: string,
     status: number,
     code?: string,
     errors?: FieldError[],
-    retryAfterMs?: number
+    retryAfterMs?: number,
+    details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'ApiClientError';
@@ -41,6 +47,7 @@ export class ApiClientError extends Error {
     this.code = code;
     this.errors = errors;
     this.retryAfterMs = retryAfterMs;
+    this.details = details;
   }
 
   static isApiClientError(error: unknown): error is ApiClientError {
@@ -62,6 +69,12 @@ export function retryAfterMsOf(error: unknown): number | undefined {
 const EMAIL_NOT_VERIFIED_STATUS = 403;
 const CLIENT_ERROR_STATUS_MIN = 400;
 const SERVER_ERROR_STATUS_MIN = 500;
+
+function errorDetailsOf(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value))
+    : undefined;
+}
 
 /**
  * True when the API rejected the request itself (4xx). An immediate retry
@@ -234,7 +247,8 @@ export class HttpClient implements IHttpClient {
           response.status,
           errorData.code,
           fieldErrors,
-          parseRetryAfterMs(response.headers.get(RETRY_AFTER_HEADER))
+          parseRetryAfterMs(response.headers.get(RETRY_AFTER_HEADER)),
+          errorDetailsOf(errorData.details)
         );
       }
 
