@@ -189,4 +189,46 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteExposureRepository', () => {
   it('answers an empty map for no ids', async () => {
     expect((await repo.findExposures(OWNER, [])).size).toBe(0);
   });
+
+  it('reports who else can write each note that exists, and what its link lets people do', async () => {
+    const access = await repo.findWriteAccess(OWNER, [
+      ...ALL_NOTES,
+      MISSING,
+      'not-a-uuid',
+    ]);
+
+    expect(Object.fromEntries(access)).toEqual({
+      [RESTRICTED]: { editableByOthers: false, linkPermission: null },
+      [VIEWER_SHARE]: { editableByOthers: false, linkPermission: null },
+      [EDITOR_SHARE]: { editableByOthers: true, linkPermission: null },
+      [VIEW_LINK]: { editableByOthers: false, linkPermission: 'viewer' },
+      [EDIT_LINK]: { editableByOthers: true, linkPermission: 'editor' },
+      [CLOSED_LINK_WITH_EDITOR_ROLE]: {
+        editableByOthers: false,
+        linkPermission: null,
+      },
+      [FOREIGN_EDIT_LINK]: { editableByOthers: true, linkPermission: null },
+      [TRASHED_EDITOR_SHARE]: { editableByOthers: true, linkPermission: null },
+      [FOREIGN_VIEW_SHARE]: { editableByOthers: true, linkPermission: null },
+    });
+  });
+
+  it("never tells a collaborator how the owner's link is set", async () => {
+    const access = await repo.findWriteAccess(OTHER, [EDIT_LINK, VIEW_LINK]);
+
+    expect(Object.fromEntries(access)).toEqual({
+      [EDIT_LINK]: { editableByOthers: true, linkPermission: null },
+      [VIEW_LINK]: { editableByOthers: true, linkPermission: null },
+    });
+  });
+
+  it('keys write access by the lowercased id', async () => {
+    const access = await repo.findWriteAccess(OWNER, [
+      EDITOR_SHARE.toUpperCase(),
+    ]);
+
+    expect(Object.fromEntries(access)).toEqual({
+      [EDITOR_SHARE]: { editableByOthers: true, linkPermission: null },
+    });
+  });
 });

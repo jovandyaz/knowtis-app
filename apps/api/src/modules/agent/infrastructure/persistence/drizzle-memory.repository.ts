@@ -1,33 +1,93 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, cosineDistance, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, cosineDistance, desc, eq, sql } from 'drizzle-orm';
 
 import {
+  conversations,
   DATABASE_CONNECTION,
   userMemories,
   type Database,
 } from '../../../../database';
+import {
+  USER_AI_SETTINGS_REPOSITORY,
+  type UserAiSettingsRepository,
+} from '../../../ai/domain/ports/user-ai-settings.repository';
 import type {
   MemoryMatch,
-  MemoryReconcileBatch,
   MemoryRepository,
+  StoredMemory,
   UpsertMemoryInput,
   UserMemoryRow,
+  VersionedMemoryRow,
 } from '../../domain/ports/memory.repository';
 
 @Injectable()
 export class DrizzleMemoryRepository implements MemoryRepository {
   constructor(
     @Inject(DATABASE_CONNECTION)
-    private readonly db: Database
+    private readonly db: Database,
+    @Inject(USER_AI_SETTINGS_REPOSITORY)
+    private readonly settings: UserAiSettingsRepository
   ) {}
 
-  async listForUser(userId: string, limit: number): Promise<UserMemoryRow[]> {
+  async listForUser(
+    userId: string,
+    limit: number
+  ): Promise<VersionedMemoryRow[]> {
     return this.db
-      .select({ id: userMemories.id, content: userMemories.content })
+      .select({
+        id: userMemories.id,
+        content: userMemories.content,
+        version: sql<string>`${userMemories.updatedAt}::text`,
+      })
       .from(userMemories)
       .where(eq(userMemories.userId, userId))
       .orderBy(desc(userMemories.updatedAt))
       .limit(limit);
+  }
+
+  async listWithSources(
+    userId: string,
+    limit: number
+  ): Promise<StoredMemory[]> {
+    const rows = await this.db
+      .select({
+        id: userMemories.id,
+        content: userMemories.content,
+        createdAt: userMemories.createdAt,
+        updatedAt: userMemories.updatedAt,
+        conversationId: conversations.id,
+        title: conversations.title,
+      })
+      .from(userMemories)
+      .leftJoin(
+        conversations,
+        and(
+          eq(conversations.id, userMemories.sourceConversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .where(eq(userMemories.userId, userId))
+      .orderBy(desc(userMemories.updatedAt), desc(userMemories.id))
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id,
+      content: row.content,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      source:
+        row.conversationId === null
+          ? null
+          : { conversationId: row.conversationId, title: row.title },
+    }));
+  }
+
+  async findForUser(userId: string, id: string): Promise<UserMemoryRow | null> {
+    const [row] = await this.db
+      .select({ id: userMemories.id, content: userMemories.content })
+      .from(userMemories)
+      .where(and(eq(userMemories.id, id), eq(userMemories.userId, userId)))
+      .limit(1);
+    return row ?? null;
   }
 
   async searchForUser(
@@ -69,60 +129,13 @@ export class DrizzleMemoryRepository implements MemoryRepository {
     id: string,
     content: string,
     embedding: number[]
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const updated = await this.db
       .update(userMemories)
       .set({ content, embedding, updatedAt: sql`now()` })
-      .where(and(eq(userMemories.id, id), eq(userMemories.userId, userId)));
-  }
-
-  async applyReconcile(batch: MemoryReconcileBatch): Promise<void> {
-    if (
-      batch.deletes.length === 0 &&
-      batch.inserts.length === 0 &&
-      batch.updates.length === 0
-    ) {
-      return;
-    }
-    await this.db.transaction(async (tx) => {
-      if (batch.deletes.length > 0) {
-        await tx
-          .delete(userMemories)
-          .where(
-            and(
-              inArray(userMemories.id, [...batch.deletes]),
-              eq(userMemories.userId, batch.userId)
-            )
-          );
-      }
-      if (batch.inserts.length > 0) {
-        await tx.insert(userMemories).values(
-          batch.inserts.map((x) => ({
-            userId: batch.userId,
-            content: x.content,
-            embedding: x.embedding,
-            ...(batch.sourceConversationId
-              ? { sourceConversationId: batch.sourceConversationId }
-              : {}),
-          }))
-        );
-      }
-      for (const u of batch.updates) {
-        await tx
-          .update(userMemories)
-          .set({
-            content: u.content,
-            embedding: u.embedding,
-            updatedAt: sql`now()`,
-          })
-          .where(
-            and(
-              eq(userMemories.id, u.id),
-              eq(userMemories.userId, batch.userId)
-            )
-          );
-      }
-    });
+      .where(and(eq(userMemories.id, id), eq(userMemories.userId, userId)))
+      .returning({ id: userMemories.id });
+    return updated.length > 0;
   }
 
   async deleteForUser(userId: string, id: string): Promise<boolean> {
@@ -147,5 +160,9 @@ export class DrizzleMemoryRepository implements MemoryRepository {
       .from(userMemories)
       .where(eq(userMemories.userId, userId));
     return row?.n ?? 0;
+  }
+
+  async isEnabledFor(userId: string): Promise<boolean> {
+    return (await this.settings.getSettings(userId)).memoryEnabled;
   }
 }

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -5,6 +6,10 @@ import { z } from 'zod';
 import { failedQuery } from '../../../../test-support/database-errors';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { AgentErrors } from '../../domain/agent-errors';
+import type {
+  NoteExposureRepository,
+  NoteWriteAccess,
+} from '../../domain/ports/note-exposure.repository';
 import type {
   CreateProposedMutation,
   ShareProposedMutation,
@@ -39,8 +44,30 @@ function run(
   return t.execute(input, {});
 }
 
-function group(builder: MutationProposalBuilder): NoteMutateToolGroup {
-  return new NoteMutateToolGroup(builder);
+function exposureOf(
+  access: ReadonlyMap<string, NoteWriteAccess> = new Map()
+): NoteExposureRepository {
+  return {
+    findExposures: vi.fn(),
+    findWriteAccess: vi.fn().mockResolvedValue(access),
+  };
+}
+
+const OWNER_ONLY: NoteWriteAccess = {
+  editableByOthers: false,
+  linkPermission: null,
+};
+
+function group(
+  builder: MutationProposalBuilder,
+  exposure: NoteExposureRepository = exposureOf(
+    new Map([
+      ['n1', OWNER_ONLY],
+      ['11111111-1111-4111-8111-111111111111', OWNER_ONLY],
+    ])
+  )
+): NoteMutateToolGroup {
+  return new NoteMutateToolGroup(builder, exposure);
 }
 
 const proposal: CreateProposedMutation = {
@@ -126,6 +153,7 @@ describe('NoteMutateToolGroup', () => {
       ok: true,
       proposalId: 'p2',
       summary: 'Update note "Plan"',
+      editableByOthers: false,
     });
     expect(JSON.stringify(out)).not.toContain('payload');
     expect(c.proposals.captured).toBe(updateProposal);
@@ -168,7 +196,12 @@ describe('NoteMutateToolGroup', () => {
         targetEmail: 'a@b.com',
         permission: 'viewer',
       })
-    ).toEqual({ ok: true, proposalId: 'p3', summary: shareProposal.summary });
+    ).toEqual({
+      ok: true,
+      proposalId: 'p3',
+      summary: shareProposal.summary,
+      editableByOthers: false,
+    });
     expect(builder.buildShare).toHaveBeenCalledWith(
       'u1',
       'n1',
@@ -176,6 +209,81 @@ describe('NoteMutateToolGroup', () => {
       'viewer'
     );
     expect(c.proposals.captured).toBe(shareProposal);
+  });
+});
+
+describe('NoteMutateToolGroup write access', () => {
+  const shared: ShareProposedMutation = {
+    id: 'p5',
+    kind: 'share',
+    targetNoteId: 'n1',
+    summary: 'Share "Plan" with a@b.com as viewer',
+    payload: { targetEmail: 'a@b.com', permission: 'viewer' },
+  };
+  const input = { noteId: 'N1', targetEmail: 'a@b.com', permission: 'viewer' };
+
+  it('records that someone else could edit the note when it was proposed', async () => {
+    const builder = {
+      buildShare: vi.fn().mockResolvedValue(ok(shared)),
+    } as unknown as MutationProposalBuilder;
+    const exposure = exposureOf(
+      new Map([['n1', { editableByOthers: true, linkPermission: 'editor' }]])
+    );
+
+    const out = await run(
+      group(builder, exposure),
+      ctx(),
+      'proposeShareNote',
+      input
+    );
+
+    expect(out).toMatchObject({ proposalId: 'p5', editableByOthers: true });
+    expect(exposure.findWriteAccess).toHaveBeenCalledWith('u1', ['N1']);
+  });
+
+  it('records a note the lookup no longer finds as editable by others', async () => {
+    const builder = {
+      buildShare: vi.fn().mockResolvedValue(ok(shared)),
+    } as unknown as MutationProposalBuilder;
+
+    const out = await run(
+      group(builder, exposureOf()),
+      ctx(),
+      'proposeShareNote',
+      input
+    );
+
+    expect(out).toMatchObject({ editableByOthers: true });
+  });
+
+  it('still captures the proposal when the lookup fails, recorded as editable by others', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const builder = {
+      buildShare: vi.fn().mockResolvedValue(ok(shared)),
+    } as unknown as MutationProposalBuilder;
+    const exposure: NoteExposureRepository = {
+      findExposures: vi.fn(),
+      findWriteAccess: vi.fn().mockRejectedValue(new Error('pool exhausted')),
+    };
+    const c = ctx();
+
+    const out = await run(
+      group(builder, exposure),
+      c,
+      'proposeShareNote',
+      input
+    );
+
+    expect(out).toMatchObject({ proposalId: 'p5', editableByOthers: true });
+    expect(c.proposals.captured).toBe(shared);
+    expect(warn).toHaveBeenCalledWith({
+      event: 'agent.tools.write_access_unavailable',
+      noteCount: 1,
+      error: 'pool exhausted',
+    });
+    warn.mockRestore();
   });
 });
 
@@ -259,6 +367,7 @@ describe('NoteMutateToolGroup.proposeEditNote', () => {
       ok: true,
       proposalId: 'p4',
       summary: editProposal.summary,
+      editableByOthers: false,
     });
     expect(JSON.stringify(out)).not.toContain('payload');
     expect(c.proposals.captured).toBe(editProposal);

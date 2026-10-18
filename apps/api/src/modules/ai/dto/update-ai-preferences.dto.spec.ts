@@ -41,6 +41,22 @@ describe('UpdateAiPreferencesDto', () => {
     }
   );
 
+  it.each([true, false])(
+    'should accept the memory switch %s',
+    async (memoryEnabled) => {
+      expect(await errorsFor({ memoryEnabled })).toHaveLength(0);
+    }
+  );
+
+  it.each([null, 'false', 0, 1])(
+    'should reject the non-boolean memory switch %p',
+    async (memoryEnabled) => {
+      const errors = await errorsFor({ memoryEnabled });
+
+      expect(errors.map((e) => e.property)).toEqual(['memoryEnabled']);
+    }
+  );
+
   it('should still clear a preferred model with null', async () => {
     expect(await errorsFor({ preferredModel: null })).toHaveLength(0);
   });

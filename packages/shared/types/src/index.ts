@@ -278,3 +278,17 @@ export {
   type ConversationTranscriptMessage,
   type MessageKind,
 } from './lib/conversation.types';
+
+export {
+  AGENT_MEMORY_REJECTED_CODE,
+  AGENT_MEMORY_UNAVAILABLE_CODE,
+  MEMORY_EDIT_REJECTION_REASONS,
+  MEMORY_EDIT_UNAVAILABLE_REASONS,
+  MEMORY_ENABLED_BY_DEFAULT,
+  MEMORY_MAX_CHARS,
+  type MemoryEditRejectionReason,
+  type MemoryEditUnavailableReason,
+  type RecalledMemory,
+  type UserMemoryItem,
+  type UserMemorySource,
+} from './lib/memory.types';

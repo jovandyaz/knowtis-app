@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ByokProvider } from '@knowtis/shared-types';
@@ -65,6 +65,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
   });
 
@@ -114,6 +115,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
       preferredIntent: 'powerful',
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
   });
 
@@ -138,6 +140,62 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
       preferredIntent: 'balanced',
       primaryProvider: null,
       ghostTextEnabled: false,
+      memoryEnabled: true,
+    });
+  });
+
+  describe('memoryEnabled', () => {
+    const resumedAt = async (): Promise<string | null> => {
+      const [row] = await db
+        .select({
+          at: sql<string | null>`${userAiSettings.memoryResumedAt}::text`,
+        })
+        .from(userAiSettings)
+        .where(eq(userAiSettings.userId, USER_ID));
+      return row?.at ?? null;
+    };
+
+    beforeEach(async () => {
+      await db.delete(userAiSettings).where(eq(userAiSettings.userId, USER_ID));
+    });
+
+    it('reads memory as on until the user pauses it', async () => {
+      expect((await repo.getSettings(USER_ID)).memoryEnabled).toBe(true);
+
+      await repo.patchSettings(USER_ID, { memoryEnabled: false });
+
+      expect((await repo.getSettings(USER_ID)).memoryEnabled).toBe(false);
+      expect(await resumedAt()).toBeNull();
+    });
+
+    it('stamps when memory is turned back on after a pause, and again after the next pause', async () => {
+      await repo.patchSettings(USER_ID, { memoryEnabled: false });
+      await repo.patchSettings(USER_ID, { memoryEnabled: true });
+      const first = await resumedAt();
+
+      await repo.patchSettings(USER_ID, { memoryEnabled: false });
+      await repo.patchSettings(USER_ID, { memoryEnabled: true });
+
+      expect((await repo.getSettings(USER_ID)).memoryEnabled).toBe(true);
+      expect(first).not.toBeNull();
+      expect(await resumedAt()).not.toBe(first);
+    });
+
+    it('never moves the stamp for a write that keeps memory on', async () => {
+      await repo.patchSettings(USER_ID, { memoryEnabled: false });
+      await repo.patchSettings(USER_ID, { memoryEnabled: true });
+      const stamped = await resumedAt();
+
+      await repo.patchSettings(USER_ID, { memoryEnabled: true });
+      await repo.patchSettings(USER_ID, { ghostTextEnabled: false });
+
+      expect(await resumedAt()).toEqual(stamped);
+    });
+
+    it('stamps nothing when the first write turns memory on', async () => {
+      await repo.patchSettings(USER_ID, { memoryEnabled: true });
+
+      expect(await resumedAt()).toBeNull();
     });
   });
 
@@ -153,6 +211,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
       preferredIntent: 'fast',
       primaryProvider: 'anthropic',
       ghostTextEnabled: false,
+      memoryEnabled: true,
     } as const satisfies UserAiSettings;
 
     beforeEach(async () => {
@@ -200,6 +259,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
       preferredIntent: 'fast',
       primaryProvider: 'openai',
       ghostTextEnabled: false,
+      memoryEnabled: true,
     } as const satisfies UserAiSettings;
 
     const holdKey = (userId: string, provider: ByokProvider) =>

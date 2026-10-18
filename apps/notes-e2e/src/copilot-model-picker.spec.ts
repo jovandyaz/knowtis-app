@@ -205,6 +205,7 @@ const UNSET_PREFERENCES: AIPreferences = {
   preferredIntent: null,
   primaryProvider: null,
   ghostTextEnabled: true,
+  memoryEnabled: true,
 };
 
 const FREE_QUOTA: AiQuota = {

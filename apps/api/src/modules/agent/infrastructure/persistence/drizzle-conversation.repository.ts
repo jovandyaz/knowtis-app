@@ -6,6 +6,7 @@ import {
   eq,
   inArray,
   isNotNull,
+  lte,
   ne,
   or,
   sql,
@@ -14,6 +15,7 @@ import {
 import { z } from 'zod';
 
 import {
+  MEMORY_ENABLED_BY_DEFAULT,
   MESSAGE_KIND,
   type ConversationSummary,
   type ConversationTranscript,
@@ -24,6 +26,8 @@ import {
   conversations,
   DATABASE_CONNECTION,
   notes,
+  userAiSettings,
+  userMemories,
   users,
   type Database,
 } from '../../../../database';
@@ -41,8 +45,13 @@ import type {
   ConversationRepository,
   CreateConversationInput,
   ExtractableConversation,
+  ExtractionCommit,
+  ExtractionCommitResult,
   ExtractionRetryPolicy,
+  ExtractionScan,
+  ExtractionWindow,
   LastConversationMessage,
+  MemoryVersionRef,
 } from '../../domain/ports/conversation.repository';
 import {
   noteIdsInToolParts,
@@ -113,6 +122,39 @@ function readableSources(userId: string): SQL<AgentSource[]> {
     END
     WHERE ${readableNoteCondition(userId)}
   )`;
+}
+
+function messageColumns(userId: string) {
+  return {
+    role: conversationMessages.role,
+    content: conversationMessages.content,
+    sources: readableSources(userId),
+    parts: conversationMessages.parts,
+    stopReason: conversationMessages.stopReason,
+    turnId: conversationMessages.turnId,
+    kind: conversationMessages.kind,
+    model: conversationMessages.model,
+  };
+}
+
+type StoredMessage = Awaited<
+  ReturnType<DrizzleConversationRepository['selectNewest']>
+>[number];
+
+const NOTHING_COMMITTED: ExtractionCommitResult = {
+  committed: false,
+  staleIds: [],
+};
+
+function unchangedMemory(
+  userId: string,
+  memory: MemoryVersionRef
+): SQL | undefined {
+  return and(
+    eq(userMemories.id, memory.id),
+    eq(userMemories.userId, userId),
+    lte(userMemories.updatedAt, sql`${memory.version}::timestamptz`)
+  );
 }
 
 const DISPLAYED_ROW = and(
@@ -198,31 +240,110 @@ export class DrizzleConversationRepository implements ConversationRepository {
     userId: string,
     limit: number
   ): Promise<ConversationMessageRow[]> {
-    const newestFirst = await this.db
+    const newestFirst = await this.selectNewest(conversationId, userId, limit);
+    return this.readableRows(
+      newestFirst.reverse().map((stored) => this.toRow(stored, conversationId)),
+      userId
+    );
+  }
+
+  async loadExtractionWindow(
+    conversationId: string,
+    userId: string,
+    limit: number
+  ): Promise<ExtractionWindow> {
+    const [state] = await this.db
       .select({
-        role: conversationMessages.role,
-        content: conversationMessages.content,
-        sources: readableSources(userId),
-        parts: conversationMessages.parts,
-        stopReason: conversationMessages.stopReason,
-        turnId: conversationMessages.turnId,
-        kind: conversationMessages.kind,
-        model: conversationMessages.model,
+        checkedSeq: conversations.memoryCheckedSeq,
+        taintedSeq: conversations.memoryTaintedSeq,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .limit(1);
+    if (!state) {
+      return { rows: [], uncheckedHistory: false, taintedFromSeq: null };
+    }
+    const newestFirst = await this.selectNewestForExtraction(
+      conversationId,
+      userId,
+      limit + 1
+    );
+    const beyond = newestFirst[limit];
+    const rows = await this.readableRows(
+      newestFirst
+        .slice(0, limit)
+        .reverse()
+        .map((stored) => ({
+          ...this.toRow(stored, conversationId),
+          seq: stored.seq,
+          afterResume: stored.afterResume,
+        })),
+      userId
+    );
+    return {
+      rows,
+      uncheckedHistory:
+        beyond !== undefined &&
+        (state.checkedSeq === null || beyond.seq > state.checkedSeq),
+      taintedFromSeq: state.taintedSeq,
+    };
+  }
+
+  private selectNewest(conversationId: string, userId: string, limit: number) {
+    return this.db
+      .select(messageColumns(userId))
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(desc(conversationMessages.seq))
+      .limit(limit);
+  }
+
+  private selectNewestForExtraction(
+    conversationId: string,
+    userId: string,
+    limit: number
+  ) {
+    const resumedAt = this.db
+      .select({ at: userAiSettings.memoryResumedAt })
+      .from(userAiSettings)
+      .where(eq(userAiSettings.userId, userId));
+    return this.db
+      .select({
+        ...messageColumns(userId),
+        seq: conversationMessages.seq,
+        afterResume: sql<boolean>`coalesce(${conversationMessages.createdAt} > (${resumedAt}), true)`,
       })
       .from(conversationMessages)
       .where(eq(conversationMessages.conversationId, conversationId))
       .orderBy(desc(conversationMessages.seq))
       .limit(limit);
-    const rows = newestFirst.reverse().map((r) => ({
-      role: r.role,
-      content: r.content,
-      sources: r.sources,
-      parts: this.partsOf(r.parts, conversationId),
-      stopReason: r.stopReason ?? null,
-      turnId: r.turnId ?? null,
-      kind: r.kind ?? null,
-      model: r.model ?? null,
-    }));
+  }
+
+  private toRow(
+    stored: StoredMessage,
+    conversationId: string
+  ): ConversationMessageRow {
+    return {
+      role: stored.role,
+      content: stored.content,
+      sources: stored.sources,
+      parts: this.partsOf(stored.parts, conversationId),
+      stopReason: stored.stopReason ?? null,
+      turnId: stored.turnId ?? null,
+      kind: stored.kind ?? null,
+      model: stored.model ?? null,
+    };
+  }
+
+  private async readableRows<T extends ConversationMessageRow>(
+    rows: readonly T[],
+    userId: string
+  ): Promise<T[]> {
     const readable = await this.readableNoteIds(
       noteIdsInToolParts(rows),
       userId
@@ -281,10 +402,16 @@ export class DrizzleConversationRepository implements ConversationRepository {
       stopReason: m.stopReason ?? null,
       kind: m.kind ?? null,
       model: m.model ?? null,
+      usedMemoryIds: m.usedMemoryIds?.length ? [...m.usedMemoryIds] : null,
     }));
     const [first, ...rest] = values;
     const claimsTurn = first.role === 'user';
     return this.db.transaction(async (tx) => {
+      await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, input.conversationId))
+        .for('no key update');
       if (claimsTurn) {
         const claimed = await tx
           .insert(conversationMessages)
@@ -332,8 +459,12 @@ export class DrizzleConversationRepository implements ConversationRepository {
       })
       .from(conversations)
       .innerJoin(users, eq(users.id, conversations.userId))
+      .leftJoin(userAiSettings, eq(userAiSettings.userId, conversations.userId))
       .where(
         sql`${users.isAnonymous} = false
+            AND coalesce(${userAiSettings.memoryEnabled}, ${MEMORY_ENABLED_BY_DEFAULT})
+            AND (${userAiSettings.memoryResumedAt} IS NULL
+                 OR ${conversations.updatedAt} > ${userAiSettings.memoryResumedAt})
             AND ${conversations.updatedAt} < now() - make_interval(secs => ${quietSeconds})
             AND (${conversations.memoriesExtractedAt} IS NULL
                  OR ${conversations.memoriesExtractedAt} < ${conversations.updatedAt})
@@ -346,19 +477,100 @@ export class DrizzleConversationRepository implements ConversationRepository {
       .limit(limit);
   }
 
-  async markExtracted(
+  async commitExtraction(
+    commit: ExtractionCommit
+  ): Promise<ExtractionCommitResult> {
+    const { userId, conversationId, version } = commit;
+    return this.db.transaction(async (tx) => {
+      await tx
+        .insert(userAiSettings)
+        .values({ userId })
+        .onConflictDoNothing({ target: userAiSettings.userId })
+        .returning({ userId: userAiSettings.userId });
+      const [settings] = await tx
+        .select({
+          enabled: userAiSettings.memoryEnabled,
+          resumedSinceState: sql<boolean>`coalesce(${userAiSettings.memoryResumedAt} >= ${version}::timestamptz, false)`,
+        })
+        .from(userAiSettings)
+        .where(eq(userAiSettings.userId, userId))
+        .for('share');
+      if (!settings?.enabled || settings.resumedSinceState) {
+        return NOTHING_COMMITTED;
+      }
+      const staleIds: string[] = [];
+      for (const target of commit.deletes) {
+        const deleted = await tx
+          .delete(userMemories)
+          .where(unchangedMemory(userId, target))
+          .returning({ id: userMemories.id });
+        if (deleted.length === 0) {
+          staleIds.push(target.id);
+        }
+      }
+      if (commit.inserts.length > 0) {
+        await tx
+          .insert(userMemories)
+          .values(
+            commit.inserts.map((insert) => ({
+              userId,
+              content: insert.content,
+              embedding: insert.embedding,
+              sourceConversationId: conversationId,
+            }))
+          )
+          .returning({ id: userMemories.id });
+      }
+      for (const update of commit.updates) {
+        const updated = await tx
+          .update(userMemories)
+          .set({
+            content: update.content,
+            embedding: update.embedding,
+            sourceConversationId: conversationId,
+            updatedAt: sql`now()`,
+          })
+          .where(unchangedMemory(userId, update))
+          .returning({ id: userMemories.id });
+        if (updated.length === 0) {
+          staleIds.push(update.id);
+        }
+      }
+      await tx
+        .update(conversations)
+        .set({
+          memoriesExtractedAt: sql`now()`,
+          memoryExtractionAttempts: 0,
+          memoryExtractionFailedAt: null,
+        })
+        .where(selectedState(userId, conversationId, version))
+        .returning({ id: conversations.id });
+      await this.recordScan(tx, userId, conversationId, commit.scan);
+      return { committed: true, staleIds };
+    });
+  }
+
+  private async recordScan(
+    tx: Pick<Database, 'update'>,
     userId: string,
     conversationId: string,
-    version: string
+    scan: ExtractionScan
   ): Promise<void> {
-    await this.db
+    if (scan.checkedSeq === null && scan.taintedFromSeq === null) {
+      return;
+    }
+    await tx
       .update(conversations)
       .set({
-        memoriesExtractedAt: sql`now()`,
-        memoryExtractionAttempts: 0,
-        memoryExtractionFailedAt: null,
+        memoryCheckedSeq: sql`greatest(${conversations.memoryCheckedSeq}, ${scan.checkedSeq}::bigint)`,
+        memoryTaintedSeq: sql`least(${conversations.memoryTaintedSeq}, ${scan.taintedFromSeq}::bigint)`,
       })
-      .where(selectedState(userId, conversationId, version))
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
       .returning({ id: conversations.id });
   }
 
@@ -496,6 +708,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         stopReason: conversationMessages.stopReason,
         turnId: conversationMessages.turnId,
         kind: conversationMessages.kind,
+        usedMemoryIds: conversationMessages.usedMemoryIds,
       })
       .from(conversationMessages)
       .innerJoin(
@@ -525,6 +738,9 @@ export class DrizzleConversationRepository implements ConversationRepository {
                 sources: row.sources,
                 stopReason: row.stopReason ?? null,
                 ...(row.kind ? { kind: row.kind } : {}),
+                ...(row.usedMemoryIds?.length
+                  ? { usedMemoryIds: row.usedMemoryIds }
+                  : {}),
               },
             ]
       );

@@ -151,10 +151,10 @@ export function noteIdsInToolParts(
  * since it may quote the note, and each tool result that depends on such a note with
  * {@link NOTE_UNAVAILABLE_OUTPUT}; every call stays paired with its result. Ids compare case-insensitively.
  */
-export function redactUnreadableToolParts(
-  rows: readonly ConversationMessageRow[],
+export function redactUnreadableToolParts<T extends ConversationMessageRow>(
+  rows: readonly T[],
   readable: ReadonlySet<string>
-): ConversationMessageRow[] {
+): T[] {
   const legKeys = legKeysOf(rows);
   const argumentsByCall = noteIdArgumentsByCall(rows, legKeys);
   const readableIds = new Set([...readable].map(normalizedNoteId));

@@ -5,6 +5,7 @@ import { QueryBuilder } from 'drizzle-orm/pg-core';
 import {
   isByokProvider,
   isModelIntent,
+  MEMORY_ENABLED_BY_DEFAULT,
   type ByokProvider,
   type ModelIntent,
 } from '@knowtis/shared-types';
@@ -39,6 +40,7 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
         preferredIntent: userAiSettings.preferredIntent,
         primaryProvider: userAiSettings.primaryProvider,
         ghostTextEnabled: userAiSettings.ghostTextEnabled,
+        memoryEnabled: userAiSettings.memoryEnabled,
       })
       .from(userAiSettings)
       .where(eq(userAiSettings.userId, userId))
@@ -48,6 +50,7 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
       preferredIntent: toIntent(row?.preferredIntent ?? null),
       primaryProvider: toProvider(row?.primaryProvider ?? null),
       ghostTextEnabled: row?.ghostTextEnabled ?? true,
+      memoryEnabled: row?.memoryEnabled ?? MEMORY_ENABLED_BY_DEFAULT,
     };
   }
 
@@ -55,13 +58,19 @@ export class DrizzleUserAiSettingsRepository implements UserAiSettingsRepository
     userId: string,
     patch: Partial<UserAiSettings>
   ): Promise<void> {
+    const resumed =
+      patch.memoryEnabled === true
+        ? {
+            memoryResumedAt: sql`CASE WHEN ${userAiSettings.memoryEnabled} THEN ${userAiSettings.memoryResumedAt} ELSE now() END`,
+          }
+        : {};
     // Drizzle's update-set drops undefined entries, so untouched fields stay put.
     await this.db
       .insert(userAiSettings)
       .values({ userId, ...patch })
       .onConflictDoUpdate({
         target: userAiSettings.userId,
-        set: { ...patch, updatedAt: sql`now()` },
+        set: { ...patch, ...resumed, updatedAt: sql`now()` },
       })
       .returning({ userId: userAiSettings.userId });
   }

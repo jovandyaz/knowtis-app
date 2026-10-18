@@ -15,6 +15,7 @@ import {
   EMBEDDING_PORT,
   type EmbeddingPort,
 } from '../../ai/domain/ports/embedding.port';
+import { DrizzleUserAiSettingsRepository } from '../../ai/infrastructure/persistence/drizzle-user-ai-settings.repository';
 import { DrizzleMemoryRepository } from '../infrastructure/persistence/drizzle-memory.repository';
 import { agentEvalModuleImports } from './agent-eval-module';
 
@@ -38,7 +39,10 @@ describe.runIf(GATE)('memory recall retrieval quality', () => {
 
     db = moduleRef.get<Database>(DATABASE_CONNECTION, { strict: false });
     embed = moduleRef.get<EmbeddingPort>(EMBEDDING_PORT, { strict: false });
-    repo = new DrizzleMemoryRepository(db);
+    repo = new DrizzleMemoryRepository(
+      db,
+      new DrizzleUserAiSettingsRepository(db)
+    );
 
     await db
       .insert(users)

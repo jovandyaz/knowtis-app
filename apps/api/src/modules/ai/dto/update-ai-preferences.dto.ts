@@ -45,4 +45,11 @@ export class UpdateAiPreferencesDto {
   })
   @IsOptionalStrictBoolean()
   ghostTextEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Long-term memory; false pauses it, so no turn reads memories and nothing said while paused is mined',
+  })
+  @IsOptionalStrictBoolean()
+  memoryEnabled?: boolean;
 }

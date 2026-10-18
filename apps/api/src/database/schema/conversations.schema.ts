@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   bigserial,
   check,
   index,
@@ -58,6 +59,8 @@ export const conversations = pgTable(
     memoryExtractionFailedAt: timestamp('memory_extraction_failed_at', {
       withTimezone: true,
     }),
+    memoryCheckedSeq: bigint('memory_checked_seq', { mode: 'number' }),
+    memoryTaintedSeq: bigint('memory_tainted_seq', { mode: 'number' }),
     model: varchar('model', { length: MODEL_ID_MAX_LENGTH }),
   },
   (table) => [
@@ -85,6 +88,7 @@ export const conversationMessages = pgTable(
     turnId: uuid('turn_id'),
     kind: text('kind').$type<MessageKind>(),
     model: varchar('model', { length: MODEL_ID_MAX_LENGTH }),
+    usedMemoryIds: uuid('used_memory_ids').array(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -251,6 +251,8 @@ export interface AIPreferences {
   /** Provider whose key intents prefer; null means the first key added. */
   primaryProvider: ByokProvider | null;
   ghostTextEnabled: boolean;
+  /** Long-term memory; false pauses it, so no turn reads memories and no conversation is mined for them, and what was said while paused is never mined. */
+  memoryEnabled: boolean;
 }
 
 export type UpdateAiPreferencesInput = Partial<AIPreferences>;

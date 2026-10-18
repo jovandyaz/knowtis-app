@@ -59,6 +59,8 @@ export interface ConversationTranscriptMessage {
   sources: { id: string; title: string }[];
   stopReason: MessageStopReason | null;
   kind?: MessageKind;
+  /** The memories the prompt of this row's turn received; present only on a terminal assistant row, and only when there were any. */
+  usedMemoryIds?: string[];
 }
 
 export interface ConversationTranscript {

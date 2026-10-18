@@ -44,6 +44,7 @@ describe('useAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useAISettings(), { wrapper });
@@ -63,6 +64,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
     const { wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
@@ -70,6 +72,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -82,6 +85,7 @@ describe('useUpdateAISettings', () => {
           preferredIntent: null,
           primaryProvider: null,
           ghostTextEnabled: true,
+          memoryEnabled: true,
         }
       )
     );
@@ -94,6 +98,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: 'balanced',
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
     const { wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
@@ -101,6 +106,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -113,6 +119,7 @@ describe('useUpdateAISettings', () => {
           preferredIntent: 'fast',
           primaryProvider: null,
           ghostTextEnabled: true,
+          memoryEnabled: true,
         }
       )
     );
@@ -128,6 +135,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -139,6 +147,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
   });
 
@@ -163,6 +172,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: 'openai',
       ghostTextEnabled: true,
+      memoryEnabled: true,
     });
     const { wrapper, queryClient } = createWrapper();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
@@ -218,6 +228,7 @@ describe('useUpdateAISettings', () => {
       preferredIntent: null,
       primaryProvider: null,
       ghostTextEnabled: false,
+      memoryEnabled: true,
     });
     const { wrapper, queryClient } = createWrapper();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');

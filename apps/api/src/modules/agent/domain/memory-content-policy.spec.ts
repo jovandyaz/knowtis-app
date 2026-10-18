@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  isRecallableMemory,
-  isStorableMemory,
-  MEMORY_MAX_CHARS,
-} from './memory-content-policy';
+import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
+
+import { isRecallableMemory, isStorableMemory } from './memory-content-policy';
 
 describe('isStorableMemory', () => {
   it.each([

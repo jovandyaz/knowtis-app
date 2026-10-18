@@ -832,6 +832,7 @@ export class AgentGateway
           webSources: usage.webSources,
           stopReason: usage.stopReason,
           continuable: usage.continuable,
+          memories: usage.memories,
           ...(usage.conversationId
             ? { conversationId: usage.conversationId }
             : {}),

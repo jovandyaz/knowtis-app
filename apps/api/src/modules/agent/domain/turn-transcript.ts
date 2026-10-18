@@ -14,9 +14,11 @@ export interface TurnRowsInput {
   readonly sources: readonly AgentSource[];
   readonly stopReason: MessageStopReason;
   readonly model?: string;
+  /** The memories the turn's prompt received. */
+  readonly usedMemoryIds?: readonly string[];
 }
 
-/** Rows to persist for one turn: the user row, the rows of every completed step, and a terminal assistant row carrying the stop reason and the model that served the turn, added empty when the turn produced none. */
+/** Rows to persist for one turn: the user row, the rows of every completed step, and a terminal assistant row carrying the stop reason, the model that served the turn and the memories its prompt received, added empty when the turn produced none. */
 export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
   const {
     userContent,
@@ -26,8 +28,14 @@ export function buildTurnRows(input: TurnRowsInput): PersistedTurnMessage[] {
     sources,
     stopReason,
     model,
+    usedMemoryIds,
   } = input;
-  const terminal = { sources, stopReason, ...(model ? { model } : {}) };
+  const terminal = {
+    sources,
+    stopReason,
+    ...(model ? { model } : {}),
+    ...(usedMemoryIds?.length ? { usedMemoryIds } : {}),
+  };
   const rows: PersistedTurnMessage[] = [];
   if (userContent !== undefined) {
     rows.push({

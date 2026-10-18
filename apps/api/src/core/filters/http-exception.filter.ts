@@ -8,7 +8,7 @@ import {
   type ArgumentsHost,
   type ExceptionFilter,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 
 import { reasonOf } from '../errors/reason-of';
 import { stackOf } from '../errors/stack-of';
@@ -25,13 +25,17 @@ interface ExposedHttpError extends Error {
   expose: true;
 }
 
-interface ErrorResponse {
+/** The error envelope every API refusal answers with, before `timestamp` and `path` are stamped on it. */
+export interface ErrorBody {
   statusCode: number;
   message: string | string[];
   error: string;
   code?: string;
   errors?: FieldError[];
   details?: Record<string, unknown>;
+}
+
+interface ErrorResponse extends ErrorBody {
   timestamp: string;
   path: string;
 }
@@ -41,9 +45,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest();
+    const request = host.switchToHttp().getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
@@ -88,11 +90,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (status >= 500) {
-      const detail = Array.isArray(message) ? message.join(', ') : message;
-      this.logger.error(
-        `${request.method} ${request.url} - ${status}: ${detail}`,
-        exception instanceof Error ? stackOf(exception) : undefined
-      );
+      this.logServerError(request, status, message, exception);
       message = 'Internal server error';
       error = 'Internal Server Error';
       code = undefined;
@@ -102,28 +100,57 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     // The throttler sets its own Retry-After before it throws, so only our
     // domain refusals write one here.
-    if (exception instanceof RetryAfterHttpException) {
-      response.setHeader(
-        RETRY_AFTER_HEADER,
-        String(exception.retryAfterSeconds)
-      );
-    }
+    this.respond(
+      host,
+      {
+        statusCode: status,
+        message,
+        error,
+        ...(code && { code }),
+        ...(errors && { errors }),
+        ...(details && { details }),
+      },
+      exception instanceof RetryAfterHttpException
+        ? exception.retryAfterSeconds
+        : null
+    );
+  }
 
+  /** Logs a 5xx with the request it answers and the stack of what was thrown. */
+  protected logServerError(
+    request: Request,
+    status: number,
+    message: string | string[],
+    exception: unknown
+  ): void {
+    const detail = Array.isArray(message) ? message.join(', ') : message;
+    this.logger.error(
+      `${request.method} ${request.url} - ${status}: ${detail}`,
+      exception instanceof Error ? stackOf(exception) : undefined
+    );
+  }
+
+  /** Answers with `body` in the error envelope, and a `Retry-After` header when `retryAfterSeconds` is not null. */
+  protected respond(
+    host: ArgumentsHost,
+    body: ErrorBody,
+    retryAfterSeconds: number | null
+  ): void {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    if (retryAfterSeconds !== null) {
+      response.setHeader(RETRY_AFTER_HEADER, String(retryAfterSeconds));
+    }
     const errorResponse: ErrorResponse = {
-      statusCode: status,
-      message,
-      error,
-      ...(code && { code }),
-      ...(errors && { errors }),
-      ...(details && { details }),
+      ...body,
       timestamp: new Date().toISOString(),
       path: request.url,
     };
-
-    response.status(status).json(errorResponse);
+    response.status(body.statusCode).json(errorResponse);
   }
 
-  private getDefaultErrorName(status: number): string {
+  protected getDefaultErrorName(status: number): string {
     return STATUS_CODES[status] ?? 'Internal Server Error';
   }
 }
