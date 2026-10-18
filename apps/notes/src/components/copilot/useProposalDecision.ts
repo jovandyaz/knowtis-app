@@ -34,7 +34,7 @@ export function useProposalDecision(
       } else {
         approve();
       }
-    } else if (event.key === 'Escape') {
+    } else if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
       event.preventDefault();
       if (rejecting) {
         cancelReject();

@@ -9,7 +9,7 @@ import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
 import { useEscapeDismiss } from '@knowtis/design-system';
-import { markdownToFragment } from '@knowtis/editor';
+import { isInLinkConfirmation, markdownToFragment } from '@knowtis/editor';
 
 import { AIStreamingPreview } from './AIStreamingPreview';
 
@@ -110,6 +110,7 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
   }, [reset, editor]);
 
   useEffect(() => {
+    let stopRecordingPress = () => undefined;
     if (isActive) {
       const proseMirrorEl = editor.view.dom;
       const editorRect = proseMirrorEl.getBoundingClientRect();
@@ -118,6 +119,17 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
       const coords = editor.view.coordsAtPos(pos);
 
       tippyRef.current?.destroy();
+
+      let pressTarget: EventTarget | null = null;
+      const recordPress = (event: Event) => {
+        pressTarget = event.target;
+      };
+      document.addEventListener('mousedown', recordPress, true);
+      document.addEventListener('touchstart', recordPress, true);
+      stopRecordingPress = () => {
+        document.removeEventListener('mousedown', recordPress, true);
+        document.removeEventListener('touchstart', recordPress, true);
+      };
 
       const instance = tippy(document.body, {
         getReferenceClientRect: () => ({
@@ -135,6 +147,12 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
         content: portalTarget,
         showOnCreate: true,
         interactive: true,
+        zIndex: 50,
+        onHide: () => {
+          const pressedLinkConfirmation = isInLinkConfirmation(pressTarget);
+          pressTarget = null;
+          return pressedLinkConfirmation ? false : undefined;
+        },
         trigger: 'manual',
         placement: 'bottom-start',
         animation: false,
@@ -149,6 +167,7 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
     }
 
     return () => {
+      stopRecordingPress();
       tippyRef.current?.destroy();
       tippyRef.current = null;
     };

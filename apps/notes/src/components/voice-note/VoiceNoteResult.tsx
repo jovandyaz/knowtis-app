@@ -4,6 +4,7 @@ import { FileText, RefreshCw, Trash2 } from 'lucide-react';
 
 import { Button } from '@knowtis/design-system';
 
+import { BLOCK_LINK_NAVIGATION } from '../../lib/block-link-navigation';
 import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 
 interface VoiceNoteResultProps {
@@ -36,6 +37,7 @@ export function VoiceNoteResult({
 
       <div
         className="prose prose-sm dark:prose-invert max-h-48 overflow-y-auto rounded-lg border border-(--border)/50 bg-(--muted)/30 p-3"
+        {...BLOCK_LINK_NAVIGATION}
         dangerouslySetInnerHTML={{ __html: sanitizeAiHtml(content) }}
       />
 

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@knowtis/design-system';
 import type { SummaryArtifact } from '@knowtis/shared-types';
 
+import { BLOCK_LINK_NAVIGATION } from '../../lib/block-link-navigation';
 import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 
 const COPY_FEEDBACK_MS = 2000;
@@ -51,6 +52,7 @@ export function SummaryViewer({ artifact }: SummaryViewerProps) {
       {content.summary && (
         <div
           className="prose prose-sm dark:prose-invert max-w-none text-foreground"
+          {...BLOCK_LINK_NAVIGATION}
           dangerouslySetInnerHTML={{
             __html: sanitizeAiHtml(content.summary),
           }}

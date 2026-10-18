@@ -53,7 +53,6 @@ export interface NodeAttributeClasses {
 }
 
 export interface SemanticExtensionsOptions {
-  readonly openLinksOnClick?: boolean;
   readonly disableHistory?: boolean;
   readonly classes?: NodeAttributeClasses;
 }
@@ -78,7 +77,7 @@ function buildStarterKitConfig(options: SemanticExtensionsOptions) {
       blockquote: { HTMLAttributes: { class: classes.blockquote } },
     }),
     link: {
-      openOnClick: options.openLinksOnClick ?? false,
+      openOnClick: false,
       HTMLAttributes: {
         rel: 'noopener noreferrer',
         target: '_blank',

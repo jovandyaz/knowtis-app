@@ -9,10 +9,7 @@ interface ReadOnlyEditorProps {
 }
 
 export function ReadOnlyEditor({ content }: ReadOnlyEditorProps) {
-  const extensions = useMemo(
-    () => createBaseExtensions({ openLinksOnClick: true }),
-    []
-  );
+  const extensions = useMemo(() => createBaseExtensions(), []);
   const lastContentRef = useRef(content);
   const editor = useEditor({
     extensions,

@@ -6,6 +6,8 @@ import {
 
 import { isStoredImageUrl } from '@knowtis/shared-util';
 
+import { STREAMDOWN_OVERLAY_PROPS } from '../../components/streamdown-overlay-props';
+
 const LINK_PROTOCOLS: ReadonlySet<string> = new Set(['https:', 'mailto:']);
 
 function urlProperty(
@@ -42,4 +44,5 @@ export const UNTRUSTED_MARKDOWN_PROPS: Pick<
   rehypePlugins: [defaultRehypePlugins['sanitize']],
   allowElement,
   unwrapDisallowed: true,
+  ...STREAMDOWN_OVERLAY_PROPS,
 };

@@ -193,7 +193,11 @@ function DockDialog({
             bodyRef.current
               ?.closest('[role="dialog"]')
               ?.contains(event.target) === true;
-          if (holdOpenOnEscape || (!modal && !pressedInsideDock)) {
+          if (
+            event.isComposing ||
+            holdOpenOnEscape ||
+            (!modal && !pressedInsideDock)
+          ) {
             event.preventDefault();
           }
         }}

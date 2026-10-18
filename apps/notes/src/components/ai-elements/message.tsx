@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Streamdown } from 'streamdown';
 
 import { cn } from '@knowtis/design-system';
+import { STREAMDOWN_OVERLAY_PROPS } from '@knowtis/editor';
 
 import { hardenAssistantUrl } from './harden-assistant-url';
 
@@ -53,7 +54,7 @@ export const Response = memo(({ className, ...props }: ResponseProps) => (
     )}
     {...props}
     urlTransform={hardenAssistantUrl}
-    linkSafety={{ enabled: true }}
+    {...STREAMDOWN_OVERLAY_PROPS}
   />
 ));
 

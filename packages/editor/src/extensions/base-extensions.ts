@@ -26,7 +26,6 @@ import { MarkdownPaste } from './markdown-paste';
 import { MermaidBlockView } from './mermaid-block/MermaidBlockView';
 
 interface BaseExtensionsOptions {
-  openLinksOnClick?: boolean;
   disableHistory?: boolean;
   aiBlockProvider?: AIBlockProvider | null;
   imageImport?: ImageImportOptions;
@@ -42,7 +41,6 @@ const EDITOR_NODE_CLASSES: NodeAttributeClasses = {
 };
 
 export function createBaseExtensions({
-  openLinksOnClick = false,
   disableHistory = false,
   aiBlockProvider = null,
   imageImport,
@@ -53,7 +51,6 @@ export function createBaseExtensions({
     : {};
 
   const semantic = createSemanticExtensions({
-    openLinksOnClick,
     disableHistory,
     classes: EDITOR_NODE_CLASSES,
   });

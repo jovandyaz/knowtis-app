@@ -80,7 +80,7 @@ Push to main → CI (same checks as above) → vercel pull/build/deploy --prebui
 
 The `deploy-frontend` job (`.github/workflows/ci.yml`) runs only on `push` to `main` and only when the `notes` app is affected (`needs.ci.outputs.notes_affected`). It installs the Vercel CLI and runs `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
-Config: `vercel.json` at repo root. Besides the SPA fallback it rewrites `/t/static/*` and `/t/*` to PostHog's US ingestion hosts, which is why the frontend's PostHog `api_host` defaults to `/t`.
+Config: `vercel.json` at repo root. Besides the SPA fallback it rewrites `/t/static/*` and `/t/*` to PostHog's US ingestion hosts, which is why the frontend's PostHog `api_host` defaults to `/t`. Both rewrites carry a `has` condition on the `Sec-Fetch-Dest` request header (`empty` or `script` on both, because posthog-js sends events with fetch, XHR and sendBeacon (`empty`) and loads its remote config and bundles as scripts), so an image load or a CSS `url()` pointed at `/t/…` falls through to the SPA rewrite instead of reaching PostHog ingestion; `apps/notes/src/security-headers.test.ts` requires this of every off-origin rewrite. Chromium, Firefox and WebKit all send `Sec-Fetch-Dest: image` for Mermaid's draw-time image and CSS `url()` fetches, including `filter`, `clip-path`, `mask` and `marker` references. Browsers that don't send `Sec-Fetch-Dest` (Safari < 16.4, Firefox < 90, Chrome < 80) get no analytics through `/t` by design: the allowlist fails closed.
 
 #### Security headers and the CSP rollout
 

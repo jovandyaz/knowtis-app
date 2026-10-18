@@ -32,6 +32,7 @@ import {
 } from '@knowtis/editor';
 import { logger } from '@knowtis/shared-util';
 
+import { BLOCK_LINK_NAVIGATION } from '../../lib/block-link-navigation';
 import { sanitizeProposalHtml } from '../../lib/sanitize-ai-html';
 import { ConfirmationFooter } from '../ai-elements/confirmation';
 import {
@@ -53,7 +54,7 @@ type ReviewItem = { kind: 'title' } | { kind: 'change'; index: number };
 
 const PROSE_CLASSES = 'prose prose-sm dark:prose-invert max-w-none';
 
-const REVIEW_EXTENSIONS = createBaseExtensions({ openLinksOnClick: true });
+const REVIEW_EXTENSIONS = createBaseExtensions();
 
 const ROOT_CLASSES =
   'flex h-full min-h-0 flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
@@ -347,21 +348,27 @@ export function ProposalReview({
                   : 'ai.copilot.review.beforeUnavailable'
               )}
             </p>
-            <div className={PROSE_CLASSES}>
+            <div
+              className={PROSE_CLASSES}
+              data-testid="review-fallback"
+              {...BLOCK_LINK_NAVIGATION}
+            >
               <ReadOnlyEditor content={afterHtml} />
             </div>
           </>
         )}
 
         {diff && (
-          <DiffPreview
-            diff={diff}
-            extensions={REVIEW_EXTENSIONS}
-            showDeleted={showDeleted}
-            currentIndex={currentChangeIndex}
-            labels={labels}
-            className={PROSE_CLASSES}
-          />
+          <div data-testid="review-diff" {...BLOCK_LINK_NAVIGATION}>
+            <DiffPreview
+              diff={diff}
+              extensions={REVIEW_EXTENSIONS}
+              showDeleted={showDeleted}
+              currentIndex={currentChangeIndex}
+              labels={labels}
+              className={PROSE_CLASSES}
+            />
+          </div>
         )}
       </div>
 

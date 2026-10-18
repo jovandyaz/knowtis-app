@@ -17,7 +17,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
 
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Escape' && showPassword) {
+        if (e.key === 'Escape' && showPassword && !e.nativeEvent.isComposing) {
           setShowPassword(false);
         }
         onKeyDown?.(e);

@@ -96,7 +96,10 @@ function EditableAIBlock({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
+        if (!(e.target instanceof Node && e.currentTarget.contains(e.target))) {
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         if (attrs.status === AI_BLOCK_STATUS.STREAMING) {

@@ -87,7 +87,7 @@ function ComposerInput({
       submit(e.metaKey || e.ctrlKey);
       return;
     }
-    if (e.key === 'Escape' && isStreaming) {
+    if (e.key === 'Escape' && isStreaming && !e.nativeEvent.isComposing) {
       e.preventDefault();
       onStop();
       return;

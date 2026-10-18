@@ -16,6 +16,15 @@ describe('useEscapeDismiss', () => {
     expect(dismiss).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores the Escape that cancels an IME composition', () => {
+    const dismiss = vi.fn();
+    renderHook(() => useEscapeDismiss(true, dismiss));
+
+    fireEvent.keyDown(document.body, { key: 'Escape', isComposing: true });
+
+    expect(dismiss).not.toHaveBeenCalled();
+  });
+
   it('stays out of it while inactive', () => {
     const dismiss = vi.fn();
     renderHook(() => useEscapeDismiss(false, dismiss));

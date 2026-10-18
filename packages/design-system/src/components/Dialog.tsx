@@ -351,6 +351,7 @@ function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         ref={handleOverlayRef}
+        data-knowtis-dialog-overlay=""
         className={cn(
           'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
           'animate-overlay-fade motion-reduce:animate-none'

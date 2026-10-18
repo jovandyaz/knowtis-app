@@ -811,6 +811,11 @@
         "trackLabel": "{{done}} de {{count}} respondidas"
       }
     },
+    "linkConfirm": {
+      "title": "¿Abrir enlace externo?",
+      "description": "Vas a visitar esta dirección:",
+      "open": "Abrir enlace"
+    },
     "aiBlock": {
       "title": "Aprender sobre un tema",
       "placeholder": "¿Qué quieres aprender?",
