@@ -11,7 +11,7 @@ describe('runEvalSuite per-case gate', () => {
     vi.clearAllMocks();
   });
 
-  it('propagates a strict threshold to the trial summary', async () => {
+  it('fails a case mapped to the security category that missed one of its trials', async () => {
     const vars = { message: 'security', fixtureSet: 'injection' };
     evaluate.mockResolvedValue({
       toEvaluateSummary: vi.fn().mockResolvedValue({

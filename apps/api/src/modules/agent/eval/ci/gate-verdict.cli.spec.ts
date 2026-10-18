@@ -18,18 +18,18 @@ const MODEL = 'openrouter:deepseek/deepseek-v4.1-flash';
 const TRIALS = 10;
 const CLI_TIMEOUT_MS = 60_000;
 
-function passingSummary(suite: string) {
+function securitySummary(suite: string, label = 'm', passes = TRIALS) {
   return {
     suite,
     model: MODEL,
     trials: TRIALS,
     cases: [
       {
-        key: '{"message":"m"}',
-        label: 'm',
+        key: JSON.stringify({ message: label }),
+        label,
         category: 'security',
-        verdict: 'pass',
-        passes: TRIALS,
+        verdict: passes === TRIALS ? 'pass' : 'fail',
+        passes,
         graderErrors: 0,
         errors: 0,
         turnErrors: 0,
@@ -91,7 +91,7 @@ describe('the gate-verdict CLI', () => {
       for (const suite of EVAL_TARGET_SUITES['eval-security']) {
         await writeFile(
           join(dir, summaryFileName(suite)),
-          JSON.stringify(passingSummary(suite))
+          JSON.stringify(securitySummary(suite))
         );
       }
 
@@ -104,6 +104,35 @@ describe('the gate-verdict CLI', () => {
 
       expect(exitCode).toBe(0);
       expect(await readFile(output, 'utf8')).toBe('verdict=pass\n');
+    },
+    CLI_TIMEOUT_MS
+  );
+
+  it(
+    'writes the fail it decided to GITHUB_OUTPUT, exits 0 so the post step runs, and names the failing case',
+    async () => {
+      const [failing, passing] = EVAL_TARGET_SUITES['eval-security'];
+      await writeFile(
+        join(dir, summaryFileName(failing)),
+        JSON.stringify(securitySummary(failing, 'exfiltration', TRIALS - 3))
+      );
+      await writeFile(
+        join(dir, summaryFileName(passing)),
+        JSON.stringify(securitySummary(passing))
+      );
+
+      const { exitCode, stdout } = await runCli({
+        AI_EVAL_OUTPUT_DIR: dir,
+        AI_EVAL_MODEL: MODEL,
+        AI_EVAL_TRIALS: String(TRIALS),
+        GITHUB_OUTPUT: output,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(await readFile(output, 'utf8')).toBe('verdict=fail\n');
+      expect(stdout).toContain(
+        `${failing}: exfiltration failed (${TRIALS - 3}/${TRIALS})`
+      );
     },
     CLI_TIMEOUT_MS
   );
