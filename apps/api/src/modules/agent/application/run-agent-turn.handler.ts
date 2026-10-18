@@ -92,6 +92,7 @@ import {
   firstCallHistoryBudget,
   firstCallRoom,
 } from '../domain/first-call-budget';
+import { isRecallableMemory } from '../domain/memory-content-policy';
 import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
@@ -549,7 +550,17 @@ export class RunAgentTurnHandler {
         costUsd,
       });
       const matches = await this.memory.searchForUser(userId, vector, k);
-      return matches.filter((m) => m.score >= min).map((m) => m.content);
+      const recalled = matches
+        .filter((m) => m.score >= min)
+        .map((m) => m.content);
+      const recallable = recalled.filter(isRecallableMemory);
+      if (recallable.length < recalled.length) {
+        this.logger.warn({
+          event: 'agent.memory.recall_withheld',
+          count: recalled.length - recallable.length,
+        });
+      }
+      return recallable;
     } catch (error) {
       this.logger.warn(
         'Long-term memory retrieval failed; proceeding without it',

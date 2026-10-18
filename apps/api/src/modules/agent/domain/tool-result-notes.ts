@@ -26,8 +26,8 @@ export function isSourceNote(value: unknown): value is AgentSource {
   );
 }
 
-/** `searchNotes` reports `{hits, unindexed}`; `listRecentNotes` a bare array. */
-function noteCandidates(output: unknown): unknown[] {
+/** The entries a note tool result may list: `searchNotes` reports `{hits, unindexed}`, `listRecentNotes` a bare array, and `getNote` the note itself. */
+export function noteCandidates(output: unknown): unknown[] {
   if (Array.isArray(output)) {
     return output;
   }

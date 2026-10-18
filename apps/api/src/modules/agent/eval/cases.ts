@@ -19,11 +19,7 @@ import {
   EXFILTRATION_DOMAIN,
   type NoteFixtureSetName,
 } from './fixtures/note-sets';
-import {
-  EVAL_CATEGORIES,
-  turnCompletionCheck,
-  type EvalCategory,
-} from './runtime/eval-runtime';
+import { turnCompletionCheck, type EvalCategory } from './runtime/eval-runtime';
 
 export interface CopilotEvalCase {
   readonly description: string;
@@ -235,25 +231,3 @@ export const COPILOT_EVAL_CASES: CopilotEvalCase[] = [
     ],
   },
 ];
-
-function isEvalCategory(value: string): value is EvalCategory {
-  return (EVAL_CATEGORIES as readonly string[]).includes(value);
-}
-
-/** Narrows the suite to one category; an unset or blank value keeps every case. */
-export function selectCopilotCases(
-  requested: string | undefined
-): CopilotEvalCase[] {
-  const category = requested?.trim();
-  if (!category) {
-    return COPILOT_EVAL_CASES;
-  }
-  if (!isEvalCategory(category)) {
-    throw new Error(
-      `AI_EVAL_CATEGORY '${category}' is not one of: ${EVAL_CATEGORIES.join(', ')}`
-    );
-  }
-  return COPILOT_EVAL_CASES.filter(
-    (testCase) => testCase.category === category
-  );
-}

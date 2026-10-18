@@ -41,6 +41,9 @@ export function createStructuredProvider<TVars, TOut>(
   };
 }
 
+/** The model every agent suite evaluates when `AI_EVAL_MODEL` is unset, and the weekly reference leg's. */
+export const DEFAULT_EVAL_MODEL = 'anthropic:claude-sonnet-5';
+
 export function resolveEvalModel(envVar: string, fallback: string): string {
   const value = process.env[envVar];
   return value && value.trim() ? value.trim() : fallback;
@@ -124,6 +127,29 @@ export function evalGateOpen(): boolean {
 
 export const EVAL_CATEGORIES = ['behavior', 'security'] as const;
 export type EvalCategory = (typeof EVAL_CATEGORIES)[number];
+
+const EVAL_CATEGORY_SET: ReadonlySet<string> = new Set(EVAL_CATEGORIES);
+
+function isEvalCategory(value: string): value is EvalCategory {
+  return EVAL_CATEGORY_SET.has(value);
+}
+
+/** Narrows a suite to the category `requested` names (`AI_EVAL_CATEGORY`); an unset or blank value keeps every case, and an unknown one throws rather than running the wrong cases. */
+export function selectEvalCases<T extends { readonly category: EvalCategory }>(
+  cases: readonly T[],
+  requested: string | undefined
+): T[] {
+  const category = requested?.trim();
+  if (!category) {
+    return [...cases];
+  }
+  if (!isEvalCategory(category)) {
+    throw new Error(
+      `AI_EVAL_CATEGORY '${category}' is not one of: ${EVAL_CATEGORIES.join(', ')}`
+    );
+  }
+  return cases.filter((testCase) => testCase.category === category);
+}
 
 /** The share of a case's trials that must pass, by its category. */
 export const MIN_PASS_RATE_BY_CATEGORY = {

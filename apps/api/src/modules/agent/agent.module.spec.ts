@@ -9,11 +9,22 @@ import {
 } from '../../test-support/module-boot';
 import { MessageQuotaService } from '../ai/application/services/message-quota.service';
 import { AI_REDIS } from '../ai/infrastructure/redis/ai-redis.provider';
+import { createExecutionContext } from '../ai/testing/create-execution-context';
 import { AgentGateway } from './agent.gateway';
 import { AgentModule } from './agent.module';
+import { ExtractMemoriesHandler } from './application/extract-memories.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
+import { MEMORY_SAFE_TOOLS, MEMORY_WEB_TOOLS } from './domain/memory-taint';
 import { RETRIEVAL_PORT } from './domain/ports/retrieval.port';
+import { MemoryExtractionTask } from './infrastructure/memory/memory-extraction.task';
+import { ProposalCollector } from './infrastructure/orchestrator/proposal-collector';
+import { WebFetchAllowlist } from './infrastructure/orchestrator/web-fetch-allowlist';
+import { WebSourceCollector } from './infrastructure/orchestrator/web-source.collector';
 import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
+import {
+  AGENT_TOOL_GROUPS,
+  type AgentToolGroup,
+} from './infrastructure/tools/agent-tool';
 import { TurnClaimService } from './infrastructure/turn-claim/turn-claim.service';
 
 const COMPILE_TIMEOUT_MS = 15_000;
@@ -79,6 +90,54 @@ describe('AgentModule wiring', () => {
         expect(Object.values(moduleRef.get(RunAgentTurnHandler))).toContain(
           quota
         );
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'gives the memory extraction task the extraction handler',
+    async () => {
+      const moduleRef = await compileAgentModule(infrastructureStub());
+
+      try {
+        expect(Object.values(moduleRef.get(MemoryExtractionTask))).toContain(
+          moduleRef.get(ExtractMemoriesHandler)
+        );
+      } finally {
+        await moduleRef.close();
+      }
+    },
+    COMPILE_TIMEOUT_MS
+  );
+
+  it(
+    'classifies every tool the registered groups build as safe or tainting for memory extraction',
+    async () => {
+      const moduleRef = await compileAgentModule(infrastructureStub());
+
+      try {
+        const groups = moduleRef.get<AgentToolGroup[]>(AGENT_TOOL_GROUPS);
+        const names = groups.flatMap((group) =>
+          Object.keys(
+            group.build({
+              phase: 'full',
+              execution: createExecutionContext(),
+              proposals: new ProposalCollector(),
+              webSources: new WebSourceCollector(),
+              webFetchAllowlist: new WebFetchAllowlist(),
+            })
+          )
+        );
+        const classified = new Set<string>([
+          ...MEMORY_SAFE_TOOLS,
+          ...MEMORY_WEB_TOOLS,
+        ]);
+
+        expect(names).toEqual(expect.arrayContaining([...classified]));
+        expect(names.filter((name) => !classified.has(name))).toEqual([]);
       } finally {
         await moduleRef.close();
       }

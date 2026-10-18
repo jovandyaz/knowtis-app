@@ -1,9 +1,5 @@
-import * as path from 'node:path';
-
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { I18nModule } from 'nestjs-i18n';
 
 import {
   computeTokenCostUsd,
@@ -11,17 +7,15 @@ import {
   type AiInputDisposition,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
-import { validateEnv, type EnvConfig } from '../../../config/env.config';
-import { DatabaseModule } from '../../../database';
+import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import type { TurnEffort } from '../../ai/domain/model-catalog/effort-policy';
 import { FallbackChainService } from '../../ai/infrastructure/providers/fallback-chain.service';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
-import { AgentModule } from '../agent.module';
 import type { AgentMessage } from '../domain/agent-message';
+import { isRecallableMemory } from '../domain/memory-content-policy';
 import {
   AGENT_ORCHESTRATOR,
   type AgentOrchestrator,
@@ -32,6 +26,7 @@ import {
   coalesceReplayHistory,
   sanitizeReplayHistory,
 } from '../domain/replay-input-sanitizer';
+import { agentEvalModuleImports } from './agent-eval-module';
 import type { NoteFixtureSetName } from './fixtures/note-sets';
 import { resolveFixtureSet } from './fixtures/note-sets';
 import {
@@ -52,6 +47,14 @@ export interface EvalTurnSettings {
   openRouterProviderOrder(): Promise<readonly string[]>;
   openRouterIgnoredProviders(): Promise<readonly string[]>;
   effortFor(model: string): Promise<TurnEffort | undefined>;
+}
+
+/** What one case changes about the turn a harness runs. */
+export interface EvalCaseOptions {
+  /** Overrides the configured step cap. */
+  readonly maxSteps?: number | undefined;
+  /** Stored memories the turn would recall, screened the way a production turn screens them. */
+  readonly userMemories?: readonly string[] | undefined;
 }
 
 interface ReplayOutcomes {
@@ -102,26 +105,8 @@ export class AgentEvalHarness {
 
   static async boot(): Promise<AgentEvalHarness> {
     const retrieval = new RecordingFixtureRetrieval();
-    // Replicates the global context AppModule provides; Schedule, Collaboration
-    // and the i18n watcher stay out because of their side effects.
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          validate: validateEnv,
-          envFilePath: ['.env.local', '.env'],
-        }),
-        EventEmitterModule.forRoot(),
-        I18nModule.forRoot({
-          fallbackLanguage: DEFAULT_LOCALE,
-          loaderOptions: {
-            path: path.join(__dirname, '../../../i18n'),
-            watch: false,
-          },
-        }),
-        DatabaseModule,
-        AgentModule,
-      ],
+      imports: agentEvalModuleImports(),
     })
       .overrideProvider(RETRIEVAL_PORT)
       .useValue(retrieval)
@@ -186,7 +171,7 @@ export class AgentEvalHarness {
     messages: readonly AgentMessage[],
     fixtureSet: NoteFixtureSetName,
     model: string,
-    maxSteps: number = this.maxSteps
+    options: EvalCaseOptions = {}
   ): Promise<EvalTranscript> {
     assertPinnedModelAvailable(this.fallbackChain.candidatesFor(model), model);
     this.retrieval.seed(resolveFixtureSet(fixtureSet));
@@ -195,11 +180,15 @@ export class AgentEvalHarness {
         this.turnSettings.openRouterProviderOrder(),
         this.turnSettings.openRouterIgnoredProviders(),
       ]);
+    const userMemories = (options.userMemories ?? []).filter(
+      isRecallableMemory
+    );
     const events = this.orchestrator.run({
       execution: EVAL_EXECUTION,
       messages,
       model,
-      maxSteps,
+      maxSteps: options.maxSteps ?? this.maxSteps,
+      ...(userMemories.length > 0 ? { userMemories } : {}),
       maxTurnTokens: this.maxTurnTokens,
       effortFor: (candidate) => this.turnSettings.effortFor(candidate),
       openrouterProviderOrder,
@@ -244,18 +233,17 @@ export class AgentEvalHarness {
     };
   }
 
-  /** `maxSteps` overrides the configured step cap for this case only. */
   async runCase(
     message: string,
     fixtureSet: NoteFixtureSetName,
     model: string,
-    maxSteps?: number
+    options: EvalCaseOptions = {}
   ): Promise<EvalTranscript> {
     return this.runConversation(
       [{ role: 'user', content: message }],
       fixtureSet,
       model,
-      maxSteps
+      options
     );
   }
 

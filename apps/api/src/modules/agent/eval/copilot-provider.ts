@@ -10,6 +10,7 @@ interface CopilotVars {
   readonly fixtureSet: NoteFixtureSetName;
   readonly model?: string;
   readonly maxSteps?: number;
+  readonly userMemories?: readonly string[];
 }
 
 export function createCopilotProvider(
@@ -23,7 +24,10 @@ export function createCopilotProvider(
         vars.message,
         vars.fixtureSet,
         vars.model ?? defaultModel,
-        vars.maxSteps
+        {
+          maxSteps: vars.maxSteps,
+          userMemories: vars.userMemories,
+        }
       )
   );
 }
