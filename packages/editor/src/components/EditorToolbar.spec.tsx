@@ -1,6 +1,13 @@
 import type { ComponentProps } from 'react';
 
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -526,6 +533,32 @@ describe('EditorToolbar keyboard navigation', () => {
     await userEvent.keyboard('{ArrowLeft}{ArrowRight}{Home}{End}');
 
     expect(field).toHaveFocus();
+  });
+
+  it('closes the link field on Escape but not while an IME composition is active', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.click(control(KEY.link));
+    const field = within(getToolbar()).getByRole('textbox');
+    await waitFor(() => expect(field).toHaveFocus());
+
+    fireEvent.keyDown(field, { key: 'Escape', isComposing: true });
+    expect(within(getToolbar()).getByRole('textbox')).toBe(field);
+
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(within(getToolbar()).queryByRole('textbox')).toBeNull();
+  });
+
+  it('applies the link on Enter but not while an IME composition is active', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early);
+    await userEvent.click(control(KEY.link));
+    const field = within(getToolbar()).getByRole('textbox');
+    await waitFor(() => expect(field).toHaveFocus());
+
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    expect(within(getToolbar()).getByRole('textbox')).toBe(field);
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(within(getToolbar()).queryByRole('textbox')).toBeNull();
   });
 
   it('leaves modified arrow keys to the browser', async () => {

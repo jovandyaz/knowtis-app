@@ -10,7 +10,7 @@ interface EscapeLayer {
 const escapeLayerStack: EscapeLayer[] = [];
 
 function dismissTopmostLayer(event: globalThis.KeyboardEvent) {
-  if (event.key !== 'Escape') {
+  if (event.key !== 'Escape' || event.isComposing) {
     return;
   }
   // Radix dismissable layers (menus, popovers, its own dialog) listen in the

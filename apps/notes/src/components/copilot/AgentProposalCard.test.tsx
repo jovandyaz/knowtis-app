@@ -139,6 +139,8 @@ describe('AgentProposalCard', () => {
     const card = screen.getByRole('group');
     fireEvent.keyDown(card, { key: 'Enter', metaKey: true });
     expect(onApprove).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(card, { key: 'Escape', isComposing: true });
+    expect(onReject).not.toHaveBeenCalled();
     fireEvent.keyDown(card, { key: 'Escape' });
     expect(onReject).toHaveBeenCalledTimes(1);
   });

@@ -111,6 +111,18 @@ describe('AgentComposer', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it('does not stop streaming on Escape while IME composition is active', () => {
+    const onStop = vi.fn();
+    render(<Harness onStop={onStop} status="streaming" />);
+
+    fireEvent.keyDown(screen.getByRole('textbox'), {
+      key: 'Escape',
+      isComposing: true,
+    });
+
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
   it('queues on Enter while streaming instead of blocking', async () => {
     const onSend = vi.fn();
     const onSendNow = vi.fn();

@@ -12,6 +12,8 @@ export type {
 } from './extensions/ghost-text';
 export type { AIBlockProvider } from './extensions/ai-block/ai-block-provider';
 export { UNTRUSTED_MARKDOWN_PROPS } from './extensions/ai-block/untrusted-markdown';
+export { isInLinkConfirmation } from './components/LinkConfirmationDialog';
+export { STREAMDOWN_OVERLAY_PROPS } from './components/streamdown-overlay-props';
 export { markdownToFragment } from './extensions/ai-block/markdown-renderer';
 export {
   AI_HTML_PURIFY_CONFIG,

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
@@ -9,6 +9,7 @@ import { AI_BLOCK_STATUS, type AIBlockStatus } from '@knowtis/editor-schema';
 
 import { ReadOnlyEditor } from '../../components/ReadOnlyEditor';
 import { createBaseExtensions } from '../base-extensions';
+import type { AIBlockProvider } from './ai-block-provider';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -48,12 +49,16 @@ function noteWithBlock(status: AIBlockStatus, content = GENERATED): string {
 function EditableNote({
   content,
   onCreate,
+  aiBlockProvider,
 }: {
   content: string;
   onCreate?: (editor: Editor) => void;
+  aiBlockProvider?: AIBlockProvider;
 }) {
   const editor = useEditor({
-    extensions: createBaseExtensions(),
+    extensions: createBaseExtensions({
+      ...(aiBlockProvider && { aiBlockProvider }),
+    }),
     content,
     editable: true,
     onCreate: ({ editor: created }) => onCreate?.(created),
@@ -114,6 +119,97 @@ describe('AIBlockView in an editable editor', () => {
     ]);
     expect(screen.getByText(GENERATED)).toBeInTheDocument();
     expect(document.activeElement).toBe(block);
+  });
+});
+
+describe('dismissing a finished block with Escape', () => {
+  it('discards the block on a plain Escape', async () => {
+    const user = userEvent.setup();
+    render(<EditableNote content={noteWithBlock(AI_BLOCK_STATUS.DONE)} />);
+    await screen.findByRole('group', { name: 'ai.aiBlock.title' });
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByText(GENERATED)).toBeNull();
+  });
+
+  it('keeps the block when the Escape cancels an IME composition', async () => {
+    render(<EditableNote content={noteWithBlock(AI_BLOCK_STATUS.DONE)} />);
+    const block = await screen.findByRole('group', {
+      name: 'ai.aiBlock.title',
+    });
+
+    fireEvent.keyDown(block, { key: 'Escape', isComposing: true });
+
+    expect(screen.getByText(GENERATED)).toBeInTheDocument();
+  });
+
+  it('keeps a streaming block when Escape closes a link dialog', async () => {
+    const user = userEvent.setup();
+    const provider: AIBlockProvider = {
+      async *stream({ signal }) {
+        yield { text: '[docs](https://example.com/docs)' };
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve())
+        );
+      },
+    };
+    render(
+      <EditableNote
+        content={noteWithBlock(AI_BLOCK_STATUS.INPUT)}
+        aiBlockProvider={provider}
+      />
+    );
+    await user.type(await screen.findByRole('textbox'), 'Rome');
+    await user.click(
+      screen.getByRole('button', { name: 'ai.aiBlock.generate' })
+    );
+    await user.click(await screen.findByRole('button', { name: 'docs' }));
+    await screen.findByRole('dialog');
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'ai.aiBlock.cancel' })
+    ).toBeInTheDocument();
+  });
+
+  it('discards the block on Escape while a control shows its tooltip', async () => {
+    const user = userEvent.setup();
+    render(<EditableNote content={noteWithBlock(AI_BLOCK_STATUS.DONE)} />);
+    await screen.findByRole('group', { name: 'ai.aiBlock.title' });
+    await user.tab();
+    await user.tab();
+    expect(
+      screen.getByRole('button', { name: 'ai.aiBlock.retry' })
+    ).toHaveFocus();
+    await screen.findByRole('tooltip');
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByText(GENERATED)).toBeNull();
+  });
+
+  it('closes only the link dialog on Escape and keeps the block', async () => {
+    const user = userEvent.setup();
+    render(
+      <EditableNote
+        content={noteWithBlock(
+          AI_BLOCK_STATUS.DONE,
+          '[docs](https://example.com/docs)'
+        )}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'docs' }));
+    await screen.findByRole('dialog');
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.getByRole('group', { name: 'ai.aiBlock.title' })
+    ).toBeInTheDocument();
   });
 });
 

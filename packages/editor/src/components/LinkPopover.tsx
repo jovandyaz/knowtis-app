@@ -107,10 +107,10 @@ export function LinkPopover({ editor, ...itemProps }: LinkPopoverProps) {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                   applyLink();
                 }
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
                   closePopover();
                 }
               }}

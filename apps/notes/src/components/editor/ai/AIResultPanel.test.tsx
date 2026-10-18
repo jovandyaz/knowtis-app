@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
 import { useAIStore } from '@/stores/ai.store';
+import { pressEscape } from '@/test/escape';
+import { createMockEditor } from '@/test/mock-editor';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Editor } from '@tiptap/react';
 import type * as StreamdownModule from 'streamdown';
@@ -28,32 +30,6 @@ vi.mock('streamdown', async (importOriginal) => ({
   Streamdown: () => null,
 }));
 
-function createMockEditor(): Editor {
-  const dom = document.createElement('div');
-  Object.defineProperty(dom, 'getBoundingClientRect', {
-    value: () => ({
-      width: 400,
-      height: 0,
-      top: 0,
-      left: 0,
-      right: 400,
-      bottom: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    }),
-  });
-
-  return {
-    view: {
-      dom,
-      coordsAtPos: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-    },
-    state: { selection: { to: 0 } },
-    commands: { focus: vi.fn() },
-  } as unknown as Editor;
-}
-
 function createTornDownEditor(): Editor {
   return {
     isDestroyed: true,
@@ -65,12 +41,6 @@ function createTornDownEditor(): Editor {
     state: { selection: { to: 0 } },
     commands: { focus: vi.fn() },
   } as unknown as Editor;
-}
-
-function pressEscape() {
-  act(() => {
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-  });
 }
 
 function TestDialog({
