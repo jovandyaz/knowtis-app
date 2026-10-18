@@ -1,20 +1,26 @@
 import { createInstance, type i18n as I18nInstance } from 'i18next';
 
 let i18n: I18nInstance;
+let langAfterInitialization: string;
 
-beforeEach(async () => {
+beforeAll(async () => {
   localStorage.clear();
   document.documentElement.lang = 'before-initialization';
-  vi.doUnmock('i18next');
   vi.resetModules();
   const isolatedI18n = createInstance();
   vi.doMock('i18next', () => ({ default: isolatedI18n }));
 
   ({ default: i18n } = await import('../lib/i18n'));
   await vi.waitFor(() => expect(i18n.isInitialized).toBe(true));
+  langAfterInitialization = document.documentElement.lang;
 });
 
-afterEach(() => {
+beforeEach(async () => {
+  Reflect.deleteProperty(i18n, 'resolvedLanguage');
+  await i18n.changeLanguage('en');
+});
+
+afterAll(() => {
   vi.doUnmock('i18next');
   vi.resetModules();
   localStorage.clear();
@@ -56,7 +62,7 @@ describe('i18n configuration', () => {
 
   it('sets the document language after initialization', () => {
     expect(i18n.resolvedLanguage).toBe('en');
-    expect(document.documentElement.lang).toBe('en');
+    expect(langAfterInitialization).toBe('en');
   });
 
   it('updates the document language when the language changes', async () => {
