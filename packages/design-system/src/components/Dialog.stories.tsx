@@ -166,3 +166,49 @@ function FullscreenDialogExample() {
 export const Fullscreen: Story = {
   render: () => <FullscreenDialogExample />,
 };
+
+function BusyDialogExample() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        Open busy dialog
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!busy) {
+            setOpen(next);
+          }
+        }}
+      >
+        <DialogContent closeLabel="Close dialog" closeDisabled={busy}>
+          <DialogHeader>
+            <DialogTitle>Forget everything?</DialogTitle>
+            <DialogDescription>
+              While the work runs, the dialog cannot be closed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => setBusy((value) => !value)}>
+              {busy ? 'Finish' : 'Start'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export const CloseDisabled: Story = {
+  render: () => <BusyDialogExample />,
+};

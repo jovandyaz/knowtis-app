@@ -56,6 +56,9 @@ export function useUpdateAISettings() {
         });
         toast.error(t('aiAssistant.primaryProvider.saveFailed'));
       }
+      if (input.memoryEnabled !== undefined) {
+        toast.error(t('memory.toggleFailed'));
+      }
     },
     onSettled: (_data, _error, input) => {
       void queryClient.invalidateQueries({

@@ -128,6 +128,10 @@ export function AgentCopilotPanel() {
   const { noteId } = useParams({ strict: false }) as { noteId?: string };
   const { canVerify, prompt: promptVerification } = useVerifyEmailGate();
   const reviewOpen = useRightDockStore((s) => s.reviewOpen);
+  const composerFocusRequested = useRightDockStore(
+    (s) => s.focusTarget === 'composer'
+  );
+  const clearDockFocusTarget = useRightDockStore((s) => s.clearFocusTarget);
   const openReview = useRightDockStore((s) => s.openReview);
   const closeReview = useRightDockStore((s) => s.closeReview);
   const updateProposal =
@@ -352,6 +356,8 @@ export function AgentCopilotPanel() {
         modelPicker={<CopilotModelPicker />}
         counter={<QuotaCounter quota={quota} />}
         locked={quotaLock && <QuotaLockedNotice {...quotaLock} />}
+        focusRequested={composerFocusRequested}
+        onFocusTaken={clearDockFocusTarget}
       />
     </div>
   );

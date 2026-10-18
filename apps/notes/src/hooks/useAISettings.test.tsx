@@ -58,6 +58,40 @@ describe('useUpdateAISettings', () => {
     vi.clearAllMocks();
   });
 
+  it('says a memory switch failed even after the screen that flipped it has gone', async () => {
+    let reject: (error: Error) => void = () => undefined;
+    vi.mocked(aiModelsApi.updatePreferences).mockReturnValue(
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      })
+    );
+    const { wrapper } = createWrapper();
+
+    const { result, unmount } = renderHook(() => useUpdateAISettings(), {
+      wrapper,
+    });
+    result.current.mutate({ memoryEnabled: false });
+    unmount();
+    reject(new Error('network error'));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('memory.toggleFailed')
+    );
+  });
+
+  it('stays quiet about a failed write that is not the memory switch', async () => {
+    vi.mocked(aiModelsApi.updatePreferences).mockRejectedValue(
+      new Error('network error')
+    );
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ ghostTextEnabled: false });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(toast.error).not.toHaveBeenCalledWith('memory.toggleFailed');
+  });
+
   it('applies an optimistic write before the server responds', async () => {
     vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
       preferredModel: 'b',

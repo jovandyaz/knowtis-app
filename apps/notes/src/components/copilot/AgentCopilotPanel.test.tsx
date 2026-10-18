@@ -64,12 +64,18 @@ vi.mock('./AgentComposer', () => ({
     onSendNow: (text: string) => void;
     counter?: ReactNode;
     locked?: ReactNode;
+    focusRequested?: boolean;
+    onFocusTaken?: () => void;
   }) => (
     <div
       data-testid="composer"
       data-draft={props.draft}
       data-queue={props.queueLength}
+      data-focus-requested={String(props.focusRequested)}
     >
+      <button type="button" onClick={props.onFocusTaken}>
+        take-focus
+      </button>
       {props.locked || (
         <>
           <button type="button" onClick={() => props.onSend('later')}>
@@ -159,7 +165,7 @@ function failWith(code: string) {
 describe('AgentCopilotPanel', () => {
   beforeEach(() => {
     useVerifyEmailStore.setState({ isOpen: false });
-    useRightDockStore.setState({ reviewOpen: false });
+    useRightDockStore.setState({ reviewOpen: false, focusTarget: null });
     useAgentStore.setState({
       status: 'idle',
       error: null,
@@ -178,6 +184,24 @@ describe('AgentCopilotPanel', () => {
     vi.mocked(conversationsApi.transcript).mockReset();
     vi.mocked(agentClient.resumeConversation).mockClear();
     vi.mocked(toast.info).mockClear();
+  });
+
+  it('asks the composer for the focus the dock was opened to give it, once', async () => {
+    const user = userEvent.setup();
+    act(() => useRightDockStore.getState().open('composer'));
+    render(<AgentCopilotPanel />, { wrapper });
+
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-focus-requested',
+      'true'
+    );
+    await user.click(screen.getByRole('button', { name: 'take-focus' }));
+
+    expect(useRightDockStore.getState().focusTarget).toBeNull();
+    expect(screen.getByTestId('composer')).toHaveAttribute(
+      'data-focus-requested',
+      'false'
+    );
   });
 
   it('offers verification when the copilot share is refused for an unverified account', () => {
@@ -919,7 +943,7 @@ const createProposal = {
 
 describe('AgentCopilotPanel proposal routing', () => {
   beforeEach(() => {
-    useRightDockStore.setState({ reviewOpen: false });
+    useRightDockStore.setState({ reviewOpen: false, focusTarget: null });
     useAgentStore.setState({
       status: 'idle',
       error: null,

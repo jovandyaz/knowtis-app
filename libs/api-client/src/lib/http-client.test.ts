@@ -138,6 +138,36 @@ describe('HttpClient', () => {
       });
     });
 
+    it('carries the details the server attached to the code', async () => {
+      mockFetch.mockResolvedValue(
+        errorResponse(422, {
+          message: 'Refused',
+          code: 'AGENT_MEMORY_REJECTED',
+          details: { reason: 'content_policy' },
+        })
+      );
+
+      const error = await captureError(client.patch('/test', {}));
+
+      expect(error.code).toBe('AGENT_MEMORY_REJECTED');
+      expect(error.details).toEqual({ reason: 'content_policy' });
+    });
+
+    it.each([
+      ['no details', {}],
+      ['details that are not an object', { details: 'content_policy' }],
+      ['details that are a list', { details: ['content_policy'] }],
+      ['null details', { details: null }],
+    ])('leaves the details unset for %s', async (_label, extra) => {
+      mockFetch.mockResolvedValue(
+        errorResponse(422, { message: 'Refused', ...extra })
+      );
+
+      expect(
+        (await captureError(client.patch('/test', {}))).details
+      ).toBeUndefined();
+    });
+
     it('should handle 204 No Content', async () => {
       mockFetch.mockResolvedValue({
         ok: true,

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { SettingsSection } from '@/stores/settings.store';
 import {
   Bell,
+  Brain,
   FileEdit,
   Globe,
   Layers,
@@ -24,6 +25,7 @@ const NAV_ITEMS: { section: SettingsSection; icon: ElementType }[] = [
   { section: 'language', icon: Globe },
   { section: 'editor', icon: FileEdit },
   { section: 'aiAssistant', icon: Sparkles },
+  { section: 'memory', icon: Brain },
   { section: 'plan', icon: Layers },
   { section: 'notifications', icon: Bell },
   { section: 'integrations', icon: Puzzle },

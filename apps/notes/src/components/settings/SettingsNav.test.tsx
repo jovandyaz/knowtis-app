@@ -13,6 +13,12 @@ vi.mock('@knowtis/data-access-oauth', () => ({
   useConnectedAppsAvailable: () => useConnectedAppsAvailable(),
 }));
 
+function sectionOrder(): (string | null)[] {
+  return screen
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'));
+}
+
 describe('SettingsNav', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,16 +47,17 @@ describe('SettingsNav', () => {
     ).toBeInTheDocument();
   });
 
-  it('lists the Plan right after the AI assistant', () => {
+  it('lists Memory right after the AI assistant, then the Plan', () => {
     useConnectedAppsAvailable.mockReturnValue(false);
 
     render(<SettingsNav activeSection="profile" onSectionChange={vi.fn()} />);
 
-    const sections = screen
-      .getAllByRole('button')
-      .map((button) => button.getAttribute('aria-label'));
-    expect(sections.indexOf('settings.sections.plan')).toBe(
-      sections.indexOf('settings.sections.aiAssistant') + 1
-    );
+    const sections = sectionOrder();
+    const aiAssistant = sections.indexOf('settings.sections.aiAssistant');
+    expect(sections.slice(aiAssistant, aiAssistant + 3)).toEqual([
+      'settings.sections.aiAssistant',
+      'settings.sections.memory',
+      'settings.sections.plan',
+    ]);
   });
 });

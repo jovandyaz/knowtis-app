@@ -12,6 +12,14 @@ import { runAnalyticsSafely } from './best-effort';
 import { ANALYTICS_ENVIRONMENT, APP_VERSION } from './constants';
 import { canCaptureAnalytics, isAnalyticsReady } from './runtime';
 
+export const CONVERSATION_OPEN_SOURCES = [
+  'switcher',
+  'reload',
+  'memory',
+] as const;
+
+export type ConversationOpenSource = (typeof CONVERSATION_OPEN_SOURCES)[number];
+
 export interface BrowserActorContext {
   environment: typeof ANALYTICS_ENVIRONMENT;
   app_version: string;
@@ -38,7 +46,7 @@ export interface BrowserProductEventMap {
     queue_length: number;
   };
   'ai conversation opened': {
-    source: 'switcher' | 'reload';
+    source: ConversationOpenSource;
   };
   'ai conversation deleted': {
     source: 'switcher';

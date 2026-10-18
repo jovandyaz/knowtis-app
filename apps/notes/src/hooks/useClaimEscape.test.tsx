@@ -16,7 +16,31 @@ function Field({ onEscape }: { onEscape: () => void }) {
   );
 }
 
+function Form({ onEscape }: { onEscape: () => void }) {
+  const ref = useRef<HTMLFormElement>(null);
+  useClaimEscape(ref, onEscape);
+  return (
+    <form ref={ref} aria-label="form">
+      <input aria-label="inside" />
+      <button type="button">Save</button>
+    </form>
+  );
+}
+
 describe('useClaimEscape', () => {
+  it('hands it an Escape pressed on any control inside its element', () => {
+    const onEscape = vi.fn();
+    render(<Form onEscape={onEscape} />);
+
+    const pressed = fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Save' }),
+      { key: 'Escape' }
+    );
+
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    expect(pressed).toBe(false);
+  });
+
   it('hands Escape to its field before anything outside can dismiss on it', () => {
     const onEscape = vi.fn();
     const documentSaw = vi.fn();

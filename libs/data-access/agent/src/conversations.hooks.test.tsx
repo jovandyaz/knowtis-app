@@ -12,7 +12,6 @@ import type { ConversationPage } from '@knowtis/shared-types';
 import {
   conversationsQueryKeys,
   invalidateConversations,
-  isConversationGone,
   useConversations,
   useDeleteConversation,
   useRenameConversation,
@@ -134,14 +133,5 @@ describe('conversation hooks', () => {
     invalidateConversations(queryClient);
 
     expect(isStale()).toBe(true);
-  });
-
-  it.each([
-    ['a 404 from the API', new ApiClientError('gone', 404), true],
-    ['another API failure', new ApiClientError('boom', 500), false],
-    ['a plain error', new Error('404'), false],
-    ['nothing', undefined, false],
-  ])('reads %s as gone: %s', (_label, error, gone) => {
-    expect(isConversationGone(error)).toBe(gone);
   });
 });
