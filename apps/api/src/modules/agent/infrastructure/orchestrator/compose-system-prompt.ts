@@ -1,5 +1,6 @@
+import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
+
 import type { AgentSource } from '../../domain/agent-event';
-import { MEMORY_MAX_CHARS } from '../../domain/memory-content-policy';
 import { toPromptLiteral } from '../../domain/prompt-literal';
 import { AGENT_SYSTEM_PROMPT } from './agent-system-prompt';
 

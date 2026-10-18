@@ -23,6 +23,7 @@ import {
   type MessageStopReason,
   type ModelResolution,
   type ReasoningEffort,
+  type RecalledMemory,
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
@@ -189,6 +190,8 @@ export interface RunAgentTurnCallbacks {
     conversationId?: string;
     /** Which model the turn asked for and which served it. */
     modelResolution?: ModelResolution;
+    /** The long-term memories the turn's prompt received. */
+    memories: readonly RecalledMemory[];
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
@@ -218,6 +221,7 @@ interface TurnLoopContext {
   readonly model: string;
   readonly resolution: ModelResolution;
   readonly retiredPick: string | undefined;
+  readonly memories: readonly RecalledMemory[];
   reconciled: boolean;
 }
 
@@ -263,7 +267,7 @@ type PreparedTurn =
   | {
       readonly kind: typeof PREPARED_TURN.READY;
       readonly messages: AgentMessage[];
-      readonly userMemories: string[];
+      readonly userMemories: RecalledMemory[];
       readonly limits: SegmentLimits;
       readonly openrouterProviderOrder: readonly string[];
       readonly openrouterIgnoredProviders: readonly string[];
@@ -524,7 +528,7 @@ export class RunAgentTurnHandler {
   private async loadUserMemories(
     execution: AiExecutionContext,
     memoryQuery: string
-  ): Promise<string[]> {
+  ): Promise<RecalledMemory[]> {
     if (!execution.policy.longTermMemory) {
       return [];
     }
@@ -538,7 +542,10 @@ export class RunAgentTurnHandler {
       return [];
     }
     try {
-      if (!this.embed.isConfigured()) {
+      if (
+        !this.embed.isConfigured() ||
+        !(await this.memory.isEnabledFor(userId))
+      ) {
         return [];
       }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
@@ -550,10 +557,10 @@ export class RunAgentTurnHandler {
         costUsd,
       });
       const matches = await this.memory.searchForUser(userId, vector, k);
-      const recalled = matches
-        .filter((m) => m.score >= min)
-        .map((m) => m.content);
-      const recallable = recalled.filter(isRecallableMemory);
+      const recalled = matches.filter((m) => m.score >= min);
+      const recallable = recalled
+        .filter((m) => isRecallableMemory(m.content))
+        .map(({ id, content }) => ({ id, content }));
       if (recallable.length < recalled.length) {
         this.logger.warn({
           event: 'agent.memory.recall_withheld',
@@ -639,8 +646,11 @@ export class RunAgentTurnHandler {
 
   private async persistTurn(
     persistence: PersistenceContext,
-    turnMessages: readonly AgentMessage[],
-    assistantText: string,
+    turn: {
+      readonly turnMessages: readonly AgentMessage[];
+      readonly assistantText: string;
+      readonly usedMemoryIds: readonly string[];
+    },
     sources: readonly AgentSource[],
     stopReason: MessageStopReason,
     servedModel?: string
@@ -648,8 +658,9 @@ export class RunAgentTurnHandler {
     const messages = buildTurnRows({
       userContent: persistence.userContent,
       ...(persistence.userKind ? { userKind: persistence.userKind } : {}),
-      turnMessages,
-      assistantText,
+      turnMessages: turn.turnMessages,
+      assistantText: turn.assistantText,
+      usedMemoryIds: turn.usedMemoryIds,
       sources,
       stopReason,
       ...(servedModel ? { model: servedModel } : {}),
@@ -712,6 +723,7 @@ export class RunAgentTurnHandler {
           stopReason: AGENT_STOP_REASON.COMPLETED,
           continuable: false,
           modelResolution: ctx.resolution,
+          memories: ctx.memories,
         });
         await this.forgetDeliveredRetiredPick(ctx);
         return 'stop';
@@ -1009,6 +1021,7 @@ export class RunAgentTurnHandler {
       model,
       resolution: resolved.resolution,
       retiredPick: resolved.retiredPick,
+      memories: prepared.userMemories,
       reconciled: false,
     };
     // Only an admitted turn may repin the conversation: a HITL resume serves
@@ -1040,8 +1053,11 @@ export class RunAgentTurnHandler {
       persisted = true;
       stored = await this.persistTurn(
         persistence,
-        turnMessages,
-        assistantText,
+        {
+          turnMessages,
+          assistantText,
+          usedMemoryIds: ctx.memories.map((memory) => memory.id),
+        },
         sources,
         stopReason,
         servedModel
@@ -1088,7 +1104,11 @@ export class RunAgentTurnHandler {
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(prepared.userMemories.length
-          ? { userMemories: prepared.userMemories }
+          ? {
+              userMemories: prepared.userMemories.map(
+                (memory) => memory.content
+              ),
+            }
           : {}),
         ...(signal ? { signal } : {}),
         ...(resume ? { resume } : {}),
@@ -1197,6 +1217,7 @@ export class RunAgentTurnHandler {
                 ? { conversationId: persistence.conversationId }
                 : {}),
               modelResolution: ctx.resolution,
+              memories: ctx.memories,
             });
             await this.forgetDeliveredRetiredPick(ctx);
             return;

@@ -55,6 +55,7 @@ function preferences(primaryProvider: ByokProvider | null): AIPreferences {
     preferredIntent: null,
     primaryProvider,
     ghostTextEnabled: true,
+    memoryEnabled: true,
   };
 }
 

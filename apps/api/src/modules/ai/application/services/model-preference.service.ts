@@ -161,12 +161,14 @@ export class ModelPreferenceService {
       preferredIntent,
       primaryProvider,
       ghostTextEnabled,
+      memoryEnabled,
     } = await this.settings.getSettings(userId);
     const stored: AIPreferences = {
       preferredModel,
       preferredIntent,
       primaryProvider,
       ghostTextEnabled,
+      memoryEnabled,
     };
     const platformIntents = preferredModel
       ? await this.aiConfig.getIntentModels()

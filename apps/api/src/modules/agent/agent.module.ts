@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { ShutdownDrainModule } from '../websocket/shutdown-drain.module';
 import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
+import { EditMemoryHandler } from './application/edit-memory.handler';
 import { ExtractMemoriesHandler } from './application/extract-memories.handler';
 import { InjectionGuardService } from './application/injection-guard.service';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
@@ -83,6 +84,7 @@ import { MemoryController } from './memory.controller';
       useClass: DrizzleNoteExposureRepository,
     },
     EmbeddingReconcileTask,
+    EditMemoryHandler,
     ExtractMemoriesHandler,
     MemoryExtractionTask,
     AgentHealthQueries,

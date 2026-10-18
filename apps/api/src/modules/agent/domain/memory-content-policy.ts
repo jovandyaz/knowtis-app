@@ -1,7 +1,5 @@
 import { detectPromptInjection } from '@knowtis/ai-gateway';
-
-/** The longest memory that is stored, and the most of one a prompt ever receives. */
-export const MEMORY_MAX_CHARS = 300;
+import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
 
 const UNSTORABLE_PATTERNS: readonly RegExp[] = [
   /[a-z][a-z\d+.-]*:\/\//i,

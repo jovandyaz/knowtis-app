@@ -261,6 +261,7 @@ import { ModelGateController } from './model-gate.controller';
     EMBEDDING_PORT,
     WEB_SEARCH_PORT,
     AI_USAGE_REPOSITORY,
+    USER_AI_SETTINGS_REPOSITORY,
     WebhookAlertService,
   ],
 })

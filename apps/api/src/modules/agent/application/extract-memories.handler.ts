@@ -33,7 +33,7 @@ import {
   type PartitionedOps,
 } from '../domain/memory-reconcile';
 import {
-  memoryTranscript,
+  memoryTranscriptOfWindow,
   type MemoryTaintReason,
   type MemoryTranscriptRow,
 } from '../domain/memory-taint';
@@ -41,6 +41,8 @@ import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
   type ExtractableConversation,
+  type ExtractionCommitResult,
+  type ExtractionScan,
 } from '../domain/ports/conversation.repository';
 import {
   MEMORY_REPOSITORY,
@@ -54,7 +56,7 @@ import { toPromptLiteral } from '../domain/prompt-literal';
 import { noteIdsInToolParts } from '../domain/tool-result-notes';
 import { InjectionGuardService } from './injection-guard.service';
 
-/** Rows read to decide whether a conversation is tainted; a conversation longer than this is treated as tainted. */
+/** Rows read to decide whether a conversation is tainted; a longer conversation is treated as tainted unless earlier runs read the rows before them. */
 export const TRANSCRIPT_ROW_WINDOW = 160;
 const TRANSCRIPT_TEXT_ROWS = 40;
 const MAX_OUTPUT_TOKENS = 1024;
@@ -101,6 +103,35 @@ export interface MemoryExtractionOutcome {
     readonly inputTokens: number;
     readonly outputTokens: number;
   } | null;
+}
+
+interface EmbeddedPlan {
+  readonly inserts: readonly { content: string; embedding: number[] }[];
+  readonly updates: readonly {
+    id: string;
+    content: string;
+    embedding: number[];
+  }[];
+  readonly deletes: readonly string[];
+}
+
+const NOTHING_APPLIED: EmbeddedPlan = {
+  inserts: [],
+  updates: [],
+  deletes: [],
+};
+const NO_VERSIONS: ReadonlyMap<string, string> = new Map();
+
+function withoutStale(
+  plan: EmbeddedPlan,
+  staleIds: readonly string[]
+): EmbeddedPlan {
+  const stale = new Set(staleIds);
+  return {
+    inserts: plan.inserts,
+    updates: plan.updates.filter((update) => !stale.has(update.id)),
+    deletes: plan.deletes.filter((id) => !stale.has(id)),
+  };
 }
 
 interface ScreenedCandidates {
@@ -160,23 +191,18 @@ export class ExtractMemoriesHandler {
     model,
     finalAttempt,
   }: ExtractMemoriesInput): Promise<MemoryExtractionOutcome> {
-    const { id: conversationId, userId, version } = conversation;
-    const loaded = await this.conversations.loadMessages(
+    const { id: conversationId, userId } = conversation;
+    const window = await this.conversations.loadExtractionWindow(
       conversationId,
       userId,
-      TRANSCRIPT_ROW_WINDOW + 1
+      TRANSCRIPT_ROW_WINDOW
     );
-    const historyTruncated = loaded.length > TRANSCRIPT_ROW_WINDOW;
-    const rows = historyTruncated
-      ? loaded.slice(-TRANSCRIPT_ROW_WINDOW)
-      : loaded;
     const noteExposures = await this.noteExposure.findExposures(
       userId,
-      noteIdsInToolParts(rows)
+      noteIdsInToolParts(window.rows)
     );
-    const transcript = memoryTranscript(rows, {
+    const transcript = memoryTranscriptOfWindow(window, {
       textLimit: TRANSCRIPT_TEXT_ROWS,
-      historyTruncated,
       noteExposures,
     });
     const taint = {
@@ -184,7 +210,12 @@ export class ExtractMemoriesHandler {
       taintReasons: transcript.reasons,
     };
     if (transcript.rows.length === 0) {
-      await this.conversations.markExtracted(userId, conversationId, version);
+      await this.commit(
+        conversation,
+        transcript.scan,
+        NOTHING_APPLIED,
+        NO_VERSIONS
+      );
       return { ...taint, reconcile: null };
     }
 
@@ -220,14 +251,22 @@ export class ExtractMemoriesHandler {
       execution,
       finalAttempt
     );
-    const applied = await this.applyScreened({
+    const planned = await this.embedScreened({
       userId,
-      conversationId,
       execution,
       screened,
       deletes: allowed.deletes,
       max,
     });
+    const outcome = await this.commit(
+      conversation,
+      transcript.scan,
+      planned,
+      new Map(existing.map((memory) => [memory.id, memory.version]))
+    );
+    const applied = outcome.committed
+      ? withoutStale(planned, outcome.staleIds)
+      : NOTHING_APPLIED;
 
     this.logger.log({
       event: 'agent.memory.candidates_screened',
@@ -244,10 +283,10 @@ export class ExtractMemoriesHandler {
         policy: screened.rejectedByPolicy,
         guard: screened.rejectedByGuard,
         undecided: screened.undecided,
+        stale: outcome.staleIds.length,
       },
-      applied: opCounts(applied),
+      applied: opCounts({ ...applied, adds: applied.inserts }),
     });
-    await this.conversations.markExtracted(userId, conversationId, version);
     return {
       ...taint,
       reconcile: {
@@ -338,21 +377,49 @@ export class ExtractMemoriesHandler {
     };
   }
 
-  private async applyScreened({
+  private async commit(
+    { id: conversationId, userId, version }: ExtractableConversation,
+    scan: ExtractionScan,
+    plan: EmbeddedPlan,
+    versions: ReadonlyMap<string, string>
+  ): Promise<ExtractionCommitResult> {
+    const result = await this.conversations.commitExtraction({
+      userId,
+      conversationId,
+      version,
+      deletes: plan.deletes.flatMap((id) => {
+        const read = versions.get(id);
+        return read === undefined ? [] : [{ id, version: read }];
+      }),
+      inserts: plan.inserts,
+      updates: plan.updates.flatMap((update) => {
+        const read = versions.get(update.id);
+        return read === undefined ? [] : [{ ...update, version: read }];
+      }),
+      scan,
+    });
+    if (!result.committed) {
+      this.logger.log({
+        event: 'agent.memory.extraction_paused',
+        conversationId,
+      });
+    }
+    return result;
+  }
+
+  private async embedScreened({
     userId,
-    conversationId,
     execution,
     screened,
     deletes,
     max,
   }: {
     readonly userId: string;
-    readonly conversationId: string;
     readonly execution: AiExecutionContext;
     readonly screened: ScreenedCandidates;
     readonly deletes: readonly string[];
     readonly max: number;
-  }): Promise<PartitionedOps> {
+  }): Promise<EmbeddedPlan> {
     const adds =
       screened.adds.length > 0
         ? admitAdds(screened.adds, {
@@ -364,7 +431,7 @@ export class ExtractMemoriesHandler {
     const inserts: { content: string; embedding: number[] }[] = [];
     const updates: { id: string; content: string; embedding: number[] }[] = [];
     // Compute every fallible external value (embeddings) before any write so
-    // applyReconcile commits delete/insert/update atomically or not at all.
+    // commitExtraction commits delete/insert/update atomically or not at all.
     if (adds.length + screened.updates.length > 0) {
       const { embeddings, costUsd } = await this.embed.embedDocuments([
         ...adds,
@@ -388,17 +455,6 @@ export class ExtractMemoriesHandler {
         }
       });
     }
-    await this.memory.applyReconcile({
-      userId,
-      sourceConversationId: conversationId,
-      deletes,
-      inserts,
-      updates,
-    });
-    return {
-      adds: inserts.map((i) => i.content),
-      updates: updates.map(({ id, content }) => ({ id, content })),
-      deletes: [...deletes],
-    };
+    return { inserts, updates, deletes };
   }
 }

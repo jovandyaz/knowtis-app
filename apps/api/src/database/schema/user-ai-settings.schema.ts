@@ -8,7 +8,11 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { BYOK_PROVIDERS, MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+import {
+  BYOK_PROVIDERS,
+  MEMORY_ENABLED_BY_DEFAULT,
+  MODEL_ID_MAX_LENGTH,
+} from '@knowtis/shared-types';
 
 import { sqlLiteralList } from './sql-literal-list';
 import { users } from './users.schema';
@@ -23,6 +27,10 @@ export const userAiSettings = pgTable(
     preferredIntent: varchar('preferred_intent', { length: 16 }),
     primaryProvider: varchar('primary_provider', { length: 20 }),
     ghostTextEnabled: boolean('ghost_text_enabled').notNull().default(true),
+    memoryEnabled: boolean('memory_enabled')
+      .notNull()
+      .default(MEMORY_ENABLED_BY_DEFAULT),
+    memoryResumedAt: timestamp('memory_resumed_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

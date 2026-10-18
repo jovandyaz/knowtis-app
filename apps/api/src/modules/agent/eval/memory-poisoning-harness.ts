@@ -25,17 +25,19 @@ import {
   type ConversationMessageRow,
   type ConversationRepository,
   type ExtractableConversation,
+  type ExtractionCommit,
 } from '../domain/ports/conversation.repository';
 import {
   MEMORY_REPOSITORY,
-  type MemoryReconcileBatch,
   type MemoryRepository,
   type UserMemoryRow,
 } from '../domain/ports/memory.repository';
 import {
+  NOTE_EXPOSURE,
   NOTE_EXPOSURE_REPOSITORY,
   type NoteExposure,
   type NoteExposureRepository,
+  type NoteWriteAccess,
 } from '../domain/ports/note-exposure.repository';
 import { agentEvalModuleImports } from './agent-eval-module';
 import type {
@@ -54,15 +56,13 @@ const EVAL_CONVERSATION: ExtractableConversation = {
   attempts: 0,
 };
 const EMBEDDING_DIMENSIONS = 1024;
+const SEEDED_VERSION = 'seeded';
 
 type SeededConversations = Pick<
   ConversationRepository,
-  'loadMessages' | 'markExtracted'
+  'loadExtractionWindow' | 'commitExtraction'
 >;
-type SeededMemories = Pick<
-  MemoryRepository,
-  'listForUser' | 'countForUser' | 'applyReconcile'
->;
+type SeededMemories = Pick<MemoryRepository, 'listForUser' | 'countForUser'>;
 
 /**
  * One seeded conversation, the exposure of the notes it names (a note left out is the user's alone),
@@ -75,9 +75,18 @@ export class SeededMemoryStore {
   private exposures: ReadonlyMap<string, NoteExposure> = new Map();
 
   readonly conversations: SeededConversations = {
-    loadMessages: (_conversationId, _userId, limit) =>
-      Promise.resolve([...this.rows.slice(-limit)]),
-    markExtracted: () => Promise.resolve(),
+    loadExtractionWindow: (_conversationId, _userId, limit) =>
+      Promise.resolve({
+        rows: this.rows
+          .slice(-limit)
+          .map((row, index) => ({ ...row, seq: index + 1, afterResume: true })),
+        uncheckedHistory: this.rows.length > limit,
+        taintedFromSeq: null,
+      }),
+    commitExtraction: (commit) => {
+      this.apply(commit);
+      return Promise.resolve({ committed: true, staleIds: [] });
+    },
   };
 
   readonly noteExposure: NoteExposureRepository = {
@@ -91,16 +100,36 @@ export class SeededMemoryStore {
           })
         )
       ),
+    findWriteAccess: (_userId, noteIds) =>
+      Promise.resolve(
+        new Map(
+          noteIds.flatMap((noteId): [string, NoteWriteAccess][] => {
+            const id = noteId.toLowerCase();
+            const exposure = this.exposures.get(id);
+            return exposure === NOTE_EXPOSURE.missing
+              ? []
+              : [
+                  [
+                    id,
+                    {
+                      editableByOthers: exposure !== undefined,
+                      linkPermission: null,
+                    },
+                  ],
+                ];
+          })
+        )
+      ),
   };
 
   readonly memoryRepository: SeededMemories = {
     listForUser: (_userId, limit) =>
-      Promise.resolve(this.memories.slice(0, limit)),
+      Promise.resolve(
+        this.memories
+          .slice(0, limit)
+          .map((memory) => ({ ...memory, version: SEEDED_VERSION }))
+      ),
     countForUser: () => Promise.resolve(this.memories.length),
-    applyReconcile: (batch) => {
-      this.apply(batch);
-      return Promise.resolve();
-    },
   };
 
   seed(
@@ -122,8 +151,8 @@ export class SeededMemoryStore {
     return this.memories.map((memory) => memory.content);
   }
 
-  private apply(batch: MemoryReconcileBatch): void {
-    const deleted = new Set(batch.deletes);
+  private apply(batch: ExtractionCommit): void {
+    const deleted = new Set(batch.deletes.map(({ id }) => id));
     const updated = new Map(batch.updates.map((u) => [u.id, u.content]));
     this.memories = [
       ...this.memories

@@ -2,11 +2,11 @@ import { asSchema } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { estimateTokenCount } from '@knowtis/ai-gateway';
+import { MEMORY_MAX_CHARS } from '@knowtis/shared-types';
 
 import { validateEnv } from '../../../../config/env.config';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { AGENT_PROMPT_OVERHEAD_TOKENS } from '../../domain/first-call-budget';
-import { MEMORY_MAX_CHARS } from '../../domain/memory-content-policy';
 import { NoteMutateToolGroup } from '../tools/note-mutate.tool-group';
 import { NoteReadToolGroup } from '../tools/note-read.tool-group';
 import { WebToolGroup } from '../tools/web.tool-group';
@@ -31,8 +31,8 @@ const SHIPPED_ENV = validateEnv({
 
 async function composedOverheadTokens(): Promise<number> {
   const tools = new AgentToolRegistry([
-    new NoteReadToolGroup({} as never),
-    new NoteMutateToolGroup({} as never),
+    new NoteReadToolGroup({} as never, {} as never),
+    new NoteMutateToolGroup({} as never, {} as never),
     new WebToolGroup(
       { isConfigured: () => true } as never,
       {} as never,

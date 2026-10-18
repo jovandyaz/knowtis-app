@@ -1,8 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
 import { AgentErrors } from '../../domain/agent-errors';
+import {
+  NOTE_EXPOSURE_REPOSITORY,
+  type NoteExposureRepository,
+} from '../../domain/ports/note-exposure.repository';
 import type { ProposedMutation } from '../../domain/proposed-mutation';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import type { ProposalCollector } from '../orchestrator/proposal-collector';
@@ -11,6 +15,10 @@ import type {
   AgentToolGroup,
   AgentToolPhase,
 } from './agent-tool';
+import {
+  findWriteAccessOrNone,
+  UNKNOWN_WRITE_ACCESS,
+} from './note-write-access';
 import {
   classifyNoteStoreFailure,
   wrapUpstreamFailure,
@@ -59,10 +67,16 @@ function refuseEditAtLimit(
   return undefined;
 }
 
+interface ProposalResult {
+  readonly ok: true;
+  readonly proposalId: string;
+  readonly summary: string;
+}
+
 function captureProposal(
   collector: ProposalCollector,
   proposal: ProposedMutation
-): { ok: true; proposalId: string; summary: string } {
+): ProposalResult {
   collector.capture(proposal);
   return { ok: true, proposalId: proposal.id, summary: proposal.summary };
 }
@@ -70,8 +84,37 @@ function captureProposal(
 @Injectable()
 export class NoteMutateToolGroup implements AgentToolGroup {
   readonly name = 'note-mutate';
+  private readonly logger = new Logger(NoteMutateToolGroup.name);
 
-  constructor(private readonly proposalBuilder: MutationProposalBuilder) {}
+  constructor(
+    private readonly proposalBuilder: MutationProposalBuilder,
+    @Inject(NOTE_EXPOSURE_REPOSITORY)
+    private readonly exposure: NoteExposureRepository
+  ) {}
+
+  private async editableByOthers(
+    userId: string,
+    noteId: string
+  ): Promise<boolean> {
+    const access = await findWriteAccessOrNone(
+      this.exposure,
+      userId,
+      [noteId],
+      this.logger
+    );
+    return (access.get(noteId.toLowerCase()) ?? UNKNOWN_WRITE_ACCESS)
+      .editableByOthers;
+  }
+
+  private async captureOnNote(
+    collector: ProposalCollector,
+    userId: string,
+    noteId: string,
+    proposal: ProposedMutation
+  ): Promise<ProposalResult & { readonly editableByOthers: boolean }> {
+    const editableByOthers = await this.editableByOthers(userId, noteId);
+    return { ...captureProposal(collector, proposal), editableByOthers };
+  }
 
   availableIn(phase: AgentToolPhase): boolean {
     return phase === 'full';
@@ -158,7 +201,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             classifyNoteStoreFailure
           );
           return r.isOk()
-            ? captureProposal(proposals, r.value)
+            ? this.captureOnNote(proposals, userId, noteId, r.value)
             : { error: r.error.message };
         },
       }),
@@ -198,7 +241,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             classifyNoteStoreFailure
           );
           return r.isOk()
-            ? captureProposal(proposals, r.value)
+            ? this.captureOnNote(proposals, userId, noteId, r.value)
             : { error: r.error.message };
         },
       }),
@@ -225,7 +268,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             classifyNoteStoreFailure
           );
           return r.isOk()
-            ? captureProposal(proposals, r.value)
+            ? this.captureOnNote(proposals, userId, noteId, r.value)
             : { error: r.error.message };
         },
       }),

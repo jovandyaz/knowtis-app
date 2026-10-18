@@ -1,6 +1,10 @@
 import type { AgentMessagePart, AgentRole } from './agent-message';
 import { isContinueMarker } from './continue-marker';
-import type { ConversationMessageRow } from './ports/conversation.repository';
+import type {
+  ConversationMessageRow,
+  ExtractionScan,
+  ExtractionWindow,
+} from './ports/conversation.repository';
 import {
   NOTE_EXPOSURE,
   type NoteExposure,
@@ -22,6 +26,7 @@ export const MEMORY_TAINT_REASONS = [
   'unknown_tool',
   'legacy_row',
   'history_truncated',
+  'recorded_taint',
 ] as const;
 
 /** Why a conversation's assistant text may carry words that someone other than the user wrote. */
@@ -35,6 +40,7 @@ const UNAVAILABLE_NOTE = 'unavailable_note' satisfies MemoryTaintReason;
 const UNKNOWN_TOOL = 'unknown_tool' satisfies MemoryTaintReason;
 const LEGACY_ROW = 'legacy_row' satisfies MemoryTaintReason;
 const HISTORY_TRUNCATED = 'history_truncated' satisfies MemoryTaintReason;
+const RECORDED_TAINT = 'recorded_taint' satisfies MemoryTaintReason;
 
 /** Tools whose results hold nothing but notes and proposals, so a note they name taints only through its exposure or the ownership a result reports. */
 export const MEMORY_SAFE_TOOLS = [
@@ -75,14 +81,24 @@ export interface MemoryTranscript {
   readonly tainted: boolean;
   /** Each reason once, in the order it was found. */
   readonly reasons: readonly MemoryTaintReason[];
+  /** The index of the first row of the first tainted turn; null when the rows are clean. */
+  readonly taintStart: number | null;
 }
 
 export interface MemoryTranscriptOptions {
   readonly textLimit: number;
-  /** The loaded rows are not the whole conversation, so what came before them was never checked. */
+  /** Rows came before the loaded ones that were never checked. */
   readonly historyTruncated: boolean;
   /** How each note the rows name may carry someone else's words, keyed by lowercased id; a note left out is the user's alone. */
   readonly noteExposures: ReadonlyMap<string, NoteExposure>;
+  /** Rows before this index were written before the user last resumed memory: they still taint, but give no text. */
+  readonly textFromIndex: number;
+  /** The first row at or after the turn an earlier run found tainted; null when none did. */
+  readonly recordedTaintIndex: number | null;
+}
+
+export interface WindowTranscript extends MemoryTranscript {
+  readonly scan: ExtractionScan;
 }
 
 function hasProperty<K extends string>(
@@ -96,6 +112,12 @@ function isForeignNote(entry: unknown): boolean {
   return (
     (hasProperty(entry, 'isOwner') && entry.isOwner === false) ||
     (hasProperty(entry, 'isSharedWithMe') && entry.isSharedWithMe === true)
+  );
+}
+
+function isEditableByOthers(entry: unknown): boolean {
+  return (
+    hasProperty(entry, 'editableByOthers') && entry.editableByOthers === true
   );
 }
 
@@ -127,6 +149,9 @@ function resultTaints(output: unknown): MemoryTaintReason[] {
   const found: MemoryTaintReason[] = [];
   if (notes.some(isForeignNote)) {
     found.push(FOREIGN_NOTE);
+  }
+  if (notes.some(isEditableByOthers)) {
+    found.push(SHARED_EDITABLE_NOTE);
   }
   if (notes.some(isWithheldRead)) {
     found.push(WITHHELD_CONTENT);
@@ -202,23 +227,34 @@ function textRowOf(
   return null;
 }
 
+function initialTaint(options: MemoryTranscriptOptions): {
+  readonly reasons: MemoryTaintReason[];
+  readonly start: number | null;
+} {
+  if (options.historyTruncated) {
+    return { reasons: [HISTORY_TRUNCATED], start: 0 };
+  }
+  return options.recordedTaintIndex === null
+    ? { reasons: [], start: null }
+    : { reasons: [RECORDED_TAINT], start: options.recordedTaintIndex };
+}
+
 /**
  * The text a memory extractor may read from `rows` (oldest first). A turn that used a tool outside
  * {@link MEMORY_SAFE_TOOLS}, named a note listed in `noteExposures` or that a result reports as someone
- * else's, read one it could not have read whole, or that predates per-turn tool records taints the
- * conversation:
+ * else's or as editable by someone else, read one it could not have read whole, or that predates per-turn
+ * tool records taints the conversation, and so does a taint an earlier run recorded:
  * from that turn on only user rows are kept, since any later assistant reply may repeat what the
- * tainted turn read.
+ * tainted turn read. Rows before `textFromIndex` still taint but give no text.
  */
 export function memoryTranscript(
   rows: readonly ConversationMessageRow[],
   options: MemoryTranscriptOptions
 ): MemoryTranscript {
-  const reasons = new Set<MemoryTaintReason>(
-    options.historyTruncated ? [HISTORY_TRUNCATED] : []
-  );
+  const initial = initialTaint(options);
+  const reasons = new Set<MemoryTaintReason>(initial.reasons);
   const starts = turnStarts(rows);
-  let taintStart = options.historyTruncated ? 0 : rows.length;
+  let taintStart = initial.start ?? rows.length;
   rows.forEach((row, index) => {
     const found = rowTaints(row, options.noteExposures);
     if (found.length === 0) {
@@ -228,12 +264,53 @@ export function memoryTranscript(
     taintStart = Math.min(taintStart, starts[index] ?? index);
   });
   const kept = rows.flatMap((row, index) => {
-    const text = textRowOf(row, index >= taintStart);
+    const text =
+      index >= options.textFromIndex
+        ? textRowOf(row, index >= taintStart)
+        : null;
     return text ? [text] : [];
   });
   return {
     rows: kept.slice(-options.textLimit),
     tainted: reasons.size > 0,
     reasons: [...reasons],
+    taintStart: reasons.size > 0 ? taintStart : null,
+  };
+}
+
+function recordedTaintIndexOf(window: ExtractionWindow): number | null {
+  const { taintedFromSeq } = window;
+  if (taintedFromSeq === null) {
+    return null;
+  }
+  const index = window.rows.findIndex((row) => row.seq >= taintedFromSeq);
+  return index === -1 ? null : index;
+}
+
+/**
+ * {@link memoryTranscript} over what an extraction run loaded: text only from the rows written after the
+ * owner last resumed memory, taint from the turn an earlier run recorded and from any rows before the
+ * window that no run read, and the scan to record for the next run.
+ */
+export function memoryTranscriptOfWindow(
+  window: ExtractionWindow,
+  options: Pick<MemoryTranscriptOptions, 'textLimit' | 'noteExposures'>
+): WindowTranscript {
+  const { rows } = window;
+  const transcript = memoryTranscript(rows, {
+    ...options,
+    historyTruncated: window.uncheckedHistory,
+    textFromIndex: rows.findLastIndex((row) => !row.afterResume) + 1,
+    recordedTaintIndex: recordedTaintIndexOf(window),
+  });
+  return {
+    ...transcript,
+    scan: {
+      checkedSeq: rows.at(-1)?.seq ?? null,
+      taintedFromSeq:
+        transcript.taintStart === null
+          ? null
+          : (rows[transcript.taintStart]?.seq ?? null),
+    },
   };
 }

@@ -5,10 +5,12 @@ export interface UserAiSettings {
   preferredIntent: ModelIntent | null;
   primaryProvider: ByokProvider | null;
   ghostTextEnabled: boolean;
+  memoryEnabled: boolean;
 }
 
 export interface UserAiSettingsRepository {
   getSettings(userId: string): Promise<UserAiSettings>;
+  /** Writes the fields the patch carries; turning long-term memory back on after a pause also stamps when it was resumed. */
   patchSettings(userId: string, patch: Partial<UserAiSettings>): Promise<void>;
   /** Clears the preferred model only while it is still `model`, so a pick written after the caller read it is never erased. */
   clearPreferredModel(userId: string, model: string): Promise<void>;

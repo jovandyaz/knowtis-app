@@ -2,10 +2,8 @@ import { Catch, HttpStatus, Logger, type ArgumentsHost } from '@nestjs/common';
 
 import { GlobalExceptionFilter } from '../../core/filters/http-exception.filter';
 import { RetryAfterHttpException } from '../../core/http/retry-after.exception';
+import { SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS } from '../../core/http/retry-after.header';
 import { AiUnavailableError } from './domain/errors/ai-unavailable.error';
-
-/** A key-store blip clears within seconds; a client that honours the header does not retry into it. */
-const AI_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
 
 /**
  * Answers a failed tier or quota lookup with a retryable 503 and
@@ -31,7 +29,7 @@ export class AiUnavailableExceptionFilter extends GlobalExceptionFilter {
           message: `${exception.dependency} unavailable`,
         },
         HttpStatus.SERVICE_UNAVAILABLE,
-        AI_UNAVAILABLE_RETRY_AFTER_SECONDS,
+        SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS,
         { cause: exception }
       ),
       host

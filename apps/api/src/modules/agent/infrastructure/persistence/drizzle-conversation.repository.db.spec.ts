@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import postgres from 'postgres';
 import {
   afterAll,
   afterEach,
@@ -25,21 +26,28 @@ import {
   DatabaseModule,
   notePermissions,
   notes,
+  userAiSettings,
   userMemories,
   users,
   type Database,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
+import { DrizzleUserAiSettingsRepository } from '../../../ai/infrastructure/persistence/drizzle-user-ai-settings.repository';
 import type { AgentSource } from '../../domain/agent-event';
 import {
   AGENT_MESSAGE_PARTS_VERSION,
   type AgentMessagePart,
   type PersistedParts,
 } from '../../domain/agent-message';
-import type { AppendTurnInput } from '../../domain/ports/conversation.repository';
+import type {
+  AppendTurnInput,
+  ExtractionCommit,
+  ExtractionScan,
+} from '../../domain/ports/conversation.repository';
 import { pruneTranscript } from '../../domain/prune-transcript';
 import { buildTurnRows } from '../../domain/turn-transcript';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
+import { DrizzleMemoryRepository } from './drizzle-memory.repository';
 
 const BACKOFF_BASE_SECONDS = 60;
 const EXTRACTION_RETRY = {
@@ -50,6 +58,30 @@ const HOUR_MS = 60 * 60 * 1000;
 const IDLE_HOURS = 3;
 const LONG_AFTER_EVERY_BACKOFF_SECONDS = 2 * 60 * 60;
 
+const NO_SCAN: ExtractionScan = { checkedSeq: null, taintedFromSeq: null };
+const LOCK_WAIT_POLL_MS = 20;
+const LOCK_WAIT_TIMEOUT_MS = 3000;
+
+interface Gate {
+  readonly entered: Promise<void>;
+  readonly enter: () => void;
+  readonly released: Promise<void>;
+  readonly release: () => void;
+}
+
+function gate(): Gate {
+  let enter: () => void = () => undefined;
+  let release: () => void = () => undefined;
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { entered, enter, released, release };
+}
+const EMBEDDING = new Array<number>(1024).fill(0);
+
 const USER = '00000000-0000-4000-8000-000000000091';
 const OTHER = '00000000-0000-4000-8000-000000000092';
 
@@ -57,6 +89,17 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleConversationRepository;
+
+  const stamp = (userId: string, conversationId: string, version: string) =>
+    repo.commitExtraction({
+      userId,
+      conversationId,
+      version,
+      deletes: [],
+      inserts: [],
+      updates: [],
+      scan: NO_SCAN,
+    });
 
   const spyOnWarn = () =>
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -265,7 +308,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(await repo.findByIdForUser(id, OTHER)).toBeNull();
   });
 
-  it('scopes markExtracted to the owner', async () => {
+  it('scopes the extraction stamp to the owner', async () => {
     const { id } = await repo.create({
       id: randomUUID(),
       userId: USER,
@@ -282,9 +325,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       .select({ version: sql<string>`${conversations.updatedAt}::text` })
       .from(conversations)
       .where(eq(conversations.id, id));
-    await repo.markExtracted(OTHER, id, version);
+    await stamp(OTHER, id, version);
     expect(await extractedAt()).toBeNull();
-    await repo.markExtracted(USER, id, version);
+    await stamp(USER, id, version);
     expect(await extractedAt()).not.toBeNull();
   });
 
@@ -1379,7 +1422,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       const id = await withTurn(LISTER);
       await touch(id, new Date(Date.now() - HOUR_MS));
 
-      await repo.markExtracted(LISTER, id, await selectedVersion(id));
+      await stamp(LISTER, id, await selectedVersion(id));
       expect(await dueForExtraction(id)).toBe(false);
 
       await repo.rename(id, LISTER, 'Renamed');
@@ -1486,7 +1529,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         const { id, version } = await idleConversation();
         await repo.recordExtractionFailure(LISTER, id, version);
 
-        await repo.markExtracted(LISTER, id, version);
+        await stamp(LISTER, id, version);
 
         expect(await failureState(id)).toEqual({
           attempts: 0,
@@ -1510,10 +1553,10 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         const { id, version } = await idleConversation();
 
         await answer(id);
-        await repo.markExtracted(LISTER, id, version);
+        await stamp(LISTER, id, version);
 
         expect(await dueForExtraction(id)).toBe(true);
-        await repo.markExtracted(LISTER, id, await selectedVersion(id));
+        await stamp(LISTER, id, await selectedVersion(id));
         expect(await dueForExtraction(id)).toBe(false);
       });
 
@@ -1531,6 +1574,662 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         });
         expect(await dueForExtraction(id)).toBe(true);
       });
+    });
+
+    describe('memory extraction state', () => {
+      const idleConversation = async (): Promise<{
+        id: string;
+        version: string;
+      }> => {
+        const id = await withTurn(LISTER);
+        await touch(id, new Date(Date.now() - IDLE_HOURS * HOUR_MS));
+        return { id, version: await selectedVersion(id) };
+      };
+
+      const commitAs = (
+        id: string,
+        version: string,
+        plan: Partial<ExtractionCommit> = {}
+      ) =>
+        repo.commitExtraction({
+          userId: LISTER,
+          conversationId: id,
+          version,
+          deletes: [],
+          inserts: [],
+          updates: [],
+          scan: NO_SCAN,
+          ...plan,
+        });
+
+      const commit = async (
+        id: string,
+        version: string,
+        plan: Partial<ExtractionCommit> = {}
+      ): Promise<boolean> => (await commitAs(id, version, plan)).committed;
+
+      const memories = () =>
+        new DrizzleMemoryRepository(
+          db,
+          new DrizzleUserAiSettingsRepository(db)
+        );
+
+      const versionOf = async (memoryId: string): Promise<string> => {
+        const [row] = await db
+          .select({ version: sql<string>`${userMemories.updatedAt}::text` })
+          .from(userMemories)
+          .where(eq(userMemories.id, memoryId));
+        if (!row) {
+          throw new Error(`memory ${memoryId} is gone`);
+        }
+        return row.version;
+      };
+
+      const memorySettings = (enabled: boolean, resumedAt: Date | SQL | null) =>
+        db
+          .insert(userAiSettings)
+          .values({
+            userId: LISTER,
+            memoryEnabled: enabled,
+            memoryResumedAt: resumedAt,
+          })
+          .onConflictDoUpdate({
+            target: userAiSettings.userId,
+            set: { memoryEnabled: enabled, memoryResumedAt: resumedAt },
+          });
+
+      const memoriesOf = () =>
+        db
+          .select({
+            content: userMemories.content,
+            source: userMemories.sourceConversationId,
+          })
+          .from(userMemories)
+          .where(eq(userMemories.userId, LISTER))
+          .orderBy(userMemories.content);
+
+      const scanOf = async (id: string) => {
+        const [row] = await db
+          .select({
+            checkedSeq: conversations.memoryCheckedSeq,
+            taintedSeq: conversations.memoryTaintedSeq,
+          })
+          .from(conversations)
+          .where(eq(conversations.id, id));
+        return row;
+      };
+
+      afterEach(async () => {
+        await db
+          .delete(userAiSettings)
+          .where(eq(userAiSettings.userId, LISTER));
+        await db
+          .delete(userMemories)
+          .where(inArray(userMemories.userId, [LISTER, STRANGER]));
+      });
+
+      it('stores adds and updates under the conversation that wrote them last, and stamps the state', async () => {
+        const earlier = await withTurn(LISTER);
+        const [stored] = await db
+          .insert(userMemories)
+          .values({
+            userId: LISTER,
+            content: 'Lives in Madrid',
+            embedding: EMBEDDING,
+            sourceConversationId: earlier,
+          })
+          .returning({ id: userMemories.id });
+        const { id, version } = await idleConversation();
+
+        expect(
+          await commit(id, version, {
+            inserts: [{ content: 'Is vegan', embedding: EMBEDDING }],
+            updates: [
+              {
+                id: stored.id,
+                content: 'Lives in Lima',
+                embedding: EMBEDDING,
+                version: await versionOf(stored.id),
+              },
+            ],
+          })
+        ).toBe(true);
+
+        expect(await memoriesOf()).toEqual([
+          { content: 'Is vegan', source: id },
+          { content: 'Lives in Lima', source: id },
+        ]);
+        expect(await dueForExtraction(id)).toBe(false);
+      });
+
+      it("never deletes or rewrites another user's memory", async () => {
+        const [foreign] = await db
+          .insert(userMemories)
+          .values({
+            userId: STRANGER,
+            content: 'stranger fact',
+            embedding: EMBEDDING,
+          })
+          .returning({ id: userMemories.id });
+        const { id, version } = await idleConversation();
+
+        const foreignVersion = await versionOf(foreign.id);
+        await commit(id, version, {
+          deletes: [{ id: foreign.id, version: foreignVersion }],
+          updates: [
+            {
+              id: foreign.id,
+              content: 'hacked',
+              embedding: EMBEDDING,
+              version: foreignVersion,
+            },
+          ],
+        });
+
+        const [kept] = await db
+          .select({
+            content: userMemories.content,
+            source: userMemories.sourceConversationId,
+          })
+          .from(userMemories)
+          .where(eq(userMemories.id, foreign.id));
+        expect(kept).toEqual({ content: 'stranger fact', source: null });
+      });
+
+      it("keeps the memories the user edited after the run read them, skipping the run's update and delete on them", async () => {
+        const [rewritten, removed, untouched] = await db
+          .insert(userMemories)
+          .values(
+            ['Lives in Madrid', 'Commutes by metro', 'Is vegan'].map(
+              (content) => ({ userId: LISTER, content, embedding: EMBEDDING })
+            )
+          )
+          .returning({ id: userMemories.id });
+        const snapshot = new Map(
+          (await memories().listForUser(LISTER, 10)).map((memory) => [
+            memory.id,
+            memory.version,
+          ])
+        );
+        const versionIn = (memoryId: string): string =>
+          snapshot.get(memoryId) ?? '';
+        await memories().update(
+          LISTER,
+          rewritten.id,
+          'Lives in Quito',
+          EMBEDDING
+        );
+        await memories().update(
+          LISTER,
+          removed.id,
+          'Cycles to work',
+          EMBEDDING
+        );
+        const { id, version } = await idleConversation();
+
+        const result = await commitAs(id, version, {
+          deletes: [
+            { id: removed.id, version: versionIn(removed.id) },
+            { id: untouched.id, version: versionIn(untouched.id) },
+          ],
+          updates: [
+            {
+              id: rewritten.id,
+              content: 'Lives in Lima',
+              embedding: EMBEDDING,
+              version: versionIn(rewritten.id),
+            },
+          ],
+        });
+
+        expect(result).toEqual({
+          committed: true,
+          staleIds: [removed.id, rewritten.id],
+        });
+        expect(await memoriesOf()).toEqual([
+          { content: 'Cycles to work', source: null },
+          { content: 'Lives in Quito', source: null },
+        ]);
+      });
+
+      it('writes nothing and stamps nothing while the owner has memory paused', async () => {
+        const { id, version } = await idleConversation();
+        await memorySettings(false, null);
+
+        expect(
+          await commit(id, version, {
+            inserts: [{ content: 'Is vegan', embedding: EMBEDDING }],
+            scan: { checkedSeq: 1, taintedFromSeq: null },
+          })
+        ).toBe(false);
+
+        expect(await memoriesOf()).toEqual([]);
+        expect(await scanOf(id)).toEqual({
+          checkedSeq: null,
+          taintedSeq: null,
+        });
+        const [state] = await db
+          .select({ at: conversations.memoriesExtractedAt })
+          .from(conversations)
+          .where(eq(conversations.id, id));
+        expect(state?.at).toBeNull();
+      });
+
+      it('writes nothing when memory was resumed after the state the run read', async () => {
+        const { id, version } = await idleConversation();
+        await memorySettings(true, sql`now()`);
+
+        expect(
+          await commit(id, version, {
+            inserts: [{ content: 'Is vegan', embedding: EMBEDDING }],
+          })
+        ).toBe(false);
+        expect(await memoriesOf()).toEqual([]);
+      });
+
+      it('commits when memory was resumed before the state the run read', async () => {
+        const { id, version } = await idleConversation();
+        await memorySettings(
+          true,
+          new Date(Date.now() - 2 * IDLE_HOURS * HOUR_MS)
+        );
+
+        expect(
+          await commit(id, version, {
+            inserts: [{ content: 'Is vegan', embedding: EMBEDDING }],
+          })
+        ).toBe(true);
+        expect(await memoriesOf()).toEqual([
+          { content: 'Is vegan', source: id },
+        ]);
+      });
+
+      it('records the newest row any run read and keeps the earliest taint', async () => {
+        const { id, version } = await idleConversation();
+
+        await commit(id, version, {
+          scan: { checkedSeq: 10, taintedFromSeq: 7 },
+        });
+        await commit(id, version, {
+          scan: { checkedSeq: 5, taintedFromSeq: 9 },
+        });
+        expect(await scanOf(id)).toEqual({ checkedSeq: 10, taintedSeq: 7 });
+
+        await commit(id, version, {
+          scan: { checkedSeq: null, taintedFromSeq: 3 },
+        });
+        expect(await scanOf(id)).toEqual({ checkedSeq: 10, taintedSeq: 3 });
+      });
+
+      it('skips a user who paused memory, and a state last changed before they resumed it', async () => {
+        const { id } = await idleConversation();
+        expect(await dueForExtraction(id)).toBe(true);
+
+        await memorySettings(false, null);
+        expect(await dueForExtraction(id)).toBe(false);
+
+        await memorySettings(true, sql`now()`);
+        expect(await dueForExtraction(id)).toBe(false);
+
+        await answer(id);
+        expect(await dueForExtraction(id)).toBe(true);
+      });
+
+      it('reads the newest rows with their sequence numbers, and no unchecked history for a short conversation', async () => {
+        const id = await withTurn(LISTER);
+        await answer(id);
+
+        const window = await repo.loadExtractionWindow(id, LISTER, 10);
+
+        expect(window.rows.map((row) => row.content)).toEqual([
+          'question',
+          'answer',
+          'question',
+          'answer',
+        ]);
+        const seqs = window.rows.map((row) => row.seq);
+        expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
+        expect(window.rows.every((row) => row.afterResume)).toBe(true);
+        expect(window.uncheckedHistory).toBe(false);
+        expect(window.taintedFromSeq).toBeNull();
+      });
+
+      it('reports unchecked history until a run has read the rows before the window', async () => {
+        const id = await withTurn(LISTER);
+        await answer(id);
+        expect(
+          (await repo.loadExtractionWindow(id, LISTER, 2)).uncheckedHistory
+        ).toBe(true);
+
+        const whole = await repo.loadExtractionWindow(id, LISTER, 10);
+        await commit(id, await selectedVersion(id), {
+          scan: {
+            checkedSeq: whole.rows.at(-1)?.seq ?? null,
+            taintedFromSeq: null,
+          },
+        });
+        await answer(id);
+
+        expect(
+          (await repo.loadExtractionWindow(id, LISTER, 2)).uncheckedHistory
+        ).toBe(false);
+        expect(
+          (await repo.loadExtractionWindow(id, LISTER, 1)).uncheckedHistory
+        ).toBe(true);
+      });
+
+      it('reports the taint an earlier run recorded', async () => {
+        const { id, version } = await idleConversation();
+        await commit(id, version, {
+          scan: { checkedSeq: 2, taintedFromSeq: 1 },
+        });
+
+        expect(
+          (await repo.loadExtractionWindow(id, LISTER, 10)).taintedFromSeq
+        ).toBe(1);
+      });
+
+      it('marks the rows written before the owner resumed memory', async () => {
+        const id = await withTurn(LISTER);
+        await memorySettings(true, sql`now()`);
+        await answer(id);
+
+        const window = await repo.loadExtractionWindow(id, LISTER, 10);
+
+        expect(window.rows.map((row) => row.afterResume)).toEqual([
+          false,
+          false,
+          true,
+          true,
+        ]);
+      });
+
+      it('reads nothing of another user conversation', async () => {
+        const id = await withTurn(LISTER);
+
+        expect(await repo.loadExtractionWindow(id, STRANGER, 10)).toEqual({
+          rows: [],
+          uncheckedHistory: false,
+          taintedFromSeq: null,
+        });
+      });
+
+      it('gives a user who never chose a settings row holding the defaults, as if they had none', async () => {
+        const { id, version } = await idleConversation();
+
+        await commit(id, version);
+
+        const [row] = await db
+          .select({
+            preferredModel: userAiSettings.preferredModel,
+            preferredIntent: userAiSettings.preferredIntent,
+            primaryProvider: userAiSettings.primaryProvider,
+            ghostTextEnabled: userAiSettings.ghostTextEnabled,
+            memoryEnabled: userAiSettings.memoryEnabled,
+            memoryResumedAt: userAiSettings.memoryResumedAt,
+          })
+          .from(userAiSettings)
+          .where(eq(userAiSettings.userId, LISTER));
+        expect(row).toEqual({
+          preferredModel: null,
+          preferredIntent: null,
+          primaryProvider: null,
+          ghostTextEnabled: true,
+          memoryEnabled: true,
+          memoryResumedAt: null,
+        });
+      });
+
+      describe('against concurrent sessions', () => {
+        const databaseUrl = process.env['DATABASE_URL'] ?? '';
+        let holder: postgres.Sql;
+        let observer: postgres.Sql;
+        let settings: DrizzleUserAiSettingsRepository;
+
+        const blockedBy = async (pid: number): Promise<number[]> => {
+          const rows = await observer<{ pid: number }[]>`
+            SELECT pid FROM pg_stat_activity
+            WHERE ${pid} = ANY(pg_blocking_pids(pid))`;
+          return rows.map((row) => row.pid);
+        };
+
+        const untilBlockedBy = async (pid: number): Promise<number> => {
+          const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
+          for (;;) {
+            const [waiting] = await blockedBy(pid);
+            if (waiting !== undefined) {
+              return waiting;
+            }
+            if (Date.now() > deadline) {
+              throw new Error(`no session ever waited on backend ${pid}`);
+            }
+            await new Promise((resolve) =>
+              setTimeout(resolve, LOCK_WAIT_POLL_MS)
+            );
+          }
+        };
+
+        const holding = (
+          lock: (tx: postgres.TransactionSql) => Promise<unknown>,
+          afterBlocking: (
+            tx: postgres.TransactionSql
+          ) => Promise<unknown> = () => Promise.resolve()
+        ) => {
+          const held = gate();
+          let pid = 0;
+          const done = holder.begin(async (tx) => {
+            const [backend] = await tx<{ pid: number }[]>`
+              SELECT pg_backend_pid() AS pid`;
+            pid = backend?.pid ?? 0;
+            await lock(tx);
+            held.enter();
+            await held.released;
+            await afterBlocking(tx);
+          });
+          return {
+            entered: held.entered.then(() => pid),
+            release: async (): Promise<void> => {
+              held.release();
+              await done;
+            },
+          };
+        };
+
+        const vegan = {
+          inserts: [{ content: 'Is vegan', embedding: EMBEDDING }],
+        };
+
+        beforeAll(() => {
+          holder = postgres(databaseUrl, { max: 1 });
+          observer = postgres(databaseUrl, { max: 1 });
+          settings = new DrizzleUserAiSettingsRepository(db);
+        });
+
+        afterAll(async () => {
+          await holder.end();
+          await observer.end();
+        });
+
+        it.each([
+          ['who never chose', false],
+          ['with a settings row', true],
+        ])(
+          'writes nothing for a user %s whose pause committed while the run waited on it',
+          async (_who, hasRow) => {
+            const { id, version } = await idleConversation();
+            if (hasRow) {
+              await memorySettings(true, null);
+            }
+            const pause = holding(
+              (tx) => tx`
+                INSERT INTO user_ai_settings (user_id, memory_enabled)
+                VALUES (${LISTER}, false)
+                ON CONFLICT (user_id) DO UPDATE SET memory_enabled = false`
+            );
+            const pausePid = await pause.entered;
+            const committing = commit(id, version, vegan);
+            try {
+              await untilBlockedBy(pausePid);
+            } finally {
+              await pause.release();
+            }
+
+            expect(await committing).toBe(false);
+            expect(await memoriesOf()).toEqual([]);
+          }
+        );
+
+        it.each([
+          ['who never chose', false],
+          ['with a settings row', true],
+        ])(
+          'makes the pause of a user %s wait for a commit that read memory as on',
+          async (_who, hasRow) => {
+            const { id, version } = await idleConversation();
+            if (hasRow) {
+              await memorySettings(true, null);
+            }
+            const stall = holding(
+              (tx) =>
+                tx`SELECT 1 FROM conversations WHERE id = ${id} FOR UPDATE`
+            );
+            const stallPid = await stall.entered;
+            const settled: string[] = [];
+
+            const committing = commit(id, version, vegan).then((written) => {
+              settled.push('commit');
+              return written;
+            });
+            let pausing: Promise<unknown> = Promise.resolve();
+            try {
+              const commitPid = await untilBlockedBy(stallPid);
+              pausing = settings
+                .patchSettings(LISTER, { memoryEnabled: false })
+                .then(() => settled.push('pause'));
+              await untilBlockedBy(commitPid);
+            } finally {
+              await stall.release();
+            }
+
+            expect(await committing).toBe(true);
+            await pausing;
+            expect(settled).toEqual(['commit', 'pause']);
+            expect(await memoriesOf()).toEqual([
+              { content: 'Is vegan', source: id },
+            ]);
+            expect((await settings.getSettings(LISTER)).memoryEnabled).toBe(
+              false
+            );
+          }
+        );
+
+        it('numbers the rows of a turn after every row committed before it, so a run never reads past an uncommitted turn', async () => {
+          const id = await withTurn(LISTER);
+          let committedSeq = 0;
+          const writer = holding(
+            (tx) =>
+              tx`SELECT 1 FROM conversations WHERE id = ${id} FOR NO KEY UPDATE`,
+            async (tx) => {
+              const [row] = await tx<{ seq: number }[]>`
+                INSERT INTO conversation_messages (conversation_id, role, content)
+                VALUES (${id}, 'user', 'from another writer')
+                RETURNING seq::int AS seq`;
+              committedSeq = row?.seq ?? 0;
+            }
+          );
+          const writerPid = await writer.entered;
+
+          const appending = repo.appendTurn({
+            conversationId: id,
+            turnId: randomUUID(),
+            messages: [
+              { role: 'user', content: 'later question' },
+              { role: 'assistant', content: 'later answer', sources: [] },
+            ],
+          });
+          try {
+            await untilBlockedBy(writerPid);
+          } finally {
+            await writer.release();
+          }
+          expect(await appending).toBe(true);
+
+          const rows = await db
+            .select({
+              content: conversationMessages.content,
+              seq: conversationMessages.seq,
+            })
+            .from(conversationMessages)
+            .where(eq(conversationMessages.conversationId, id));
+          const appended = rows.filter((row) =>
+            row.content.startsWith('later')
+          );
+          expect(appended).toHaveLength(2);
+          expect(appended.every((row) => row.seq > committedSeq)).toBe(true);
+        });
+
+        it('reads the model history without touching the memory pause, and the extraction window with it', async () => {
+          const id = await withTurn(LISTER);
+          const settingsLock = holding(
+            (tx) => tx`LOCK TABLE user_ai_settings IN ACCESS EXCLUSIVE MODE`
+          );
+          const lockPid = await settingsLock.entered;
+          const reading = repo.loadMessages(id, LISTER, 10);
+          let history: 'read' | 'blocked';
+          let windowing: ReturnType<typeof repo.loadExtractionWindow>;
+          try {
+            history = await Promise.race([
+              reading.then(() => 'read' as const),
+              new Promise<'blocked'>((resolve) =>
+                setTimeout(() => resolve('blocked'), LOCK_WAIT_TIMEOUT_MS)
+              ),
+            ]);
+            windowing = repo.loadExtractionWindow(id, LISTER, 10);
+            await untilBlockedBy(lockPid);
+          } finally {
+            await settingsLock.release();
+          }
+
+          expect(history).toBe('read');
+          expect((await reading).map((row) => row.content)).toEqual([
+            'question',
+            'answer',
+          ]);
+          expect((await windowing).rows).toHaveLength(2);
+        });
+      });
+    });
+
+    it('returns the memories a turn used on its terminal row', async () => {
+      const { id } = await repo.create({
+        id: randomUUID(),
+        userId: LISTER,
+        title: 't',
+      });
+      const used = [randomUUID(), randomUUID()];
+      await repo.appendTurn({
+        conversationId: id,
+        turnId: randomUUID(),
+        messages: buildTurnRows({
+          userContent: 'what do I eat?',
+          turnMessages: [],
+          assistantText: 'Vegan dishes.',
+          sources: [],
+          stopReason: 'completed',
+          usedMemoryIds: used,
+        }),
+      });
+
+      const transcript = await repo.loadTranscriptForUser(id, LISTER, 10);
+
+      expect(transcript?.messages).toEqual([
+        expect.not.objectContaining({ usedMemoryIds: expect.anything() }),
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Vegan dishes.',
+          usedMemoryIds: used,
+        }),
+      ]);
     });
 
     it('deletes only the owner conversation, with its messages', async () => {

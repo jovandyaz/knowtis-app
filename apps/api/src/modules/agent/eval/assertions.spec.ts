@@ -51,14 +51,17 @@ function transcript(partial: Partial<EvalTranscript>): EvalTranscript {
 
 describe('NOTE_READ_TOOL', () => {
   it('names only tools the agent really builds', () => {
-    const group = new NoteReadToolGroup({
-      search: vi.fn(),
-      listUnindexed: vi.fn(),
-      getById: vi.fn(),
-      getBody: vi.fn(),
-      listRecent: vi.fn(),
-      overview: vi.fn(),
-    });
+    const group = new NoteReadToolGroup(
+      {
+        search: vi.fn(),
+        listUnindexed: vi.fn(),
+        getById: vi.fn(),
+        getBody: vi.fn(),
+        listRecent: vi.fn(),
+        overview: vi.fn(),
+      },
+      { findExposures: vi.fn(), findWriteAccess: vi.fn() }
+    );
     const built = Object.keys(
       group.build({
         phase: 'full',

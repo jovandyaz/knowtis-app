@@ -66,6 +66,7 @@ function preferences(
     preferredIntent: null,
     primaryProvider,
     ghostTextEnabled: true,
+    memoryEnabled: true,
   };
 }
 

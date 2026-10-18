@@ -204,6 +204,35 @@ describe('buildTurnRows', () => {
     expect(rows.every((row) => !('model' in row))).toBe(true);
   });
 
+  it.each([
+    ['the streamed answer', input({ assistantText: 'N1 says hi' })],
+    [
+      'the last step row',
+      input({
+        turnMessages: [
+          ...toolStep,
+          { role: 'assistant', content: 'N1 says hi' },
+        ],
+      }),
+    ],
+    ['the empty closing row', input({ turnMessages: toolStep })],
+  ])('stamps the memories the prompt received on %s alone', (_row, turn) => {
+    const rows = buildTurnRows({ ...turn, usedMemoryIds: ['m1', 'm2'] });
+
+    expect(rows.at(-1)).toMatchObject({ usedMemoryIds: ['m1', 'm2'] });
+    expect(rows.slice(0, -1).filter((row) => 'usedMemoryIds' in row)).toEqual(
+      []
+    );
+  });
+
+  it('stamps no memories when the prompt received none', () => {
+    const rows = buildTurnRows(
+      input({ assistantText: 'N1 says hi', usedMemoryIds: [] })
+    );
+
+    expect(rows.every((row) => !('usedMemoryIds' in row))).toBe(true);
+  });
+
   it('adds no row to a resume leg that stored nothing', () => {
     expect(
       buildTurnRows({

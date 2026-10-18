@@ -89,6 +89,7 @@ function makeChooser(
     preferredIntent: settings.preferredIntent ?? null,
     primaryProvider: settings.primaryProvider ?? null,
     ghostTextEnabled: true,
+    memoryEnabled: true,
   };
   const repo = {
     getSettings: vi.fn(async (_userId: string) => ({ ...stored })),
@@ -420,6 +421,18 @@ describe('ModelPreferenceService', () => {
       });
     });
 
+    it('stores a memory pause without validating a model or reading the tier', async () => {
+      const { svc, repo, selectable } = makeChooser();
+      const catalogFor = vi.spyOn(selectable, 'catalogFor');
+      const tierOf = vi.fn();
+      await writeAs(svc, FREE_CALLER, { memoryEnabled: false }, tierOf);
+      expect(repo.patchSettings).toHaveBeenCalledWith('user-1', {
+        memoryEnabled: false,
+      });
+      expect(catalogFor).not.toHaveBeenCalled();
+      expect(tierOf).not.toHaveBeenCalled();
+    });
+
     it('stores a ghost text patch without validating a model', async () => {
       const { svc, repo, selectable } = makeChooser();
       const catalogFor = vi.spyOn(selectable, 'catalogFor');
@@ -445,6 +458,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: 'powerful',
         primaryProvider: null,
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
       expect(tierOf).not.toHaveBeenCalled();
     });
@@ -456,10 +470,26 @@ describe('ModelPreferenceService', () => {
         preferredIntent: null,
         primaryProvider: null,
         ghostTextEnabled: false,
+        memoryEnabled: true,
       });
       expect(
         (await svc.getUserPreferences('u1', async () => FREE_CALLER))
           .ghostTextEnabled
+      ).toBe(false);
+    });
+
+    it('returns a paused memory', async () => {
+      const { svc, repo } = makeChooser();
+      repo.getSettings.mockResolvedValue({
+        preferredModel: null,
+        preferredIntent: null,
+        primaryProvider: null,
+        ghostTextEnabled: true,
+        memoryEnabled: false,
+      });
+      expect(
+        (await svc.getUserPreferences('u1', async () => FREE_CALLER))
+          .memoryEnabled
       ).toBe(false);
     });
 
@@ -480,6 +510,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: 'fast',
         primaryProvider: null,
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
       expect(served).toMatchObject({ model: MINIMAX });
     });
@@ -501,6 +532,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: 'fast',
         primaryProvider: null,
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
     });
 
@@ -518,6 +550,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: 'powerful',
         primaryProvider: null,
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
     });
 
@@ -539,6 +572,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: null,
         primaryProvider: 'openai',
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
       expect(tierOf).toHaveBeenCalledTimes(1);
     });
@@ -554,6 +588,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: null,
         primaryProvider: null,
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
     });
 
@@ -583,6 +618,7 @@ describe('ModelPreferenceService', () => {
         preferredIntent: 'fast',
         primaryProvider: null,
         ghostTextEnabled: true,
+        memoryEnabled: true,
       });
       expect(tierOf).toHaveBeenCalledTimes(1);
     });

@@ -70,9 +70,10 @@ function flow(
     overview: vi.fn(),
   };
   const proposals = new ProposalCollector();
-  const tool = new NoteMutateToolGroup(
-    new MutationProposalBuilder(retrieval)
-  ).build({
+  const tool = new NoteMutateToolGroup(new MutationProposalBuilder(retrieval), {
+    findExposures: vi.fn(),
+    findWriteAccess: vi.fn().mockResolvedValue(new Map()),
+  }).build({
     phase: 'full',
     execution: createExecutionContext({ userId: 'u1' }),
     proposals,
