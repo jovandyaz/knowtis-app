@@ -12,6 +12,7 @@ import {
   type ModelResolution,
   type QuotaUpgrade,
   type ReasoningEffort,
+  type RecalledMemory,
 } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
@@ -67,6 +68,8 @@ export interface AgentDonePayload {
   conversationId?: string;
   /** Absent from servers that predate tier-scoped catalogs. */
   modelResolution?: ModelResolution;
+  /** Absent from servers that predate used-memory tracking. */
+  memories?: RecalledMemory[];
 }
 
 export interface AgentErrorPayload {
@@ -88,6 +91,8 @@ export interface AgentProposalPayload {
   targetNoteId: string | null;
   summary: string;
   payload: Record<string, unknown>;
+  /** Absent from servers that predate used-memory tracking. */
+  memories?: RecalledMemory[];
 }
 
 export interface AgentCommittedPayload {

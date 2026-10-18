@@ -44,6 +44,7 @@ import {
   type ModelFallbackReason,
   type ModelResolution,
   type ReasoningEffort,
+  type RecalledMemory,
 } from '@knowtis/shared-types';
 import {
   COPILOT_CONVERSATION_STORAGE_KEY,
@@ -111,6 +112,11 @@ export interface ReplyModelFallback {
   to: string;
 }
 
+export interface UsedMemory {
+  id: string;
+  live?: { content: string; receivedAt: number };
+}
+
 export interface AgentChatMessage {
   id: string;
   /** Absent only on history written before turns had ids. */
@@ -129,6 +135,22 @@ export interface AgentChatMessage {
   interrupted?: boolean;
   /** Only the live `agent:done` reports it; the stored transcript does not, so a refetched thread drops it. */
   modelFallback?: ReplyModelFallback;
+  usedMemories?: UsedMemory[];
+}
+
+function usedMemoriesOf(
+  memories: readonly RecalledMemory[] | undefined
+): Pick<AgentChatMessage, 'usedMemories'> {
+  if (!memories?.length) {
+    return {};
+  }
+  const receivedAt = Date.now();
+  return {
+    usedMemories: memories.map(({ id, content }) => ({
+      id,
+      live: { content, receivedAt },
+    })),
+  };
 }
 
 export interface QueuedMessage {
@@ -683,6 +705,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
         stopReason,
         continuable,
         modelResolution,
+        memories,
       }) => {
         if (version !== streamVersion || get().status !== 'streaming') {
           return;
@@ -716,6 +739,7 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
                     ...(fallback
                       ? { modelFallback: replyFallbackOf(fallback) }
                       : {}),
+                    ...usedMemoriesOf(memories),
                   }
                 : m
             ),
@@ -811,7 +835,13 @@ function createAgentState(set: SetAgentState, get: GetAgentState): AgentState {
           decisionInFlight: null,
           thinkingText: '',
           messages: s.messages.map((m) =>
-            m.id === id ? { ...m, proposal: { kind: proposal.kind } } : m
+            m.id === id
+              ? {
+                  ...m,
+                  proposal: { kind: proposal.kind },
+                  ...usedMemoriesOf(proposal.memories),
+                }
+              : m
           ),
         }));
       },

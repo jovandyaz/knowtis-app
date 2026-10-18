@@ -1,4 +1,4 @@
-import type { ElementType } from 'react';
+import type { ElementType, Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SettingsSection } from '@/stores/settings.store';
@@ -36,11 +36,13 @@ const NAV_ITEMS: { section: SettingsSection; icon: ElementType }[] = [
 interface SettingsNavProps {
   activeSection: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
+  activeItemRef?: Ref<HTMLButtonElement>;
 }
 
 export function SettingsNav({
   activeSection,
   onSectionChange,
+  activeItemRef,
 }: SettingsNavProps) {
   const { t } = useTranslation('common');
   const connectedAppsAvailable = useConnectedAppsAvailable();
@@ -59,6 +61,7 @@ export function SettingsNav({
       {navItems.map(({ section, icon: Icon }) => (
         <button
           key={section}
+          ref={activeSection === section ? activeItemRef : undefined}
           type="button"
           onClick={() => onSectionChange(section)}
           aria-label={t(`settings.sections.${section}`)}

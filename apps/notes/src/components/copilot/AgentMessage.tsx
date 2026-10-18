@@ -6,6 +6,7 @@ import { MESSAGE_KIND } from '@knowtis/shared-types';
 
 import { Message, MessageContent, Response } from '../ai-elements/message';
 import { AgentContinueChip } from './AgentContinueChip';
+import { AgentMemoryChip } from './AgentMemoryChip';
 import { AgentModelFallbackNotice } from './AgentModelFallbackNotice';
 import { AgentResolvedChip } from './AgentResolvedChip';
 import { AgentSourceChips } from './AgentSourceChips';
@@ -65,6 +66,9 @@ export function AgentMessage({
             {message.sources && <AgentSourceChips sources={message.sources} />}
             {message.webSources && (
               <AgentWebSourceChips sources={message.webSources} />
+            )}
+            {message.usedMemories && (
+              <AgentMemoryChip memories={message.usedMemories} />
             )}
             {footer}
           </>

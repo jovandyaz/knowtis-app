@@ -1430,6 +1430,18 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
       expect(await dueForExtraction(id)).toBe(false);
     });
 
+    it("never makes an anonymous user's conversation due for memory extraction", async () => {
+      const guest = await withTurn(STRANGER);
+      const registered = await withTurn(LISTER);
+      await touch(guest, new Date(Date.now() - HOUR_MS));
+      await touch(registered, new Date(Date.now() - HOUR_MS));
+
+      expect([
+        await dueForExtraction(guest),
+        await dueForExtraction(registered),
+      ]).toEqual([false, true]);
+    });
+
     describe('memory extraction retries', () => {
       const lastFailedSecondsAgo = (id: string, seconds: number) =>
         db

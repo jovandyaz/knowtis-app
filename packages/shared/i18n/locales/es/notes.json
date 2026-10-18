@@ -506,6 +506,13 @@
       "reasoning": "Razonamiento",
       "sources": "Fuentes",
       "webSources": "Fuentes web",
+      "memoriesUsed_one": "Usó {{count}} memoria",
+      "memoriesUsed_other": "Usó {{count}} memorias",
+      "memoriesTitle": "Memorias usadas en esta respuesta",
+      "memoriesManage": "Administrar memorias",
+      "memoryDeleted": "Memoria eliminada",
+      "memoryLoading": "Cargando memoria…",
+      "memoryUnavailable": "No se pudo cargar esta memoria",
       "stop": "Detener",
       "stopReason": {
         "max_steps": "Se alcanzó el límite de pasos.",

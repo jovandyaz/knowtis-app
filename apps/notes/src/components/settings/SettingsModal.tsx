@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import { useRef, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSettingsStore } from '@/stores/settings.store';
@@ -53,6 +53,7 @@ const SECTION_COMPONENTS: Record<SettingsSection, ComponentType> = {
 export function SettingsModal() {
   const { isOpen, activeSection, close, open } = useSettingsStore();
   const { t } = useTranslation('common');
+  const activeNavItem = useRef<HTMLButtonElement>(null);
 
   const SectionComponent = SECTION_COMPONENTS[activeSection];
 
@@ -61,6 +62,13 @@ export function SettingsModal() {
       <DialogContent
         className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 md:h-[80vh] md:max-w-3xl"
         closeLabel={t('labels.closeDialog')}
+        onOpenAutoFocus={(event) => {
+          const navItem = activeNavItem.current;
+          if (navItem) {
+            event.preventDefault();
+            navItem.focus();
+          }
+        }}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-(--border) px-6 py-4">
           <Settings className="h-4 w-4 text-(--muted-foreground)" />
@@ -70,7 +78,11 @@ export function SettingsModal() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <SettingsNav activeSection={activeSection} onSectionChange={open} />
+          <SettingsNav
+            activeSection={activeSection}
+            onSectionChange={open}
+            activeItemRef={activeNavItem}
+          />
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 overscroll-y-contain">
             <SectionComponent />
           </div>

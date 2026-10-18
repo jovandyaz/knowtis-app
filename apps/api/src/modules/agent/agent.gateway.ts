@@ -359,7 +359,10 @@ export class AgentGateway
 
     const data = parsed.data;
     const turnId = data.turnId ?? randomUUID();
-    const onProposal: RunAgentTurnCallbacks['onProposal'] = (proposal) =>
+    const onProposal: RunAgentTurnCallbacks['onProposal'] = ({
+      proposal,
+      memories,
+    }) =>
       client.emit('agent:proposal', {
         turnId,
         id: proposal.id,
@@ -367,6 +370,7 @@ export class AgentGateway
         targetNoteId: proposal.kind === 'create' ? null : proposal.targetNoteId,
         summary: proposal.summary,
         payload: proposal.payload,
+        memories,
       });
     const turn = {
       userId,
@@ -391,9 +395,9 @@ export class AgentGateway
           (markSettled, markDiscarded) => {
             const callbacks: RunAgentTurnCallbacks = {
               ...this.baseCallbacks(client, controller, turnId),
-              onProposal: (proposal) => {
+              onProposal: (event) => {
                 this.endedLegs.add(controller);
-                onProposal(proposal);
+                onProposal(event);
               },
               onModelStart: markSettled,
               onTurnDiscarded: markDiscarded,

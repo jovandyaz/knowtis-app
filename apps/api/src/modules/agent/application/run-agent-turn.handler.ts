@@ -194,7 +194,10 @@ export interface RunAgentTurnCallbacks {
     memories: readonly RecalledMemory[];
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
-  readonly onProposal: (proposal: ProposedMutation) => void;
+  readonly onProposal: (event: {
+    proposal: ProposedMutation;
+    memories: readonly RecalledMemory[];
+  }) => void;
   /** Fires once, just before the model runs, when the turn named no conversation, with the one it opened; the id must not wait for `done`. A turn refused before the model runs keeps no conversation, so it announces none. */
   readonly onConversation?: (conversationId: string) => void;
   /** Fires once, just before the model runs; a turn that ends without it was refused before any model call. */
@@ -411,7 +414,10 @@ export class RunAgentTurnHandler {
           mutation: event.proposal,
           conversationId: persistence.conversationId,
         });
-        callbacks.onProposal(event.proposal);
+        callbacks.onProposal({
+          proposal: event.proposal,
+          memories: ctx.memories,
+        });
         return 'stop';
       },
       consumesQuota: true,
