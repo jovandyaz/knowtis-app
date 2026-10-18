@@ -192,6 +192,26 @@ function Dialog({ children, open, onOpenChange, modal = true }: DialogProps) {
     previouslyOpenRef.current = resolvedOpen;
   }, [markActiveCycleClosing, resolvedOpen, startOpeningCycle]);
 
+  const unmountedCycleIdRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const closingCycles = closingCyclesRef.current;
+    const remountedCycleId = unmountedCycleIdRef.current;
+    if (remountedCycleId !== null) {
+      unmountedCycleIdRef.current = null;
+      closingCycles.delete(remountedCycleId);
+      activeCycleIdRef.current = remountedCycleId;
+    }
+    return () => {
+      const cycleId = activeCycleIdRef.current;
+      if (cycleId === null) {
+        return;
+      }
+      closingCycles.add(cycleId);
+      activeCycleIdRef.current = null;
+      unmountedCycleIdRef.current = cycleId;
+    };
+  }, []);
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (isControlled) {
       onOpenChange?.(nextOpen);
@@ -252,6 +272,17 @@ function canRestoreFocus(element: HTMLElement): boolean {
   );
 }
 
+function isFocusHeldElsewhere(closing: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  return (
+    active instanceof HTMLElement &&
+    active !== document.body &&
+    active !== document.documentElement &&
+    active.isConnected &&
+    !closing?.contains(active)
+  );
+}
+
 function focusParentDialog(parentDialog: HTMLElement | null) {
   if (!parentDialog?.isConnected) {
     return;
@@ -279,6 +310,8 @@ interface DialogContentProps extends Omit<
   side?: DialogSide;
   /** Accessible name of the close control; the caller owns its translation. */
   closeLabel: string;
+  /** Disables the close control while the dialog's work cannot be interrupted. */
+  closeDisabled?: boolean;
 }
 
 function DialogContent({
@@ -286,6 +319,7 @@ function DialogContent({
   children,
   side = DIALOG_SIDE.CENTER,
   closeLabel,
+  closeDisabled = false,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
@@ -332,7 +366,7 @@ function DialogContent({
     }
 
     event.preventDefault();
-    if (!origin) {
+    if (!origin || isFocusHeldElsewhere(content)) {
       return;
     }
     if (origin.opener && canRestoreFocus(origin.opener)) {
@@ -393,9 +427,10 @@ function DialogContent({
         </EnclosingDialogContentContext.Provider>
         <DialogPrimitive.Close
           type="button"
+          disabled={closeDisabled}
           className={cn(
             TOUCH_TARGET_CLASS,
-            'absolute right-4 top-4 max-md:top-5 inline-flex cursor-pointer items-center justify-center rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2'
+            'absolute right-4 top-4 max-md:top-5 inline-flex cursor-pointer items-center justify-center rounded-sm opacity-70 ring-offset-(--background) transition-opacity duration-(--motion-duration-fast) ease-standard motion-reduce:transition-none hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-30'
           )}
           aria-label={closeLabel}
         >

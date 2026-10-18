@@ -538,6 +538,36 @@ describe('Dialog accessibility', () => {
     ).toBeInTheDocument();
   });
 
+  it('returns focus to the opener when the browser reports the root element as focused', async () => {
+    function OpenerAndDialog({ open }: { open: boolean }) {
+      return (
+        <>
+          <button type="button">Share</button>
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Verify</DialogTitle>
+              <input aria-label="Code" />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<OpenerAndDialog open={false} />);
+    const opener = screen.getByRole('button', { name: 'Share' });
+    opener.focus();
+    rerender(<OpenerAndDialog open />);
+    const rootFocused = vi
+      .spyOn(document, 'activeElement', 'get')
+      .mockReturnValue(document.documentElement);
+    const restore = vi.spyOn(opener, 'focus');
+    rerender(<OpenerAndDialog open={false} />);
+    await settleCloseAutoFocus();
+    rootFocused.mockRestore();
+
+    expect(restore).toHaveBeenCalled();
+  });
+
   it('returns focus to the control the dialog was opened over', async () => {
     function OpenerAndDialog({ open }: { open: boolean }) {
       return (
@@ -807,6 +837,173 @@ describe('Dialog accessibility', () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  describe('a dialog its consumer unmounts while it is open', () => {
+    function UnmountOnClose({ strict = false }: { strict?: boolean }) {
+      const [open, setOpen] = useState(false);
+      const dialog = open ? (
+        <Dialog open onOpenChange={setOpen}>
+          <DialogContent closeLabel="Close dialog">
+            <DialogTitle>Revoke access</DialogTitle>
+            <button type="button" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </DialogContent>
+        </Dialog>
+      ) : null;
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Revoke
+          </button>
+          {strict ? <StrictMode>{dialog}</StrictMode> : dialog}
+        </>
+      );
+    }
+
+    it.each([
+      ['a cancel button', 'cancel'],
+      ['Escape', 'escape'],
+      ['the close control', 'close'],
+    ] as const)(
+      'returns focus to the opener when %s unmounts it',
+      async (_label, exit) => {
+        const user = userEvent.setup();
+        render(<UnmountOnClose />);
+        const opener = screen.getByRole('button', { name: 'Revoke' });
+
+        await user.click(opener);
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        if (exit === 'escape') {
+          await user.keyboard('{Escape}');
+        } else {
+          await user.click(
+            screen.getByRole('button', {
+              name: exit === 'cancel' ? 'Cancel' : 'Close dialog',
+            })
+          );
+        }
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        await waitFor(() => expect(opener).toHaveFocus());
+      }
+    );
+
+    it('returns focus to the opener through StrictMode synthetic cleanup', async () => {
+      const user = userEvent.setup();
+      render(<UnmountOnClose strict />);
+      const opener = screen.getByRole('button', { name: 'Revoke' });
+
+      await user.click(opener);
+      await settleCloseAutoFocus();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(opener).toHaveFocus());
+    });
+
+    it('keeps the opener when StrictMode content remounts while open', async () => {
+      function RemountingDialog() {
+        const [open, setOpen] = useState(false);
+        const [generation, setGeneration] = useState(0);
+        return (
+          <>
+            <button type="button" onClick={() => setOpen(true)}>
+              Open remounting
+            </button>
+            {open ? (
+              <StrictMode>
+                <Dialog open onOpenChange={setOpen}>
+                  <DialogContent key={generation} closeLabel="Close dialog">
+                    <DialogTitle>Remounting</DialogTitle>
+                    <button
+                      type="button"
+                      onClick={() => setGeneration((value) => value + 1)}
+                    >
+                      Reload
+                    </button>
+                    <button type="button" onClick={() => setOpen(false)}>
+                      Done
+                    </button>
+                  </DialogContent>
+                </Dialog>
+              </StrictMode>
+            ) : null}
+          </>
+        );
+      }
+
+      const user = userEvent.setup();
+      render(<RemountingDialog />);
+      const opener = screen.getByRole('button', { name: 'Open remounting' });
+
+      await user.click(opener);
+      await settleCloseAutoFocus();
+      await user.click(screen.getByRole('button', { name: 'Reload' }));
+      await settleCloseAutoFocus();
+      await user.click(screen.getByRole('button', { name: 'Done' }));
+
+      await waitFor(() => expect(opener).toHaveFocus());
+    });
+
+    it('keeps a StrictMode dialog open and focused through its synthetic cleanup', async () => {
+      const user = userEvent.setup();
+      render(<UnmountOnClose strict />);
+
+      await user.click(screen.getByRole('button', { name: 'Revoke' }));
+      await settleCloseAutoFocus();
+
+      expect(
+        screen.getByRole('dialog', { name: 'Revoke access' })
+      ).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toContainElement(
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null
+      );
+    });
+
+    it('still lets a consumer close-autofocus target win', async () => {
+      function UnmountWithTarget() {
+        const [open, setOpen] = useState(false);
+        const target = useRef<HTMLButtonElement>(null);
+        return (
+          <>
+            <button type="button" onClick={() => setOpen(true)}>
+              Open
+            </button>
+            <button ref={target} type="button">
+              Logical target
+            </button>
+            {open ? (
+              <Dialog open onOpenChange={setOpen}>
+                <DialogContent
+                  closeLabel="Close dialog"
+                  onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                    target.current?.focus();
+                  }}
+                >
+                  <DialogTitle>Done</DialogTitle>
+                </DialogContent>
+              </Dialog>
+            ) : null}
+          </>
+        );
+      }
+
+      const user = userEvent.setup();
+      render(<UnmountWithTarget />);
+
+      await user.click(screen.getByRole('button', { name: 'Open' }));
+      await user.keyboard('{Escape}');
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Logical target' })
+        ).toHaveFocus()
+      );
+    });
+  });
+
   it('never uses an unrelated role dialog as a parent fallback', async () => {
     function UnrelatedDialogHarness() {
       const [open, setOpen] = useState(false);
@@ -977,6 +1174,89 @@ describe('Dialog accessibility', () => {
     rerender(<Stack lowerOpen={false} />);
 
     await waitFor(() => expect(upperField).toHaveFocus());
+  });
+
+  it('leaves the focus in a dialog that opened as another one closed', async () => {
+    function SelfFocusingField() {
+      const field = useRef<HTMLInputElement>(null);
+      useEffect(() => {
+        field.current?.focus();
+      }, []);
+      return <input ref={field} aria-label="Next field" />;
+    }
+
+    function Handoff({ step }: { step: 'idle' | 'first' | 'next' }) {
+      return (
+        <>
+          <button type="button">First opener</button>
+          <Dialog open={step === 'first'} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close first dialog">
+              <DialogTitle>First</DialogTitle>
+              <button type="button">First action</button>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={step === 'next'} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close next dialog">
+              <DialogTitle>Next</DialogTitle>
+              <SelfFocusingField />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<Handoff step="idle" />);
+    screen.getByRole('button', { name: 'First opener' }).focus();
+    rerender(<Handoff step="first" />);
+    rerender(<Handoff step="next" />);
+    await settleCloseAutoFocus();
+
+    expect(screen.getByRole('textbox', { name: 'Next field' })).toHaveFocus();
+  });
+
+  it('leaves the focus where it moved when an inline field took it as the dialog closed', async () => {
+    function InlineComposer() {
+      const field = useRef<HTMLTextAreaElement>(null);
+      useEffect(() => {
+        field.current?.focus();
+      }, []);
+      return <textarea ref={field} aria-label="Composer" />;
+    }
+
+    function CloseIntoComposer({ step }: { step: 'idle' | 'open' | 'docked' }) {
+      return (
+        <>
+          <button type="button">Settings</button>
+          <Dialog open={step === 'open'} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close settings">
+              <DialogTitle>Settings</DialogTitle>
+              <button type="button">Open source</button>
+            </DialogContent>
+          </Dialog>
+          {step === 'docked' ? <InlineComposer /> : null}
+        </>
+      );
+    }
+
+    const { rerender } = render(<CloseIntoComposer step="idle" />);
+    screen.getByRole('button', { name: 'Settings' }).focus();
+    rerender(<CloseIntoComposer step="open" />);
+    rerender(<CloseIntoComposer step="docked" />);
+    await settleCloseAutoFocus();
+
+    expect(screen.getByRole('textbox', { name: 'Composer' })).toHaveFocus();
+  });
+
+  it('disables its close control while the consumer cannot be interrupted', () => {
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent closeLabel="Close dialog" closeDisabled>
+          <DialogTitle>Working</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+
+    expect(screen.getByRole('button', { name: 'Close dialog' })).toBeDisabled();
   });
 
   it('focuses the parent dialog when a nested opener is removed before close', async () => {

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -120,4 +120,39 @@ describe('ConnectedAppsSection', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('connectedApps.revokeConfirm')).toBeInTheDocument();
   });
+
+  it.each([
+    ['cancelled', 'cancel'],
+    ['dismissed with Escape', 'escape'],
+  ] as const)(
+    'returns focus to the revoke button when the dialog is %s',
+    async (_label, exit) => {
+      const user = userEvent.setup();
+      useOauthGrants.mockReturnValue({
+        data: [grant()],
+        isLoading: false,
+        isError: false,
+      });
+      render(<ConnectedAppsSection />);
+      const revoke = screen.getByRole('button', {
+        name: 'connectedApps.revoke',
+      });
+
+      await user.click(revoke);
+      const dialog = screen.getByRole('dialog');
+      if (exit === 'escape') {
+        await user.keyboard('{Escape}');
+      } else {
+        await user.click(
+          within(dialog).getByRole('button', { name: 'connectedApps.cancel' })
+        );
+      }
+
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      );
+      await waitFor(() => expect(revoke).toHaveFocus());
+      expect(revokeMutate).not.toHaveBeenCalled();
+    }
+  );
 });
