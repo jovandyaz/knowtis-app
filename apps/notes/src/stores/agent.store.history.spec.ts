@@ -396,6 +396,77 @@ describe('agent.store openConversation', () => {
     });
   });
 
+  it('shows by id the memories a stored reply used', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue({
+      ...TRANSCRIPT,
+      messages: TRANSCRIPT.messages.map((message) =>
+        message.role === 'assistant'
+          ? { ...message, usedMemoryIds: ['mem-1'] }
+          : message
+      ),
+    });
+
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+
+    expect(
+      useAgentStore.getState().messages.map((message) => message.usedMemories)
+    ).toEqual([undefined, [{ id: 'mem-1' }]]);
+  });
+
+  it('keeps on the answer of a decided turn the memories of its hidden proposing leg', async () => {
+    vi.mocked(conversationsApi.transcript).mockResolvedValue({
+      ...TRANSCRIPT,
+      messages: [
+        TRANSCRIPT.messages[0],
+        {
+          ...TRANSCRIPT.messages[1],
+          content: '',
+          usedMemoryIds: ['mem-1'],
+        },
+        { ...TRANSCRIPT.messages[1], usedMemoryIds: ['mem-2'] },
+      ],
+    });
+
+    await useAgentStore.getState().openConversation('c1', 'switcher');
+
+    expect(
+      useAgentStore
+        .getState()
+        .messages.map((message) => [message.content, message.usedMemories])
+    ).toEqual([
+      ['Plan it', undefined],
+      ['Day one.', [{ id: 'mem-1' }, { id: 'mem-2' }]],
+    ]);
+  });
+
+  it('replaces the text a live reply showed for its memories with the ids the server stored', async () => {
+    const { callbacks } = capture();
+    useAgentStore.getState().sendMessage('Plan it');
+    callbacks().onConversation?.('c1');
+    callbacks().onChunk({ text: 'Day one.' });
+    callbacks().onDone({
+      ...DONE,
+      memories: [{ id: 'mem-1', content: 'Soy vegano' }],
+    });
+    vi.mocked(conversationsApi.transcript).mockResolvedValue({
+      ...TRANSCRIPT,
+      messages: [
+        { ...TRANSCRIPT.messages[0], turnId: 'turn-1' },
+        {
+          ...TRANSCRIPT.messages[1],
+          turnId: 'turn-1',
+          usedMemoryIds: ['mem-1'],
+        },
+      ],
+    });
+
+    await useAgentStore.getState().retryHydration();
+
+    expect(useAgentStore.getState().messages.at(-1)?.usedMemories).toEqual([
+      { id: 'mem-1' },
+    ]);
+  });
+
   it('keeps the draft and drops the queue', async () => {
     useAgentStore.setState({
       draft: 'half typed',

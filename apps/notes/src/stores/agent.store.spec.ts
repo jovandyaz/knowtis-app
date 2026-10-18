@@ -3067,3 +3067,116 @@ describe('agent.store a reply served by a fallback model', () => {
     });
   });
 });
+
+describe('agent.store the memories a reply used', () => {
+  const VEGAN = { id: 'mem-1', content: 'Soy vegano' };
+  const LIMA = { id: 'mem-2', content: 'Vivo en Lima' };
+  const DONE: AgentDonePayload = {
+    usage: USAGE,
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+    stopReason: 'completed',
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    vi.mocked(agentClient.canResume).mockReturnValue(true);
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  function received(
+    memory: { id: string; content: string },
+    receivedAt = Date.now()
+  ) {
+    return { id: memory.id, live: { content: memory.content, receivedAt } };
+  }
+
+  function answer(done: AgentDonePayload, turnId = 'turn-1') {
+    const { get } = capture(turnId);
+    useAgentStore.getState().sendMessage('¿qué ceno?');
+    get().onChunk({ text: 'Unas lentejas.' });
+    get().onDone(done);
+  }
+
+  it('keeps the memories the prompt received on the reply, with their text and when they arrived', () => {
+    const arrival = new Date('2026-10-18T12:00:00.000Z');
+    vi.setSystemTime(arrival);
+
+    answer({ ...DONE, memories: [VEGAN, LIMA] });
+
+    expect(useAgentStore.getState().messages.at(-1)?.usedMemories).toEqual([
+      received(VEGAN, arrival.getTime()),
+      received(LIMA, arrival.getTime()),
+    ]);
+  });
+
+  it.each([
+    ['received none', { ...DONE, memories: [] }],
+    ['sent no memories field', DONE],
+  ])('leaves a reply without them when the server %s', (_case, done) => {
+    answer(done);
+
+    expect(useAgentStore.getState().messages.at(-1)).not.toHaveProperty(
+      'usedMemories'
+    );
+  });
+
+  it('marks only the reply of the turn that used them', () => {
+    answer({ ...DONE, memories: [VEGAN] }, 'turn-1');
+    answer(DONE, 'turn-2');
+
+    const replies = useAgentStore
+      .getState()
+      .messages.filter((m) => m.role === 'assistant');
+    expect(replies.map((m) => m.usedMemories)).toEqual([
+      [received(VEGAN)],
+      undefined,
+    ]);
+  });
+
+  function decide(proposalMemories?: AgentProposalPayload['memories']) {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onChunk({ text: 'La creo.' });
+    get().onProposal?.({
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 'Create "My Note"',
+      payload: {},
+      ...(proposalMemories ? { memories: proposalMemories } : {}),
+    });
+    useAgentStore.getState().approveProposal();
+    get().onChunk({ text: 'Creada.' });
+    get().onDone({ ...DONE, memories: [LIMA] });
+    return useAgentStore
+      .getState()
+      .messages.filter((m) => m.role === 'assistant')
+      .map((m) => m.usedMemories);
+  }
+
+  it('gives each leg of a decided turn the memories its own prompt received', () => {
+    expect(decide([VEGAN])).toEqual([[received(VEGAN)], [received(LIMA)]]);
+  });
+
+  it.each([
+    ['received none', []],
+    ['sent no memories field', undefined],
+  ] as const)(
+    'leaves the proposing reply without them when the proposal %s',
+    (_case, memories) => {
+      expect(decide(memories ? [...memories] : undefined)).toEqual([
+        undefined,
+        [received(LIMA)],
+      ]);
+    }
+  );
+});

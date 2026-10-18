@@ -11,6 +11,7 @@ const QUOTA_EXHAUSTED_KEY = 'ai.copilot.quota.exhausted';
 const QUOTA_USED_LABEL_KEY = 'ai.copilot.quota.usedLabel';
 const QUOTA_RESETS_AT_KEY = 'ai.copilot.quota.resetsAt';
 const QUOTA_EXHAUSTED_TODAY_KEY = 'ai.copilot.quota.exhaustedToday';
+const MEMORIES_USED_KEY = 'ai.copilot.memoriesUsed';
 
 const BUNDLES = { en: enNotes, es: esNotes };
 
@@ -100,6 +101,11 @@ const QUOTA_USED_LABEL_CASES = [
     singular: 'Free: 1 de 1 mensaje usado hoy',
     plural: 'Free: 1 de 2 mensajes usados hoy',
   },
+] as const;
+
+const MEMORIES_USED_CASES = [
+  { locale: 'en', singular: 'Used 1 memory', plural: 'Used 2 memories' },
+  { locale: 'es', singular: 'Usó 1 memoria', plural: 'Usó 2 memorias' },
 ] as const;
 
 async function translatorFor(locale: keyof typeof BUNDLES) {
@@ -236,6 +242,16 @@ describe('plural forms', () => {
       expect(
         i18n.t(QUOTA_USED_LABEL_KEY, { tier: 'Free', used: 1, count: 2 })
       ).toBe(plural);
+    }
+  );
+
+  it.each(MEMORIES_USED_CASES)(
+    'counts the memories an answer used with the right plural in $locale',
+    async ({ locale, singular, plural }) => {
+      const i18n = await translatorFor(locale);
+
+      expect(i18n.t(MEMORIES_USED_KEY, { count: 1 })).toBe(singular);
+      expect(i18n.t(MEMORIES_USED_KEY, { count: 2 })).toBe(plural);
     }
   );
 });

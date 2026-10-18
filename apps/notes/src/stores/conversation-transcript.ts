@@ -6,7 +6,7 @@ import {
   type ConversationTranscriptMessage,
 } from '@knowtis/shared-types';
 
-import type { AgentChatMessage } from './agent.store';
+import type { AgentChatMessage, UsedMemory } from './agent.store';
 
 const ASSISTANT_ROLE = 'assistant' satisfies AgentChatMessage['role'];
 
@@ -37,6 +37,9 @@ function turnOf(row: ConversationTranscriptMessage) {
 function assistantDetails(row: ConversationTranscriptMessage) {
   return {
     sources: row.sources,
+    ...(row.usedMemoryIds?.length
+      ? { usedMemories: row.usedMemoryIds.map((id) => ({ id })) }
+      : {}),
     ...(isAgentStopReason(row.stopReason)
       ? { stopReason: row.stopReason }
       : {}),
@@ -54,6 +57,59 @@ function hasSomethingToShow(message: AgentChatMessage): boolean {
     (message.stopReason !== undefined &&
       message.stopReason !== AGENT_STOP_REASON.COMPLETED)
   );
+}
+
+interface CarriedMemories {
+  turnId: string;
+  memories: readonly UsedMemory[];
+}
+
+function unionOf(
+  first: readonly UsedMemory[],
+  second: readonly UsedMemory[]
+): UsedMemory[] {
+  const byId = new Map<string, UsedMemory>();
+  for (const memory of [...first, ...second]) {
+    if (!byId.has(memory.id)) {
+      byId.set(memory.id, memory);
+    }
+  }
+  return [...byId.values()];
+}
+
+function shownWithCarriedMemories(
+  messages: readonly AgentChatMessage[]
+): AgentChatMessage[] {
+  const shown: AgentChatMessage[] = [];
+  let carried: CarriedMemories | undefined;
+  for (const message of messages) {
+    if (!hasSomethingToShow(message)) {
+      if (message.turnId !== undefined && message.usedMemories) {
+        carried = {
+          turnId: message.turnId,
+          memories:
+            carried?.turnId === message.turnId
+              ? unionOf(carried.memories, message.usedMemories)
+              : message.usedMemories,
+        };
+      }
+      continue;
+    }
+    if (
+      carried &&
+      message.role === ASSISTANT_ROLE &&
+      message.turnId === carried.turnId
+    ) {
+      shown.push({
+        ...message,
+        usedMemories: unionOf(carried.memories, message.usedMemories ?? []),
+      });
+    } else {
+      shown.push(message);
+    }
+    carried = undefined;
+  }
+  return shown;
 }
 
 export function toChatMessages(
@@ -91,5 +147,5 @@ export function toChatMessages(
     }
     previous = row;
   }
-  return messages.filter(hasSomethingToShow);
+  return shownWithCarriedMemories(messages);
 }

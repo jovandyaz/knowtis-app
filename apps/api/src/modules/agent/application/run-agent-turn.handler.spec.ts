@@ -1443,7 +1443,10 @@ describe('RunAgentTurnHandler', () => {
     expect(pendingStore.save).toHaveBeenCalledWith(
       expect.objectContaining({ userId: USER, mutation: proposal })
     );
-    expect(onProposal).toHaveBeenCalledWith(proposal);
+    expect(onProposal).toHaveBeenCalledWith({
+      proposal,
+      memories: [],
+    });
   });
 
   it('resumeTurn streams the acknowledgment and records usage on done', async () => {
@@ -4241,7 +4244,10 @@ describe('RunAgentTurnHandler', () => {
     expect(pendingStore.save).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-1' })
     );
-    expect(onProposal).toHaveBeenCalledWith(proposal);
+    expect(onProposal).toHaveBeenCalledWith({
+      proposal,
+      memories: [],
+    });
   });
 
   it('completes the turn and still emits conversationId when persistence fails (memory path)', async () => {
@@ -4439,6 +4445,44 @@ describe('RunAgentTurnHandler', () => {
     ).toEqual([]);
   });
 
+  it('reports on a proposal the memories its prompt received, the ones stored on the proposing leg', async () => {
+    const proposal = makeProposal('55555555-5555-4555-8555-555555555555');
+    const deps = makeDeps({
+      events: [
+        { type: 'chunk', text: 'I will create it.' },
+        {
+          type: 'proposal',
+          proposal,
+          usage: {
+            inputTokens: 7,
+            outputTokens: 3,
+            model: 'anthropic:claude-sonnet-4-20250514',
+          },
+        },
+      ],
+    });
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const conversations = makeConversations();
+    const onProposal = vi.fn();
+
+    await recallHandler(memory, deps, conversations).execute(COOK, {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal,
+    });
+
+    expect(onProposal).toHaveBeenCalledWith({
+      proposal,
+      memories: [{ id: 'm1', content: 'Is vegan' }],
+    });
+    const [{ messages }] = vi.mocked(conversations.appendTurn).mock.calls[0];
+    expect(messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      usedMemoryIds: ['m1'],
+    });
+  });
+
   it('skips memory retrieval without embedding when embeddings are not configured', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
@@ -4508,6 +4552,8 @@ describe('RunAgentTurnHandler', () => {
       makeEvents()
     );
 
+    const done = vi.fn();
+
     await handler.execute(
       {
         userId: USER,
@@ -4517,7 +4563,7 @@ describe('RunAgentTurnHandler', () => {
       },
       {
         onChunk: vi.fn(),
-        onDone: vi.fn(),
+        onDone: done,
         onError: vi.fn(),
         onProposal: vi.fn(),
       }
@@ -4526,6 +4572,9 @@ describe('RunAgentTurnHandler', () => {
     expect(embed.embedQuery).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.not.objectContaining({ userMemories: expect.anything() })
+    );
+    expect(done).toHaveBeenCalledWith(
+      expect.objectContaining({ memories: [] })
     );
   });
 

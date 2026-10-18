@@ -1131,7 +1131,7 @@ describe('AgentGateway', () => {
           cb: RunAgentTurnCallbacks,
           signal: AbortSignal
         ) => {
-          cb.onProposal(proposal);
+          cb.onProposal({ proposal, memories: [] });
           await untilAborted(signal);
         }
       );
@@ -1667,7 +1667,7 @@ describe('AgentGateway', () => {
         cb.onConversation?.(CONVERSATION);
         cb.onThinking?.('hmm');
         cb.onChunk('Hi');
-        cb.onProposal(proposal);
+        cb.onProposal({ proposal, memories: [] });
         cb.onDone(doneUsage);
         cb.onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
       });
@@ -1689,6 +1689,29 @@ describe('AgentGateway', () => {
       for (const [, payload] of client.emit.mock.calls) {
         expect(payload).toMatchObject({ turnId: TURN });
       }
+    });
+
+    it('sends with a proposal the memories the prompt of its leg received', async () => {
+      const proposal = ProposedMutation.create({
+        id: '77777777-7777-4777-8777-777777777777',
+        kind: 'create',
+        payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+        summary: 'Create GTD',
+      })._unsafeUnwrap();
+      const memories = [{ id: 'm1', content: 'Is vegan' }];
+      const execute = vi.fn<Execute>(async (_input, cb) => {
+        cb.onModelStart?.();
+        cb.onProposal({ proposal, memories });
+      });
+      const gateway = makeGateway({ handler: { execute } as never });
+      const client = makeClient('u1');
+
+      await gateway.handleMessage(client as never, turn());
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:proposal',
+        expect.objectContaining({ turnId: TURN, id: proposal.id, memories })
+      );
     });
 
     it('resumes an approved proposal under the turn that proposed it, and echoes that id', async () => {
@@ -2123,14 +2146,15 @@ describe('AgentGateway', () => {
         'a proposal',
         (async (_input, cb) => {
           cb.onModelStart?.();
-          cb.onProposal(
-            ProposedMutation.create({
+          cb.onProposal({
+            proposal: ProposedMutation.create({
               id: '77777777-7777-4777-8777-777777777777',
               kind: 'create',
               payload: { title: 'GTD', contentHtml: '<p>x</p>' },
               summary: 'Create GTD',
-            })._unsafeUnwrap()
-          );
+            })._unsafeUnwrap(),
+            memories: [],
+          });
         }) as Execute,
       ],
     ])(
@@ -2460,7 +2484,7 @@ describe('AgentGateway', () => {
             messages: { used: 2, limit: 30, resetsAt: '2026-09-29T00:00:00Z' },
           });
           cb.onModelStart?.();
-          cb.onProposal(proposal);
+          cb.onProposal({ proposal, memories: [] });
         });
         const redis = createInMemoryClaimRedis();
         const gateway = makeGateway({
@@ -2751,14 +2775,15 @@ describe('AgentGateway', () => {
           'a proposal',
           (async (_input, cb) => {
             cb.onModelStart?.();
-            cb.onProposal(
-              ProposedMutation.create({
+            cb.onProposal({
+              proposal: ProposedMutation.create({
                 id: '77777777-7777-4777-8777-777777777777',
                 kind: 'create',
                 payload: { title: 'GTD', contentHtml: '<p>x</p>' },
                 summary: 'Create GTD',
-              })._unsafeUnwrap()
-            );
+              })._unsafeUnwrap(),
+              memories: [],
+            });
           }) as Execute,
         ],
         [
@@ -3265,14 +3290,15 @@ describe('AgentGateway', () => {
           'agent:proposal',
           (cb) => {
             cb.onModelStart?.();
-            cb.onProposal(
-              ProposedMutation.create({
+            cb.onProposal({
+              proposal: ProposedMutation.create({
                 id: '77777777-7777-4777-8777-777777777777',
                 kind: 'create',
                 payload: { title: 'GTD', contentHtml: '<p>x</p>' },
                 summary: 'Create GTD',
-              })._unsafeUnwrap()
-            );
+              })._unsafeUnwrap(),
+              memories: [],
+            });
           },
         ],
         ['agent:turn_settled', (cb) => cb.onTurnSettled?.(CONVERSATION)],
@@ -3724,14 +3750,15 @@ describe('AgentGateway', () => {
         cb.onModelStart?.();
         cb.onChunk('I will create it.');
         await decided.wait();
-        cb.onProposal(
-          ProposedMutation.create({
+        cb.onProposal({
+          proposal: ProposedMutation.create({
             id: '77777777-7777-4777-8777-777777777777',
             kind: 'create',
             payload: { title: 'GTD', contentHtml: '<p>x</p>' },
             summary: 'Create GTD',
-          })._unsafeUnwrap()
-        );
+          })._unsafeUnwrap(),
+          memories: [],
+        });
       });
       const { gateway, client } = await connectedGateway({
         execute,

@@ -506,6 +506,13 @@
       "reasoning": "Reasoning",
       "sources": "Sources",
       "webSources": "Web sources",
+      "memoriesUsed_one": "Used {{count}} memory",
+      "memoriesUsed_other": "Used {{count}} memories",
+      "memoriesTitle": "Memories used in this answer",
+      "memoriesManage": "Manage memories",
+      "memoryDeleted": "Deleted memory",
+      "memoryLoading": "Loading memory…",
+      "memoryUnavailable": "Couldn't load this memory",
       "stop": "Stop",
       "stopReason": {
         "max_steps": "The step limit was reached.",
