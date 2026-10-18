@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
+  admitAdds,
   buildReconcilePrompt,
   MAX_DESTRUCTIVE_OPS_PER_RUN,
   MEMORY_RECONCILE_SYSTEM,
@@ -203,5 +204,34 @@ describe('screenDestructiveOps', () => {
         maxDestructive: MAX_DESTRUCTIVE_OPS_PER_RUN,
       }).deletes
     ).toHaveLength(MAX_DESTRUCTIVE_OPS_PER_RUN);
+  });
+});
+
+describe('admitAdds', () => {
+  const ADDS = ['first', 'second', 'third'];
+
+  it('admits every add while the user has room for them', () => {
+    expect(admitAdds(ADDS, { max: 10, stored: 2, deleting: 0 })).toEqual(ADDS);
+  });
+
+  it('admits the first adds up to the room left, in order', () => {
+    expect(admitAdds(ADDS, { max: 10, stored: 9, deleting: 0 })).toEqual([
+      'first',
+    ]);
+  });
+
+  it('admits none when the user is at the cap', () => {
+    expect(admitAdds(ADDS, { max: 10, stored: 10, deleting: 0 })).toEqual([]);
+  });
+
+  it('floors the room at zero when the user is already past the cap', () => {
+    expect(admitAdds(ADDS, { max: 10, stored: 12, deleting: 1 })).toEqual([]);
+  });
+
+  it('counts the deletes of the same run as room freed', () => {
+    expect(admitAdds(ADDS, { max: 10, stored: 10, deleting: 2 })).toEqual([
+      'first',
+      'second',
+    ]);
   });
 });

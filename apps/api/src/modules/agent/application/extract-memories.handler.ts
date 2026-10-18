@@ -23,6 +23,7 @@ import {
   isStorableMemory,
 } from '../domain/memory-content-policy';
 import {
+  admitAdds,
   buildReconcilePrompt,
   MAX_DESTRUCTIVE_OPS_PER_RUN,
   MEMORY_RECONCILE_SYSTEM,
@@ -337,15 +338,6 @@ export class ExtractMemoriesHandler {
     };
   }
 
-  private async roomForAdds(
-    userId: string,
-    max: number,
-    deleting: number
-  ): Promise<number> {
-    const count = await this.memory.countForUser(userId);
-    return Math.max(0, max - (count - deleting));
-  }
-
   private async applyScreened({
     userId,
     conversationId,
@@ -363,10 +355,11 @@ export class ExtractMemoriesHandler {
   }): Promise<PartitionedOps> {
     const adds =
       screened.adds.length > 0
-        ? screened.adds.slice(
-            0,
-            await this.roomForAdds(userId, max, deletes.length)
-          )
+        ? admitAdds(screened.adds, {
+            max,
+            stored: await this.memory.countForUser(userId),
+            deleting: deletes.length,
+          })
         : [];
     const inserts: { content: string; embedding: number[] }[] = [];
     const updates: { id: string; content: string; embedding: number[] }[] = [];
