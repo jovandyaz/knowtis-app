@@ -465,8 +465,10 @@ describe('AgentGateway', () => {
     }
   );
 
-  it('forwards the memories the turn used on agent:done', async () => {
-    const memories = [{ id: 'm1', content: 'Is vegan' }];
+  it.each([
+    ['the memories the turn used', [{ id: 'm1', content: 'Is vegan' }]],
+    ['an empty list for a turn that recalled none, paused or unmatched', []],
+  ])('forwards %s on agent:done', async (_what, memories) => {
     const execute = vi.fn(
       async (
         _input: unknown,

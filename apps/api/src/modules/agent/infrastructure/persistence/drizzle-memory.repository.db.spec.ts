@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { validateEnv } from '../../../../config/env.config';
@@ -9,6 +9,7 @@ import {
   DATABASE_CONNECTION,
   DatabaseModule,
   userAiSettings,
+  userMemories,
   users,
   type Database,
 } from '../../../../database';
@@ -136,6 +137,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
       sourceConversationId: foreignSource.id,
     });
     await repo.insert({ userId: U2, content: 'u2 fact', embedding: vec(12) });
+    await db
+      .update(userMemories)
+      .set({
+        createdAt: sql`now() - interval '1 hour'`,
+        updatedAt: sql`now() - interval '1 hour'`,
+      })
+      .where(eq(userMemories.userId, U1));
     await repo.update(U1, sourced.id, 'Prefers aisle seats', vec(13));
 
     const listed = await repo.listWithSources(U1, 50);
