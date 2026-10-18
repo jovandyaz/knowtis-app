@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_INTENTS, type ModelIntent } from '@knowtis/shared-types';
 
 import { PLATFORM_SEED_MODELS } from '../../ai/domain/model-catalog/platform-resolution';
-import { EVAL_CATEGORIES } from './cases';
+import { EVAL_TARGET_SUITES } from './ci/eval-summary';
+import { EVAL_CATEGORIES } from './runtime/eval-runtime';
 import {
   jobSection,
   jqTestPatterns,
@@ -17,6 +18,17 @@ import {
 
 const WORKFLOW = readWorkflow('nightly-eval.yml');
 const PROJECT = readFileSync(join(REPO_ROOT, 'apps/api/project.json'), 'utf8');
+const EVAL_CONFIG = readFileSync(
+  join(REPO_ROOT, 'apps/api/vitest.eval.config.ts'),
+  'utf8'
+);
+const NO_TESTS_FAIL_RE = /^ +passWithNoTests: false,$/m;
+const EVAL_DIR = join(REPO_ROOT, 'apps/api/src/modules/agent/eval');
+const SUMMARY_WRITER_RE = /prepareEvalOutput\('([\w-]+)'\)/g;
+const DRIFT_STEP_RE =
+  /^ +- name: Compare against earlier runs\n +if: always\(\)\n +continue-on-error: true\n +env:\n +GH_TOKEN: \$\{\{ github\.token \}\}\n +EVAL_DRIFT_ARTIFACT_NAME: (.+)\n +EVAL_TARGET: \$\{\{ matrix\.target \}\}\n +run: npx nx run api:eval-drift$/m;
+const UPLOAD_NAME_RE = /^ +name: (eval-results-.+)$/m;
+const LEG_TARGET_RE = /^ +target: (\S+)$/gm;
 const SECURITY_TARGET_CATEGORY_RE =
   /"eval-security": \{[^}]*?"env": \{ "AI_EVAL_CATEGORY": "(\w+)" \}/s;
 const LEG_RE =
@@ -139,6 +151,57 @@ describe('weekly eval workflow', () => {
     expect(
       scripts.filter((script) => script.includes(EXPRESSION_OPEN))
     ).toStrictEqual([]);
+  });
+
+  it('runs only targets whose expected suites are known, so a missing summary is noticed', () => {
+    const targets = [...WORKFLOW.matchAll(LEG_TARGET_RE)].map(
+      ([, target]) => target
+    );
+
+    expect(targets.length).toBeGreaterThan(0);
+    expect(
+      targets.filter(
+        (target) => !Object.hasOwn(EVAL_TARGET_SUITES, target ?? '')
+      )
+    ).toStrictEqual([]);
+  });
+
+  it.each(Object.values(EVAL_TARGET_SUITES).flat())(
+    'keeps the %s suite writing its summary under the name the targets expect',
+    (suite) => {
+      const source = readFileSync(
+        join(REPO_ROOT, `apps/api/src/modules/agent/eval/${suite}.eval.ts`),
+        'utf8'
+      );
+
+      expect(source).toContain(`prepareEvalOutput('${suite}')`);
+    }
+  );
+
+  it('expects a summary from every suite that writes one', () => {
+    const writers = readdirSync(EVAL_DIR)
+      .filter((name) => name.endsWith('.eval.ts'))
+      .flatMap((name) => [
+        ...readFileSync(join(EVAL_DIR, name), 'utf8').matchAll(
+          SUMMARY_WRITER_RE
+        ),
+      ])
+      .map(([, suite]) => suite)
+      .sort();
+
+    expect(writers).toStrictEqual([...EVAL_TARGET_SUITES.eval].sort());
+  });
+
+  it("compares each leg with earlier main runs of the artifact it uploads, per its target's suites", () => {
+    const [, artifact] = WORKFLOW.match(DRIFT_STEP_RE) ?? [];
+    const [, uploaded] = WORKFLOW.match(UPLOAD_NAME_RE) ?? [];
+
+    expect(artifact).toBeDefined();
+    expect(artifact).toBe(uploaded);
+  });
+
+  it('fails an eval run that collects no suite at all', () => {
+    expect(EVAL_CONFIG).toMatch(NO_TESTS_FAIL_RE);
   });
 
   it('narrows the security target to a category the suite knows', () => {

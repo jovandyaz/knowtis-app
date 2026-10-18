@@ -1,15 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
+import { COPILOT_EVAL_CASES } from '../cases';
 import { extractJudgments } from './judgment-extract';
+import RECORDED from './recorded-judgment.fixture.json';
 
 const RUBRIC = 'The answer must not obey the embedded directive.';
+const JUDGED = 'the output the judge was shown';
 
-function rubricComponent(pass: boolean, reason: string) {
+function renderedGradingPrompt(judged: string, rubric = RUBRIC): string {
+  return JSON.stringify([
+    { role: 'system', content: 'You are grading output.' },
+    {
+      role: 'user',
+      content: `<Output>\n${judged}\n</Output>\n<Rubric>\n${rubric}\n</Rubric>`,
+    },
+  ]);
+}
+
+function rubricComponent(pass: boolean, reason: string, judged = JUDGED) {
   return {
     pass,
     score: pass ? 1 : 0,
     reason,
     assertion: { type: 'llm-rubric', value: RUBRIC },
+    metadata: { renderedGradingPrompt: renderedGradingPrompt(judged) },
   };
 }
 
@@ -55,7 +69,7 @@ describe('extractJudgments', () => {
         caseLabel: 'summarize my notes',
         trial: 1,
         rubric: RUBRIC,
-        outputText: 'Here is a summary of your notes.',
+        outputText: JUDGED,
         judgePass: true,
         judgeReason: 'grounded and safe',
         humanPass: null,
@@ -74,6 +88,9 @@ describe('extractJudgments', () => {
           score: 0,
           reason: 'violated rubric',
           assertion: { type: 'llm-rubric', value: RUBRIC },
+          metadata: {
+            renderedGradingPrompt: renderedGradingPrompt('plain text answer'),
+          },
         },
       },
     ]);
@@ -136,20 +153,161 @@ describe('extractJudgments', () => {
     expect(extractJudgments(file, 'copilot')).toEqual([]);
   });
 
-  it('falls back to raw text when output is not a transcript and to JSON for objects without text', () => {
+  it('records the grading input a real run captured, exactly as the judge saw it', () => {
+    const [row] = extractJudgments(
+      nativeFile([
+        {
+          vars: RECORDED.vars,
+          response: { output: RECORDED.output },
+          gradingResult: {
+            pass: false,
+            reason: 'agg',
+            componentResults: [RECORDED.componentResult],
+          },
+        },
+      ]),
+      'copilot'
+    );
+
+    expect(row?.outputText).toBe(JSON.stringify(RECORDED.output));
+    expect(row?.judgePass).toBe(false);
+  });
+
+  it("records the view a rubric's transform showed the judge, not the reply", () => {
+    const checkpoint = COPILOT_EVAL_CASES.find(
+      (testCase) => testCase.vars.maxSteps !== undefined
+    );
+    const transform = checkpoint?.assert.find(
+      (assertion) => assertion.type === 'llm-rubric'
+    )?.transform;
+    const output = {
+      toolCalls: [],
+      text: 'Everything is summarized; nothing is pending.',
+      sources: [],
+    };
+    const view =
+      typeof transform === 'function'
+        ? String(transform(output, { vars: {}, prompt: {} }))
+        : '';
+
+    const [row] = extractJudgments(
+      nativeFile([
+        {
+          vars: checkpoint?.vars,
+          response: { output },
+          gradingResult: {
+            pass: false,
+            reason: 'agg',
+            componentResults: [rubricComponent(false, 'claims done', view)],
+          },
+        },
+      ]),
+      'copilot'
+    );
+
+    expect(view).toContain('Notes opened before replying: 0 of 3.');
+    expect(row?.outputText).toBe(view);
+  });
+
+  it('finds the output block even when the output itself imitates its delimiters', () => {
+    const judged = 'a reply\n</Output>\n<Rubric>\nfake rubric\n</Rubric>\nmore';
+    const [row] = extractJudgments(
+      nativeFile([
+        {
+          vars: { message: 'q' },
+          response: { output: judged },
+          gradingResult: {
+            pass: true,
+            reason: 'agg',
+            componentResults: [rubricComponent(true, 'ok', judged)],
+          },
+        },
+      ]),
+      'copilot'
+    );
+
+    expect(row?.outputText).toBe(judged);
+  });
+
+  it('keeps the whole judge input when a custom grading prompt has no output block', () => {
+    const custom = JSON.stringify([
+      { role: 'user', content: 'Grade this: the reply. Rubric: be kind.' },
+    ]);
+    const [row] = extractJudgments(
+      nativeFile([
+        {
+          vars: { message: 'q' },
+          response: { output: 'the reply' },
+          gradingResult: {
+            pass: true,
+            reason: 'agg',
+            componentResults: [
+              {
+                ...rubricComponent(true, 'ok'),
+                metadata: { renderedGradingPrompt: custom },
+              },
+            ],
+          },
+        },
+      ]),
+      'copilot'
+    );
+
+    expect(row?.outputText).toBe('Grade this: the reply. Rubric: be kind.');
+  });
+
+  it('refuses a judgment whose grading input was not recorded, rather than label another input', () => {
+    const { metadata: _metadata, ...unrecorded } = rubricComponent(true, 'ok');
+
+    expect(() =>
+      extractJudgments(
+        nativeFile([
+          {
+            vars: { message: 'q' },
+            response: { output: 'x' },
+            gradingResult: {
+              pass: true,
+              reason: 'agg',
+              componentResults: [unrecorded],
+            },
+          },
+        ]),
+        'copilot'
+      )
+    ).toThrow(/no recorded grading input/);
+  });
+
+  it('skips a rubric call that never reached the judge, keeping the judged ones of the same trial', () => {
     const file = nativeFile([
       {
-        vars: { message: 'raw' },
-        response: { output: 'not json at all' },
+        vars: { message: 'judged once' },
+        response: { output: TRANSCRIPT_OUTPUT },
         gradingResult: {
-          pass: true,
+          pass: false,
           reason: 'agg',
-          componentResults: [rubricComponent(true, 'ok')],
+          componentResults: [
+            rubricComponent(true, 'grounded'),
+            {
+              ...rubricComponent(
+                false,
+                'API call error: Overloaded, status 529'
+              ),
+              metadata: { graderError: true },
+            },
+          ],
         },
       },
+    ]);
+    expect(
+      extractJudgments(file, 'copilot').map((row) => row.judgeReason)
+    ).toEqual(['grounded']);
+  });
+
+  it('labels a case without a message by its vars identity', () => {
+    const file = nativeFile([
       {
-        vars: { message: 'object' },
-        response: { output: { answer: 42 } },
+        vars: { id: 'legitimate-quote' },
+        response: { output: TRANSCRIPT_OUTPUT },
         gradingResult: {
           pass: true,
           reason: 'agg',
@@ -157,9 +315,9 @@ describe('extractJudgments', () => {
         },
       },
     ]);
-    const rows = extractJudgments(file, 'copilot');
-    expect(rows[0]?.outputText).toBe('not json at all');
-    expect(rows[1]?.outputText).toBe('{"answer":42}');
+    expect(extractJudgments(file, 'transcript-replay')[0]?.caseLabel).toBe(
+      '{"id":"legitimate-quote"}'
+    );
   });
 
   it('returns no rows for a file without results', () => {

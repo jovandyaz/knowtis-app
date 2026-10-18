@@ -8,6 +8,7 @@ import {
   caseKeyOf,
   createStructuredProvider,
   evalGateOpen,
+  evalSuiteTimeoutMs,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -19,6 +20,7 @@ import { FIXTURE_SET, REPLAY_GUARD_CASES } from './transcript-replay.fixtures';
 loadEnv({ path: '.env.local', quiet: true });
 loadEnv({ path: '.env', quiet: true });
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
+const TRIALS = resolveEvalTrials();
 
 describe.runIf(evalGateOpen())('transcript replay', () => {
   let harness: AgentEvalHarness;
@@ -30,55 +32,59 @@ describe.runIf(evalGateOpen())('transcript replay', () => {
   afterAll(async () => {
     await harness?.close();
   });
-  it('preserves useful replay and excludes unsafe history with strict security thresholds', async () => {
-    const trials = resolveEvalTrials();
-    const target = await prepareEvalOutput('transcript-replay');
-    const provider = createStructuredProvider<{ id: string }, unknown>(
-      'knowtis-history-replay',
-      async ({ id }) => {
-        const item = REPLAY_GUARD_CASES.find(
-          (candidate) => candidate.id === id
-        );
-        if (!item) {
-          throw new Error('Unknown replay eval case');
+  it(
+    'preserves useful replay and excludes unsafe history with strict security thresholds',
+    async () => {
+      const target = await prepareEvalOutput('transcript-replay');
+      const provider = createStructuredProvider<{ id: string }, unknown>(
+        'knowtis-history-replay',
+        async ({ id }) => {
+          const item = REPLAY_GUARD_CASES.find(
+            (candidate) => candidate.id === id
+          );
+          if (!item) {
+            throw new Error('Unknown replay eval case');
+          }
+          return harness.runReplayConversation(
+            item.history,
+            item.message,
+            FIXTURE_SET,
+            model
+          );
         }
-        return harness.runReplayConversation(
-          item.history,
-          item.message,
-          FIXTURE_SET,
-          model
+      );
+      const stats = await runEvalSuite(
+        {
+          providers: [provider],
+          prompts: ['{{id}}'],
+          tests: REPLAY_GUARD_CASES.map((item) => ({
+            description: item.id,
+            vars: { id: item.id },
+            assert: item.assert,
+          })),
+          ...(target ? { outputPath: target.nativePath } : {}),
+        },
+        {
+          trials: TRIALS,
+          categoryByCase: new Map(
+            REPLAY_GUARD_CASES.map((item) => [
+              caseKeyOf({ id: item.id }),
+              item.category,
+            ])
+          ),
+        }
+      );
+      if (target) {
+        await writeEvalSummary(
+          target,
+          { suite: 'transcript-replay', model, trials: TRIALS },
+          stats
         );
       }
-    );
-    const stats = await runEvalSuite(
-      {
-        providers: [provider],
-        prompts: ['{{id}}'],
-        tests: REPLAY_GUARD_CASES.map((item) => ({
-          description: item.id,
-          vars: { id: item.id },
-          assert: item.assert,
-        })),
-        ...(target ? { outputPath: target.nativePath } : {}),
-      },
-      {
-        trials,
-        minPassRateByCase: new Map(
-          REPLAY_GUARD_CASES.filter((item) => item.category === 'security').map(
-            (item) => [caseKeyOf({ id: item.id }), 1]
-          )
-        ),
-      }
-    );
-    if (target) {
-      await writeEvalSummary(
-        target,
-        { suite: 'transcript-replay', model, trials },
-        stats
-      );
-    }
-    expect(stats.providerErrors).toBe(0);
-    expect(stats.cases).toHaveLength(REPLAY_GUARD_CASES.length);
-    expect(stats.casesBelowThreshold).toEqual([]);
-  }, 300_000);
+      expect(stats.providerErrors).toBe(0);
+      expect(stats.cases).toHaveLength(REPLAY_GUARD_CASES.length);
+      expect(stats.cases.filter((c) => c.verdict !== 'pass')).toEqual([]);
+    },
+    evalSuiteTimeoutMs(TRIALS)
+  );
 });

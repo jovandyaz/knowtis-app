@@ -1,8 +1,46 @@
+import type { Assertion } from 'promptfoo';
 import { describe, expect, it } from 'vitest';
 
-import { assertCappedTurnAnswers } from './assertions';
+import {
+  assertCappedTurnAnswers,
+  assertInjectionNotObeyed,
+  assertNoExfiltrationLink,
+  assertTurnAnswered,
+  assertUpdateProposal,
+} from './assertions';
 import { COPILOT_EVAL_CASES, selectCopilotCases } from './cases';
-import { caseKeyOf } from './runtime/eval-runtime';
+import { caseKeyOf, turnCompletionCheck } from './runtime/eval-runtime';
+import type { EvalTranscript } from './transcript';
+
+const CAPTURED_PROPOSAL_ONLY_ANSWER: EvalTranscript = {
+  toolCalls: [{ name: 'searchNotes', args: { query: 'Project Aurora spec' } }],
+  text: '',
+  proposal: { kind: 'update', payload: { title: 'Aurora — Final' } },
+  sources: [],
+  error: null,
+  stopReason: null,
+  servedModel: 'openrouter:deepseek/deepseek-v4-pro-0813',
+  steps: [],
+  usage: null,
+  costUsd: null,
+};
+
+function caseNamed(description: string) {
+  const found = COPILOT_EVAL_CASES.find(
+    (testCase) => testCase.description === description
+  );
+  if (!found) {
+    throw new Error(`no case '${description}'`);
+  }
+  return found;
+}
+
+function rubricOf(assertions: readonly Assertion[]): string {
+  const rubric = assertions.find(
+    (assertion) => assertion.type === 'llm-rubric'
+  );
+  return typeof rubric?.value === 'string' ? rubric.value : '';
+}
 
 const FIXTURE_NAMES = new Set([
   'recent',
@@ -21,6 +59,32 @@ describe('COPILOT_EVAL_CASES', () => {
     expect(COPILOT_EVAL_CASES).toHaveLength(12);
   });
 
+  it('judges the checkpoint wording on the reply and the notes it opened, never on the raw transcript', () => {
+    const checkpoint = caseNamed(
+      'checkpoint: a capped turn answers and states what is pending'
+    );
+    const [, judged] = checkpoint.assert;
+    const transform = judged?.transform;
+    const output: EvalTranscript = {
+      ...CAPTURED_PROPOSAL_ONLY_ANSWER,
+      proposal: null,
+      text: 'All three notes are summarized; nothing is pending.',
+      toolCalls: [{ name: 'getNote', args: { noteId: 'x' } }],
+    };
+
+    expect(typeof transform).toBe('function');
+    expect(
+      typeof transform === 'function'
+        ? transform(output, { vars: {}, prompt: {} })
+        : ''
+    ).toBe(
+      'Reply shown to the user:\nAll three notes are summarized; nothing is pending.\n\nNotes opened before replying: 0 of 3.'
+    );
+    expect(rubricOf(checkpoint.assert)).toMatch(
+      /only if every note was opened/
+    );
+  });
+
   it('caps the checkpoint case at three steps and grades both the answer and its wording', () => {
     const checkpoint = COPILOT_EVAL_CASES.find(
       (testCase) =>
@@ -37,6 +101,57 @@ describe('COPILOT_EVAL_CASES', () => {
       value: assertCappedTurnAnswers,
     });
   });
+
+  describe('the HITL case', () => {
+    const hitl = caseNamed('HITL');
+
+    it('checks deterministically only that a pending update proposal was made', () => {
+      expect(
+        hitl.assert.filter((assertion) => assertion.type === 'javascript')
+      ).toEqual([turnCompletionCheck(assertUpdateProposal)]);
+    });
+
+    it('accepts the captured answer whose only deliverable is the pending proposal', () => {
+      expect(assertUpdateProposal(CAPTURED_PROPOSAL_ONLY_ANSWER)).toBe(true);
+    });
+
+    it('rejects an answer with neither text nor a proposal', () => {
+      expect(
+        assertUpdateProposal({
+          ...CAPTURED_PROPOSAL_ONLY_ANSWER,
+          proposal: null,
+        })
+      ).toBe(false);
+    });
+
+    it('tells the judge an empty reply beside a pending proposal is a complete answer, and a claimed change is not', () => {
+      const rubric = rubricOf(hitl.assert);
+
+      expect(rubric).toMatch(/empty reply text beside the pending `proposal`/);
+      expect(rubric).toMatch(/does not claim that the note has already been/);
+    });
+  });
+
+  it.each([
+    ['prompt injection', assertInjectionNotObeyed],
+    [
+      'prompt injection: exfiltration via retrieved note',
+      assertNoExfiltrationLink,
+    ],
+  ] as const)(
+    'lets a stall excuse only the answered check of %s, never its violation check',
+    (description, violationCheck) => {
+      const checks = caseNamed(description).assert.filter(
+        (assertion) => assertion.type === 'javascript'
+      );
+
+      expect(checks).toEqual([
+        turnCompletionCheck(assertTurnAnswered),
+        expect.objectContaining({ value: violationCheck }),
+      ]);
+      expect(checks[1]?.metric).toBeUndefined();
+    }
+  );
 
   it('every case has a message, a known fixtureSet, and at least one assertion', () => {
     for (const testCase of COPILOT_EVAL_CASES) {

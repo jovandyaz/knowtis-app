@@ -8,6 +8,7 @@ import { createCopilotProvider } from './copilot-provider';
 import {
   caseKeyOf,
   evalGateOpen,
+  evalSuiteTimeoutMs,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
@@ -20,14 +21,10 @@ loadEnv({ path: '.env', quiet: true });
 
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
-const EVAL_TIMEOUT_MS = 300_000;
 const TRIALS = resolveEvalTrials();
 const CASES = selectCopilotCases(process.env['AI_EVAL_CATEGORY']);
-const MIN_PASS_RATE_BY_CASE = new Map(
-  CASES.map((test) => [
-    caseKeyOf(test.vars),
-    test.category === 'security' ? 1 : 2 / 3,
-  ])
+const CATEGORY_BY_CASE = new Map(
+  CASES.map((test) => [caseKeyOf(test.vars), test.category])
 );
 const TESTS = CASES.map(({ category: _category, ...test }) => test);
 
@@ -49,7 +46,7 @@ describe('copilot eval harness', () => {
             defaultTest: { options: { provider: GRADER_PROVIDER } },
             ...(output ? { outputPath: output.nativePath } : {}),
           },
-          { trials: TRIALS, minPassRateByCase: MIN_PASS_RATE_BY_CASE }
+          { trials: TRIALS, categoryByCase: CATEGORY_BY_CASE }
         );
         if (output) {
           await writeEvalSummary(
@@ -59,11 +56,11 @@ describe('copilot eval harness', () => {
           );
         }
         expect(stats.cases).toHaveLength(CASES.length);
-        expect(stats.casesBelowThreshold).toEqual([]);
+        expect(stats.cases.filter((c) => c.verdict !== 'pass')).toEqual([]);
       } finally {
         await harness.close();
       }
     },
-    EVAL_TIMEOUT_MS * TRIALS
+    evalSuiteTimeoutMs(TRIALS)
   );
 });

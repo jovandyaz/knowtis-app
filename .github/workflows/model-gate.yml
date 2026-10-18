@@ -116,14 +116,19 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: npx nx run api:eval-security
 
-      - name: Post the verdict
+      - id: verdict
+        name: Decide the verdict from the suite summaries
         if: ${{ !cancelled() && (steps.eval.outcome == 'success' || steps.eval.outcome == 'failure') }}
+        run: npx nx run api:eval-gate-verdict
+
+      - name: Post the verdict
+        if: ${{ !cancelled() && (steps.verdict.outputs.verdict == 'fail' || (steps.verdict.outputs.verdict == 'pass' && steps.eval.outcome == 'success')) }}
         env:
           KNOWTIS_API_URL: ${{ secrets.KNOWTIS_API_URL }}
           MODEL_GATE_TOKEN: ${{ secrets.MODEL_GATE_TOKEN }}
           SELECTOR_KEY: ${{ matrix.selectorKey }}
           MODEL_ID: ${{ matrix.modelId }}
-          PASSED: ${{ steps.eval.outcome == 'success' }}
+          PASSED: ${{ steps.verdict.outputs.verdict == 'pass' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           jq -n --arg s "$SELECTOR_KEY" --arg m "$MODEL_ID" --argjson p "$PASSED" --arg u "$RUN_URL" \

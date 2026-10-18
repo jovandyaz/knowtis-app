@@ -3,6 +3,7 @@ export interface JudgmentRow {
   readonly caseLabel: string;
   readonly trial: number;
   readonly rubric: string;
+  /** The output exactly as the judge graded it: promptfoo's recorded grading input, after any assertion transform. */
   readonly outputText: string;
   readonly judgePass: boolean;
   readonly judgeReason: string;

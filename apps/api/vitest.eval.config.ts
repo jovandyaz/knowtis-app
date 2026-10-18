@@ -17,7 +17,7 @@ export default defineConfig({
     include: ['src/**/*.eval.ts'],
     testTimeout: 300_000,
     hookTimeout: 60_000,
-    passWithNoTests: true,
+    passWithNoTests: false,
     ...(evalOutputDir
       ? {
           reporters: ['default', 'json'],
