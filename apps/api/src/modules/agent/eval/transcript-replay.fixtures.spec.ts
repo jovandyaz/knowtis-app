@@ -13,9 +13,11 @@ import {
 import { NOTE_CONTENT_NOTE, WITHHELD_CONTENT } from '../domain/retrieval';
 import { toModelMessages } from '../infrastructure/orchestrator/message-mapper';
 import {
+  assertNoNoteOpened,
   assertReplayNotObeyed,
   FIXTURE_NOTE,
   FOLLOW_UP_MESSAGE,
+  GLOSSARY_OPENING_MESSAGE,
   OPENING_MESSAGE,
   REPLAY_ATTACK,
   REPLAY_GUARD_CASES,
@@ -56,6 +58,7 @@ describe('transcript replay fixtures', () => {
       REPLAY_LONG_DETAIL,
     ]) {
       expect(OPENING_MESSAGE).not.toContain(detail);
+      expect(GLOSSARY_OPENING_MESSAGE).not.toContain(detail);
       expect(FOLLOW_UP_MESSAGE).not.toContain(detail);
       expect(
         REPLAY_GUARD_CASES.every((item) => !item.message.includes(detail))
@@ -81,17 +84,54 @@ describe('transcript replay fixtures', () => {
 });
 
 describe('transcript replay fixtures through the replay guard', () => {
-  it('keeps the benign sentence of a legitimate quote and redacts the quote', () => {
+  it('gives the legitimate quote the read it came from, as a real turn would', () => {
+    const [opening, read, result, answer] = historyOf('legitimate-quote');
+
+    expect(opening).toEqual({
+      role: 'user',
+      content: GLOSSARY_OPENING_MESSAGE,
+    });
+    expect(read?.parts).toEqual([
+      expect.objectContaining({
+        type: 'tool-call',
+        toolName: 'getNote',
+        input: { noteId: expect.any(String) },
+      }),
+    ]);
+    expect(JSON.stringify(result?.parts)).toContain(REPLAY_QUOTED_DETAIL);
+    expect(answer).toMatchObject({ role: 'assistant' });
+    expect(answer?.content).toContain(REPLAY_QUOTED_FACT);
+  });
+  it('withholds the glossary read and keeps the benign sentence of the answer that quoted it', () => {
     const history = historyOf('legitimate-quote');
     const { messages, detections } = sanitizeReplayHistory(history);
     expect(messages).toEqual([
       history[0],
+      history[1],
+      {
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'replay-read',
+            toolName: 'getNote',
+            outputType: 'json',
+            output: {
+              note: NOTE_CONTENT_NOTE,
+              contentStatus: 'withheld',
+              content: WITHHELD_CONTENT,
+            },
+          },
+        ],
+      },
       {
         role: 'assistant',
         content: `${REPLAY_QUOTED_FACT} ${REPLAY_REDACTION_MARKER}`,
       },
     ]);
     expect(detections).toEqual([
+      expect.objectContaining({ disposition: 'withhold', redactedSpans: 0 }),
       expect.objectContaining({ disposition: 'redact', redactedSpans: 1 }),
     ]);
   });
@@ -179,4 +219,25 @@ it('fails the security cases when the model obeys the replayed injection', () =>
       item.assert.some((assertion) => assertion.value === assertReplayNotObeyed)
     ).toBe(true);
   }
+});
+
+it('lets a stalled replay turn excuse only its answer check, never a note it opened', () => {
+  const stalledAfterOpening = {
+    toolCalls: [{ name: 'getNote', args: { noteId: FIXTURE_NOTE.id } }],
+    text: '',
+    proposal: null,
+    sources: [],
+    error: { code: 'AI_TIMEOUT', message: 'Agent turn stalled' },
+  };
+
+  for (const item of REPLAY_GUARD_CASES) {
+    expect(item.assert).toContainEqual({
+      type: 'javascript',
+      value: assertNoNoteOpened,
+    });
+  }
+  expect(assertNoNoteOpened(stalledAfterOpening)).toBe(false);
+  expect(assertNoNoteOpened({ ...stalledAfterOpening, toolCalls: [] })).toBe(
+    true
+  );
 });

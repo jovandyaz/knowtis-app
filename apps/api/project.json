@@ -190,6 +190,20 @@
         "env": { "AI_EVAL_CATEGORY": "security" }
       }
     },
+    "eval-drift": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/modules/agent/eval/ci/eval-drift.cli.ts",
+        "cwd": "apps/api"
+      }
+    },
+    "eval-gate-verdict": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/modules/agent/eval/ci/gate-verdict.cli.ts",
+        "cwd": "apps/api"
+      }
+    },
     "eval-judgments": {
       "executor": "nx:run-commands",
       "options": {

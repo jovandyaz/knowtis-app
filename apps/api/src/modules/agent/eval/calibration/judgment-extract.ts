@@ -1,4 +1,6 @@
-import { caseKeyOf } from '../runtime/eval-runtime';
+import { z } from 'zod';
+
+import { caseKeyOf, caseLabelOf } from '../runtime/eval-runtime';
 import type { JudgmentRow } from './judgment-row';
 
 interface NativeGradingResult {
@@ -9,11 +11,14 @@ interface NativeGradingResult {
     readonly type?: string;
     readonly value?: unknown;
   } | null;
+  readonly metadata?: {
+    readonly graderError?: boolean;
+    readonly renderedGradingPrompt?: unknown;
+  } | null;
 }
 
 interface NativeResult {
   readonly vars?: Record<string, unknown>;
-  readonly response?: { readonly output?: unknown };
   readonly gradingResult?: NativeGradingResult | null;
 }
 
@@ -31,29 +36,46 @@ function rubricComponents(
     ? grading.componentResults
     : [grading];
   return components.filter(
-    (component) => component.assertion?.type === 'llm-rubric'
+    (component) =>
+      component.assertion?.type === 'llm-rubric' &&
+      component.metadata?.graderError !== true
   );
 }
 
-function outputTextOf(output: unknown): string {
-  if (typeof output === 'string') {
-    try {
-      const parsed: unknown = JSON.parse(output);
-      return typeof parsed === 'object' && parsed !== null
-        ? outputTextOf(parsed)
-        : output;
-    } catch {
-      return output;
-    }
+const JUDGED_OUTPUT_OPEN = '<Output>\n';
+const JUDGED_OUTPUT_CLOSE = '\n</Output>\n<Rubric>\n';
+
+const gradingMessagesSchema = z.array(
+  z.object({ role: z.string(), content: z.string() })
+);
+
+function judgeInputOf(renderedPrompt: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(renderedPrompt);
+  } catch {
+    return renderedPrompt;
   }
-  if (
-    typeof output === 'object' &&
-    output !== null &&
-    typeof (output as { text?: unknown }).text === 'string'
-  ) {
-    return (output as { text: string }).text;
+  const messages = gradingMessagesSchema.safeParse(parsed);
+  return messages.success
+    ? (messages.data.findLast((message) => message.role === 'user')?.content ??
+        renderedPrompt)
+    : renderedPrompt;
+}
+
+function judgedOutputOf(component: NativeGradingResult): string {
+  const rendered = component.metadata?.renderedGradingPrompt;
+  if (typeof rendered !== 'string') {
+    throw new Error(
+      'an llm-rubric judgment has no recorded grading input (metadata.renderedGradingPrompt)'
+    );
   }
-  return JSON.stringify(output ?? null);
+  const input = judgeInputOf(rendered);
+  const end = input.lastIndexOf(JUDGED_OUTPUT_CLOSE);
+  return input.startsWith(JUDGED_OUTPUT_OPEN) &&
+    end >= JUDGED_OUTPUT_OPEN.length
+    ? input.slice(JUDGED_OUTPUT_OPEN.length, end)
+    : input;
 }
 
 export function extractJudgments(file: unknown, suite: string): JudgmentRow[] {
@@ -67,13 +89,13 @@ export function extractJudgments(file: unknown, suite: string): JudgmentRow[] {
     for (const component of rubricComponents(result.gradingResult)) {
       rows.push({
         suite,
-        caseLabel: String(result.vars?.['message'] ?? '(case)'),
+        caseLabel: caseLabelOf(result.vars),
         trial,
         rubric:
           typeof component.assertion?.value === 'string'
             ? component.assertion.value
             : JSON.stringify(component.assertion?.value ?? null),
-        outputText: outputTextOf(result.response?.output),
+        outputText: judgedOutputOf(component),
         judgePass: component.pass === true,
         judgeReason: component.reason ?? '',
         humanPass: null,

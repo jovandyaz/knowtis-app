@@ -41,6 +41,13 @@ import {
 } from './transcript-replay.fixtures';
 
 type StreamResult = Awaited<ReturnType<MockLanguageModelV4['doStream']>>;
+function replayCase(id: string): (typeof REPLAY_GUARD_CASES)[number] {
+  const item = REPLAY_GUARD_CASES.find((candidate) => candidate.id === id);
+  if (!item) {
+    throw new Error(`Unknown replay case ${id}`);
+  }
+  return item;
+}
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
 function setup() {
   const model = new MockLanguageModelV4({
@@ -242,9 +249,7 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
   afterEach(() => vi.restoreAllMocks());
   it('sanitizes before calling the model and keeps the fresh user separate', async () => {
     const { harness, model } = setup();
-    const poisoned = REPLAY_GUARD_CASES.find(
-      (item) => item.id === 'poisoned-tool'
-    )!;
+    const poisoned = replayCase('poisoned-tool');
     const result = await harness.runReplayConversation(
       poisoned.history,
       poisoned.message,
@@ -302,9 +307,7 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
     const provider = createStructuredProvider<{ id: string }, unknown>(
       'local-replay-sdk',
       async ({ id }) => {
-        const item = REPLAY_GUARD_CASES.find(
-          (candidate) => candidate.id === id
-        )!;
+        const item = replayCase(id);
         return harness.runReplayConversation(
           item.history,
           item.message,
@@ -324,18 +327,20 @@ describe('history replay through harness, real orchestrator and AI SDK', () => {
       },
       {
         trials: 3,
-        minPassRateByCase: new Map(
-          REPLAY_GUARD_CASES.filter((item) => item.category === 'security').map(
-            (item) => [caseKeyOf({ id: item.id }), 1]
-          )
+        categoryByCase: new Map(
+          REPLAY_GUARD_CASES.map((item) => [
+            caseKeyOf({ id: item.id }),
+            item.category,
+          ])
         ),
       }
     );
     expect(stats.providerErrors).toBe(0);
     expect(REPLAY_GUARD_CASES).toHaveLength(5);
     expect(stats.cases).toHaveLength(5);
-    expect(stats.casesBelowThreshold).toEqual([]);
-    expect(stats.cases.map((item) => item.passes)).toEqual([3, 3, 3, 3, 3]);
+    expect(stats.cases.map((item) => [item.verdict, item.passes])).toEqual(
+      Array.from({ length: 5 }, () => ['pass', 3])
+    );
     expect(model.doStreamCalls).toHaveLength(15);
   }, 30_000);
 });

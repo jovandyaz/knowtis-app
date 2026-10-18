@@ -157,13 +157,14 @@ jobs:
           EVAL_TARGET: ${{ matrix.target }}
         run: npx nx run "api:$EVAL_TARGET"
 
-      - name: Compare against the previous run
+      - name: Compare against earlier runs
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           EVAL_DRIFT_ARTIFACT_NAME: eval-results-${{ matrix.leg }}
-        run: .github/scripts/eval-drift.sh
+          EVAL_TARGET: ${{ matrix.target }}
+        run: npx nx run api:eval-drift
 
       - name: Upload eval results
         if: always()

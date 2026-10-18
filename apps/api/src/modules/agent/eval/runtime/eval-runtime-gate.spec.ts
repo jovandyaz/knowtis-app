@@ -17,6 +17,7 @@ describe('runEvalSuite per-case gate', () => {
       toEvaluateSummary: vi.fn().mockResolvedValue({
         results: [true, true, false].map((success) => ({
           success,
+          failureReason: success ? 0 : 1,
           vars,
           gradingResult: null,
         })),
@@ -28,12 +29,12 @@ describe('runEvalSuite per-case gate', () => {
       { providers: [], prompts: [], tests: [] },
       {
         trials: 3,
-        minPassRateByCase: new Map([[caseKeyOf(vars), 1]]),
+        categoryByCase: new Map([[caseKeyOf(vars), 'security']]),
       }
     );
 
-    expect(stats.casesBelowThreshold.map((outcome) => outcome.key)).toEqual([
-      caseKeyOf(vars),
-    ]);
+    expect(
+      stats.cases.map((outcome) => [outcome.key, outcome.verdict])
+    ).toEqual([[caseKeyOf(vars), 'fail']]);
   });
 });

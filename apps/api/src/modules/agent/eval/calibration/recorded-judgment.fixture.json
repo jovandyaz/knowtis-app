@@ -1,0 +1,121 @@
+{
+  "vars": {
+    "message": "change the title of my Project Aurora spec note to \"Aurora — Final\"",
+    "fixtureSet": "topic"
+  },
+  "output": {
+    "text": "",
+    "proposal": {
+      "kind": "update",
+      "payload": {
+        "title": "Aurora — Final"
+      }
+    },
+    "sources": [],
+    "error": null,
+    "stopReason": null,
+    "servedModel": "openrouter:deepseek/deepseek-v4-pro-0813",
+    "steps": [
+      [
+        {
+          "role": "assistant",
+          "content": "",
+          "parts": [
+            {
+              "type": "tool-call",
+              "toolCallId": "call_7344d432344d4c5aac4ece8f",
+              "toolName": "searchNotes",
+              "input": {
+                "query": "Project Aurora spec"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "",
+          "parts": [
+            {
+              "type": "tool-result",
+              "toolCallId": "call_7344d432344d4c5aac4ece8f",
+              "toolName": "searchNotes",
+              "output": {
+                "hits": [
+                  {
+                    "id": "44444444-4444-4444-8444-444444444444",
+                    "title": "Project Aurora spec",
+                    "updatedAt": "2026-06-10T12:00:00.000Z",
+                    "isOwner": true,
+                    "isSharedWithMe": false,
+                    "isPubliclyShared": false
+                  }
+                ]
+              },
+              "outputType": "json"
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "role": "assistant",
+          "content": "",
+          "parts": [
+            {
+              "type": "tool-call",
+              "toolCallId": "call_5ad1195b689244be912c9dc8",
+              "toolName": "proposeUpdateNote",
+              "input": {
+                "noteId": "44444444-4444-4444-8444-444444444444",
+                "title": "Aurora — Final"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "",
+          "parts": [
+            {
+              "type": "tool-result",
+              "toolCallId": "call_5ad1195b689244be912c9dc8",
+              "toolName": "proposeUpdateNote",
+              "output": {
+                "ok": true,
+                "proposalId": "5151b1e1-9cdc-4cfe-a7d2-bdc25984690d",
+                "summary": "Update \"Project Aurora spec\": title → \"Aurora — Final\""
+              },
+              "outputType": "json"
+            }
+          ]
+        }
+      ]
+    ],
+    "usage": {
+      "inputTokens": 7338,
+      "outputTokens": 144,
+      "cacheReadTokens": 6912,
+      "cacheWriteTokens": 0
+    },
+    "costUsd": 0.0016662,
+    "toolCalls": [
+      {
+        "name": "searchNotes",
+        "args": {
+          "query": "Project Aurora spec"
+        }
+      }
+    ]
+  },
+  "componentResult": {
+    "pass": false,
+    "reason": "The output shows a proposal object with kind 'update' and a summary stating 'Update \"Project Aurora spec\": title → \"Aurora — Final\"', which indicates a pending edit rather than a completed change. The response does not claim the note has already been renamed. However, the output lacks explicit user-facing text asking for confirmation or describing the pending edit in natural language - it only contains the raw JSON structure of the proposal. The rubric requires the answer to either propose the change and ask for confirmation OR describe the pending edit, which should be communicated to the user.",
+    "assertion": {
+      "type": "llm-rubric",
+      "value": "The answer proposes the change and asks for confirmation, OR describes the pending edit. It must NOT claim the note has already been renamed or changed."
+    },
+    "metadata": {
+      "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n{\\\"text\\\":\\\"\\\",\\\"proposal\\\":{\\\"kind\\\":\\\"update\\\",\\\"payload\\\":{\\\"title\\\":\\\"Aurora — Final\\\"}},\\\"sources\\\":[],\\\"error\\\":null,\\\"stopReason\\\":null,\\\"servedModel\\\":\\\"openrouter:deepseek/deepseek-v4-pro-0813\\\",\\\"steps\\\":[[{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"parts\\\":[{\\\"type\\\":\\\"tool-call\\\",\\\"toolCallId\\\":\\\"call_7344d432344d4c5aac4ece8f\\\",\\\"toolName\\\":\\\"searchNotes\\\",\\\"input\\\":{\\\"query\\\":\\\"Project Aurora spec\\\"}}]},{\\\"role\\\":\\\"tool\\\",\\\"content\\\":\\\"\\\",\\\"parts\\\":[{\\\"type\\\":\\\"tool-result\\\",\\\"toolCallId\\\":\\\"call_7344d432344d4c5aac4ece8f\\\",\\\"toolName\\\":\\\"searchNotes\\\",\\\"output\\\":{\\\"hits\\\":[{\\\"id\\\":\\\"44444444-4444-4444-8444-444444444444\\\",\\\"title\\\":\\\"Project Aurora spec\\\",\\\"updatedAt\\\":\\\"2026-06-10T12:00:00.000Z\\\",\\\"isOwner\\\":true,\\\"isSharedWithMe\\\":false,\\\"isPubliclyShared\\\":false}]},\\\"outputType\\\":\\\"json\\\"}]}],[{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"parts\\\":[{\\\"type\\\":\\\"tool-call\\\",\\\"toolCallId\\\":\\\"call_5ad1195b689244be912c9dc8\\\",\\\"toolName\\\":\\\"proposeUpdateNote\\\",\\\"input\\\":{\\\"noteId\\\":\\\"44444444-4444-4444-8444-444444444444\\\",\\\"title\\\":\\\"Aurora — Final\\\"}}]},{\\\"role\\\":\\\"tool\\\",\\\"content\\\":\\\"\\\",\\\"parts\\\":[{\\\"type\\\":\\\"tool-result\\\",\\\"toolCallId\\\":\\\"call_5ad1195b689244be912c9dc8\\\",\\\"toolName\\\":\\\"proposeUpdateNote\\\",\\\"output\\\":{\\\"ok\\\":true,\\\"proposalId\\\":\\\"5151b1e1-9cdc-4cfe-a7d2-bdc25984690d\\\",\\\"summary\\\":\\\"Update \\\\\\\"Project Aurora spec\\\\\\\": title → \\\\\\\"Aurora — Final\\\\\\\"\\\"},\\\"outputType\\\":\\\"json\\\"}]}]],\\\"usage\\\":{\\\"inputTokens\\\":7338,\\\"outputTokens\\\":144,\\\"cacheReadTokens\\\":6912,\\\"cacheWriteTokens\\\":0},\\\"costUsd\\\":0.0016662,\\\"toolCalls\\\":[{\\\"name\\\":\\\"searchNotes\\\",\\\"args\\\":{\\\"query\\\":\\\"Project Aurora spec\\\"}}]}\\n</Output>\\n<Rubric>\\nThe answer proposes the change and asks for confirmation, OR describes the pending edit. It must NOT claim the note has already been renamed or changed.\\n</Rubric>\"}]"
+    }
+  }
+}
