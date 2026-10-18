@@ -5,7 +5,7 @@ import {
   type AgentChatMessage,
   type AgentStatus,
 } from '@/stores/agent.store';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,6 +54,28 @@ const shimmerLines = (container: HTMLElement) =>
 describe('AgentMessageList', () => {
   beforeEach(() => {
     useAgentStore.setState({ queue: [] });
+  });
+
+  it('stops a streaming turn on an Escape aimed at the log, even when it arrives already handled', () => {
+    const onStop = vi.fn();
+    render(
+      <AgentMessageList
+        messages={[{ id: 'a1', role: 'assistant', content: 'La' }]}
+        status="streaming"
+        onStop={onStop}
+      />
+    );
+    const claim = (event: KeyboardEvent) => event.preventDefault();
+    window.addEventListener('keydown', claim, { capture: true });
+    try {
+      fireEvent.keyDown(screen.getByLabelText('ai.copilot.history.thread'), {
+        key: 'Escape',
+      });
+    } finally {
+      window.removeEventListener('keydown', claim, { capture: true });
+    }
+
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it('shows the reasoning while the answer has not started', () => {

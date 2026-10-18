@@ -1592,17 +1592,4 @@ describe('AgentCopilotPanel stopping from the thread', () => {
 
     expect(cancel).not.toHaveBeenCalled();
   });
-
-  it('leaves an Escape an open layer already claimed to that layer', async () => {
-    const user = userEvent.setup();
-    const claim = (event: KeyboardEvent) => event.preventDefault();
-    document.addEventListener('keydown', claim, { capture: true });
-    showTurn({ status: 'streaming' });
-
-    thread().focus();
-    await user.keyboard('{Escape}');
-    document.removeEventListener('keydown', claim, { capture: true });
-
-    expect(cancel).not.toHaveBeenCalled();
-  });
 });

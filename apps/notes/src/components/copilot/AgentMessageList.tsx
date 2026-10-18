@@ -47,14 +47,11 @@ export function AgentMessageList({
     status === 'streaming' && lastAssistant?.role === 'assistant';
   const answering = isAssistantTurn && lastAssistant.content.length > 0;
 
-  // Streamdown's overlays inside a message close on Escape without preventing
-  // its default, and React bubbles that Escape up through this log.
   const stopOnEscape = (event: KeyboardEvent<HTMLDivElement>) => {
     if (
       event.key !== 'Escape' ||
       status !== 'streaming' ||
-      event.target !== event.currentTarget ||
-      event.defaultPrevented
+      event.target !== event.currentTarget
     ) {
       return;
     }
