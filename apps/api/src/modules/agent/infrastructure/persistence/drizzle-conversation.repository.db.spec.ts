@@ -476,9 +476,6 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
           ],
         },
       ]);
-      expect(
-        await repo.loadMessages(id, USER, 40, { textOnly: true })
-      ).toHaveLength(1);
     }
   );
 
@@ -612,54 +609,6 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     );
   });
 
-  it('loads text-only rows when asked, skipping tool rows and empty assistant rows', async () => {
-    const { id } = await repo.create({
-      id: randomUUID(),
-      userId: USER,
-      title: 't',
-    });
-    await repo.appendTurn({
-      conversationId: id,
-      turnId: randomUUID(),
-      messages: [
-        { role: 'user', content: 'U' },
-        {
-          role: 'assistant',
-          content: '',
-          parts: [
-            {
-              type: 'tool-call',
-              toolCallId: 'c1',
-              toolName: 'getNote',
-              input: { id: 'n1' },
-            },
-          ],
-        },
-        {
-          role: 'tool',
-          content: '',
-          parts: [
-            {
-              type: 'tool-result',
-              toolCallId: 'c1',
-              toolName: 'getNote',
-              output: 'body',
-              outputType: 'text',
-            },
-          ],
-        },
-        { role: 'assistant', content: 'A', stopReason: 'completed' },
-      ],
-    });
-
-    const rows = await repo.loadMessages(id, USER, 40, { textOnly: true });
-
-    expect(rows.map((r) => [r.role, r.content])).toEqual([
-      ['user', 'U'],
-      ['assistant', 'A'],
-    ]);
-  });
-
   it('is a no-op for an empty turn', async () => {
     const { id } = await repo.create({
       id: randomUUID(),
@@ -749,18 +698,6 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         ['assistant', 'Found B.', null],
       ]);
       expect(rows[2].turnId).toBe(continuation);
-    });
-
-    it('keeps the marker out of text-only reads', async () => {
-      const { id } = await storeContinuedConversation();
-
-      const rows = await repo.loadMessages(id, USER, 40, { textOnly: true });
-
-      expect(rows.map((r) => [r.role, r.content])).toEqual([
-        ['user', 'Research X'],
-        ['assistant', 'Found A. Pending: B.'],
-        ['assistant', 'Found B.'],
-      ]);
     });
 
     it('rejects writing a kind outside the persisted set', async () => {
@@ -1507,6 +1444,22 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
         expect(await dueForExtraction(id)).toBe(false);
         await lastFailedSecondsAgo(id, 2 * BACKOFF_BASE_SECONDS + 1);
         expect(await dueForExtraction(id)).toBe(true);
+      });
+
+      it('reports how many times the selected state already failed, counting afresh after a new message', async () => {
+        const { id, version } = await idleConversation();
+        expect((await extractable(id))?.attempts).toBe(0);
+
+        await repo.recordExtractionFailure(LISTER, id, version);
+        await lastFailedSecondsAgo(id, BACKOFF_BASE_SECONDS + 1);
+        expect((await extractable(id))?.attempts).toBe(1);
+
+        await repo.recordExtractionFailure(LISTER, id, version);
+        await lastFailedSecondsAgo(id, 2 * BACKOFF_BASE_SECONDS + 1);
+        expect((await extractable(id))?.attempts).toBe(2);
+
+        await answer(id);
+        expect((await extractable(id))?.attempts).toBe(0);
       });
 
       it('gives a conversation up once its failures reach the cap', async () => {

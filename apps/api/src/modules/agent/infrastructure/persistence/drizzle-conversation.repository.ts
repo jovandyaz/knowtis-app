@@ -43,13 +43,13 @@ import type {
   ExtractableConversation,
   ExtractionRetryPolicy,
   LastConversationMessage,
-  LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
 import {
   noteIdsInToolParts,
   redactUnreadableToolParts,
 } from '../../domain/tool-result-notes';
 import { alignTranscriptWindow } from '../../domain/transcript-window';
+import { isUuidText, UUID_TEXT_PATTERN } from './uuid-text';
 
 const agentMessagePartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
@@ -74,11 +74,6 @@ const persistedPartsSchema = z.object({
 });
 
 const HAS_MESSAGES = sql`EXISTS (SELECT 1 FROM ${conversationMessages} WHERE ${conversationMessages.conversationId} = ${conversations.id})`;
-
-// A stored id that is not a uuid names no note, and casting one would fail the whole load.
-const UUID_TEXT_PATTERN =
-  '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
-const UUID_TEXT = new RegExp(UUID_TEXT_PATTERN);
 
 const TURN_USER_ROW = sql`${conversationMessages.role} = 'user' AND ${conversationMessages.turnId} IS NOT NULL`;
 
@@ -201,10 +196,8 @@ export class DrizzleConversationRepository implements ConversationRepository {
   async loadMessages(
     conversationId: string,
     userId: string,
-    limit: number,
-    options: LoadMessagesOptions = {}
+    limit: number
   ): Promise<ConversationMessageRow[]> {
-    const scope = eq(conversationMessages.conversationId, conversationId);
     const newestFirst = await this.db
       .select({
         role: conversationMessages.role,
@@ -217,15 +210,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         model: conversationMessages.model,
       })
       .from(conversationMessages)
-      .where(
-        options.textOnly
-          ? and(
-              scope,
-              ne(conversationMessages.role, 'tool'),
-              ne(conversationMessages.content, '')
-            )
-          : scope
-      )
+      .where(eq(conversationMessages.conversationId, conversationId))
       .orderBy(desc(conversationMessages.seq))
       .limit(limit);
     const rows = newestFirst.reverse().map((r) => ({
@@ -249,7 +234,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
     noteIds: readonly string[],
     userId: string
   ): Promise<ReadonlySet<string>> {
-    const candidates = noteIds.filter((id) => UUID_TEXT.test(id));
+    const candidates = noteIds.filter(isUuidText);
     if (candidates.length === 0) {
       return new Set();
     }
@@ -343,6 +328,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         id: conversations.id,
         userId: conversations.userId,
         version: STATE_VERSION,
+        attempts: sql<number>`CASE WHEN ${FAILED_IN_CURRENT_STATE} THEN ${conversations.memoryExtractionAttempts} ELSE 0 END`,
       })
       .from(conversations)
       .innerJoin(users, eq(users.id, conversations.userId))

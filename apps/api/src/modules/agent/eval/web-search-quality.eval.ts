@@ -1,25 +1,19 @@
 import 'reflect-metadata';
 
-import * as path from 'node:path';
-
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
-import { I18nModule } from 'nestjs-i18n';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { DEFAULT_LOCALE } from '@knowtis/shared-util';
-
-import { validateEnv, type EnvConfig } from '../../../config/env.config';
-import { DatabaseModule } from '../../../database';
+import type { EnvConfig } from '../../../config/env.config';
 import { createExecutionContext } from '../../ai/testing/create-execution-context';
-import { AgentModule } from '../agent.module';
 import type { AgentEvent, WebSource } from '../domain/agent-event';
 import {
   AGENT_ORCHESTRATOR,
   type AgentOrchestrator,
 } from '../domain/ports/agent-orchestrator.port';
+import { agentEvalModuleImports } from './agent-eval-module';
+import { DEFAULT_EVAL_MODEL } from './runtime/eval-runtime';
 
 loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
@@ -28,7 +22,6 @@ const GATE =
   !!process.env['ANTHROPIC_API_KEY']?.trim();
 const USER = '00000000-0000-4000-8000-0000000000fa';
 const EXECUTION = createExecutionContext({ userId: USER });
-const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 
 describe.runIf(GATE)('web search tool quality', () => {
   let orchestrator: AgentOrchestrator;
@@ -38,23 +31,7 @@ describe.runIf(GATE)('web search tool quality', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          validate: validateEnv,
-          envFilePath: ['.env.local', '.env'],
-        }),
-        EventEmitterModule.forRoot(),
-        I18nModule.forRoot({
-          fallbackLanguage: DEFAULT_LOCALE,
-          loaderOptions: {
-            path: path.join(__dirname, '../../../i18n'),
-            watch: false,
-          },
-        }),
-        DatabaseModule,
-        AgentModule,
-      ],
+      imports: agentEvalModuleImports(),
     }).compile();
     await moduleRef.init();
     moduleClose = () => moduleRef.close();
@@ -79,7 +56,7 @@ describe.runIf(GATE)('web search tool quality', () => {
   });
 
   it('cites web sources for a current public-web question', async () => {
-    const model = process.env['AI_EVAL_MODEL']?.trim() || DEFAULT_AGENT_MODEL;
+    const model = process.env['AI_EVAL_MODEL']?.trim() || DEFAULT_EVAL_MODEL;
     const events = orchestrator.run({
       execution: EXECUTION,
       messages: [

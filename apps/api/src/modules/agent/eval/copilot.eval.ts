@@ -3,26 +3,30 @@ import 'reflect-metadata';
 import { config as loadEnv } from 'dotenv';
 import { describe, expect, it } from 'vitest';
 
-import { selectCopilotCases } from './cases';
+import { COPILOT_EVAL_CASES } from './cases';
 import { createCopilotProvider } from './copilot-provider';
 import {
   caseKeyOf,
+  DEFAULT_EVAL_MODEL,
   evalGateOpen,
   evalSuiteTimeoutMs,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
   runEvalSuite,
+  selectEvalCases,
   writeEvalSummary,
 } from './runtime/eval-runtime';
 
 loadEnv({ path: '.env.local', quiet: true });
 loadEnv({ path: '.env', quiet: true });
 
-const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
 const TRIALS = resolveEvalTrials();
-const CASES = selectCopilotCases(process.env['AI_EVAL_CATEGORY']);
+const CASES = selectEvalCases(
+  COPILOT_EVAL_CASES,
+  process.env['AI_EVAL_CATEGORY']
+);
 const CATEGORY_BY_CASE = new Map(
   CASES.map((test) => [caseKeyOf(test.vars), test.category])
 );
@@ -32,7 +36,7 @@ describe('copilot eval harness', () => {
   it.runIf(evalGateOpen())(
     'passes every copilot case against the live model',
     async () => {
-      const model = resolveEvalModel('AI_EVAL_MODEL', DEFAULT_AGENT_MODEL);
+      const model = resolveEvalModel('AI_EVAL_MODEL', DEFAULT_EVAL_MODEL);
       const { AgentEvalHarness } = await import('./agent-eval-harness');
       const harness = await AgentEvalHarness.boot();
       try {

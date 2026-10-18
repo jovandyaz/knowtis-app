@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { ShutdownDrainModule } from '../websocket/shutdown-drain.module';
 import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
+import { ExtractMemoriesHandler } from './application/extract-memories.handler';
 import { InjectionGuardService } from './application/injection-guard.service';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
@@ -18,6 +19,7 @@ import { AGENT_ORCHESTRATOR } from './domain/ports/agent-orchestrator.port';
 import { CONVERSATION_REPOSITORY } from './domain/ports/conversation.repository';
 import { MEMORY_REPOSITORY } from './domain/ports/memory.repository';
 import { NOTE_EMBEDDING_REPOSITORY } from './domain/ports/note-embedding.repository';
+import { NOTE_EXPOSURE_REPOSITORY } from './domain/ports/note-exposure.repository';
 import { PENDING_MUTATION_STORE } from './domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from './domain/ports/retrieval.port';
 import { AgentHealthReportTask } from './infrastructure/health/agent-health-report.task';
@@ -29,6 +31,7 @@ import { MutationProposalBuilder } from './infrastructure/orchestrator/mutation-
 import { RedisPendingMutationStore } from './infrastructure/pending/redis-pending-mutation.store';
 import { DrizzleConversationRepository } from './infrastructure/persistence/drizzle-conversation.repository';
 import { DrizzleMemoryRepository } from './infrastructure/persistence/drizzle-memory.repository';
+import { DrizzleNoteExposureRepository } from './infrastructure/persistence/drizzle-note-exposure.repository';
 import { DrizzleNoteEmbeddingRepository } from './infrastructure/retrieval/drizzle-note-embedding.repository';
 import { EmbeddingReconcileTask } from './infrastructure/retrieval/embedding-reconcile.task';
 import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
@@ -75,7 +78,12 @@ import { MemoryController } from './memory.controller';
       useClass: DrizzleConversationRepository,
     },
     { provide: MEMORY_REPOSITORY, useClass: DrizzleMemoryRepository },
+    {
+      provide: NOTE_EXPOSURE_REPOSITORY,
+      useClass: DrizzleNoteExposureRepository,
+    },
     EmbeddingReconcileTask,
+    ExtractMemoriesHandler,
     MemoryExtractionTask,
     AgentHealthQueries,
     AgentHealthReportTask,

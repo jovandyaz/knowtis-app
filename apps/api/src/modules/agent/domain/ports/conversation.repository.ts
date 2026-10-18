@@ -50,11 +50,6 @@ export interface AppendTurnInput {
   readonly messages: readonly PersistedTurnMessage[];
 }
 
-export interface LoadMessagesOptions {
-  /** Skip tool rows and assistant rows without text — for readers that only understand text. */
-  readonly textOnly?: boolean;
-}
-
 /** How long a conversation whose memory extraction failed waits, and how often it may fail, before it is given up on. */
 export interface ExtractionRetryPolicy {
   /** Failures of one conversation state after which it is given up on until a new message changes it. */
@@ -68,6 +63,8 @@ export interface ExtractableConversation {
   readonly userId: string;
   /** The state that was read: `updated_at` as Postgres text, exact to the microsecond. */
   readonly version: string;
+  /** Failures of that state so far; 0 when it never failed. */
+  readonly attempts: number;
 }
 
 export interface ConversationRepository {
@@ -89,8 +86,7 @@ export interface ConversationRepository {
   loadMessages(
     conversationId: string,
     userId: string,
-    limit: number,
-    options?: LoadMessagesOptions
+    limit: number
   ): Promise<ConversationMessageRow[]>;
   /**
    * Single transaction: appends every row of the turn and bumps `conversations.updatedAt`.

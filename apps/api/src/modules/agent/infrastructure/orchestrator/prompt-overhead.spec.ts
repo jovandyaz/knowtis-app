@@ -6,6 +6,7 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 import { validateEnv } from '../../../../config/env.config';
 import { createExecutionContext } from '../../../ai/testing/create-execution-context';
 import { AGENT_PROMPT_OVERHEAD_TOKENS } from '../../domain/first-call-budget';
+import { MEMORY_MAX_CHARS } from '../../domain/memory-content-policy';
 import { NoteMutateToolGroup } from '../tools/note-mutate.tool-group';
 import { NoteReadToolGroup } from '../tools/note-read.tool-group';
 import { WebToolGroup } from '../tools/web.tool-group';
@@ -16,7 +17,6 @@ import { WebFetchAllowlist } from './web-fetch-allowlist';
 import { WebSourceCollector } from './web-source.collector';
 
 const NOTE_ID = '8f14e45f-ceea-4671-9f1b-8f0c1c2d3e4f';
-const MEMORY_MAX_CHARS = 300;
 const MEMORY =
   'Prefers answers in Spanish; project "Knowtis 2026-Q4" tracks PARA tags #work/#ideas, reviews on Fridays at 09:30 (UTC-6); '
     .repeat(3)

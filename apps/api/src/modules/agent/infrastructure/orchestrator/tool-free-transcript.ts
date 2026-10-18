@@ -6,7 +6,7 @@ import type {
   ToolResultPart,
 } from 'ai';
 
-import { toPromptLiteral } from './compose-system-prompt';
+import { toPromptLiteral } from '../../domain/prompt-literal';
 
 type ToolResultOutput = ToolResultPart['output'];
 type ToolResultContent = Extract<ToolResultOutput, { type: 'content' }>;

@@ -12,8 +12,8 @@ import { messageOf } from './cli-env';
 
 /** The promptfoo suites each eval target must leave a summary for. */
 export const EVAL_TARGET_SUITES = {
-  eval: ['copilot', 'injection-guard', 'transcript-replay'],
-  'eval-security': ['copilot', 'injection-guard'],
+  eval: ['copilot', 'injection-guard', 'memory-poisoning', 'transcript-replay'],
+  'eval-security': ['copilot', 'injection-guard', 'memory-poisoning'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type EvalTarget = keyof typeof EVAL_TARGET_SUITES;

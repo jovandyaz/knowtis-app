@@ -7,6 +7,7 @@ import type { AgentEvalHarness } from './agent-eval-harness';
 import {
   caseKeyOf,
   createStructuredProvider,
+  DEFAULT_EVAL_MODEL,
   evalGateOpen,
   evalSuiteTimeoutMs,
   prepareEvalOutput,
@@ -19,12 +20,11 @@ import { FIXTURE_SET, REPLAY_GUARD_CASES } from './transcript-replay.fixtures';
 
 loadEnv({ path: '.env.local', quiet: true });
 loadEnv({ path: '.env', quiet: true });
-const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 const TRIALS = resolveEvalTrials();
 
 describe.runIf(evalGateOpen())('transcript replay', () => {
   let harness: AgentEvalHarness;
-  const model = resolveEvalModel('AI_EVAL_MODEL', DEFAULT_AGENT_MODEL);
+  const model = resolveEvalModel('AI_EVAL_MODEL', DEFAULT_EVAL_MODEL);
   beforeAll(async () => {
     const { AgentEvalHarness } = await import('./agent-eval-harness');
     harness = await AgentEvalHarness.boot();

@@ -1,21 +1,12 @@
 import 'reflect-metadata';
 
-import * as path from 'node:path';
-
-import { ConfigModule } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
-import { I18nModule } from 'nestjs-i18n';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { DEFAULT_LOCALE } from '@knowtis/shared-util';
-
-import { validateEnv } from '../../../config/env.config';
 import {
   DATABASE_CONNECTION,
-  DatabaseModule,
   userMemories,
   users,
   type Database,
@@ -24,8 +15,8 @@ import {
   EMBEDDING_PORT,
   type EmbeddingPort,
 } from '../../ai/domain/ports/embedding.port';
-import { AgentModule } from '../agent.module';
 import { DrizzleMemoryRepository } from '../infrastructure/persistence/drizzle-memory.repository';
+import { agentEvalModuleImports } from './agent-eval-module';
 
 loadEnv({ path: ['.env.local', '.env'], quiet: true });
 
@@ -40,23 +31,7 @@ describe.runIf(GATE)('memory recall retrieval quality', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          validate: validateEnv,
-          envFilePath: ['.env.local', '.env'],
-        }),
-        EventEmitterModule.forRoot(),
-        I18nModule.forRoot({
-          fallbackLanguage: DEFAULT_LOCALE,
-          loaderOptions: {
-            path: path.join(__dirname, '../../../i18n'),
-            watch: false,
-          },
-        }),
-        DatabaseModule,
-        AgentModule,
-      ],
+      imports: agentEvalModuleImports(),
     }).compile();
     await moduleRef.init();
     moduleClose = () => moduleRef.close();

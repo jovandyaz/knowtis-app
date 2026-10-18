@@ -31,7 +31,7 @@ describe('createCopilotProvider', () => {
       'recent?',
       'recent',
       'anthropic:default-model',
-      undefined
+      { maxSteps: undefined, userMemories: undefined }
     );
     expect(res).toEqual({ output: TRANSCRIPT });
   });
@@ -53,7 +53,7 @@ describe('createCopilotProvider', () => {
       'recent?',
       'recent',
       'anthropic:override',
-      undefined
+      { maxSteps: undefined, userMemories: undefined }
     );
   });
 
@@ -70,7 +70,28 @@ describe('createCopilotProvider', () => {
       'recent?',
       'recent',
       'anthropic:default-model',
-      2
+      { maxSteps: 2, userMemories: undefined }
+    );
+  });
+
+  it('passes the memories a case recalls from vars to the harness', async () => {
+    const runCase = vi.fn(async () => TRANSCRIPT);
+    const harness = { runCase } as unknown as AgentEvalHarness;
+
+    const provider = createCopilotProvider(harness, 'anthropic:default-model');
+    await provider.callApi('ignored', {
+      vars: {
+        message: 'dinner?',
+        fixtureSet: 'empty',
+        userMemories: ['Is vegan'],
+      },
+    } as never);
+
+    expect(runCase).toHaveBeenCalledWith(
+      'dinner?',
+      'empty',
+      'anthropic:default-model',
+      { maxSteps: undefined, userMemories: ['Is vegan'] }
     );
   });
 

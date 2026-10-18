@@ -311,7 +311,7 @@ describe('renderDriftReport', () => {
 
   it('lists every expected suite the run left no summary for', () => {
     expect(report()).toContain(
-      'Missing suites: injection-guard (expected from eval-security).'
+      'Missing suites: injection-guard, memory-poisoning (expected from eval-security).'
     );
   });
 

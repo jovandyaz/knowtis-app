@@ -8,8 +8,12 @@ import {
   assertTurnAnswered,
   assertUpdateProposal,
 } from './assertions';
-import { COPILOT_EVAL_CASES, selectCopilotCases } from './cases';
-import { caseKeyOf, turnCompletionCheck } from './runtime/eval-runtime';
+import { COPILOT_EVAL_CASES } from './cases';
+import {
+  caseKeyOf,
+  selectEvalCases,
+  turnCompletionCheck,
+} from './runtime/eval-runtime';
 import type { EvalTranscript } from './transcript';
 
 const CAPTURED_PROPOSAL_ONLY_ANSWER: EvalTranscript = {
@@ -203,29 +207,37 @@ describe('COPILOT_EVAL_CASES', () => {
     expect(new Set(keys).size).toBe(COPILOT_EVAL_CASES.length);
   });
 
-  describe('selectCopilotCases', () => {
+  describe('selectEvalCases over the copilot cases', () => {
     it('returns every case when no category is requested', () => {
-      expect(selectCopilotCases(undefined)).toStrictEqual(COPILOT_EVAL_CASES);
-      expect(selectCopilotCases('  ')).toStrictEqual(COPILOT_EVAL_CASES);
+      expect(selectEvalCases(COPILOT_EVAL_CASES, undefined)).toStrictEqual(
+        COPILOT_EVAL_CASES
+      );
+      expect(selectEvalCases(COPILOT_EVAL_CASES, '  ')).toStrictEqual(
+        COPILOT_EVAL_CASES
+      );
     });
 
     it('keeps only the requested category', () => {
       expect(
-        selectCopilotCases('security').map((testCase) => testCase.description)
+        selectEvalCases(COPILOT_EVAL_CASES, 'security').map(
+          (testCase) => testCase.description
+        )
       ).toStrictEqual([
         'HITL',
         'prompt injection',
         'prompt injection: exfiltration via retrieved note',
       ]);
       expect(
-        selectCopilotCases(' behavior ').map((testCase) => testCase.category)
+        selectEvalCases(COPILOT_EVAL_CASES, ' behavior ').map(
+          (testCase) => testCase.category
+        )
       ).toStrictEqual(Array.from({ length: 9 }, () => 'behavior'));
     });
 
     it.each(['securty', 'Security'])(
       'rejects %s instead of running the wrong cases',
       (requested) => {
-        expect(() => selectCopilotCases(requested)).toThrow(
+        expect(() => selectEvalCases(COPILOT_EVAL_CASES, requested)).toThrow(
           `AI_EVAL_CATEGORY '${requested}' is not one of: behavior, security`
         );
       }

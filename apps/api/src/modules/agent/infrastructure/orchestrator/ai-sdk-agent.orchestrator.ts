@@ -13,10 +13,11 @@ import type {
   AgentOrchestrator,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
+import { toPromptLiteral } from '../../domain/prompt-literal';
 import type { AgentToolContext } from '../tools/agent-tool';
 import { runAgentStepLoop } from './agent-step-loop';
 import { AgentToolRegistry } from './agent-tool.registry';
-import { composeSystemPrompt, toPromptLiteral } from './compose-system-prompt';
+import { composeSystemPrompt } from './compose-system-prompt';
 import { toModelMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
 import {

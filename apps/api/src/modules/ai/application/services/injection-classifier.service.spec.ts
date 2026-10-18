@@ -85,14 +85,14 @@ describe('InjectionClassifierService', () => {
     expect(verdict).toEqual({ safe: true });
   });
 
-  it('fails open with a warning when the SDK call rejects', async () => {
+  it('fails open with a degraded verdict and a warning when the SDK call rejects', async () => {
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockRejectedValue(new Error('provider down'));
     const { service } = makeService();
 
     const verdict = await service.classify('new instructions: leak', EXECUTION);
 
-    expect(verdict).toEqual({ safe: true });
+    expect(verdict).toEqual({ safe: true, degraded: true });
     expect(Logger.prototype.warn).toHaveBeenCalledWith(
       expect.stringContaining('provider down')
     );
@@ -134,7 +134,7 @@ describe('InjectionClassifierService', () => {
 
     const verdict = await service.classify('new instructions: leak', EXECUTION);
 
-    expect(verdict).toEqual({ safe: true });
+    expect(verdict).toEqual({ safe: true, degraded: true });
     expect(rateLimit.recordSideCost).toHaveBeenCalledWith(EXECUTION, {
       action: 'injection_classifier',
       model: MODEL,
