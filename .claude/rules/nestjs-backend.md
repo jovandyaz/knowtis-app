@@ -27,7 +27,7 @@ import { ConfigService } from '@nestjs/config';
 
 ## Guards and Decorators
 
-- Apply guards via `@UseGuards()` at controller or method level: `JwtAuthGuard`, `PoliciesGuard`, `McpScopeGuard`, `AnonymousNoteLimitGuard`.
+- Apply guards via `@UseGuards()` at controller or method level: `JwtAuthGuard`, `PoliciesGuard`, `McpScopeGuard`.
 - Use custom decorators for metadata: `@RequirePermission('create', SUBJECTS.Note)`.
 - Global guards (e.g., `ThrottlerGuard`) are registered in `AppModule` via `APP_GUARD`.
 

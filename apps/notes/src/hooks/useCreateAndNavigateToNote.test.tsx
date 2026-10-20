@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
+import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
+
 import { useCreateAndNavigateToNote } from './useCreateAndNavigateToNote';
 
 const { captureProductEvent } = vi.hoisted(() => ({
@@ -84,6 +87,28 @@ describe('useCreateAndNavigateToNote analytics', () => {
     await act(async () => result.current({ onLimitReached: vi.fn() }));
 
     await waitFor(() => expect(consoleError).toHaveBeenCalledTimes(1));
+    expect(captureProductEvent).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('hands a guest past the note limit to onLimitReached instead of failing', async () => {
+    const consoleError = vi.spyOn(console, 'error');
+    mutateAsync.mockRejectedValue(
+      new ApiClientError(
+        'Guest note limit reached',
+        403,
+        ANONYMOUS_NOTE_LIMIT_CODE
+      )
+    );
+    const onLimitReached = vi.fn();
+    const { result } = renderHook(() => useCreateAndNavigateToNote(), {
+      wrapper,
+    });
+
+    await act(async () => result.current({ onLimitReached }));
+
+    await waitFor(() => expect(onLimitReached).toHaveBeenCalledTimes(1));
+    expect(consoleError).not.toHaveBeenCalled();
     expect(captureProductEvent).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });

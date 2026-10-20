@@ -428,6 +428,7 @@
       "noteNotFound": "The note no longer exists.",
       "invalidProposal": "That request couldn't be processed. Please try again.",
       "emailNotVerified": "Verify your email address before sharing this note.",
+      "anonymousNoteLimit": "You've reached the guest note limit. Create a free account to save more notes.",
       "modelUnavailable": "This model is not available on your plan. Pick another one in the model menu.",
       "byokKeyFailed": {
         "auth": "{{key}} rejected your API key. Check it in Settings → AI Assistant.",

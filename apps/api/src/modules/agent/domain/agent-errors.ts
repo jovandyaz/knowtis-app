@@ -4,6 +4,8 @@ import {
   AGENT_PROPOSAL_EXPIRED_CODE,
   AGENT_TURN_ERROR_CODE,
   AGENT_TURN_NOT_CONTINUABLE_CODE,
+  ANONYMOUS_LIMITS,
+  ANONYMOUS_NOTE_LIMIT_CODE,
 } from '@knowtis/shared-types';
 
 import type { NoteContentStatus } from './retrieval';
@@ -45,8 +47,18 @@ export const AgentErrors = {
     ),
   proposalExpired: () =>
     make(AGENT_PROPOSAL_EXPIRED_CODE, 'This proposal expired; ask again'),
+  proposalAlreadyPending: () =>
+    make(
+      'AGENT_PROPOSAL_ALREADY_PENDING',
+      'Nothing was proposed: this reply already proposed a change, and only one change at a time can wait for the user. Tell the user what else you would change; they can ask for it once they decide on the pending one.'
+    ),
   permissionDenied: () =>
     make('AGENT_PERMISSION_DENIED', 'You cannot perform this action'),
+  anonymousNoteLimit: () =>
+    make(
+      ANONYMOUS_NOTE_LIMIT_CODE,
+      `Guest accounts can keep up to ${ANONYMOUS_LIMITS.maxNotes} notes; create a free account to save more`
+    ),
   emailNotVerified: () =>
     make(
       AGENT_EMAIL_NOT_VERIFIED_CODE,

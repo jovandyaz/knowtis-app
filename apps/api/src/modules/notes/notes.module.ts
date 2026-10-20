@@ -19,6 +19,7 @@ import {
   UpdateNoteHandler,
   UpdateTagHandler,
 } from './application';
+import { AnonymousNoteLimitPolicy } from './application/anonymous-note-limit.policy';
 import { ImportImageHandler } from './application/commands/import-image.handler';
 import { RotateShareLinkHandler } from './application/commands/rotate-share-link.handler';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
@@ -81,6 +82,7 @@ import { TagsController } from './tags.controller';
       provide: TAG_REPOSITORY,
       useClass: DrizzleTagRepository,
     },
+    AnonymousNoteLimitPolicy,
     CreateNoteHandler,
     UpdateNoteHandler,
     DeleteNoteHandler,

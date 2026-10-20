@@ -261,10 +261,10 @@ All endpoints are under `POST|GET|PATCH|DELETE /notes/...` and require `JwtAuthG
 | `GET`    | `/notes/supertags`         | JWT  | `read`               | Static note-type catalog (field descriptors per supertag)                                                                                                                                                                                                                                                                         |
 | `GET`    | `/notes/counts`            | JWT  | `read`               | Accessible note counts per PARA bucket and supertag                                                                                                                                                                                                                                                                               |
 | `GET`    | `/notes/:id`               | JWT  | `read`               | Get single note with access level                                                                                                                                                                                                                                                                                                 |
-| `POST`   | `/notes`                   | JWT  | `create`             | Create note (also passes `AnonymousNoteLimitGuard`)                                                                                                                                                                                                                                                                               |
+| `POST`   | `/notes`                   | JWT  | `create`             | Create note; an anonymous owner already holding `ANONYMOUS_LIMITS.maxNotes` notes gets `403 ANONYMOUS_NOTE_LIMIT` (`AnonymousNoteLimitPolicy`, which the copilot's approved creates go through too)                                                                                                                               |
 | `PATCH`  | `/notes/:id`               | JWT  | `update`             | Update note (owner: all fields; editor: title+content only)                                                                                                                                                                                                                                                                       |
 | `DELETE` | `/notes/:id`               | JWT  | `delete`             | **Soft-delete** note (owner only): sets `deleted_at`, `204`                                                                                                                                                                                                                                                                       |
-| `POST`   | `/notes/:id/restore`       | JWT  | `delete`             | Restore a soft-deleted note (owner only)                                                                                                                                                                                                                                                                                          |
+| `POST`   | `/notes/:id/restore`       | JWT  | `delete`             | Restore a soft-deleted note (owner only); refused with `403 ANONYMOUS_NOTE_LIMIT` like a create when an anonymous owner is at the limit                                                                                                                                                                                           |
 | `POST`   | `/notes/:id/images`        | JWT  | `update`             | Upload an image (`multipart/form-data`, ≤ 10 MB, png/jpeg/gif/webp); needs edit access to the note                                                                                                                                                                                                                                |
 | `POST`   | `/notes/:id/images/import` | JWT  | `update`             | Copy the image at an http(s) URL (`{ url }`, ≤ 2048 chars) into the note's blob store; needs edit access to the note, 20 per minute. Same answer as the upload; a URL already in the blob store comes back as it is with `id: null`. Refusals are `422` with `code` `too_large`, `unsupported_type` or `fetch_failed` (see below) |
 
@@ -311,9 +311,9 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 | ------ | ---------------------- | ---------- | ------------------------------------- |
 | `GET`  | `/notes/shared/:token` | **Public** | Access note via share token (no auth) |
 
-### Error Codes (access and sharing)
+### Error Codes (access, sharing and account limits)
 
-The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.errors.ts`) that access control and sharing produce. The remaining codes — `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_TAG`, `INVALID_SUPERTAG`, `TAG_NOT_FOUND`, `CONTENT_OVERWRITE_REFUSED`, `INTERNAL_ERROR` — are input, tag and persistence errors outside this document.
+The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.errors.ts`) that access control, sharing and the guest note limit produce. The remaining codes — `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_TAG`, `INVALID_SUPERTAG`, `TAG_NOT_FOUND`, `CONTENT_OVERWRITE_REFUSED`, `INTERNAL_ERROR` — are input, tag and persistence errors outside this document.
 
 | Code                    | HTTP Status | Description                                                                                       |
 | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
@@ -323,6 +323,7 @@ The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.e
 | `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                                      |
 | `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                          |
 | `EMAIL_NOT_VERIFIED`    | 403         | Verified-identity gate refused the action — see [Verified-Identity Gate](#verified-identity-gate) |
+| `ANONYMOUS_NOTE_LIMIT`  | 403         | An anonymous owner already holds `ANONYMOUS_LIMITS.maxNotes` active notes (create or restore)     |
 
 ---
 
