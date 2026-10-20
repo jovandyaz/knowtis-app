@@ -323,6 +323,7 @@ The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.e
 | `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                                      |
 | `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                          |
 | `EMAIL_NOT_VERIFIED`    | 403         | Verified-identity gate refused the action — see [Verified-Identity Gate](#verified-identity-gate) |
+| `ANONYMOUS_NOTE_LIMIT`  | 403         | An anonymous owner already holds `ANONYMOUS_LIMITS.maxNotes` active notes (create or restore)     |
 
 ---
 

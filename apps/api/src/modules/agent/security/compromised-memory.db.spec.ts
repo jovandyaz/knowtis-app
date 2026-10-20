@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   afterAll,
   afterEach,
@@ -10,6 +10,7 @@ import {
   vi,
 } from 'vitest';
 
+import { conversations } from '../../../database/schema/conversations.schema';
 import { userMemories } from '../../../database/schema/user-memories.schema';
 import { users } from '../../../database/schema/users.schema';
 import { DB_AVAILABLE } from '../../../test-support/database';
@@ -47,8 +48,6 @@ const ACCOUNTS = [OWNER, STRANGER];
 const TIMEOUT_MS = 60_000;
 const EMBEDDING_DIMENSIONS = 1024;
 const ZERO_VECTOR = new Array<number>(EMBEDDING_DIMENSIONS).fill(0);
-const RETRY = { maxAttempts: 3, backoffBaseSeconds: 60 };
-const EXTRACTABLE_LIMIT = 100;
 
 const MEMORY_CANARY = 'heron-velvet-4127';
 const USER_FACT = 'The user is planning a trip to Lisbon in May.';
@@ -93,12 +92,24 @@ async function extractAfterTurn(
   expect(turn.errors).toEqual([]);
   expect(turn.done).toBe(true);
   expect(turn.text).toContain(MEMORY_CANARY);
-  const conversation = (
-    await graph.conversations.findExtractable(0, EXTRACTABLE_LIMIT, RETRY)
-  ).find(({ id }) => id === turn.conversationId);
-  if (!conversation) {
-    throw new Error('the turn left no extractable conversation');
+  const conversationId = turn.conversationId;
+  if (!conversationId) {
+    throw new Error('the turn reported no conversation');
   }
+  const [state] = await graph.db
+    .select({
+      id: conversations.id,
+      userId: conversations.userId,
+      version: sql<string>`${conversations.updatedAt}::text`,
+    })
+    .from(conversations)
+    .where(
+      and(eq(conversations.id, conversationId), eq(conversations.userId, OWNER))
+    );
+  if (!state) {
+    throw new Error('the turn left no conversation');
+  }
+  const conversation = { ...state, attempts: 0 };
   const structured = scriptedStructuredOutput({ operations });
   graph.answerStructured(structured);
   const outcome = await graph.memories.execute({
