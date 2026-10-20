@@ -118,6 +118,78 @@ describe('NoteMutateToolGroup', () => {
     });
   });
 
+  it('keeps the first proposal of a run and refuses a later one as a tool error, storing nothing of it', async () => {
+    const second: CreateProposedMutation = {
+      ...proposal,
+      id: 'p-second',
+      summary: 'Create note "Other"',
+    };
+    const builder = {
+      buildCreate: vi
+        .fn()
+        .mockResolvedValueOnce(ok(proposal))
+        .mockResolvedValueOnce(ok(second)),
+    } as unknown as MutationProposalBuilder;
+    const g = group(builder);
+    const c = ctx();
+
+    const first = await run(g, c, 'proposeCreateNote', {
+      title: 'Plan',
+      contentMarkdown: '# Plan',
+    });
+    const later = await run(g, c, 'proposeCreateNote', {
+      title: 'Other',
+      contentMarkdown: '# Other',
+    });
+
+    expect(first).toEqual({
+      ok: true,
+      proposalId: 'p1',
+      summary: 'Create note "Plan"',
+    });
+    expect(later).toEqual({
+      error: AgentErrors.proposalAlreadyPending().message,
+    });
+    expect(c.proposals.captured).toBe(proposal);
+  });
+
+  it('answers only one of two proposals made in parallel with a proposal id, and keeps that one', async () => {
+    const shared: ShareProposedMutation = {
+      id: 'p-share',
+      kind: 'share',
+      targetNoteId: 'n1',
+      summary: 'Share "Plan" with a@b.com as viewer',
+      payload: { targetEmail: 'a@b.com', permission: 'viewer' },
+    };
+    const builder = {
+      buildCreate: vi.fn().mockResolvedValue(ok(proposal)),
+      buildShare: vi.fn().mockResolvedValue(ok(shared)),
+    } as unknown as MutationProposalBuilder;
+    const g = group(builder);
+    const c = ctx();
+
+    const results = (await Promise.all([
+      run(g, c, 'proposeShareNote', {
+        noteId: '11111111-1111-4111-8111-111111111111',
+        targetEmail: 'a@b.com',
+        permission: 'viewer',
+      }),
+      run(g, c, 'proposeCreateNote', {
+        title: 'Plan',
+        contentMarkdown: '# Plan',
+      }),
+    ])) as ({ proposalId: string } | { error: string })[];
+
+    const accepted = results.flatMap((r) =>
+      'proposalId' in r ? [r.proposalId] : []
+    );
+    expect(accepted).toHaveLength(1);
+    expect(results.filter((r) => 'error' in r)).toEqual([
+      { error: AgentErrors.proposalAlreadyPending().message },
+    ]);
+    expect(c.proposals.captured?.id).toBe(accepted[0]);
+  });
+
   it('returns {error} and captures nothing when the builder fails', async () => {
     const builder = {
       buildCreate: vi
@@ -303,7 +375,7 @@ describe('NoteMutateToolGroup when the note store fails', () => {
       { noteId: 'n1', targetEmail: 'a@b.com', permission: 'viewer' },
     ],
   ])(
-    '%s hands the model a generic store failure, never the query',
+    '%s throws our generic store failure, keeping the query only on its cause',
     async (tool, method, input) => {
       const upstream = failedQuery([SECRET_PARAM]);
       const builder = {
@@ -415,7 +487,7 @@ describe('NoteMutateToolGroup.proposeEditNote', () => {
     ).toBe(false);
   });
 
-  it('rejects a noteId the model did not get from a tool', () => {
+  it('rejects a noteId that is not a uuid', () => {
     const schema = editSchema(group({} as MutationProposalBuilder));
 
     expect(

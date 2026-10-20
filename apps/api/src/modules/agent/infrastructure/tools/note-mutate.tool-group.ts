@@ -39,12 +39,16 @@ const MERMAID_ESCAPE_GUIDANCE =
   'Inside a ```mermaid diagram never write a semicolon or a # in a label or message: mermaid reads them as the end of the statement or a comment and the diagram fails to render, so write #59; for a semicolon and #35; for a # instead.';
 const CONTENT_MARKDOWN_DESCRIPTION = `The note body in Markdown: headings (levels 1–3), bold/italic/strikethrough, ++underline++, links, inline and fenced code, bullet and numbered lists, task lists (- [ ] / - [x], nesting allowed), blockquotes, horizontal rules, GFM tables, ==highlight==, ^superscript^, ~subscript~, \`\`\`mermaid fenced diagrams, and images as ![alt](url "caption") ONLY with a url that getNote returned — any other image is dropped. Raw HTML is not supported. ${MERMAID_ESCAPE_GUIDANCE}`;
 
+interface ToolRefusal {
+  readonly error: string;
+}
+
 // a provider that decodes against the schema stops a string at maxLength
 // instead of failing it, so text that fills the limit exactly was cut off
 function refuseMarkdownAtLimit(
   field: string,
   text: string | undefined
-): { error: string } | undefined {
+): ToolRefusal | undefined {
   return text?.length === MAX_MARKDOWN_CHARS
     ? { error: AgentErrors.markdownAtLimit(field, MAX_MARKDOWN_CHARS).message }
     : undefined;
@@ -52,7 +56,7 @@ function refuseMarkdownAtLimit(
 
 function refuseEditAtLimit(
   edits: readonly { oldText: string; newText: string }[]
-): { error: string } | undefined {
+): ToolRefusal | undefined {
   for (const [i, edit] of edits.entries()) {
     const cut = (['oldText', 'newText'] as const).find(
       (field) => edit[field].length === MAX_MARKDOWN_CHARS
@@ -76,9 +80,10 @@ interface ProposalResult {
 function captureProposal(
   collector: ProposalCollector,
   proposal: ProposedMutation
-): ProposalResult {
-  collector.capture(proposal);
-  return { ok: true, proposalId: proposal.id, summary: proposal.summary };
+): ProposalResult | ToolRefusal {
+  return collector.capture(proposal)
+    ? { ok: true, proposalId: proposal.id, summary: proposal.summary }
+    : { error: AgentErrors.proposalAlreadyPending().message };
 }
 
 @Injectable()
@@ -111,9 +116,12 @@ export class NoteMutateToolGroup implements AgentToolGroup {
     userId: string,
     noteId: string,
     proposal: ProposedMutation
-  ): Promise<ProposalResult & { readonly editableByOthers: boolean }> {
+  ): Promise<
+    (ProposalResult & { readonly editableByOthers: boolean }) | ToolRefusal
+  > {
     const editableByOthers = await this.editableByOthers(userId, noteId);
-    return { ...captureProposal(collector, proposal), editableByOthers };
+    const captured = captureProposal(collector, proposal);
+    return 'error' in captured ? captured : { ...captured, editableByOthers };
   }
 
   availableIn(phase: AgentToolPhase): boolean {
