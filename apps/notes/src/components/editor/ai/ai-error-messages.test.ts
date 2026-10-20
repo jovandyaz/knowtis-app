@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AGENT_TURN_NOT_CONTINUABLE_CODE,
+  ANONYMOUS_NOTE_LIMIT_CODE,
   type ProviderKeyInfo,
 } from '@knowtis/shared-types';
 
@@ -29,6 +30,12 @@ describe('aiErrorMessageKey', () => {
   it('names the verified-email gate the copilot share hits instead of a generic failure', () => {
     expect(aiErrorMessageKey({ code: 'AGENT_EMAIL_NOT_VERIFIED' })).toBe(
       'ai.errors.emailNotVerified'
+    );
+  });
+
+  it('names the guest note limit an approved create hit instead of a generic failure', () => {
+    expect(aiErrorMessageKey({ code: ANONYMOUS_NOTE_LIMIT_CODE })).toBe(
+      'ai.errors.anonymousNoteLimit'
     );
   });
 

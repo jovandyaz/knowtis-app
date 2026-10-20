@@ -2,8 +2,11 @@ import { Logger } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
+
 import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { NoteErrors } from '../../notes/domain/errors/note.errors';
+import { AgentErrors } from '../domain/agent-errors';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { ApproveMutationHandler } from './approve-mutation.handler';
 
@@ -376,6 +379,24 @@ describe('ApproveMutationHandler', () => {
       expect(r.error.message).toContain('title too long');
       expect(r.error.turnId).toBe(TURN);
     }
+  });
+
+  it('refuses an approved create the anonymous note limit does not admit with its own code, naming the turn', async () => {
+    const d = deps({
+      createHandler: {
+        execute: vi
+          .fn()
+          .mockResolvedValue(err(NoteErrors.anonymousNoteLimit(5))),
+      },
+    });
+
+    const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
+
+    expect(r._unsafeUnwrapErr()).toEqual({
+      ...AgentErrors.anonymousNoteLimit(),
+      turnId: TURN,
+    });
+    expect(r._unsafeUnwrapErr().code).toBe(ANONYMOUS_NOTE_LIMIT_CODE);
   });
 
   it('surfaces a non-permission share error as AGENT_COMMIT_FAILED', async () => {

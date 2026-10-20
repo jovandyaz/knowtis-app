@@ -234,6 +234,9 @@ export class ApproveMutationHandler {
     if (error.code === NoteErrorCodes.PERMISSION_DENIED) {
       return AgentErrors.permissionDenied();
     }
+    if (error.code === NoteErrorCodes.ANONYMOUS_NOTE_LIMIT) {
+      return AgentErrors.anonymousNoteLimit();
+    }
     return AgentErrors.commitFailed(error.code, error.message);
   }
 }

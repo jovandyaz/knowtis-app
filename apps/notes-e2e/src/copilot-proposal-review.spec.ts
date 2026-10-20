@@ -1,4 +1,10 @@
 import { expect } from '@playwright/test';
+import { z } from 'zod';
+
+import {
+  ANONYMOUS_LIMITS,
+  ANONYMOUS_NOTE_LIMIT_CODE,
+} from '@knowtis/shared-types';
 
 import { openCopilotDock, scriptAgent, test } from './fixtures/copilot.fixture';
 
@@ -31,6 +37,14 @@ const SURVIVING_PARAGRAPH =
   'Cloudflare Pages: recomendado por su rendimiento global.';
 
 const REVIEW_TITLE_RE = /review changes|revisar cambios/i;
+const CREATE_TITLE_RE = /create note|crear nota/i;
+const APPROVE_CREATE_RE = /^(create|crear)$/i;
+const RETRY_RE = /retry|reintentar/i;
+const GUEST_NOTE_LIMIT_COPY =
+  "You've reached the guest note limit. Create a free account to save more notes.";
+const GUEST_NOTE_LIMIT_MESSAGE = `Guest accounts can keep up to ${ANONYMOUS_LIMITS.maxNotes} notes; create a free account to save more`;
+
+const sentMessageSchema = z.object({ turnId: z.string().min(1) });
 const REMOVED_BLOCK_RE = /1 block removed|1 bloque eliminado/i;
 const REASON_TEXTBOX_RE = /why\?|por qué/i;
 
@@ -182,4 +196,45 @@ test('discards a proposed update with a reason', async ({ sharing }) => {
   };
   expect(rejected.reason).toBe('prefiero el original');
   await expect(review).toHaveCount(0);
+});
+
+test('tells a guest past the note limit to create an account when an approved create is refused', async ({
+  sharing,
+}) => {
+  const { owner } = sharing;
+  const note = await owner.createNote('Lista de viaje');
+  const agent = await scriptAgent(owner.page, { onMessage: [] });
+
+  await owner.page.goto(`/notes/${note.id}`);
+  const composer = await openCopilotDock(owner.page);
+  await composer.fill('Crea una nota con mi lista de viaje');
+  await owner.page.keyboard.press('Enter');
+  const { turnId } = sentMessageSchema.parse(
+    await agent.waitForSent('agent:message')
+  );
+  agent.emit('agent:proposal', {
+    turnId,
+    id: PROPOSAL_ID,
+    kind: 'create',
+    targetNoteId: null,
+    summary: 'Create note "Packing list"',
+    payload: { title: 'Packing list', contentHtml: '<p>Passport.</p>' },
+    memories: [],
+  });
+
+  const card = owner.page.getByRole('group', { name: CREATE_TITLE_RE });
+  await card.getByRole('button', { name: APPROVE_CREATE_RE }).click();
+  await agent.waitForSent('agent:approve');
+  agent.emit('agent:error', {
+    code: ANONYMOUS_NOTE_LIMIT_CODE,
+    message: GUEST_NOTE_LIMIT_MESSAGE,
+    turnId,
+  });
+
+  await expect(
+    owner.page.getByRole('alert').filter({ hasText: GUEST_NOTE_LIMIT_COPY })
+  ).toBeVisible();
+  await expect(owner.page.getByRole('button', { name: RETRY_RE })).toHaveCount(
+    0
+  );
 });

@@ -9,6 +9,7 @@ import {
   AI_INVALID_INPUT_CODE,
   AI_MODEL_UNAVAILABLE_CODE,
   AI_QUOTA_EXHAUSTED_CODE,
+  ANONYMOUS_NOTE_LIMIT_CODE,
   BYOK_KEY_FAILURE_KIND,
   type ByokKeyFailureKind,
   type ByokProvider,
@@ -41,6 +42,7 @@ type AIErrorMessageKey =
   | 'ai.errors.noteNotFound'
   | 'ai.errors.invalidProposal'
   | 'ai.errors.emailNotVerified'
+  | 'ai.errors.anonymousNoteLimit'
   | 'ai.errors.modelUnavailable'
   | 'ai.errors.byokKeyFailed.auth'
   | 'ai.errors.byokKeyFailed.credit'
@@ -77,6 +79,7 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AGENT_NOTE_NOT_FOUND: 'ai.errors.noteNotFound',
   AGENT_INVALID_PROPOSAL: 'ai.errors.invalidProposal',
   [AGENT_EMAIL_NOT_VERIFIED_CODE]: 'ai.errors.emailNotVerified',
+  [ANONYMOUS_NOTE_LIMIT_CODE]: 'ai.errors.anonymousNoteLimit',
   [AI_QUOTA_EXHAUSTED_CODE]: 'ai.errors.rateLimited',
   [AI_MODEL_UNAVAILABLE_CODE]: 'ai.errors.modelUnavailable',
 };
