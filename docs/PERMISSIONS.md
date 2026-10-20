@@ -311,9 +311,9 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 | ------ | ---------------------- | ---------- | ------------------------------------- |
 | `GET`  | `/notes/shared/:token` | **Public** | Access note via share token (no auth) |
 
-### Error Codes (access and sharing)
+### Error Codes (access, sharing and account limits)
 
-The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.errors.ts`) that access control and sharing produce. The remaining codes — `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_TAG`, `INVALID_SUPERTAG`, `TAG_NOT_FOUND`, `CONTENT_OVERWRITE_REFUSED`, `INTERNAL_ERROR` — are input, tag and persistence errors outside this document.
+The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.errors.ts`) that access control, sharing and the guest note limit produce. The remaining codes — `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_TAG`, `INVALID_SUPERTAG`, `TAG_NOT_FOUND`, `CONTENT_OVERWRITE_REFUSED`, `INTERNAL_ERROR` — are input, tag and persistence errors outside this document.
 
 | Code                    | HTTP Status | Description                                                                                       |
 | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
