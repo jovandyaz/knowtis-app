@@ -1,4 +1,7 @@
-import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import {
+  ANONYMOUS_NOTE_LIMIT_CODE,
+  EMAIL_NOT_VERIFIED_CODE,
+} from '@knowtis/shared-types';
 
 export interface NoteDomainError {
   readonly code: string;
@@ -18,6 +21,7 @@ export const NoteErrorCodes = {
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   EMAIL_NOT_VERIFIED: EMAIL_NOT_VERIFIED_CODE,
+  ANONYMOUS_NOTE_LIMIT: ANONYMOUS_NOTE_LIMIT_CODE,
   SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
   CONTENT_OVERWRITE_REFUSED: 'CONTENT_OVERWRITE_REFUSED',
   // Same wire code the URL image import answers, so clients handle both alike.
@@ -101,6 +105,12 @@ export const NoteErrors = {
     createNoteError(
       NoteErrorCodes.PERMISSION_DENIED,
       `Only owner can ${action}`
+    ),
+
+  anonymousNoteLimit: (maxNotes: number) =>
+    createNoteError(
+      NoteErrorCodes.ANONYMOUS_NOTE_LIMIT,
+      `Anonymous users can create up to ${maxNotes} notes. Sign up for unlimited notes.`
     ),
 
   shareTokenNotFound: (token: string) =>

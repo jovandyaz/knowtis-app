@@ -18,6 +18,7 @@ import {
   useCreateNote,
   type NoteListPages,
 } from '@knowtis/data-access-notes';
+import { ANONYMOUS_NOTE_LIMIT_CODE } from '@knowtis/shared-types';
 import { generateId } from '@knowtis/shared-util';
 
 interface CreateAndNavigateOptions {
@@ -115,7 +116,7 @@ export function useCreateAndNavigateToNote() {
 
         if (
           ApiClientError.isApiClientError(err) &&
-          err.code === 'ANONYMOUS_NOTE_LIMIT'
+          err.code === ANONYMOUS_NOTE_LIMIT_CODE
         ) {
           options.onLimitReached();
           nav({ to: ROUTES.DASHBOARD, replace: true });

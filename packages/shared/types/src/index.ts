@@ -48,7 +48,11 @@ export {
   type FeatureFlagDto,
 } from './lib/feature-flags.types';
 
-export { ANONYMOUS_LIMITS, type AnonymousLimits } from './lib/anonymous.types';
+export {
+  ANONYMOUS_LIMITS,
+  ANONYMOUS_NOTE_LIMIT_CODE,
+  type AnonymousLimits,
+} from './lib/anonymous.types';
 
 export {
   AI_ACTION,

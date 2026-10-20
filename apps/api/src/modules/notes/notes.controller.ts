@@ -90,7 +90,6 @@ import {
 } from './dto';
 import { IMPORT_URL_MAX_LENGTH, ImportImageDto } from './dto/import-image.dto';
 import { UploadImageDto } from './dto/upload-image.dto';
-import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
 import { sanitizeFilename } from './infrastructure/filename.util';
 import {
   CLIENT_IMAGE_IMPORT_ERROR_CODE,
@@ -385,7 +384,6 @@ export class NotesController {
   @ApiBadRequest('invalid title or content')
   @ApiAuthErrors('anonymous note limit reached')
   @Post()
-  @UseGuards(AnonymousNoteLimitGuard)
   @RequirePermission('create', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.WRITE)
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateNoteDto) {
@@ -491,7 +489,9 @@ export class NotesController {
     description: 'Note restored successfully',
     schema: noteSchema,
   })
-  @ApiAuthErrors('only the owner can restore a note')
+  @ApiAuthErrors(
+    'only the owner can restore a note, or an anonymous owner already holds the most notes allowed'
+  )
   @ApiNotFound('note does not exist or is not deleted')
   @Post(':id/restore')
   @RequirePermission('delete', SUBJECTS.Note)

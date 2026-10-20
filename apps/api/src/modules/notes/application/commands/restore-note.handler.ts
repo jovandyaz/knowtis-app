@@ -1,5 +1,6 @@
+import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
-import type { Result } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 
 import {
   NOTE_REPOSITORY,
@@ -7,6 +8,7 @@ import {
   type NoteEntity,
   type NoteRepository,
 } from '../../domain';
+import { AnonymousNoteLimitPolicy } from '../anonymous-note-limit.policy';
 
 export interface RestoreNoteInput {
   readonly noteId: string;
@@ -16,12 +18,19 @@ export interface RestoreNoteInput {
 @Injectable()
 export class RestoreNoteHandler {
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository
+    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
+    private readonly noteLimit: AnonymousNoteLimitPolicy
   ) {}
 
-  execute(
+  async execute(
     input: RestoreNoteInput
   ): Promise<Result<NoteEntity, NoteDomainError>> {
+    const admitted = await this.noteLimit.admit(
+      UserId.fromTrusted(input.userId)
+    );
+    if (admitted.isErr()) {
+      return err(admitted.error);
+    }
     return this.noteRepository.restore(input.noteId, input.userId);
   }
 }

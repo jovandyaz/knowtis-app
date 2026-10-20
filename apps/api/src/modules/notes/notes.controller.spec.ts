@@ -22,7 +22,7 @@ import {
   vi,
 } from 'vitest';
 
-import { SUPERTAGS } from '@knowtis/shared-types';
+import { ANONYMOUS_NOTE_LIMIT_CODE, SUPERTAGS } from '@knowtis/shared-types';
 import { MAX_IMAGE_BYTES, STORED_IMAGE_HOST } from '@knowtis/shared-util';
 
 import { createValidationPipe } from '../../config/validation-pipe';
@@ -48,6 +48,7 @@ import {
   PERMISSION_REPOSITORY,
   type NoteEntity,
 } from './domain';
+import { NoteErrors } from './domain/errors/note.errors';
 import { IMAGE_STORAGE } from './domain/ports/image-storage.port';
 import { NOTE_IMAGE_REPOSITORY } from './domain/ports/note-image.repository';
 import {
@@ -57,7 +58,6 @@ import {
   type RemoteImageFetcher,
 } from './domain/ports/remote-image-fetcher.port';
 import { IMPORT_URL_MAX_LENGTH } from './dto/import-image.dto';
-import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
 import { SafeRemoteImageFetcher } from './infrastructure/remote-image/safe-remote-image-fetcher';
 import { NotesController } from './notes.controller';
 
@@ -177,8 +177,6 @@ async function startNotesApp(providers: Provider[]): Promise<INestApplication> {
     })
     .overrideGuard(PoliciesGuard)
     .useValue({ canActivate: () => true })
-    .overrideGuard(AnonymousNoteLimitGuard)
-    .useValue({ canActivate: () => true })
     .compile();
 
   const app = moduleRef.createNestApplication();
@@ -232,6 +230,54 @@ describe('NotesController route order', () => {
     expect(response.status).toBe(200);
     expect(Object.keys(body)).toEqual([...SUPERTAGS]);
     expect(findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('the anonymous note limit over HTTP', () => {
+  const NOTE_LIMIT = 5;
+  let app: INestApplication;
+  let base: string;
+  const create = vi.fn();
+  const restore = vi.fn();
+
+  beforeAll(async () => {
+    app = await startNotesApp([
+      { provide: CreateNoteHandler, useValue: { execute: create } },
+      { provide: RestoreNoteHandler, useValue: { execute: restore } },
+    ]);
+    base = await app.getUrl();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('answers a create the limit refuses with 403 and the code the notes app reads', async () => {
+    create.mockResolvedValue(err(NoteErrors.anonymousNoteLimit(NOTE_LIMIT)));
+
+    const response = await fetch(`${base}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'One too many' }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: ANONYMOUS_NOTE_LIMIT_CODE,
+    });
+  });
+
+  it('answers a restore the limit refuses the same way', async () => {
+    restore.mockResolvedValue(err(NoteErrors.anonymousNoteLimit(NOTE_LIMIT)));
+
+    const response = await fetch(`${base}/notes/${noteEntity.id}/restore`, {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: ANONYMOUS_NOTE_LIMIT_CODE,
+    });
   });
 });
 

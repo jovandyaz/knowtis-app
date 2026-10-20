@@ -6,10 +6,13 @@ import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
-import { NoteEntity, NoteErrorCodes, NoteWriteRepository } from '../../domain';
+import type { NoteEntity } from '../../domain/entities/note.entity';
+import { NoteErrorCodes, NoteErrors } from '../../domain/errors/note.errors';
 import { NoteCreatedEvent } from '../../domain/events/note-created.event';
+import type { NoteWriteRepository } from '../../domain/ports/note-write.repository';
 import { editorSchema } from '../../infrastructure/html-to-yjs';
 import * as htmlToYjsModule from '../../infrastructure/html-to-yjs';
+import type { AnonymousNoteLimitPolicy } from '../anonymous-note-limit.policy';
 import { CreateNoteHandler } from './create-note.handler';
 
 function decodeYjsBuffer(buf: Buffer) {
@@ -57,6 +60,7 @@ describe('CreateNoteHandler', () => {
   let handler: CreateNoteHandler;
   let mockRepository: NoteWriteRepository;
   let mockEventEmitter: EventEmitter2;
+  let noteLimit: { admit: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     mockRepository = {
@@ -74,7 +78,32 @@ describe('CreateNoteHandler', () => {
       emit: vi.fn(),
     } as unknown as EventEmitter2;
 
-    handler = new CreateNoteHandler(mockRepository, mockEventEmitter);
+    noteLimit = { admit: vi.fn().mockResolvedValue(ok(undefined)) };
+
+    handler = new CreateNoteHandler(
+      mockRepository,
+      mockEventEmitter,
+      noteLimit as unknown as AnonymousNoteLimitPolicy
+    );
+  });
+
+  it('refuses an owner the anonymous note limit does not admit, writing nothing', async () => {
+    const limit = NoteErrors.anonymousNoteLimit(5);
+    noteLimit.admit.mockResolvedValue(err(limit));
+
+    const result = await handler.execute({
+      title: 'Valid Title',
+      content: '<p>Valid content</p>',
+      ownerId: 'user-123',
+    });
+
+    expect(result._unsafeUnwrapErr()).toBe(limit);
+    expect(noteLimit.admit).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 'user-123' })
+    );
+    expect(mockRepository.create).not.toHaveBeenCalled();
+    expect(mockRepository.createWithYjsState).not.toHaveBeenCalled();
+    expect(mockEventEmitter.emit).not.toHaveBeenCalled();
   });
 
   it('should create a note successfully and emit event', async () => {
@@ -173,7 +202,6 @@ describe('CreateNoteHandler', () => {
     expect((bufferArg as Buffer).byteLength).toBeGreaterThan(0);
 
     const decoded = decodeYjsBuffer(bufferArg as Buffer);
-    // Input was '<p>hi</p>' → round-trip should contain 'hi' text
     expect(JSON.stringify(decoded)).toContain('hi');
   });
 

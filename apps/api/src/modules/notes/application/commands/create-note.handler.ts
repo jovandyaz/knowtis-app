@@ -18,6 +18,7 @@ import {
   htmlToYjsState,
   yjsStateToHtml,
 } from '../../infrastructure/html-to-yjs';
+import { AnonymousNoteLimitPolicy } from '../anonymous-note-limit.policy';
 
 export interface CreateNoteInput {
   readonly id?: string;
@@ -33,7 +34,8 @@ export class CreateNoteHandler {
   constructor(
     @Inject(NOTE_WRITE_REPOSITORY)
     private readonly noteRepository: NoteWriteRepository,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly noteLimit: AnonymousNoteLimitPolicy
   ) {}
 
   async execute(
@@ -52,6 +54,11 @@ export class CreateNoteHandler {
     const contentResult = NoteContent.create(input.content ?? '');
     if (contentResult.isErr()) {
       return err(contentResult.error);
+    }
+
+    const admitted = await this.noteLimit.admit(ownerIdResult.value);
+    if (admitted.isErr()) {
+      return err(admitted.error);
     }
 
     const data = {
