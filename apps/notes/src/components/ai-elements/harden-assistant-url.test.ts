@@ -59,19 +59,34 @@ describe('hardenAssistantUrl', () => {
     ).toBe('https://example.com/article');
   });
 
-  it('drops a javascript: link (delegates to default sanitizer)', () => {
-    expect(hardenAssistantUrl('javascript:alert(1)', 'href', linkNode)).toBe(
-      ''
-    );
+  it('drops a javascript: link', () => {
+    expect(
+      hardenAssistantUrl('javascript:alert(1)', 'href', linkNode)
+    ).toBeUndefined();
   });
 
   it('drops a vbscript: link', () => {
-    expect(hardenAssistantUrl('vbscript:msgbox', 'href', linkNode)).toBe('');
+    expect(
+      hardenAssistantUrl('vbscript:msgbox', 'href', linkNode)
+    ).toBeUndefined();
   });
 
   it('drops a data: link href', () => {
-    expect(hardenAssistantUrl('data:text/html,x', 'href', linkNode)).toBe('');
+    expect(
+      hardenAssistantUrl('data:text/html,x', 'href', linkNode)
+    ).toBeUndefined();
   });
+
+  it.each([
+    'irc://chat.example/room',
+    'ircs://chat.example/room',
+    'xmpp:a@b.com',
+  ])(
+    'drops a %s link href entirely, so no empty href opens the current page',
+    (href) => {
+      expect(hardenAssistantUrl(href, 'href', linkNode)).toBeUndefined();
+    }
+  );
 
   it('keeps a mailto: link href', () => {
     expect(hardenAssistantUrl('mailto:a@b.com', 'href', linkNode)).toBe(

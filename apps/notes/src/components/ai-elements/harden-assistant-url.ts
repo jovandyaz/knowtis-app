@@ -19,15 +19,16 @@ function schemeOf(url: string): string | null {
 /** Assistant output is untrusted (injectable via shared notes). Image `src` keeps
  * only the app's own blob store: any other source auto-fires a GET on render, and a
  * relative one resolves to the app origin, whose `/t/*` proxies to analytics. Links
- * allow only schemes Streamdown won't strip. */
+ * allow only schemes Streamdown won't strip; a refused link loses its URL entirely
+ * (`undefined`, never `''`, which Streamdown renders as a new-tab link to the
+ * current page) and keeps its text. */
 export const hardenAssistantUrl: UrlTransform = (url, key, node) => {
-  const sanitized = defaultUrlTransform(url, key, node);
-  if (sanitized == null || sanitized === '') {
-    return sanitized;
-  }
+  const sanitized = defaultUrlTransform(url, key, node) ?? '';
   if (key === 'src') {
     return isStoredImageUrl(sanitized) ? sanitized : '';
   }
   const scheme = schemeOf(sanitized);
-  return scheme == null || SAFE_LINK_SCHEMES.has(scheme) ? sanitized : '';
+  return sanitized !== '' && (scheme == null || SAFE_LINK_SCHEMES.has(scheme))
+    ? sanitized
+    : undefined;
 };
